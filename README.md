@@ -108,6 +108,10 @@ Construído em etapas — veja o estado de cada uma nas tasks do repositório.
   genérico pra sprint e tarefa (`src/app/clients/comments-actions.ts` cria o
   comentário sempre com `author_id` do usuário logado). Na sprint fica
   sempre visível; na tarefa fica dentro de um `<details>` colapsável
+- `src/app/painel-mensal` — painel geral do mês (só admin): planejado x
+  gasto de todos os clientes no mês, reaproveitando `spend-status.ts` (a
+  mesma margem de ±10%, mas comparando com o planejado total do mês, sem
+  proporção por dia como na sprint)
 
 ## Sync com o Meta
 
@@ -135,7 +139,7 @@ Construído em etapas — veja o estado de cada uma nas tasks do repositório.
 5. ✅ Dashboard financeiro por sprint com selos de status
 6. ✅ CRUD de tarefas + recorrência e "atrasado"
 7. ✅ Comentários genéricos (sprint e tarefa)
-8. Painel geral do mês com cálculo de meta batida
+8. ✅ Painel geral do mês com cálculo de meta batida
 9. Polimento visual da página do cliente
 
 ## Deploy

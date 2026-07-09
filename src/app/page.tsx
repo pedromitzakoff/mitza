@@ -35,14 +35,21 @@ export default async function Home() {
             {profile.name} · {profile.role}
           </p>
         </div>
-        <form action={logout}>
-          <button
-            type="submit"
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
-          >
-            Sair
-          </button>
-        </form>
+        <div className="flex items-center gap-3">
+          {profile.role === "admin" && (
+            <Link href="/painel-mensal" className="text-sm text-zinc-500 hover:underline">
+              Painel geral do mês
+            </Link>
+          )}
+          <form action={logout}>
+            <button
+              type="submit"
+              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+            >
+              Sair
+            </button>
+          </form>
+        </div>
       </div>
 
       <div className="mt-10 flex items-center justify-between">
