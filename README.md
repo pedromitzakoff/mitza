@@ -73,8 +73,13 @@ Construído em etapas — veja o estado de cada uma nas tasks do repositório.
 - `src/app` — rotas (App Router)
 - `src/app/login` — página de login e server actions de login/logout
 - `src/lib/supabase` — clientes Supabase (browser/server/middleware) e tipos do banco
-- `src/lib/auth.ts` — helper para ler o profile (id/nome/papel) do usuário logado
-- `src/middleware.ts` — protege todas as rotas exceto `/login`
+- `src/lib/auth.ts` — helpers para ler o profile do usuário logado e para
+  exigir papel admin (`requireAdmin`) nas páginas de admin
+- `src/proxy.ts` — protege todas as rotas exceto `/login` (equivalente ao
+  antigo `middleware.ts`, renomeado nesta versão do Next.js)
+- `src/app/clients` — cadastro/edição de clientes e atribuição de gestores
+  (`/clients/new`, `/clients/[id]/edit`, admin apenas) e a página do cliente
+  (`/clients/[id]`, preenchida nas próximas etapas)
 - `supabase/schema.sql` — schema SQL das tabelas e funções auxiliares
 - `supabase/policies.sql` — trigger de criação de profile + RLS por papel
 
@@ -82,7 +87,7 @@ Construído em etapas — veja o estado de cada uma nas tasks do repositório.
 
 1. ✅ Setup do projeto e schema SQL
 2. ✅ Autenticação com papéis (admin/gestor) e proteção de rotas
-3. CRUD de clientes e atribuição de gestores
+3. ✅ CRUD de clientes e atribuição de gestores
 4. Sync com a Meta Insights API
 5. Dashboard financeiro por sprint com selos de status
 6. CRUD de tarefas + recorrência e "atrasado"

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/lib/supabase/database.types";
 
@@ -20,6 +21,17 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     .select("id, name, role")
     .eq("id", user.id)
     .single();
+
+  return profile;
+}
+
+/** Redireciona para a home se o usuário logado não for admin. */
+export async function requireAdmin(): Promise<CurrentProfile> {
+  const profile = await getCurrentProfile();
+
+  if (!profile || profile.role !== "admin") {
+    redirect("/");
+  }
 
   return profile;
 }
