@@ -35,6 +35,7 @@ const DIFFERENCE_TEXT_CLASSES = {
 
 export function SprintCard({
   sprint,
+  sprintNumber,
   comments,
   clientId,
   isAdmin,
@@ -42,6 +43,7 @@ export function SprintCard({
   commentsByTaskId,
 }: {
   sprint: SprintFinancials;
+  sprintNumber: number;
   comments: CommentItem[];
   clientId: string;
   isAdmin: boolean;
@@ -63,7 +65,7 @@ export function SprintCard({
             ▸
           </span>
           <p className="text-sm font-medium text-foreground">
-            {formatDateRange(sprint.startDate, sprint.endDate)}
+            Sprint {sprintNumber} · {formatDateRange(sprint.startDate, sprint.endDate)}
           </p>
           <span
             className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}

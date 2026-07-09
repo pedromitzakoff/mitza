@@ -271,10 +271,11 @@ export default async function ClientPage({
       <Section title="Sprints do mês">
         <div className="flex flex-col gap-3">
           {sprintFinancials.length > 0 ? (
-            sprintFinancials.map((sprint) => (
+            sprintFinancials.map((sprint, index) => (
               <SprintCard
                 key={sprint.sprintId}
                 sprint={sprint}
+                sprintNumber={index + 1}
                 comments={sprintCommentsById.get(sprint.sprintId) ?? []}
                 clientId={client.id}
                 isAdmin={isAdmin}

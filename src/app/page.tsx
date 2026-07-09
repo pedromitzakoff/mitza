@@ -37,9 +37,14 @@ export default async function Home() {
         </div>
         <div className="flex items-center gap-3">
           {profile.role === "admin" && (
-            <Link href="/painel-mensal" className="text-sm text-zinc-500 hover:underline">
-              Painel geral do mês
-            </Link>
+            <>
+              <Link href="/painel-mensal" className="text-sm text-zinc-500 hover:underline">
+                Painel geral do mês
+              </Link>
+              <Link href="/settings" className="text-sm text-zinc-500 hover:underline">
+                Configurações
+              </Link>
+            </>
           )}
           <form action={logout}>
             <button

@@ -5,8 +5,8 @@ import type { CumulativeSpendPoint } from "@/lib/spend-chart-data";
 import { formatCurrency } from "@/lib/format";
 
 const WIDTH = 720;
-const HEIGHT = 220;
-const PADDING = { top: 16, right: 16, bottom: 28, left: 64 };
+const HEIGHT = 170;
+const PADDING = { top: 14, right: 16, bottom: 24, left: 60 };
 
 const dayFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", timeZone: "UTC" });
 

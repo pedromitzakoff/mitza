@@ -220,7 +220,78 @@ export interface Database {
             foreignKeyName: "tasks_template_id_fkey";
             columns: ["template_id"];
             isOneToOne: false;
-            referencedRelation: "client_task_templates";
+            referencedRelation: "sprint_task_templates";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      sprint_task_templates: {
+        Row: {
+          id: string;
+          title: string;
+          type: TaskType;
+          default_assignee_id: string | null;
+          weekday: Weekday;
+          applies_to_all: boolean;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          type: TaskType;
+          default_assignee_id?: string | null;
+          weekday: Weekday;
+          applies_to_all?: boolean;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          type?: TaskType;
+          default_assignee_id?: string | null;
+          weekday?: Weekday;
+          applies_to_all?: boolean;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "sprint_task_templates_default_assignee_id_fkey";
+            columns: ["default_assignee_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      sprint_task_template_clients: {
+        Row: {
+          template_id: string;
+          client_id: string;
+        };
+        Insert: {
+          template_id: string;
+          client_id: string;
+        };
+        Update: {
+          template_id?: string;
+          client_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "sprint_task_template_clients_template_id_fkey";
+            columns: ["template_id"];
+            isOneToOne: false;
+            referencedRelation: "sprint_task_templates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "sprint_task_template_clients_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
             referencedColumns: ["id"];
           },
         ];
@@ -313,7 +384,10 @@ export interface Database {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      backfill_sprint_tasks_from_templates: {
+        Args: Record<PropertyKey, never>;
+        Returns: void;
+      };
     };
     Enums: {
       [_ in never]: never;

@@ -41,19 +41,34 @@ automático da sync, refinamentos de UX, etc.
      editável só pelo admin).
 
 3b. Rode `supabase/task-templates.sql` (mesmo SQL Editor, depois do
-    `policies.sql`). Isso cria o plano operacional padrão por cliente
-    (`client_task_templates`) e a geração idempotente das tarefas de cada
-    sprint. Se você já tem clientes/sprints cadastrados de antes dessa
-    etapa, rode uma vez, no SQL Editor:
+    `policies.sql`). Cria `client_task_templates`, `tasks.template_id` e a
+    geração idempotente — esse modelo por cliente foi substituído pelo
+    global no passo 3c, mas o arquivo precisa rodar primeiro porque cria a
+    coluna/índice que o passo seguinte reaproveita.
 
-    ```sql
-    select backfill_client_task_templates_and_tasks();
-    ```
+3c. (Opcional, só se você já tem clientes/sprints de antes dessa etapa)
+    Rode `supabase/cleanup-old-client-templates.sql` — primeiro a consulta
+    de preview (mostra o que seria afetado), depois o `delete`, que só
+    remove tarefas geradas pelo modelo antigo que estão **pendentes e sem
+    comentário** (tarefa concluída ou comentada nunca é apagada).
 
-    Isso semeia os templates padrão (Otimização seg/qua/sex, Report terça,
-    Checar saldo seg-sex) pros clientes que ainda não têm nenhum, e gera as
-    tarefas que estiverem faltando nas sprints já existentes — sem duplicar
-    nada mesmo se você rodar de novo.
+3d. Rode `supabase/global-sprint-task-templates.sql` (depois do
+    `task-templates.sql`, e do `cleanup` se você rodou o passo 3c). Isso:
+
+    - Cria `sprint_task_templates` (configuração global, em vez de por
+      cliente) + `sprint_task_template_clients` (quando o template vale só
+      pra clientes selecionados, não "todos").
+    - Reescreve a geração de tarefas da sprint pra ler essa configuração
+      global.
+    - Desativa (`is_active = false`) os templates antigos de
+      `client_task_templates` e desvincula (`template_id = null`) as
+      tarefas que sobraram — sem apagar nenhuma tarefa.
+
+    Se você criar ou editar um template global depois, aplique nas sprints
+    que já existem clicando em "Aplicar às sprints já existentes" na tela
+    `/settings/sprint-task-templates` (ou rodando
+    `select backfill_sprint_tasks_from_templates();` no SQL Editor) — sem
+    isso, a mudança só vale pras próximas sprints geradas.
 
 4. Crie os usuários em Authentication > Users no painel do Supabase
    (email/senha). O trigger cria o `profile` automaticamente com papel
@@ -140,17 +155,23 @@ automático da sync, refinamentos de UX, etc.
   mover o prazo/`due_date`); `/tasks/new` aceita `?sprintId=` pra já criar a
   tarefa vinculada à sprint (usado pelo "+ Adicionar tarefa na sprint" de
   cada card)
-- `supabase/task-templates.sql` — `client_task_templates` (plano
-  operacional configurável por cliente), `tasks.template_id` + índice único
-  parcial (garante que a geração não duplica tarefa), e a geração fica
-  embutida na mesma função que já cria as sprints — criar um cliente
-  semeia os templates padrão e já gera as tarefas da primeira sprint
-- `src/app/clients/task-templates-list.tsx` — configuração do plano
-  operacional na página de editar cliente: listar, criar, editar,
-  ativar/desativar e excluir templates (`task-templates-actions.ts`,
-  admin only). Editar um template não altera tarefas já geradas; excluir
-  um template só solta o vínculo (`template_id` vira null), não apaga a
-  tarefa
+- `supabase/task-templates.sql` — schema-base (`tasks.template_id` + índice
+  único parcial `tasks_template_sprint_unique`, que garante que a geração
+  não duplica tarefa); o `client_task_templates` que esse arquivo cria foi
+  desativado pelo passo 3d, mantido só como histórico
+- `supabase/global-sprint-task-templates.sql` — `sprint_task_templates`
+  (plano operacional global, "todos os clientes" ou clientes selecionados
+  via `sprint_task_template_clients`) + a geração de tarefas da sprint
+  reescrita pra ler essa configuração; `backfill_sprint_tasks_from_templates()`
+  aplica nas sprints já existentes
+- `supabase/cleanup-old-client-templates.sql` — remoção segura das tarefas
+  de teste do modelo antigo (só apaga pendente + sem comentário)
+- `src/app/settings` — configurações (admin only). `/settings/sprint-task-templates`:
+  listar, criar, editar, ativar/desativar e excluir templates globais
+  (`sprint-task-templates-actions.ts`), escolher "todos os clientes" ou
+  clientes específicos, e botão pra aplicar num backfill manual. Editar um
+  template não altera tarefas já geradas; excluir só é permitido se o
+  template ainda não gerou nenhuma tarefa (senão, é só desativar)
 - `src/lib/attention-alerts.ts` — gera o bloco "Precisa de atenção" a
   partir de dados reais (investimento fora do esperado, tarefas atrasadas,
   sync antiga, sprint sem planejado/tarefas/responsável), ordenado por
@@ -205,6 +226,9 @@ automático da sync, refinamentos de UX, etc.
     (idempotente), painel de indicadores, "Precisa de atenção", gráfico de
     planejado x real acumulado, sprints em accordion (atual aberta, demais
     compactadas), identidade visual MITZA
+12. ✅ Tarefas padrão de sprint viram configuração global (`/settings`,
+    "todos os clientes" ou clientes selecionados, em vez de por cliente),
+    numeração das sprints (Sprint 1, 2, 3...) e gráfico mais baixo
 
 ## Deploy
 
