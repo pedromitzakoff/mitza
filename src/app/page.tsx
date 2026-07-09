@@ -63,10 +63,12 @@ export default async function Home() {
             <li key={client.id}>
               <Link
                 href={`/clients/${client.id}`}
-                className="flex items-center justify-between px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900"
               >
-                <span className="text-black dark:text-zinc-50">{client.name}</span>
-                <span className="font-mono text-xs text-zinc-500">
+                <span className="min-w-0 truncate text-black dark:text-zinc-50">
+                  {client.name}
+                </span>
+                <span className="shrink-0 font-mono text-xs text-zinc-500">
                   {client.meta_ad_account_id}
                 </span>
               </Link>

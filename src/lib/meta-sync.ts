@@ -1,13 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchDailySpend } from "@/lib/meta";
+import { todayDateString } from "@/lib/today";
 
 export interface SyncResult {
   clientId: string;
   daysSynced: number;
-}
-
-function today() {
-  return new Date().toISOString().slice(0, 10);
 }
 
 /**
@@ -31,7 +28,7 @@ export async function syncClientMetaSpend(clientId: string): Promise<SyncResult>
     throw new Error(`Cliente ${clientId} não encontrado`);
   }
 
-  const currentDate = today();
+  const currentDate = todayDateString();
 
   const { data: sprint, error: sprintError } = await supabase
     .from("sprints")

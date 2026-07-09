@@ -101,6 +101,9 @@ Construído em etapas — veja o estado de cada uma nas tasks do repositório.
   (diária/semanal/mensal, com o mês tratando fim de mês corretamente)
 - `src/lib/task-status.ts` — status efetivo da tarefa calculado na consulta:
   vira "atrasado" se passou do prazo sem estar "feito", sem job separado
+- `src/lib/today.ts` — "hoje" no fuso da agência (`America/Sao_Paulo`), não
+  no fuso do servidor — usado em tudo que compara com a data atual (sprint,
+  tarefa, sync do Meta) pra não errar o dia perto da meia-noite
 
 ## Sync com o Meta
 

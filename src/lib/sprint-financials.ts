@@ -1,4 +1,5 @@
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
+import { todayUTC } from "@/lib/today";
 
 export interface SprintFinancials {
   sprintId: string;
@@ -27,7 +28,7 @@ function parseDateUTC(value: string): Date {
 export function computeSprintFinancials(
   sprint: { id: string; start_date: string; end_date: string; planned_spend: number },
   actualSpend: number,
-  today: Date = new Date(),
+  today: Date = todayUTC(),
 ): SprintFinancials {
   const start = parseDateUTC(sprint.start_date);
   const end = parseDateUTC(sprint.end_date);
@@ -53,7 +54,7 @@ export function computeSprintFinancials(
 }
 
 /** Intervalo (YYYY-MM-DD) do mês corrente, usado pra filtrar sprints e daily_spend. */
-export function currentMonthRange(today = new Date()): { firstDay: string; lastDay: string } {
+export function currentMonthRange(today: Date = todayUTC()): { firstDay: string; lastDay: string } {
   const year = today.getUTCFullYear();
   const month = today.getUTCMonth();
   const firstDay = new Date(Date.UTC(year, month, 1));
