@@ -46,7 +46,7 @@ export default async function PainelMensalPage() {
   const rows = (clients ?? []).map((client) => {
     const planned = plannedByClient.get(client.id) ?? 0;
     const actual = actualByClient.get(client.id) ?? 0;
-    const status = classifySpendStatus(actual, planned);
+    const status = classifySpendStatus(actual, planned, planned);
     const pct = planned > 0 ? (actual / planned) * 100 : null;
 
     return { id: client.id, name: client.name, planned, actual, pct, status };

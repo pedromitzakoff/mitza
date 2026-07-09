@@ -6,6 +6,9 @@ export type TaskRecurrence = "nenhuma" | "diaria" | "semanal" | "mensal";
 
 export type CommentableType = "sprint" | "task";
 
+/** ISO: 1 = segunda ... 7 = domingo. */
+export type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
 export interface Database {
   public: {
     Tables: {
@@ -159,6 +162,7 @@ export interface Database {
           status: TaskStatus;
           recurrence: TaskRecurrence;
           sprint_id: string | null;
+          template_id: string | null;
           notes: string | null;
           created_at: string;
         };
@@ -172,6 +176,7 @@ export interface Database {
           status?: TaskStatus;
           recurrence?: TaskRecurrence;
           sprint_id?: string | null;
+          template_id?: string | null;
           notes?: string | null;
           created_at?: string;
         };
@@ -185,6 +190,7 @@ export interface Database {
           status?: TaskStatus;
           recurrence?: TaskRecurrence;
           sprint_id?: string | null;
+          template_id?: string | null;
           notes?: string | null;
           created_at?: string;
         };
@@ -208,6 +214,61 @@ export interface Database {
             columns: ["sprint_id"];
             isOneToOne: false;
             referencedRelation: "sprints";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tasks_template_id_fkey";
+            columns: ["template_id"];
+            isOneToOne: false;
+            referencedRelation: "client_task_templates";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      client_task_templates: {
+        Row: {
+          id: string;
+          client_id: string;
+          title: string;
+          type: TaskType;
+          default_assignee_id: string | null;
+          weekday: Weekday;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          title: string;
+          type: TaskType;
+          default_assignee_id?: string | null;
+          weekday: Weekday;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          title?: string;
+          type?: TaskType;
+          default_assignee_id?: string | null;
+          weekday?: Weekday;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_task_templates_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_task_templates_default_assignee_id_fkey";
+            columns: ["default_assignee_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];

@@ -40,6 +40,21 @@ automático da sync, refinamentos de UX, etc.
      e comentários desses clientes — `planned_spend` das sprints é
      editável só pelo admin).
 
+3b. Rode `supabase/task-templates.sql` (mesmo SQL Editor, depois do
+    `policies.sql`). Isso cria o plano operacional padrão por cliente
+    (`client_task_templates`) e a geração idempotente das tarefas de cada
+    sprint. Se você já tem clientes/sprints cadastrados de antes dessa
+    etapa, rode uma vez, no SQL Editor:
+
+    ```sql
+    select backfill_client_task_templates_and_tasks();
+    ```
+
+    Isso semeia os templates padrão (Otimização seg/qua/sex, Report terça,
+    Checar saldo seg-sex) pros clientes que ainda não têm nenhum, e gera as
+    tarefas que estiverem faltando nas sprints já existentes — sem duplicar
+    nada mesmo se você rodar de novo.
+
 4. Crie os usuários em Authentication > Users no painel do Supabase
    (email/senha). O trigger cria o `profile` automaticamente com papel
    `gestor`. Para promover alguém a admin, rode no SQL Editor:
@@ -114,11 +129,45 @@ automático da sync, refinamentos de UX, etc.
   gasto de todos os clientes no mês, reaproveitando `spend-status.ts` (a
   mesma margem de ±10%, mas comparando com o planejado total do mês, sem
   proporção por dia como na sprint)
-- `src/app/clients/section.tsx` — wrapper de seção (título + ação +
-  conteúdo) reaproveitado entre "Financeiro por sprint" e "Tarefas" na
-  página do cliente, que também ganhou um resumo do mês (mesmo selo do
-  painel geral) e as ações (Editar / Atualizar dados do Meta / última
-  sincronização) agrupadas num cabeçalho único
+- `src/app/clients/section.tsx` — wrapper de seção (título + ação + conteúdo)
+- `src/app/clients/task-row.tsx` — uma linha de tarefa (título, tipo, prazo,
+  responsável, selo, editar, marcar como feito, comentários), reaproveitada
+  tanto na lista geral (`task-list.tsx`) quanto dentro do card da sprint
+  (`sprint-task-list.tsx`)
+- `src/app/clients/sprint-actions.ts` — editar `planned_spend` de uma
+  sprint, só admin (`requireAdmin`, e a RLS de `sprints` já bloqueia gestor)
+- `src/app/clients/[id]/tasks/[taskId]/edit` — editar uma tarefa (inclusive
+  mover o prazo/`due_date`); `/tasks/new` aceita `?sprintId=` pra já criar a
+  tarefa vinculada à sprint (usado pelo "+ Adicionar tarefa na sprint" de
+  cada card)
+- `supabase/task-templates.sql` — `client_task_templates` (plano
+  operacional configurável por cliente), `tasks.template_id` + índice único
+  parcial (garante que a geração não duplica tarefa), e a geração fica
+  embutida na mesma função que já cria as sprints — criar um cliente
+  semeia os templates padrão e já gera as tarefas da primeira sprint
+- `src/app/clients/task-templates-list.tsx` — configuração do plano
+  operacional na página de editar cliente: listar, criar, editar,
+  ativar/desativar e excluir templates (`task-templates-actions.ts`,
+  admin only). Editar um template não altera tarefas já geradas; excluir
+  um template só solta o vínculo (`template_id` vira null), não apaga a
+  tarefa
+- `src/lib/attention-alerts.ts` — gera o bloco "Precisa de atenção" a
+  partir de dados reais (investimento fora do esperado, tarefas atrasadas,
+  sync antiga, sprint sem planejado/tarefas/responsável), ordenado por
+  severidade; `computeAccountHealth()` deriva a saúde da conta da
+  severidade máxima entre os alertas ativos
+- `src/lib/client-metrics.ts` — projeção de fechamento do mês (pelo ritmo
+  observado até hoje) e contagem de tarefas do mês (feitas/pendentes/atrasadas)
+- `src/lib/spend-chart-data.ts` + `src/app/clients/spend-chart.tsx` —
+  planejado acumulado x gasto real acumulado no mês (SVG próprio, sem lib
+  nova — o projeto não tinha nenhuma e não valia adicionar uma pra um
+  gráfico de linha só)
+- `src/app/clients/client-header.tsx`, `client-metrics-cards.tsx`,
+  `attention-panel.tsx` — o novo topo da página do cliente
+- Tokens de marca em `src/app/globals.css` (`bg-background`, `bg-card`,
+  `text-muted-foreground`, `border-border`, `bg-brand`/`text-brand`) —
+  usados nos componentes novos; o resto do app continua nas classes
+  zinc-* que já funcionavam, pra não arriscar quebrar nada
 
 ## Sync com o Meta
 
@@ -137,17 +186,6 @@ automático da sync, refinamentos de UX, etc.
    Meta" que roda a mesma sync. Cron automático fica pra depois — por ora
    é só esse botão manual (ou o script acima).
 
-- `src/app/clients/task-row.tsx` — uma linha de tarefa (título, tipo, prazo,
-  responsável, selo, editar, marcar como feito, comentários), reaproveitada
-  tanto na lista geral (`task-list.tsx`) quanto dentro do card da sprint
-  (`sprint-task-list.tsx`)
-- `src/app/clients/sprint-actions.ts` — editar `planned_spend` de uma
-  sprint, só admin (`requireAdmin`, e a RLS de `sprints` já bloqueia gestor)
-- `src/app/clients/[id]/tasks/[taskId]/edit` — editar uma tarefa (inclusive
-  mover o prazo/`due_date`); `/tasks/new` aceita `?sprintId=` pra já criar a
-  tarefa vinculada à sprint (usado pelo "+ Adicionar tarefa na sprint" de
-  cada card)
-
 ## Ordem de construção
 
 1. ✅ Setup do projeto e schema SQL
@@ -162,6 +200,11 @@ automático da sync, refinamentos de UX, etc.
 10. ✅ Sprint como centro de gestão: `planned_spend` editável inline pelo
     admin, e tarefas vinculadas (`sprint_id`) exibidas e criadas dentro do
     card da sprint em vez de só numa lista geral separada
+11. ✅ Redesign da página do cliente + plano operacional automático: tarefas
+    padrão configuráveis por cliente e geradas sozinhas em cada sprint
+    (idempotente), painel de indicadores, "Precisa de atenção", gráfico de
+    planejado x real acumulado, sprints em accordion (atual aberta, demais
+    compactadas), identidade visual MITZA
 
 ## Deploy
 

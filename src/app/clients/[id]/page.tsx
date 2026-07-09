@@ -3,18 +3,22 @@ import { notFound } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { computeSprintFinancials, currentMonthRange } from "@/lib/sprint-financials";
-import {
-  classifySpendStatus,
-  SPEND_STATUS_BADGE_CLASSES,
-  SPEND_STATUS_LABEL,
-} from "@/lib/spend-status";
-import { formatCurrency, formatDateTime } from "@/lib/format";
-import { syncClientMetaAction } from "../meta-actions";
+import { computeCumulativeSpendSeries } from "@/lib/spend-chart-data";
+import { computeMonthProjection, computeTaskCounts } from "@/lib/client-metrics";
+import { classifySpendStatus } from "@/lib/spend-status";
+import { buildAttentionAlerts, computeAccountHealth } from "@/lib/attention-alerts";
+import { effectiveTaskStatus } from "@/lib/task-status";
+import { ClientHeader } from "../client-header";
+import { ClientMetricsCards } from "../client-metrics-cards";
+import { AttentionPanel } from "../attention-panel";
+import { SpendChart } from "../spend-chart";
 import { SprintCard } from "../sprint-card";
 import { TaskList } from "../task-list";
 import { Section } from "../section";
 import type { CommentItem } from "../comment-thread";
 import type { TaskListItem } from "../task-row";
+
+const OPTIMIZATION_LOOKBACK_DAYS = 14;
 
 async function fetchCommentsByType(
   supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
@@ -77,6 +81,7 @@ export default async function ClientPage({
   const { id } = await params;
   const { error, synced, taskError, commentError } = await searchParams;
   const profile = await getCurrentProfile();
+  const isAdmin = profile?.role === "admin";
   const supabase = await createSupabaseClient();
 
   // RLS já garante que um gestor só recebe o cliente se estiver em
@@ -91,42 +96,46 @@ export default async function ClientPage({
   if (!client) notFound();
 
   const { firstDay, lastDay } = currentMonthRange();
+  const today = new Date();
 
-  const [{ data: sprints }, { data: dailySpend }, { data: lastSync }] = await Promise.all([
-    supabase
-      .from("sprints")
-      .select("id, start_date, end_date, planned_spend")
-      .eq("client_id", id)
-      .gte("start_date", firstDay)
-      .lte("start_date", lastDay)
-      .order("start_date"),
-    supabase
-      .from("daily_spend")
-      .select("date, spend")
-      .eq("client_id", id)
-      .gte("date", firstDay)
-      .lte("date", lastDay),
-    supabase
-      .from("daily_spend")
-      .select("synced_at")
-      .eq("client_id", id)
-      .order("synced_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
+  const [{ data: sprints }, { data: dailySpend }, { data: lastSync }, { data: managers }] =
+    await Promise.all([
+      supabase
+        .from("sprints")
+        .select("id, start_date, end_date, planned_spend")
+        .eq("client_id", id)
+        .gte("start_date", firstDay)
+        .lte("start_date", lastDay)
+        .order("start_date"),
+      supabase
+        .from("daily_spend")
+        .select("date, spend")
+        .eq("client_id", id)
+        .gte("date", firstDay)
+        .lte("date", lastDay),
+      supabase
+        .from("daily_spend")
+        .select("synced_at")
+        .eq("client_id", id)
+        .order("synced_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase.from("client_managers").select("profiles(name)").eq("client_id", id),
+    ]);
 
   const sprintFinancials = (sprints ?? []).map((sprint) => {
     const actualSpend = (dailySpend ?? [])
       .filter((row) => row.date >= sprint.start_date && row.date <= sprint.end_date)
       .reduce((sum, row) => sum + row.spend, 0);
 
-    return computeSprintFinancials(sprint, actualSpend);
+    return computeSprintFinancials(sprint, actualSpend, today);
   });
 
   const monthPlanned = sprintFinancials.reduce((sum, sprint) => sum + sprint.plannedSpend, 0);
   const monthActual = sprintFinancials.reduce((sum, sprint) => sum + sprint.actualSpend, 0);
-  const monthStatus = classifySpendStatus(monthActual, monthPlanned);
-  const monthPct = monthPlanned > 0 ? (monthActual / monthPlanned) * 100 : null;
+  const monthStatus = classifySpendStatus(monthActual, monthPlanned, monthPlanned);
+  const projection = computeMonthProjection(monthPlanned, monthActual, today);
+  const currentSprint = sprintFinancials.find((sprint) => sprint.temporalStatus === "atual") ?? null;
 
   const { data: tasks } = await supabase
     .from("tasks")
@@ -153,6 +162,47 @@ export default async function ClientPage({
   const taskCommentsById = groupByCommentableId(taskComments);
   const { bySprintId: tasksBySprintId, unlinked: unlinkedTasks } = groupBySprintId(tasks ?? []);
 
+  const tasksThisMonth = (tasks ?? []).filter(
+    (task) => task.due_date >= firstDay && task.due_date <= lastDay,
+  );
+  const taskCounts = computeTaskCounts(tasksThisMonth, today);
+
+  const lookbackStart = new Date(today.getTime() - OPTIMIZATION_LOOKBACK_DAYS * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const recentOptimizationTasks = (tasks ?? []).filter(
+    (task) =>
+      task.type === "otimizacao" &&
+      task.due_date >= lookbackStart &&
+      task.due_date <= today.toISOString().slice(0, 10),
+  );
+  const optimizationRecentlyDone =
+    recentOptimizationTasks.length === 0 ||
+    recentOptimizationTasks.some((task) => effectiveTaskStatus(task, today) === "feito");
+
+  const currentSprintTasks = currentSprint ? tasksBySprintId.get(currentSprint.sprintId) ?? [] : [];
+
+  const alerts = buildAttentionAlerts({
+    monthStatus,
+    overdueTasksCount: taskCounts.overdue,
+    optimizationRecentlyDone,
+    lastSyncedAt: lastSync?.synced_at ?? null,
+    currentSprintPlannedSpend: currentSprint?.plannedSpend ?? null,
+    currentSprintTaskCount: currentSprintTasks.length,
+    currentSprintUnassignedCount: currentSprintTasks.filter((task) => !task.assignee).length,
+    now: today,
+  });
+  const accountHealth = computeAccountHealth(alerts);
+
+  const chartPoints = computeCumulativeSpendSeries(
+    sprints ?? [],
+    dailySpend ?? [],
+    { firstDay, lastDay },
+    today,
+  );
+
+  const managerNames = (managers ?? []).flatMap((m) => (m.profiles ? [m.profiles.name] : []));
+
   const banners = [
     error && { tone: "red", text: error },
     commentError && { tone: "red", text: commentError },
@@ -161,48 +211,25 @@ export default async function ClientPage({
   ].filter((banner): banner is { tone: "red" | "green"; text: string } => Boolean(banner));
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-12">
+    <div className="mx-auto max-w-6xl px-6 py-8">
       <Link href="/" className="text-sm text-zinc-500 hover:underline">
         &larr; Voltar
       </Link>
 
-      <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
-            {client.name}
-          </h1>
-          <p className="font-mono text-sm text-zinc-500">{client.meta_ad_account_id}</p>
-        </div>
-
-        <div className="flex flex-col items-end gap-1.5">
-          <div className="flex items-center gap-2">
-            {profile?.role === "admin" && (
-              <Link
-                href={`/clients/${client.id}/edit`}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
-              >
-                Editar
-              </Link>
-            )}
-            <form action={syncClientMetaAction.bind(null, client.id)}>
-              <button
-                type="submit"
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
-              >
-                Atualizar dados do Meta
-              </button>
-            </form>
-          </div>
-          {lastSync && (
-            <p className="text-xs text-zinc-400">
-              Última sync: {formatDateTime(lastSync.synced_at)}
-            </p>
-          )}
-        </div>
+      <div className="mt-3">
+        <ClientHeader
+          clientId={client.id}
+          clientName={client.name}
+          metaAdAccountId={client.meta_ad_account_id}
+          managerNames={managerNames}
+          health={accountHealth}
+          lastSyncedAt={lastSync?.synced_at ?? null}
+          isAdmin={isAdmin}
+        />
       </div>
 
       {banners.length > 0 && (
-        <div className="mt-6 flex flex-col gap-2">
+        <div className="mt-4 flex flex-col gap-2">
           {banners.map((banner, index) => (
             <p
               key={index}
@@ -218,23 +245,31 @@ export default async function ClientPage({
         </div>
       )}
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-zinc-500">Resumo do mês</p>
-          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-            Planejado {formatCurrency(monthPlanned)} · Gasto {formatCurrency(monthActual)}
-            {monthPct !== null && ` · ${monthPct.toFixed(0)}% atingido`}
-          </p>
-        </div>
-        <span
-          className={`rounded-full px-2.5 py-1 text-xs font-medium ${SPEND_STATUS_BADGE_CLASSES[monthStatus]}`}
-        >
-          {SPEND_STATUS_LABEL[monthStatus]}
-        </span>
+      <div className="mt-4">
+        <ClientMetricsCards
+          monthPlanned={monthPlanned}
+          monthActual={monthActual}
+          projection={projection}
+          taskCounts={taskCounts}
+          health={accountHealth}
+        />
       </div>
 
-      <Section title="Financeiro por sprint">
-        <div className="flex flex-col gap-4">
+      <div className="mt-4">
+        <AttentionPanel alerts={alerts} />
+      </div>
+
+      <div className="mt-4 rounded-lg border border-border bg-card p-4">
+        <h2 className="text-sm font-medium text-foreground">
+          Planejado acumulado x gasto real acumulado
+        </h2>
+        <div className="mt-3">
+          <SpendChart points={chartPoints} />
+        </div>
+      </div>
+
+      <Section title="Sprints do mês">
+        <div className="flex flex-col gap-3">
           {sprintFinancials.length > 0 ? (
             sprintFinancials.map((sprint) => (
               <SprintCard
@@ -242,7 +277,7 @@ export default async function ClientPage({
                 sprint={sprint}
                 comments={sprintCommentsById.get(sprint.sprintId) ?? []}
                 clientId={client.id}
-                isAdmin={profile?.role === "admin"}
+                isAdmin={isAdmin}
                 tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
                 commentsByTaskId={taskCommentsById}
               />

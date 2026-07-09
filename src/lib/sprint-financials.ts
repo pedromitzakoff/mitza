@@ -1,6 +1,8 @@
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { todayUTC } from "@/lib/today";
 
+export type SprintTemporalStatus = "futura" | "atual" | "concluida";
+
 export interface SprintFinancials {
   sprintId: string;
   startDate: string;
@@ -10,6 +12,7 @@ export interface SprintFinancials {
   expectedToDate: number;
   status: SpendStatus;
   progressPct: number;
+  temporalStatus: SprintTemporalStatus;
 }
 
 function daysBetweenInclusive(a: Date, b: Date): number {
@@ -38,8 +41,10 @@ export function computeSprintFinancials(
     today < start ? 0 : today > end ? totalDays : daysBetweenInclusive(start, today);
 
   const expectedToDate = (sprint.planned_spend * daysPassed) / totalDays;
-  const status = classifySpendStatus(actualSpend, expectedToDate);
+  const status = classifySpendStatus(actualSpend, expectedToDate, sprint.planned_spend);
   const progressPct = sprint.planned_spend > 0 ? (actualSpend / sprint.planned_spend) * 100 : 0;
+  const temporalStatus: SprintTemporalStatus =
+    today < start ? "futura" : today > end ? "concluida" : "atual";
 
   return {
     sprintId: sprint.id,
@@ -50,6 +55,7 @@ export function computeSprintFinancials(
     expectedToDate,
     status,
     progressPct,
+    temporalStatus,
   };
 }
 

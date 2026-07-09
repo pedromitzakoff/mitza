@@ -1,21 +1,40 @@
 @import "tailwindcss";
 
+/*
+ * Tokens de marca (MITZA). Componentes novos (header/métricas/painel de
+ * atenção/gráfico/sprint) usam essas classes (bg-card, text-muted-foreground,
+ * border-border, bg-brand...) em vez de zinc-* hardcoded. Componentes mais
+ * antigos continuam em zinc-* — as duas paletas são próximas o bastante (não
+ * há choque visual) e não valia o risco de retocar tudo que já funciona.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f7f5;
+  --foreground: #181817;
+  --card: #ffffff;
+  --muted-foreground: #737373;
+  --border-default: #e7e5e4;
+  --brand: #654321;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border-default);
+  --color-brand: var(--brand);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #141412;
+    --foreground: #f2f1ee;
+    --card: #1c1c1a;
+    --muted-foreground: #9c9a95;
+    --border-default: #34332f;
+    --brand: #b58a5c;
   }
 }
 
