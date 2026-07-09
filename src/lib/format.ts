@@ -19,6 +19,19 @@ export function formatDateRange(startDate: string, endDate: string): string {
   return `${start} – ${end}`;
 }
 
+const fullDateFormatter = new Intl.DateTimeFormat("pt-BR", {
+  weekday: "long",
+  day: "2-digit",
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/** Data por extenso em pt-BR (ex.: "quinta-feira, 09 de julho de 2026"). */
+export function formatFullDate(date: Date): string {
+  return fullDateFormatter.format(date);
+}
+
 const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",

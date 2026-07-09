@@ -192,9 +192,21 @@ automático da sync, refinamentos de UX, etc.
 - `src/app/clients/client-header.tsx`, `client-metrics-cards.tsx`,
   `attention-panel.tsx` — o novo topo da página do cliente
 - Tokens de marca em `src/app/globals.css` (`bg-background`, `bg-card`,
-  `text-muted-foreground`, `border-border`, `bg-brand`/`text-brand`) —
-  usados nos componentes novos; o resto do app continua nas classes
-  zinc-* que já funcionavam, pra não arriscar quebrar nada
+  `text-muted-foreground`, `border-border`, `bg-brand`/`text-brand`,
+  `--brand` = azul MITZA `#2563eb`/`#60a5fa` no escuro) — usados nos
+  componentes novos e nos botões principais/links de navegação do resto
+  do app (que trocaram de preto/branco pra azul); cores semânticas
+  (verde/âmbar/vermelho de status) continuam à parte, não fazem parte do
+  token de marca
+- `src/lib/format.ts` — `formatFullDate` (data por extenso em pt-BR, ex.
+  "quinta-feira, 09 de julho de 2026"), usado no header do cliente e
+  dentro do card da sprint atual (`src/app/clients/sprint-card.tsx`, selo
+  "Sprint atual" com borda azul à esquerda) — calculado a partir de
+  `todayUTC()`, nunca hardcoded
+- `src/app/clients/task-row.tsx` — selo "Hoje" (azul) quando
+  `due_date` é hoje e a tarefa ainda está pendente; tarefa futura pendente
+  fica com opacidade reduzida (mais discreta); atrasada continua com o
+  selo vermelho de sempre
 - `supabase/soft-delete-clients.sql` — `clients.deleted_at`; excluir é
   sempre soft delete (`deleteClientAction`/`restoreClientAction` em
   `src/app/clients/actions.ts`, admin only). Todas as queries de listagem
@@ -248,6 +260,10 @@ automático da sync, refinamentos de UX, etc.
     numeração das sprints (Sprint 1, 2, 3...) e gráfico mais baixo
 13. ✅ Exclusão de cliente (soft delete, admin only) com confirmação,
     tela de clientes excluídos com restaurar
+14. ✅ Identidade visual azul/branco/preto (token `--brand` = azul, sem
+    marrom), selo "Sprint atual" com destaque, data de hoje por extenso no
+    header e na sprint atual, selo "Hoje" em tarefa com prazo hoje,
+    tarefas futuras mais discretas
 
 ## Deploy
 

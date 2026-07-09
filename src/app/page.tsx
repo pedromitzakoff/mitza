@@ -39,10 +39,10 @@ export default async function Home() {
         <div className="flex items-center gap-3">
           {profile.role === "admin" && (
             <>
-              <Link href="/painel-mensal" className="text-sm text-zinc-500 hover:underline">
+              <Link href="/painel-mensal" className="text-sm font-medium text-brand hover:underline">
                 Painel geral do mês
               </Link>
-              <Link href="/settings" className="text-sm text-zinc-500 hover:underline">
+              <Link href="/settings" className="text-sm font-medium text-brand hover:underline">
                 Configurações
               </Link>
             </>
@@ -63,7 +63,7 @@ export default async function Home() {
         {profile.role === "admin" && (
           <Link
             href="/clients/new"
-            className="rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+            className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
           >
             + Novo cliente
           </Link>
@@ -78,7 +78,7 @@ export default async function Home() {
                 href={`/clients/${client.id}`}
                 className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900"
               >
-                <span className="min-w-0 truncate text-black dark:text-zinc-50">
+                <span className="min-w-0 truncate font-medium text-brand">
                   {client.name}
                 </span>
                 <span className="shrink-0 font-mono text-xs text-zinc-500">

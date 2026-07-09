@@ -81,7 +81,7 @@ export default async function PainelMensalPage() {
               rows.map((row) => (
                 <tr key={row.id}>
                   <td className="px-4 py-3">
-                    <Link href={`/clients/${row.id}`} className="text-black hover:underline dark:text-zinc-50">
+                    <Link href={`/clients/${row.id}`} className="font-medium text-brand hover:underline">
                       {row.name}
                     </Link>
                   </td>

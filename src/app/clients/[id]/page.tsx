@@ -295,7 +295,7 @@ export default async function ClientPage({
         action={
           <Link
             href={`/clients/${client.id}/tasks/new`}
-            className="rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+            className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
           >
             + Nova tarefa
           </Link>

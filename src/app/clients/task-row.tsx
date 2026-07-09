@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { effectiveTaskStatus } from "@/lib/task-status";
+import { todayDateString } from "@/lib/today";
 import type { TaskStatus, TaskType } from "@/lib/supabase/database.types";
 import { TASK_STATUS_BADGE_CLASSES, TASK_STATUS_LABEL, TASK_TYPE_LABEL } from "./task-labels";
 import { completeTaskAction } from "./tasks-actions";
@@ -35,9 +36,13 @@ export function TaskRow({
   comments: CommentItem[];
 }) {
   const effectiveStatus = effectiveTaskStatus(task);
+  const isToday = task.due_date === todayDateString();
+  const isFuture = effectiveStatus === "pendente" && !isToday && task.due_date > todayDateString();
 
   return (
-    <li className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <li
+      className={`rounded-lg border border-zinc-200 p-4 dark:border-zinc-800 ${isFuture ? "opacity-70" : ""}`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-black dark:text-zinc-50">{task.title}</p>
@@ -48,6 +53,11 @@ export function TaskRow({
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
+          {isToday && effectiveStatus === "pendente" && (
+            <span className="rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand">
+              Hoje
+            </span>
+          )}
           <span
             className={`rounded-full px-2.5 py-1 text-xs font-medium ${TASK_STATUS_BADGE_CLASSES[effectiveStatus]}`}
           >

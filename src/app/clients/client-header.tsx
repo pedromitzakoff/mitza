@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatFullDate } from "@/lib/format";
+import { todayUTC } from "@/lib/today";
 import type { AccountHealth } from "@/lib/attention-alerts";
 import { syncClientMetaAction } from "./meta-actions";
 
@@ -47,6 +48,7 @@ export function ClientHeader({
         <p className="mt-0.5 text-xs text-muted-foreground">
           {managerNames.length > 0 ? managerNames.join(", ") : "Sem gestor atribuído"}
         </p>
+        <p className="mt-0.5 text-xs font-medium text-brand">Hoje: {formatFullDate(todayUTC())}</p>
       </div>
 
       <div className="flex flex-col items-end gap-1.5">

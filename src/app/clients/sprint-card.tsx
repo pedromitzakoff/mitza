@@ -1,7 +1,8 @@
 import type { SprintFinancials } from "@/lib/sprint-financials";
-import { formatCurrency, formatDateRange } from "@/lib/format";
+import { formatCurrency, formatDateRange, formatFullDate } from "@/lib/format";
 import { SPEND_STATUS_BADGE_CLASSES, SPEND_STATUS_LABEL } from "@/lib/spend-status";
 import { effectiveTaskStatus } from "@/lib/task-status";
+import { todayUTC } from "@/lib/today";
 import { CommentThread, type CommentItem } from "./comment-thread";
 import { SprintTaskList } from "./sprint-task-list";
 import type { TaskListItem } from "./task-row";
@@ -9,13 +10,13 @@ import { updateSprintPlannedSpendAction } from "./sprint-actions";
 
 const TEMPORAL_LABEL = {
   futura: "Futura",
-  atual: "Em andamento",
+  atual: "Sprint atual",
   concluida: "Concluída",
 } as const;
 
 const TEMPORAL_BADGE_CLASSES = {
   futura: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
-  atual: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  atual: "bg-brand/10 text-brand",
   concluida: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
 } as const;
 
@@ -54,10 +55,14 @@ export function SprintCard({
   const barWidth = Math.min(Math.max(sprint.progressPct, 0), 100);
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
 
+  const isCurrent = sprint.temporalStatus === "atual";
+
   return (
     <details
-      open={sprint.temporalStatus === "atual"}
-      className="group rounded-lg border border-border bg-card [&_summary::-webkit-details-marker]:hidden"
+      open={isCurrent}
+      className={`group rounded-lg border bg-card [&_summary::-webkit-details-marker]:hidden ${
+        isCurrent ? "border-l-4 border-l-brand border-y-border border-r-border" : "border-border"
+      }`}
     >
       <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -90,6 +95,12 @@ export function SprintCard({
       </summary>
 
       <div className="border-t border-border p-4">
+        {isCurrent && (
+          <p className="mb-3 text-xs font-medium text-brand">
+            Hoje: {formatFullDate(todayUTC())}
+          </p>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           {isAdmin ? (
             <form

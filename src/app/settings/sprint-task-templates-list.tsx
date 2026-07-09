@@ -190,7 +190,7 @@ export function SprintTaskTemplatesList({
         <TemplateFields managers={managers} clients={clients} />
         <button
           type="submit"
-          className="rounded-md bg-black px-2 py-1 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          className="rounded-md bg-brand px-2 py-1 text-xs font-medium text-white hover:bg-brand-hover"
         >
           + Adicionar
         </button>
