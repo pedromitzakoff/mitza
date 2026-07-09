@@ -104,6 +104,10 @@ Construído em etapas — veja o estado de cada uma nas tasks do repositório.
 - `src/lib/today.ts` — "hoje" no fuso da agência (`America/Sao_Paulo`), não
   no fuso do servidor — usado em tudo que compara com a data atual (sprint,
   tarefa, sync do Meta) pra não errar o dia perto da meia-noite
+- `src/app/clients/comment-thread.tsx` — lista + formulário de comentário,
+  genérico pra sprint e tarefa (`src/app/clients/comments-actions.ts` cria o
+  comentário sempre com `author_id` do usuário logado). Na sprint fica
+  sempre visível; na tarefa fica dentro de um `<details>` colapsável
 
 ## Sync com o Meta
 
@@ -130,7 +134,7 @@ Construído em etapas — veja o estado de cada uma nas tasks do repositório.
 4. ✅ Sync com a Meta Insights API
 5. ✅ Dashboard financeiro por sprint com selos de status
 6. ✅ CRUD de tarefas + recorrência e "atrasado"
-7. Comentários genéricos (sprint e tarefa)
+7. ✅ Comentários genéricos (sprint e tarefa)
 8. Painel geral do mês com cálculo de meta batida
 9. Polimento visual da página do cliente
 

@@ -6,16 +6,49 @@ import { computeSprintFinancials, currentMonthRange } from "@/lib/sprint-financi
 import { syncClientMetaAction } from "../meta-actions";
 import { SprintCard } from "../sprint-card";
 import { TaskList } from "../task-list";
+import type { CommentItem } from "../comment-thread";
+
+async function fetchCommentsByType(
+  supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
+  type: "sprint" | "task",
+  ids: string[],
+): Promise<CommentItem[]> {
+  if (ids.length === 0) return [];
+
+  const { data } = await supabase
+    .from("comments")
+    .select("id, commentable_id, content, created_at, author:profiles!comments_author_id_fkey(name)")
+    .eq("commentable_type", type)
+    .in("commentable_id", ids)
+    .order("created_at");
+
+  return data ?? [];
+}
+
+function groupByCommentableId(comments: CommentItem[]): Map<string, CommentItem[]> {
+  const map = new Map<string, CommentItem[]>();
+  for (const comment of comments) {
+    const list = map.get(comment.commentable_id) ?? [];
+    list.push(comment);
+    map.set(comment.commentable_id, list);
+  }
+  return map;
+}
 
 export default async function ClientPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; synced?: string; taskError?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    synced?: string;
+    taskError?: string;
+    commentError?: string;
+  }>;
 }) {
   const { id } = await params;
-  const { error, synced, taskError } = await searchParams;
+  const { error, synced, taskError, commentError } = await searchParams;
   const profile = await getCurrentProfile();
   const supabase = await createSupabaseClient();
 
@@ -62,6 +95,22 @@ export default async function ClientPage({
     .eq("client_id", id)
     .order("due_date");
 
+  const [sprintComments, taskComments] = await Promise.all([
+    fetchCommentsByType(
+      supabase,
+      "sprint",
+      sprintFinancials.map((sprint) => sprint.sprintId),
+    ),
+    fetchCommentsByType(
+      supabase,
+      "task",
+      (tasks ?? []).map((task) => task.id),
+    ),
+  ]);
+
+  const sprintCommentsById = groupByCommentableId(sprintComments);
+  const taskCommentsById = groupByCommentableId(taskComments);
+
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
       <Link href="/" className="text-sm text-zinc-500 hover:underline">
@@ -96,6 +145,11 @@ export default async function ClientPage({
           {synced} dia(s) de spend sincronizado(s) com o Meta.
         </p>
       )}
+      {commentError && (
+        <p className="mt-6 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+          {commentError}
+        </p>
+      )}
 
       <form action={syncClientMetaAction.bind(null, client.id)} className="mt-6">
         <button
@@ -113,7 +167,14 @@ export default async function ClientPage({
 
         <div className="mt-4 flex flex-col gap-4">
           {sprintFinancials.length > 0 ? (
-            sprintFinancials.map((sprint) => <SprintCard key={sprint.sprintId} sprint={sprint} />)
+            sprintFinancials.map((sprint) => (
+              <SprintCard
+                key={sprint.sprintId}
+                sprint={sprint}
+                comments={sprintCommentsById.get(sprint.sprintId) ?? []}
+                clientId={client.id}
+              />
+            ))
           ) : (
             <p className="text-sm text-zinc-500">Nenhuma sprint neste mês ainda.</p>
           )}
@@ -138,7 +199,7 @@ export default async function ClientPage({
         )}
 
         <div className="mt-4">
-          <TaskList tasks={tasks ?? []} clientId={client.id} />
+          <TaskList tasks={tasks ?? []} clientId={client.id} commentsByTaskId={taskCommentsById} />
         </div>
       </section>
     </div>

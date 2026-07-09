@@ -1,5 +1,6 @@
 import type { SprintFinancials } from "@/lib/sprint-financials";
 import { formatCurrency, formatDateRange } from "@/lib/format";
+import { CommentThread, type CommentItem } from "./comment-thread";
 
 const STATUS_LABEL = {
   dentro: "Dentro do esperado",
@@ -25,7 +26,15 @@ const DIFFERENCE_TEXT_CLASSES = {
   abaixo: "text-amber-600 dark:text-amber-400",
 } as const;
 
-export function SprintCard({ sprint }: { sprint: SprintFinancials }) {
+export function SprintCard({
+  sprint,
+  comments,
+  clientId,
+}: {
+  sprint: SprintFinancials;
+  comments: CommentItem[];
+  clientId: string;
+}) {
   const difference = sprint.actualSpend - sprint.plannedSpend;
   const barWidth = Math.min(Math.max(sprint.progressPct, 0), 100);
 
@@ -63,7 +72,12 @@ export function SprintCard({ sprint }: { sprint: SprintFinancials }) {
         </span>
       </p>
 
-      <p className="mt-3 text-xs text-zinc-400">Comentários chegam na Etapa 7.</p>
+      <CommentThread
+        comments={comments}
+        commentableType="sprint"
+        commentableId={sprint.sprintId}
+        clientId={clientId}
+      />
     </div>
   );
 }
