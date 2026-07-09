@@ -82,13 +82,38 @@ Construído em etapas — veja o estado de cada uma nas tasks do repositório.
   (`/clients/[id]`, preenchida nas próximas etapas)
 - `supabase/schema.sql` — schema SQL das tabelas e funções auxiliares
 - `supabase/policies.sql` — trigger de criação de profile + RLS por papel
+- `src/lib/meta.ts` — chamada à Meta Insights API (`fetchDailySpend`)
+- `src/lib/meta-sync.ts` — sync de um cliente (ou de todos) para `daily_spend`,
+  usando o client admin (service role) porque roda fora de uma sessão de usuário
+- `scripts/sync-meta.ts` — script isolado pra testar a sync via terminal
+  (`npm run sync:meta -- <client_id>`) antes/depois de mexer na UI
+- `src/app/api/cron/sync-meta` — rota que roda a sync de todos os clientes;
+  sem cron automático ainda (só o botão manual), ver comentário no arquivo
+  para como ligar um cron da Vercel quando for a hora
+
+## Sync com o Meta
+
+1. Teste primeiro pelo terminal, sem precisar da UI:
+
+   ```bash
+   npm run sync:meta -- <client_id>
+   ```
+
+   Isso busca o spend diário (breakdown por dia) da conta de anúncios do
+   cliente desde o início da sprint atual até hoje, e salva em `daily_spend`.
+   Requer que o cliente já tenha uma sprint cobrindo a data de hoje (criada
+   automaticamente ao cadastrar o cliente — veja `supabase/schema.sql`).
+
+2. Na página do cliente (`/clients/[id]`) tem um botão "Atualizar dados do
+   Meta" que roda a mesma sync. Cron automático fica pra depois — por ora
+   é só esse botão manual (ou o script acima).
 
 ## Ordem de construção
 
 1. ✅ Setup do projeto e schema SQL
 2. ✅ Autenticação com papéis (admin/gestor) e proteção de rotas
 3. ✅ CRUD de clientes e atribuição de gestores
-4. Sync com a Meta Insights API
+4. ✅ Sync com a Meta Insights API
 5. Dashboard financeiro por sprint com selos de status
 6. CRUD de tarefas + recorrência e "atrasado"
 7. Comentários genéricos (sprint e tarefa)

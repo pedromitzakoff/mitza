@@ -2,13 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { syncClientMetaAction } from "../meta-actions";
 
 export default async function ClientPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; synced?: string }>;
 }) {
   const { id } = await params;
+  const { error, synced } = await searchParams;
   const profile = await getCurrentProfile();
   const supabase = await createSupabaseClient();
 
@@ -46,6 +50,26 @@ export default async function ClientPage({
           </Link>
         )}
       </div>
+
+      {error && (
+        <p className="mt-6 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+          {error}
+        </p>
+      )}
+      {synced && (
+        <p className="mt-6 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">
+          {synced} dia(s) de spend sincronizado(s) com o Meta.
+        </p>
+      )}
+
+      <form action={syncClientMetaAction.bind(null, client.id)} className="mt-6">
+        <button
+          type="submit"
+          className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+        >
+          Atualizar dados do Meta
+        </button>
+      </form>
 
       <p className="mt-8 text-sm text-zinc-500">
         Financeiro por sprint e tarefas chegam nas próximas etapas.
