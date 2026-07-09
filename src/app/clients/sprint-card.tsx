@@ -19,6 +19,12 @@ const PROGRESS_BAR_CLASSES = {
   abaixo: "bg-amber-500",
 } as const;
 
+const DIFFERENCE_TEXT_CLASSES = {
+  dentro: "",
+  acima: "text-red-600 dark:text-red-400",
+  abaixo: "text-amber-600 dark:text-amber-400",
+} as const;
+
 export function SprintCard({ sprint }: { sprint: SprintFinancials }) {
   const difference = sprint.actualSpend - sprint.plannedSpend;
   const barWidth = Math.min(Math.max(sprint.progressPct, 0), 100);
@@ -51,15 +57,7 @@ export function SprintCard({ sprint }: { sprint: SprintFinancials }) {
 
       <p className="mt-2 text-xs text-zinc-500">
         Diferença:{" "}
-        <span
-          className={
-            difference > 0
-              ? "text-red-600 dark:text-red-400"
-              : difference < 0
-                ? "text-amber-600 dark:text-amber-400"
-                : ""
-          }
-        >
+        <span className={DIFFERENCE_TEXT_CLASSES[sprint.status]}>
           {difference > 0 ? "+" : ""}
           {formatCurrency(difference)}
         </span>
