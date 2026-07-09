@@ -5,16 +5,17 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { computeSprintFinancials, currentMonthRange } from "@/lib/sprint-financials";
 import { syncClientMetaAction } from "../meta-actions";
 import { SprintCard } from "../sprint-card";
+import { TaskList } from "../task-list";
 
 export default async function ClientPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; synced?: string }>;
+  searchParams: Promise<{ error?: string; synced?: string; taskError?: string }>;
 }) {
   const { id } = await params;
-  const { error, synced } = await searchParams;
+  const { error, synced, taskError } = await searchParams;
   const profile = await getCurrentProfile();
   const supabase = await createSupabaseClient();
 
@@ -54,6 +55,12 @@ export default async function ClientPage({
 
     return computeSprintFinancials(sprint, actualSpend);
   });
+
+  const { data: tasks } = await supabase
+    .from("tasks")
+    .select("id, title, type, due_date, status, assignee:profiles!tasks_assignee_id_fkey(name)")
+    .eq("client_id", id)
+    .order("due_date");
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
@@ -113,7 +120,27 @@ export default async function ClientPage({
         </div>
       </section>
 
-      <p className="mt-8 text-sm text-zinc-500">Tarefas chegam nas próximas etapas.</p>
+      <section className="mt-8">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-medium text-black dark:text-zinc-50">Tarefas</h2>
+          <Link
+            href={`/clients/${client.id}/tasks/new`}
+            className="rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          >
+            + Nova tarefa
+          </Link>
+        </div>
+
+        {taskError && (
+          <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+            {taskError}
+          </p>
+        )}
+
+        <div className="mt-4">
+          <TaskList tasks={tasks ?? []} clientId={client.id} />
+        </div>
+      </section>
     </div>
   );
 }

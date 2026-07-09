@@ -94,6 +94,13 @@ Construído em etapas — veja o estado de cada uma nas tasks do repositório.
   ±10% por padrão) e a classificação dentro/acima/abaixo
 - `src/lib/sprint-financials.ts` — gasto esperado até hoje (proporcional aos
   dias já passados na sprint) e % de progresso de cada sprint
+- `src/app/clients/[id]/tasks/new` — cadastro de tarefa (admin ou gestor do
+  cliente); `src/app/clients/tasks-actions.ts` tem a criação e o "marcar
+  como feito" (que já gera a próxima ocorrência se a tarefa for recorrente)
+- `src/lib/task-recurrence.ts` — próxima data de uma tarefa recorrente
+  (diária/semanal/mensal, com o mês tratando fim de mês corretamente)
+- `src/lib/task-status.ts` — status efetivo da tarefa calculado na consulta:
+  vira "atrasado" se passou do prazo sem estar "feito", sem job separado
 
 ## Sync com o Meta
 
@@ -119,7 +126,7 @@ Construído em etapas — veja o estado de cada uma nas tasks do repositório.
 3. ✅ CRUD de clientes e atribuição de gestores
 4. ✅ Sync com a Meta Insights API
 5. ✅ Dashboard financeiro por sprint com selos de status
-6. CRUD de tarefas + recorrência e "atrasado"
+6. ✅ CRUD de tarefas + recorrência e "atrasado"
 7. Comentários genéricos (sprint e tarefa)
 8. Painel geral do mês com cálculo de meta batida
 9. Polimento visual da página do cliente
