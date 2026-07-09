@@ -21,7 +21,7 @@ export default async function SprintTaskTemplatesPage({
         .select("id, title, type, weekday, is_active, applies_to_all, default_assignee_id")
         .order("weekday"),
       supabase.from("sprint_task_template_clients").select("template_id, client_id"),
-      supabase.from("clients").select("id, name").order("name"),
+      supabase.from("clients").select("id, name").is("deleted_at", null).order("name"),
       supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
       supabase.from("tasks").select("template_id").not("template_id", "is", null),
     ]);

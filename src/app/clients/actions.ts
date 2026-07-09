@@ -64,3 +64,32 @@ export async function updateClientAction(clientId: string, formData: FormData) {
   revalidatePath(`/clients/${clientId}`);
   redirect(`/clients/${clientId}`);
 }
+
+export async function deleteClientAction(clientId: string) {
+  await requireAdmin();
+  const supabase = await createSupabaseClient();
+
+  const { error } = await supabase
+    .from("clients")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", clientId);
+
+  if (error) {
+    redirect(`/clients/${clientId}/edit?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/");
+  revalidatePath("/painel-mensal");
+  redirect("/");
+}
+
+export async function restoreClientAction(clientId: string) {
+  await requireAdmin();
+  const supabase = await createSupabaseClient();
+
+  await supabase.from("clients").update({ deleted_at: null }).eq("id", clientId);
+
+  revalidatePath("/");
+  revalidatePath("/settings/deleted-clients");
+  redirect("/settings/deleted-clients");
+}

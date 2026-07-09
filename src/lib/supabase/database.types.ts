@@ -39,18 +39,21 @@ export interface Database {
           name: string;
           meta_ad_account_id: string;
           created_at: string;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
           name: string;
           meta_ad_account_id: string;
           created_at?: string;
+          deleted_at?: string | null;
         };
         Update: {
           id?: string;
           name?: string;
           meta_ad_account_id?: string;
           created_at?: string;
+          deleted_at?: string | null;
         };
         Relationships: [];
       };

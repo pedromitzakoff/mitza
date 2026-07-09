@@ -20,12 +20,16 @@ export async function syncClientMetaSpend(clientId: string): Promise<SyncResult>
 
   const { data: client, error: clientError } = await supabase
     .from("clients")
-    .select("id, meta_ad_account_id")
+    .select("id, meta_ad_account_id, deleted_at")
     .eq("id", clientId)
     .single();
 
   if (clientError || !client) {
     throw new Error(`Cliente ${clientId} não encontrado`);
+  }
+
+  if (client.deleted_at) {
+    throw new Error(`Cliente ${clientId} foi excluído`);
   }
 
   const currentDate = todayDateString();
@@ -66,7 +70,10 @@ export async function syncClientMetaSpend(clientId: string): Promise<SyncResult>
 /** Roda a sync acima para todos os clientes cadastrados. */
 export async function syncAllClientsMetaSpend(): Promise<SyncResult[]> {
   const supabase = createAdminClient();
-  const { data: clients, error } = await supabase.from("clients").select("id");
+  const { data: clients, error } = await supabase
+    .from("clients")
+    .select("id")
+    .is("deleted_at", null);
 
   if (error) {
     throw new Error(error.message);

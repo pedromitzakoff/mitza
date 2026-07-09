@@ -91,6 +91,7 @@ export default async function ClientPage({
     .from("clients")
     .select("id, name, meta_ad_account_id")
     .eq("id", id)
+    .is("deleted_at", null)
     .single();
 
   if (!client) notFound();

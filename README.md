@@ -70,6 +70,12 @@ automático da sync, refinamentos de UX, etc.
     `select backfill_sprint_tasks_from_templates();` no SQL Editor) — sem
     isso, a mudança só vale pras próximas sprints geradas.
 
+3e. Rode `supabase/soft-delete-clients.sql` (depois do passo 3d). Adiciona
+    `clients.deleted_at` (exclusão de cliente é soft delete — sprints,
+    tarefas, comentários e `daily_spend` nunca são apagados) e ajusta a
+    geração de sprints do mês seguinte e o backfill de tarefas pra ignorar
+    cliente excluído.
+
 4. Crie os usuários em Authentication > Users no painel do Supabase
    (email/senha). O trigger cria o `profile` automaticamente com papel
    `gestor`. Para promover alguém a admin, rode no SQL Editor:
@@ -189,6 +195,17 @@ automático da sync, refinamentos de UX, etc.
   `text-muted-foreground`, `border-border`, `bg-brand`/`text-brand`) —
   usados nos componentes novos; o resto do app continua nas classes
   zinc-* que já funcionavam, pra não arriscar quebrar nada
+- `supabase/soft-delete-clients.sql` — `clients.deleted_at`; excluir é
+  sempre soft delete (`deleteClientAction`/`restoreClientAction` em
+  `src/app/clients/actions.ts`, admin only). Todas as queries de listagem
+  (`/`, `/painel-mensal`, o seletor de clientes em
+  `/settings/sprint-task-templates`) filtram `deleted_at is null`; a
+  página do cliente e a de editar fazem o mesmo filtro, então uma URL
+  direta de cliente excluído vira 404. `src/app/clients/delete-client-button.tsx`
+  pede confirmação nativa do navegador antes de excluir (não é um clique
+  só). `/settings/deleted-clients` lista e restaura
+- `src/app/settings/deleted-clients/page.tsx` — clientes excluídos e
+  botão de restaurar (admin only)
 
 ## Sync com o Meta
 
@@ -229,6 +246,8 @@ automático da sync, refinamentos de UX, etc.
 12. ✅ Tarefas padrão de sprint viram configuração global (`/settings`,
     "todos os clientes" ou clientes selecionados, em vez de por cliente),
     numeração das sprints (Sprint 1, 2, 3...) e gráfico mais baixo
+13. ✅ Exclusão de cliente (soft delete, admin only) com confirmação,
+    tela de clientes excluídos com restaurar
 
 ## Deploy
 

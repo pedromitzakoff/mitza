@@ -22,6 +22,7 @@ export default async function Home() {
   const { data: clients } = await supabase
     .from("clients")
     .select("id, name, meta_ad_account_id")
+    .is("deleted_at", null)
     .order("name");
 
   return (

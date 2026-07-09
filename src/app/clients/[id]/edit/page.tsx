@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { updateClientAction } from "../../actions";
+import { deleteClientAction, updateClientAction } from "../../actions";
 import { ClientForm } from "../../client-form";
+import { DeleteClientButton } from "../../delete-client-button";
+import { Section } from "../../section";
 
 export default async function EditClientPage({
   params,
@@ -18,7 +20,12 @@ export default async function EditClientPage({
 
   const supabase = await createSupabaseClient();
   const [{ data: client }, { data: allManagers }, { data: assigned }] = await Promise.all([
-    supabase.from("clients").select("id, name, meta_ad_account_id").eq("id", id).single(),
+    supabase
+      .from("clients")
+      .select("id, name, meta_ad_account_id")
+      .eq("id", id)
+      .is("deleted_at", null)
+      .single(),
     supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
     supabase.from("client_managers").select("user_id, profiles(id, name)").eq("client_id", id),
   ]);
@@ -44,6 +51,15 @@ export default async function EditClientPage({
         defaultMetaAdAccountId={client.meta_ad_account_id}
         submitLabel="Salvar"
       />
+
+      <Section title="Excluir cliente">
+        <p className="mb-3 text-xs text-zinc-500">
+          O cliente some das listagens e para de sincronizar com o Meta, mas sprints, tarefas e
+          comentários ficam preservados. Dá pra restaurar depois em Configurações &gt; Clientes
+          excluídos.
+        </p>
+        <DeleteClientButton action={deleteClientAction.bind(null, id)} clientName={client.name} />
+      </Section>
     </div>
   );
 }

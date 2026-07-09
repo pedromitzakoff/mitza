@@ -17,7 +17,7 @@ export default async function PainelMensalPage() {
   const { firstDay, lastDay } = currentMonthRange();
 
   const [{ data: clients }, { data: sprints }, { data: dailySpend }] = await Promise.all([
-    supabase.from("clients").select("id, name").order("name"),
+    supabase.from("clients").select("id, name").is("deleted_at", null).order("name"),
     supabase
       .from("sprints")
       .select("client_id, planned_spend")
