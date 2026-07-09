@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { computeSprintFinancials, currentMonthRange } from "@/lib/sprint-financials";
 import { syncClientMetaAction } from "../meta-actions";
+import { SprintCard } from "../sprint-card";
 
 export default async function ClientPage({
   params,
@@ -26,6 +28,32 @@ export default async function ClientPage({
     .single();
 
   if (!client) notFound();
+
+  const { firstDay, lastDay } = currentMonthRange();
+
+  const [{ data: sprints }, { data: dailySpend }] = await Promise.all([
+    supabase
+      .from("sprints")
+      .select("id, start_date, end_date, planned_spend")
+      .eq("client_id", id)
+      .gte("start_date", firstDay)
+      .lte("start_date", lastDay)
+      .order("start_date"),
+    supabase
+      .from("daily_spend")
+      .select("date, spend")
+      .eq("client_id", id)
+      .gte("date", firstDay)
+      .lte("date", lastDay),
+  ]);
+
+  const sprintFinancials = (sprints ?? []).map((sprint) => {
+    const actualSpend = (dailySpend ?? [])
+      .filter((row) => row.date >= sprint.start_date && row.date <= sprint.end_date)
+      .reduce((sum, row) => sum + row.spend, 0);
+
+    return computeSprintFinancials(sprint, actualSpend);
+  });
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
@@ -71,9 +99,21 @@ export default async function ClientPage({
         </button>
       </form>
 
-      <p className="mt-8 text-sm text-zinc-500">
-        Financeiro por sprint e tarefas chegam nas próximas etapas.
-      </p>
+      <section className="mt-8">
+        <h2 className="text-lg font-medium text-black dark:text-zinc-50">
+          Financeiro por sprint
+        </h2>
+
+        <div className="mt-4 flex flex-col gap-4">
+          {sprintFinancials.length > 0 ? (
+            sprintFinancials.map((sprint) => <SprintCard key={sprint.sprintId} sprint={sprint} />)
+          ) : (
+            <p className="text-sm text-zinc-500">Nenhuma sprint neste mês ainda.</p>
+          )}
+        </div>
+      </section>
+
+      <p className="mt-8 text-sm text-zinc-500">Tarefas chegam nas próximas etapas.</p>
     </div>
   );
 }

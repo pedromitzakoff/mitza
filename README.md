@@ -90,6 +90,10 @@ Construído em etapas — veja o estado de cada uma nas tasks do repositório.
 - `src/app/api/cron/sync-meta` — rota que roda a sync de todos os clientes;
   sem cron automático ainda (só o botão manual), ver comentário no arquivo
   para como ligar um cron da Vercel quando for a hora
+- `src/lib/spend-status.ts` — margem de tolerância (`SPEND_STATUS_MARGIN`,
+  ±10% por padrão) e a classificação dentro/acima/abaixo
+- `src/lib/sprint-financials.ts` — gasto esperado até hoje (proporcional aos
+  dias já passados na sprint) e % de progresso de cada sprint
 
 ## Sync com o Meta
 
@@ -114,7 +118,7 @@ Construído em etapas — veja o estado de cada uma nas tasks do repositório.
 2. ✅ Autenticação com papéis (admin/gestor) e proteção de rotas
 3. ✅ CRUD de clientes e atribuição de gestores
 4. ✅ Sync com a Meta Insights API
-5. Dashboard financeiro por sprint com selos de status
+5. ✅ Dashboard financeiro por sprint com selos de status
 6. CRUD de tarefas + recorrência e "atrasado"
 7. Comentários genéricos (sprint e tarefa)
 8. Painel geral do mês com cálculo de meta batida
