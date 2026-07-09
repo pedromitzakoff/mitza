@@ -19,3 +19,18 @@ export function classifySpendStatus(actual: number, expected: number): SpendStat
   if (ratio < 1 - SPEND_STATUS_MARGIN) return "abaixo";
   return "dentro";
 }
+
+/** Rótulo usado quando o status compara com o planejado total (sem
+ * prorateio por dia) — painel geral do mês e resumo do mês na página do
+ * cliente. */
+export const SPEND_STATUS_LABEL: Record<SpendStatus, string> = {
+  dentro: "Bateu meta",
+  acima: "Acima",
+  abaixo: "Abaixo",
+};
+
+export const SPEND_STATUS_BADGE_CLASSES: Record<SpendStatus, string> = {
+  dentro: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
+  acima: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+  abaixo: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+};

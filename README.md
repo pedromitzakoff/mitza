@@ -4,7 +4,9 @@ Sistema web da agência para substituir o ClickUp: gestão de clientes,
 acompanhamento financeiro por sprint semanal (planejado vs. gasto, puxado do
 Meta), tarefas recorrentes e painel geral de metas do mês.
 
-Construído em etapas — veja o estado de cada uma nas tasks do repositório.
+Construído em etapas (todas as 9 da ordem original já feitas — veja abaixo).
+Fica como base pra continuar iterando: mais tipos de relatório, cron
+automático da sync, refinamentos de UX, etc.
 
 ## Stack
 
@@ -112,6 +114,11 @@ Construído em etapas — veja o estado de cada uma nas tasks do repositório.
   gasto de todos os clientes no mês, reaproveitando `spend-status.ts` (a
   mesma margem de ±10%, mas comparando com o planejado total do mês, sem
   proporção por dia como na sprint)
+- `src/app/clients/section.tsx` — wrapper de seção (título + ação +
+  conteúdo) reaproveitado entre "Financeiro por sprint" e "Tarefas" na
+  página do cliente, que também ganhou um resumo do mês (mesmo selo do
+  painel geral) e as ações (Editar / Atualizar dados do Meta / última
+  sincronização) agrupadas num cabeçalho único
 
 ## Sync com o Meta
 
@@ -140,7 +147,7 @@ Construído em etapas — veja o estado de cada uma nas tasks do repositório.
 6. ✅ CRUD de tarefas + recorrência e "atrasado"
 7. ✅ Comentários genéricos (sprint e tarefa)
 8. ✅ Painel geral do mês com cálculo de meta batida
-9. Polimento visual da página do cliente
+9. ✅ Polimento visual da página do cliente
 
 ## Deploy
 

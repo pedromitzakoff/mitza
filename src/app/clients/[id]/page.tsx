@@ -3,9 +3,16 @@ import { notFound } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { computeSprintFinancials, currentMonthRange } from "@/lib/sprint-financials";
+import {
+  classifySpendStatus,
+  SPEND_STATUS_BADGE_CLASSES,
+  SPEND_STATUS_LABEL,
+} from "@/lib/spend-status";
+import { formatCurrency, formatDateTime } from "@/lib/format";
 import { syncClientMetaAction } from "../meta-actions";
 import { SprintCard } from "../sprint-card";
 import { TaskList } from "../task-list";
+import { Section } from "../section";
 import type { CommentItem } from "../comment-thread";
 
 async function fetchCommentsByType(
@@ -65,7 +72,7 @@ export default async function ClientPage({
 
   const { firstDay, lastDay } = currentMonthRange();
 
-  const [{ data: sprints }, { data: dailySpend }] = await Promise.all([
+  const [{ data: sprints }, { data: dailySpend }, { data: lastSync }] = await Promise.all([
     supabase
       .from("sprints")
       .select("id, start_date, end_date, planned_spend")
@@ -79,6 +86,13 @@ export default async function ClientPage({
       .eq("client_id", id)
       .gte("date", firstDay)
       .lte("date", lastDay),
+    supabase
+      .from("daily_spend")
+      .select("synced_at")
+      .eq("client_id", id)
+      .order("synced_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const sprintFinancials = (sprints ?? []).map((sprint) => {
@@ -88,6 +102,11 @@ export default async function ClientPage({
 
     return computeSprintFinancials(sprint, actualSpend);
   });
+
+  const monthPlanned = sprintFinancials.reduce((sum, sprint) => sum + sprint.plannedSpend, 0);
+  const monthActual = sprintFinancials.reduce((sum, sprint) => sum + sprint.actualSpend, 0);
+  const monthStatus = classifySpendStatus(monthActual, monthPlanned);
+  const monthPct = monthPlanned > 0 ? (monthActual / monthPlanned) * 100 : null;
 
   const { data: tasks } = await supabase
     .from("tasks")
@@ -111,13 +130,20 @@ export default async function ClientPage({
   const sprintCommentsById = groupByCommentableId(sprintComments);
   const taskCommentsById = groupByCommentableId(taskComments);
 
+  const banners = [
+    error && { tone: "red", text: error },
+    commentError && { tone: "red", text: commentError },
+    taskError && { tone: "red", text: taskError },
+    synced && { tone: "green", text: `${synced} dia(s) de spend sincronizado(s) com o Meta.` },
+  ].filter((banner): banner is { tone: "red" | "green"; text: string } => Boolean(banner));
+
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
       <Link href="/" className="text-sm text-zinc-500 hover:underline">
         &larr; Voltar
       </Link>
 
-      <div className="mt-4 flex items-start justify-between">
+      <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
             {client.name}
@@ -125,47 +151,67 @@ export default async function ClientPage({
           <p className="font-mono text-sm text-zinc-500">{client.meta_ad_account_id}</p>
         </div>
 
-        {profile?.role === "admin" && (
-          <Link
-            href={`/clients/${client.id}/edit`}
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
-          >
-            Editar
-          </Link>
-        )}
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex items-center gap-2">
+            {profile?.role === "admin" && (
+              <Link
+                href={`/clients/${client.id}/edit`}
+                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+              >
+                Editar
+              </Link>
+            )}
+            <form action={syncClientMetaAction.bind(null, client.id)}>
+              <button
+                type="submit"
+                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+              >
+                Atualizar dados do Meta
+              </button>
+            </form>
+          </div>
+          {lastSync && (
+            <p className="text-xs text-zinc-400">
+              Última sync: {formatDateTime(lastSync.synced_at)}
+            </p>
+          )}
+        </div>
       </div>
 
-      {error && (
-        <p className="mt-6 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          {error}
-        </p>
-      )}
-      {synced && (
-        <p className="mt-6 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">
-          {synced} dia(s) de spend sincronizado(s) com o Meta.
-        </p>
-      )}
-      {commentError && (
-        <p className="mt-6 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          {commentError}
-        </p>
+      {banners.length > 0 && (
+        <div className="mt-6 flex flex-col gap-2">
+          {banners.map((banner, index) => (
+            <p
+              key={index}
+              className={
+                banner.tone === "red"
+                  ? "rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300"
+                  : "rounded-md bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950 dark:text-green-300"
+              }
+            >
+              {banner.text}
+            </p>
+          ))}
+        </div>
       )}
 
-      <form action={syncClientMetaAction.bind(null, client.id)} className="mt-6">
-        <button
-          type="submit"
-          className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-zinc-500">Resumo do mês</p>
+          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+            Planejado {formatCurrency(monthPlanned)} · Gasto {formatCurrency(monthActual)}
+            {monthPct !== null && ` · ${monthPct.toFixed(0)}% atingido`}
+          </p>
+        </div>
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-medium ${SPEND_STATUS_BADGE_CLASSES[monthStatus]}`}
         >
-          Atualizar dados do Meta
-        </button>
-      </form>
+          {SPEND_STATUS_LABEL[monthStatus]}
+        </span>
+      </div>
 
-      <section className="mt-8">
-        <h2 className="text-lg font-medium text-black dark:text-zinc-50">
-          Financeiro por sprint
-        </h2>
-
-        <div className="mt-4 flex flex-col gap-4">
+      <Section title="Financeiro por sprint">
+        <div className="flex flex-col gap-4">
           {sprintFinancials.length > 0 ? (
             sprintFinancials.map((sprint) => (
               <SprintCard
@@ -179,29 +225,21 @@ export default async function ClientPage({
             <p className="text-sm text-zinc-500">Nenhuma sprint neste mês ainda.</p>
           )}
         </div>
-      </section>
+      </Section>
 
-      <section className="mt-8">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium text-black dark:text-zinc-50">Tarefas</h2>
+      <Section
+        title="Tarefas"
+        action={
           <Link
             href={`/clients/${client.id}/tasks/new`}
             className="rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
           >
             + Nova tarefa
           </Link>
-        </div>
-
-        {taskError && (
-          <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-            {taskError}
-          </p>
-        )}
-
-        <div className="mt-4">
-          <TaskList tasks={tasks ?? []} clientId={client.id} commentsByTaskId={taskCommentsById} />
-        </div>
-      </section>
+        }
+      >
+        <TaskList tasks={tasks ?? []} clientId={client.id} commentsByTaskId={taskCommentsById} />
+      </Section>
     </div>
   );
 }

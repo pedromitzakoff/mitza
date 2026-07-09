@@ -18,3 +18,14 @@ export function formatDateRange(startDate: string, endDate: string): string {
   const end = dayMonthFormatter.format(new Date(`${endDate}T00:00:00Z`));
   return `${start} – ${end}`;
 }
+
+const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+export function formatDateTime(value: string): string {
+  return dateTimeFormatter.format(new Date(value));
+}

@@ -2,20 +2,13 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { currentMonthRange } from "@/lib/sprint-financials";
-import { classifySpendStatus, SPEND_STATUS_MARGIN, type SpendStatus } from "@/lib/spend-status";
+import {
+  classifySpendStatus,
+  SPEND_STATUS_BADGE_CLASSES,
+  SPEND_STATUS_LABEL,
+  SPEND_STATUS_MARGIN,
+} from "@/lib/spend-status";
 import { formatCurrency } from "@/lib/format";
-
-const STATUS_LABEL: Record<SpendStatus, string> = {
-  dentro: "Bateu meta",
-  acima: "Acima",
-  abaixo: "Abaixo",
-};
-
-const STATUS_BADGE_CLASSES: Record<SpendStatus, string> = {
-  dentro: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
-  acima: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-  abaixo: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-};
 
 export default async function PainelMensalPage() {
   await requireAdmin();
@@ -103,9 +96,9 @@ export default async function PainelMensalPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_BADGE_CLASSES[row.status]}`}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${SPEND_STATUS_BADGE_CLASSES[row.status]}`}
                     >
-                      {STATUS_LABEL[row.status]}
+                      {SPEND_STATUS_LABEL[row.status]}
                     </span>
                   </td>
                 </tr>
