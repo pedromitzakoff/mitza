@@ -137,6 +137,17 @@ automático da sync, refinamentos de UX, etc.
    Meta" que roda a mesma sync. Cron automático fica pra depois — por ora
    é só esse botão manual (ou o script acima).
 
+- `src/app/clients/task-row.tsx` — uma linha de tarefa (título, tipo, prazo,
+  responsável, selo, editar, marcar como feito, comentários), reaproveitada
+  tanto na lista geral (`task-list.tsx`) quanto dentro do card da sprint
+  (`sprint-task-list.tsx`)
+- `src/app/clients/sprint-actions.ts` — editar `planned_spend` de uma
+  sprint, só admin (`requireAdmin`, e a RLS de `sprints` já bloqueia gestor)
+- `src/app/clients/[id]/tasks/[taskId]/edit` — editar uma tarefa (inclusive
+  mover o prazo/`due_date`); `/tasks/new` aceita `?sprintId=` pra já criar a
+  tarefa vinculada à sprint (usado pelo "+ Adicionar tarefa na sprint" de
+  cada card)
+
 ## Ordem de construção
 
 1. ✅ Setup do projeto e schema SQL
@@ -148,6 +159,9 @@ automático da sync, refinamentos de UX, etc.
 7. ✅ Comentários genéricos (sprint e tarefa)
 8. ✅ Painel geral do mês com cálculo de meta batida
 9. ✅ Polimento visual da página do cliente
+10. ✅ Sprint como centro de gestão: `planned_spend` editável inline pelo
+    admin, e tarefas vinculadas (`sprint_id`) exibidas e criadas dentro do
+    card da sprint em vez de só numa lista geral separada
 
 ## Deploy
 

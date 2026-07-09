@@ -14,6 +14,7 @@ import { SprintCard } from "../sprint-card";
 import { TaskList } from "../task-list";
 import { Section } from "../section";
 import type { CommentItem } from "../comment-thread";
+import type { TaskListItem } from "../task-row";
 
 async function fetchCommentsByType(
   supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
@@ -40,6 +41,25 @@ function groupByCommentableId(comments: CommentItem[]): Map<string, CommentItem[
     map.set(comment.commentable_id, list);
   }
   return map;
+}
+
+function groupBySprintId(
+  tasks: (TaskListItem & { sprint_id: string | null })[],
+): { bySprintId: Map<string, TaskListItem[]>; unlinked: TaskListItem[] } {
+  const bySprintId = new Map<string, TaskListItem[]>();
+  const unlinked: TaskListItem[] = [];
+
+  for (const { sprint_id, ...task } of tasks) {
+    if (!sprint_id) {
+      unlinked.push(task);
+      continue;
+    }
+    const list = bySprintId.get(sprint_id) ?? [];
+    list.push(task);
+    bySprintId.set(sprint_id, list);
+  }
+
+  return { bySprintId, unlinked };
 }
 
 export default async function ClientPage({
@@ -110,7 +130,9 @@ export default async function ClientPage({
 
   const { data: tasks } = await supabase
     .from("tasks")
-    .select("id, title, type, due_date, status, assignee:profiles!tasks_assignee_id_fkey(name)")
+    .select(
+      "id, title, type, due_date, status, sprint_id, assignee:profiles!tasks_assignee_id_fkey(name)",
+    )
     .eq("client_id", id)
     .order("due_date");
 
@@ -129,6 +151,7 @@ export default async function ClientPage({
 
   const sprintCommentsById = groupByCommentableId(sprintComments);
   const taskCommentsById = groupByCommentableId(taskComments);
+  const { bySprintId: tasksBySprintId, unlinked: unlinkedTasks } = groupBySprintId(tasks ?? []);
 
   const banners = [
     error && { tone: "red", text: error },
@@ -219,6 +242,9 @@ export default async function ClientPage({
                 sprint={sprint}
                 comments={sprintCommentsById.get(sprint.sprintId) ?? []}
                 clientId={client.id}
+                isAdmin={profile?.role === "admin"}
+                tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
+                commentsByTaskId={taskCommentsById}
               />
             ))
           ) : (
@@ -228,7 +254,7 @@ export default async function ClientPage({
       </Section>
 
       <Section
-        title="Tarefas"
+        title="Outras tarefas"
         action={
           <Link
             href={`/clients/${client.id}/tasks/new`}
@@ -238,7 +264,10 @@ export default async function ClientPage({
           </Link>
         }
       >
-        <TaskList tasks={tasks ?? []} clientId={client.id} commentsByTaskId={taskCommentsById} />
+        <p className="mb-3 text-xs text-zinc-500">
+          Tarefas sem sprint vinculada — as de cada sprint aparecem no card dela, acima.
+        </p>
+        <TaskList tasks={unlinkedTasks} clientId={client.id} commentsByTaskId={taskCommentsById} />
       </Section>
     </div>
   );
