@@ -64,5 +64,7 @@ export async function createCommentAction(
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/operation");
+  revalidatePath("/sprints");
+  revalidatePath("/clients");
   redirect(returnTo);
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useSyncExternalStore } from "react";
 import {
-  CalendarCheck2,
+  Building2,
   LayoutGrid,
   ListChecks,
   LogOut,
@@ -70,17 +70,17 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: "Visão Geral", href: "/", icon: LayoutGrid, isActive: (p) => p === "/", group: "principal" },
   {
-    label: "Operação",
-    href: "/operation",
-    icon: ListChecks,
-    isActive: (p, mode) => p === "/operation" && mode !== "hoje",
+    label: "Clientes",
+    href: "/clients",
+    icon: Building2,
+    isActive: (p) => p === "/clients",
     group: "principal",
   },
   {
-    label: "Tarefas",
-    href: "/operation?mode=hoje",
-    icon: CalendarCheck2,
-    isActive: (p, mode) => p === "/operation" && mode === "hoje",
+    label: "Sprints",
+    href: "/sprints",
+    icon: ListChecks,
+    isActive: (p) => p === "/sprints" || p === "/operation",
     group: "principal",
   },
   { label: "Reuniões", icon: Video, group: "mais" },

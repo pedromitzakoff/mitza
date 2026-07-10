@@ -61,6 +61,8 @@ export async function createTaskAction(clientId: string, formData: FormData) {
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/operation");
+  revalidatePath("/sprints");
+  revalidatePath("/clients");
   redirect(returnTo);
 }
 
@@ -108,6 +110,8 @@ export async function updateTaskAction(taskId: string, clientId: string, formDat
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/operation");
+  revalidatePath("/sprints");
+  revalidatePath("/clients");
   redirect(returnTo);
 }
 
@@ -167,5 +171,7 @@ export async function completeTaskAction(taskId: string, clientId: string, formD
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/operation");
+  revalidatePath("/sprints");
+  revalidatePath("/clients");
   redirect(returnTo);
 }

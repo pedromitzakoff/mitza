@@ -595,11 +595,11 @@ export default async function Home({
             value={String(sprintOps.atrasadas)}
             href={drillDownUrl({ tasks: "atrasadas" })}
           />
-          <StatItem label="Tarefas hoje" value={String(sprintOps.paraHoje)} href="/operation?mode=hoje" />
+          <StatItem label="Tarefas hoje" value={String(sprintOps.paraHoje)} href="/sprints?mode=hoje" />
           <StatItem
             label="Sem execução"
             value={String(sprintOps.semExecucao)}
-            href="/operation?sprint=sem_execucao"
+            href="/sprints?sprint=sem_execucao"
           />
         </MetricGroup>
       </div>

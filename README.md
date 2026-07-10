@@ -415,6 +415,16 @@ automático da sync, refinamentos de UX, etc.
     uma faixa só de ícones com tooltip (botão integrado no topo dela, não
     mais um círculo flutuando na borda), e no mobile o drawer some abaixo
     da Top Bar (que continua sempre visível e clicável)
+24. ✅ Nova tela `/sprints` (renomeação de "Operação" — mesma query agregada,
+    filtros e modos de `buildOperationClientCard`, agora ordenada por
+    prioridade de intervenção e organizada em grupos colapsáveis por
+    cliente, com tarefas na linha densa `TaskRow` já usada na página do
+    cliente); `/operation` virou redirect pra `/sprints` (preserva links e
+    favoritos antigos); item "Tarefas" saiu da sidebar (era só um atalho pra
+    `mode=hoje`, que continua acessível dentro de Sprints); nova tela
+    `/clients` (diretório simples de clientes com busca, filtro por gestor e
+    por status, sem duplicar as métricas da Visão Geral) — ambos os menus
+    aparecem na sidebar como "Clientes" e "Sprints"
 
 ## Deploy
 
