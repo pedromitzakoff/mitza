@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { formatCnpj, isValidCnpjLength, normalizeCnpj } from "@/lib/cnpj";
 import { isValidEmail } from "@/lib/validation";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDateWithYear } from "@/lib/format";
 import { formatMoneyDisplay, parseMoneyInput } from "@/lib/money-format";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
 import type { ClientContractStatus } from "@/lib/supabase/database.types";
@@ -129,17 +129,17 @@ export function InlineSelectCell({
 /** Célula de data (Início do contrato): input type="date" nativo, preserva
  * timezone porque trabalha só com a string YYYY-MM-DD, nunca um objeto Date
  * local. Enter salva, Escape cancela, clique fora salva se mudou (ou só
- * fecha se não mudou). */
+ * fecha se não mudou). Formata sempre como dd/mm/aaaa (`formatDateWithYear`
+ * importada aqui dentro, não recebida como prop — funções não podem
+ * atravessar a fronteira Server → Client Component). */
 export function InlineDateCell({
   value,
   action,
   ariaLabel,
-  format,
 }: {
   value: string | null;
   action: (value: string | null) => Promise<void>;
   ariaLabel: string;
-  format: (value: string) => string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
@@ -170,7 +170,7 @@ export function InlineDateCell({
         }}
         className={cellButtonClasses}
       >
-        {value ? format(value) : "—"}
+        {value ? formatDateWithYear(value) : "—"}
       </button>
     );
   }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC } from "@/lib/today";
-import { formatActiveMonths, formatDateWithYear } from "@/lib/format";
+import { formatActiveMonths } from "@/lib/format";
 import { normalizeCnpj } from "@/lib/cnpj";
 import type { ClientContractStatus } from "@/lib/supabase/database.types";
 import {
@@ -141,7 +141,6 @@ export default async function SettingsClientsPage({
                       value={client.contract_start_date}
                       action={updateClientContractStartAction.bind(null, client.id)}
                       ariaLabel="Início do contrato"
-                      format={formatDateWithYear}
                     />
                   </td>
 
