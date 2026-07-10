@@ -489,6 +489,29 @@ automático da sync, refinamentos de UX, etc.
     "Ritmo do mês" (Clientes totais/Dentro/Abaixo/Acima do esperado,
     reaproveitando `monthStatus` e o filtro `ritmo` já existentes), e as
     duas tabelas (Contas prioritárias + Clientes) viraram uma tabela única
+31. ✅ Simplificação da página individual do cliente + edição financeira da
+    sprint (nova migration `sprint-actual-spend-source.sql`): nome do
+    cliente não aparece mais duas vezes (o antigo `ClientHeader` foi
+    removido — nome/sprint/gestor já vivem só no `ClientContextBar` sticky,
+    que perdeu o selo de saúde da conta, mantendo Editar/Atualizar Meta); o
+    "Precisa de atenção" virou "Atenção", uma faixa compacta com no máximo 3
+    alertas (priorizados por tipo: atrasadas → investimento → atividade →
+    sync do Meta → otimização → sem responsável → outros) e "Ver todos (N)"
+    expandindo localmente, sem navegar nem crescer a página; "Planejado" da
+    sprint virou "Investimento planejado" com um input monetário de verdade
+    (`MoneyInput`, digitação natural em pt-BR, nunca NaN/negativo); "Gasto
+    real" agora pode ser editado manualmente (mesmo input monetário) — nova
+    origem por sprint (`spend_source`: `manual`/`meta_api`, resolvida por
+    `resolveSprintActualSpend`), com indicador discreto "Manual"/"Meta" e
+    confirmação antes de voltar pra "Meta"; a sync do Meta continua gravando
+    em `daily_spend` normalmente e nunca sobrescreve um valor manual sozinha;
+    "Diferença" virou "Saldo do planejamento" (`planejado - gasto`, com os
+    textos "restantes"/"Planejamento atingido"/"acima do planejado"); barra
+    de progresso da sprint unificada num componente só (`SprintFinancialBar`,
+    reaproveitado também em `/sprints`) com "X% utilizado" integrado ao
+    mesmo bloco financeiro — escopo limitado à página do cliente: Sprints,
+    Visão Geral, `/clients` e o gráfico diário continuam somando
+    `daily_spend` normalmente, sem refletir valores manuais
 
 ## Deploy
 

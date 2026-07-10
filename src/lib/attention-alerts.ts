@@ -3,9 +3,23 @@ import { classifyOperationalActivityStatus } from "./operational-activity";
 
 export type AlertSeverity = "critico" | "atencao" | "informativo";
 
+/** Categoria do alerta, usada só pela página do cliente pra priorizar quais
+ * 3 alertas mostrar primeiro (ver AttentionPanel). Opcional pra não quebrar
+ * quem já constrói AttentionAlert sem isso (Visão Geral/agency-alerts.ts) —
+ * essas telas continuam ordenando só por severidade, como sempre. */
+export type AlertKind =
+  | "tarefas_atrasadas"
+  | "investimento"
+  | "atividade"
+  | "meta_sync"
+  | "otimizacao"
+  | "sem_responsavel"
+  | "outro";
+
 export interface AttentionAlert {
   severity: AlertSeverity;
   message: string;
+  kind?: AlertKind;
 }
 
 const SEVERITY_ORDER: Record<AlertSeverity, number> = {
@@ -44,15 +58,16 @@ export function buildAttentionAlerts(input: AttentionAlertsInput): AttentionAler
   const now = input.now ?? new Date();
 
   if (input.monthStatus === "acima") {
-    alerts.push({ severity: "critico", message: "Investimento do mês acima do esperado." });
+    alerts.push({ severity: "critico", kind: "investimento", message: "Investimento do mês acima do esperado." });
   } else if (input.monthStatus === "abaixo") {
-    alerts.push({ severity: "atencao", message: "Investimento do mês abaixo do esperado." });
+    alerts.push({ severity: "atencao", kind: "investimento", message: "Investimento do mês abaixo do esperado." });
   }
 
   if (input.overdueTasksCount > 0) {
     const plural = input.overdueTasksCount > 1 ? "s" : "";
     alerts.push({
       severity: "critico",
+      kind: "tarefas_atrasadas",
       message: `${input.overdueTasksCount} tarefa${plural} atrasada${plural}.`,
     });
   }
@@ -60,32 +75,34 @@ export function buildAttentionAlerts(input: AttentionAlertsInput): AttentionAler
   if (!input.optimizationRecentlyDone) {
     alerts.push({
       severity: "atencao",
+      kind: "otimizacao",
       message: "Nenhuma tarefa de otimização concluída recentemente.",
     });
   }
 
   if (!input.lastSyncedAt) {
-    alerts.push({ severity: "atencao", message: "Dados do Meta sem sincronização recente." });
+    alerts.push({ severity: "atencao", kind: "meta_sync", message: "Dados do Meta sem sincronização recente." });
   } else {
     const hoursSinceSync = (now.getTime() - new Date(input.lastSyncedAt).getTime()) / 3_600_000;
     if (hoursSinceSync > SYNC_STALE_AFTER_HOURS) {
-      alerts.push({ severity: "atencao", message: "Dados do Meta sem sincronização recente." });
+      alerts.push({ severity: "atencao", kind: "meta_sync", message: "Dados do Meta sem sincronização recente." });
     }
   }
 
   if (input.currentSprintPlannedSpend !== null) {
     if (input.currentSprintPlannedSpend <= 0) {
-      alerts.push({ severity: "critico", message: "Sprint atual sem planejado configurado." });
+      alerts.push({ severity: "critico", kind: "outro", message: "Sprint atual sem planejado configurado." });
     }
 
     if (input.currentSprintTaskCount === 0) {
-      alerts.push({ severity: "atencao", message: "Sprint atual sem tarefas padrão." });
+      alerts.push({ severity: "atencao", kind: "outro", message: "Sprint atual sem tarefas padrão." });
     }
 
     if (input.currentSprintUnassignedCount > 0) {
       const plural = input.currentSprintUnassignedCount > 1 ? "s" : "";
       alerts.push({
         severity: "informativo",
+        kind: "sem_responsavel",
         message: `${input.currentSprintUnassignedCount} tarefa${plural} da sprint atual sem responsável.`,
       });
     }
@@ -95,11 +112,13 @@ export function buildAttentionAlerts(input: AttentionAlertsInput): AttentionAler
   if (activityStatus === "atencao") {
     alerts.push({
       severity: "atencao",
+      kind: "atividade",
       message: `Cliente sem atividade operacional há ${input.clientInactivityBusinessDays} dias úteis.`,
     });
   } else if (activityStatus === "inativo") {
     alerts.push({
       severity: "critico",
+      kind: "atividade",
       message:
         input.clientInactivityBusinessDays === null
           ? "Cliente nunca teve atividade operacional registrada."

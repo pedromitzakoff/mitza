@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { computeSprintFinancials, currentMonthRange } from "@/lib/sprint-financials";
+import { computeSprintFinancials, currentMonthRange, resolveSprintActualSpend } from "@/lib/sprint-financials";
 import { computeCumulativeSpendSeries } from "@/lib/spend-chart-data";
 import { computeMonthProjection, computeTaskCounts } from "@/lib/client-metrics";
 import { classifySpendStatus } from "@/lib/spend-status";
@@ -11,7 +11,6 @@ import { buildSprintExecutionAlert } from "@/lib/sprint-execution";
 import { businessDaysSince } from "@/lib/business-days";
 import { classifyOperationalActivityStatus, formatLastActivityLabel } from "@/lib/operational-activity";
 import { effectiveTaskStatus } from "@/lib/task-status";
-import { ClientHeader } from "../client-header";
 import { ClientMetricsCards } from "../client-metrics-cards";
 import { AttentionPanel } from "../attention-panel";
 import { SpendChart } from "../spend-chart";
@@ -97,7 +96,7 @@ export default async function ClientPage({
   // retorna linha, o que aqui vira 404 (sem revelar que o cliente existe).
   const { data: client } = await supabase
     .from("clients")
-    .select("id, name, meta_ad_account_id")
+    .select("id, name")
     .eq("id", id)
     .is("deleted_at", null)
     .single();
@@ -107,30 +106,28 @@ export default async function ClientPage({
   const { firstDay, lastDay } = currentMonthRange();
   const today = new Date();
 
-  const [{ data: sprints }, { data: dailySpend }, { data: lastSync }, { data: managers }] =
-    await Promise.all([
-      supabase
-        .from("sprints")
-        .select("id, start_date, end_date, planned_spend")
-        .eq("client_id", id)
-        .gte("start_date", firstDay)
-        .lte("start_date", lastDay)
-        .order("start_date"),
-      supabase
-        .from("daily_spend")
-        .select("date, spend")
-        .eq("client_id", id)
-        .gte("date", firstDay)
-        .lte("date", lastDay),
-      supabase
-        .from("daily_spend")
-        .select("synced_at")
-        .eq("client_id", id)
-        .order("synced_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase.from("client_managers").select("profiles(name)").eq("client_id", id),
-    ]);
+  const [{ data: sprints }, { data: dailySpend }, { data: lastSync }] = await Promise.all([
+    supabase
+      .from("sprints")
+      .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
+      .eq("client_id", id)
+      .gte("start_date", firstDay)
+      .lte("start_date", lastDay)
+      .order("start_date"),
+    supabase
+      .from("daily_spend")
+      .select("date, spend")
+      .eq("client_id", id)
+      .gte("date", firstDay)
+      .lte("date", lastDay),
+    supabase
+      .from("daily_spend")
+      .select("synced_at")
+      .eq("client_id", id)
+      .order("synced_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   const { data: clientActivity } = await supabase
     .from("client_last_operational_activity")
@@ -139,11 +136,12 @@ export default async function ClientPage({
     .maybeSingle();
 
   const sprintFinancials = (sprints ?? []).map((sprint) => {
-    const actualSpend = (dailySpend ?? [])
+    const metaSpendSum = (dailySpend ?? [])
       .filter((row) => row.date >= sprint.start_date && row.date <= sprint.end_date)
       .reduce((sum, row) => sum + row.spend, 0);
+    const actualSpend = resolveSprintActualSpend(sprint, metaSpendSum);
 
-    return computeSprintFinancials(sprint, actualSpend, today);
+    return computeSprintFinancials(sprint, actualSpend, today, sprint.spend_source);
   });
 
   const monthPlanned = sprintFinancials.reduce((sum, sprint) => sum + sprint.plannedSpend, 0);
@@ -244,8 +242,6 @@ export default async function ClientPage({
     today,
   );
 
-  const managerNames = (managers ?? []).flatMap((m) => (m.profiles ? [m.profiles.name] : []));
-
   const banners = [
     error && { tone: "red", text: error },
     commentError && { tone: "red", text: commentError },
@@ -275,17 +271,9 @@ export default async function ClientPage({
   return (
     <div className="mx-auto max-w-6xl px-6 py-5">
       <ScrollRestoreOnMount />
-      <div>
-        <ClientHeader
-          clientName={client.name}
-          metaAdAccountId={client.meta_ad_account_id}
-          managerNames={managerNames}
-          lastSyncedAt={lastSync?.synced_at ?? null}
-        />
-      </div>
 
       {banners.length > 0 && (
-        <div className="mt-3 flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           {banners.map((banner, index) => (
             <p
               key={index}

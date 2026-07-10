@@ -33,3 +33,52 @@ export async function updateSprintPlannedSpendAction(
   revalidatePath(`/clients/${clientId}`);
   redirect(`/clients/${clientId}`);
 }
+
+/** Salva um gasto real digitado à mão e marca a sprint como spend_source =
+ * "manual" — a partir daí, resolveSprintActualSpend passa a mostrar esse
+ * valor em vez da soma de daily_spend, até alguém reverter (ver
+ * resetSprintSpendSourceAction). A sync do Meta continua rodando e
+ * gravando em daily_spend normalmente, só não aparece enquanto for manual. */
+export async function updateSprintActualSpendAction(
+  sprintId: string,
+  clientId: string,
+  formData: FormData,
+) {
+  await requireAdmin();
+
+  const actualSpend = Number(formData.get("actual_spend"));
+
+  if (!Number.isFinite(actualSpend) || actualSpend < 0) {
+    redirect(`/clients/${clientId}?error=${encodeURIComponent("Valor de gasto real inválido")}`);
+  }
+
+  const supabase = await createSupabaseClient();
+  const { error } = await supabase
+    .from("sprints")
+    .update({ spend_source: "manual", manual_actual_spend: actualSpend })
+    .eq("id", sprintId);
+
+  if (error) {
+    redirect(`/clients/${clientId}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath(`/clients/${clientId}`);
+  redirect(`/clients/${clientId}`);
+}
+
+/** Volta a sprint pra origem "meta_api" — o gasto real exibido passa a ser
+ * de novo a soma de daily_spend. Não apaga o valor manual salvo (fica
+ * ignorado, não deletado), então dá pra confirmar com segurança. */
+export async function resetSprintSpendSourceAction(sprintId: string, clientId: string) {
+  await requireAdmin();
+
+  const supabase = await createSupabaseClient();
+  const { error } = await supabase.from("sprints").update({ spend_source: "meta_api" }).eq("id", sprintId);
+
+  if (error) {
+    redirect(`/clients/${clientId}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath(`/clients/${clientId}`);
+  redirect(`/clients/${clientId}`);
+}

@@ -7,6 +7,7 @@ import { orderTasks } from "@/app/clients/task-list";
 import type { AttentionAlert } from "@/lib/attention-alerts";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import type { OperationClientCard as OperationClientCardData, OperationMode } from "@/app/operation/operation-data";
+import { SprintFinancialBar } from "@/app/clients/sprint-financial-bar";
 
 /** Cor discreta (texto, não badge) pro rótulo de última atividade — só
  * chama atenção quando ultrapassa a regra de inatividade já existente. */
@@ -33,34 +34,6 @@ function AlertsSummaryLine({ topAlert, remaining }: { topAlert: AttentionAlert; 
       <span className={isCritical ? "font-medium text-red-600 dark:text-red-400" : ""}>{topAlert.message}</span>
       {remaining > 0 && <span>· +{remaining} alerta{remaining !== 1 ? "s" : ""}</span>}
     </>
-  );
-}
-
-/** Barra fina de progresso financeiro da sprint — azul MITZA no estado
- * normal, vermelho discreto só quando o gasto ultrapassa o planejado
- * (preenchimento nunca passa de 100% de largura). Não recalcula nada: usa
- * o mesmo actualSpend/plannedSpend já computados por buildOperationClientCard. */
-function SprintFinancialBar({ actualSpend, plannedSpend }: { actualSpend: number; plannedSpend: number }) {
-  if (plannedSpend <= 0) {
-    return (
-      <div>
-        <div className="h-1 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />
-        <p className="mt-0.5 text-[11px] text-muted-foreground">Meta não configurada</p>
-      </div>
-    );
-  }
-
-  const pct = (actualSpend / plannedSpend) * 100;
-  const barWidth = Math.min(Math.max(pct, 0), 100);
-  const isOver = pct > 100;
-
-  return (
-    <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-      <div
-        className={`h-full rounded-full ${isOver ? "bg-red-500" : "bg-brand"}`}
-        style={{ width: `${barWidth}%` }}
-      />
-    </div>
   );
 }
 

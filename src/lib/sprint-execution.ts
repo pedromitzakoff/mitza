@@ -24,11 +24,11 @@ export function buildSprintExecutionAlert(
   const businessDays = businessDaysSince(reference, today);
 
   if (businessDays === OPERATIONAL_ACTIVITY_THRESHOLDS.warningBusinessDays) {
-    return { severity: "atencao", message: `Sprint sem execução há ${businessDays} dias úteis.` };
+    return { severity: "atencao", kind: "atividade", message: `Sprint sem execução há ${businessDays} dias úteis.` };
   }
 
   if (businessDays >= OPERATIONAL_ACTIVITY_THRESHOLDS.inactiveMinBusinessDays) {
-    return { severity: "critico", message: `Sprint sem execução há ${businessDays} dias úteis.` };
+    return { severity: "critico", kind: "atividade", message: `Sprint sem execução há ${businessDays} dias úteis.` };
   }
 
   return null;

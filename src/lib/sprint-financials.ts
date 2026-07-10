@@ -3,6 +3,11 @@ import { todayUTC } from "@/lib/today";
 
 export type SprintTemporalStatus = "futura" | "atual" | "concluida";
 
+/** Origem do gasto real de uma sprint: "meta_api" é o padrão (soma de
+ * daily_spend, como sempre foi); "manual" é um valor digitado à mão
+ * enquanto a sync do Meta não é a fonte de teste. */
+export type SpendSource = "manual" | "meta_api";
+
 export interface SprintFinancials {
   sprintId: string;
   startDate: string;
@@ -13,6 +18,25 @@ export interface SprintFinancials {
   status: SpendStatus;
   progressPct: number;
   temporalStatus: SprintTemporalStatus;
+  spendSource: SpendSource;
+}
+
+/**
+ * Decide qual valor de gasto real vale pra uma sprint: se a origem
+ * configurada é "manual" e existe um valor manual salvo, esse valor manda —
+ * a sync do Meta continua rodando e gravando em daily_spend normalmente,
+ * mas essa função é o único lugar que decide se ela deve "aparecer" ou não.
+ * Fora daqui (Sprints, Visão Geral, /clients), nada muda: essas telas nunca
+ * chamam esta função e continuam com a soma de daily_spend de sempre.
+ */
+export function resolveSprintActualSpend(
+  sprint: { spend_source: SpendSource; manual_actual_spend: number | null },
+  metaSpendSum: number,
+): number {
+  if (sprint.spend_source === "manual" && sprint.manual_actual_spend !== null) {
+    return sprint.manual_actual_spend;
+  }
+  return metaSpendSum;
 }
 
 function daysBetweenInclusive(a: Date, b: Date): number {
@@ -32,6 +56,7 @@ export function computeSprintFinancials(
   sprint: { id: string; start_date: string; end_date: string; planned_spend: number },
   actualSpend: number,
   today: Date = todayUTC(),
+  spendSource: SpendSource = "meta_api",
 ): SprintFinancials {
   const start = parseDateUTC(sprint.start_date);
   const end = parseDateUTC(sprint.end_date);
@@ -56,6 +81,7 @@ export function computeSprintFinancials(
     status,
     progressPct,
     temporalStatus,
+    spendSource,
   };
 }
 

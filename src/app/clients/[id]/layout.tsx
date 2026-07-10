@@ -102,7 +102,6 @@ export default async function ClientLayout({
         clientName={card.clientName}
         metaAdAccountId={card.metaAdAccountId}
         managerNames={card.managerNames}
-        accountHealth={card.accountHealth}
         sprintNumber={card.sprintNumber}
         sprint={card.sprint}
         isAdmin={profile.role === "admin"}

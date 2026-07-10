@@ -1,7 +1,5 @@
 import Link from "next/link";
 import { formatDateRange } from "@/lib/format";
-import type { AccountHealth } from "@/lib/attention-alerts";
-import { HEALTH_BADGE_CLASSES, HEALTH_LABEL } from "./client-header";
 import { syncClientMetaAction } from "./meta-actions";
 import { TOP_BAR_OFFSET_CLASS } from "@/app/app-shell-dimensions";
 
@@ -9,13 +7,16 @@ import { TOP_BAR_OFFSET_CLASS } from "@/app/app-shell-dimensions";
  * Subheader sticky do cliente — fica abaixo da Top Bar global em toda rota
  * /clients/[id]/**, pra o nome do cliente nunca sumir da tela ao rolar pras
  * sprints. Só CSS sticky (sem JS), então não interfere em scroll/âncoras.
+ * Serve orientação + ações (nome, sprint, gestor, Editar, Atualizar Meta) —
+ * sem selo de saúde da conta, pra não competir com o bloco "Atenção" da
+ * página. O cálculo de saúde (accountHealth) continua existindo em
+ * buildOperationClientCard, só não é mais exibido aqui.
  */
 export function ClientContextBar({
   clientId,
   clientName,
   metaAdAccountId,
   managerNames,
-  accountHealth,
   sprintNumber,
   sprint,
   isAdmin,
@@ -24,7 +25,6 @@ export function ClientContextBar({
   clientName: string;
   metaAdAccountId: string;
   managerNames: string[];
-  accountHealth: AccountHealth;
   sprintNumber: number | null;
   sprint: { startDate: string; endDate: string } | null;
   isAdmin: boolean;
@@ -48,11 +48,6 @@ export function ClientContextBar({
           </span>
           <span className="shrink-0 truncate text-xs text-muted-foreground">{sprintLabel}</span>
           <span className="hidden shrink-0 truncate text-xs text-muted-foreground md:inline">{gestorLabel}</span>
-          <span
-            className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium md:inline-block ${HEALTH_BADGE_CLASSES[accountHealth]}`}
-          >
-            {HEALTH_LABEL[accountHealth]}
-          </span>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">

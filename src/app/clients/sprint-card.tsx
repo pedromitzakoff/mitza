@@ -6,7 +6,13 @@ import { todayUTC } from "@/lib/today";
 import { CommentThread, type CommentItem } from "./comment-thread";
 import { SprintTaskList } from "./sprint-task-list";
 import type { TaskListItem } from "./task-row";
-import { updateSprintPlannedSpendAction } from "./sprint-actions";
+import {
+  resetSprintSpendSourceAction,
+  updateSprintActualSpendAction,
+  updateSprintPlannedSpendAction,
+} from "./sprint-actions";
+import { MoneyInput } from "./money-input";
+import { SprintFinancialBar } from "./sprint-financial-bar";
 
 const TEMPORAL_LABEL = {
   futura: "Futura",
@@ -18,13 +24,6 @@ const TEMPORAL_BADGE_CLASSES = {
   futura: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
   atual: "bg-brand/10 text-brand",
   concluida: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
-} as const;
-
-const PROGRESS_BAR_CLASSES = {
-  dentro: "bg-green-500",
-  acima: "bg-red-500",
-  abaixo: "bg-amber-500",
-  sem_meta: "bg-zinc-300 dark:bg-zinc-700",
 } as const;
 
 const DIFFERENCE_TEXT_CLASSES = {
@@ -59,12 +58,20 @@ export function SprintCard({
   executionLabel?: string | null;
   executionSeverity?: "atencao" | "critico" | null;
 }) {
-  const difference = sprint.actualSpend - sprint.plannedSpend;
-  const barWidth = Math.min(Math.max(sprint.progressPct, 0), 100);
+  const saldo = sprint.plannedSpend - sprint.actualSpend;
+  const saldoText =
+    saldo > 0
+      ? `${formatCurrency(saldo)} restantes`
+      : saldo === 0
+        ? "Planejamento atingido"
+        : `${formatCurrency(Math.abs(saldo))} acima do planejado`;
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
 
   const isCurrent = sprint.temporalStatus === "atual";
-  const editToggleId = `edit-planned-${sprint.sprintId}`;
+  const editPlannedToggleId = `edit-planned-${sprint.sprintId}`;
+  const editActualToggleId = `edit-actual-${sprint.sprintId}`;
+  const revertSourceToggleId = `revert-source-${sprint.sprintId}`;
+  const isManualSource = sprint.spendSource === "manual";
 
   return (
     <details
@@ -117,83 +124,153 @@ export function SprintCard({
           </p>
         )}
 
-        <div className="grid grid-cols-3 gap-3 rounded-lg border border-border bg-zinc-50 p-3 dark:bg-zinc-900/40">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Planejado
-            </p>
-            {isAdmin ? (
-              <>
-                <input type="checkbox" id={editToggleId} className="peer hidden" />
-                <div className="mt-0.5 flex items-center gap-1.5 peer-checked:hidden">
-                  <p className="text-base font-semibold text-foreground">
-                    {formatCurrency(sprint.plannedSpend)}
+        <div className="rounded-lg border border-border bg-zinc-50 p-3 dark:bg-zinc-900/40">
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Investimento planejado
+              </p>
+              {isAdmin ? (
+                <>
+                  <input type="checkbox" id={editPlannedToggleId} className="peer hidden" />
+                  <div className="mt-0.5 flex items-center gap-1.5 peer-checked:hidden">
+                    <p className="text-base font-semibold text-foreground">
+                      {formatCurrency(sprint.plannedSpend)}
+                    </p>
+                    <label
+                      htmlFor={editPlannedToggleId}
+                      className="cursor-pointer text-[11px] font-medium text-brand hover:underline"
+                    >
+                      Editar
+                    </label>
+                  </div>
+                  <form
+                    action={updateSprintPlannedSpendAction.bind(null, sprint.sprintId, clientId)}
+                    className="mt-1 hidden flex-wrap items-center gap-1.5 peer-checked:flex"
+                  >
+                    <MoneyInput name="planned_spend" defaultValue={sprint.plannedSpend} autoFocus />
+                    <button
+                      type="submit"
+                      className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                    >
+                      Salvar
+                    </button>
+                    <label
+                      htmlFor={editPlannedToggleId}
+                      className="cursor-pointer text-[11px] text-muted-foreground hover:underline"
+                    >
+                      Cancelar
+                    </label>
+                  </form>
+                </>
+              ) : (
+                <p className="mt-0.5 text-base font-semibold text-foreground">
+                  {formatCurrency(sprint.plannedSpend)}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Gasto real
+              </p>
+              {isAdmin ? (
+                <>
+                  <input type="checkbox" id={editActualToggleId} className="peer hidden" />
+                  <div className="mt-0.5 flex items-center gap-1.5 peer-checked:hidden">
+                    <p className="text-base font-semibold text-foreground">
+                      {formatCurrency(sprint.actualSpend)}
+                    </p>
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-1 peer-checked:hidden">
+                    <label
+                      htmlFor={editActualToggleId}
+                      className="cursor-pointer text-[11px] font-medium text-brand hover:underline"
+                    >
+                      Editar
+                    </label>
+                    <span
+                      className="text-[11px] text-muted-foreground"
+                      title={isManualSource ? "Valor digitado manualmente" : "Valor sincronizado do Meta"}
+                    >
+                      · {isManualSource ? "Manual" : "Meta"}
+                    </span>
+                  </div>
+                  {isManualSource && (
+                    <div className="mt-0.5 peer-checked:hidden">
+                      <input type="checkbox" id={revertSourceToggleId} className="peer/revert hidden" />
+                      <label
+                        htmlFor={revertSourceToggleId}
+                        className="cursor-pointer text-[11px] text-muted-foreground hover:underline peer-checked/revert:hidden"
+                      >
+                        Usar dado do Meta
+                      </label>
+                      <div className="hidden items-center gap-1.5 peer-checked/revert:flex">
+                        <span className="text-[11px] text-muted-foreground">Substituir valor manual pelo do Meta?</span>
+                        <form action={resetSprintSpendSourceAction.bind(null, sprint.sprintId, clientId)}>
+                          <button
+                            type="submit"
+                            className="text-[11px] font-medium text-brand hover:underline"
+                          >
+                            Confirmar
+                          </button>
+                        </form>
+                        <label
+                          htmlFor={revertSourceToggleId}
+                          className="cursor-pointer text-[11px] text-muted-foreground hover:underline"
+                        >
+                          Cancelar
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                  <form
+                    action={updateSprintActualSpendAction.bind(null, sprint.sprintId, clientId)}
+                    className="mt-1 hidden flex-wrap items-center gap-1.5 peer-checked:flex"
+                  >
+                    <MoneyInput name="actual_spend" defaultValue={sprint.actualSpend} autoFocus />
+                    <button
+                      type="submit"
+                      className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                    >
+                      Salvar
+                    </button>
+                    <label
+                      htmlFor={editActualToggleId}
+                      className="cursor-pointer text-[11px] text-muted-foreground hover:underline"
+                    >
+                      Cancelar
+                    </label>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <p className="mt-0.5 text-base font-semibold text-foreground">
+                    {formatCurrency(sprint.actualSpend)}
                   </p>
-                  <label
-                    htmlFor={editToggleId}
-                    className="cursor-pointer text-[11px] font-medium text-brand hover:underline"
-                  >
-                    Editar
-                  </label>
-                </div>
-                <form
-                  action={updateSprintPlannedSpendAction.bind(null, sprint.sprintId, clientId)}
-                  className="mt-1 hidden items-center gap-1.5 peer-checked:flex"
-                >
-                  <input
-                    name="planned_spend"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    defaultValue={sprint.plannedSpend}
-                    className="w-24 rounded-md border border-border px-2 py-1 text-xs text-foreground outline-none focus:border-zinc-500 dark:bg-zinc-900"
-                  />
-                  <button
-                    type="submit"
-                    className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                  >
-                    Salvar
-                  </button>
-                  <label
-                    htmlFor={editToggleId}
-                    className="cursor-pointer text-[11px] text-muted-foreground hover:underline"
-                  >
-                    Cancelar
-                  </label>
-                </form>
-              </>
-            ) : (
-              <p className="mt-0.5 text-base font-semibold text-foreground">
-                {formatCurrency(sprint.plannedSpend)}
+                  <p className="text-[11px] text-muted-foreground">{isManualSource ? "Manual" : "Meta"}</p>
+                </>
+              )}
+            </div>
+
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Saldo do planejamento
+              </p>
+              <p className={`mt-0.5 text-base font-semibold ${DIFFERENCE_TEXT_CLASSES[sprint.status]}`}>
+                {saldoText}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-2">
+            <SprintFinancialBar actualSpend={sprint.actualSpend} plannedSpend={sprint.plannedSpend} />
+            {sprint.plannedSpend > 0 && (
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {Math.round(sprint.progressPct)}% utilizado
               </p>
             )}
           </div>
-
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Gasto real
-            </p>
-            <p className="mt-0.5 text-base font-semibold text-foreground">
-              {formatCurrency(sprint.actualSpend)}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Diferença
-            </p>
-            <p className={`mt-0.5 text-base font-semibold ${DIFFERENCE_TEXT_CLASSES[sprint.status]}`}>
-              {difference > 0 ? "+" : ""}
-              {formatCurrency(difference)}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-          <div
-            className={`h-full rounded-full ${PROGRESS_BAR_CLASSES[sprint.status]}`}
-            style={{ width: `${barWidth}%` }}
-          />
         </div>
 
         <SprintTaskList tasks={tasks} clientId={clientId} sprintId={sprint.sprintId} />
