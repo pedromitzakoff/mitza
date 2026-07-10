@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense } from "react";
 import { logout } from "@/app/login/actions";
 import { syncAllMetaAction } from "@/app/global-actions";
 import type { UserRole } from "@/lib/supabase/database.types";
@@ -71,14 +71,8 @@ function SidebarContent({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="p-4">
-        <Link href="/" className="text-lg font-semibold text-foreground">
-          Mitza
-        </Link>
-      </div>
-
       {isAdmin && (
-        <div className="px-3">
+        <div className="p-3">
           <Link
             href="/clients/new"
             className="block rounded-md bg-brand px-3 py-2 text-center text-sm font-medium text-white hover:bg-brand-hover"
@@ -128,31 +122,27 @@ function SidebarMode({ onMode }: { onMode: (mode: string | null) => React.ReactN
   return <>{onMode(searchParams.get("mode"))}</>;
 }
 
-export function Sidebar({ profile }: { profile: { name: string; role: UserRole } }) {
+/** O botão "Menu" e o relógio/marca agora vivem na Top Bar global
+ * (src/app/top-bar.tsx); a Sidebar recebe o estado do drawer mobile por
+ * fora (dono é o AppShell) em vez de administrar o seu próprio. */
+export function Sidebar({
+  profile,
+  mobileOpen,
+  onClose,
+}: {
+  profile: { name: string; role: UserRole };
+  mobileOpen: boolean;
+  onClose: () => void;
+}) {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <>
-      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card px-4 py-3 md:hidden">
-        <Link href="/" className="text-lg font-semibold text-foreground">
-          Mitza
-        </Link>
-        <button
-          type="button"
-          onClick={() => setMobileOpen(true)}
-          aria-label="Abrir menu"
-          className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground"
-        >
-          Menu
-        </button>
-      </div>
-
       {mobileOpen && (
         <button
           type="button"
           aria-label="Fechar menu"
-          onClick={() => setMobileOpen(false)}
+          onClick={onClose}
           className="fixed inset-0 z-40 bg-black/30 md:hidden"
         />
       )}

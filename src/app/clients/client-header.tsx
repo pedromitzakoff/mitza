@@ -9,13 +9,13 @@ import {
 } from "@/lib/operational-activity";
 import { syncClientMetaAction } from "./meta-actions";
 
-const HEALTH_LABEL: Record<AccountHealth, string> = {
+export const HEALTH_LABEL: Record<AccountHealth, string> = {
   saudavel: "Conta saudável",
   atencao: "Atenção",
   critico: "Crítico",
 };
 
-const HEALTH_BADGE_CLASSES: Record<AccountHealth, string> = {
+export const HEALTH_BADGE_CLASSES: Record<AccountHealth, string> = {
   saudavel: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
   atencao: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   critico: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",

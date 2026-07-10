@@ -6,11 +6,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-12">
-      <Link href="/" className="text-sm text-zinc-500 hover:underline">
-        &larr; Voltar
-      </Link>
-
-      <h1 className="mt-4 text-2xl font-semibold text-black dark:text-zinc-50">Configurações</h1>
+      <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">Configurações</h1>
 
       <ul className="mt-6 divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
         <li>

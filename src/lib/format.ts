@@ -1,3 +1,5 @@
+import { APP_TIMEZONE } from "./today";
+
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
@@ -96,4 +98,31 @@ const monthYearFormatter = new Intl.DateTimeFormat("pt-BR", {
 export function formatMonthLabel(firstDayOfMonth: string): string {
   const [month, year] = monthYearFormatter.format(new Date(`${firstDayOfMonth}T00:00:00Z`)).split(" de ");
   return `${capitalize(month)} de ${year}`;
+}
+
+const agencyWeekdayFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: APP_TIMEZONE });
+const agencyDateFormatter = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "long",
+  year: "numeric",
+  timeZone: APP_TIMEZONE,
+});
+const agencyTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: APP_TIMEZONE,
+});
+
+/**
+ * Dia da semana + data + horário no fuso da agência — ao contrário das
+ * outras funções deste arquivo (que formatam datas civis já corretas com
+ * timeZone "UTC"), esta recebe um instante real (`new Date()`) e por isso
+ * converte de verdade pro fuso America/Sao_Paulo. Usada na Top Bar global.
+ */
+export function formatAgencyDateTime(date: Date): { weekday: string; date: string; time: string } {
+  return {
+    weekday: capitalize(agencyWeekdayFormatter.format(date)),
+    date: agencyDateFormatter.format(date),
+    time: agencyTimeFormatter.format(date),
+  };
 }

@@ -251,11 +251,7 @@ export default async function ClientPage({
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
-      <Link href="/" className="text-sm text-zinc-500 hover:underline">
-        &larr; Voltar
-      </Link>
-
-      <div className="mt-3">
+      <div>
         <ClientHeader
           clientId={client.id}
           clientName={client.name}

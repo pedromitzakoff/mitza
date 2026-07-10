@@ -54,11 +54,7 @@ export default async function PainelMensalPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
-      <Link href="/" className="text-sm text-zinc-500 hover:underline">
-        &larr; Voltar
-      </Link>
-
-      <h1 className="mt-4 text-2xl font-semibold text-black dark:text-zinc-50">
+      <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
         Painel geral do mês
       </h1>
       <p className="text-sm text-zinc-500">

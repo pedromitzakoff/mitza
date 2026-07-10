@@ -240,10 +240,7 @@ export default async function OperationPage({
     <div className="mx-auto max-w-6xl px-6 py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Link href="/" className="text-sm text-zinc-500 hover:underline">
-            &larr; Voltar
-          </Link>
-          <h1 className="mt-1 text-2xl font-semibold text-foreground">Operação</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Operação</h1>
           <p className="text-sm text-muted-foreground">{formatFullDate(today)}</p>
         </div>
       </div>

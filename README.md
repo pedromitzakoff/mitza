@@ -376,6 +376,13 @@ automático da sync, refinamentos de UX, etc.
     reaproveitando `buildOperationClientCard` (agora com mês selecionável)
     e as mesmas regras de saúde/ritmo/atividade já usadas em Operação e na
     página do cliente, sem duplicar lógica
+19. ✅ Top Bar global (MITZA + dia da semana/data/hora ao vivo no fuso
+    America/Sao_Paulo, sem risco de hydration) acima de toda página
+    autenticada; sidebar volta a ser só navegação (removidos os "← Voltar"
+    redundantes com ela); subheader sticky do cliente (`ClientContextBar`)
+    em toda rota `/clients/[id]/**`, sempre visível durante o scroll, com
+    nome, sprint atual, gestor(es) e status — reaproveitando
+    `buildOperationClientCard` de novo, sem duplicar a regra de saúde
 
 ## Deploy
 

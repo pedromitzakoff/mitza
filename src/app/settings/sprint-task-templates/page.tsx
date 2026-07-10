@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { SprintTaskTemplatesList, type GlobalTemplateItem } from "../sprint-task-templates-list";
@@ -43,11 +42,7 @@ export default async function SprintTaskTemplatesPage({
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
-      <Link href="/settings" className="text-sm text-zinc-500 hover:underline">
-        &larr; Voltar
-      </Link>
-
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
           Tarefas padrão de sprint
         </h1>

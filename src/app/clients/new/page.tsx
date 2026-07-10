@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { createClientAction } from "../actions";
@@ -21,11 +20,7 @@ export default async function NewClientPage({
 
   return (
     <div className="mx-auto max-w-lg px-6 py-12">
-      <Link href="/" className="text-sm text-zinc-500 hover:underline">
-        &larr; Voltar
-      </Link>
-
-      <h1 className="mt-4 text-2xl font-semibold text-black dark:text-zinc-50">
+      <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
         Novo cliente
       </h1>
 
