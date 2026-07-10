@@ -6,6 +6,7 @@ import {
   OPERATIONAL_ACTIVITY_STATUS_LABEL,
 } from "@/lib/operational-activity";
 import { TaskRow } from "@/app/clients/task-row";
+import { orderTasks } from "@/app/clients/task-list";
 import type { AccountHealth } from "@/lib/attention-alerts";
 import type { OperationClientCard as OperationClientCardData, OperationMode } from "@/app/operation/operation-data";
 
@@ -36,7 +37,7 @@ export function SprintClientGroup({
   mode: OperationMode;
   returnTo: string;
 }) {
-  const tasksToShow = mode === "hoje" ? card.todayAndOverdueTasks : mode === "sprint" ? card.sprintTasks : [];
+  const tasksToShow = orderTasks(mode === "hoje" ? card.todayAndOverdueTasks : mode === "sprint" ? card.sprintTasks : []);
   const needsAttention =
     card.accountHealth !== "saudavel" ||
     card.activityStatus !== "ativo" ||

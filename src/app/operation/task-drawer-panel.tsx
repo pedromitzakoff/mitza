@@ -37,6 +37,7 @@ export function TaskDrawerPanel({
     <>
       <Link
         href={closeHref}
+        scroll={false}
         className="fixed inset-0 z-40 bg-black/30"
         aria-label="Fechar"
       />
@@ -51,6 +52,7 @@ export function TaskDrawerPanel({
           </div>
           <Link
             href={closeHref}
+            scroll={false}
             className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
           >
             Fechar
@@ -85,7 +87,6 @@ export function TaskDrawerPanel({
         <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
           {status !== "feito" && (
             <form action={completeTaskAction.bind(null, task.id, clientId)}>
-              <input type="hidden" name="return_to" value={returnTo} />
               <button
                 type="submit"
                 className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
@@ -121,7 +122,6 @@ export function TaskDrawerPanel({
             action={createCommentAction.bind(null, "task", task.id, clientId)}
             className="mt-2 flex gap-2"
           >
-            <input type="hidden" name="return_to" value={returnTo} />
             <input
               name="content"
               placeholder="Comentar..."

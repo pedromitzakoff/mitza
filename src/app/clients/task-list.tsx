@@ -1,23 +1,15 @@
-import { effectiveTaskStatus } from "@/lib/task-status";
 import { TaskRow, type TaskListItem } from "./task-row";
 
 export type { TaskListItem };
 
+/**
+ * Ordem cronológica pura — due_date crescente, id como desempate estável.
+ * O status (concluída, atrasada, hoje) não entra no critério: concluir uma
+ * tarefa não deve fazer ela pular pro final da lista, só muda o visual
+ * (check, cor) e as ações disponíveis, nunca a posição.
+ */
 export function orderTasks(tasks: TaskListItem[]): TaskListItem[] {
-  const withStatus = tasks.map((task) => ({
-    ...task,
-    effectiveStatus: effectiveTaskStatus(task),
-  }));
-
-  const pending = withStatus
-    .filter((task) => task.effectiveStatus !== "feito")
-    .sort((a, b) => a.due_date.localeCompare(b.due_date));
-
-  const done = withStatus
-    .filter((task) => task.effectiveStatus === "feito")
-    .sort((a, b) => b.due_date.localeCompare(a.due_date));
-
-  return [...pending, ...done];
+  return [...tasks].sort((a, b) => a.due_date.localeCompare(b.due_date) || a.id.localeCompare(b.id));
 }
 
 export function TaskList({ tasks, clientId }: { tasks: TaskListItem[]; clientId: string }) {

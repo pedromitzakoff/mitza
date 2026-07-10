@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from "react";
 import type { CumulativeSpendPoint } from "@/lib/spend-chart-data";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatShortDate } from "@/lib/format";
 
 const WIDTH = 720;
 
@@ -13,12 +13,6 @@ const SIZES = {
   compact: { height: 90, padding: { top: 8, right: 16, bottom: 16, left: 56 } },
   large: { height: 220, padding: { top: 14, right: 16, bottom: 24, left: 64 } },
 } as const;
-
-const dayFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", timeZone: "UTC" });
-
-function formatDay(date: string): string {
-  return dayFormatter.format(new Date(`${date}T00:00:00Z`));
-}
 
 export function SpendChart({
   points,
@@ -140,7 +134,7 @@ export function SpendChart({
                 textAnchor="middle"
                 className="fill-muted-foreground text-[10px]"
               >
-                {formatDay(point.date)}
+                {formatShortDate(point.date)}
               </text>
             ),
         )}
@@ -154,7 +148,7 @@ export function SpendChart({
             transform: hoverIndex! > points.length / 2 ? "translateX(-105%)" : "translateX(5%)",
           }}
         >
-          <p className="font-medium text-foreground">{formatDay(hovered.date)}/mês</p>
+          <p className="font-medium text-foreground">{formatShortDate(hovered.date)}</p>
           <p className="text-zinc-500 dark:text-zinc-400">
             Planejado: {formatCurrency(hovered.plannedCumulative)}
           </p>

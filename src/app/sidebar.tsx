@@ -64,18 +64,15 @@ interface NavItem {
   icon: LucideIcon;
   adminOnly?: boolean;
   isActive?: (pathname: string, mode: string | null) => boolean;
-  group: "principal" | "mais";
+  /** principal: Visão Geral/Clientes/Sprints. moderado: itens secundários
+   * (Reuniões/Equipe). flexivel: empurrado pro fim da nav via spacer
+   * (Configurações), ficando logo acima do rodapé fixo. */
+  group: "principal" | "moderado" | "flexivel";
 }
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Visão Geral", href: "/", icon: LayoutGrid, isActive: (p) => p === "/", group: "principal" },
-  {
-    label: "Clientes",
-    href: "/clients",
-    icon: Building2,
-    isActive: (p) => p === "/clients",
-    group: "principal",
-  },
+  { label: "Clientes", href: "/clients", icon: Building2, isActive: (p) => p === "/clients", group: "principal" },
   {
     label: "Sprints",
     href: "/sprints",
@@ -83,20 +80,21 @@ const NAV_ITEMS: NavItem[] = [
     isActive: (p) => p === "/sprints" || p === "/operation",
     group: "principal",
   },
-  { label: "Reuniões", icon: Video, group: "mais" },
-  { label: "Equipe", icon: Users, adminOnly: true, group: "mais" },
+  { label: "Reuniões", icon: Video, group: "moderado" },
+  { label: "Equipe", icon: Users, adminOnly: true, group: "moderado" },
   {
     label: "Configurações",
     href: "/settings",
     icon: Settings,
     adminOnly: true,
     isActive: (p) => p.startsWith("/settings"),
-    group: "mais",
+    group: "flexivel",
   },
 ];
 
 /** Label some no desktop quando `collapsed` (só md+ — no drawer mobile o
- * texto sempre aparece, controlado pelas mesmas classes responsivas). */
+ * texto sempre aparece, controlado pelas mesmas classes responsivas). Sem
+ * espaço reservado: o span some do layout (`hidden`), não só fica invisível. */
 function ItemLabel({ collapsed, children }: { collapsed: boolean; children: React.ReactNode }) {
   return <span className={collapsed ? "md:hidden" : ""}>{children}</span>;
 }
@@ -134,8 +132,10 @@ function NavLink({
     <Link
       href={item.href}
       title={item.label}
-      className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium ${collapsed ? "md:justify-center" : ""} ${
-        active ? "bg-brand text-white" : "text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+      className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm ${collapsed ? "md:justify-center" : ""} ${
+        active
+          ? "bg-brand/10 font-semibold text-brand"
+          : "font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
       }`}
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -149,63 +149,94 @@ function SidebarContent({
   pathname,
   mode,
   collapsed,
+  toggleCollapsed,
 }: {
   profile: { name: string; role: UserRole };
   pathname: string;
   mode: string | null;
   collapsed: boolean;
+  toggleCollapsed: () => void;
 }) {
   const isAdmin = profile.role === "admin";
   const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
   const principal = items.filter((item) => item.group === "principal");
-  const mais = items.filter((item) => item.group === "mais");
+  const moderado = items.filter((item) => item.group === "moderado");
+  const flexivel = items.filter((item) => item.group === "flexivel");
   const initial = profile.name.trim().charAt(0).toUpperCase() || "?";
 
   return (
-    <div className="flex min-h-full flex-col">
-      {isAdmin && (
-        <div className="p-2.5">
+    <div className="flex h-full flex-col">
+      {/* AÇÃO — Novo cliente e recolher na mesma linha, sem faixa/divisor
+       * próprio pro botão de recolher. */}
+      <div className="flex shrink-0 items-center gap-1.5 p-2">
+        {isAdmin && (
           <Link
             href="/clients/new"
             title="Novo cliente"
-            className={`flex items-center justify-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover ${collapsed ? "md:px-0" : ""}`}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md bg-brand px-2.5 py-1 text-sm font-medium text-white hover:bg-brand-hover ${collapsed ? "md:px-0" : ""}`}
           >
             <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
             <ItemLabel collapsed={collapsed}>Novo cliente</ItemLabel>
           </Link>
-        </div>
-      )}
+        )}
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
+          className="hidden shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-zinc-100 hover:text-foreground md:block dark:hover:bg-zinc-900"
+        >
+          {collapsed ? (
+            <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+          )}
+        </button>
+      </div>
 
-      <nav className="mt-1 flex flex-col gap-0.5 px-2.5">
-        {principal.map((item) => (
-          <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
-        ))}
-      </nav>
-
-      {mais.length > 0 && (
-        <nav className="mt-2 flex flex-1 flex-col gap-0.5 border-t border-border px-2.5 pt-2">
-          {mais.map((item) => (
+      {/* Região com scroll próprio: só a navegação rola se não couber —
+       * rodapé (usuário/sair) fica sempre visível, fora desta região. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <nav className="flex flex-col gap-0.5 px-2.5">
+          {principal.map((item) => (
             <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
           ))}
         </nav>
-      )}
 
-      {isAdmin && (
-        <div className="px-2.5 pb-2">
-          <form action={syncAllMetaAction}>
-            <button
-              type="submit"
-              title="Atualizar Meta (todos)"
-              className={`flex w-full items-center justify-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900 ${collapsed ? "md:px-0" : ""}`}
-            >
-              <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <ItemLabel collapsed={collapsed}>Atualizar Meta (todos)</ItemLabel>
-            </button>
-          </form>
-        </div>
-      )}
+        {moderado.length > 0 && (
+          <nav className="mt-3 flex flex-col gap-0.5 px-2.5">
+            {moderado.map((item) => (
+              <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
+            ))}
+          </nav>
+        )}
 
-      <div className="border-t border-border p-2.5">
+        <div className="flex-1" />
+
+        {(flexivel.length > 0 || isAdmin) && (
+          <div className="flex items-center gap-1 px-2.5 pb-2">
+            <nav className="flex flex-1 flex-col gap-0.5">
+              {flexivel.map((item) => (
+                <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
+              ))}
+            </nav>
+            {isAdmin && (
+              <form action={syncAllMetaAction}>
+                <button
+                  type="submit"
+                  title="Atualizar Meta (todos)"
+                  className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-zinc-100 hover:text-foreground dark:hover:bg-zinc-900"
+                >
+                  <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* RODAPÉ — sempre visível, uma borda sutil separando do resto. */}
+      <div className="shrink-0 border-t border-border p-2.5">
         <div className={`flex items-center gap-2 ${collapsed ? "md:justify-center" : ""}`} title={`${profile.name} · ${profile.role === "admin" ? "Admin" : "Gestor"}`}>
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-semibold text-brand">
             {initial}
@@ -267,33 +298,29 @@ export function Sidebar({
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         } ${collapsed ? SIDEBAR_COLLAPSED_WIDTH_CLASS : SIDEBAR_EXPANDED_WIDTH_CLASS}`}
       >
-        <div className={`hidden shrink-0 items-center border-b border-border p-2 md:flex ${collapsed ? "justify-center" : "justify-end"}`}>
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
-            title={collapsed ? "Expandir menu" : "Recolher menu"}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-zinc-100 hover:text-foreground dark:hover:bg-zinc-900"
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
-            )}
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <Suspense
-            fallback={<SidebarContent profile={profile} pathname={pathname} mode={null} collapsed={collapsed} />}
-          >
-            <SidebarMode
-              onMode={(mode) => (
-                <SidebarContent profile={profile} pathname={pathname} mode={mode} collapsed={collapsed} />
-              )}
+        <Suspense
+          fallback={
+            <SidebarContent
+              profile={profile}
+              pathname={pathname}
+              mode={null}
+              collapsed={collapsed}
+              toggleCollapsed={toggleCollapsed}
             />
-          </Suspense>
-        </div>
+          }
+        >
+          <SidebarMode
+            onMode={(mode) => (
+              <SidebarContent
+                profile={profile}
+                pathname={pathname}
+                mode={mode}
+                collapsed={collapsed}
+                toggleCollapsed={toggleCollapsed}
+              />
+            )}
+          />
+        </Suspense>
       </aside>
     </>
   );

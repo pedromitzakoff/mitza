@@ -115,9 +115,8 @@ export async function updateTaskAction(taskId: string, clientId: string, formDat
   redirect(returnTo);
 }
 
-export async function completeTaskAction(taskId: string, clientId: string, formData: FormData) {
+export async function completeTaskAction(taskId: string, clientId: string) {
   const supabase = await createSupabaseClient();
-  const returnTo = resolveReturnTo(formData, `/clients/${clientId}`);
 
   const { data: task, error: fetchError } = await supabase
     .from("tasks")
@@ -169,9 +168,12 @@ export async function completeTaskAction(taskId: string, clientId: string, formD
     });
   }
 
+  // Sem redirect de propósito: quem chama esta action já está na página
+  // certa (linha da tarefa ou drawer) — só revalida os dados em cima da
+  // mesma URL, sem navegar, pra não resetar o scroll nem fechar o que
+  // estava expandido.
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
-  redirect(returnTo);
 }

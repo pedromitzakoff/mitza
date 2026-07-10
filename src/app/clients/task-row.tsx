@@ -27,12 +27,16 @@ export function formatDueDate(value: string): string {
 }
 
 /**
- * Linha densa de tarefa — status como um círculo clicável no início,
- * título/responsável/prazo/situação numa linha só. Observações, editar e
- * comentários não ficam mais permanentemente na linha — clicar no título ou
- * no "•••" abre o drawer lateral (TaskDrawerPanel, o mesmo já usado na
- * Operação) com os detalhes completos. Reaproveitada em TaskList (tarefas
- * soltas) e SprintTaskList (tarefas da sprint).
+ * Linha densa de tarefa — status como um círculo clicável no início, depois
+ * prazo/dia da semana, título, responsável, situação e ações. Prioridade
+ * visual: prazo > título > responsável > status > ações (a data vem antes
+ * do nome porque a lista é lida cronologicamente). Observações, editar e
+ * comentários não ficam permanentemente na linha — clicar no título ou no
+ * "•••" abre o drawer lateral (TaskDrawerPanel) com os detalhes completos.
+ * Os links pro drawer usam `scroll={false}`: é a mesma página (só o
+ * search param `task` muda), então não faz sentido pular pro topo.
+ * Reaproveitada em TaskList (tarefas soltas), SprintTaskList (tarefas da
+ * sprint) e SprintClientGroup (tela Sprints).
  */
 export function TaskRow({
   task,
@@ -80,7 +84,12 @@ export function TaskRow({
           </form>
         )}
 
-        <Link href={detailsHref} className="min-w-0 flex-1 truncate">
+        <span className={`w-20 shrink-0 text-xs sm:w-28 ${dateClasses}`}>
+          <span className="hidden sm:inline">{dueDate.long}</span>
+          <span className="sm:hidden">{dueDate.short}</span>
+        </span>
+
+        <Link href={detailsHref} scroll={false} className="min-w-0 flex-1 truncate">
           <span className={`text-sm ${isDone ? "text-muted-foreground line-through" : "font-medium text-foreground"}`}>
             {task.title}
           </span>
@@ -89,11 +98,6 @@ export function TaskRow({
 
         <span className="hidden w-28 shrink-0 truncate text-xs text-muted-foreground md:block">
           {task.assignee?.name ?? "Sem responsável"}
-        </span>
-
-        <span className={`w-20 shrink-0 text-xs sm:w-28 ${dateClasses}`}>
-          <span className="hidden sm:inline">{dueDate.long}</span>
-          <span className="sm:hidden">{dueDate.short}</span>
         </span>
 
         <span className="hidden w-16 shrink-0 sm:block">
@@ -110,6 +114,7 @@ export function TaskRow({
 
         <Link
           href={detailsHref}
+          scroll={false}
           aria-label="Abrir detalhes da tarefa"
           title="Abrir detalhes"
           className="shrink-0 rounded px-1 text-sm text-muted-foreground hover:text-brand"

@@ -18,5 +18,13 @@ export const SIDEBAR_EXPANDED_WIDTH_CLASS = "md:w-60";
 export const SIDEBAR_COLLAPSED_WIDTH_CLASS = "md:w-16";
 
 /** Altura da sidebar no desktop: o resto do viewport, descontando a Top
- * Bar — ela tem scroll próprio (overflow-y-auto) se os itens não couberem. */
-export const SIDEBAR_HEIGHT_CLASS = `md:h-[calc(100vh-${TOP_BAR_OFFSET_REM})]`;
+ * Bar — ela tem scroll próprio (overflow-y-auto) se os itens não couberem.
+ * `dvh` (não `vh`) porque `vh` inclui a área atrás de barras de
+ * navegador/toolbars dinâmicas, deixando uma folga visível abaixo da
+ * sidebar em algumas viewports. */
+export const SIDEBAR_HEIGHT_CLASS = `md:h-[calc(100dvh-${TOP_BAR_OFFSET_REM})]`;
+
+/** Altura mínima do corpo (Sidebar + MainArea) — garante que a linha nunca
+ * fique mais baixa que a viewport real em páginas com conteúdo curto
+ * (evita uma faixa de fundo diferente aparecendo abaixo da sidebar). */
+export const BODY_MIN_HEIGHT_CLASS = `md:min-h-[calc(100dvh-${TOP_BAR_OFFSET_REM})]`;

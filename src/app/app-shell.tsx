@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { UserRole } from "@/lib/supabase/database.types";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
+import { BODY_MIN_HEIGHT_CLASS } from "./app-shell-dimensions";
 
 /**
  * Dono do estado do menu mobile, compartilhado entre o botão "Menu" (Top
@@ -32,9 +33,9 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="min-h-full">
+    <div className="min-h-dvh">
       <TopBar onOpenMenu={() => setMobileOpen(true)} />
-      <div className="flex md:items-start">
+      <div className={`flex md:items-start ${BODY_MIN_HEIGHT_CLASS}`}>
         <Sidebar profile={profile} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
         <main className="min-w-0 flex-1">{children}</main>
       </div>

@@ -23,7 +23,6 @@ export async function createCommentAction(
   }
 
   const content = String(formData.get("content") ?? "").trim();
-  const returnTo = String(formData.get("return_to") ?? "") || `/clients/${clientId}`;
 
   if (content) {
     const { error } = await supabase.from("comments").insert({
@@ -62,9 +61,11 @@ export async function createCommentAction(
     });
   }
 
+  // Sem redirect de propósito: quem chama esta action já está na página
+  // certa — só revalida os dados em cima da mesma URL, sem navegar, pra
+  // não resetar o scroll nem fechar o que estava expandido.
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
-  redirect(returnTo);
 }
