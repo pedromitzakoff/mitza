@@ -47,7 +47,6 @@ export function SprintCard({
   clientId,
   isAdmin,
   tasks,
-  commentsByTaskId,
   executionLabel,
   executionSeverity,
 }: {
@@ -57,7 +56,6 @@ export function SprintCard({
   clientId: string;
   isAdmin: boolean;
   tasks: TaskListItem[];
-  commentsByTaskId: Map<string, CommentItem[]>;
   executionLabel?: string | null;
   executionSeverity?: "atencao" | "critico" | null;
 }) {
@@ -198,19 +196,21 @@ export function SprintCard({
           />
         </div>
 
-        <SprintTaskList
-          tasks={tasks}
-          clientId={clientId}
-          sprintId={sprint.sprintId}
-          commentsByTaskId={commentsByTaskId}
-        />
+        <SprintTaskList tasks={tasks} clientId={clientId} sprintId={sprint.sprintId} />
 
-        <CommentThread
-          comments={comments}
-          commentableType="sprint"
-          commentableId={sprint.sprintId}
-          clientId={clientId}
-        />
+        <details className="mt-3 border-t border-border pt-2 [&_summary]:cursor-pointer [&_summary]:list-none">
+          <summary className="text-xs font-medium text-muted-foreground hover:text-brand">
+            Ver detalhes da sprint {comments.length > 0 ? `(${comments.length} comentário${comments.length !== 1 ? "s" : ""})` : ""}
+          </summary>
+          <div className="mt-2">
+            <CommentThread
+              comments={comments}
+              commentableType="sprint"
+              commentableId={sprint.sprintId}
+              clientId={clientId}
+            />
+          </div>
+        </details>
       </div>
     </details>
   );

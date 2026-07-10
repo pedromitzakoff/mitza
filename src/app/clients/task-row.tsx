@@ -5,7 +5,6 @@ import { formatWeekdayAndDate } from "@/lib/format";
 import type { TaskStatus, TaskType } from "@/lib/supabase/database.types";
 import { TASK_STATUS_BADGE_CLASSES, TASK_STATUS_LABEL, TASK_TYPE_LABEL } from "./task-labels";
 import { completeTaskAction } from "./tasks-actions";
-import { CommentThread, type CommentItem } from "./comment-thread";
 
 export interface TaskListItem {
   id: string;
@@ -28,21 +27,21 @@ export function formatDueDate(value: string): string {
 }
 
 /**
- * Linha densa de tarefa (padrão de lista de ferramentas de gestão de
- * trabalho) — status como um círculo clicável no início, título, responsável,
- * prazo e situação numa linha só, ações secundárias reveladas no hover (ou
- * foco, pra manter navegação por teclado). Reaproveitada em TaskList (tarefas
- * soltas) e SprintTaskList (tarefas da sprint) — nenhuma mudou de query nem
- * de regra de negócio, só a apresentação.
+ * Linha densa de tarefa — status como um círculo clicável no início,
+ * título/responsável/prazo/situação numa linha só. Observações, editar e
+ * comentários não ficam mais permanentemente na linha — clicar no título ou
+ * no "•••" abre o drawer lateral (TaskDrawerPanel, o mesmo já usado na
+ * Operação) com os detalhes completos. Reaproveitada em TaskList (tarefas
+ * soltas) e SprintTaskList (tarefas da sprint).
  */
 export function TaskRow({
   task,
   clientId,
-  comments,
+  detailsHref,
 }: {
   task: TaskListItem;
   clientId: string;
-  comments: CommentItem[];
+  detailsHref: string;
 }) {
   const effectiveStatus = effectiveTaskStatus(task);
   const isDone = effectiveStatus === "feito";
@@ -58,7 +57,7 @@ export function TaskRow({
       : "text-muted-foreground";
 
   return (
-    <li className="group/row border-b border-border/60 px-2 py-1.5 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
+    <li className="border-b border-border/60 px-2 py-1.5 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
       <div className={`flex items-center gap-2.5 ${isFuture ? "opacity-70" : ""}`}>
         {isDone ? (
           <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none text-green-700 dark:bg-green-950 dark:text-green-300">
@@ -81,12 +80,12 @@ export function TaskRow({
           </form>
         )}
 
-        <span className="min-w-0 flex-1 truncate">
+        <Link href={detailsHref} className="min-w-0 flex-1 truncate">
           <span className={`text-sm ${isDone ? "text-muted-foreground line-through" : "font-medium text-foreground"}`}>
             {task.title}
           </span>
           <span className="ml-1.5 hidden text-xs text-muted-foreground lg:inline">{TASK_TYPE_LABEL[task.type]}</span>
-        </span>
+        </Link>
 
         <span className="hidden w-28 shrink-0 truncate text-xs text-muted-foreground md:block">
           {task.assignee?.name ?? "Sem responsável"}
@@ -109,24 +108,15 @@ export function TaskRow({
           )}
         </span>
 
-        <span className="flex shrink-0 items-center gap-2 opacity-100 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/row:opacity-100">
-          <Link
-            href={`/clients/${clientId}/tasks/${task.id}/edit`}
-            className="text-xs text-muted-foreground hover:text-brand hover:underline"
-          >
-            Editar
-          </Link>
-        </span>
+        <Link
+          href={detailsHref}
+          aria-label="Abrir detalhes da tarefa"
+          title="Abrir detalhes"
+          className="shrink-0 rounded px-1 text-sm text-muted-foreground hover:text-brand"
+        >
+          •••
+        </Link>
       </div>
-
-      <details className="[&_summary]:cursor-pointer [&_summary]:list-none">
-        <summary className="ml-[26px] mt-1 text-xs text-muted-foreground hover:text-brand">
-          Comentários {comments.length > 0 ? `(${comments.length})` : ""}
-        </summary>
-        <div className="ml-[26px]">
-          <CommentThread comments={comments} commentableType="task" commentableId={task.id} clientId={clientId} />
-        </div>
-      </details>
     </li>
   );
 }

@@ -2,18 +2,15 @@ import Link from "next/link";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { orderTasks } from "./task-list";
 import { TaskRow, type TaskListItem } from "./task-row";
-import type { CommentItem } from "./comment-thread";
 
 export function SprintTaskList({
   tasks,
   clientId,
   sprintId,
-  commentsByTaskId,
 }: {
   tasks: TaskListItem[];
   clientId: string;
   sprintId: string;
-  commentsByTaskId: Map<string, CommentItem[]>;
 }) {
   const ordered = orderTasks(tasks);
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
@@ -54,7 +51,7 @@ export function SprintTaskList({
               key={task.id}
               task={task}
               clientId={clientId}
-              comments={commentsByTaskId.get(task.id) ?? []}
+              detailsHref={`/clients/${clientId}?task=${task.id}`}
             />
           ))}
         </ul>

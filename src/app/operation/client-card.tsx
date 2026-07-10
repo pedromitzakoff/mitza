@@ -62,8 +62,9 @@ export function OperationClientCard({
 
         {card.sprint && (
           <div className="shrink-0 text-right text-xs text-muted-foreground">
-            <p>
+            <p className="tabular-nums">
               {formatCurrency(card.sprint.actualSpend)} / {formatCurrency(card.sprint.plannedSpend)}
+              {card.sprint.plannedSpend > 0 && ` · ${Math.round(card.sprint.progressPct)}%`}
             </p>
             <span
               className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[card.sprint.status]}`}

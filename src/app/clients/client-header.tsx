@@ -1,13 +1,8 @@
-import Link from "next/link";
 import { formatDateTime } from "@/lib/format";
 import type { AccountHealth } from "@/lib/attention-alerts";
-import {
-  OPERATIONAL_ACTIVITY_STATUS_BADGE_CLASSES,
-  OPERATIONAL_ACTIVITY_STATUS_LABEL,
-  type OperationalActivityStatus,
-} from "@/lib/operational-activity";
-import { syncClientMetaAction } from "./meta-actions";
 
+/** Reaproveitados pelo ClientContextBar (sticky) — a fonte visível da saúde
+ * da conta agora é só ali, não duplica mais aqui. */
 export const HEALTH_LABEL: Record<AccountHealth, string> = {
   saudavel: "Conta saudável",
   atencao: "Atenção",
@@ -20,75 +15,35 @@ export const HEALTH_BADGE_CLASSES: Record<AccountHealth, string> = {
   critico: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
 };
 
+/**
+ * Só o nome do cliente (título da página) + um "Detalhes do cliente"
+ * recolhível com o que é secundário — ID Meta, gestores por extenso, última
+ * sync. Nome, sprint atual, gestor resumido, status e ações principais já
+ * aparecem sempre no ClientContextBar (sticky logo abaixo da Top Bar), então
+ * não repetimos aqui.
+ */
 export function ClientHeader({
-  clientId,
   clientName,
   metaAdAccountId,
   managerNames,
-  health,
   lastSyncedAt,
-  isAdmin,
-  activityStatus,
-  activityLabel,
 }: {
-  clientId: string;
   clientName: string;
   metaAdAccountId: string;
   managerNames: string[];
-  health: AccountHealth;
   lastSyncedAt: string | null;
-  isAdmin: boolean;
-  activityStatus: OperationalActivityStatus;
-  activityLabel: string;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-card p-3">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-lg font-semibold text-foreground">{clientName}</h1>
-          <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${HEALTH_BADGE_CLASSES[health]}`}
-          >
-            {HEALTH_LABEL[health]}
-          </span>
-          <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${OPERATIONAL_ACTIVITY_STATUS_BADGE_CLASSES[activityStatus]}`}
-          >
-            {OPERATIONAL_ACTIVITY_STATUS_LABEL[activityStatus]}
-          </span>
+    <div>
+      <h1 className="text-lg font-semibold text-foreground">{clientName}</h1>
+      <details className="mt-0.5 [&_summary]:cursor-pointer [&_summary]:list-none">
+        <summary className="text-xs text-muted-foreground hover:text-brand">Detalhes do cliente</summary>
+        <div className="mt-1.5 flex flex-col gap-0.5 text-xs text-muted-foreground">
+          <p className="font-mono">{metaAdAccountId}</p>
+          <p>{managerNames.length > 0 ? managerNames.join(", ") : "Sem gestor atribuído"}</p>
+          <p>{lastSyncedAt ? `Última sync: ${formatDateTime(lastSyncedAt)}` : "Nunca sincronizado"}</p>
         </div>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          <span className="font-mono">{metaAdAccountId}</span>
-          {" · "}
-          {managerNames.length > 0 ? managerNames.join(", ") : "Sem gestor atribuído"}
-          {" · Última atividade: "}
-          {activityLabel}
-        </p>
-      </div>
-
-      <div className="flex flex-col items-end gap-1">
-        <div className="flex items-center gap-2">
-          {isAdmin && (
-            <Link
-              href={`/clients/${clientId}/edit`}
-              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            >
-              Editar
-            </Link>
-          )}
-          <form action={syncClientMetaAction.bind(null, clientId)}>
-            <button
-              type="submit"
-              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            >
-              Atualizar dados do Meta
-            </button>
-          </form>
-        </div>
-        <p className="text-[11px] text-muted-foreground">
-          {lastSyncedAt ? `Última sync: ${formatDateTime(lastSyncedAt)}` : "Nunca sincronizado"}
-        </p>
-      </div>
+      </details>
     </div>
   );
 }

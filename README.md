@@ -393,6 +393,19 @@ automático da sync, refinamentos de UX, etc.
     cabeçalho da sprint virou uma linha-resumo (com % de progresso),
     tabelas da Visão Geral e filtros de Operação padronizados — só camada
     visual, nenhuma query/regra de negócio mudou
+22. ✅ Simplificação visual e redução de poluição (progressive disclosure):
+    Visão Geral agrupada em 3 grupos compactos (Carteira/Investimento/
+    Operação, no lugar de 19 cards soltos), "Resumo por Gestor" virou
+    seção recolhível "Ver análises adicionais" e a tabela de clientes
+    passou a aparecer bem mais cedo; página do cliente reduzida a 4
+    indicadores essenciais (Investimento/Projeção/Tarefas atrasadas/
+    Última atividade), header duplicado removido (nome/gestor/status/ações
+    já vivem só no ClientContextBar sticky), ID Meta/gestores completos/
+    última sync viraram um "Detalhes do cliente" recolhível; tarefas agora
+    abrem um drawer lateral (reaproveitando o já existente da Operação) em
+    vez de mostrar observações/comentários permanentemente na linha;
+    comentários da sprint viraram "Ver detalhes da sprint" — nenhuma
+    informação removida, só reorganizada por prioridade de decisão
 
 ## Deploy
 

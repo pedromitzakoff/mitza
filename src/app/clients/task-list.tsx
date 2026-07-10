@@ -1,6 +1,5 @@
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { TaskRow, type TaskListItem } from "./task-row";
-import type { CommentItem } from "./comment-thread";
 
 export type { TaskListItem };
 
@@ -21,15 +20,7 @@ export function orderTasks(tasks: TaskListItem[]): TaskListItem[] {
   return [...pending, ...done];
 }
 
-export function TaskList({
-  tasks,
-  clientId,
-  commentsByTaskId,
-}: {
-  tasks: TaskListItem[];
-  clientId: string;
-  commentsByTaskId: Map<string, CommentItem[]>;
-}) {
+export function TaskList({ tasks, clientId }: { tasks: TaskListItem[]; clientId: string }) {
   const ordered = orderTasks(tasks);
 
   if (ordered.length === 0) {
@@ -43,7 +34,7 @@ export function TaskList({
           key={task.id}
           task={task}
           clientId={clientId}
-          comments={commentsByTaskId.get(task.id) ?? []}
+          detailsHref={`/clients/${clientId}?task=${task.id}`}
         />
       ))}
     </ul>

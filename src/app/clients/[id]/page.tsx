@@ -6,7 +6,7 @@ import { computeSprintFinancials, currentMonthRange } from "@/lib/sprint-financi
 import { computeCumulativeSpendSeries } from "@/lib/spend-chart-data";
 import { computeMonthProjection, computeTaskCounts } from "@/lib/client-metrics";
 import { classifySpendStatus } from "@/lib/spend-status";
-import { buildAttentionAlerts, computeAccountHealth } from "@/lib/attention-alerts";
+import { buildAttentionAlerts } from "@/lib/attention-alerts";
 import { buildSprintExecutionAlert } from "@/lib/sprint-execution";
 import { businessDaysSince } from "@/lib/business-days";
 import { classifyOperationalActivityStatus, formatLastActivityLabel } from "@/lib/operational-activity";
@@ -20,6 +20,8 @@ import { TaskList } from "../task-list";
 import { Section } from "../section";
 import type { CommentItem } from "../comment-thread";
 import type { TaskListItem } from "../task-row";
+import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
+import type { OperationTaskItem } from "@/app/operation/operation-data";
 
 const OPTIMIZATION_LOOKBACK_DAYS = 14;
 
@@ -79,10 +81,11 @@ export default async function ClientPage({
     synced?: string;
     taskError?: string;
     commentError?: string;
+    task?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, synced, taskError, commentError } = await searchParams;
+  const { error, synced, taskError, commentError, task: openTaskId } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
   const supabase = await createSupabaseClient();
@@ -167,7 +170,7 @@ export default async function ClientPage({
   const { data: tasks } = await supabase
     .from("tasks")
     .select(
-      "id, title, type, due_date, status, sprint_id, assignee:profiles!tasks_assignee_id_fkey(name)",
+      "id, title, type, due_date, status, sprint_id, notes, assignee:profiles!tasks_assignee_id_fkey(name)",
     )
     .eq("client_id", id)
     .order("due_date");
@@ -228,7 +231,6 @@ export default async function ClientPage({
     ? buildSprintExecutionAlert(currentSprint, sprintLastActivityDate, today)
     : null;
   const alerts = sprintExecutionAlert ? [...baseAlerts, sprintExecutionAlert] : baseAlerts;
-  const accountHealth = computeAccountHealth(alerts);
   const sprintExecutionLabel = currentSprint
     ? formatLastActivityLabel(sprintLastActivityDate ?? new Date(`${currentSprint.startDate}T00:00:00Z`), today)
     : null;
@@ -249,19 +251,32 @@ export default async function ClientPage({
     synced && { tone: "green", text: `${synced} dia(s) de spend sincronizado(s) com o Meta.` },
   ].filter((banner): banner is { tone: "red" | "green"; text: string } => Boolean(banner));
 
+  const returnTo = `/clients/${client.id}`;
+  const openTaskRow = openTaskId ? (tasks ?? []).find((t) => t.id === openTaskId) ?? null : null;
+  const openTask: OperationTaskItem | null = openTaskRow
+    ? {
+        id: openTaskRow.id,
+        title: openTaskRow.title,
+        type: openTaskRow.type,
+        due_date: openTaskRow.due_date,
+        status: openTaskRow.status,
+        assignee: openTaskRow.assignee,
+        sprint_id: openTaskRow.sprint_id,
+        notes: openTaskRow.notes,
+      }
+    : null;
+  const openTaskSprintNumber = openTaskRow?.sprint_id
+    ? sprintFinancials.findIndex((s) => s.sprintId === openTaskRow.sprint_id) + 1 || null
+    : null;
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-5">
       <div>
         <ClientHeader
-          clientId={client.id}
           clientName={client.name}
           metaAdAccountId={client.meta_ad_account_id}
           managerNames={managerNames}
-          health={accountHealth}
           lastSyncedAt={lastSync?.synced_at ?? null}
-          isAdmin={isAdmin}
-          activityStatus={activityStatus}
-          activityLabel={activityLabel}
         />
       </div>
 
@@ -288,7 +303,8 @@ export default async function ClientPage({
           monthActual={monthActual}
           projection={projection}
           taskCounts={taskCounts}
-          health={accountHealth}
+          activityStatus={activityStatus}
+          activityLabel={activityLabel}
         />
       </div>
 
@@ -317,7 +333,6 @@ export default async function ClientPage({
                 clientId={client.id}
                 isAdmin={isAdmin}
                 tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
-                commentsByTaskId={taskCommentsById}
                 executionLabel={sprint.temporalStatus === "atual" ? sprintExecutionLabel : null}
                 executionSeverity={
                   sprint.temporalStatus === "atual" && sprintExecutionAlert?.severity !== "informativo"
@@ -346,8 +361,20 @@ export default async function ClientPage({
         <p className="mb-3 text-xs text-zinc-500">
           Tarefas sem sprint vinculada — as de cada sprint aparecem no card dela, acima.
         </p>
-        <TaskList tasks={unlinkedTasks} clientId={client.id} commentsByTaskId={taskCommentsById} />
+        <TaskList tasks={unlinkedTasks} clientId={client.id} />
       </Section>
+
+      {openTask && (
+        <TaskDrawerPanel
+          task={openTask}
+          clientId={client.id}
+          clientName={client.name}
+          sprintNumber={openTaskSprintNumber}
+          comments={taskCommentsById.get(openTask.id) ?? []}
+          closeHref={returnTo}
+          returnTo={returnTo}
+        />
+      )}
     </div>
   );
 }

@@ -57,26 +57,45 @@ function shiftMonthParam(monthRange: { firstDay: string }, deltaMonths: number):
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-function IndicatorCard({
-  label,
-  value,
-  href,
-  hint,
-}: {
-  label: string;
-  value: string;
-  href?: string;
-  hint?: string;
-}) {
+/** Uma métrica compacta dentro de um grupo (Carteira/Investimento/Operação)
+ * — nunca um card com borda própria, pra não voltar a virar uma grade de
+ * caixinhas competindo por atenção. */
+function StatItem({ label, value, href }: { label: string; value: string; href?: string }) {
   const content = (
-    <div className="rounded-lg border border-border bg-card p-3 transition-colors hover:border-brand/50">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{value}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>}
+    <div>
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="text-lg font-semibold tabular-nums text-foreground">{value}</p>
     </div>
   );
 
-  return href ? <Link href={href}>{content}</Link> : content;
+  return href ? (
+    <Link href={href} className="-mx-1 rounded-md px-1 hover:bg-zinc-100 dark:hover:bg-zinc-900">
+      {content}
+    </Link>
+  ) : (
+    content
+  );
+}
+
+/** Um grupo (Carteira/Investimento/Operação) — no máximo 4 no primeiro
+ * viewport, cada um com métricas compactas dentro em vez de vários cards
+ * soltos e iguais. */
+function MetricGroup({
+  title,
+  children,
+  extra,
+}: {
+  title: string;
+  children: React.ReactNode;
+  extra?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-3">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
+      <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">{children}</div>
+      {extra}
+    </div>
+  );
 }
 
 export default async function Home({
@@ -471,33 +490,40 @@ export default async function Home({
         )}
       </form>
 
-      {/* Portfólio */}
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <IndicatorCard label="Clientes Ativos" value={String(portfolio.ativos)} href={drillDownUrl({ activity: "ativo" })} />
-        <IndicatorCard label="Saudáveis" value={String(portfolio.saudaveis)} href={drillDownUrl({ health: "saudavel" })} />
-        <IndicatorCard label="Em Atenção" value={String(portfolio.atencao)} href={drillDownUrl({ health: "atencao" })} />
-        <IndicatorCard label="Críticos" value={String(portfolio.criticos)} href={drillDownUrl({ health: "critico" })} />
-        <IndicatorCard
-          label="Inativos Operacionalmente"
-          value={String(portfolio.inativos)}
-          href={drillDownUrl({ activity: "inativo" })}
-        />
-      </div>
+      {/* Resumo consolidado: no máximo 4 grupos, métricas compactas dentro
+          de cada um em vez de uma grade de cards soltos. */}
+      <div className="mt-5 flex flex-col gap-3">
+        <MetricGroup title="Carteira">
+          <StatItem label="Ativos" value={String(portfolio.ativos)} href={drillDownUrl({ activity: "ativo" })} />
+          <StatItem label="Saudáveis" value={String(portfolio.saudaveis)} href={drillDownUrl({ health: "saudavel" })} />
+          <StatItem label="Em atenção" value={String(portfolio.atencao)} href={drillDownUrl({ health: "atencao" })} />
+          <StatItem label="Críticos" value={String(portfolio.criticos)} href={drillDownUrl({ health: "critico" })} />
+          <StatItem
+            label="Inativos"
+            value={String(portfolio.inativos)}
+            href={drillDownUrl({ activity: "inativo" })}
+          />
+        </MetricGroup>
 
-      {/* Financeiro */}
-      <div className="mt-5">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Investimento da agência
-        </h2>
-        <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <IndicatorCard label="Planejado do mês" value={formatCurrency(financial.planned)} />
-          <IndicatorCard label="Realizado até hoje" value={formatCurrency(financial.actual)} />
-          <IndicatorCard label="% Realizado" value={financial.pct !== null ? `${Math.round(financial.pct)}%` : "—"} />
-          <IndicatorCard
-            label={isFutureMonth ? "Projeção (mês futuro)" : "Projeção de fechamento"}
+        <MetricGroup
+          title="Investimento"
+          extra={
+            <>
+              <div className="mt-3">
+                <SpendChart points={chartPoints} size="large" />
+              </div>
+              <p className="mt-2 text-sm font-medium text-foreground">{ritmoText}</p>
+            </>
+          }
+        >
+          <StatItem label="Planejado" value={formatCurrency(financial.planned)} />
+          <StatItem label="Realizado" value={formatCurrency(financial.actual)} />
+          <StatItem label="% realizado" value={financial.pct !== null ? `${Math.round(financial.pct)}%` : "—"} />
+          <StatItem
+            label={isFutureMonth ? "Projeção (mês futuro)" : "Projeção"}
             value={isFutureMonth ? "—" : formatCurrency(financial.projection.projectedSpend)}
           />
-          <IndicatorCard
+          <StatItem
             label="Diferença projetada"
             value={
               isFutureMonth || financial.planned <= 0
@@ -505,86 +531,77 @@ export default async function Home({
                 : formatCurrency(financial.projection.projectedSpend - financial.planned)
             }
           />
-          <IndicatorCard
-            label="Sem meta configurada"
-            value={String(financial.semMeta)}
-            href={drillDownUrl({ meta: "sem" })}
-          />
-        </div>
-      </div>
+          <StatItem label="Sem meta" value={String(financial.semMeta)} href={drillDownUrl({ meta: "sem" })} />
+        </MetricGroup>
 
-      {/* Gráfico consolidado */}
-      <div className="mt-3 rounded-lg border border-border bg-card p-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Planejado acumulado x gasto real acumulado da agência
-        </h2>
-        <div className="mt-2">
-          <SpendChart points={chartPoints} size="large" />
-        </div>
-        <p className="mt-2 text-sm font-medium text-foreground">{ritmoText}</p>
-      </div>
-
-      {/* Operação das sprints */}
-      <div className="mt-5">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Operação das sprints</h2>
-        <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-          <IndicatorCard label="Em andamento" value={String(sprintOps.emAndamento)} />
-          <IndicatorCard label="Em dia" value={String(sprintOps.emDia)} />
-          <IndicatorCard label="Atenção" value={String(sprintOps.atencao)} />
-          <IndicatorCard label="Críticas" value={String(sprintOps.criticas)} />
-          <IndicatorCard
-            label="Sem execução"
-            value={String(sprintOps.semExecucao)}
-            href="/operation?sprint=sem_execucao"
-          />
-          <IndicatorCard
+        <MetricGroup
+          title="Operação"
+          extra={
+            <>
+              <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full border border-border">
+                {sprintOps.emDia > 0 && (
+                  <div
+                    className="bg-green-500"
+                    style={{ width: `${(sprintOps.emDia / sprintDistributionTotal) * 100}%` }}
+                    title={`Em dia: ${sprintOps.emDia}`}
+                  />
+                )}
+                {sprintOps.atencao > 0 && (
+                  <div
+                    className="bg-amber-500"
+                    style={{ width: `${(sprintOps.atencao / sprintDistributionTotal) * 100}%` }}
+                    title={`Atenção: ${sprintOps.atencao}`}
+                  />
+                )}
+                {sprintOps.criticas > 0 && (
+                  <div
+                    className="bg-red-500"
+                    style={{ width: `${(sprintOps.criticas / sprintDistributionTotal) * 100}%` }}
+                    title={`Críticas: ${sprintOps.criticas}`}
+                  />
+                )}
+                {sprintOps.semExecucao > 0 && (
+                  <div
+                    className="bg-zinc-400 dark:bg-zinc-600"
+                    style={{ width: `${(sprintOps.semExecucao / sprintDistributionTotal) * 100}%` }}
+                    title={`Sem execução: ${sprintOps.semExecucao}`}
+                  />
+                )}
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-green-500" /> Em dia
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-amber-500" /> Atenção
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-red-500" /> Críticas
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-zinc-400 dark:bg-zinc-600" /> Sem execução
+                </span>
+              </div>
+            </>
+          }
+        >
+          <StatItem label="Sprints em andamento" value={String(sprintOps.emAndamento)} />
+          <StatItem
             label="Taxa de execução"
             value={sprintOps.taxaExecucao !== null ? `${Math.round(sprintOps.taxaExecucao)}%` : "—"}
           />
-          <IndicatorCard
+          <StatItem
             label="Tarefas atrasadas"
             value={String(sprintOps.atrasadas)}
             href={drillDownUrl({ tasks: "atrasadas" })}
           />
-          <IndicatorCard label="Tarefas para hoje" value={String(sprintOps.paraHoje)} href="/operation?mode=hoje" />
-        </div>
-
-        <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full border border-border">
-          {sprintOps.emDia > 0 && (
-            <div
-              className="bg-green-500"
-              style={{ width: `${(sprintOps.emDia / sprintDistributionTotal) * 100}%` }}
-              title={`Em dia: ${sprintOps.emDia}`}
-            />
-          )}
-          {sprintOps.atencao > 0 && (
-            <div
-              className="bg-amber-500"
-              style={{ width: `${(sprintOps.atencao / sprintDistributionTotal) * 100}%` }}
-              title={`Atenção: ${sprintOps.atencao}`}
-            />
-          )}
-          {sprintOps.criticas > 0 && (
-            <div
-              className="bg-red-500"
-              style={{ width: `${(sprintOps.criticas / sprintDistributionTotal) * 100}%` }}
-              title={`Críticas: ${sprintOps.criticas}`}
-            />
-          )}
-          {sprintOps.semExecucao > 0 && (
-            <div
-              className="bg-zinc-400 dark:bg-zinc-600"
-              style={{ width: `${(sprintOps.semExecucao / sprintDistributionTotal) * 100}%` }}
-              title={`Sem execução: ${sprintOps.semExecucao}`}
-            />
-          )}
-        </div>
-        <div className="mt-1.5 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-500" /> Em dia</span>
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-500" /> Atenção</span>
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500" /> Críticas</span>
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-zinc-400 dark:bg-zinc-600" /> Sem execução</span>
-        </div>
+          <StatItem label="Tarefas hoje" value={String(sprintOps.paraHoje)} href="/operation?mode=hoje" />
+          <StatItem
+            label="Sem execução"
+            value={String(sprintOps.semExecucao)}
+            href="/operation?sprint=sem_execucao"
+          />
+        </MetricGroup>
       </div>
 
       {/* Precisa de atenção */}
@@ -677,61 +694,6 @@ export default async function Home({
           </div>
         ) : (
           <p className="mt-2 text-sm text-muted-foreground">Nenhuma conta precisa de intervenção agora.</p>
-        )}
-      </div>
-
-      {/* Resumo por gestor */}
-      <div className="mt-5 rounded-lg border border-border bg-card p-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {isAdmin ? "Operação por gestor" : "Minha operação"}
-        </h2>
-        {managerSummary.length > 0 ? (
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                  <th className="py-1.5 px-3">Gestor</th>
-                  <th className="py-1.5 px-3">Clientes</th>
-                  <th className="py-1.5 px-3">Saudáveis</th>
-                  <th className="py-1.5 px-3">Atenção</th>
-                  <th className="py-1.5 px-3">Críticos</th>
-                  <th className="py-1.5 px-3">Inativos</th>
-                  <th className="py-1.5 px-3">Sem execução</th>
-                  <th className="py-1.5 px-3">Atrasadas</th>
-                  <th className="py-1.5 px-3">Hoje</th>
-                  <th className="py-1.5 px-3">Execução</th>
-                </tr>
-              </thead>
-              <tbody>
-                {managerSummary.map((row) => (
-                  <tr key={row.id} className="border-b border-border/60 last:border-0">
-                    <td className="py-1.5 px-3 font-medium text-foreground">
-                      {isAdmin ? (
-                        <Link href={drillDownUrl({ manager: row.id })} className="hover:underline">
-                          {row.name}
-                        </Link>
-                      ) : (
-                        row.name
-                      )}
-                    </td>
-                    <td className="py-1.5 px-3 text-muted-foreground">{row.totalClients}</td>
-                    <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.saudaveis}</td>
-                    <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.atencao}</td>
-                    <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.criticos}</td>
-                    <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.inativos}</td>
-                    <td className="py-1.5 px-3 text-muted-foreground">{row.semExecucao}</td>
-                    <td className="py-1.5 px-3 text-muted-foreground">{row.atrasadas}</td>
-                    <td className="py-1.5 px-3 text-muted-foreground">{row.paraHoje}</td>
-                    <td className="py-1.5 px-3 text-muted-foreground">
-                      {row.taxaExecucao !== null ? `${Math.round(row.taxaExecucao)}%` : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="mt-2 text-sm text-muted-foreground">Nenhum gestor encontrado.</p>
         )}
       </div>
 
@@ -844,6 +806,68 @@ export default async function Home({
           </p>
         )}
       </div>
+
+      {/* Análises secundárias — fora do primeiro viewport de propósito */}
+      <details className="mt-5 rounded-lg border border-border bg-card [&_summary]:cursor-pointer [&_summary]:list-none">
+        <summary className="flex items-center justify-between p-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-brand">
+          Ver análises adicionais
+          <span className="text-sm">▾</span>
+        </summary>
+
+        <div className="border-t border-border p-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {isAdmin ? "Operação por gestor" : "Minha operação"}
+          </h3>
+          {managerSummary.length > 0 ? (
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <th className="py-1.5 px-3">Gestor</th>
+                    <th className="py-1.5 px-3">Clientes</th>
+                    <th className="py-1.5 px-3">Saudáveis</th>
+                    <th className="py-1.5 px-3">Atenção</th>
+                    <th className="py-1.5 px-3">Críticos</th>
+                    <th className="py-1.5 px-3">Inativos</th>
+                    <th className="py-1.5 px-3">Sem execução</th>
+                    <th className="py-1.5 px-3">Atrasadas</th>
+                    <th className="py-1.5 px-3">Hoje</th>
+                    <th className="py-1.5 px-3">Execução</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {managerSummary.map((row) => (
+                    <tr key={row.id} className="border-b border-border/60 last:border-0">
+                      <td className="py-1.5 px-3 font-medium text-foreground">
+                        {isAdmin ? (
+                          <Link href={drillDownUrl({ manager: row.id })} className="hover:underline">
+                            {row.name}
+                          </Link>
+                        ) : (
+                          row.name
+                        )}
+                      </td>
+                      <td className="py-1.5 px-3 text-muted-foreground">{row.totalClients}</td>
+                      <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.saudaveis}</td>
+                      <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.atencao}</td>
+                      <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.criticos}</td>
+                      <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.inativos}</td>
+                      <td className="py-1.5 px-3 text-muted-foreground">{row.semExecucao}</td>
+                      <td className="py-1.5 px-3 text-muted-foreground">{row.atrasadas}</td>
+                      <td className="py-1.5 px-3 text-muted-foreground">{row.paraHoje}</td>
+                      <td className="py-1.5 px-3 text-muted-foreground">
+                        {row.taxaExecucao !== null ? `${Math.round(row.taxaExecucao)}%` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">Nenhum gestor encontrado.</p>
+          )}
+        </div>
+      </details>
     </div>
   );
 }
