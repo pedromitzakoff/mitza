@@ -463,6 +463,15 @@ automático da sync, refinamentos de UX, etc.
     hoje → demais, depois alfabético) sem depender de badge — ordenação nova
     e isolada (`sortSprintClientsByUrgency`), não mexe na ordenação da Visão
     Geral
+29. ✅ Densidade dos alertas e expansão inicial na tela Sprints: todos os
+    clientes/sprints iniciam recolhidos em qualquer modo (nada expande
+    automaticamente por saúde/atraso/atividade); a lista completa de
+    alertas some do resumo padrão — vira uma linha compacta (ícone + alerta
+    mais prioritário, já vem ordenado por severidade, + "+N alertas"),
+    vermelho só quando o alerta principal é crítico; a lista detalhada só
+    aparece num `<details>` aninhado ("Ver alertas"/"Ocultar alertas"),
+    independente da expansão do cliente — tarefas continuam logo em
+    seguida, sem a lista de alertas entre o resumo e elas
 
 ## Deploy
 

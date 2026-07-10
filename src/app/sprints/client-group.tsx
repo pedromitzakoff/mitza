@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { TriangleAlert } from "lucide-react";
 import { formatCurrency, formatDateRange } from "@/lib/format";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { TaskRow } from "@/app/clients/task-row";
 import { orderTasks } from "@/app/clients/task-list";
+import type { AttentionAlert } from "@/lib/attention-alerts";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import type { OperationClientCard as OperationClientCardData, OperationMode } from "@/app/operation/operation-data";
 
@@ -14,13 +16,37 @@ const ACTIVITY_TEXT_CLASSES: Record<OperationalActivityStatus, string> = {
   inativo: "text-red-600 dark:text-red-400",
 };
 
+/** Linha compacta de alertas — 1 ícone + o alerta mais prioritário (os
+ * alertas já vêm ordenados por severidade de buildAttentionAlerts, então
+ * `alerts[0]` já é o mais prioritário sem recalcular nada) + quantos
+ * restam. Vermelho só quando esse alerta é crítico (seção 9: não competir
+ * com várias cores). Reaproveitada no resumo (sempre visível, sem clique)
+ * e no toggle "Ver alertas" dentro do corpo expandido. */
+function AlertsSummaryLine({ topAlert, remaining }: { topAlert: AttentionAlert; remaining: number }) {
+  const isCritical = topAlert.severity === "critico";
+  return (
+    <>
+      <TriangleAlert
+        className={`h-3 w-3 shrink-0 ${isCritical ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}
+        aria-hidden="true"
+      />
+      <span className={isCritical ? "font-medium text-red-600 dark:text-red-400" : ""}>{topAlert.message}</span>
+      {remaining > 0 && <span>· +{remaining} alerta{remaining !== 1 ? "s" : ""}</span>}
+    </>
+  );
+}
+
 /**
  * Grupo colapsável por cliente na tela Sprints — cabeçalho compacto
  * (identidade, gestor principal, sprint, financeiro, progresso, última
- * atividade), sem badge de saúde ao lado do nome: a prioridade já aparece
- * na ordenação (sortSprintClientsByUrgency) e um alerta só some quando há
- * algo acionável. Reaproveita buildOperationClientCard — nenhuma query
- * nova por cliente.
+ * atividade, resumo de alertas), sem badge de saúde ao lado do nome: a
+ * prioridade já aparece na ordenação (sortSprintClientsByUrgency). Inicia
+ * sempre recolhido — o foco é deixar o usuário escanear a carteira e
+ * escolher o que expandir, não abrir tudo por padrão. Os alertas ficam
+ * resumidos numa linha (ícone + alerta mais prioritário + "+N"); a lista
+ * completa só aparece se o usuário clicar "Ver alertas", num <details>
+ * aninhado independente da expansão do cliente. Reaproveita
+ * buildOperationClientCard — nenhuma query nova por cliente.
  */
 export function SprintClientGroup({
   card,
@@ -34,23 +60,18 @@ export function SprintClientGroup({
   primaryManagerName: string | null;
 }) {
   const tasksToShow = orderTasks(mode === "hoje" ? card.todayAndOverdueTasks : mode === "sprint" ? card.sprintTasks : []);
-  const needsAttention =
-    card.accountHealth !== "saudavel" ||
-    card.activityStatus !== "ativo" ||
-    card.sprintFilterBucket === "atrasadas" ||
-    card.sprintFilterBucket === "sem_execucao";
-  const defaultOpen = mode !== "todos" || needsAttention;
 
   const sprintTasksDone = card.sprintTasks.filter((t) => effectiveTaskStatus(t) === "feito").length;
   const sprintTasksOverdue = card.sprintTasks.filter((t) => effectiveTaskStatus(t) === "atrasado").length;
 
+  const topAlert = card.alerts[0];
+  const remainingAlerts = card.alerts.length - 1;
+  const activityLabel = card.activityLabel === "Nunca houve atividade" ? "Nunca" : card.activityLabel;
+
   return (
-    <details
-      open={defaultOpen}
-      className="group rounded-lg border border-border bg-card [&_summary::-webkit-details-marker]:hidden"
-    >
+    <details className="group/client rounded-lg border border-border bg-card [&_summary::-webkit-details-marker]:hidden">
       <summary className="flex cursor-pointer list-none items-start gap-2 px-3 py-2">
-        <span className="mt-0.5 shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90">
+        <span className="mt-0.5 shrink-0 text-xs text-muted-foreground transition-transform group-open/client:rotate-90">
           ▸
         </span>
 
@@ -88,36 +109,44 @@ export function SprintClientGroup({
                 )}
               </span>
             )}
-            <span className={ACTIVITY_TEXT_CLASSES[card.activityStatus]}>
-              Última atividade: {card.activityLabel}
-            </span>
-            {card.alerts.length > 0 && (
-              <span className="font-medium text-amber-600 dark:text-amber-400">
-                {card.alerts.length} alerta{card.alerts.length !== 1 ? "s" : ""}
-              </span>
-            )}
+            <span className={ACTIVITY_TEXT_CLASSES[card.activityStatus]}>Última atividade: {activityLabel}</span>
           </div>
+
+          {topAlert && (
+            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+              <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
+            </div>
+          )}
         </div>
       </summary>
 
       <div className="border-t border-border p-3">
-        {card.alerts.length > 0 && (
-          <ul className="mb-3 flex flex-col gap-1">
-            {card.alerts.map((alert, index) => (
-              <li
-                key={index}
-                className={`text-xs ${
-                  alert.severity === "critico"
-                    ? "text-red-600 dark:text-red-400"
-                    : alert.severity === "atencao"
-                      ? "text-amber-600 dark:text-amber-400"
-                      : "text-muted-foreground"
-                }`}
-              >
-                {alert.message}
-              </li>
-            ))}
-          </ul>
+        {topAlert && (
+          <details className="group/alerts mb-3">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
+              <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
+              <span className="ml-auto shrink-0 font-medium text-brand">
+                <span className="group-open/alerts:hidden">{card.alerts.length > 1 ? "Ver todos" : "Ver detalhe"}</span>
+                <span className="hidden group-open/alerts:inline">Ocultar alertas</span>
+              </span>
+            </summary>
+            <ul className="mt-1.5 flex flex-col gap-0.5 border-l-2 border-border pl-2">
+              {card.alerts.map((alert, index) => (
+                <li
+                  key={index}
+                  className={`text-xs leading-tight ${
+                    alert.severity === "critico"
+                      ? "text-red-600 dark:text-red-400"
+                      : alert.severity === "atencao"
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-muted-foreground"
+                  }`}
+                >
+                  {alert.message}
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
 
         {mode !== "todos" &&
