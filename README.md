@@ -383,6 +383,8 @@ automático da sync, refinamentos de UX, etc.
     em toda rota `/clients/[id]/**`, sempre visível durante o scroll, com
     nome, sprint atual, gestor(es) e status — reaproveitando
     `buildOperationClientCard` de novo, sem duplicar a regra de saúde
+20. ✅ Sidebar recolhível no desktop (botão de seta na borda), preferência
+    salva no navegador
 
 ## Deploy
 

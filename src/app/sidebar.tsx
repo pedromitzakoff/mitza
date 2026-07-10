@@ -2,10 +2,40 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useSyncExternalStore } from "react";
 import { logout } from "@/app/login/actions";
 import { syncAllMetaAction } from "@/app/global-actions";
 import type { UserRole } from "@/lib/supabase/database.types";
+
+/**
+ * Preferência de sidebar recolhida (só desktop) — fica salva no navegador,
+ * não por conta de usuário, é só uma preferência de tela. Lida via
+ * useSyncExternalStore (em vez de useState + useEffect) pra não cair no
+ * anti-padrão de setState dentro de efeito e pra não gerar mismatch de
+ * hydration: o servidor não tem acesso a localStorage, então a snapshot do
+ * servidor é sempre "expandida", e o valor real do cliente só substitui
+ * depois da hydration — igual ao relógio da Top Bar.
+ */
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "mitza:sidebar-collapsed";
+const SIDEBAR_COLLAPSED_EVENT = "mitza:sidebar-collapsed-changed";
+
+function subscribeToCollapsed(callback: () => void) {
+  window.addEventListener(SIDEBAR_COLLAPSED_EVENT, callback);
+  return () => window.removeEventListener(SIDEBAR_COLLAPSED_EVENT, callback);
+}
+
+function getCollapsedSnapshot() {
+  return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "1";
+}
+
+function getCollapsedServerSnapshot() {
+  return false;
+}
+
+function setSidebarCollapsedPreference(value: boolean) {
+  window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, value ? "1" : "0");
+  window.dispatchEvent(new Event(SIDEBAR_COLLAPSED_EVENT));
+}
 
 interface NavItem {
   label: string;
@@ -135,6 +165,8 @@ export function Sidebar({
   onClose: () => void;
 }) {
   const pathname = usePathname();
+  const collapsed = useSyncExternalStore(subscribeToCollapsed, getCollapsedSnapshot, getCollapsedServerSnapshot);
+  const toggleCollapsed = () => setSidebarCollapsedPreference(!collapsed);
 
   return (
     <>
@@ -148,13 +180,25 @@ export function Sidebar({
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-card transition-transform md:sticky md:top-0 md:z-0 md:h-screen md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-card transition-transform md:sticky md:top-0 md:z-0 md:h-screen md:translate-x-0 md:w-64 md:transition-[width] ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        } ${collapsed ? "md:w-12" : ""}`}
       >
-        <Suspense fallback={<SidebarContent profile={profile} pathname={pathname} mode={null} />}>
-          <SidebarMode onMode={(mode) => <SidebarContent profile={profile} pathname={pathname} mode={mode} />} />
-        </Suspense>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
+          className="absolute top-3 -right-3 z-10 hidden h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-xs text-foreground shadow-sm hover:bg-zinc-100 md:flex dark:hover:bg-zinc-900"
+        >
+          {collapsed ? "›" : "‹"}
+        </button>
+
+        <div className={`h-full ${collapsed ? "md:hidden" : ""}`}>
+          <Suspense fallback={<SidebarContent profile={profile} pathname={pathname} mode={null} />}>
+            <SidebarMode onMode={(mode) => <SidebarContent profile={profile} pathname={pathname} mode={mode} />} />
+          </Suspense>
+        </div>
       </aside>
     </>
   );
