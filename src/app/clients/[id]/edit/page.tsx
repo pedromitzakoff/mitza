@@ -12,20 +12,16 @@ export default async function EditClientPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; return_to?: string }>;
 }) {
   await requireAdmin();
   const { id } = await params;
-  const { error } = await searchParams;
+  const { error, return_to } = await searchParams;
+  const returnTo = return_to && return_to.startsWith("/") ? return_to : `/clients/${id}`;
 
   const supabase = await createSupabaseClient();
   const [{ data: client }, { data: allManagers }, { data: assigned }] = await Promise.all([
-    supabase
-      .from("clients")
-      .select("id, name, meta_ad_account_id")
-      .eq("id", id)
-      .is("deleted_at", null)
-      .single(),
+    supabase.from("clients").select("*").eq("id", id).is("deleted_at", null).single(),
     supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
     supabase.from("client_managers").select("user_id, profiles(id, name)").eq("client_id", id),
   ]);
@@ -34,7 +30,7 @@ export default async function EditClientPage({
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-12">
-      <Link href={`/clients/${id}`} className="text-sm text-zinc-500 hover:underline">
+      <Link href={returnTo} className="text-sm text-zinc-500 hover:underline">
         &larr; Voltar
       </Link>
 
@@ -43,13 +39,15 @@ export default async function EditClientPage({
       </h1>
 
       <ClientForm
-        action={updateClientAction.bind(null, id)}
+        action={updateClientAction.bind(null, id, returnTo)}
         managers={allManagers ?? []}
         assignedIds={assigned?.map((a) => a.user_id) ?? []}
         error={error}
         defaultName={client.name}
         defaultMetaAdAccountId={client.meta_ad_account_id}
+        defaults={client}
         submitLabel="Salvar"
+        cancelHref={returnTo}
       />
 
       <Section title="Excluir cliente">

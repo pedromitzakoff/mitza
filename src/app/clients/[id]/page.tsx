@@ -80,13 +80,14 @@ export default async function ClientPage({
   searchParams: Promise<{
     error?: string;
     synced?: string;
+    saved?: string;
     taskError?: string;
     commentError?: string;
     task?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, synced, taskError, commentError, task: openTaskId } = await searchParams;
+  const { error, synced, saved, taskError, commentError, task: openTaskId } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
   const supabase = await createSupabaseClient();
@@ -250,6 +251,7 @@ export default async function ClientPage({
     commentError && { tone: "red", text: commentError },
     taskError && { tone: "red", text: taskError },
     synced && { tone: "green", text: `${synced} dia(s) de spend sincronizado(s) com o Meta.` },
+    saved && { tone: "green", text: "Dados do cliente atualizados." },
   ].filter((banner): banner is { tone: "red" | "green"; text: string } => Boolean(banner));
 
   const returnTo = `/clients/${client.id}`;

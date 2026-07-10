@@ -6,6 +6,13 @@ export type TaskRecurrence = "nenhuma" | "diaria" | "semanal" | "mensal";
 
 export type CommentableType = "sprint" | "task";
 
+/** Status CONTRATUAL do cliente — não confundir com a saúde OPERACIONAL da
+ * conta (AccountHealth, em lib/attention-alerts.ts). São conceitos
+ * diferentes de propósito: este é cadastral (o contrato está em vigor?),
+ * aquele é sobre execução da semana. */
+export type ClientContractStatus = "ativo" | "pausado" | "encerrado";
+export type ClientMainObjective = "leads" | "vendas" | "reservas" | "reconhecimento" | "trafego" | "outro";
+
 /** ISO: 1 = segunda ... 7 = domingo. */
 export type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -47,6 +54,40 @@ export interface Database {
           meta_ad_account_id: string;
           created_at: string;
           deleted_at: string | null;
+          legal_name: string | null;
+          status: ClientContractStatus;
+          contract_start_date: string | null;
+          contract_end_date: string | null;
+          renewal_date: string | null;
+          primary_manager_id: string | null;
+          main_contact_name: string | null;
+          main_contact_role: string | null;
+          main_contact_email: string | null;
+          main_contact_phone: string | null;
+          financial_contact_name: string | null;
+          financial_contact_email: string | null;
+          financial_contact_phone: string | null;
+          instagram_url: string | null;
+          website_url: string | null;
+          facebook_url: string | null;
+          commercial_whatsapp: string | null;
+          meta_ad_account_name: string | null;
+          main_objective: ClientMainObjective | null;
+          monthly_planned_spend: number | null;
+          primary_kpi: string | null;
+          primary_kpi_target: string | null;
+          operational_summary: string | null;
+          important_notes: string | null;
+          agency_monthly_fee: number | null;
+          billing_due_day: number | null;
+          contracted_services: string[] | null;
+          notice_period_days: number | null;
+          main_product_or_service: string | null;
+          operation_region: string | null;
+          primary_audience: string | null;
+          client_differentials: string | null;
+          client_restrictions: string | null;
+          important_seasonal_dates: string | null;
         };
         Insert: {
           id?: string;
@@ -54,6 +95,40 @@ export interface Database {
           meta_ad_account_id: string;
           created_at?: string;
           deleted_at?: string | null;
+          legal_name?: string | null;
+          status?: ClientContractStatus;
+          contract_start_date?: string | null;
+          contract_end_date?: string | null;
+          renewal_date?: string | null;
+          primary_manager_id?: string | null;
+          main_contact_name?: string | null;
+          main_contact_role?: string | null;
+          main_contact_email?: string | null;
+          main_contact_phone?: string | null;
+          financial_contact_name?: string | null;
+          financial_contact_email?: string | null;
+          financial_contact_phone?: string | null;
+          instagram_url?: string | null;
+          website_url?: string | null;
+          facebook_url?: string | null;
+          commercial_whatsapp?: string | null;
+          meta_ad_account_name?: string | null;
+          main_objective?: ClientMainObjective | null;
+          monthly_planned_spend?: number | null;
+          primary_kpi?: string | null;
+          primary_kpi_target?: string | null;
+          operational_summary?: string | null;
+          important_notes?: string | null;
+          agency_monthly_fee?: number | null;
+          billing_due_day?: number | null;
+          contracted_services?: string[] | null;
+          notice_period_days?: number | null;
+          main_product_or_service?: string | null;
+          operation_region?: string | null;
+          primary_audience?: string | null;
+          client_differentials?: string | null;
+          client_restrictions?: string | null;
+          important_seasonal_dates?: string | null;
         };
         Update: {
           id?: string;
@@ -61,8 +136,50 @@ export interface Database {
           meta_ad_account_id?: string;
           created_at?: string;
           deleted_at?: string | null;
+          legal_name?: string | null;
+          status?: ClientContractStatus;
+          contract_start_date?: string | null;
+          contract_end_date?: string | null;
+          renewal_date?: string | null;
+          primary_manager_id?: string | null;
+          main_contact_name?: string | null;
+          main_contact_role?: string | null;
+          main_contact_email?: string | null;
+          main_contact_phone?: string | null;
+          financial_contact_name?: string | null;
+          financial_contact_email?: string | null;
+          financial_contact_phone?: string | null;
+          instagram_url?: string | null;
+          website_url?: string | null;
+          facebook_url?: string | null;
+          commercial_whatsapp?: string | null;
+          meta_ad_account_name?: string | null;
+          main_objective?: ClientMainObjective | null;
+          monthly_planned_spend?: number | null;
+          primary_kpi?: string | null;
+          primary_kpi_target?: string | null;
+          operational_summary?: string | null;
+          important_notes?: string | null;
+          agency_monthly_fee?: number | null;
+          billing_due_day?: number | null;
+          contracted_services?: string[] | null;
+          notice_period_days?: number | null;
+          main_product_or_service?: string | null;
+          operation_region?: string | null;
+          primary_audience?: string | null;
+          client_differentials?: string | null;
+          client_restrictions?: string | null;
+          important_seasonal_dates?: string | null;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "clients_primary_manager_id_fkey";
+            columns: ["primary_manager_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       client_managers: {
         Row: {

@@ -4,23 +4,90 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
+import type { ClientContractStatus, ClientMainObjective } from "@/lib/supabase/database.types";
+
+function optionalText(formData: FormData, name: string): string | null {
+  const value = String(formData.get(name) ?? "").trim();
+  return value || null;
+}
+
+function optionalNumber(formData: FormData, name: string): number | null {
+  const value = String(formData.get(name) ?? "").trim();
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function optionalInt(formData: FormData, name: string): number | null {
+  const value = optionalNumber(formData, name);
+  return value === null ? null : Math.trunc(value);
+}
+
+/** Campos estruturais (Etapa 27) — todos opcionais, lidos e persistidos
+ * juntos tanto na criação quanto na edição. Nenhum deles substitui
+ * `planned_spend` da sprint, que continua sendo a fonte operacional semanal. */
+function readStructuralFields(formData: FormData) {
+  return {
+    legal_name: optionalText(formData, "legal_name"),
+    status: (String(formData.get("status") ?? "ativo") || "ativo") as ClientContractStatus,
+    contract_start_date: optionalText(formData, "contract_start_date"),
+    contract_end_date: optionalText(formData, "contract_end_date"),
+    renewal_date: optionalText(formData, "renewal_date"),
+    primary_manager_id: optionalText(formData, "primary_manager_id"),
+    main_contact_name: optionalText(formData, "main_contact_name"),
+    main_contact_role: optionalText(formData, "main_contact_role"),
+    main_contact_email: optionalText(formData, "main_contact_email"),
+    main_contact_phone: optionalText(formData, "main_contact_phone"),
+    financial_contact_name: optionalText(formData, "financial_contact_name"),
+    financial_contact_email: optionalText(formData, "financial_contact_email"),
+    financial_contact_phone: optionalText(formData, "financial_contact_phone"),
+    instagram_url: optionalText(formData, "instagram_url"),
+    website_url: optionalText(formData, "website_url"),
+    facebook_url: optionalText(formData, "facebook_url"),
+    commercial_whatsapp: optionalText(formData, "commercial_whatsapp"),
+    meta_ad_account_name: optionalText(formData, "meta_ad_account_name"),
+    main_objective: optionalText(formData, "main_objective") as ClientMainObjective | null,
+    monthly_planned_spend: optionalNumber(formData, "monthly_planned_spend"),
+    primary_kpi: optionalText(formData, "primary_kpi"),
+    primary_kpi_target: optionalText(formData, "primary_kpi_target"),
+    operational_summary: optionalText(formData, "operational_summary"),
+    important_notes: optionalText(formData, "important_notes"),
+    agency_monthly_fee: optionalNumber(formData, "agency_monthly_fee"),
+    billing_due_day: optionalInt(formData, "billing_due_day"),
+    contracted_services: formData.getAll("contracted_services").map(String).length
+      ? formData.getAll("contracted_services").map(String)
+      : null,
+    notice_period_days: optionalInt(formData, "notice_period_days"),
+    main_product_or_service: optionalText(formData, "main_product_or_service"),
+    operation_region: optionalText(formData, "operation_region"),
+    primary_audience: optionalText(formData, "primary_audience"),
+    client_differentials: optionalText(formData, "client_differentials"),
+    client_restrictions: optionalText(formData, "client_restrictions"),
+    important_seasonal_dates: optionalText(formData, "important_seasonal_dates"),
+  };
+}
 
 function readClientFields(formData: FormData) {
   return {
     name: String(formData.get("name") ?? "").trim(),
     meta_ad_account_id: String(formData.get("meta_ad_account_id") ?? "").trim(),
     managerIds: formData.getAll("manager_ids").map(String),
+    ...readStructuralFields(formData),
   };
+}
+
+function appendSaved(url: string): string {
+  return `${url}${url.includes("?") ? "&" : "?"}saved=1`;
 }
 
 export async function createClientAction(formData: FormData) {
   await requireAdmin();
-  const { name, meta_ad_account_id, managerIds } = readClientFields(formData);
+  const { name, meta_ad_account_id, managerIds, ...structural } = readClientFields(formData);
   const supabase = await createSupabaseClient();
 
   const { data: client, error } = await supabase
     .from("clients")
-    .insert({ name, meta_ad_account_id })
+    .insert({ name, meta_ad_account_id, ...structural })
     .select("id")
     .single();
 
@@ -35,17 +102,19 @@ export async function createClientAction(formData: FormData) {
   }
 
   revalidatePath("/");
+  revalidatePath("/clients");
+  revalidatePath("/settings/clients");
   redirect(`/clients/${client.id}`);
 }
 
-export async function updateClientAction(clientId: string, formData: FormData) {
+export async function updateClientAction(clientId: string, returnTo: string, formData: FormData) {
   await requireAdmin();
-  const { name, meta_ad_account_id, managerIds } = readClientFields(formData);
+  const { name, meta_ad_account_id, managerIds, ...structural } = readClientFields(formData);
   const supabase = await createSupabaseClient();
 
   const { error } = await supabase
     .from("clients")
-    .update({ name, meta_ad_account_id })
+    .update({ name, meta_ad_account_id, ...structural })
     .eq("id", clientId);
 
   if (error) {
@@ -61,8 +130,10 @@ export async function updateClientAction(clientId: string, formData: FormData) {
   }
 
   revalidatePath("/");
+  revalidatePath("/clients");
+  revalidatePath("/settings/clients");
   revalidatePath(`/clients/${clientId}`);
-  redirect(`/clients/${clientId}`);
+  redirect(appendSaved(returnTo));
 }
 
 export async function deleteClientAction(clientId: string) {
@@ -80,6 +151,8 @@ export async function deleteClientAction(clientId: string) {
 
   revalidatePath("/");
   revalidatePath("/painel-mensal");
+  revalidatePath("/clients");
+  revalidatePath("/settings/clients");
   redirect("/");
 }
 
@@ -90,6 +163,8 @@ export async function restoreClientAction(clientId: string) {
   await supabase.from("clients").update({ deleted_at: null }).eq("id", clientId);
 
   revalidatePath("/");
+  revalidatePath("/clients");
+  revalidatePath("/settings/clients");
   revalidatePath("/settings/deleted-clients");
   redirect("/settings/deleted-clients");
 }

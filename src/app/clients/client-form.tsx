@@ -1,4 +1,42 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import type { Database } from "@/lib/supabase/database.types";
+import { CONTRACTED_SERVICE_OPTIONS } from "@/lib/client-fields";
+
 type Manager = { id: string; name: string };
+type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
+
+const inputClasses =
+  "rounded-md border border-zinc-300 px-3 py-2 text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50";
+const labelClasses = "flex flex-col gap-1 text-sm text-zinc-700 dark:text-zinc-300";
+
+/** Seção recolhível — Identificação fica sempre aberta (nome e Meta ID são
+ * obrigatórios); as demais começam fechadas pra não virar uma coluna
+ * interminável de campos, a maioria opcional e de uso futuro (painéis,
+ * reuniões, alertas de renovação — ver Etapa 27). */
+function FormSection({
+  title,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details
+      open={defaultOpen}
+      className="rounded-lg border border-zinc-200 [&_summary::-webkit-details-marker]:hidden dark:border-zinc-800"
+    >
+      <summary className="cursor-pointer list-none px-4 py-2.5 text-sm font-semibold text-black dark:text-zinc-50">
+        {title}
+      </summary>
+      <div className="flex flex-col gap-4 border-t border-zinc-200 p-4 dark:border-zinc-800">{children}</div>
+    </details>
+  );
+}
 
 export function ClientForm({
   action,
@@ -7,7 +45,9 @@ export function ClientForm({
   error,
   defaultName,
   defaultMetaAdAccountId,
+  defaults,
   submitLabel,
+  cancelHref,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   managers: Manager[];
@@ -15,14 +55,34 @@ export function ClientForm({
   error?: string;
   defaultName?: string;
   defaultMetaAdAccountId?: string;
+  /** Campos estruturais (Etapa 27) — todos opcionais, `undefined` numa
+   * criação nova. */
+  defaults?: Partial<ClientRow>;
   submitLabel: string;
+  cancelHref: string;
 }) {
   const assigned = new Set(assignedIds);
+  const contractedServices = new Set(defaults?.contracted_services ?? []);
+  const [dirty, setDirty] = useState(false);
+
+  // Confirmação "simples" antes de sair (só fecha aba/recarrega — o App
+  // Router navega sem descarregar a página, então isso não cobre clique em
+  // outro link/menu, só o caso realmente simples de fechar/recarregar).
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
 
   return (
     <form
       action={action}
-      className="mt-6 flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+      onChange={() => setDirty(true)}
+      onSubmit={() => setDirty(false)}
+      className="mt-6 flex flex-col gap-4"
     >
       {error && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
@@ -30,59 +90,412 @@ export function ClientForm({
         </p>
       )}
 
-      <label className="flex flex-col gap-1 text-sm text-zinc-700 dark:text-zinc-300">
-        Nome
-        <input
-          name="name"
-          required
-          defaultValue={defaultName}
-          className="rounded-md border border-zinc-300 px-3 py-2 text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-        />
-      </label>
+      <FormSection title="Identificação" defaultOpen>
+        <label className={labelClasses}>
+          Nome <span className="text-red-500">*</span>
+          <input name="name" required defaultValue={defaultName} className={inputClasses} />
+        </label>
 
-      <label className="flex flex-col gap-1 text-sm text-zinc-700 dark:text-zinc-300">
-        Conta de anúncios (Meta)
-        <input
-          name="meta_ad_account_id"
-          required
-          placeholder="act_1234567890"
-          pattern="act_[0-9]+"
-          title="Formato: act_ seguido de números"
-          defaultValue={defaultMetaAdAccountId}
-          className="rounded-md border border-zinc-300 px-3 py-2 font-mono text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-        />
-      </label>
+        <label className={labelClasses}>
+          Razão social <span className="text-xs text-zinc-400">(opcional)</span>
+          <input name="legal_name" defaultValue={defaults?.legal_name ?? ""} className={inputClasses} />
+        </label>
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="text-sm text-zinc-700 dark:text-zinc-300">Gestores</legend>
-        {managers.length === 0 && (
-          <p className="text-sm text-zinc-500">
-            Nenhum gestor cadastrado ainda (crie usuários no Supabase Auth primeiro).
-          </p>
-        )}
-        {managers.map((manager) => (
-          <label
-            key={manager.id}
-            className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300"
-          >
-            <input
-              type="checkbox"
-              name="manager_ids"
-              value={manager.id}
-              defaultChecked={assigned.has(manager.id)}
-              className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
-            />
-            {manager.name}
+        <label className={labelClasses}>
+          Conta de anúncios (Meta) <span className="text-red-500">*</span>
+          <input
+            name="meta_ad_account_id"
+            required
+            placeholder="act_1234567890"
+            pattern="act_[0-9]+"
+            title="Formato: act_ seguido de números"
+            defaultValue={defaultMetaAdAccountId}
+            className={`${inputClasses} font-mono`}
+          />
+        </label>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className={labelClasses}>
+            Status contratual
+            <select name="status" defaultValue={defaults?.status ?? "ativo"} className={inputClasses}>
+              <option value="ativo">Ativo</option>
+              <option value="pausado">Pausado</option>
+              <option value="encerrado">Encerrado</option>
+            </select>
           </label>
-        ))}
-      </fieldset>
 
-      <button
-        type="submit"
-        className="mt-2 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
-      >
-        {submitLabel}
-      </button>
+          <label className={labelClasses}>
+            Gestor principal <span className="text-xs text-zinc-400">(opcional)</span>
+            <select
+              name="primary_manager_id"
+              defaultValue={defaults?.primary_manager_id ?? ""}
+              className={inputClasses}
+            >
+              <option value="">Sem gestor principal</option>
+              {managers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className={labelClasses}>
+            Início de contrato <span className="text-xs text-zinc-400">(opcional)</span>
+            <input
+              type="date"
+              name="contract_start_date"
+              defaultValue={defaults?.contract_start_date ?? ""}
+              className={inputClasses}
+            />
+          </label>
+
+          <label className={labelClasses}>
+            Fim de contrato <span className="text-xs text-zinc-400">(opcional)</span>
+            <input
+              type="date"
+              name="contract_end_date"
+              defaultValue={defaults?.contract_end_date ?? ""}
+              className={inputClasses}
+            />
+          </label>
+
+          <label className={labelClasses}>
+            Próxima renovação <span className="text-xs text-zinc-400">(opcional)</span>
+            <input
+              type="date"
+              name="renewal_date"
+              defaultValue={defaults?.renewal_date ?? ""}
+              className={inputClasses}
+            />
+          </label>
+        </div>
+
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-sm text-zinc-700 dark:text-zinc-300">Gestores de apoio</legend>
+          {managers.length === 0 && (
+            <p className="text-sm text-zinc-500">
+              Nenhum gestor cadastrado ainda (crie usuários no Supabase Auth primeiro).
+            </p>
+          )}
+          {managers.map((manager) => (
+            <label key={manager.id} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                name="manager_ids"
+                value={manager.id}
+                defaultChecked={assigned.has(manager.id)}
+                className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+              />
+              {manager.name}
+            </label>
+          ))}
+        </fieldset>
+      </FormSection>
+
+      <FormSection title="Contatos">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className={labelClasses}>
+            Contato principal — nome
+            <input name="main_contact_name" defaultValue={defaults?.main_contact_name ?? ""} className={inputClasses} />
+          </label>
+          <label className={labelClasses}>
+            Contato principal — cargo
+            <input name="main_contact_role" defaultValue={defaults?.main_contact_role ?? ""} className={inputClasses} />
+          </label>
+          <label className={labelClasses}>
+            Contato principal — e-mail
+            <input
+              type="email"
+              name="main_contact_email"
+              defaultValue={defaults?.main_contact_email ?? ""}
+              className={inputClasses}
+            />
+          </label>
+          <label className={labelClasses}>
+            Contato principal — telefone
+            <input
+              type="tel"
+              name="main_contact_phone"
+              defaultValue={defaults?.main_contact_phone ?? ""}
+              className={inputClasses}
+            />
+          </label>
+          <label className={labelClasses}>
+            Contato financeiro — nome
+            <input
+              name="financial_contact_name"
+              defaultValue={defaults?.financial_contact_name ?? ""}
+              className={inputClasses}
+            />
+          </label>
+          <label className={labelClasses}>
+            Contato financeiro — e-mail
+            <input
+              type="email"
+              name="financial_contact_email"
+              defaultValue={defaults?.financial_contact_email ?? ""}
+              className={inputClasses}
+            />
+          </label>
+          <label className={labelClasses}>
+            Contato financeiro — telefone
+            <input
+              type="tel"
+              name="financial_contact_phone"
+              defaultValue={defaults?.financial_contact_phone ?? ""}
+              className={inputClasses}
+            />
+          </label>
+        </div>
+      </FormSection>
+
+      <FormSection title="Presença digital">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className={labelClasses}>
+            Instagram
+            <input
+              type="url"
+              name="instagram_url"
+              placeholder="https://instagram.com/..."
+              defaultValue={defaults?.instagram_url ?? ""}
+              className={inputClasses}
+            />
+          </label>
+          <label className={labelClasses}>
+            Site
+            <input
+              type="url"
+              name="website_url"
+              placeholder="https://..."
+              defaultValue={defaults?.website_url ?? ""}
+              className={inputClasses}
+            />
+          </label>
+          <label className={labelClasses}>
+            Facebook
+            <input
+              type="url"
+              name="facebook_url"
+              placeholder="https://facebook.com/..."
+              defaultValue={defaults?.facebook_url ?? ""}
+              className={inputClasses}
+            />
+          </label>
+          <label className={labelClasses}>
+            WhatsApp comercial
+            <input
+              type="tel"
+              name="commercial_whatsapp"
+              defaultValue={defaults?.commercial_whatsapp ?? ""}
+              className={inputClasses}
+            />
+          </label>
+        </div>
+      </FormSection>
+
+      <FormSection title="Operação de mídia">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className={labelClasses}>
+            Nome da conta de anúncios <span className="text-xs text-zinc-400">(opcional)</span>
+            <input
+              name="meta_ad_account_name"
+              defaultValue={defaults?.meta_ad_account_name ?? ""}
+              className={inputClasses}
+            />
+          </label>
+          <label className={labelClasses}>
+            Objetivo principal
+            <select name="main_objective" defaultValue={defaults?.main_objective ?? ""} className={inputClasses}>
+              <option value="">Sem objetivo definido</option>
+              <option value="leads">Leads</option>
+              <option value="vendas">Vendas</option>
+              <option value="reservas">Reservas</option>
+              <option value="reconhecimento">Reconhecimento</option>
+              <option value="trafego">Tráfego</option>
+              <option value="outro">Outro</option>
+            </select>
+          </label>
+          <label className={labelClasses}>
+            Investimento mensal planejado (referência)
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              name="monthly_planned_spend"
+              defaultValue={defaults?.monthly_planned_spend ?? ""}
+              className={inputClasses}
+            />
+            <span className="text-xs text-zinc-400">
+              Valor de referência do cliente — não altera o planejado das sprints.
+            </span>
+          </label>
+          <label className={labelClasses}>
+            KPI principal
+            <input name="primary_kpi" defaultValue={defaults?.primary_kpi ?? ""} className={inputClasses} />
+          </label>
+          <label className={labelClasses}>
+            Meta do KPI principal
+            <input
+              name="primary_kpi_target"
+              defaultValue={defaults?.primary_kpi_target ?? ""}
+              className={inputClasses}
+            />
+          </label>
+        </div>
+
+        <label className={labelClasses}>
+          Resumo operacional
+          <textarea
+            name="operational_summary"
+            rows={2}
+            placeholder="Ex.: Captação de leads para franquias. Prioridade em Campinas e região."
+            defaultValue={defaults?.operational_summary ?? ""}
+            className={inputClasses}
+          />
+        </label>
+
+        <label className={labelClasses}>
+          Observações importantes
+          <textarea
+            name="important_notes"
+            rows={2}
+            defaultValue={defaults?.important_notes ?? ""}
+            className={inputClasses}
+          />
+        </label>
+      </FormSection>
+
+      <FormSection title="Comercial">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className={labelClasses}>
+            Valor mensal da agência
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              name="agency_monthly_fee"
+              defaultValue={defaults?.agency_monthly_fee ?? ""}
+              className={inputClasses}
+            />
+          </label>
+          <label className={labelClasses}>
+            Dia de vencimento
+            <input
+              type="number"
+              min="1"
+              max="31"
+              name="billing_due_day"
+              defaultValue={defaults?.billing_due_day ?? ""}
+              className={inputClasses}
+            />
+          </label>
+          <label className={labelClasses}>
+            Prazo de aviso prévio (dias)
+            <input
+              type="number"
+              min="0"
+              name="notice_period_days"
+              defaultValue={defaults?.notice_period_days ?? ""}
+              className={inputClasses}
+            />
+          </label>
+        </div>
+
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-sm text-zinc-700 dark:text-zinc-300">Serviços contratados</legend>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {CONTRACTED_SERVICE_OPTIONS.map((service) => (
+              <label key={service} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  name="contracted_services"
+                  value={service}
+                  defaultChecked={contractedServices.has(service)}
+                  className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+                />
+                {service}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </FormSection>
+
+      <FormSection title="Contexto estratégico">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className={labelClasses}>
+            Produto ou serviço principal
+            <input
+              name="main_product_or_service"
+              defaultValue={defaults?.main_product_or_service ?? ""}
+              className={inputClasses}
+            />
+          </label>
+          <label className={labelClasses}>
+            Região de atuação
+            <input name="operation_region" defaultValue={defaults?.operation_region ?? ""} className={inputClasses} />
+          </label>
+        </div>
+
+        <label className={labelClasses}>
+          Público-alvo principal
+          <textarea
+            name="primary_audience"
+            rows={2}
+            defaultValue={defaults?.primary_audience ?? ""}
+            className={inputClasses}
+          />
+        </label>
+
+        <label className={labelClasses}>
+          Diferenciais do cliente
+          <textarea
+            name="client_differentials"
+            rows={2}
+            defaultValue={defaults?.client_differentials ?? ""}
+            className={inputClasses}
+          />
+        </label>
+
+        <label className={labelClasses}>
+          Restrições do cliente
+          <textarea
+            name="client_restrictions"
+            rows={2}
+            defaultValue={defaults?.client_restrictions ?? ""}
+            className={inputClasses}
+          />
+        </label>
+
+        <label className={labelClasses}>
+          Datas sazonais importantes
+          <textarea
+            name="important_seasonal_dates"
+            rows={2}
+            placeholder="Ex.: Black Friday, Dia das Mães, alta temporada em dezembro..."
+            defaultValue={defaults?.important_seasonal_dates ?? ""}
+            className={inputClasses}
+          />
+        </label>
+      </FormSection>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
+        >
+          {submitLabel}
+        </button>
+        <Link
+          href={cancelHref}
+          className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+        >
+          Cancelar
+        </Link>
+        <span className="text-xs text-zinc-400">
+          <span className="text-red-500">*</span> campos obrigatórios
+        </span>
+      </div>
     </form>
   );
 }

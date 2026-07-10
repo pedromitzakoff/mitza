@@ -240,7 +240,10 @@ export default async function ClientsPage({
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Link href={`/clients/${card.clientId}`} className="font-medium text-brand hover:underline">
+                    <Link
+                      href={`/clients/${card.clientId}`}
+                      className="font-semibold text-foreground hover:underline"
+                    >
                       {card.clientName}
                     </Link>
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${HEALTH_BADGE_CLASSES[card.accountHealth]}`}>

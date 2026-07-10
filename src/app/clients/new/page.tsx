@@ -19,7 +19,7 @@ export default async function NewClientPage({
     .order("name");
 
   return (
-    <div className="mx-auto max-w-lg px-6 py-12">
+    <div className="mx-auto max-w-2xl px-6 py-12">
       <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
         Novo cliente
       </h1>
@@ -30,6 +30,7 @@ export default async function NewClientPage({
         assignedIds={[]}
         error={error}
         submitLabel="Criar cliente"
+        cancelHref="/clients"
       />
     </div>
   );

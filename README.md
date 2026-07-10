@@ -425,6 +425,32 @@ automático da sync, refinamentos de UX, etc.
     `/clients` (diretório simples de clientes com busca, filtro por gestor e
     por status, sem duplicar as métricas da Visão Geral) — ambos os menus
     aparecem na sidebar como "Clientes" e "Sprints"
+25. ✅ Ajustes de UX na Sidebar, tarefas, drawer e gráfico: Sidebar chega até
+    o final da viewport (`dvh`), botão de recolher juntou com "Novo cliente"
+    na mesma linha (sem faixa própria), nav reagrupada com espaço flexível,
+    "Atualizar Meta" virou ação secundária, estado ativo mais leve; tarefas
+    passaram a ordenar só por `due_date` (concluir não muda mais a posição),
+    com a data antes do nome na `TaskRow`; abrir/fechar/concluir/comentar no
+    drawer de tarefa não pula mais pro topo da página (`scroll={false}` +
+    fim do `redirect()` nas actions de sucesso) — inclusive o fluxo "Editar
+    tarefa" (guarda e restaura o scroll antes do primeiro paint); tooltip e
+    eixo do gráfico de investimento acumulado usam `formatShortDate` (dd/MM)
+    em vez do texto fixo "/mês"
+26. ✅ Simplificação do cabeçalho e filtros da Visão Geral: removida a data e
+    o nome/papel do usuário do conteúdo (já vivem na Top Bar/Sidebar);
+    título compacto "Visão Geral"; filtros secundários (status da conta,
+    atividade, ritmo, tarefas) escondidos num popover "Filtros" com contador,
+    aplicação automática (sem botão "Filtrar", busca com debounce de 300ms)
+27. ✅ Dados estruturais do cliente: nova migration
+    (`client-structural-fields.sql`) com ~30 campos opcionais em `clients`
+    (identificação/status contratual, contatos, presença digital, operação
+    de mídia, comercial, contexto estratégico — `monthly_planned_spend` é só
+    referência, não mexe no `planned_spend` da sprint); `ClientForm`
+    reorganizado em seções recolhíveis e reaproveitado tanto por
+    `/clients/new` quanto por `/clients/[id]/edit`; nova tela administrativa
+    `Configurações > Clientes` (`/settings/clients`, listagem enxuta com
+    busca/filtro por status, "Editar" abre o form completo); nome do cliente
+    em `/clients` passou de azul pra preto/negrito (azul fica só pra ações)
 
 ## Deploy
 
