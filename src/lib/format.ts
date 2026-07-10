@@ -19,6 +19,44 @@ export function formatDateRange(startDate: string, endDate: string): string {
   return `${start} – ${end}`;
 }
 
+const weekdayLongFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: "UTC" });
+const weekdayShortFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "UTC" });
+const dayMonthLongFormatter = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "long",
+  timeZone: "UTC",
+});
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+/**
+ * Dia da semana + data (DD/MM), em duas variantes — longa ("Segunda-feira
+ * · 13/07") pra telas maiores e curta ("Seg · 13/07") pra telas pequenas.
+ * Reutilizada em qualquer lugar que mostre uma data operacional (prazo de
+ * tarefa, datas da sprint etc.), pra nunca hardcodar dia da semana.
+ */
+export function formatWeekdayAndDate(value: string): { long: string; short: string } {
+  const date = new Date(`${value}T00:00:00Z`);
+  const dayMonth = dayMonthFormatter.format(date);
+  const weekdayLong = capitalize(weekdayLongFormatter.format(date));
+  const weekdayShort = capitalize(weekdayShortFormatter.format(date).replace(/\.$/, ""));
+
+  return {
+    long: `${weekdayLong} · ${dayMonth}`,
+    short: `${weekdayShort} · ${dayMonth}`,
+  };
+}
+
+/** Dia da semana + dia/mês por extenso, sem ano (ex.: "Quinta-feira · 09 de
+ * julho") — usado no bloco de destaque de "hoje" dentro da sprint atual. */
+export function formatWeekdayAndDayMonth(date: Date): string {
+  const weekday = capitalize(weekdayLongFormatter.format(date));
+  const dayMonth = dayMonthLongFormatter.format(date);
+  return `${weekday} · ${dayMonth}`;
+}
+
 const fullDateFormatter = new Intl.DateTimeFormat("pt-BR", {
   weekday: "long",
   day: "2-digit",

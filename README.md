@@ -235,7 +235,21 @@ automático da sync, refinamentos de UX, etc.
 - `src/app/clients/task-row.tsx` — selo "Hoje" (azul) quando
   `due_date` é hoje e a tarefa ainda está pendente; tarefa futura pendente
   fica com opacidade reduzida (mais discreta); atrasada continua com o
-  selo vermelho de sempre
+  selo vermelho de sempre. Data do prazo com dia da semana em destaque
+  (`formatWeekdayAndDate` em `src/lib/format.ts`, versão longa e curta
+  pra tela pequena) tem mais peso visual que tipo/responsável; concluída
+  ganha check e fica com texto mais discreto; borda muda de cor conforme
+  hoje/atrasada/neutra
+- `src/app/clients/sprint-card.tsx` — header com "Sprint N" + período em
+  destaque; bloco "Hoje" vira um chip com fundo/borda azul clara
+  (`formatWeekdayAndDayMonth`); planejado/gasto real/diferença em 3
+  colunas com valor em destaque; edição do `planned_spend` (admin) fica
+  escondida atrás de um "Editar" — só aparece o formulário ao clicar,
+  via `<input type="checkbox">` + CSS `peer` (sem componente cliente
+  novo); "Última execução da sprint" muda de cor (neutro/âmbar/vermelho)
+  conforme a severidade do alerta de sprint sem execução
+- `src/app/clients/sprint-task-list.tsx` — barra de progresso de tarefas
+  concluídas da sprint (separada da barra de gasto, que já existia)
 - `supabase/soft-delete-clients.sql` — `clients.deleted_at`; excluir é
   sempre soft delete (`deleteClientAction`/`restoreClientAction` em
   `src/app/clients/actions.ts`, admin only). Todas as queries de listagem
@@ -346,6 +360,11 @@ automático da sync, refinamentos de UX, etc.
 16. ✅ Sidebar fixa (menu hambúrguer no mobile) com os itens por papel,
     página ativa destacada, atalhos de "+ Novo cliente" e "Atualizar Meta
     (todos)" pra admin
+17. ✅ Hierarquia visual dos cards de sprint: sprint+período em destaque,
+    bloco "Hoje" com identidade MITZA, datas com dia da semana em toda
+    tarefa, financeiro em 3 colunas com edição inline, barra de progresso
+    de tarefas, cards de tarefa mais compactos — só visual, nenhuma regra
+    de negócio mudou
 
 ## Deploy
 

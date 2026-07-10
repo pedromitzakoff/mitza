@@ -323,6 +323,11 @@ export default async function ClientPage({
                 tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
                 commentsByTaskId={taskCommentsById}
                 executionLabel={sprint.temporalStatus === "atual" ? sprintExecutionLabel : null}
+                executionSeverity={
+                  sprint.temporalStatus === "atual" && sprintExecutionAlert?.severity !== "informativo"
+                    ? (sprintExecutionAlert?.severity ?? null)
+                    : null
+                }
               />
             ))
           ) : (
