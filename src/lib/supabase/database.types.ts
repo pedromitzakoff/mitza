@@ -55,6 +55,7 @@ export interface Database {
           created_at: string;
           deleted_at: string | null;
           legal_name: string | null;
+          cnpj: string | null;
           status: ClientContractStatus;
           contract_start_date: string | null;
           contract_end_date: string | null;
@@ -96,6 +97,7 @@ export interface Database {
           created_at?: string;
           deleted_at?: string | null;
           legal_name?: string | null;
+          cnpj?: string | null;
           status?: ClientContractStatus;
           contract_start_date?: string | null;
           contract_end_date?: string | null;
@@ -137,6 +139,7 @@ export interface Database {
           created_at?: string;
           deleted_at?: string | null;
           legal_name?: string | null;
+          cnpj?: string | null;
           status?: ClientContractStatus;
           contract_start_date?: string | null;
           contract_end_date?: string | null;

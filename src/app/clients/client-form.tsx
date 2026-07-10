@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Database } from "@/lib/supabase/database.types";
 import { CONTRACTED_SERVICE_OPTIONS } from "@/lib/client-fields";
+import { formatCnpj } from "@/lib/cnpj";
 
 type Manager = { id: string; name: string };
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
@@ -99,6 +100,20 @@ export function ClientForm({
         <label className={labelClasses}>
           Razão social <span className="text-xs text-zinc-400">(opcional)</span>
           <input name="legal_name" defaultValue={defaults?.legal_name ?? ""} className={inputClasses} />
+        </label>
+
+        <label className={labelClasses}>
+          CNPJ <span className="text-xs text-zinc-400">(opcional)</span>
+          <input
+            name="cnpj"
+            inputMode="numeric"
+            placeholder="00.000.000/0000-00"
+            defaultValue={defaults?.cnpj ? formatCnpj(defaults.cnpj) : ""}
+            onChange={(event) => {
+              event.target.value = formatCnpj(event.target.value);
+            }}
+            className={`${inputClasses} font-mono`}
+          />
         </label>
 
         <label className={labelClasses}>

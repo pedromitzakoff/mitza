@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
+import { normalizeCnpj } from "@/lib/cnpj";
 import type { ClientContractStatus, ClientMainObjective } from "@/lib/supabase/database.types";
 
 function optionalText(formData: FormData, name: string): string | null {
@@ -29,6 +30,7 @@ function optionalInt(formData: FormData, name: string): number | null {
 function readStructuralFields(formData: FormData) {
   return {
     legal_name: optionalText(formData, "legal_name"),
+    cnpj: normalizeCnpj(String(formData.get("cnpj") ?? "")) || null,
     status: (String(formData.get("status") ?? "ativo") || "ativo") as ClientContractStatus,
     contract_start_date: optionalText(formData, "contract_start_date"),
     contract_end_date: optionalText(formData, "contract_end_date"),

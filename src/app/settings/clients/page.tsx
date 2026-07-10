@@ -1,17 +1,34 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { formatCurrency, formatShortDate } from "@/lib/format";
+import { todayUTC } from "@/lib/today";
+import { formatActiveMonths, formatDateWithYear } from "@/lib/format";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
+import { normalizeCnpj } from "@/lib/cnpj";
 import type { ClientContractStatus } from "@/lib/supabase/database.types";
+import {
+  updateClientCnpjAction,
+  updateClientContractStartAction,
+  updateClientEmailAction,
+  updateClientMonthlyFeeAction,
+  updateClientPrimaryManagerAction,
+  updateClientStatusAction,
+} from "./actions";
+import { InlineCnpjCell, InlineDateCell, InlineEmailCell, InlineMoneyCell, InlineSelectCell } from "./inline-cell";
+import { SettingsClientsFilters } from "./filters";
+
+const STATUS_OPTIONS: { value: ClientContractStatus; label: string }[] = (
+  Object.keys(CLIENT_STATUS_LABEL) as ClientContractStatus[]
+).map((value) => ({ value, label: CLIENT_STATUS_LABEL[value] }));
 
 /**
- * Configurações > Clientes — cadastro e manutenção dos dados estruturais
- * (contrato, contatos, comercial, contexto estratégico). Diferente de
- * /clients (consulta operacional rápida, todo mundo acessa): esta tela é
- * só admin e não repete as métricas operacionais — nome, status
- * CONTRATUAL, gestor principal e os números comerciais básicos, com
- * "Editar" abrindo o formulário completo (reaproveitado de /clients/[id]/edit).
+ * Configurações > Clientes — manutenção eficiente dos dados estruturais:
+ * status, gestor principal, início de contrato, CNPJ, e-mail e mensalidade
+ * editáveis direto na tabela (clique na célula, Enter salva, Escape
+ * cancela). Diferente de /clients (consulta operacional, todo mundo
+ * acessa): esta tela é só admin e cobre exatamente os campos cadastrais
+ * cobrados — nome só é editável na edição completa (evita alteração
+ * acidental do identificador principal do cliente).
  */
 export default async function SettingsClientsPage({
   searchParams,
@@ -21,21 +38,31 @@ export default async function SettingsClientsPage({
   await requireAdmin();
   const params = await searchParams;
   const search = (params.search ?? "").trim().toLowerCase();
+  const searchCnpjDigits = normalizeCnpj(search);
   const statusFilter = (params.status ?? "todos") as ClientContractStatus | "sem_gestor" | "todos";
+  const today = todayUTC();
 
   const supabase = await createSupabaseClient();
-  const { data: clients } = await supabase
-    .from("clients")
-    .select(
-      "id, name, status, contract_start_date, monthly_planned_spend, agency_monthly_fee, renewal_date, primary_manager_id, primary_manager:profiles!clients_primary_manager_id_fkey(name)",
-    )
-    .is("deleted_at", null)
-    .order("name");
+  const [{ data: clients }, { data: managers }] = await Promise.all([
+    supabase
+      .from("clients")
+      .select(
+        "id, name, status, contract_start_date, primary_manager_id, cnpj, main_contact_email, agency_monthly_fee, primary_manager:profiles!clients_primary_manager_id_fkey(name)",
+      )
+      .is("deleted_at", null)
+      .order("name"),
+    supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
+  ]);
 
   let rows = clients ?? [];
 
   if (search) {
-    rows = rows.filter((c) => c.name.toLowerCase().includes(search));
+    rows = rows.filter((c) => {
+      const matchesName = c.name.toLowerCase().includes(search);
+      const matchesEmail = (c.main_contact_email ?? "").toLowerCase().includes(search);
+      const matchesCnpj = searchCnpjDigits.length > 0 && (c.cnpj ?? "").includes(searchCnpjDigits);
+      return matchesName || matchesEmail || matchesCnpj;
+    });
   }
   if (statusFilter === "sem_gestor") {
     rows = rows.filter((c) => !c.primary_manager_id);
@@ -43,13 +70,15 @@ export default async function SettingsClientsPage({
     rows = rows.filter((c) => c.status === statusFilter);
   }
 
+  const managerOptions = (managers ?? []).map((m) => ({ value: m.id, label: m.name }));
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Clientes</h1>
           <p className="text-xs text-muted-foreground">
-            Cadastro e manutenção dos dados estruturais — consulta operacional rápida continua em{" "}
+            Manutenção dos dados cadastrais — consulta operacional rápida continua em{" "}
             <Link href="/clients" className="text-brand hover:underline">
               /clients
             </Link>
@@ -64,52 +93,24 @@ export default async function SettingsClientsPage({
         </Link>
       </div>
 
-      <form method="get" className="mt-4 flex flex-wrap items-center gap-1.5">
-        <input
-          name="search"
-          defaultValue={search}
-          placeholder="Buscar cliente..."
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none"
-        />
-        <select
-          name="status"
-          defaultValue={statusFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-        >
-          <option value="todos">Status: todos</option>
-          <option value="ativo">Ativo</option>
-          <option value="pausado">Pausado</option>
-          <option value="encerrado">Encerrado</option>
-          <option value="sem_gestor">Sem gestor principal</option>
-        </select>
-        <button
-          type="submit"
-          className="rounded-md bg-brand px-3 py-1 text-sm font-medium text-white hover:bg-brand-hover"
-        >
-          Filtrar
-        </button>
-        {(search || statusFilter !== "todos") && (
-          <Link href="/settings/clients" className="text-xs text-brand hover:underline">
-            Limpar filtros
-          </Link>
-        )}
-      </form>
+      <SettingsClientsFilters search={search} status={statusFilter} />
 
       <p className="mt-3 text-xs text-muted-foreground">
         {rows.length} cliente{rows.length !== 1 ? "s" : ""}
       </p>
 
       <div className="mt-2 overflow-x-auto rounded-lg border border-border">
-        <table className="w-full min-w-[900px] text-sm">
+        <table className="w-full min-w-[820px] text-sm">
           <thead>
             <tr className="border-b border-border bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-muted-foreground dark:bg-zinc-900">
-              <th className="px-3 py-1.5">Nome</th>
+              <th className="px-3 py-1.5">Cliente</th>
               <th className="px-3 py-1.5">Status</th>
               <th className="px-3 py-1.5">Gestor principal</th>
-              <th className="px-3 py-1.5">Início</th>
-              <th className="px-3 py-1.5">Invest. mensal planejado</th>
-              <th className="px-3 py-1.5">Valor mensal da agência</th>
-              <th className="px-3 py-1.5">Próxima renovação</th>
+              <th className="px-3 py-1.5">Início do contrato</th>
+              <th className="px-3 py-1.5">Tempo ativo</th>
+              <th className="hidden px-3 py-1.5 lg:table-cell">CNPJ</th>
+              <th className="hidden px-3 py-1.5 lg:table-cell">E-mail</th>
+              <th className="px-3 py-1.5">Mensalidade</th>
               <th className="px-3 py-1.5" />
             </tr>
           </thead>
@@ -118,28 +119,64 @@ export default async function SettingsClientsPage({
               rows.map((client) => (
                 <tr key={client.id} className="border-b border-border/60 last:border-0">
                   <td className="px-3 py-1.5 font-semibold text-foreground">{client.name}</td>
+
                   <td className="px-3 py-1.5">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}
-                    >
-                      {CLIENT_STATUS_LABEL[client.status]}
-                    </span>
+                    <InlineSelectCell
+                      value={client.status}
+                      options={STATUS_OPTIONS}
+                      action={updateClientStatusAction.bind(null, client.id)}
+                      ariaLabel="Status"
+                      renderDisplay={(label) => (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}
+                        >
+                          {label}
+                        </span>
+                      )}
+                    />
                   </td>
+
                   <td className="px-3 py-1.5 text-muted-foreground">
-                    {client.primary_manager?.name ?? "Sem gestor principal"}
+                    <InlineSelectCell
+                      value={client.primary_manager_id ?? ""}
+                      options={managerOptions}
+                      emptyLabel="Sem gestor principal"
+                      action={updateClientPrimaryManagerAction.bind(null, client.id)}
+                      ariaLabel="Gestor principal"
+                    />
                   </td>
+
                   <td className="px-3 py-1.5 text-muted-foreground">
-                    {client.contract_start_date ? formatShortDate(client.contract_start_date) : "—"}
+                    <InlineDateCell
+                      value={client.contract_start_date}
+                      action={updateClientContractStartAction.bind(null, client.id)}
+                      ariaLabel="Início do contrato"
+                      format={formatDateWithYear}
+                    />
                   </td>
+
+                  <td className="px-3 py-1.5 text-muted-foreground">
+                    {formatActiveMonths(client.contract_start_date, today)}
+                  </td>
+
+                  <td className="hidden px-3 py-1.5 text-muted-foreground lg:table-cell">
+                    <InlineCnpjCell value={client.cnpj} action={updateClientCnpjAction.bind(null, client.id)} />
+                  </td>
+
+                  <td className="hidden px-3 py-1.5 text-muted-foreground lg:table-cell">
+                    <InlineEmailCell
+                      value={client.main_contact_email}
+                      action={updateClientEmailAction.bind(null, client.id)}
+                    />
+                  </td>
+
                   <td className="px-3 py-1.5 tabular-nums text-muted-foreground">
-                    {client.monthly_planned_spend !== null ? formatCurrency(client.monthly_planned_spend) : "—"}
+                    <InlineMoneyCell
+                      value={client.agency_monthly_fee}
+                      action={updateClientMonthlyFeeAction.bind(null, client.id)}
+                    />
                   </td>
-                  <td className="px-3 py-1.5 tabular-nums text-muted-foreground">
-                    {client.agency_monthly_fee !== null ? formatCurrency(client.agency_monthly_fee) : "—"}
-                  </td>
-                  <td className="px-3 py-1.5 text-muted-foreground">
-                    {client.renewal_date ? formatShortDate(client.renewal_date) : "—"}
-                  </td>
+
                   <td className="px-3 py-1.5 text-right">
                     <Link
                       href={`/clients/${client.id}/edit?return_to=${encodeURIComponent("/settings/clients")}`}
@@ -152,7 +189,7 @@ export default async function SettingsClientsPage({
               ))
             ) : (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                <td colSpan={9} className="px-3 py-6 text-center text-sm text-muted-foreground">
                   Nenhum cliente encontrado com esses filtros.
                 </td>
               </tr>
@@ -160,6 +197,9 @@ export default async function SettingsClientsPage({
           </tbody>
         </table>
       </div>
+      <p className="mt-1 text-[11px] text-muted-foreground lg:hidden">
+        CNPJ e e-mail ficam disponíveis em telas maiores ou na edição completa (&ldquo;Editar&rdquo;).
+      </p>
 
       <p className="mt-3 text-xs text-muted-foreground">
         Clientes arquivados/excluídos ficam em{" "}

@@ -26,6 +26,19 @@ export function formatShortDate(value: string): string {
   return dayMonthFormatter.format(new Date(`${value}T00:00:00Z`));
 }
 
+const dayMonthYearFormatter = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/** Data completa (DD/MM/AAAA) — usada onde o ano importa (ex.: início de
+ * contrato em Configurações > Clientes), diferente de `formatShortDate`. */
+export function formatDateWithYear(value: string): string {
+  return dayMonthYearFormatter.format(new Date(`${value}T00:00:00Z`));
+}
+
 const weekdayLongFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: "UTC" });
 const weekdayShortFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "UTC" });
 const dayMonthLongFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -138,6 +151,29 @@ export function formatRelationshipDuration(contractStartDate: string | null, tod
     return `Cliente há ${years} ${years === 1 ? "ano" : "anos"}`;
   }
   return `Cliente há ${years} ${years === 1 ? "ano" : "anos"} e ${months} ${months === 1 ? "mês" : "meses"}`;
+}
+
+/**
+ * "Tempo ativo" da tabela de Configurações > Clientes — sempre em meses
+ * completos (nunca dobra pra anos, ao contrário de `formatRelationshipDuration`
+ * acima), pra ficar compacto numa coluna de tabela. Meses de calendário, não
+ * dias/30 — reaproveita o mesmo cálculo de mês completo da função acima, só
+ * sem o desdobramento em anos. Data de início no futuro (ou ausente) vira
+ * "—", nunca um número negativo.
+ */
+export function formatActiveMonths(contractStartDate: string | null, today: Date): string {
+  if (!contractStartDate) return "—";
+
+  const start = new Date(`${contractStartDate}T00:00:00Z`);
+  if (start > today) return "—";
+
+  let months = (today.getUTCFullYear() - start.getUTCFullYear()) * 12 + (today.getUTCMonth() - start.getUTCMonth());
+  if (today.getUTCDate() < start.getUTCDate()) {
+    months -= 1;
+  }
+
+  if (months <= 0) return "< 1 mês";
+  return `${months} ${months === 1 ? "mês" : "meses"}`;
 }
 
 const agencyWeekdayFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: APP_TIMEZONE });

@@ -551,6 +551,27 @@ automático da sync, refinamentos de UX, etc.
     sprint, nunca cria gasto na data da edição. A coluna
     `manual_spend_updated_at` (Etapa 32) continua existindo e sendo
     preenchida pela action, só não é mais usada por essa conta
+34. ✅ Configurações > Clientes vira manutenção cadastral eficiente (nova
+    migration `client-cnpj.sql`): removidos da tabela "Investimento mensal
+    planejado" (já é a soma das sprints, variável por mês) e "Próxima
+    renovação" (contratos são contínuos até cancelamento — nenhum dado foi
+    apagado, só saíram da visualização); nova coluna CNPJ (`clients.cnpj`,
+    opcional, só dígitos armazenados, checagem no banco de 14 dígitos);
+    "E-mail" reaproveita `main_contact_email` (já existia — nenhuma coluna
+    duplicada); "Mensalidade" é o mesmo `agency_monthly_fee` de sempre, só
+    renomeado; nova coluna calculada "Tempo ativo" (meses completos desde
+    `contract_start_date`, sem guardar nada no banco); Status, Gestor
+    principal, Início do contrato, CNPJ, E-mail e Mensalidade agora são
+    editáveis direto na célula da tabela (clique → editar → Enter salva/Escape
+    cancela/clique fora confirma), sem modal e sem transformar a linha
+    inteira em formulário; busca passou a encontrar também CNPJ e e-mail,
+    filtro por status aplica sozinho (removido o botão "Filtrar"); nome do
+    cliente continua editável só na edição completa; CNPJ também virou
+    editável lá (pro cadastro de clientes novos, que só aparecem em
+    Configurações depois de criados). Nenhum menu "•••" foi adicionado — não
+    existe padrão equivalente hoje em nenhuma tela, então "Editar" continua
+    sendo a única ação. `/clients`, Visão Geral, Sprints, tarefas, regras
+    financeiras, Meta API, autenticação, permissões e RLS não foram tocados
 
 ## Deploy
 
