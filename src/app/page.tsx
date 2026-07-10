@@ -24,7 +24,7 @@ import {
   selectTopAttentionItems,
   type AttentionCenterCategory,
 } from "@/lib/attention-center";
-import { AgencyFilters } from "./agency-filters";
+import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
 import { AgencyInvestmentBar } from "./agency-investment-bar";
 import { AttentionCenterDrawer, AttentionCenterPanel } from "./attention-center";
 
@@ -122,7 +122,7 @@ export default async function Home({
   searchParams: Promise<{
     month?: string;
     manager?: string;
-    search?: string;
+    client?: string;
     health?: string;
     activity?: string;
     ritmo?: string;
@@ -153,7 +153,7 @@ export default async function Home({
   const rangeEnd = monthRange.lastDay > currentRange.lastDay ? monthRange.lastDay : currentRange.lastDay;
 
   const managerFilter: ManagerFilter = params.manager ?? (isAdmin ? "all" : "me");
-  const search = (params.search ?? "").trim().toLowerCase();
+  const clientParam = params.client;
   const healthFilter = (params.health ?? "todos") as AccountHealth | "todos";
   const activityFilter = (params.activity ?? "todos") as OperationalActivityStatus | "todos";
   const ritmoFilter = (params.ritmo ?? "todos") as RitmoFilter;
@@ -285,14 +285,19 @@ export default async function Home({
 
   const allCards = rawClients.map((client) => buildOperationClientCard(client, today, monthRange));
 
+  // Opções do combobox de cliente: todos os clientes visíveis (mesma regra
+  // de RLS que já trouxe `allCards` — Etapa 15 abriu leitura de `clients`
+  // pra qualquer usuário autenticado, pra colaboração entre gestores), sem
+  // filtrar por carteira — carteira e cliente são eixos independentes.
+  const clientOptions: AgencyClientOption[] = [...allCards]
+    .map((card) => ({ id: card.clientId, name: card.clientName }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   // Filtros que respeitam tudo, exceto gestor — permite comparar gestores
   // no bloco "Resumo por Gestor" com o mesmo recorte de status/atividade
   // aplicado no resto do dashboard.
   let filteredBase = allCards;
 
-  if (search) {
-    filteredBase = filteredBase.filter((card) => card.clientName.toLowerCase().includes(search));
-  }
   if (healthFilter !== "todos") {
     filteredBase = filteredBase.filter((card) => card.accountHealth === healthFilter);
   }
@@ -324,6 +329,17 @@ export default async function Home({
     cards = cards.filter((card) => card.managerIds.includes(managerFilter));
   }
 
+  // Filtro de cliente específico: um ID inválido, inacessível, ou que não
+  // pertence mais à carteira selecionada (ex.: usuário trocou o gestor
+  // depois de já ter escolhido um cliente) é ignorado com segurança — nunca
+  // mantemos uma seleção que não bate mais com o resto do contexto. Como
+  // `clientFilter` (validado) é o mesmo valor usado em todos os links da
+  // página, a URL se autocorrige assim que o usuário navega de novo.
+  const clientFilter = clientParam && cards.some((card) => card.clientId === clientParam) ? clientParam : undefined;
+  if (clientFilter) {
+    cards = cards.filter((card) => card.clientId === clientFilter);
+  }
+
   const sortedCards =
     sort === "nome" ? [...cards].sort((a, b) => a.clientName.localeCompare(b.clientName)) : sortCardsBySpendRhythm(cards);
 
@@ -351,7 +367,7 @@ export default async function Home({
     const next = new URLSearchParams();
     if (params.month) next.set("month", params.month);
     next.set("manager", managerFilter);
-    if (search) next.set("search", search);
+    if (clientFilter) next.set("client", clientFilter);
     if (healthFilter !== "todos") next.set("health", healthFilter);
     if (activityFilter !== "todos") next.set("activity", activityFilter);
     if (ritmoFilter !== "todos") next.set("ritmo", ritmoFilter);
@@ -376,6 +392,7 @@ export default async function Home({
     const next = new URLSearchParams();
     if (params.month) next.set("month", params.month);
     next.set("manager", managerFilter);
+    if (clientFilter) next.set("client", clientFilter);
     for (const [key, value] of Object.entries(overrides)) {
       next.set(key, value);
     }
@@ -427,7 +444,8 @@ export default async function Home({
         defaultManager={isAdmin ? "all" : "me"}
         gestores={gestores ?? []}
         manager={managerFilter}
-        search={search}
+        clients={clientOptions}
+        selectedClientId={clientFilter}
         health={healthFilter}
         activity={activityFilter}
         ritmo={ritmoFilter}

@@ -700,6 +700,48 @@ automático da sync, refinamentos de UX, etc.
     `sprint.planned_spend`, que agora só passou a ser mantido certo por
     baixo dos panos.
 
+39. ✅ Filtro de cliente específico e pesquisável na Visão Geral (sem
+    migration, sem mudança de RLS/permissões): o seletor "Todos os
+    clientes" que já existia (`manager`, na URL) sempre foi **carteira**
+    (gestor responsável), não uma lista de clientes — confirmado tanto pelo
+    código (compara `card.managerIds`) quanto pela RLS (`operation-
+    collaboration-rls.sql` já abriu leitura de `clients`/`sprints`/`tasks`/
+    `daily_spend` pra qualquer usuário autenticado desde a Etapa 15, então
+    "quem vê o quê" nunca dependeu desse seletor). Os dois filtros agora são
+    independentes e com rótulo próprio ("Carteira" / "Cliente") pra nunca
+    reaproveitar o mesmo texto de opção sem contexto. O novo filtro
+    "Cliente" é um combobox pesquisável (`agency-filters.tsx`, populado com
+    a mesma lista de clientes já carregada pela página — nenhuma query
+    nova, nenhuma consulta por tecla digitada): estado padrão "Todos os
+    clientes", digitar filtra localmente por nome, Enter seleciona, Escape
+    fecha, navegação com setas, "×" ao lado do controle e a primeira opção
+    da lista ("Todos os clientes") limpam só esse filtro sem afetar mês/
+    carteira/outros. A busca por texto solta que existia antes ("Buscar
+    cliente...") foi removida — ela só filtrava por nome mesmo, então virou
+    exatamente redundante com a nova busca de dentro do combobox.
+
+    Persistência: o cliente selecionado vai pra URL como `?client=<id>`
+    (nunca o nome). Se o ID não existir mais, não pertencer a nenhum
+    cliente visível, ou não estiver mais dentro da carteira selecionada
+    (ex.: usuário troca de gestor depois de já ter escolhido um cliente),
+    o filtro é ignorado com segurança e a página volta pra "Todos os
+    clientes" sozinha — nunca mantém uma seleção inválida. Como todos os
+    links da página (navegação de mês, "Limpar filtros", drill-down dos
+    cartões de Ritmo do mês, Central de Atenção) usam esse mesmo valor já
+    validado, a URL se autocorrige assim que o usuário navega de novo.
+
+    Efeito do filtro: nenhuma regra de cálculo mudou — Ritmo do mês,
+    Investimento do mês (planejado/realizado/%/esperado até hoje/diferença),
+    a barra financeira, "N clientes sem planejamento", a Central de Atenção
+    e a tabela de clientes já eram todos calculados em cima do array
+    `cards`; selecionar um cliente específico só reduz esse array a um item
+    antes de chegar nessas funções, então tudo respeita o filtro
+    automaticamente, sem duplicar nenhuma lógica financeira. O bloco "Ver
+    análises adicionais" (resumo por gestor, recolhido por padrão) foi
+    deixado de fora de propósito — não estava na lista de blocos pedida
+    pra respeitar o filtro, e é uma comparação entre gestores que não faz
+    sentido recortar por um cliente só.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis
