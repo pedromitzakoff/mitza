@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { logout } from "@/app/login/actions";
 import { todayUTC } from "@/lib/today";
 import { businessDaysSince } from "@/lib/business-days";
 import {
@@ -15,7 +14,7 @@ import {
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ activity?: string }>;
+  searchParams: Promise<{ activity?: string; synced?: string }>;
 }) {
   const profile = await getCurrentProfile();
 
@@ -29,7 +28,7 @@ export default async function Home({
     );
   }
 
-  const { activity: activityFilter = "todos" } = await searchParams;
+  const { activity: activityFilter = "todos", synced } = await searchParams;
   const today = todayUTC();
 
   const supabase = await createSupabaseClient();
@@ -70,67 +69,44 @@ export default async function Home({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
-            Mitza
+            Clientes
           </h1>
           <p className="text-sm text-zinc-500">
             {profile.name} · {profile.role}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link href="/operation" className="text-sm font-medium text-brand hover:underline">
-            Operação
+        {profile.role === "admin" && (
+          <Link href="/painel-mensal" className="text-sm font-medium text-brand hover:underline">
+            Painel geral do mês
           </Link>
-          {profile.role === "admin" && (
-            <>
-              <Link href="/painel-mensal" className="text-sm font-medium text-brand hover:underline">
-                Painel geral do mês
-              </Link>
-              <Link href="/settings" className="text-sm font-medium text-brand hover:underline">
-                Configurações
-              </Link>
-            </>
-          )}
-          <form action={logout}>
-            <button
-              type="submit"
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
-            >
-              Sair
-            </button>
-          </form>
-        </div>
+        )}
       </div>
 
-      <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-medium text-black dark:text-zinc-50">Clientes</h2>
-        <div className="flex items-center gap-2">
-          <form method="get" className="flex items-center gap-2">
-            <select
-              name="activity"
-              defaultValue={activityFilter}
-              className="rounded-md border border-zinc-300 bg-transparent px-2 py-1.5 text-sm text-black dark:border-zinc-700 dark:text-zinc-50"
-            >
-              <option value="todos">Atividade: todas</option>
-              <option value="ativo">Ativos</option>
-              <option value="atencao">Atenção por inatividade</option>
-              <option value="inativo">Inativos</option>
-            </select>
-            <button
-              type="submit"
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
-            >
-              Filtrar
-            </button>
-          </form>
-          {profile.role === "admin" && (
-            <Link
-              href="/clients/new"
-              className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
-            >
-              + Novo cliente
-            </Link>
-          )}
-        </div>
+      {synced && (
+        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">
+          {synced} cliente(s) sincronizado(s) com o Meta.
+        </p>
+      )}
+
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <form method="get" className="flex items-center gap-2">
+          <select
+            name="activity"
+            defaultValue={activityFilter}
+            className="rounded-md border border-zinc-300 bg-transparent px-2 py-1.5 text-sm text-black dark:border-zinc-700 dark:text-zinc-50"
+          >
+            <option value="todos">Atividade: todas</option>
+            <option value="ativo">Ativos</option>
+            <option value="atencao">Atenção por inatividade</option>
+            <option value="inativo">Inativos</option>
+          </select>
+          <button
+            type="submit"
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+          >
+            Filtrar
+          </button>
+        </form>
       </div>
 
       <ul className="mt-4 divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">

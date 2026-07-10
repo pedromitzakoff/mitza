@@ -280,6 +280,18 @@ automático da sync, refinamentos de UX, etc.
   sempre, só com um campo oculto `return_to`); `task-drawer-panel.tsx` é
   o painel lateral de detalhes, aberto via `?task=<id>` — fechar é só
   tirar o parâmetro da URL, sem JavaScript de cliente nenhum
+- `src/app/layout.tsx` — layout raiz agora monta a sidebar em volta de
+  `children` quando há perfil logado (`/login` continua sem sidebar,
+  porque nesse momento `getCurrentProfile()` retorna null); nenhuma rota
+  mudou de lugar, é só a casca visual
+- `src/app/sidebar.tsx` (`"use client"`, único jeito de destacar a página
+  ativa e controlar o menu mobile) — itens por papel (Equipe e
+  Configurações só pra admin), "Em breve" pra Reuniões/Equipe (ainda sem
+  tela própria), atalho "+ Novo cliente" e "Atualizar Meta (todos)"
+  (admin), nome+papel e "Sair" no rodapé. Fixa no desktop, vira
+  hambúrguer com overlay no mobile (`md:` breakpoint)
+- `src/app/global-actions.ts` — `syncAllMetaAction` (admin only), sincroniza
+  o Meta de todos os clientes de uma vez, chamado pelo atalho da sidebar
 
 ## Sync com o Meta
 
@@ -331,6 +343,9 @@ automático da sync, refinamentos de UX, etc.
     relevante (`operational_activities`), status Ativo/Atenção/Inativo
     por dias úteis sem atividade, "sprint sem execução", tudo integrado
     no mesmo painel "Precisa de atenção" e na Visão Geral
+16. ✅ Sidebar fixa (menu hambúrguer no mobile) com os itens por papel,
+    página ativa destacada, atalhos de "+ Novo cliente" e "Atualizar Meta
+    (todos)" pra admin
 
 ## Deploy
 
