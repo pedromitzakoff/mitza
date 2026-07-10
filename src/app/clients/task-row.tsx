@@ -42,10 +42,16 @@ export function TaskRow({
   task,
   clientId,
   detailsHref,
+  hideAssigneeIfName,
 }: {
   task: TaskListItem;
   clientId: string;
   detailsHref: string;
+  /** Some a coluna de responsável quando ele for esse nome (ex.: o gestor
+   * principal do cliente, já identificado no cabeçalho — usado só pela
+   * tela Sprints, pra não repetir a mesma informação em toda linha). Tarefa
+   * sem responsável ou com um responsável diferente continua aparecendo. */
+  hideAssigneeIfName?: string;
 }) {
   const effectiveStatus = effectiveTaskStatus(task);
   const isDone = effectiveStatus === "feito";
@@ -96,9 +102,11 @@ export function TaskRow({
           <span className="ml-1.5 hidden text-xs text-muted-foreground lg:inline">{TASK_TYPE_LABEL[task.type]}</span>
         </Link>
 
-        <span className="hidden w-28 shrink-0 truncate text-xs text-muted-foreground md:block">
-          {task.assignee?.name ?? "Sem responsável"}
-        </span>
+        {(!hideAssigneeIfName || task.assignee?.name !== hideAssigneeIfName) && (
+          <span className="hidden w-28 shrink-0 truncate text-xs text-muted-foreground md:block">
+            {task.assignee?.name ?? "Sem responsável"}
+          </span>
+        )}
 
         <span className="hidden w-16 shrink-0 sm:block">
           {isToday && !isDone ? (

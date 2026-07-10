@@ -5,6 +5,7 @@ import { todayUTC, todayDateString } from "@/lib/today";
 import { monthRangeFromParam } from "@/lib/sprint-financials";
 import { formatFullDate } from "@/lib/format";
 import { sortByPriority } from "@/lib/priority-accounts";
+import { sortSprintClientsByUrgency } from "@/lib/sprint-priority";
 import type { CommentItem } from "@/app/clients/comment-thread";
 import {
   buildOperationClientCard,
@@ -68,7 +69,11 @@ export default async function SprintsPage({
     { data: dailySpend },
     { data: tasks },
   ] = await Promise.all([
-    supabase.from("clients").select("id, name, meta_ad_account_id").is("deleted_at", null).order("name"),
+    supabase
+      .from("clients")
+      .select("id, name, meta_ad_account_id, primary_manager:profiles!clients_primary_manager_id_fkey(name)")
+      .is("deleted_at", null)
+      .order("name"),
     supabase.from("client_managers").select("client_id, user_id, profiles(id, name)"),
     supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
     supabase
@@ -140,6 +145,9 @@ export default async function SprintsPage({
 
   const clientActivityById = new Map((clientActivity ?? []).map((r) => [r.client_id, r.last_activity_at]));
   const sprintActivityById = new Map((sprintActivity ?? []).map((r) => [r.sprint_id, r.last_activity_at]));
+  const primaryManagerNameByClient = new Map(
+    (clients ?? []).map((c) => [c.id, c.primary_manager?.name ?? null]),
+  );
 
   const rawClients: OperationClientRawData[] = (clients ?? []).map((client) => {
     const clientSprints = sprintsByClient.get(client.id) ?? [];
@@ -187,7 +195,11 @@ export default async function SprintsPage({
   }
 
   cards = cards.filter((card) => matchesOperationMode(card, mode));
-  cards = sortByPriority(cards);
+  // No modo "Sprint atual", a prioridade operacional (atrasadas > sem
+  // execução > tarefas hoje > demais) substitui a ordenação genérica de
+  // saúde da conta — só aqui, sortByPriority continua igual pra Visão
+  // Geral e pros outros modos desta própria tela.
+  cards = mode === "sprint" ? sortSprintClientsByUrgency(cards, todayStr) : sortByPriority(cards);
 
   const buildUrl = (overrides: Record<string, string>) => {
     const next = new URLSearchParams();
@@ -356,7 +368,13 @@ export default async function SprintsPage({
       <div className="mt-3 flex flex-col gap-2">
         {cards.length > 0 ? (
           cards.map((card) => (
-            <SprintClientGroup key={card.clientId} card={card} mode={mode} returnTo={buildUrl({})} />
+            <SprintClientGroup
+              key={card.clientId}
+              card={card}
+              mode={mode}
+              returnTo={buildUrl({})}
+              primaryManagerName={primaryManagerNameByClient.get(card.clientId) ?? null}
+            />
           ))
         ) : (
           <p className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">

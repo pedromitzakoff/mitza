@@ -451,6 +451,18 @@ automático da sync, refinamentos de UX, etc.
     `Configurações > Clientes` (`/settings/clients`, listagem enxuta com
     busca/filtro por status, "Editar" abre o form completo); nome do cliente
     em `/clients` passou de azul pra preto/negrito (azul fica só pra ações)
+28. ✅ UX e densidade da tela Sprints: nome do cliente em preto/negrito (sem
+    badge de saúde/atividade ao lado); cabeçalho compacto em 3 linhas
+    (nome + gestor principal / sprint e período / financeiro · progresso da
+    sprint · última atividade), sem gráfico/projeção/selo de status
+    financeiro; gestor principal (novo campo da Etapa 27) aparece uma vez no
+    cabeçalho e some da linha da tarefa quando o responsável é o mesmo;
+    alertas viraram uma única área compacta (contagem no cabeçalho, detalhe
+    só quando expandido, nada quando não há alerta); modo "Sprint atual"
+    ordena por prioridade operacional (atrasadas → sem execução → tarefas de
+    hoje → demais, depois alfabético) sem depender de badge — ordenação nova
+    e isolada (`sortSprintClientsByUrgency`), não mexe na ordenação da Visão
+    Geral
 
 ## Deploy
 
