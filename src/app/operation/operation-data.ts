@@ -3,6 +3,7 @@ import {
   computeSprintFinancials,
   currentMonthRange,
   sumEffectiveSpend,
+  sumExpectedToDate,
   type SprintFinancials,
   type SpendSource,
 } from "@/lib/sprint-financials";
@@ -64,6 +65,10 @@ export interface OperationClientCard {
   sprintFilterBucket: SprintFilterBucket;
   monthPlanned: number;
   monthActual: number;
+  /** Soma do esperado até hoje de cada sprint do mês (dias corridos já
+   * decorridos dentro de cada sprint) — mesma conta usada no cartão da
+   * sprint individual, nunca uma regra paralela. */
+  monthExpectedToDate: number;
   monthStatus: SpendStatus;
   hasMonthGoal: boolean;
   /** Prazo da otimização concluída mais recente (qualquer mês), ou null se
@@ -105,6 +110,7 @@ export function buildOperationClientCard(
   const monthSprints = client.sprints.filter((s) => s.start_date >= firstDay && s.start_date <= lastDay);
   const monthPlanned = monthSprints.reduce((sum, s) => sum + s.planned_spend, 0);
   const monthActual = sumEffectiveSpend(monthSprints, client.dailySpend);
+  const monthExpectedToDate = sumExpectedToDate(monthSprints, today);
   const monthStatus = classifySpendStatus(monthActual, monthPlanned, monthPlanned);
 
   const taskCounts = { total: 0, done: 0, pending: 0, overdue: 0 };
@@ -197,6 +203,7 @@ export function buildOperationClientCard(
     sprintFilterBucket,
     monthPlanned,
     monthActual,
+    monthExpectedToDate,
     monthStatus,
     hasMonthGoal: monthPlanned > 0,
     lastOptimizationAt,

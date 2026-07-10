@@ -11,9 +11,7 @@ import {
 } from "@/app/operation/operation-data";
 import type { AccountHealth } from "@/lib/attention-alerts";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
-import { type SpendStatus } from "@/lib/spend-status";
-import { computeCumulativeSpendSeries } from "@/lib/spend-chart-data";
-import { SpendChart } from "@/app/clients/spend-chart";
+import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { buildAgencyAttentionAlerts } from "@/lib/agency-alerts";
 import {
   computeFinancialSummary,
@@ -21,9 +19,9 @@ import {
   computeSpendRhythmCounts,
   computeSprintOpsSummary,
   sortCardsBySpendRhythm,
-  buildRitmoSummaryText,
 } from "@/lib/agency-metrics";
 import { AgencyFilters } from "./agency-filters";
+import { AgencyInvestmentBar } from "./agency-investment-bar";
 
 /** Rótulos da "situação" financeira do mês nesta tabela — mesma
  * classificação de sempre (card.monthStatus, ±10% central), só um texto
@@ -33,7 +31,7 @@ const SITUATION_LABEL: Record<SpendStatus, string> = {
   dentro: "Dentro do esperado",
   acima: "Acima do esperado",
   abaixo: "Abaixo do esperado",
-  sem_meta: "Meta não configurada",
+  sem_meta: "Sem planejamento",
 };
 
 const SITUATION_BADGE_CLASSES: Record<SpendStatus, string> = {
@@ -53,14 +51,33 @@ function shiftMonthParam(monthRange: { firstDay: string }, deltaMonths: number):
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-/** Uma métrica compacta dentro de um grupo (Carteira/Investimento/Operação)
+/** Cor do valor — só sinalização discreta no texto, nunca um card ou fundo
+ * inteiro colorido. "neutral" é o padrão (ex.: contagem total). */
+const STAT_TONE_CLASSES = {
+  neutral: "text-foreground",
+  positive: "text-green-600 dark:text-green-400",
+  warning: "text-amber-600 dark:text-amber-400",
+  critical: "text-red-600 dark:text-red-400",
+} as const;
+
+/** Uma métrica compacta dentro de um grupo (Ritmo do mês/Investimento/Operação)
  * — nunca um card com borda própria, pra não voltar a virar uma grade de
  * caixinhas competindo por atenção. */
-function StatItem({ label, value, href }: { label: string; value: string; href?: string }) {
+function StatItem({
+  label,
+  value,
+  href,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  href?: string;
+  tone?: keyof typeof STAT_TONE_CLASSES;
+}) {
   const content = (
     <div>
       <p className="text-[11px] text-muted-foreground">{label}</p>
-      <p className="text-lg font-semibold tabular-nums text-foreground">{value}</p>
+      <p className={`text-lg font-semibold tabular-nums ${STAT_TONE_CLASSES[tone]}`}>{value}</p>
     </div>
   );
 
@@ -121,7 +138,6 @@ export default async function Home({
   const todayStr = todayDateString();
   const monthRange = monthRangeFromParam(params.month, today);
   const currentRange = currentMonthRange(today);
-  const isFutureMonth = monthRange.firstDay > todayStr;
 
   // Busca sprints/gastos numa janela que cobre o mês selecionado E o mês
   // corrente (union) — assim a sprint atual (de hoje) é sempre encontrada,
@@ -305,18 +321,18 @@ export default async function Home({
     sort === "nome" ? [...cards].sort((a, b) => a.clientName.localeCompare(b.clientName)) : sortCardsBySpendRhythm(cards);
 
   const spendRhythm = computeSpendRhythmCounts(cards);
-  const financial = computeFinancialSummary(cards, monthRange, today);
+  const financial = computeFinancialSummary(cards);
   const sprintOps = computeSprintOpsSummary(cards, todayStr);
-  const ritmoText = buildRitmoSummaryText(financial, isFutureMonth);
   const agencyAlerts = buildAgencyAttentionAlerts(cards);
 
   const managersForSummary = isAdmin ? gestores ?? [] : [{ id: profile.id, name: profile.name }];
   const managerSummary = computeManagerSummary(managersForSummary, filteredBase, todayStr);
 
-  const cardsClientIds = new Set(cards.map((c) => c.clientId));
-  const chartSprints = (sprints ?? []).filter((s) => cardsClientIds.has(s.client_id));
-  const chartDailySpend = (dailySpend ?? []).filter((d) => cardsClientIds.has(d.client_id));
-  const chartPoints = computeCumulativeSpendSeries(chartSprints, chartDailySpend, monthRange, today);
+  const investmentDiff = financial.actual - financial.expectedToDate;
+  const investmentRitmoStatus =
+    financial.planned > 0 ? classifySpendStatus(financial.actual, financial.expectedToDate, financial.planned) : "sem_meta";
+  const investmentDiffTone =
+    investmentRitmoStatus === "acima" ? "critical" : investmentRitmoStatus === "abaixo" ? "warning" : "neutral";
 
   const sprintDistributionTotal = Math.max(
     1,
@@ -373,29 +389,29 @@ export default async function Home({
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold text-foreground">Visão Geral</h1>
 
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
+        <div className="flex items-center gap-0.5 text-sm">
           <Link
             href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
-            className="rounded-md px-2 py-1 text-sm text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
             aria-label="Mês anterior"
           >
-            &larr;
+            &lsaquo;
           </Link>
-          <span className="min-w-[10rem] text-center text-sm font-medium text-foreground">
+          <span className="min-w-[8.5rem] text-center font-medium text-foreground">
             {formatMonthLabel(monthRange.firstDay)}
           </span>
           <Link
             href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
-            className="rounded-md px-2 py-1 text-sm text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
             aria-label="Próximo mês"
           >
-            &rarr;
+            &rsaquo;
           </Link>
           {params.month && (
-            <Link href={buildUrl({ month: "" })} className="ml-1 text-xs text-brand hover:underline">
+            <Link href={buildUrl({ month: "" })} className="ml-1.5 text-xs text-brand hover:underline">
               Mês atual
             </Link>
           )}
@@ -422,53 +438,59 @@ export default async function Home({
 
       {/* Resumo consolidado: no máximo 4 grupos, métricas compactas dentro
           de cada um em vez de uma grade de cards soltos. */}
-      <div className="mt-5 flex flex-col gap-3">
+      <div className="mt-3 flex flex-col gap-2.5">
         <MetricGroup title="Ritmo do mês">
           <StatItem label="Clientes totais" value={String(spendRhythm.total)} />
           <StatItem
             label="Dentro do esperado"
             value={String(spendRhythm.dentro)}
             href={drillDownUrl({ ritmo: "dentro" })}
+            tone="positive"
           />
           <StatItem
             label="Abaixo do esperado"
             value={String(spendRhythm.abaixo)}
             href={drillDownUrl({ ritmo: "abaixo" })}
+            tone="warning"
           />
           <StatItem
             label="Acima do esperado"
             value={String(spendRhythm.acima)}
             href={drillDownUrl({ ritmo: "acima" })}
+            tone="critical"
           />
         </MetricGroup>
 
         <MetricGroup
-          title="Investimento"
+          title="Investimento do mês"
           extra={
-            <>
-              <div className="mt-3">
-                <SpendChart points={chartPoints} size="large" />
-              </div>
-              <p className="mt-2 text-sm font-medium text-foreground">{ritmoText}</p>
-            </>
+            <div className="mt-3">
+              <AgencyInvestmentBar
+                planned={financial.planned}
+                actual={financial.actual}
+                expectedToDate={financial.expectedToDate}
+              />
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                {financial.semMeta > 0 ? (
+                  <Link href={drillDownUrl({ meta: "sem" })} className="hover:underline">
+                    {financial.semMeta} cliente{financial.semMeta !== 1 ? "s" : ""} sem planejamento configurado
+                  </Link>
+                ) : (
+                  "Todos os clientes possuem planejamento configurado"
+                )}
+              </p>
+            </div>
           }
         >
           <StatItem label="Planejado" value={formatCurrency(financial.planned)} />
           <StatItem label="Realizado" value={formatCurrency(financial.actual)} />
           <StatItem label="% realizado" value={financial.pct !== null ? `${Math.round(financial.pct)}%` : "—"} />
+          <StatItem label="Esperado até hoje" value={formatCurrency(financial.expectedToDate)} />
           <StatItem
-            label={isFutureMonth ? "Projeção (mês futuro)" : "Projeção"}
-            value={isFutureMonth ? "—" : formatCurrency(financial.projection.projectedSpend)}
+            label="Diferença p/ ritmo esperado"
+            value={financial.planned > 0 ? formatCurrency(investmentDiff) : "—"}
+            tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
           />
-          <StatItem
-            label="Diferença projetada"
-            value={
-              isFutureMonth || financial.planned <= 0
-                ? "—"
-                : formatCurrency(financial.projection.projectedSpend - financial.planned)
-            }
-          />
-          <StatItem label="Sem meta" value={String(financial.semMeta)} href={drillDownUrl({ meta: "sem" })} />
         </MetricGroup>
 
         <MetricGroup
@@ -542,7 +564,7 @@ export default async function Home({
       </div>
 
       {/* Precisa de atenção */}
-      <div className="mt-5 rounded-lg border border-border bg-card p-3">
+      <div className="mt-3 rounded-lg border border-border bg-card p-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Precisa de atenção</h2>
         {agencyAlerts.length > 0 ? (
           <ul className="mt-2 flex flex-col gap-1.5">
@@ -580,7 +602,7 @@ export default async function Home({
       {/* Tabela única de clientes — consolida o que antes eram duas tabelas
           (Contas prioritárias + Clientes), só com o essencial pra entender
           rápido o estágio do mês de cada conta. */}
-      <div className="mt-5">
+      <div className="mt-3">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Clientes · {formatMonthLabel(monthRange.firstDay)}
@@ -605,8 +627,8 @@ export default async function Home({
                   <th className="py-1.5 px-3">Gestor</th>
                   <th className="py-1.5 px-3">Investimento</th>
                   <th className="py-1.5 px-3">% Realizado</th>
-                  <th className="py-1.5 px-3">Última atividade</th>
                   <th className="py-1.5 px-3">Situação</th>
+                  <th className="py-1.5 px-3">Última atividade</th>
                   <th className="py-1.5 px-3">Ação</th>
                 </tr>
               </thead>
@@ -626,7 +648,6 @@ export default async function Home({
                       <td className="py-1.5 px-3 tabular-nums text-muted-foreground">
                         {pctRealizado !== null ? `${pctRealizado}%` : "—"}
                       </td>
-                      <td className="py-1.5 px-3 text-muted-foreground">{card.activityLabel}</td>
                       <td className="py-1.5 px-3">
                         <span
                           className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SITUATION_BADGE_CLASSES[card.monthStatus]}`}
@@ -634,6 +655,7 @@ export default async function Home({
                           {SITUATION_LABEL[card.monthStatus]}
                         </span>
                       </td>
+                      <td className="py-1.5 px-3 text-muted-foreground">{card.activityLabel}</td>
                       <td className="py-1.5 px-3 text-right">
                         <Link href={`/clients/${card.clientId}`} className="text-xs font-medium text-brand hover:underline">
                           Abrir

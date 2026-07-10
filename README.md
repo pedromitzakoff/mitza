@@ -583,6 +583,31 @@ automático da sync, refinamentos de UX, etc.
     Investimento, % Realizado, Última atividade, Situação, Ação — mesma
     regra de Situação de sempre (`classifySpendStatus`, sem mudança); tabela
     continua com a mesma altura de linha compacta, sem cards novos
+36. ✅ Visão Geral vira dashboard operacional compacto (sem migration):
+    gráfico "Planejado acumulado x gasto real acumulado" removido (o
+    acompanhamento diário detalhado continua nas páginas individuais dos
+    clientes, que têm seu próprio gráfico, intocado); cabeçalho compacto
+    (mês selecionado ao lado do título, sem caixa própria); "Ritmo do mês"
+    continua com os mesmos 4 indicadores (Clientes totais/Dentro/Abaixo/
+    Acima), agora com cor discreta no valor (verde/âmbar/vermelho); bloco
+    "Investimento" virou "Investimento do mês": Planejado, Realizado, %
+    realizado, **Esperado até hoje** (métrica nova) e Diferença para o
+    ritmo esperado — Projeção e Diferença projetada saíram deste
+    dashboard (os cálculos de projeção continuam intactos em `/clients` e
+    na página do cliente); "Esperado até hoje" é a soma, por sprint do
+    mês, de `planejado × dias decorridos / dias totais da sprint` (sprint
+    futura conta R$ 0, encerrada conta 100%) — a mesma fórmula já usada no
+    cartão da sprint individual, extraída para uma função pura só
+    (`computeSprintExpectedToDate`, em `sprint-financials.ts`) pra nunca
+    divergir entre página do cliente, Sprints e Visão Geral; nova barra
+    horizontal (`AgencyInvestmentBar`) mostra o realizado preenchido e um
+    marcador circular (não um traço fino) na posição do esperado até hoje,
+    com tooltip; "N clientes sem planejamento configurado" virou uma linha
+    discreta abaixo da barra, não mais uma métrica junto das financeiras;
+    tabela de clientes já tinha "% Realizado"/título com o mês (Etapa 35) —
+    só troquei a ordem das colunas Situação/Última atividade e renomeei o
+    rótulo "Meta não configurada" para "Sem planejamento"; blocos
+    "Operação" e "Precisa de atenção" não foram alterados
 
 ## Deploy
 

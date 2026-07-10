@@ -1,6 +1,4 @@
 import type { OperationClientCard } from "@/app/operation/operation-data";
-import { computeMonthProjectionForRange, type MonthProjection } from "./client-metrics";
-import { formatCurrency } from "./format";
 
 /**
  * Agregações do dashboard da agência — tudo derivado dos cards já montados
@@ -67,26 +65,25 @@ export interface FinancialSummary {
   actual: number;
   /** % realizado sobre o planejado, ou null se ninguém no recorte tem meta. */
   pct: number | null;
-  projection: MonthProjection;
+  /** Soma do esperado até hoje (proporcional às sprints do mês) de todos os
+   * clientes filtrados — mesma conta de `computeSprintExpectedToDate`. */
+  expectedToDate: number;
   semMeta: number;
 }
 
 /**
- * Soma planejado/realizado de TODOS os clientes filtrados (nunca uma média
- * de percentuais por cliente) — assim clientes sem meta (planejado = 0) não
- * distorcem o percentual agregado, só reduzem o denominador corretamente.
+ * Soma planejado/realizado/esperado de TODOS os clientes filtrados (nunca
+ * uma média de percentuais por cliente) — assim clientes sem meta
+ * (planejado = 0) não distorcem o percentual agregado, só reduzem o
+ * denominador corretamente.
  */
-export function computeFinancialSummary(
-  cards: OperationClientCard[],
-  monthRange: { firstDay: string; lastDay: string },
-  today: Date,
-): FinancialSummary {
+export function computeFinancialSummary(cards: OperationClientCard[]): FinancialSummary {
   const planned = cards.reduce((sum, c) => sum + c.monthPlanned, 0);
   const actual = cards.reduce((sum, c) => sum + c.monthActual, 0);
   const pct = planned > 0 ? (actual / planned) * 100 : null;
-  const projection = computeMonthProjectionForRange(planned, actual, monthRange, today);
+  const expectedToDate = cards.reduce((sum, c) => sum + c.monthExpectedToDate, 0);
   const semMeta = cards.filter((c) => !c.hasMonthGoal).length;
-  return { planned, actual, pct, projection, semMeta };
+  return { planned, actual, pct, expectedToDate, semMeta };
 }
 
 export interface SprintOpsSummary {
@@ -138,26 +135,6 @@ export function computeSprintOpsSummary(
     atrasadas,
     paraHoje,
   };
-}
-
-/** Texto dinâmico abaixo do gráfico consolidado — sempre a partir do
- * status/projeção já calculados, nunca um texto solto. */
-export function buildRitmoSummaryText(financial: FinancialSummary, isFutureMonth: boolean): string {
-  if (isFutureMonth) return "Mês futuro — ainda sem dados de investimento.";
-  if (financial.planned <= 0) {
-    return "Nenhum cliente filtrado tem meta de investimento configurada neste mês.";
-  }
-
-  const { projectedSpend, projectedPct, status } = financial.projection;
-  const diff = projectedSpend - financial.planned;
-
-  if (status === "dentro") {
-    return `No ritmo para atingir ${Math.round(projectedPct ?? 0)}% do investimento planejado.`;
-  }
-  if (status === "acima") {
-    return `Projeção ${formatCurrency(diff)} acima do planejado.`;
-  }
-  return `Projeção ${formatCurrency(Math.abs(diff))} abaixo do planejado.`;
 }
 
 export interface ManagerSummaryRow {

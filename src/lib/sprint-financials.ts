@@ -82,9 +82,38 @@ function parseDateUTC(value: string): Date {
 }
 
 /**
- * Calcula o financeiro de uma sprint: gasto esperado até hoje (proporcional
- * aos dias já passados dentro da sprint), status (dentro/acima/abaixo) e %
- * de progresso da barra (gasto / planejado).
+ * Gasto esperado até hoje de UMA sprint, proporcional aos dias já passados
+ * dentro dela: sprint futura = R$ 0; sprint encerrada = 100% do planejado;
+ * sprint em andamento = planejado × (dias decorridos / dias totais). Única
+ * fonte dessa conta — reaproveitada por `computeSprintFinancials` (cartão
+ * da sprint) e por `sumExpectedToDate` (agregado da agência), pra nunca
+ * divergir entre página do cliente, Sprints e Visão Geral.
+ */
+export function computeSprintExpectedToDate(
+  sprint: { start_date: string; end_date: string; planned_spend: number },
+  today: Date,
+): number {
+  const start = parseDateUTC(sprint.start_date);
+  const end = parseDateUTC(sprint.end_date);
+  const totalDays = daysBetweenInclusive(start, end);
+  if (totalDays <= 0) return 0;
+
+  const daysPassed = today < start ? 0 : today > end ? totalDays : daysBetweenInclusive(start, today);
+  return (sprint.planned_spend * daysPassed) / totalDays;
+}
+
+/** Soma o esperado até hoje de várias sprints — usado pelo resumo de
+ * investimento da Visão Geral (agregado de todos os clientes filtrados). */
+export function sumExpectedToDate(
+  sprints: { start_date: string; end_date: string; planned_spend: number }[],
+  today: Date,
+): number {
+  return sprints.reduce((sum, sprint) => sum + computeSprintExpectedToDate(sprint, today), 0);
+}
+
+/**
+ * Calcula o financeiro de uma sprint: gasto esperado até hoje, status
+ * (dentro/acima/abaixo) e % de progresso da barra (gasto / planejado).
  */
 export function computeSprintFinancials(
   sprint: { id: string; start_date: string; end_date: string; planned_spend: number },
@@ -94,12 +123,8 @@ export function computeSprintFinancials(
 ): SprintFinancials {
   const start = parseDateUTC(sprint.start_date);
   const end = parseDateUTC(sprint.end_date);
-  const totalDays = daysBetweenInclusive(start, end);
 
-  const daysPassed =
-    today < start ? 0 : today > end ? totalDays : daysBetweenInclusive(start, today);
-
-  const expectedToDate = (sprint.planned_spend * daysPassed) / totalDays;
+  const expectedToDate = computeSprintExpectedToDate(sprint, today);
   const status = classifySpendStatus(actualSpend, expectedToDate, sprint.planned_spend);
   const progressPct = sprint.planned_spend > 0 ? (actualSpend / sprint.planned_spend) * 100 : 0;
   const temporalStatus: SprintTemporalStatus =
