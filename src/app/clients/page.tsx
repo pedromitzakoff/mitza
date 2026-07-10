@@ -3,39 +3,28 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
 import { currentMonthRange } from "@/lib/sprint-financials";
-import {
-  OPERATIONAL_ACTIVITY_STATUS_BADGE_CLASSES,
-  OPERATIONAL_ACTIVITY_STATUS_LABEL,
-} from "@/lib/operational-activity";
-import type { AccountHealth } from "@/lib/attention-alerts";
+import { computeMonthProjection } from "@/lib/client-metrics";
+import { formatCurrency, formatRelationshipDuration } from "@/lib/format";
+import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
+import type { ClientContractStatus } from "@/lib/supabase/database.types";
 import {
   buildOperationClientCard,
   type OperationClientRawData,
 } from "@/app/operation/operation-data";
 
-const HEALTH_LABEL: Record<AccountHealth, string> = {
-  saudavel: "Saudável",
-  atencao: "Atenção",
-  critico: "Crítico",
-};
-
-const HEALTH_BADGE_CLASSES: Record<AccountHealth, string> = {
-  saudavel: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
-  atencao: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  critico: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-};
-
 /**
- * Listagem simples de clientes — nome, gestor(es), status da conta e
- * atividade, com busca/filtros. Não duplica as métricas completas da Visão
- * Geral: é só um diretório pra achar e abrir um cliente rápido. Reaproveita
- * buildOperationClientCard (mesmas queries em lote já usadas em Sprints e na
- * Visão Geral) só pelo status já calculado, sem inventar regra nova.
+ * Listagem simples de clientes — nome, status contratual, tempo de
+ * relacionamento, projeção do mês, gestor principal, com busca/filtro. Não
+ * duplica as métricas completas da Visão Geral: é só um diretório pra achar
+ * e abrir um cliente rápido. Saúde/atividade operacional continuam
+ * calculadas (buildOperationClientCard) mas não aparecem aqui — só na
+ * Sprints e na Visão Geral, pra não misturar status contratual com
+ * operacional nesta tela.
  */
 export default async function ClientsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; manager?: string; health?: string }>;
+  searchParams: Promise<{ search?: string; manager?: string; status?: string }>;
 }) {
   const profile = await getCurrentProfile();
   if (!profile) return null;
@@ -44,7 +33,7 @@ export default async function ClientsPage({
   const params = await searchParams;
   const search = (params.search ?? "").trim().toLowerCase();
   const managerFilter = params.manager ?? "all";
-  const healthFilter = params.health ?? "todos";
+  const statusFilter = (params.status ?? "todos") as ClientContractStatus | "todos";
 
   const today = todayUTC();
   const todayStr = todayDateString();
@@ -60,7 +49,13 @@ export default async function ClientsPage({
     { data: dailySpend },
     { data: tasks },
   ] = await Promise.all([
-    supabase.from("clients").select("id, name, meta_ad_account_id").is("deleted_at", null).order("name"),
+    supabase
+      .from("clients")
+      .select(
+        "id, name, meta_ad_account_id, status, contract_start_date, primary_manager:profiles!clients_primary_manager_id_fkey(name)",
+      )
+      .is("deleted_at", null)
+      .order("name"),
     supabase.from("client_managers").select("client_id, user_id, profiles(id, name)"),
     supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
     supabase
@@ -154,6 +149,16 @@ export default async function ClientsPage({
 
   let cards = rawClients.map((client) => buildOperationClientCard(client, today));
 
+  // Dados estruturais (Etapa 27) — status contratual, início de contrato e
+  // gestor principal não fazem parte de buildOperationClientCard (que é só
+  // operacional), então ficam num map à parte, indexado pelo mesmo clientId.
+  const clientMetaById = new Map(
+    (clients ?? []).map((c) => [
+      c.id,
+      { status: c.status, contractStartDate: c.contract_start_date, primaryManagerName: c.primary_manager?.name ?? null },
+    ]),
+  );
+
   if (search) {
     cards = cards.filter((card) => card.clientName.toLowerCase().includes(search));
   }
@@ -162,8 +167,8 @@ export default async function ClientsPage({
     cards = cards.filter((card) => card.managerIds.includes(managerFilter));
   }
 
-  if (healthFilter !== "todos") {
-    cards = cards.filter((card) => card.accountHealth === healthFilter);
+  if (statusFilter !== "todos") {
+    cards = cards.filter((card) => clientMetaById.get(card.clientId)?.status === statusFilter);
   }
 
   return (
@@ -202,14 +207,14 @@ export default async function ClientsPage({
         </select>
 
         <select
-          name="health"
-          defaultValue={healthFilter}
+          name="status"
+          defaultValue={statusFilter}
           className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
         >
           <option value="todos">Status: todos</option>
-          <option value="saudavel">Saudável</option>
-          <option value="atencao">Atenção</option>
-          <option value="critico">Crítico</option>
+          <option value="ativo">Ativo</option>
+          <option value="pausado">Pausado</option>
+          <option value="encerrado">Encerrado</option>
         </select>
 
         <button
@@ -219,7 +224,7 @@ export default async function ClientsPage({
           Filtrar
         </button>
 
-        {(search || managerFilter !== "all" || healthFilter !== "todos") && (
+        {(search || managerFilter !== "all" || statusFilter !== "todos") && (
           <Link href="/clients" className="text-xs text-brand hover:underline">
             Limpar filtros
           </Link>
@@ -233,41 +238,49 @@ export default async function ClientsPage({
       <div className="mt-3 overflow-hidden rounded-lg border border-border">
         {cards.length > 0 ? (
           <ul>
-            {cards.map((card) => (
-              <li
-                key={card.clientId}
-                className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-card px-3 py-2 last:border-0"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Link
-                      href={`/clients/${card.clientId}`}
-                      className="font-semibold text-foreground hover:underline"
-                    >
-                      {card.clientName}
-                    </Link>
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${HEALTH_BADGE_CLASSES[card.accountHealth]}`}>
-                      {HEALTH_LABEL[card.accountHealth]}
-                    </span>
-                    <span
-                      className={`hidden rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline-block ${OPERATIONAL_ACTIVITY_STATUS_BADGE_CLASSES[card.activityStatus]}`}
-                    >
-                      {OPERATIONAL_ACTIVITY_STATUS_LABEL[card.activityStatus]}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {card.managerNames.length > 0 ? card.managerNames.join(", ") : "Sem gestor atribuído"}
-                  </p>
-                </div>
-
-                <Link
-                  href={`/clients/${card.clientId}`}
-                  className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            {cards.map((card) => {
+              const meta = clientMetaById.get(card.clientId);
+              const projection = computeMonthProjection(card.monthPlanned, card.monthActual, today);
+              return (
+                <li
+                  key={card.clientId}
+                  className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-card px-3 py-2 last:border-0"
                 >
-                  Abrir
-                </Link>
-              </li>
-            ))}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={`/clients/${card.clientId}`}
+                        className="font-semibold text-foreground hover:underline"
+                      >
+                        {card.clientName}
+                      </Link>
+                      {meta && (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CLIENT_STATUS_BADGE_CLASSES[meta.status]}`}
+                        >
+                          {CLIENT_STATUS_LABEL[meta.status]}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                      <span>{formatRelationshipDuration(meta?.contractStartDate ?? null, today)}</span>
+                      <span>
+                        Projeção:{" "}
+                        {card.monthPlanned > 0 ? formatCurrency(projection.projectedSpend) : "—"}
+                      </span>
+                      <span>{meta?.primaryManagerName ?? "Sem gestor"}</span>
+                    </p>
+                  </div>
+
+                  <Link
+                    href={`/clients/${card.clientId}`}
+                    className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                  >
+                    Abrir
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="bg-card p-4 text-sm text-muted-foreground">Nenhum cliente encontrado com esses filtros.</p>

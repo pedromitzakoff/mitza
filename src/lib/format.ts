@@ -100,6 +100,46 @@ export function formatMonthLabel(firstDayOfMonth: string): string {
   return `${capitalize(month)} de ${year}`;
 }
 
+/**
+ * Tempo de relacionamento com a agência a partir de `contract_start_date`
+ * (data civil, sem hora — por isso parseada como UTC, igual ao resto deste
+ * arquivo). Anos/meses calculados de calendário (não dias/30), pra "12/06"
+ * até "12/07" dar exatamente "1 mês", não uma aproximação. Nunca mostra
+ * "0 meses": abaixo de um mês vira contagem em dias.
+ */
+export function formatRelationshipDuration(contractStartDate: string | null, today: Date): string {
+  if (!contractStartDate) return "Início não configurado";
+
+  const start = new Date(`${contractStartDate}T00:00:00Z`);
+  if (start > today) return "Início não configurado";
+
+  let years = today.getUTCFullYear() - start.getUTCFullYear();
+  let months = today.getUTCMonth() - start.getUTCMonth();
+  let days = today.getUTCDate() - start.getUTCDate();
+
+  if (days < 0) {
+    months -= 1;
+    const lastDayOfPrevMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 0)).getUTCDate();
+    days += lastDayOfPrevMonth;
+  }
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+
+  if (years === 0 && months === 0) {
+    const totalDays = Math.floor((today.getTime() - start.getTime()) / 86_400_000);
+    return `Cliente há ${totalDays} dia${totalDays !== 1 ? "s" : ""}`;
+  }
+  if (years === 0) {
+    return `Cliente há ${months} ${months === 1 ? "mês" : "meses"}`;
+  }
+  if (months === 0) {
+    return `Cliente há ${years} ${years === 1 ? "ano" : "anos"}`;
+  }
+  return `Cliente há ${years} ${years === 1 ? "ano" : "anos"} e ${months} ${months === 1 ? "mês" : "meses"}`;
+}
+
 const agencyWeekdayFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: APP_TIMEZONE });
 const agencyDateFormatter = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",

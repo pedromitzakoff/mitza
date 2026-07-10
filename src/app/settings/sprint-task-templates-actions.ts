@@ -4,14 +4,22 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
+import { TASK_TYPE_DEFAULT_TITLE } from "@/app/clients/task-labels";
 import type { TaskType, Weekday } from "@/lib/supabase/database.types";
 
 const BASE_PATH = "/settings/sprint-task-templates";
 
+/** Título do template vem do tipo (TASK_TYPE_DEFAULT_TITLE) — só "outro"
+ * usa o texto livre digitado no form. Mantém a coluna `title` sempre
+ * preenchida sem depender de um campo redundante na interface. */
 function readTemplateFields(formData: FormData) {
+  const type = String(formData.get("type") ?? "outro") as TaskType;
+  const customTitle = String(formData.get("title") ?? "").trim();
+  const title = type === "outro" ? customTitle || "Outro" : TASK_TYPE_DEFAULT_TITLE[type];
+
   return {
-    title: String(formData.get("title") ?? "").trim(),
-    type: String(formData.get("type") ?? "outro") as TaskType,
+    title,
+    type,
     weekday: Number(formData.get("weekday")) as Weekday,
     defaultAssigneeId: String(formData.get("default_assignee_id") ?? "") || null,
     appliesToAll: formData.get("applies_to_all") === "on",

@@ -472,6 +472,23 @@ automático da sync, refinamentos de UX, etc.
     aparece num `<details>` aninhado ("Ver alertas"/"Ocultar alertas"),
     independente da expansão do cliente — tarefas continuam logo em
     seguida, sem a lista de alertas entre o resumo e elas
+30. ✅ Rodada consolidada de UX + planejamento financeiro (sem migration):
+    corrigido o bug real da Sidebar não chegar ao final da viewport — os
+    `calc()` de altura estavam sem espaço em volta do operador
+    (`calc(100dvh-3rem)` é CSS inválido, silenciosamente descartado; virou
+    `calc(100dvh_-_3rem)`); confirmado que o planejamento mensal já é a soma
+    de `sprints.planned_spend` (`buildOperationClientCard`), sem valor
+    concorrente — `monthly_planned_spend` (Etapa 27) continua só uma
+    referência; nova barra financeira compacta (azul MITZA) no cabeçalho de
+    cada cliente em `/sprints`; templates de sprint (Configurações) não têm
+    mais campo de título redundante — o tipo já gera o nome
+    (`TASK_TYPE_DEFAULT_TITLE`), exceto "Outro"; `/clients` ganhou tempo de
+    relacionamento (`contract_start_date`) e projeção do mês, perdeu os
+    badges de saúde/atividade operacional (status contratual continua);
+    Visão Geral: gráfico reduzido (220px → 180px), grupo "Carteira" virou
+    "Ritmo do mês" (Clientes totais/Dentro/Abaixo/Acima do esperado,
+    reaproveitando `monthStatus` e o filtro `ritmo` já existentes), e as
+    duas tabelas (Contas prioritárias + Clientes) viraram uma tabela única
 
 ## Deploy
 

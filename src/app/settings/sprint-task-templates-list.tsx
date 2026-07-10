@@ -1,5 +1,9 @@
+"use client";
+
+import { useState } from "react";
 import { TASK_TYPE_LABEL } from "@/app/clients/task-labels";
 import { WEEKDAY_LABEL } from "@/app/clients/weekday-labels";
+import type { TaskType } from "@/lib/supabase/database.types";
 import {
   createGlobalTemplateAction,
   deleteGlobalTemplateAction,
@@ -22,6 +26,12 @@ export interface GlobalTemplateItem {
 const fieldClasses =
   "rounded-md border border-zinc-300 px-2 py-1 text-xs text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50";
 
+/**
+ * Como são tarefas padronizadas, o tipo já define o nome exibido
+ * (TASK_TYPE_DEFAULT_TITLE, em task-labels.ts) — o campo de título só
+ * aparece pra "Outro", que não tem um nome óbvio derivável do tipo. Título
+ * final é montado no server (sprint-task-templates-actions.ts).
+ */
 function TemplateFields({
   template,
   managers,
@@ -31,23 +41,32 @@ function TemplateFields({
   managers: { id: string; name: string }[];
   clients: { id: string; name: string }[];
 }) {
+  const [type, setType] = useState<TaskType>(template?.type ?? "otimizacao");
+
   return (
     <div className="flex flex-1 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <input
-          name="title"
-          required
-          defaultValue={template?.title}
-          placeholder="Título"
-          className={`${fieldClasses} flex-1`}
-        />
-        <select name="type" defaultValue={template?.type ?? "otimizacao"} className={fieldClasses}>
+        <select
+          name="type"
+          value={type}
+          onChange={(event) => setType(event.target.value as TaskType)}
+          className={fieldClasses}
+        >
           {Object.entries(TASK_TYPE_LABEL).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
         </select>
+        {type === "outro" && (
+          <input
+            name="title"
+            required
+            defaultValue={template?.title}
+            placeholder="Título"
+            className={`${fieldClasses} flex-1`}
+          />
+        )}
         <select name="weekday" defaultValue={template?.weekday ?? 1} className={fieldClasses}>
           {Object.entries(WEEKDAY_LABEL).map(([value, label]) => (
             <option key={value} value={value}>

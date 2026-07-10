@@ -22,9 +22,14 @@ export const SIDEBAR_COLLAPSED_WIDTH_CLASS = "md:w-16";
  * `dvh` (não `vh`) porque `vh` inclui a área atrás de barras de
  * navegador/toolbars dinâmicas, deixando uma folga visível abaixo da
  * sidebar em algumas viewports. */
-export const SIDEBAR_HEIGHT_CLASS = `md:h-[calc(100dvh-${TOP_BAR_OFFSET_REM})]`;
+// CSS exige espaço em volta do operador do calc() ("100dvh - 3rem"); sem
+// ele o navegador descarta a expressão inteira como inválida — era esse o
+// bug real da Sidebar não chegar até o final (a troca vh->dvh da Etapa 25
+// nunca teve efeito, porque o calc() já estava malformado antes e depois).
+// Em valor arbitrário do Tailwind, "_" representa o espaço.
+export const SIDEBAR_HEIGHT_CLASS = `md:h-[calc(100dvh_-_${TOP_BAR_OFFSET_REM})]`;
 
 /** Altura mínima do corpo (Sidebar + MainArea) — garante que a linha nunca
  * fique mais baixa que a viewport real em páginas com conteúdo curto
  * (evita uma faixa de fundo diferente aparecendo abaixo da sidebar). */
-export const BODY_MIN_HEIGHT_CLASS = `md:min-h-[calc(100dvh-${TOP_BAR_OFFSET_REM})]`;
+export const BODY_MIN_HEIGHT_CLASS = `md:min-h-[calc(100dvh_-_${TOP_BAR_OFFSET_REM})]`;

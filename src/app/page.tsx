@@ -3,48 +3,45 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
 import { currentMonthRange, monthRangeFromParam } from "@/lib/sprint-financials";
-import {
-  formatCurrency,
-  formatDateRange,
-  formatDateTime,
-  formatMonthLabel,
-  formatShortDate,
-} from "@/lib/format";
+import { formatCurrency, formatMonthLabel } from "@/lib/format";
 import {
   buildOperationClientCard,
   type OperationClientRawData,
   type SprintFilterBucket,
 } from "@/app/operation/operation-data";
 import type { AccountHealth } from "@/lib/attention-alerts";
-import {
-  OPERATIONAL_ACTIVITY_STATUS_BADGE_CLASSES,
-  OPERATIONAL_ACTIVITY_STATUS_LABEL,
-  type OperationalActivityStatus,
-} from "@/lib/operational-activity";
-import { SPEND_STATUS_BADGE_CLASSES, SPEND_STATUS_LABEL, type SpendStatus } from "@/lib/spend-status";
+import type { OperationalActivityStatus } from "@/lib/operational-activity";
+import { type SpendStatus } from "@/lib/spend-status";
 import { computeCumulativeSpendSeries } from "@/lib/spend-chart-data";
+import { computeMonthProjectionForRange } from "@/lib/client-metrics";
 import { SpendChart } from "@/app/clients/spend-chart";
 import { buildAgencyAttentionAlerts } from "@/lib/agency-alerts";
-import { sortByPriority, mainAttentionReason } from "@/lib/priority-accounts";
 import {
   computeFinancialSummary,
   computeManagerSummary,
-  computePortfolioCounts,
+  computeSpendRhythmCounts,
   computeSprintOpsSummary,
+  sortCardsBySpendRhythm,
   buildRitmoSummaryText,
 } from "@/lib/agency-metrics";
 import { AgencyFilters } from "./agency-filters";
 
-const HEALTH_LABEL: Record<AccountHealth, string> = {
-  saudavel: "Saudável",
-  atencao: "Atenção",
-  critico: "Crítico",
+/** Rótulos da "situação" financeira do mês nesta tabela — mesma
+ * classificação de sempre (card.monthStatus, ±10% central), só um texto
+ * mais descritivo nesse contexto específico (SPEND_STATUS_LABEL/"Bateu
+ * meta" continua igual em todo o resto do sistema). */
+const SITUATION_LABEL: Record<SpendStatus, string> = {
+  dentro: "Dentro do esperado",
+  acima: "Acima do esperado",
+  abaixo: "Abaixo do esperado",
+  sem_meta: "Meta não configurada",
 };
 
-const HEALTH_BADGE_CLASSES: Record<AccountHealth, string> = {
-  saudavel: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
-  atencao: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  critico: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+const SITUATION_BADGE_CLASSES: Record<SpendStatus, string> = {
+  dentro: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
+  acima: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+  abaixo: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  sem_meta: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
 };
 
 type ManagerFilter = "all" | "me" | string;
@@ -154,7 +151,11 @@ export default async function Home({
     { data: dailySpend },
     { data: tasks },
   ] = await Promise.all([
-    supabase.from("clients").select("id, name, meta_ad_account_id").is("deleted_at", null).order("name"),
+    supabase
+      .from("clients")
+      .select("id, name, meta_ad_account_id, primary_manager:profiles!clients_primary_manager_id_fkey(name)")
+      .is("deleted_at", null)
+      .order("name"),
     supabase.from("client_managers").select("client_id, user_id, profiles(id, name)"),
     supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
     supabase
@@ -226,6 +227,9 @@ export default async function Home({
 
   const clientActivityById = new Map((clientActivity ?? []).map((r) => [r.client_id, r.last_activity_at]));
   const sprintActivityById = new Map((sprintActivity ?? []).map((r) => [r.sprint_id, r.last_activity_at]));
+  const primaryManagerNameByClient = new Map(
+    (clients ?? []).map((c) => [c.id, c.primary_manager?.name ?? null]),
+  );
 
   const rawClients: OperationClientRawData[] = (clients ?? []).map((client) => {
     const clientSprints = sprintsByClient.get(client.id) ?? [];
@@ -287,14 +291,14 @@ export default async function Home({
     cards = cards.filter((card) => card.managerIds.includes(managerFilter));
   }
 
-  const sortedCards = sort === "nome" ? [...cards].sort((a, b) => a.clientName.localeCompare(b.clientName)) : sortByPriority(cards);
+  const sortedCards =
+    sort === "nome" ? [...cards].sort((a, b) => a.clientName.localeCompare(b.clientName)) : sortCardsBySpendRhythm(cards);
 
-  const portfolio = computePortfolioCounts(cards);
+  const spendRhythm = computeSpendRhythmCounts(cards);
   const financial = computeFinancialSummary(cards, monthRange, today);
   const sprintOps = computeSprintOpsSummary(cards, todayStr);
   const ritmoText = buildRitmoSummaryText(financial, isFutureMonth);
   const agencyAlerts = buildAgencyAttentionAlerts(cards);
-  const priorityAccounts = sortByPriority(cards).slice(0, 8);
 
   const managersForSummary = isAdmin ? gestores ?? [] : [{ id: profile.id, name: profile.name }];
   const managerSummary = computeManagerSummary(managersForSummary, filteredBase, todayStr);
@@ -409,15 +413,22 @@ export default async function Home({
       {/* Resumo consolidado: no máximo 4 grupos, métricas compactas dentro
           de cada um em vez de uma grade de cards soltos. */}
       <div className="mt-5 flex flex-col gap-3">
-        <MetricGroup title="Carteira">
-          <StatItem label="Ativos" value={String(portfolio.ativos)} href={drillDownUrl({ activity: "ativo" })} />
-          <StatItem label="Saudáveis" value={String(portfolio.saudaveis)} href={drillDownUrl({ health: "saudavel" })} />
-          <StatItem label="Em atenção" value={String(portfolio.atencao)} href={drillDownUrl({ health: "atencao" })} />
-          <StatItem label="Críticos" value={String(portfolio.criticos)} href={drillDownUrl({ health: "critico" })} />
+        <MetricGroup title="Ritmo do mês">
+          <StatItem label="Clientes totais" value={String(spendRhythm.total)} />
           <StatItem
-            label="Inativos"
-            value={String(portfolio.inativos)}
-            href={drillDownUrl({ activity: "inativo" })}
+            label="Dentro do esperado"
+            value={String(spendRhythm.dentro)}
+            href={drillDownUrl({ ritmo: "dentro" })}
+          />
+          <StatItem
+            label="Abaixo do esperado"
+            value={String(spendRhythm.abaixo)}
+            href={drillDownUrl({ ritmo: "abaixo" })}
+          />
+          <StatItem
+            label="Acima do esperado"
+            value={String(spendRhythm.acima)}
+            href={drillDownUrl({ ritmo: "acima" })}
           />
         </MetricGroup>
 
@@ -556,64 +567,9 @@ export default async function Home({
         )}
       </div>
 
-      {/* Contas prioritárias */}
-      <div className="mt-5 rounded-lg border border-border bg-card p-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contas prioritárias</h2>
-        {priorityAccounts.length > 0 ? (
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                  <th className="py-1.5 px-3">Cliente</th>
-                  <th className="py-1.5 px-3">Gestor</th>
-                  <th className="py-1.5 px-3">Status</th>
-                  <th className="py-1.5 px-3">Motivo principal</th>
-                  <th className="py-1.5 px-3">Última atividade</th>
-                  <th className="py-1.5 px-3">Atrasadas</th>
-                  <th className="py-1.5 px-3">Ritmo</th>
-                  <th className="py-1.5 px-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {priorityAccounts.map((card) => (
-                  <tr key={card.clientId} className="border-b border-border/60 last:border-0">
-                    <td className="py-1.5 px-3 font-medium text-foreground">{card.clientName}</td>
-                    <td className="py-1.5 px-3 text-muted-foreground">
-                      {card.managerNames.length > 0 ? card.managerNames.join(", ") : "—"}
-                    </td>
-                    <td className="py-1.5 px-3">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${HEALTH_BADGE_CLASSES[card.accountHealth]}`}
-                      >
-                        {HEALTH_LABEL[card.accountHealth]}
-                      </span>
-                    </td>
-                    <td className="py-1.5 px-3 text-muted-foreground">{mainAttentionReason(card)}</td>
-                    <td className="py-1.5 px-3 text-muted-foreground">{card.activityLabel}</td>
-                    <td className="py-1.5 px-3 text-muted-foreground">{card.taskCounts.overdue}</td>
-                    <td className="py-1.5 px-3">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[card.monthStatus]}`}
-                      >
-                        {SPEND_STATUS_LABEL[card.monthStatus]}
-                      </span>
-                    </td>
-                    <td className="py-1.5 px-3 text-right">
-                      <Link href={`/clients/${card.clientId}`} className="text-xs font-medium text-brand hover:underline">
-                        Abrir cliente
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="mt-2 text-sm text-muted-foreground">Nenhuma conta precisa de intervenção agora.</p>
-        )}
-      </div>
-
-      {/* Tabela principal de clientes */}
+      {/* Tabela única de clientes — consolida o que antes eram duas tabelas
+          (Contas prioritárias + Clientes), só com o essencial pra entender
+          rápido o estágio do mês de cada conta. */}
       <div className="mt-5">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Clientes</h2>
@@ -623,91 +579,67 @@ export default async function Home({
               href={buildUrl({ sort: sort === "nome" ? "prioridade" : "nome" })}
               className="font-medium text-brand hover:underline"
             >
-              Ordenar por {sort === "nome" ? "prioridade" : "nome"}
+              Ordenar por {sort === "nome" ? "situação" : "nome"}
             </Link>
           </div>
         </div>
 
         {sortedCards.length > 0 ? (
           <div className="mt-2 overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[1100px] text-sm">
+            <table className="w-full min-w-[900px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-muted-foreground dark:bg-zinc-900">
                   <th className="py-1.5 px-3">Cliente</th>
                   <th className="py-1.5 px-3">Gestor</th>
-                  <th className="py-1.5 px-3">Sprint atual</th>
                   <th className="py-1.5 px-3">Investimento</th>
-                  <th className="py-1.5 px-3">Projeção</th>
-                  <th className="py-1.5 px-3">Execução</th>
-                  <th className="py-1.5 px-3">Última otimização</th>
+                  <th className="py-1.5 px-3">Projeção do mês</th>
+                  <th className="py-1.5 px-3">Tarefas</th>
                   <th className="py-1.5 px-3">Última atividade</th>
-                  <th className="py-1.5 px-3">Atividade</th>
-                  <th className="py-1.5 px-3">Última sync Meta</th>
-                  <th className="py-1.5 px-3">Status geral</th>
+                  <th className="py-1.5 px-3">Situação</th>
                   <th className="py-1.5 px-3" />
                 </tr>
               </thead>
               <tbody>
                 {sortedCards.map((card) => {
-                  const pct = card.hasMonthGoal ? Math.round((card.monthActual / card.monthPlanned) * 100) : null;
+                  const projection = computeMonthProjectionForRange(card.monthPlanned, card.monthActual, monthRange, today);
                   return (
                     <tr key={card.clientId} className="border-b border-border/60 last:border-0">
-                      <td className="py-1.5 px-3 font-medium text-foreground">{card.clientName}</td>
+                      <td className="py-1.5 px-3 font-semibold text-foreground">{card.clientName}</td>
                       <td className="py-1.5 px-3 text-muted-foreground">
-                        {card.managerNames.length > 0 ? card.managerNames.join(", ") : "—"}
-                      </td>
-                      <td className="py-1.5 px-3 text-muted-foreground">
-                        {card.sprint ? (
-                          <>
-                            Sprint {card.sprintNumber} · {formatDateRange(card.sprint.startDate, card.sprint.endDate)}
-                          </>
-                        ) : (
-                          "Sem sprint atual"
-                        )}
+                        {primaryManagerNameByClient.get(card.clientId) ?? "Sem gestor"}
                       </td>
                       <td className="py-1.5 px-3 tabular-nums text-muted-foreground">
                         {formatCurrency(card.monthActual)} / {formatCurrency(card.monthPlanned)}
-                        {pct !== null && <span className="ml-1">({pct}%)</span>}
                       </td>
-                      <td className="py-1.5 px-3">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[card.monthStatus]}`}
-                        >
-                          {SPEND_STATUS_LABEL[card.monthStatus]}
-                        </span>
+                      <td className="py-1.5 px-3 tabular-nums text-muted-foreground">
+                        {card.hasMonthGoal ? (
+                          <>
+                            {formatCurrency(projection.projectedSpend)}
+                            {projection.projectedPct !== null && ` · ${Math.round(projection.projectedPct)}%`}
+                          </>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="py-1.5 px-3 text-muted-foreground">
                         {card.taskCounts.done}/{card.taskCounts.total}
                         {card.taskCounts.overdue > 0 && (
                           <span className="ml-1 font-medium text-red-600 dark:text-red-400">
-                            ({card.taskCounts.overdue} atrasada{card.taskCounts.overdue !== 1 ? "s" : ""})
+                            · {card.taskCounts.overdue} atrasada{card.taskCounts.overdue !== 1 ? "s" : ""}
                           </span>
                         )}
-                      </td>
-                      <td className="py-1.5 px-3 text-muted-foreground">
-                        {card.lastOptimizationAt ? formatShortDate(card.lastOptimizationAt) : "—"}
                       </td>
                       <td className="py-1.5 px-3 text-muted-foreground">{card.activityLabel}</td>
                       <td className="py-1.5 px-3">
                         <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${OPERATIONAL_ACTIVITY_STATUS_BADGE_CLASSES[card.activityStatus]}`}
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SITUATION_BADGE_CLASSES[card.monthStatus]}`}
                         >
-                          {OPERATIONAL_ACTIVITY_STATUS_LABEL[card.activityStatus]}
-                        </span>
-                      </td>
-                      <td className="py-1.5 px-3 text-muted-foreground">
-                        {card.lastSyncedAt ? formatDateTime(card.lastSyncedAt) : "Nunca"}
-                      </td>
-                      <td className="py-1.5 px-3">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${HEALTH_BADGE_CLASSES[card.accountHealth]}`}
-                        >
-                          {HEALTH_LABEL[card.accountHealth]}
+                          {SITUATION_LABEL[card.monthStatus]}
                         </span>
                       </td>
                       <td className="py-1.5 px-3 text-right">
                         <Link href={`/clients/${card.clientId}`} className="text-xs font-medium text-brand hover:underline">
-                          Abrir cliente
+                          Abrir
                         </Link>
                       </td>
                     </tr>

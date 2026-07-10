@@ -7,11 +7,11 @@ import { formatCurrency, formatShortDate } from "@/lib/format";
 const WIDTH = 720;
 
 /** "compact" é o padrão (card de sprint, dentro do cliente); "large" é
- * usado no gráfico consolidado da agência (Visão Geral), que precisa de
- * mais altura por concentrar todos os clientes numa linha só. */
+ * usado no gráfico consolidado da agência (Visão Geral) — reduzido pra
+ * servir só de contexto visual rápido, não protagonista do dashboard. */
 const SIZES = {
   compact: { height: 90, padding: { top: 8, right: 16, bottom: 16, left: 56 } },
-  large: { height: 220, padding: { top: 14, right: 16, bottom: 24, left: 64 } },
+  large: { height: 180, padding: { top: 10, right: 16, bottom: 20, left: 60 } },
 } as const;
 
 export function SpendChart({

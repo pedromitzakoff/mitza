@@ -7,6 +7,16 @@ export const TASK_TYPE_LABEL: Record<TaskType, string> = {
   outro: "Outro",
 };
 
+/** Título gerado automaticamente pro template de sprint a partir do tipo —
+ * evita o campo redundante de "título" na tela de templates (são tarefas
+ * padronizadas, o tipo já diz o nome). Só "outro" mantém título livre,
+ * escolhido por quem cria o template. */
+export const TASK_TYPE_DEFAULT_TITLE: Record<Exclude<TaskType, "outro">, string> = {
+  otimizacao: "Otimização",
+  verificacao_saldo: "Checar Saldo",
+  report: "Report",
+};
+
 export const TASK_RECURRENCE_LABEL: Record<TaskRecurrence, string> = {
   nenhuma: "Não repete",
   diaria: "Diária",
