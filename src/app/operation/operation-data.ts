@@ -21,7 +21,6 @@ import type { TaskListItem } from "@/app/clients/task-row";
 
 const OPTIMIZATION_LOOKBACK_DAYS = 14;
 
-export type OperationMode = "hoje" | "sprint" | "todos";
 export type SprintFilterBucket = "atrasadas" | "sem_execucao" | "em_dia" | "sem_sprint";
 
 export type OperationTaskItem = TaskListItem & { sprint_id: string | null; notes: string | null };
@@ -82,6 +81,11 @@ export interface OperationClientCard {
   /** Mesma regra de "sprint sem execução" de sempre — null se a sprint
    * atual não está sem execução (ou não há sprint atual). */
   sprintExecutionInfo: SprintExecutionInfo | null;
+  /** Todas as sprints do mês selecionado (não só a atual), na ordem do
+   * calendário — usado pelo resumo expansível da visão Mensal da tela
+   * Sprints. Reaproveita computeSprintFinancials pra cada uma, nunca
+   * duplica a conta de planejado/realizado/esperado. */
+  monthSprints: SprintFinancials[];
 }
 
 /** Monta o card operacional de um cliente a partir dos dados já buscados
@@ -114,11 +118,21 @@ export function buildOperationClientCard(
   }
 
   const monthTasks = client.tasks.filter((t) => t.due_date >= firstDay && t.due_date <= lastDay);
-  const monthSprints = client.sprints.filter((s) => s.start_date >= firstDay && s.start_date <= lastDay);
-  const monthPlanned = monthSprints.reduce((sum, s) => sum + s.planned_spend, 0);
-  const monthActual = sumEffectiveSpend(monthSprints, client.dailySpend);
-  const monthExpectedToDate = sumExpectedToDate(monthSprints, today);
-  const monthStatus = classifySpendStatus(monthActual, monthPlanned, monthPlanned);
+  const monthSprintRows = client.sprints
+    .filter((s) => s.start_date >= firstDay && s.start_date <= lastDay)
+    .sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const monthPlanned = monthSprintRows.reduce((sum, s) => sum + s.planned_spend, 0);
+  const monthActual = sumEffectiveSpend(monthSprintRows, client.dailySpend);
+  const monthExpectedToDate = sumExpectedToDate(monthSprintRows, today);
+  // Ritmo do mês: sempre realizado x esperado até hoje (nunca x 100% do
+  // planejado antes do mês acabar — clientes no início do mês não podem
+  // aparecer "abaixo do ritmo" só por ainda não terem gastado o mês
+  // inteiro). `monthPlanned` como 3º argumento só detecta "sem meta".
+  const monthStatus = classifySpendStatus(monthActual, monthExpectedToDate, monthPlanned);
+  const monthSprints: SprintFinancials[] = monthSprintRows.map((row) => {
+    const actualSpend = computeSprintEffectiveSpend(row, client.dailySpend);
+    return computeSprintFinancials(row, actualSpend, today, row.spend_source);
+  });
 
   const taskCounts = { total: 0, done: 0, pending: 0, overdue: 0 };
   const overdueTasks: { id: string; due_date: string }[] = [];
@@ -223,14 +237,6 @@ export function buildOperationClientCard(
     lastSyncedAt: client.lastSyncedAt,
     overdueTasks,
     sprintExecutionInfo,
+    monthSprints,
   };
-}
-
-export function matchesOperationMode(card: OperationClientCard, mode: OperationMode): boolean {
-  if (mode !== "hoje") return true;
-  return (
-    card.todayAndOverdueTasks.length > 0 ||
-    card.activityStatus !== "ativo" ||
-    card.sprintFilterBucket === "sem_execucao"
-  );
 }

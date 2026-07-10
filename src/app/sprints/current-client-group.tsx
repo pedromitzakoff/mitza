@@ -6,7 +6,7 @@ import { TaskRow } from "@/app/clients/task-row";
 import { orderTasks } from "@/app/clients/task-list";
 import type { AttentionAlert } from "@/lib/attention-alerts";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
-import type { OperationClientCard as OperationClientCardData, OperationMode } from "@/app/operation/operation-data";
+import type { OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
 import { SprintFinancialBar } from "@/app/clients/sprint-financial-bar";
 
 /** Cor discreta (texto, não badge) pro rótulo de última atividade — só
@@ -20,10 +20,11 @@ const ACTIVITY_TEXT_CLASSES: Record<OperationalActivityStatus, string> = {
 /** Linha compacta de alertas — 1 ícone + o alerta mais prioritário (os
  * alertas já vêm ordenados por severidade de buildAttentionAlerts, então
  * `alerts[0]` já é o mais prioritário sem recalcular nada) + quantos
- * restam. Vermelho só quando esse alerta é crítico (seção 9: não competir
- * com várias cores). Reaproveitada no resumo (sempre visível, sem clique)
- * e no toggle "Ver alertas" dentro do corpo expandido. */
-function AlertsSummaryLine({ topAlert, remaining }: { topAlert: AttentionAlert; remaining: number }) {
+ * restam. Vermelho só quando esse alerta é crítico. Reaproveitada no resumo
+ * (sempre visível, sem clique) e no toggle "Ver alertas" dentro do corpo
+ * expandido. Exportada pra `monthly-client-group.tsx` reaproveitar, nunca
+ * duplicar. */
+export function AlertsSummaryLine({ topAlert, remaining }: { topAlert: AttentionAlert; remaining: number }) {
   const isCritical = topAlert.severity === "critico";
   return (
     <>
@@ -38,30 +39,25 @@ function AlertsSummaryLine({ topAlert, remaining }: { topAlert: AttentionAlert; 
 }
 
 /**
- * Grupo colapsável por cliente na tela Sprints — cabeçalho compacto
- * (identidade, gestor principal, sprint, financeiro, progresso, última
- * atividade, resumo de alertas), sem badge de saúde ao lado do nome: a
- * prioridade já aparece na ordenação (sortSprintClientsByUrgency). Inicia
- * sempre recolhido — o foco é deixar o usuário escanear a carteira e
- * escolher o que expandir, não abrir tudo por padrão. Os alertas ficam
- * resumidos numa linha (ícone + alerta mais prioritário + "+N"); a lista
- * completa só aparece se o usuário clicar "Ver alertas", num <details>
- * aninhado independente da expansão do cliente. Reaproveita
- * buildOperationClientCard — nenhuma query nova por cliente.
+ * Grupo colapsável por cliente na visão "Sprint atual" da tela Sprints —
+ * cabeçalho compacto (identidade, gestor principal, sprint, financeiro da
+ * sprint, progresso, última atividade, resumo de alertas), sem badge de
+ * saúde ao lado do nome: a prioridade já aparece na ordenação
+ * (sortSprintClientsByUrgency). Inicia sempre recolhido. Todos os valores
+ * financeiros aqui são exclusivamente da sprint atual (`card.sprint`) —
+ * nunca do mês (isso é responsabilidade de `monthly-client-group.tsx`).
+ * Reaproveita buildOperationClientCard — nenhuma query nova por cliente.
  */
-export function SprintClientGroup({
+export function SprintCurrentClientGroup({
   card,
-  mode,
   returnTo,
   primaryManagerName,
 }: {
   card: OperationClientCardData;
-  mode: OperationMode;
   returnTo: string;
   primaryManagerName: string | null;
 }) {
-  const tasksToShow = orderTasks(mode === "hoje" ? card.todayAndOverdueTasks : mode === "sprint" ? card.sprintTasks : []);
-
+  const tasksToShow = orderTasks(card.sprintTasks);
   const sprintTasksDone = card.sprintTasks.filter((t) => effectiveTaskStatus(t) === "feito").length;
   const sprintTasksOverdue = card.sprintTasks.filter((t) => effectiveTaskStatus(t) === "atrasado").length;
 
@@ -96,7 +92,7 @@ export function SprintClientGroup({
             {card.sprint && (
               <span className="tabular-nums">
                 {formatCurrency(card.sprint.actualSpend)} / {formatCurrency(card.sprint.plannedSpend)}
-                {card.sprint.plannedSpend > 0 && ` · ${Math.round(card.sprint.progressPct)}%`}
+                {card.sprint.plannedSpend > 0 && ` · ${Math.round(card.sprint.progressPct)}% realizado da sprint`}
               </span>
             )}
             {card.sprint && (
@@ -156,24 +152,21 @@ export function SprintClientGroup({
           </details>
         )}
 
-        {mode !== "todos" &&
-          (tasksToShow.length > 0 ? (
-            <ul className="overflow-hidden rounded-lg border border-border">
-              {tasksToShow.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  clientId={card.clientId}
-                  detailsHref={`${returnTo}&task=${task.id}`}
-                  hideAssigneeIfName={primaryManagerName ?? undefined}
-                />
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              {mode === "hoje" ? "Nada pendente pra hoje." : "Sem tarefas na sprint atual."}
-            </p>
-          ))}
+        {tasksToShow.length > 0 ? (
+          <ul className="overflow-hidden rounded-lg border border-border">
+            {tasksToShow.map((task) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                clientId={card.clientId}
+                detailsHref={`${returnTo}&task=${task.id}`}
+                hideAssigneeIfName={primaryManagerName ?? undefined}
+              />
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-muted-foreground">Sem tarefas na sprint atual.</p>
+        )}
 
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
           <Link

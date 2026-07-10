@@ -1,29 +1,25 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Filter, Search, X } from "lucide-react";
+import { Filter } from "lucide-react";
+import { ClientCombobox, type ClientComboboxOption } from "./client-combobox";
 
-export interface AgencyClientOption {
-  id: string;
-  name: string;
-}
+export type AgencyClientOption = ClientComboboxOption;
 
 /**
  * Barra de filtros da Visão Geral — sempre visíveis: carteira (gestor),
- * cliente específico (combobox pesquisável) e o botão "Filtros" (status da
- * conta/atividade/ritmo/tarefas, escondidos num popover até o usuário
- * pedir). Nada de botão "Filtrar": toda mudança navega na hora. Roda
- * inteiramente no client porque precisa reagir a onChange/teclado, mas a
- * URL final é montada com a mesma lista de parâmetros que a página já
- * preservava no buildUrl do servidor — só a origem da navegação mudou
- * (clique/tecla em vez de submit).
+ * cliente específico (combobox pesquisável, `client-combobox.tsx`) e o
+ * botão "Filtros" (status da conta/atividade/ritmo/tarefas, escondidos num
+ * popover até o usuário pedir). Nada de botão "Filtrar": toda mudança
+ * navega na hora. Roda inteiramente no client porque precisa reagir a
+ * onChange/teclado, mas a URL final é montada com a mesma lista de
+ * parâmetros que a página já preservava no buildUrl do servidor — só a
+ * origem da navegação mudou (clique/tecla em vez de submit).
  *
  * "Carteira" (gestor) e "Cliente" são dois filtros independentes — carteira
  * decide de quem são os clientes mostrados, cliente escolhe um específico
- * dentro do que já está visível. Por isso os dois nunca reaproveitam o
- * mesmo texto de opção sem contexto (cada um tem seu rótulo antes do
- * controle).
+ * dentro do que já está visível.
  */
 export function AgencyFilters({
   defaultManager,
@@ -50,10 +46,6 @@ export function AgencyFilters({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [clientOpen, setClientOpen] = useState(false);
-  const [clientQuery, setClientQuery] = useState("");
-  const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const clientInputRef = useRef<HTMLInputElement>(null);
 
   function buildUrl(overrides: Record<string, string>) {
     const next = new URLSearchParams();
@@ -77,52 +69,6 @@ export function AgencyFilters({
     return `/?${next.toString()}`;
   }
 
-  const selectedClient = selectedClientId ? clients.find((c) => c.id === selectedClientId) ?? null : null;
-
-  const filteredClients = useMemo(() => {
-    const query = clientQuery.trim().toLowerCase();
-    if (!query) return clients;
-    return clients.filter((c) => c.name.toLowerCase().includes(query));
-  }, [clients, clientQuery]);
-
-  function openClientCombobox() {
-    setClientOpen(true);
-    setClientQuery("");
-    setHighlightedIndex(0);
-    requestAnimationFrame(() => clientInputRef.current?.focus());
-  }
-
-  function handleClientQueryChange(value: string) {
-    setClientQuery(value);
-    setHighlightedIndex(0);
-  }
-
-  function selectClient(clientId: string) {
-    router.push(buildUrl({ client: clientId }));
-    setClientOpen(false);
-  }
-
-  function handleClientKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setHighlightedIndex((i) => Math.min(i + 1, filteredClients.length));
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setHighlightedIndex((i) => Math.max(i - 1, 0));
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      if (highlightedIndex === 0) {
-        selectClient("");
-      } else {
-        const client = filteredClients[highlightedIndex - 1];
-        if (client) selectClient(client.id);
-      }
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      setClientOpen(false);
-    }
-  }
-
   const secondaryCount = [health !== "todos", activity !== "todos", ritmo !== "todos", tasks !== "todas"].filter(
     Boolean,
   ).length;
@@ -140,17 +86,14 @@ export function AgencyFilters({
     next.set("manager", defaultManager);
     router.push(`/?${next.toString()}`);
     setOpen(false);
-    setClientOpen(false);
   }
 
   const selectClasses = "w-full sm:w-auto rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground";
-  const filterGroupClasses = "flex items-center gap-1.5";
-  const filterLabelClasses = "text-xs text-muted-foreground";
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
-      <div className={filterGroupClasses}>
-        <span className={filterLabelClasses}>Carteira</span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-muted-foreground">Carteira</span>
         <select
           value={manager}
           onChange={(e) => router.push(buildUrl({ manager: e.target.value }))}
@@ -167,84 +110,11 @@ export function AgencyFilters({
         </select>
       </div>
 
-      <div className={`${filterGroupClasses} relative w-full sm:w-auto`}>
-        <span className={filterLabelClasses}>Cliente</span>
-        <button
-          type="button"
-          onClick={() => (clientOpen ? setClientOpen(false) : openClientCombobox())}
-          className="flex w-full min-w-0 flex-1 items-center gap-1.5 rounded-md border border-border bg-transparent px-2 py-1 text-left text-sm text-foreground sm:w-48"
-          aria-haspopup="listbox"
-          aria-expanded={clientOpen}
-        >
-          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="truncate">{selectedClient ? selectedClient.name : "Todos os clientes"}</span>
-        </button>
-        {selectedClientId && !clientOpen && (
-          <button
-            type="button"
-            onClick={() => router.push(buildUrl({ client: "" }))}
-            aria-label="Limpar cliente selecionado"
-            className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-          >
-            <X className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-        )}
-
-        {clientOpen && (
-          <>
-            <button
-              type="button"
-              aria-label="Fechar seleção de cliente"
-              onClick={() => setClientOpen(false)}
-              className="fixed inset-0 z-40"
-            />
-            <div className="absolute left-0 z-50 mt-1 w-72 rounded-lg border border-border bg-card p-2 shadow-lg" style={{ top: "100%" }}>
-              <input
-                ref={clientInputRef}
-                type="text"
-                role="combobox"
-                aria-expanded={clientOpen}
-                aria-controls="agency-client-listbox"
-                aria-autocomplete="list"
-                value={clientQuery}
-                onChange={(e) => handleClientQueryChange(e.target.value)}
-                onKeyDown={handleClientKeyDown}
-                placeholder="Buscar cliente..."
-                className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:border-zinc-500"
-              />
-              <ul id="agency-client-listbox" role="listbox" className="mt-1.5 max-h-56 overflow-y-auto">
-                <li
-                  role="option"
-                  aria-selected={!selectedClientId}
-                  onClick={() => selectClient("")}
-                  className={`cursor-pointer rounded-md px-2 py-1 text-sm ${
-                    highlightedIndex === 0 ? "bg-zinc-100 dark:bg-zinc-900" : ""
-                  } ${!selectedClientId ? "font-medium text-brand" : "text-foreground"}`}
-                >
-                  Todos os clientes
-                </li>
-                {filteredClients.length > 0 ? (
-                  filteredClients.map((client, index) => (
-                    <li
-                      key={client.id}
-                      role="option"
-                      aria-selected={client.id === selectedClientId}
-                      onClick={() => selectClient(client.id)}
-                      className={`cursor-pointer truncate rounded-md px-2 py-1 text-sm ${
-                        highlightedIndex === index + 1 ? "bg-zinc-100 dark:bg-zinc-900" : ""
-                      } ${client.id === selectedClientId ? "font-medium text-brand" : "text-foreground"}`}
-                    >
-                      {client.name}
-                    </li>
-                  ))
-                ) : (
-                  <li className="px-2 py-1.5 text-sm text-muted-foreground">Nenhum cliente encontrado.</li>
-                )}
-              </ul>
-            </div>
-          </>
-        )}
-      </div>
+      <ClientCombobox
+        clients={clients}
+        selectedClientId={selectedClientId}
+        onSelect={(clientId) => router.push(buildUrl({ client: clientId }))}
+      />
 
       <div className="relative">
         <button

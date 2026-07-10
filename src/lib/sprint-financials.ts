@@ -157,6 +157,15 @@ export function currentMonthRange(today: Date = todayUTC()): { firstDay: string;
   };
 }
 
+/** Desloca um `{firstDay}` de mês por `deltaMonths` e devolve o parâmetro
+ * `?month=YYYY-MM` correspondente — usado pela navegação de mês (Visão
+ * Geral, tela Sprints no modo Mensal), pra nunca duplicar essa conta. */
+export function shiftMonthParam(monthRange: { firstDay: string }, deltaMonths: number): string {
+  const d = new Date(`${monthRange.firstDay}T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() + deltaMonths);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 /** Lê o mês selecionado (`?month=YYYY-MM`) da URL, ou usa o mês corrente se
  * ausente/inválido — mesmo parsing reutilizado por Operação e pela Visão
  * Geral, pra nunca duplicar essa regra. */

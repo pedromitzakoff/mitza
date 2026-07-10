@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
-import { currentMonthRange, monthRangeFromParam } from "@/lib/sprint-financials";
+import { currentMonthRange, monthRangeFromParam, shiftMonthParam } from "@/lib/sprint-financials";
 import { formatCurrency, formatMonthLabel } from "@/lib/format";
 import {
   buildOperationClientCard,
@@ -49,12 +49,6 @@ const SITUATION_BADGE_CLASSES: Record<SpendStatus, string> = {
 type ManagerFilter = "all" | "me" | string;
 type RitmoFilter = "todos" | SpendStatus;
 type TasksFilter = "todas" | "atrasadas" | "sem_atrasadas";
-
-function shiftMonthParam(monthRange: { firstDay: string }, deltaMonths: number): string {
-  const d = new Date(`${monthRange.firstDay}T00:00:00Z`);
-  d.setUTCMonth(d.getUTCMonth() + deltaMonths);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
 
 /** Cor do valor — só sinalização discreta no texto, nunca um card ou fundo
  * inteiro colorido. "neutral" é o padrão (ex.: contagem total). */

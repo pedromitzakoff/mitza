@@ -2,7 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { computeSprintEffectiveSpend, computeSprintFinancials, currentMonthRange } from "@/lib/sprint-financials";
+import {
+  computeSprintEffectiveSpend,
+  computeSprintFinancials,
+  currentMonthRange,
+  sumExpectedToDate,
+} from "@/lib/sprint-financials";
 import { computeCumulativeSpendSeries } from "@/lib/spend-chart-data";
 import { computeMonthProjection, computeTaskCounts } from "@/lib/client-metrics";
 import { classifySpendStatus } from "@/lib/spend-status";
@@ -181,7 +186,11 @@ export default async function ClientPage({
 
   const monthPlanned = sprintFinancials.reduce((sum, sprint) => sum + sprint.plannedSpend, 0);
   const monthActual = sprintFinancials.reduce((sum, sprint) => sum + sprint.actualSpend, 0);
-  const monthStatus = classifySpendStatus(monthActual, monthPlanned, monthPlanned);
+  const monthExpectedToDate = sumExpectedToDate(sprints ?? [], today);
+  // Ritmo do mês: realizado x esperado até hoje, nunca x 100% do planejado
+  // antes do mês acabar (mesma regra agora usada em toda a Visão Geral/
+  // Sprints — ver operation-data.ts).
+  const monthStatus = classifySpendStatus(monthActual, monthExpectedToDate, monthPlanned);
   const projection = computeMonthProjection(monthPlanned, monthActual, today);
   const currentSprint = sprintFinancials.find((sprint) => sprint.temporalStatus === "atual") ?? null;
 

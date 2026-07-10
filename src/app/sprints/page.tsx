@@ -2,37 +2,38 @@ import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
-import { monthRangeFromParam } from "@/lib/sprint-financials";
-import { formatFullDate } from "@/lib/format";
+import { currentMonthRange, monthRangeFromParam, shiftMonthParam } from "@/lib/sprint-financials";
+import { formatFullDate, formatMonthLabel } from "@/lib/format";
 import { sortByPriority } from "@/lib/priority-accounts";
 import { sortSprintClientsByUrgency } from "@/lib/sprint-priority";
 import type { CommentItem } from "@/app/clients/comment-thread";
 import {
   buildOperationClientCard,
-  matchesOperationMode,
   type OperationClientRawData,
-  type OperationMode,
   type OperationTaskItem,
   type SprintFilterBucket,
 } from "@/app/operation/operation-data";
-import { SprintClientGroup } from "./client-group";
+import { SprintCurrentClientGroup } from "./current-client-group";
+import { SprintMonthlyClientGroup } from "./monthly-client-group";
+import { SprintsClientFilter } from "./sprints-client-filter";
 import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
 
-const MODE_LABEL: Record<OperationMode, string> = {
-  hoje: "Hoje",
-  sprint: "Sprint atual",
-  todos: "Todos os clientes",
+type SprintsView = "current" | "monthly";
+
+const VIEW_LABEL: Record<SprintsView, string> = {
+  current: "Sprint atual",
+  monthly: "Mensal",
 };
 
 export default async function SprintsPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    mode?: string;
+    view?: string;
     manager?: string;
+    client?: string;
     month?: string;
-    search?: string;
     health?: string;
     activity?: string;
     sprint?: string;
@@ -47,17 +48,23 @@ export default async function SprintsPage({
   const isAdmin = profile.role === "admin";
   const params = await searchParams;
 
-  const mode: OperationMode =
-    params.mode === "sprint" || params.mode === "todos" ? params.mode : "hoje";
+  const view: SprintsView = params.view === "monthly" ? "monthly" : "current";
   const managerFilter = params.manager ?? (isAdmin ? "all" : "me");
-  const search = (params.search ?? "").trim().toLowerCase();
   const healthFilter = params.health ?? "todos";
   const activityFilter = params.activity ?? "todos";
   const sprintFilter = (params.sprint ?? "todas") as SprintFilterBucket | "todas";
 
   const today = todayUTC();
   const todayStr = todayDateString();
-  const { firstDay, lastDay } = monthRangeFromParam(params.month, today);
+  // "Sprint atual" sempre é resolvida pela data real de hoje — por isso a
+  // busca cobre o mês corrente E o mês selecionado (union), garantindo que
+  // a sprint de hoje seja encontrada mesmo com a visão Mensal navegando pra
+  // outro mês. Isso também evita a ambiguidade de "sprint atual de um mês
+  // passado": a visão Sprint atual nunca lê `month`, só a Mensal lê.
+  const monthRange = monthRangeFromParam(params.month, today);
+  const currentRange = currentMonthRange(today);
+  const rangeStart = monthRange.firstDay < currentRange.firstDay ? monthRange.firstDay : currentRange.firstDay;
+  const rangeEnd = monthRange.lastDay > currentRange.lastDay ? monthRange.lastDay : currentRange.lastDay;
 
   const supabase = await createSupabaseClient();
 
@@ -79,13 +86,13 @@ export default async function SprintsPage({
     supabase
       .from("sprints")
       .select("id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
-      .gte("start_date", firstDay)
-      .lte("start_date", lastDay),
+      .gte("start_date", rangeStart)
+      .lte("start_date", rangeEnd),
     supabase
       .from("daily_spend")
       .select("client_id, date, spend, synced_at")
-      .gte("date", firstDay)
-      .lte("date", lastDay),
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd),
     supabase
       .from("tasks")
       .select(
@@ -176,18 +183,18 @@ export default async function SprintsPage({
     };
   });
 
-  let cards = rawClients.map((client) => buildOperationClientCard(client, today));
+  const allCards = rawClients.map((client) => buildOperationClientCard(client, today, monthRange));
 
-  // Escopo por gestor: admin default "todos"; gestor default "meus
-  // clientes". Qualquer gestor pode trocar pra ver outro (colaboração).
+  const clientOptions = [...allCards]
+    .map((card) => ({ id: card.clientId, name: card.clientName }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  let cards = allCards;
+
   if (managerFilter === "me") {
     cards = cards.filter((card) => card.managerIds.includes(profile.id));
   } else if (managerFilter !== "all") {
     cards = cards.filter((card) => card.managerIds.includes(managerFilter));
-  }
-
-  if (search) {
-    cards = cards.filter((card) => card.clientName.toLowerCase().includes(search));
   }
 
   if (healthFilter !== "todos") {
@@ -202,19 +209,21 @@ export default async function SprintsPage({
     cards = cards.filter((card) => card.sprintFilterBucket === sprintFilter);
   }
 
-  cards = cards.filter((card) => matchesOperationMode(card, mode));
-  // No modo "Sprint atual", a prioridade operacional (atrasadas > sem
-  // execução > tarefas hoje > demais) substitui a ordenação genérica de
-  // saúde da conta — só aqui, sortByPriority continua igual pra Visão
-  // Geral e pros outros modos desta própria tela.
-  cards = mode === "sprint" ? sortSprintClientsByUrgency(cards, todayStr) : sortByPriority(cards);
+  // Cliente inválido, inacessível, ou fora da carteira selecionada é
+  // ignorado com segurança — mesma regra da Visão Geral (Etapa 39).
+  const clientFilter = params.client && cards.some((card) => card.clientId === params.client) ? params.client : undefined;
+  if (clientFilter) {
+    cards = cards.filter((card) => card.clientId === clientFilter);
+  }
+
+  cards = view === "current" ? sortSprintClientsByUrgency(cards, todayStr) : sortByPriority(cards);
 
   const buildUrl = (overrides: Record<string, string>) => {
     const next = new URLSearchParams();
-    next.set("mode", mode);
+    next.set("view", view);
     next.set("manager", managerFilter);
-    if (params.month) next.set("month", params.month);
-    if (search) next.set("search", search);
+    if (clientFilter) next.set("client", clientFilter);
+    if (view === "monthly" && params.month) next.set("month", params.month);
     if (healthFilter !== "todos") next.set("health", healthFilter);
     if (activityFilter !== "todos") next.set("activity", activityFilter);
     if (sprintFilter !== "todas") next.set("sprint", sprintFilter);
@@ -227,6 +236,8 @@ export default async function SprintsPage({
     return `/sprints?${next.toString()}`;
   };
 
+  const monthLabel = formatMonthLabel(monthRange.firstDay);
+
   const openTaskId = params.task ?? null;
   let openTask: {
     task: OperationTaskItem;
@@ -238,8 +249,7 @@ export default async function SprintsPage({
 
   if (openTaskId) {
     for (const card of cards) {
-      const found = card.sprintTasks.find((t) => t.id === openTaskId) ??
-        card.todayAndOverdueTasks.find((t) => t.id === openTaskId);
+      const found = card.sprintTasks.find((t) => t.id === openTaskId);
       if (found) {
         const { data: comments } = await supabase
           .from("comments")
@@ -275,24 +285,53 @@ export default async function SprintsPage({
         </p>
       )}
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        {(Object.keys(MODE_LABEL) as OperationMode[]).map((m) => (
-          <Link
-            key={m}
-            href={buildUrl({ mode: m })}
-            className={`rounded-md px-3 py-1 text-sm font-medium ${
-              m === mode
-                ? "bg-brand text-white"
-                : "border border-border text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            }`}
-          >
-            {MODE_LABEL[m]}
-          </Link>
-        ))}
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(VIEW_LABEL) as SprintsView[]).map((v) => (
+            <Link
+              key={v}
+              href={buildUrl({ view: v, month: v === "monthly" ? (params.month ?? "") : "" })}
+              className={`rounded-md px-3 py-1 text-sm font-medium ${
+                v === view
+                  ? "bg-brand text-white"
+                  : "border border-border text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              }`}
+            >
+              {VIEW_LABEL[v]}
+            </Link>
+          ))}
+        </div>
+
+        {view === "monthly" && (
+          <div className="flex items-center gap-0.5 text-sm">
+            <Link
+              href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
+              className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              aria-label="Mês anterior"
+            >
+              &lsaquo;
+            </Link>
+            <span className="min-w-[8.5rem] text-center font-medium text-foreground">{monthLabel}</span>
+            <Link
+              href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
+              className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              aria-label="Próximo mês"
+            >
+              &rsaquo;
+            </Link>
+            {params.month && (
+              <Link href={buildUrl({ month: "" })} className="ml-1.5 text-xs text-brand hover:underline">
+                Mês atual
+              </Link>
+            )}
+          </div>
+        )}
       </div>
 
       <form method="get" className="mt-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-card p-2">
-        <input type="hidden" name="mode" value={mode} />
+        <input type="hidden" name="view" value={view} />
+        {clientFilter && <input type="hidden" name="client" value={clientFilter} />}
+        {view === "monthly" && params.month && <input type="hidden" name="month" value={params.month} />}
 
         <select
           name="manager"
@@ -307,13 +346,6 @@ export default async function SprintsPage({
             </option>
           ))}
         </select>
-
-        <input
-          name="search"
-          defaultValue={search}
-          placeholder="Buscar cliente..."
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none"
-        />
 
         <select
           name="health"
@@ -356,17 +388,27 @@ export default async function SprintsPage({
         </button>
 
         {(managerFilter !== (isAdmin ? "all" : "me") ||
-          search ||
           healthFilter !== "todos" ||
           activityFilter !== "todos" ||
           sprintFilter !== "todas") && (
           <Link
-            href={buildUrl({ manager: isAdmin ? "all" : "me", search: "", health: "", activity: "", sprint: "" })}
+            href={buildUrl({ manager: isAdmin ? "all" : "me", health: "", activity: "", sprint: "" })}
             className="text-xs text-brand hover:underline"
           >
             Limpar filtros
           </Link>
         )}
+
+        <SprintsClientFilter
+          clients={clientOptions}
+          selectedClientId={clientFilter}
+          view={view}
+          manager={managerFilter}
+          month={view === "monthly" ? params.month : undefined}
+          health={healthFilter}
+          activity={activityFilter}
+          sprint={sprintFilter}
+        />
       </form>
 
       <p className="mt-3 text-xs text-muted-foreground">
@@ -375,15 +417,26 @@ export default async function SprintsPage({
 
       <div className="mt-3 flex flex-col gap-2">
         {cards.length > 0 ? (
-          cards.map((card) => (
-            <SprintClientGroup
-              key={card.clientId}
-              card={card}
-              mode={mode}
-              returnTo={buildUrl({})}
-              primaryManagerName={primaryManagerNameByClient.get(card.clientId) ?? null}
-            />
-          ))
+          view === "current" ? (
+            cards.map((card) => (
+              <SprintCurrentClientGroup
+                key={card.clientId}
+                card={card}
+                returnTo={buildUrl({})}
+                primaryManagerName={primaryManagerNameByClient.get(card.clientId) ?? null}
+              />
+            ))
+          ) : (
+            cards.map((card) => (
+              <SprintMonthlyClientGroup
+                key={card.clientId}
+                card={card}
+                monthLabel={monthLabel}
+                monthRange={monthRange}
+                primaryManagerName={primaryManagerNameByClient.get(card.clientId) ?? null}
+              />
+            ))
+          )
         ) : (
           <p className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
             Nenhum cliente encontrado com esses filtros.

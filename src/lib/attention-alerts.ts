@@ -5,8 +5,8 @@ export type AlertSeverity = "critico" | "atencao" | "informativo";
 
 /** Categoria do alerta, usada só pela página do cliente pra priorizar quais
  * 3 alertas mostrar primeiro (ver AttentionPanel). Opcional pra não quebrar
- * quem já constrói AttentionAlert sem isso (ex.: client-group.tsx, em
- * Sprints) — essas telas continuam ordenando só por severidade, como sempre. */
+ * quem já constrói AttentionAlert sem isso (ex.: current-client-group.tsx,
+ * em Sprints) — essas telas continuam ordenando só por severidade, como sempre. */
 export type AlertKind =
   | "tarefas_atrasadas"
   | "investimento"

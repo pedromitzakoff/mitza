@@ -742,6 +742,54 @@ automático da sync, refinamentos de UX, etc.
     pra respeitar o filtro, e é uma comparação entre gestores que não faz
     sentido recortar por um cliente só.
 
+40. ✅ Padronização do período financeiro + simplificação da tela Sprints
+    (sem migration): a tela Sprints tinha 3 "modos" (Hoje/Sprint atual/Todos
+    os clientes) que na real filtravam **quais clientes apareciam**
+    (`matchesOperationMode`) — "Hoje" era um filtro de urgência (tarefas do
+    dia) disfarçado de período financeiro. Agora só existem duas visões,
+    **Sprint atual** e **Mensal** (`?view=current|monthly`, padrão
+    `current`), e nenhuma delas filtra clientes — só muda como os dados são
+    exibidos. Novo `src/lib/financial-period.ts`: um formato único
+    (`FinancialPeriodSummary`) que empacota planejado/realizado/esperado/%/
+    status pra sprint ou mês, sem recalcular nada — só reaproveita
+    `computeSprintFinancials` (sprint) e os campos `month*` do card
+    operacional (mês), que por sua vez já usam `sumEffectiveSpend`/
+    `sumExpectedToDate`/`classifySpendStatus`. **Sprint atual** sempre
+    resolve pela data real de hoje (nunca lê `?month=`) — evita a
+    ambiguidade de "sprint atual de um mês passado" da forma mais simples:
+    essa visão simplesmente não navega por mês. **Mensal** ganhou navegação
+    de mês (igual à Visão Geral) e mostra, por cliente, um resumo recolhido
+    (orçamento mensal, realizado, % realizado, esperado até hoje, ritmo) que
+    expande pra lista das sprints do mês com status (concluída/atual/
+    futura) — sem abrir nenhuma sprint automaticamente. Também ganhou (como
+    a Visão Geral, Etapa 39) o filtro de cliente pesquisável — o combobox
+    foi extraído pra `client-combobox.tsx`, compartilhado entre as duas
+    telas; o campo de busca solto que só filtrava por nome foi removido
+    (redundante, mesmo raciocínio da Etapa 39).
+
+    **Correção real encontrada durante a padronização** (mandada
+    explicitamente pela regra 19 do pedido): `card.monthStatus` — usado
+    pelo "Ritmo do mês" e pela coluna "Situação" da Visão Geral, pela
+    Central de Atenção, e pelo alerta "Investimento do mês" da página do
+    cliente — comparava o realizado com **100% do orçamento mensal**
+    (`classifySpendStatus(monthActual, monthPlanned, monthPlanned)`) em vez
+    de com o esperado até hoje. Na prática, um cliente no dia 5 de um mês
+    de 31 dias aparecia "abaixo do esperado" só por ainda não ter gasto o
+    mês inteiro, mesmo estando exatamente no ritmo. Corrigido em dois
+    lugares (`operation-data.ts` e a página do cliente, os únicos dois
+    pontos que faziam essa conta) pra sempre comparar com
+    `monthExpectedToDate` — mesma tolerância central (`classifySpendStatus`,
+    ±10%), nenhum threshold novo. `computeMonthProjection` (projeção de
+    fim de mês) não foi tocada — ali comparar com o orçamento total é
+    correto, é uma pergunta diferente ("se esse ritmo continuar, onde você
+    vai terminar o mês").
+
+    Não alterei Visão Geral nem a página do cliente estruturalmente (fora a
+    correção acima) — já separavam sprint de mês corretamente pelas mesmas
+    funções, então não tinham o problema do "Hoje" que motivou esta etapa;
+    e não toquei a Central de Atenção (não lê `?mode=`, não tem visão
+    "Hoje").
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

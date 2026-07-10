@@ -8,7 +8,7 @@ import { formatCurrency } from "@/lib/format";
  * vertical escuro sobre o "gasto esperado até hoje" (dias corridos da
  * sprint, mesma conta já centralizada em computeSprintFinancials — não
  * inventa uma tolerância nova). Componente único compartilhado por Sprints
- * (client-group.tsx) e pela página do cliente (sprint-card.tsx) — nunca
+ * (current-client-group.tsx) e pela página do cliente (sprint-card.tsx) — nunca
  * duas barras diferentes mostrando a mesma coisa.
  */
 export function SprintFinancialBar({ sprint }: { sprint: SprintFinancials }) {
