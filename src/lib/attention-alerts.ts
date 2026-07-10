@@ -1,4 +1,5 @@
 import type { SpendStatus } from "@/lib/spend-status";
+import { classifyOperationalActivityStatus } from "./operational-activity";
 
 export type AlertSeverity = "critico" | "atencao" | "informativo";
 
@@ -27,6 +28,9 @@ export interface AttentionAlertsInput {
   currentSprintTaskCount: number;
   /** Tarefas da sprint atual sem responsável definido. */
   currentSprintUnassignedCount: number;
+  /** Dias úteis desde a última atividade operacional relevante do cliente
+   * (null = nunca houve nenhuma). */
+  clientInactivityBusinessDays: number | null;
   now?: Date;
 }
 
@@ -85,6 +89,22 @@ export function buildAttentionAlerts(input: AttentionAlertsInput): AttentionAler
         message: `${input.currentSprintUnassignedCount} tarefa${plural} da sprint atual sem responsável.`,
       });
     }
+  }
+
+  const activityStatus = classifyOperationalActivityStatus(input.clientInactivityBusinessDays);
+  if (activityStatus === "atencao") {
+    alerts.push({
+      severity: "atencao",
+      message: `Cliente sem atividade operacional há ${input.clientInactivityBusinessDays} dias úteis.`,
+    });
+  } else if (activityStatus === "inativo") {
+    alerts.push({
+      severity: "critico",
+      message:
+        input.clientInactivityBusinessDays === null
+          ? "Cliente nunca teve atividade operacional registrada."
+          : `Cliente sem atividade operacional há ${input.clientInactivityBusinessDays} dias úteis.`,
+    });
   }
 
   return alerts.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);

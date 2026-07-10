@@ -9,10 +9,10 @@ export default async function EditTaskPage({
   searchParams,
 }: {
   params: Promise<{ id: string; taskId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; return_to?: string }>;
 }) {
   const { id, taskId } = await params;
-  const { error } = await searchParams;
+  const { error, return_to: returnTo } = await searchParams;
 
   const supabase = await createSupabaseClient();
 
@@ -37,7 +37,7 @@ export default async function EditTaskPage({
 
   return (
     <div className="mx-auto max-w-lg px-6 py-12">
-      <Link href={`/clients/${id}`} className="text-sm text-zinc-500 hover:underline">
+      <Link href={returnTo || `/clients/${id}`} className="text-sm text-zinc-500 hover:underline">
         &larr; Voltar
       </Link>
 
@@ -49,6 +49,7 @@ export default async function EditTaskPage({
         action={updateTaskAction.bind(null, task.id, id)}
         className="mt-6 flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
       >
+        {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
         {error && (
           <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
             {error}

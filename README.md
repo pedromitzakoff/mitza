@@ -76,6 +76,35 @@ automático da sync, refinamentos de UX, etc.
     geração de sprints do mês seguinte e o backfill de tarefas pra ignorar
     cliente excluído.
 
+3f. Rode `supabase/operation-collaboration-rls.sql` (depois do passo 3e).
+    Abre a **leitura** de clientes/sprints/tarefas/comentários pra qualquer
+    usuário logado (antes só admin ou gestor responsável viam algo) — é o
+    que permite a tela `/operation` mostrar todos os clientes pra
+    colaboração entre gestores. Escrita (concluir/criar/editar tarefa,
+    `planned_spend`, dados do cliente) continua exigindo admin ou gestor
+    responsável, sem mudança nenhuma aí.
+
+3g. Rode `supabase/operational-activities.sql` (depois do passo 3f). Cria
+    `operational_activities` (log de tarefa criada/editada/concluída e
+    comentário em tarefa/sprint — nunca sync do Meta nem geração automática
+    de tarefa), as views `client_last_operational_activity` e
+    `sprint_last_operational_activity` (última atividade por cliente/sprint
+    num único select, sem query por cliente), e a função de backfill. Se
+    você já tem tarefas/comentários de antes dessa etapa, rode uma vez, no
+    SQL Editor:
+
+    ```sql
+    select backfill_operational_activities();
+    ```
+
+    Isso infere `task_created` só das tarefas manuais (não geradas por
+    template) e `task_commented`/`sprint_commented` de todos os comentários
+    já existentes. **Não** inventa `task_completed` histórico — não existe
+    coluna de "quando foi concluída" em `tasks`, só o status atual, então
+    chutar uma data de conclusão seria dado fabricado. A partir de agora
+    toda conclusão nova gera o evento certinho; conclusões anteriores a
+    essa etapa simplesmente não entram no histórico de atividade.
+
 4. Crie os usuários em Authentication > Users no painel do Supabase
    (email/senha). O trigger cria o `profile` automaticamente com papel
    `gestor`. Para promover alguém a admin, rode no SQL Editor:
@@ -193,7 +222,7 @@ automático da sync, refinamentos de UX, etc.
   `attention-panel.tsx` — o novo topo da página do cliente
 - Tokens de marca em `src/app/globals.css` (`bg-background`, `bg-card`,
   `text-muted-foreground`, `border-border`, `bg-brand`/`text-brand`,
-  `--brand` = azul MITZA `#2563eb`/`#60a5fa` no escuro) — usados nos
+  `--brand` = azul MITZA `#4169e1`/`#7b93e8` no escuro) — usados nos
   componentes novos e nos botões principais/links de navegação do resto
   do app (que trocaram de preto/branco pra azul); cores semânticas
   (verde/âmbar/vermelho de status) continuam à parte, não fazem parte do
@@ -218,6 +247,39 @@ automático da sync, refinamentos de UX, etc.
   só). `/settings/deleted-clients` lista e restaura
 - `src/app/settings/deleted-clients/page.tsx` — clientes excluídos e
   botão de restaurar (admin only)
+- `supabase/operation-collaboration-rls.sql` — abre leitura de
+  clientes/sprints/tarefas/comentários pra qualquer usuário logado
+  (colaboração); escrita continua igual (admin ou gestor responsável)
+- `supabase/operational-activities.sql` — `operational_activities` (log de
+  tarefa criada/editada/concluída, comentário em tarefa/sprint), views
+  `client_last_operational_activity`/`sprint_last_operational_activity` e
+  `backfill_operational_activities()`
+- `src/lib/business-days.ts` — `businessDaysSince()`, ignora sábado/domingo
+- `src/lib/operational-activity.ts` — `OPERATIONAL_ACTIVITY_THRESHOLDS`
+  (1/2/3 dias úteis = ativo/atenção/inativo, centralizado, nada hardcoded
+  nos componentes), `classifyOperationalActivityStatus`,
+  `formatLastActivityLabel` ("Hoje"/"Ontem"/"Há N dias úteis"/"Nunca
+  houve atividade")
+- `src/lib/sprint-execution.ts` — "sprint sem execução" (2+ dias úteis sem
+  tarefa concluída/comentário na sprint atual), conceito separado da
+  inatividade do cliente; os dois alertas entram no mesmo
+  `buildAttentionAlerts`/`AttentionPanel` de sempre, sem sistema paralelo
+- `src/lib/operational-activity-log.ts` — único ponto que grava em
+  `operational_activities`, chamado de dentro de `createTaskAction`,
+  `updateTaskAction`, `completeTaskAction`
+  (`src/app/clients/tasks-actions.ts`) e `createCommentAction`
+  (`src/app/clients/comments-actions.ts`). Sync do Meta e geração
+  automática de tarefa por template nunca chamam esse helper, então nunca
+  contam como atividade
+- `src/app/operation` — nova área "Operação": `page.tsx` busca tudo em
+  lote (nunca uma query por cliente) e monta os cards
+  (`operation-data.ts`, `client-card.tsx`), com 3 modos (Hoje/Sprint
+  atual/Todos os clientes) e filtros (mês, gestor, busca, status da
+  conta, atividade operacional, sprint) via query string. Concluir
+  tarefa e comentar acontecem sem sair da página (as mesmas actions de
+  sempre, só com um campo oculto `return_to`); `task-drawer-panel.tsx` é
+  o painel lateral de detalhes, aberto via `?task=<id>` — fechar é só
+  tirar o parâmetro da URL, sem JavaScript de cliente nenhum
 
 ## Sync com o Meta
 
@@ -264,6 +326,11 @@ automático da sync, refinamentos de UX, etc.
     marrom), selo "Sprint atual" com destaque, data de hoje por extenso no
     header e na sprint atual, selo "Hoje" em tarefa com prazo hoje,
     tarefas futuras mais discretas
+15. ✅ Tela "Operação" (execução diária em vários clientes de uma vez) +
+    detecção automática de inatividade operacional: log de atividade
+    relevante (`operational_activities`), status Ativo/Atenção/Inativo
+    por dias úteis sem atividade, "sprint sem execução", tudo integrado
+    no mesmo painel "Precisa de atenção" e na Visão Geral
 
 ## Deploy
 

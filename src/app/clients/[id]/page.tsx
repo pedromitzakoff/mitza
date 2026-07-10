@@ -7,6 +7,9 @@ import { computeCumulativeSpendSeries } from "@/lib/spend-chart-data";
 import { computeMonthProjection, computeTaskCounts } from "@/lib/client-metrics";
 import { classifySpendStatus } from "@/lib/spend-status";
 import { buildAttentionAlerts, computeAccountHealth } from "@/lib/attention-alerts";
+import { buildSprintExecutionAlert } from "@/lib/sprint-execution";
+import { businessDaysSince } from "@/lib/business-days";
+import { classifyOperationalActivityStatus, formatLastActivityLabel } from "@/lib/operational-activity";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { ClientHeader } from "../client-header";
 import { ClientMetricsCards } from "../client-metrics-cards";
@@ -124,6 +127,12 @@ export default async function ClientPage({
       supabase.from("client_managers").select("profiles(name)").eq("client_id", id),
     ]);
 
+  const { data: clientActivity } = await supabase
+    .from("client_last_operational_activity")
+    .select("last_activity_at")
+    .eq("client_id", id)
+    .maybeSingle();
+
   const sprintFinancials = (sprints ?? []).map((sprint) => {
     const actualSpend = (dailySpend ?? [])
       .filter((row) => row.date >= sprint.start_date && row.date <= sprint.end_date)
@@ -137,6 +146,23 @@ export default async function ClientPage({
   const monthStatus = classifySpendStatus(monthActual, monthPlanned, monthPlanned);
   const projection = computeMonthProjection(monthPlanned, monthActual, today);
   const currentSprint = sprintFinancials.find((sprint) => sprint.temporalStatus === "atual") ?? null;
+
+  const { data: sprintActivity } = currentSprint
+    ? await supabase
+        .from("sprint_last_operational_activity")
+        .select("last_activity_at")
+        .eq("sprint_id", currentSprint.sprintId)
+        .maybeSingle()
+    : { data: null };
+
+  const clientLastActivityDate = clientActivity?.last_activity_at
+    ? new Date(clientActivity.last_activity_at)
+    : null;
+  const clientInactivityBusinessDays = clientLastActivityDate
+    ? businessDaysSince(clientLastActivityDate, today)
+    : null;
+  const activityStatus = classifyOperationalActivityStatus(clientInactivityBusinessDays);
+  const activityLabel = formatLastActivityLabel(clientLastActivityDate, today);
 
   const { data: tasks } = await supabase
     .from("tasks")
@@ -183,7 +209,7 @@ export default async function ClientPage({
 
   const currentSprintTasks = currentSprint ? tasksBySprintId.get(currentSprint.sprintId) ?? [] : [];
 
-  const alerts = buildAttentionAlerts({
+  const baseAlerts = buildAttentionAlerts({
     monthStatus,
     overdueTasksCount: taskCounts.overdue,
     optimizationRecentlyDone,
@@ -191,9 +217,21 @@ export default async function ClientPage({
     currentSprintPlannedSpend: currentSprint?.plannedSpend ?? null,
     currentSprintTaskCount: currentSprintTasks.length,
     currentSprintUnassignedCount: currentSprintTasks.filter((task) => !task.assignee).length,
+    clientInactivityBusinessDays,
     now: today,
   });
+
+  const sprintLastActivityDate = sprintActivity?.last_activity_at
+    ? new Date(sprintActivity.last_activity_at)
+    : null;
+  const sprintExecutionAlert = currentSprint
+    ? buildSprintExecutionAlert(currentSprint, sprintLastActivityDate, today)
+    : null;
+  const alerts = sprintExecutionAlert ? [...baseAlerts, sprintExecutionAlert] : baseAlerts;
   const accountHealth = computeAccountHealth(alerts);
+  const sprintExecutionLabel = currentSprint
+    ? formatLastActivityLabel(sprintLastActivityDate ?? new Date(`${currentSprint.startDate}T00:00:00Z`), today)
+    : null;
 
   const chartPoints = computeCumulativeSpendSeries(
     sprints ?? [],
@@ -226,6 +264,8 @@ export default async function ClientPage({
           health={accountHealth}
           lastSyncedAt={lastSync?.synced_at ?? null}
           isAdmin={isAdmin}
+          activityStatus={activityStatus}
+          activityLabel={activityLabel}
         />
       </div>
 
@@ -282,6 +322,7 @@ export default async function ClientPage({
                 isAdmin={isAdmin}
                 tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
                 commentsByTaskId={taskCommentsById}
+                executionLabel={sprint.temporalStatus === "atual" ? sprintExecutionLabel : null}
               />
             ))
           ) : (

@@ -13,8 +13,8 @@
   --card: #ffffff;
   --muted-foreground: #737373;
   --border-default: #e7e5e4;
-  --brand: #2563eb;
-  --brand-hover: #1d4ed8;
+  --brand: #4169e1;
+  --brand-hover: #3151b8;
 }
 
 @theme inline {
@@ -36,8 +36,8 @@
     --card: #1c1c1a;
     --muted-foreground: #9c9a95;
     --border-default: #34332f;
-    --brand: #60a5fa;
-    --brand-hover: #3b82f6;
+    --brand: #7b93e8;
+    --brand-hover: #5b78d6;
   }
 }
 

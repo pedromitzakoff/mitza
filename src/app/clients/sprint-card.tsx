@@ -42,6 +42,7 @@ export function SprintCard({
   isAdmin,
   tasks,
   commentsByTaskId,
+  executionLabel,
 }: {
   sprint: SprintFinancials;
   sprintNumber: number;
@@ -50,6 +51,7 @@ export function SprintCard({
   isAdmin: boolean;
   tasks: TaskListItem[];
   commentsByTaskId: Map<string, CommentItem[]>;
+  executionLabel?: string | null;
 }) {
   const difference = sprint.actualSpend - sprint.plannedSpend;
   const barWidth = Math.min(Math.max(sprint.progressPct, 0), 100);
@@ -59,8 +61,9 @@ export function SprintCard({
 
   return (
     <details
+      id={`sprint-${sprint.sprintId}`}
       open={isCurrent}
-      className={`group rounded-lg border bg-card [&_summary::-webkit-details-marker]:hidden ${
+      className={`group scroll-mt-4 rounded-lg border bg-card [&_summary::-webkit-details-marker]:hidden ${
         isCurrent ? "border-l-4 border-l-brand border-y-border border-r-border" : "border-border"
       }`}
     >
@@ -96,8 +99,13 @@ export function SprintCard({
 
       <div className="border-t border-border p-4">
         {isCurrent && (
-          <p className="mb-3 text-xs font-medium text-brand">
+          <p className="mb-1 text-xs font-medium text-brand">
             Hoje: {formatFullDate(todayUTC())}
+          </p>
+        )}
+        {isCurrent && executionLabel && (
+          <p className="mb-3 text-xs text-muted-foreground">
+            Última execução da sprint: {executionLabel}
           </p>
         )}
 

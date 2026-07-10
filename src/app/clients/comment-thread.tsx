@@ -21,11 +21,13 @@ export function CommentThread({
   commentableType,
   commentableId,
   clientId,
+  returnTo,
 }: {
   comments: CommentItem[];
   commentableType: CommentableType;
   commentableId: string;
   clientId: string;
+  returnTo?: string;
 }) {
   return (
     <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-900">
@@ -47,6 +49,7 @@ export function CommentThread({
         action={createCommentAction.bind(null, commentableType, commentableId, clientId)}
         className="mt-2 flex gap-2"
       >
+        {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
         <input
           name="content"
           placeholder="Comentar..."

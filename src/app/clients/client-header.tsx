@@ -2,6 +2,11 @@ import Link from "next/link";
 import { formatDateTime, formatFullDate } from "@/lib/format";
 import { todayUTC } from "@/lib/today";
 import type { AccountHealth } from "@/lib/attention-alerts";
+import {
+  OPERATIONAL_ACTIVITY_STATUS_BADGE_CLASSES,
+  OPERATIONAL_ACTIVITY_STATUS_LABEL,
+  type OperationalActivityStatus,
+} from "@/lib/operational-activity";
 import { syncClientMetaAction } from "./meta-actions";
 
 const HEALTH_LABEL: Record<AccountHealth, string> = {
@@ -24,6 +29,8 @@ export function ClientHeader({
   health,
   lastSyncedAt,
   isAdmin,
+  activityStatus,
+  activityLabel,
 }: {
   clientId: string;
   clientName: string;
@@ -32,6 +39,8 @@ export function ClientHeader({
   health: AccountHealth;
   lastSyncedAt: string | null;
   isAdmin: boolean;
+  activityStatus: OperationalActivityStatus;
+  activityLabel: string;
 }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-border bg-card p-4">
@@ -43,11 +52,17 @@ export function ClientHeader({
           >
             {HEALTH_LABEL[health]}
           </span>
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${OPERATIONAL_ACTIVITY_STATUS_BADGE_CLASSES[activityStatus]}`}
+          >
+            {OPERATIONAL_ACTIVITY_STATUS_LABEL[activityStatus]}
+          </span>
         </div>
         <p className="mt-1 font-mono text-xs text-muted-foreground">{metaAdAccountId}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {managerNames.length > 0 ? managerNames.join(", ") : "Sem gestor atribuído"}
         </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">Última atividade: {activityLabel}</p>
         <p className="mt-0.5 text-xs font-medium text-brand">Hoje: {formatFullDate(todayUTC())}</p>
       </div>
 

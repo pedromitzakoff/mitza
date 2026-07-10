@@ -1,0 +1,142 @@
+import Link from "next/link";
+import { effectiveTaskStatus } from "@/lib/task-status";
+import { TASK_STATUS_BADGE_CLASSES, TASK_STATUS_LABEL, TASK_TYPE_LABEL } from "@/app/clients/task-labels";
+import { formatDueDate } from "@/app/clients/task-row";
+import { completeTaskAction } from "@/app/clients/tasks-actions";
+import { createCommentAction } from "@/app/clients/comments-actions";
+import type { CommentItem } from "@/app/clients/comment-thread";
+import type { OperationTaskItem } from "./operation-data";
+
+const commentDateFormatter = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+export function TaskDrawerPanel({
+  task,
+  clientId,
+  clientName,
+  sprintNumber,
+  comments,
+  closeHref,
+  returnTo,
+}: {
+  task: OperationTaskItem;
+  clientId: string;
+  clientName: string;
+  sprintNumber: number | null;
+  comments: CommentItem[];
+  closeHref: string;
+  returnTo: string;
+}) {
+  const status = effectiveTaskStatus(task);
+
+  return (
+    <>
+      <Link
+        href={closeHref}
+        className="fixed inset-0 z-40 bg-black/30"
+        aria-label="Fechar"
+      />
+      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs text-muted-foreground">
+              {clientName}
+              {sprintNumber !== null ? ` · Sprint ${sprintNumber}` : ""}
+            </p>
+            <h2 className="mt-0.5 text-lg font-semibold text-foreground">{task.title}</h2>
+          </div>
+          <Link
+            href={closeHref}
+            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          >
+            Fechar
+          </Link>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TASK_STATUS_BADGE_CLASSES[status]}`}>
+            {TASK_STATUS_LABEL[status]}
+          </span>
+          <span className="text-xs text-muted-foreground">{TASK_TYPE_LABEL[task.type]}</span>
+        </div>
+
+        <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <dt className="text-muted-foreground">Responsável</dt>
+            <dd className="text-foreground">{task.assignee?.name ?? "Sem responsável"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Prazo</dt>
+            <dd className="text-foreground">{formatDueDate(task.due_date)}</dd>
+          </div>
+        </dl>
+
+        {task.notes && (
+          <div className="mt-4">
+            <p className="text-xs font-medium text-muted-foreground">Observações</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">{task.notes}</p>
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
+          {status !== "feito" && (
+            <form action={completeTaskAction.bind(null, task.id, clientId)}>
+              <input type="hidden" name="return_to" value={returnTo} />
+              <button
+                type="submit"
+                className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
+              >
+                Marcar como feito
+              </button>
+            </form>
+          )}
+          <Link
+            href={`/clients/${clientId}/tasks/${task.id}/edit?return_to=${encodeURIComponent(returnTo)}`}
+            className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          >
+            Editar tarefa
+          </Link>
+        </div>
+
+        <div className="mt-5 border-t border-border pt-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Comentários</p>
+
+          {comments.length > 0 && (
+            <ul className="mt-2 flex flex-col gap-2">
+              {comments.map((comment) => (
+                <li key={comment.id} className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">{comment.author?.name ?? "Alguém"}</span>{" "}
+                  · {commentDateFormatter.format(new Date(comment.created_at))}
+                  <p className="text-foreground">{comment.content}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <form
+            action={createCommentAction.bind(null, "task", task.id, clientId)}
+            className="mt-2 flex gap-2"
+          >
+            <input type="hidden" name="return_to" value={returnTo} />
+            <input
+              name="content"
+              placeholder="Comentar..."
+              required
+              className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none"
+            />
+            <button
+              type="submit"
+              className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Enviar
+            </button>
+          </form>
+        </div>
+      </div>
+    </>
+  );
+}

@@ -9,6 +9,13 @@ export type CommentableType = "sprint" | "task";
 /** ISO: 1 = segunda ... 7 = domingo. */
 export type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
+export type OperationalActivityType =
+  | "task_created"
+  | "task_completed"
+  | "task_updated"
+  | "task_commented"
+  | "sprint_commented";
+
 export interface Database {
   public: {
     Tables: {
@@ -382,12 +389,100 @@ export interface Database {
           },
         ];
       };
+      operational_activities: {
+        Row: {
+          id: string;
+          client_id: string;
+          sprint_id: string | null;
+          task_id: string | null;
+          user_id: string | null;
+          activity_type: OperationalActivityType;
+          source_type: string | null;
+          source_id: string | null;
+          metadata: Record<string, unknown> | null;
+          occurred_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          sprint_id?: string | null;
+          task_id?: string | null;
+          user_id?: string | null;
+          activity_type: OperationalActivityType;
+          source_type?: string | null;
+          source_id?: string | null;
+          metadata?: Record<string, unknown> | null;
+          occurred_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          sprint_id?: string | null;
+          task_id?: string | null;
+          user_id?: string | null;
+          activity_type?: OperationalActivityType;
+          source_type?: string | null;
+          source_id?: string | null;
+          metadata?: Record<string, unknown> | null;
+          occurred_at?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "operational_activities_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "operational_activities_sprint_id_fkey";
+            columns: ["sprint_id"];
+            isOneToOne: false;
+            referencedRelation: "sprints";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "operational_activities_task_id_fkey";
+            columns: ["task_id"];
+            isOneToOne: false;
+            referencedRelation: "tasks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "operational_activities_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
-      [_ in never]: never;
+      client_last_operational_activity: {
+        Row: {
+          client_id: string | null;
+          last_activity_at: string | null;
+        };
+        Relationships: [];
+      };
+      sprint_last_operational_activity: {
+        Row: {
+          sprint_id: string | null;
+          last_activity_at: string | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       backfill_sprint_tasks_from_templates: {
+        Args: Record<PropertyKey, never>;
+        Returns: void;
+      };
+      backfill_operational_activities: {
         Args: Record<PropertyKey, never>;
         Returns: void;
       };
