@@ -36,8 +36,8 @@ export function ClientContextBar({
   const gestorLabel = managerNames.length > 0 ? `Gestor: ${managerNames.join(", ")}` : "Sem gestor atribuído";
 
   return (
-    <div className="sticky top-14 z-20 border-b border-border bg-card">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-2">
+    <div className="sticky top-12 z-20 border-b border-border bg-card">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-1.5">
         <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
           <p className="min-w-0 shrink truncate border-l-2 border-brand pl-2.5 text-sm font-semibold text-foreground">
             {clientName}

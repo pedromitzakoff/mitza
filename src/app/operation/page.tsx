@@ -237,7 +237,7 @@ export default async function OperationPage({
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
+    <div className="mx-auto max-w-6xl px-6 py-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Operação</h1>
@@ -246,17 +246,17 @@ export default async function OperationPage({
       </div>
 
       {(params.taskError || params.commentError) && (
-        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           {params.taskError || params.commentError}
         </p>
       )}
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         {(Object.keys(MODE_LABEL) as OperationMode[]).map((m) => (
           <Link
             key={m}
             href={buildUrl({ mode: m })}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+            className={`rounded-md px-3 py-1 text-sm font-medium ${
               m === mode
                 ? "bg-brand text-white"
                 : "border border-border text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
@@ -267,13 +267,13 @@ export default async function OperationPage({
         ))}
       </div>
 
-      <form method="get" className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3">
+      <form method="get" className="mt-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-card p-2">
         <input type="hidden" name="mode" value={mode} />
 
         <select
           name="manager"
           defaultValue={managerFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground"
+          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
         >
           <option value="me">Meus clientes</option>
           <option value="all">Todos os clientes</option>
@@ -288,13 +288,13 @@ export default async function OperationPage({
           name="search"
           defaultValue={search}
           placeholder="Buscar cliente..."
-          className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground outline-none"
+          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none"
         />
 
         <select
           name="health"
           defaultValue={healthFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground"
+          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
         >
           <option value="todos">Status da conta: todos</option>
           <option value="saudavel">Saudável</option>
@@ -305,7 +305,7 @@ export default async function OperationPage({
         <select
           name="activity"
           defaultValue={activityFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground"
+          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
         >
           <option value="todos">Atividade: todas</option>
           <option value="ativo">Ativos</option>
@@ -316,7 +316,7 @@ export default async function OperationPage({
         <select
           name="sprint"
           defaultValue={sprintFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground"
+          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
         >
           <option value="todas">Sprint: todas</option>
           <option value="atrasadas">Com tarefas atrasadas</option>
@@ -326,17 +326,30 @@ export default async function OperationPage({
 
         <button
           type="submit"
-          className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+          className="rounded-md bg-brand px-3 py-1 text-sm font-medium text-white hover:bg-brand-hover"
         >
           Filtrar
         </button>
+
+        {(managerFilter !== (isAdmin ? "all" : "me") ||
+          search ||
+          healthFilter !== "todos" ||
+          activityFilter !== "todos" ||
+          sprintFilter !== "todas") && (
+          <Link
+            href={buildUrl({ manager: isAdmin ? "all" : "me", search: "", health: "", activity: "", sprint: "" })}
+            className="text-xs text-brand hover:underline"
+          >
+            Limpar filtros
+          </Link>
+        )}
       </form>
 
       <p className="mt-3 text-xs text-muted-foreground">
         {cards.length} cliente{cards.length !== 1 ? "s" : ""}
       </p>
 
-      <div className="mt-3 flex flex-col gap-3">
+      <div className="mt-3 flex flex-col gap-2">
         {cards.length > 0 ? (
           cards.map((card) => (
             <OperationClientCard key={card.clientId} card={card} mode={mode} returnTo={buildUrl({})} />

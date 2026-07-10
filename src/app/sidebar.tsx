@@ -42,23 +42,32 @@ interface NavItem {
   href?: string;
   adminOnly?: boolean;
   isActive?: (pathname: string, mode: string | null) => boolean;
+  group: "principal" | "mais";
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Visão Geral", href: "/", isActive: (p) => p === "/" },
+  { label: "Visão Geral", href: "/", isActive: (p) => p === "/", group: "principal" },
   {
     label: "Operação",
     href: "/operation",
     isActive: (p, mode) => p === "/operation" && mode !== "hoje",
+    group: "principal",
   },
   {
     label: "Tarefas",
     href: "/operation?mode=hoje",
     isActive: (p, mode) => p === "/operation" && mode === "hoje",
+    group: "principal",
   },
-  { label: "Reuniões" },
-  { label: "Equipe", adminOnly: true },
-  { label: "Configurações", href: "/settings", adminOnly: true, isActive: (p) => p.startsWith("/settings") },
+  { label: "Reuniões", group: "mais" },
+  { label: "Equipe", adminOnly: true, group: "mais" },
+  {
+    label: "Configurações",
+    href: "/settings",
+    adminOnly: true,
+    isActive: (p) => p.startsWith("/settings"),
+    group: "mais",
+  },
 ];
 
 function NavLink({ item, pathname, mode }: { item: NavItem; pathname: string; mode: string | null }) {
@@ -66,7 +75,7 @@ function NavLink({ item, pathname, mode }: { item: NavItem; pathname: string; mo
 
   if (!item.href) {
     return (
-      <span className="flex items-center justify-between rounded-md px-3 py-2 text-sm text-muted-foreground/60">
+      <span className="flex items-center justify-between rounded-md px-3 py-1.5 text-sm text-muted-foreground/60">
         {item.label}
         <span className="text-[10px] uppercase tracking-wide">Em breve</span>
       </span>
@@ -76,7 +85,7 @@ function NavLink({ item, pathname, mode }: { item: NavItem; pathname: string; mo
   return (
     <Link
       href={item.href}
-      className={`block rounded-md px-3 py-2 text-sm font-medium ${
+      className={`block rounded-md px-3 py-1.5 text-sm font-medium ${
         active
           ? "bg-brand text-white"
           : "text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
@@ -98,32 +107,42 @@ function SidebarContent({
 }) {
   const isAdmin = profile.role === "admin";
   const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+  const principal = items.filter((item) => item.group === "principal");
+  const mais = items.filter((item) => item.group === "mais");
 
   return (
     <div className="flex h-full flex-col">
       {isAdmin && (
-        <div className="p-3">
+        <div className="p-2.5">
           <Link
             href="/clients/new"
-            className="block rounded-md bg-brand px-3 py-2 text-center text-sm font-medium text-white hover:bg-brand-hover"
+            className="block rounded-md bg-brand px-3 py-1.5 text-center text-sm font-medium text-white hover:bg-brand-hover"
           >
             + Novo cliente
           </Link>
         </div>
       )}
 
-      <nav className="mt-4 flex flex-1 flex-col gap-0.5 px-3">
-        {items.map((item) => (
+      <nav className="mt-2 flex flex-col gap-0.5 px-2.5">
+        {principal.map((item) => (
           <NavLink key={item.label} item={item} pathname={pathname} mode={mode} />
         ))}
       </nav>
 
+      {mais.length > 0 && (
+        <nav className="mt-3 flex flex-1 flex-col gap-0.5 border-t border-border px-2.5 pt-3">
+          {mais.map((item) => (
+            <NavLink key={item.label} item={item} pathname={pathname} mode={mode} />
+          ))}
+        </nav>
+      )}
+
       {isAdmin && (
-        <div className="px-3 pb-2">
+        <div className="px-2.5 pb-2">
           <form action={syncAllMetaAction}>
             <button
               type="submit"
-              className="w-full rounded-md border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              className="w-full rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
             >
               Atualizar Meta (todos)
             </button>
@@ -131,13 +150,13 @@ function SidebarContent({
         </div>
       )}
 
-      <div className="border-t border-border p-3">
+      <div className="border-t border-border p-2.5">
         <p className="truncate text-sm font-medium text-foreground">{profile.name}</p>
         <p className="text-xs text-muted-foreground">{profile.role === "admin" ? "Admin" : "Gestor"}</p>
-        <form action={logout} className="mt-2">
+        <form action={logout} className="mt-1.5">
           <button
             type="submit"
-            className="w-full rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="w-full rounded-md border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
           >
             Sair
           </button>

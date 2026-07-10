@@ -385,6 +385,14 @@ automático da sync, refinamentos de UX, etc.
     `buildOperationClientCard` de novo, sem duplicar a regra de saúde
 20. ✅ Sidebar recolhível no desktop (botão de seta na borda), preferência
     salva no navegador
+21. ✅ Refinamento visual e UX geral (padrões familiares de ferramentas de
+    gestão de trabalho, sem copiar identidade do ClickUp): interface mais
+    densa (paddings/alturas menores, Top Bar de 48px), tarefas viraram
+    linha densa (status clicável no início, responsável/prazo/situação
+    numa linha só, ações reveladas no hover, sempre visíveis no mobile),
+    cabeçalho da sprint virou uma linha-resumo (com % de progresso),
+    tabelas da Visão Geral e filtros de Operação padronizados — só camada
+    visual, nenhuma query/regra de negócio mudou
 
 ## Deploy
 

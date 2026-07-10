@@ -27,6 +27,14 @@ export function formatDueDate(value: string): string {
   return dueDateFormatter.format(new Date(`${value}T00:00:00Z`));
 }
 
+/**
+ * Linha densa de tarefa (padrão de lista de ferramentas de gestão de
+ * trabalho) — status como um círculo clicável no início, título, responsável,
+ * prazo e situação numa linha só, ações secundárias reveladas no hover (ou
+ * foco, pra manter navegação por teclado). Reaproveitada em TaskList (tarefas
+ * soltas) e SprintTaskList (tarefas da sprint) — nenhuma mudou de query nem
+ * de regra de negócio, só a apresentação.
+ */
 export function TaskRow({
   task,
   clientId,
@@ -43,84 +51,81 @@ export function TaskRow({
   const isFuture = effectiveStatus === "pendente" && !isToday && task.due_date > todayDateString();
   const dueDate = formatWeekdayAndDate(task.due_date);
 
-  const borderClasses = isOverdue
-    ? "border-red-200 dark:border-red-900"
-    : isToday && !isDone
-      ? "border-brand/40"
-      : "border-zinc-200 dark:border-zinc-800";
-
   const dateClasses = isOverdue
-    ? "text-red-600 dark:text-red-400"
+    ? "font-medium text-red-600 dark:text-red-400"
     : isToday && !isDone
-      ? "text-brand"
-      : isDone
-        ? "font-normal text-zinc-400 dark:text-zinc-600"
-        : "text-foreground";
+      ? "font-medium text-brand"
+      : "text-muted-foreground";
 
   return (
-    <li className={`rounded-lg border p-3 ${borderClasses} ${isFuture ? "opacity-70" : ""}`}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p
-            className={`text-sm font-medium ${
-              isDone ? "text-zinc-500 line-through dark:text-zinc-500" : "text-black dark:text-zinc-50"
-            }`}
-          >
-            {isDone && <span className="mr-1 text-green-600 dark:text-green-400">✓</span>}
-            {task.title}
-          </p>
-          <p className={`mt-0.5 text-sm font-semibold ${dateClasses}`}>
-            <span className="hidden sm:inline">{dueDate.long}</span>
-            <span className="sm:hidden">{dueDate.short}</span>
-          </p>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            {TASK_TYPE_LABEL[task.type]} · {task.assignee?.name ?? "Sem responsável"}
-          </p>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2">
-          {isToday && !isDone && (
-            <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
-              Hoje
-            </span>
-          )}
-          <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TASK_STATUS_BADGE_CLASSES[effectiveStatus]}`}
-          >
-            {TASK_STATUS_LABEL[effectiveStatus]}
+    <li className="group/row border-b border-border/60 px-2 py-1.5 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
+      <div className={`flex items-center gap-2.5 ${isFuture ? "opacity-70" : ""}`}>
+        {isDone ? (
+          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none text-green-700 dark:bg-green-950 dark:text-green-300">
+            ✓
           </span>
-        </div>
-      </div>
-
-      <div className="mt-2 flex items-center gap-3 text-xs">
-        <Link
-          href={`/clients/${clientId}/tasks/${task.id}/edit`}
-          className="text-zinc-500 hover:underline"
-        >
-          Editar
-        </Link>
-        {!isDone && (
+        ) : (
           <form action={completeTaskAction.bind(null, task.id, clientId)}>
             <button
               type="submit"
-              className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
-            >
-              Marcar como feito
-            </button>
+              aria-label="Marcar como feito"
+              title="Marcar como feito"
+              className={`block h-4 w-4 shrink-0 rounded-full border-2 hover:border-brand hover:bg-brand/10 ${
+                isOverdue
+                  ? "border-red-400 dark:border-red-700"
+                  : isToday
+                    ? "border-brand"
+                    : "border-zinc-300 dark:border-zinc-600"
+              }`}
+            />
           </form>
         )}
+
+        <span className="min-w-0 flex-1 truncate">
+          <span className={`text-sm ${isDone ? "text-muted-foreground line-through" : "font-medium text-foreground"}`}>
+            {task.title}
+          </span>
+          <span className="ml-1.5 hidden text-xs text-muted-foreground lg:inline">{TASK_TYPE_LABEL[task.type]}</span>
+        </span>
+
+        <span className="hidden w-28 shrink-0 truncate text-xs text-muted-foreground md:block">
+          {task.assignee?.name ?? "Sem responsável"}
+        </span>
+
+        <span className={`w-20 shrink-0 text-xs sm:w-28 ${dateClasses}`}>
+          <span className="hidden sm:inline">{dueDate.long}</span>
+          <span className="sm:hidden">{dueDate.short}</span>
+        </span>
+
+        <span className="hidden w-16 shrink-0 sm:block">
+          {isToday && !isDone ? (
+            <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">Hoje</span>
+          ) : (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TASK_STATUS_BADGE_CLASSES[effectiveStatus]}`}
+            >
+              {TASK_STATUS_LABEL[effectiveStatus]}
+            </span>
+          )}
+        </span>
+
+        <span className="flex shrink-0 items-center gap-2 opacity-100 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/row:opacity-100">
+          <Link
+            href={`/clients/${clientId}/tasks/${task.id}/edit`}
+            className="text-xs text-muted-foreground hover:text-brand hover:underline"
+          >
+            Editar
+          </Link>
+        </span>
       </div>
 
-      <details className="mt-1.5 [&_summary]:cursor-pointer">
-        <summary className="text-xs text-zinc-500 hover:underline">
+      <details className="[&_summary]:cursor-pointer [&_summary]:list-none">
+        <summary className="ml-[26px] mt-1 text-xs text-muted-foreground hover:text-brand">
           Comentários {comments.length > 0 ? `(${comments.length})` : ""}
         </summary>
-        <CommentThread
-          comments={comments}
-          commentableType="task"
-          commentableId={task.id}
-          clientId={clientId}
-        />
+        <div className="ml-[26px]">
+          <CommentThread comments={comments} commentableType="task" commentableId={task.id} clientId={clientId} />
+        </div>
       </details>
     </li>
   );

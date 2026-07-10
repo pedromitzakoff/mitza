@@ -71,7 +71,7 @@ function IndicatorCard({
   const content = (
     <div className="rounded-lg border border-border bg-card p-3 transition-colors hover:border-brand/50">
       <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-foreground">{value}</p>
+      <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{value}</p>
       {hint && <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   );
@@ -339,7 +339,7 @@ export default async function Home({
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8">
+    <div className="mx-auto max-w-7xl px-6 py-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">VISÃO GERAL DA AGÊNCIA</h1>
@@ -377,7 +377,7 @@ export default async function Home({
 
       <form
         method="get"
-        className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3"
+        className="mt-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-card p-2"
       >
         {params.month && <input type="hidden" name="month" value={params.month} />}
         {sprintBucketFilter && <input type="hidden" name="sprintBucket" value={sprintBucketFilter} />}
@@ -388,7 +388,7 @@ export default async function Home({
         <select
           name="manager"
           defaultValue={managerFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground"
+          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
         >
           <option value="me">Meus clientes</option>
           <option value="all">Todos os clientes</option>
@@ -402,7 +402,7 @@ export default async function Home({
         <select
           name="health"
           defaultValue={healthFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground"
+          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
         >
           <option value="todos">Status da conta: todos</option>
           <option value="saudavel">Saudável</option>
@@ -413,7 +413,7 @@ export default async function Home({
         <select
           name="activity"
           defaultValue={activityFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground"
+          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
         >
           <option value="todos">Atividade: todas</option>
           <option value="ativo">Ativos</option>
@@ -424,7 +424,7 @@ export default async function Home({
         <select
           name="ritmo"
           defaultValue={ritmoFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground"
+          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
         >
           <option value="todos">Ritmo de investimento: todos</option>
           <option value="abaixo">Abaixo</option>
@@ -436,7 +436,7 @@ export default async function Home({
         <select
           name="tasks"
           defaultValue={tasksFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground"
+          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
         >
           <option value="todas">Tarefas: todas</option>
           <option value="atrasadas">Com tarefas atrasadas</option>
@@ -447,12 +447,12 @@ export default async function Home({
           name="search"
           defaultValue={search}
           placeholder="Buscar cliente..."
-          className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground outline-none"
+          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none"
         />
 
         <button
           type="submit"
-          className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+          className="rounded-md bg-brand px-3 py-1 text-sm font-medium text-white hover:bg-brand-hover"
         >
           Filtrar
         </button>
@@ -472,7 +472,7 @@ export default async function Home({
       </form>
 
       {/* Portfólio */}
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <IndicatorCard label="Clientes Ativos" value={String(portfolio.ativos)} href={drillDownUrl({ activity: "ativo" })} />
         <IndicatorCard label="Saudáveis" value={String(portfolio.saudaveis)} href={drillDownUrl({ health: "saudavel" })} />
         <IndicatorCard label="Em Atenção" value={String(portfolio.atencao)} href={drillDownUrl({ health: "atencao" })} />
@@ -485,7 +485,7 @@ export default async function Home({
       </div>
 
       {/* Financeiro */}
-      <div className="mt-6">
+      <div className="mt-5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Investimento da agência
         </h2>
@@ -514,7 +514,7 @@ export default async function Home({
       </div>
 
       {/* Gráfico consolidado */}
-      <div className="mt-4 rounded-lg border border-border bg-card p-4">
+      <div className="mt-3 rounded-lg border border-border bg-card p-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Planejado acumulado x gasto real acumulado da agência
         </h2>
@@ -525,7 +525,7 @@ export default async function Home({
       </div>
 
       {/* Operação das sprints */}
-      <div className="mt-6">
+      <div className="mt-5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Operação das sprints</h2>
         <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
           <IndicatorCard label="Em andamento" value={String(sprintOps.emAndamento)} />
@@ -588,7 +588,7 @@ export default async function Home({
       </div>
 
       {/* Precisa de atenção */}
-      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+      <div className="mt-5 rounded-lg border border-border bg-card p-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Precisa de atenção</h2>
         {agencyAlerts.length > 0 ? (
           <ul className="mt-2 flex flex-col gap-1.5">
@@ -624,48 +624,48 @@ export default async function Home({
       </div>
 
       {/* Contas prioritárias */}
-      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+      <div className="mt-5 rounded-lg border border-border bg-card p-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contas prioritárias</h2>
         {priorityAccounts.length > 0 ? (
           <div className="mt-2 overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                  <th className="py-1.5 pr-3">Cliente</th>
-                  <th className="py-1.5 pr-3">Gestor</th>
-                  <th className="py-1.5 pr-3">Status</th>
-                  <th className="py-1.5 pr-3">Motivo principal</th>
-                  <th className="py-1.5 pr-3">Última atividade</th>
-                  <th className="py-1.5 pr-3">Atrasadas</th>
-                  <th className="py-1.5 pr-3">Ritmo</th>
-                  <th className="py-1.5" />
+                  <th className="py-1.5 px-3">Cliente</th>
+                  <th className="py-1.5 px-3">Gestor</th>
+                  <th className="py-1.5 px-3">Status</th>
+                  <th className="py-1.5 px-3">Motivo principal</th>
+                  <th className="py-1.5 px-3">Última atividade</th>
+                  <th className="py-1.5 px-3">Atrasadas</th>
+                  <th className="py-1.5 px-3">Ritmo</th>
+                  <th className="py-1.5 px-3" />
                 </tr>
               </thead>
               <tbody>
                 {priorityAccounts.map((card) => (
                   <tr key={card.clientId} className="border-b border-border/60 last:border-0">
-                    <td className="py-1.5 pr-3 font-medium text-foreground">{card.clientName}</td>
-                    <td className="py-1.5 pr-3 text-muted-foreground">
+                    <td className="py-1.5 px-3 font-medium text-foreground">{card.clientName}</td>
+                    <td className="py-1.5 px-3 text-muted-foreground">
                       {card.managerNames.length > 0 ? card.managerNames.join(", ") : "—"}
                     </td>
-                    <td className="py-1.5 pr-3">
+                    <td className="py-1.5 px-3">
                       <span
                         className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${HEALTH_BADGE_CLASSES[card.accountHealth]}`}
                       >
                         {HEALTH_LABEL[card.accountHealth]}
                       </span>
                     </td>
-                    <td className="py-1.5 pr-3 text-muted-foreground">{mainAttentionReason(card)}</td>
-                    <td className="py-1.5 pr-3 text-muted-foreground">{card.activityLabel}</td>
-                    <td className="py-1.5 pr-3 text-muted-foreground">{card.taskCounts.overdue}</td>
-                    <td className="py-1.5 pr-3">
+                    <td className="py-1.5 px-3 text-muted-foreground">{mainAttentionReason(card)}</td>
+                    <td className="py-1.5 px-3 text-muted-foreground">{card.activityLabel}</td>
+                    <td className="py-1.5 px-3 text-muted-foreground">{card.taskCounts.overdue}</td>
+                    <td className="py-1.5 px-3">
                       <span
                         className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[card.monthStatus]}`}
                       >
                         {SPEND_STATUS_LABEL[card.monthStatus]}
                       </span>
                     </td>
-                    <td className="py-1.5 text-right">
+                    <td className="py-1.5 px-3 text-right">
                       <Link href={`/clients/${card.clientId}`} className="text-xs font-medium text-brand hover:underline">
                         Abrir cliente
                       </Link>
@@ -681,7 +681,7 @@ export default async function Home({
       </div>
 
       {/* Resumo por gestor */}
-      <div className="mt-6 rounded-lg border border-border bg-card p-4">
+      <div className="mt-5 rounded-lg border border-border bg-card p-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {isAdmin ? "Operação por gestor" : "Minha operação"}
         </h2>
@@ -690,22 +690,22 @@ export default async function Home({
             <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                  <th className="py-1.5 pr-3">Gestor</th>
-                  <th className="py-1.5 pr-3">Clientes</th>
-                  <th className="py-1.5 pr-3">Saudáveis</th>
-                  <th className="py-1.5 pr-3">Atenção</th>
-                  <th className="py-1.5 pr-3">Críticos</th>
-                  <th className="py-1.5 pr-3">Inativos</th>
-                  <th className="py-1.5 pr-3">Sem execução</th>
-                  <th className="py-1.5 pr-3">Atrasadas</th>
-                  <th className="py-1.5 pr-3">Hoje</th>
-                  <th className="py-1.5">Execução</th>
+                  <th className="py-1.5 px-3">Gestor</th>
+                  <th className="py-1.5 px-3">Clientes</th>
+                  <th className="py-1.5 px-3">Saudáveis</th>
+                  <th className="py-1.5 px-3">Atenção</th>
+                  <th className="py-1.5 px-3">Críticos</th>
+                  <th className="py-1.5 px-3">Inativos</th>
+                  <th className="py-1.5 px-3">Sem execução</th>
+                  <th className="py-1.5 px-3">Atrasadas</th>
+                  <th className="py-1.5 px-3">Hoje</th>
+                  <th className="py-1.5 px-3">Execução</th>
                 </tr>
               </thead>
               <tbody>
                 {managerSummary.map((row) => (
                   <tr key={row.id} className="border-b border-border/60 last:border-0">
-                    <td className="py-1.5 pr-3 font-medium text-foreground">
+                    <td className="py-1.5 px-3 font-medium text-foreground">
                       {isAdmin ? (
                         <Link href={drillDownUrl({ manager: row.id })} className="hover:underline">
                           {row.name}
@@ -714,15 +714,15 @@ export default async function Home({
                         row.name
                       )}
                     </td>
-                    <td className="py-1.5 pr-3 text-muted-foreground">{row.totalClients}</td>
-                    <td className="py-1.5 pr-3 text-muted-foreground">{row.portfolio.saudaveis}</td>
-                    <td className="py-1.5 pr-3 text-muted-foreground">{row.portfolio.atencao}</td>
-                    <td className="py-1.5 pr-3 text-muted-foreground">{row.portfolio.criticos}</td>
-                    <td className="py-1.5 pr-3 text-muted-foreground">{row.portfolio.inativos}</td>
-                    <td className="py-1.5 pr-3 text-muted-foreground">{row.semExecucao}</td>
-                    <td className="py-1.5 pr-3 text-muted-foreground">{row.atrasadas}</td>
-                    <td className="py-1.5 pr-3 text-muted-foreground">{row.paraHoje}</td>
-                    <td className="py-1.5 text-muted-foreground">
+                    <td className="py-1.5 px-3 text-muted-foreground">{row.totalClients}</td>
+                    <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.saudaveis}</td>
+                    <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.atencao}</td>
+                    <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.criticos}</td>
+                    <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.inativos}</td>
+                    <td className="py-1.5 px-3 text-muted-foreground">{row.semExecucao}</td>
+                    <td className="py-1.5 px-3 text-muted-foreground">{row.atrasadas}</td>
+                    <td className="py-1.5 px-3 text-muted-foreground">{row.paraHoje}</td>
+                    <td className="py-1.5 px-3 text-muted-foreground">
                       {row.taxaExecucao !== null ? `${Math.round(row.taxaExecucao)}%` : "—"}
                     </td>
                   </tr>
@@ -736,7 +736,7 @@ export default async function Home({
       </div>
 
       {/* Tabela principal de clientes */}
-      <div className="mt-6">
+      <div className="mt-5">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Clientes</h2>
           <div className="flex items-center gap-2 text-xs">
@@ -755,18 +755,18 @@ export default async function Home({
             <table className="w-full min-w-[1100px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-muted-foreground dark:bg-zinc-900">
-                  <th className="py-2 px-3">Cliente</th>
-                  <th className="py-2 px-3">Gestor</th>
-                  <th className="py-2 px-3">Sprint atual</th>
-                  <th className="py-2 px-3">Investimento</th>
-                  <th className="py-2 px-3">Projeção</th>
-                  <th className="py-2 px-3">Execução</th>
-                  <th className="py-2 px-3">Última otimização</th>
-                  <th className="py-2 px-3">Última atividade</th>
-                  <th className="py-2 px-3">Atividade</th>
-                  <th className="py-2 px-3">Última sync Meta</th>
-                  <th className="py-2 px-3">Status geral</th>
-                  <th className="py-2 px-3" />
+                  <th className="py-1.5 px-3">Cliente</th>
+                  <th className="py-1.5 px-3">Gestor</th>
+                  <th className="py-1.5 px-3">Sprint atual</th>
+                  <th className="py-1.5 px-3">Investimento</th>
+                  <th className="py-1.5 px-3">Projeção</th>
+                  <th className="py-1.5 px-3">Execução</th>
+                  <th className="py-1.5 px-3">Última otimização</th>
+                  <th className="py-1.5 px-3">Última atividade</th>
+                  <th className="py-1.5 px-3">Atividade</th>
+                  <th className="py-1.5 px-3">Última sync Meta</th>
+                  <th className="py-1.5 px-3">Status geral</th>
+                  <th className="py-1.5 px-3" />
                 </tr>
               </thead>
               <tbody>
@@ -774,11 +774,11 @@ export default async function Home({
                   const pct = card.hasMonthGoal ? Math.round((card.monthActual / card.monthPlanned) * 100) : null;
                   return (
                     <tr key={card.clientId} className="border-b border-border/60 last:border-0">
-                      <td className="py-2 px-3 font-medium text-foreground">{card.clientName}</td>
-                      <td className="py-2 px-3 text-muted-foreground">
+                      <td className="py-1.5 px-3 font-medium text-foreground">{card.clientName}</td>
+                      <td className="py-1.5 px-3 text-muted-foreground">
                         {card.managerNames.length > 0 ? card.managerNames.join(", ") : "—"}
                       </td>
-                      <td className="py-2 px-3 text-muted-foreground">
+                      <td className="py-1.5 px-3 text-muted-foreground">
                         {card.sprint ? (
                           <>
                             Sprint {card.sprintNumber} · {formatDateRange(card.sprint.startDate, card.sprint.endDate)}
@@ -787,18 +787,18 @@ export default async function Home({
                           "Sem sprint atual"
                         )}
                       </td>
-                      <td className="py-2 px-3 text-muted-foreground">
+                      <td className="py-1.5 px-3 tabular-nums text-muted-foreground">
                         {formatCurrency(card.monthActual)} / {formatCurrency(card.monthPlanned)}
                         {pct !== null && <span className="ml-1">({pct}%)</span>}
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-1.5 px-3">
                         <span
                           className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[card.monthStatus]}`}
                         >
                           {SPEND_STATUS_LABEL[card.monthStatus]}
                         </span>
                       </td>
-                      <td className="py-2 px-3 text-muted-foreground">
+                      <td className="py-1.5 px-3 text-muted-foreground">
                         {card.taskCounts.done}/{card.taskCounts.total}
                         {card.taskCounts.overdue > 0 && (
                           <span className="ml-1 font-medium text-red-600 dark:text-red-400">
@@ -806,28 +806,28 @@ export default async function Home({
                           </span>
                         )}
                       </td>
-                      <td className="py-2 px-3 text-muted-foreground">
+                      <td className="py-1.5 px-3 text-muted-foreground">
                         {card.lastOptimizationAt ? formatShortDate(card.lastOptimizationAt) : "—"}
                       </td>
-                      <td className="py-2 px-3 text-muted-foreground">{card.activityLabel}</td>
-                      <td className="py-2 px-3">
+                      <td className="py-1.5 px-3 text-muted-foreground">{card.activityLabel}</td>
+                      <td className="py-1.5 px-3">
                         <span
                           className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${OPERATIONAL_ACTIVITY_STATUS_BADGE_CLASSES[card.activityStatus]}`}
                         >
                           {OPERATIONAL_ACTIVITY_STATUS_LABEL[card.activityStatus]}
                         </span>
                       </td>
-                      <td className="py-2 px-3 text-muted-foreground">
+                      <td className="py-1.5 px-3 text-muted-foreground">
                         {card.lastSyncedAt ? formatDateTime(card.lastSyncedAt) : "Nunca"}
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-1.5 px-3">
                         <span
                           className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${HEALTH_BADGE_CLASSES[card.accountHealth]}`}
                         >
                           {HEALTH_LABEL[card.accountHealth]}
                         </span>
                       </td>
-                      <td className="py-2 px-3 text-right">
+                      <td className="py-1.5 px-3 text-right">
                         <Link href={`/clients/${card.clientId}`} className="text-xs font-medium text-brand hover:underline">
                           Abrir cliente
                         </Link>

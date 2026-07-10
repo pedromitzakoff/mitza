@@ -45,17 +45,17 @@ function AgencyClock() {
 
 export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4">
+    <header className="sticky top-0 z-30 flex h-12 shrink-0 items-center justify-between border-b border-border bg-card px-4">
       <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={onOpenMenu}
           aria-label="Abrir menu"
-          className="rounded-md border border-border px-2.5 py-1.5 text-sm font-medium text-foreground md:hidden"
+          className="rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground md:hidden"
         >
           Menu
         </button>
-        <Link href="/" className="text-base font-semibold tracking-wide text-foreground">
+        <Link href="/" className="text-sm font-semibold tracking-wide text-foreground">
           MITZA
         </Link>
       </div>

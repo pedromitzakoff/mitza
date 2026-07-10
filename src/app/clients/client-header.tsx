@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { formatDateTime, formatFullDate } from "@/lib/format";
-import { todayUTC } from "@/lib/today";
+import { formatDateTime } from "@/lib/format";
 import type { AccountHealth } from "@/lib/attention-alerts";
 import {
   OPERATIONAL_ACTIVITY_STATUS_BADGE_CLASSES,
@@ -43,35 +42,36 @@ export function ClientHeader({
   activityLabel: string;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-border bg-card p-4">
+    <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-card p-3">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-semibold text-foreground">{clientName}</h1>
+          <h1 className="text-lg font-semibold text-foreground">{clientName}</h1>
           <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${HEALTH_BADGE_CLASSES[health]}`}
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${HEALTH_BADGE_CLASSES[health]}`}
           >
             {HEALTH_LABEL[health]}
           </span>
           <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${OPERATIONAL_ACTIVITY_STATUS_BADGE_CLASSES[activityStatus]}`}
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${OPERATIONAL_ACTIVITY_STATUS_BADGE_CLASSES[activityStatus]}`}
           >
             {OPERATIONAL_ACTIVITY_STATUS_LABEL[activityStatus]}
           </span>
         </div>
-        <p className="mt-1 font-mono text-xs text-muted-foreground">{metaAdAccountId}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
+          <span className="font-mono">{metaAdAccountId}</span>
+          {" · "}
           {managerNames.length > 0 ? managerNames.join(", ") : "Sem gestor atribuído"}
+          {" · Última atividade: "}
+          {activityLabel}
         </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">Última atividade: {activityLabel}</p>
-        <p className="mt-0.5 text-xs font-medium text-brand">Hoje: {formatFullDate(todayUTC())}</p>
       </div>
 
-      <div className="flex flex-col items-end gap-1.5">
+      <div className="flex flex-col items-end gap-1">
         <div className="flex items-center gap-2">
           {isAdmin && (
             <Link
               href={`/clients/${clientId}/edit`}
-              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
             >
               Editar
             </Link>
@@ -79,13 +79,13 @@ export function ClientHeader({
           <form action={syncClientMetaAction.bind(null, clientId)}>
             <button
               type="submit"
-              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
             >
               Atualizar dados do Meta
             </button>
           </form>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           {lastSyncedAt ? `Última sync: ${formatDateTime(lastSyncedAt)}` : "Nunca sincronizado"}
         </p>
       </div>

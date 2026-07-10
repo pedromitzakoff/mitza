@@ -48,7 +48,7 @@ export function SprintTaskList({
       )}
 
       {ordered.length > 0 ? (
-        <ul className="mt-2 flex flex-col gap-2">
+        <ul className="mt-2 overflow-hidden rounded-lg border border-border">
           {ordered.map((task) => (
             <TaskRow
               key={task.id}

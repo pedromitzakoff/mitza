@@ -250,7 +250,7 @@ export default async function ClientPage({
   ].filter((banner): banner is { tone: "red" | "green"; text: string } => Boolean(banner));
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
+    <div className="mx-auto max-w-6xl px-6 py-5">
       <div>
         <ClientHeader
           clientId={client.id}
@@ -266,7 +266,7 @@ export default async function ClientPage({
       </div>
 
       {banners.length > 0 && (
-        <div className="mt-4 flex flex-col gap-2">
+        <div className="mt-3 flex flex-col gap-2">
           {banners.map((banner, index) => (
             <p
               key={index}
@@ -282,7 +282,7 @@ export default async function ClientPage({
         </div>
       )}
 
-      <div className="mt-4">
+      <div className="mt-3">
         <ClientMetricsCards
           monthPlanned={monthPlanned}
           monthActual={monthActual}
@@ -292,21 +292,21 @@ export default async function ClientPage({
         />
       </div>
 
-      <div className="mt-4">
+      <div className="mt-3">
         <AttentionPanel alerts={alerts} />
       </div>
 
-      <div className="mt-4 rounded-lg border border-border bg-card p-4">
+      <div className="mt-3 rounded-lg border border-border bg-card p-3">
         <h2 className="text-sm font-medium text-foreground">
           Planejado acumulado x gasto real acumulado
         </h2>
-        <div className="mt-3">
+        <div className="mt-2">
           <SpendChart points={chartPoints} />
         </div>
       </div>
 
       <Section title="Sprints do mês">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {sprintFinancials.length > 0 ? (
             sprintFinancials.map((sprint, index) => (
               <SprintCard

@@ -76,44 +76,37 @@ export function SprintCard({
         isCurrent ? "border-l-4 border-l-brand border-y-border border-r-border" : "border-border"
       }`}
     >
-      <summary className="flex cursor-pointer list-none flex-wrap items-start justify-between gap-3 p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="mt-1 text-xs text-muted-foreground transition-transform group-open:rotate-90">
-            ▸
-          </span>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Sprint {sprintNumber}
-            </p>
-            <p className="text-lg font-semibold leading-tight text-foreground">
-              {formatDateRange(sprint.startDate, sprint.endDate)}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
-            >
-              {TEMPORAL_LABEL[sprint.temporalStatus]}
-            </span>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[sprint.status]}`}
-            >
-              {SPEND_STATUS_LABEL[sprint.status]}
-            </span>
-          </div>
-        </div>
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+        <span className="shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90">
+          ▸
+        </span>
+        <span className="shrink-0 text-sm font-semibold text-foreground">Sprint {sprintNumber}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {formatDateRange(sprint.startDate, sprint.endDate)}
+        </span>
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
+        >
+          {TEMPORAL_LABEL[sprint.temporalStatus]}
+        </span>
 
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span>
+        <span className="ml-auto flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span className="tabular-nums">
             {formatCurrency(sprint.actualSpend)} / {formatCurrency(sprint.plannedSpend)}
           </span>
-          <span>
+          <span className="hidden tabular-nums sm:inline">{Math.round(sprint.progressPct)}%</span>
+          <span className="hidden sm:inline">
             {tasksDone}/{tasks.length} tarefas
           </span>
-        </div>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[sprint.status]}`}
+          >
+            {SPEND_STATUS_LABEL[sprint.status]}
+          </span>
+        </span>
       </summary>
 
-      <div className="border-t border-border p-4">
+      <div className="border-t border-border p-3">
         {isCurrent && (
           <div className="mb-3 inline-flex flex-col rounded-md border border-brand/30 bg-brand/5 px-3 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-brand">Hoje</span>

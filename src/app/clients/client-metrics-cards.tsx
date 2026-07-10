@@ -31,11 +31,11 @@ function MetricCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-3">
+    <div className="rounded-lg border border-border bg-card px-3 py-2">
       <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <div className="mt-1.5">{children}</div>
+      <div className="mt-1">{children}</div>
     </div>
   );
 }
@@ -56,12 +56,12 @@ export function ClientMetricsCards({
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       <MetricCard label="Investimento">
-        <p className="text-lg font-semibold text-foreground">{formatCurrency(monthActual)}</p>
+        <p className="text-base font-semibold tabular-nums text-foreground">{formatCurrency(monthActual)}</p>
         <p className="text-xs text-muted-foreground">de {formatCurrency(monthPlanned)} planejado</p>
       </MetricCard>
 
       <MetricCard label="Projeção do mês">
-        <p className="text-lg font-semibold text-foreground">
+        <p className="text-base font-semibold tabular-nums text-foreground">
           {formatCurrency(projection.projectedSpend)}
         </p>
         <span
@@ -73,7 +73,7 @@ export function ClientMetricsCards({
       </MetricCard>
 
       <MetricCard label="Tarefas do mês">
-        <p className="text-lg font-semibold text-foreground">
+        <p className="text-base font-semibold tabular-nums text-foreground">
           {taskCounts.done}/{taskCounts.total}
         </p>
         <p className="text-xs text-muted-foreground">

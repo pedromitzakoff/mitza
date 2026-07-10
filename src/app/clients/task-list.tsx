@@ -37,7 +37,7 @@ export function TaskList({
   }
 
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className="overflow-hidden rounded-lg border border-border">
       {ordered.map((task) => (
         <TaskRow
           key={task.id}

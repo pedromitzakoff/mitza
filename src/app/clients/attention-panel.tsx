@@ -14,7 +14,7 @@ const SEVERITY_CLASSES: Record<AlertSeverity, string> = {
 
 export function AttentionPanel({ alerts }: { alerts: AttentionAlert[] }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
+    <div className="rounded-lg border border-border bg-card p-3">
       <h2 className="text-sm font-medium text-foreground">Precisa de atenção</h2>
 
       {alerts.length === 0 ? (
