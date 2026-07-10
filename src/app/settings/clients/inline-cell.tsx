@@ -5,17 +5,75 @@ import { formatCnpj, isValidCnpjLength, normalizeCnpj } from "@/lib/cnpj";
 import { isValidEmail } from "@/lib/validation";
 import { formatCurrency } from "@/lib/format";
 import { formatMoneyDisplay, parseMoneyInput } from "@/lib/money-format";
+import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
+import type { ClientContractStatus } from "@/lib/supabase/database.types";
 
 const cellButtonClasses =
   "block w-full truncate rounded px-1.5 py-0.5 text-left hover:bg-zinc-100 disabled:opacity-60 dark:hover:bg-zinc-900";
 const cellInputClasses =
   "w-full rounded-md border border-border bg-card px-1.5 py-0.5 text-sm text-foreground outline-none focus:border-zinc-500";
 
+const STATUS_OPTIONS = (Object.keys(CLIENT_STATUS_LABEL) as ClientContractStatus[]).map((value) => ({
+  value,
+  label: CLIENT_STATUS_LABEL[value],
+}));
+
 /**
- * Célula de select compacto (Status, Gestor principal): mostra o valor
- * formatado; um clique troca pra um `<select>` focado — a própria escolha
- * já salva (onChange), sem precisar de um botão "salvar" separado. Blur sem
- * mudança só volta ao modo de exibição.
+ * Célula de Status: mesmo padrão de clique-pra-editar das outras, mas o
+ * selo colorido é montado aqui dentro (não dá pra passar uma função de
+ * renderização de um Server Component pra um Client Component — só dados e
+ * Server Actions cruzam essa fronteira).
+ */
+export function InlineStatusCell({
+  value,
+  action,
+}: {
+  value: ClientContractStatus;
+  action: (value: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  if (!editing) {
+    return (
+      <button type="button" onClick={() => setEditing(true)} className={cellButtonClasses} disabled={pending}>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CLIENT_STATUS_BADGE_CLASSES[value]}`}>
+          {CLIENT_STATUS_LABEL[value]}
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <select
+      autoFocus
+      aria-label="Status"
+      defaultValue={value}
+      disabled={pending}
+      onChange={(event) => {
+        const next = event.target.value;
+        startTransition(async () => {
+          await action(next);
+          setEditing(false);
+        });
+      }}
+      onBlur={() => setEditing(false)}
+      className={cellInputClasses}
+    >
+      {STATUS_OPTIONS.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/**
+ * Célula de select compacto (Gestor principal): mostra o valor formatado;
+ * um clique troca pra um `<select>` focado — a própria escolha já salva
+ * (onChange), sem precisar de um botão "salvar" separado. Blur sem mudança
+ * só volta ao modo de exibição.
  */
 export function InlineSelectCell({
   value,
@@ -23,14 +81,12 @@ export function InlineSelectCell({
   emptyLabel,
   action,
   ariaLabel,
-  renderDisplay,
 }: {
   value: string;
   options: { value: string; label: string }[];
   emptyLabel?: string;
   action: (value: string) => Promise<void>;
   ariaLabel: string;
-  renderDisplay?: (label: string) => React.ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -39,7 +95,7 @@ export function InlineSelectCell({
   if (!editing) {
     return (
       <button type="button" onClick={() => setEditing(true)} className={cellButtonClasses} disabled={pending}>
-        {renderDisplay ? renderDisplay(currentLabel) : currentLabel}
+        {currentLabel}
       </button>
     );
   }

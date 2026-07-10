@@ -3,7 +3,6 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC } from "@/lib/today";
 import { formatActiveMonths, formatDateWithYear } from "@/lib/format";
-import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
 import { normalizeCnpj } from "@/lib/cnpj";
 import type { ClientContractStatus } from "@/lib/supabase/database.types";
 import {
@@ -14,12 +13,15 @@ import {
   updateClientPrimaryManagerAction,
   updateClientStatusAction,
 } from "./actions";
-import { InlineCnpjCell, InlineDateCell, InlineEmailCell, InlineMoneyCell, InlineSelectCell } from "./inline-cell";
+import {
+  InlineCnpjCell,
+  InlineDateCell,
+  InlineEmailCell,
+  InlineMoneyCell,
+  InlineSelectCell,
+  InlineStatusCell,
+} from "./inline-cell";
 import { SettingsClientsFilters } from "./filters";
-
-const STATUS_OPTIONS: { value: ClientContractStatus; label: string }[] = (
-  Object.keys(CLIENT_STATUS_LABEL) as ClientContractStatus[]
-).map((value) => ({ value, label: CLIENT_STATUS_LABEL[value] }));
 
 /**
  * Configurações > Clientes — manutenção eficiente dos dados estruturais:
@@ -121,19 +123,7 @@ export default async function SettingsClientsPage({
                   <td className="px-3 py-1.5 font-semibold text-foreground">{client.name}</td>
 
                   <td className="px-3 py-1.5">
-                    <InlineSelectCell
-                      value={client.status}
-                      options={STATUS_OPTIONS}
-                      action={updateClientStatusAction.bind(null, client.id)}
-                      ariaLabel="Status"
-                      renderDisplay={(label) => (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}
-                        >
-                          {label}
-                        </span>
-                      )}
-                    />
+                    <InlineStatusCell value={client.status} action={updateClientStatusAction.bind(null, client.id)} />
                   </td>
 
                   <td className="px-3 py-1.5 text-muted-foreground">
