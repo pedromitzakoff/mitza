@@ -1,4 +1,11 @@
-import { computeSprintFinancials, currentMonthRange, type SprintFinancials } from "@/lib/sprint-financials";
+import {
+  computeSprintEffectiveSpend,
+  computeSprintFinancials,
+  currentMonthRange,
+  sumEffectiveSpend,
+  type SprintFinancials,
+  type SpendSource,
+} from "@/lib/sprint-financials";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { buildAttentionAlerts, computeAccountHealth, type AttentionAlert, type AccountHealth } from "@/lib/attention-alerts";
@@ -24,7 +31,14 @@ export interface OperationClientRawData {
   metaAdAccountId: string;
   managerNames: string[];
   managerIds: string[];
-  sprints: { id: string; start_date: string; end_date: string; planned_spend: number }[];
+  sprints: {
+    id: string;
+    start_date: string;
+    end_date: string;
+    planned_spend: number;
+    spend_source: SpendSource;
+    manual_actual_spend: number | null;
+  }[];
   dailySpend: { date: string; spend: number }[];
   tasks: OperationTaskItem[];
   clientLastActivityAt: string | null;
@@ -80,10 +94,8 @@ export function buildOperationClientCard(
   let sprintTasks: OperationTaskItem[] = [];
 
   if (currentSprintRow) {
-    const actualSpend = client.dailySpend
-      .filter((d) => d.date >= currentSprintRow.start_date && d.date <= currentSprintRow.end_date)
-      .reduce((sum, d) => sum + d.spend, 0);
-    sprint = computeSprintFinancials(currentSprintRow, actualSpend, today);
+    const actualSpend = computeSprintEffectiveSpend(currentSprintRow, client.dailySpend);
+    sprint = computeSprintFinancials(currentSprintRow, actualSpend, today, currentSprintRow.spend_source);
     sprintNumber =
       client.sprints.filter((s) => s.start_date <= currentSprintRow.start_date).length;
     sprintTasks = client.tasks.filter((t) => t.sprint_id === currentSprintRow.id);
@@ -92,9 +104,7 @@ export function buildOperationClientCard(
   const monthTasks = client.tasks.filter((t) => t.due_date >= firstDay && t.due_date <= lastDay);
   const monthSprints = client.sprints.filter((s) => s.start_date >= firstDay && s.start_date <= lastDay);
   const monthPlanned = monthSprints.reduce((sum, s) => sum + s.planned_spend, 0);
-  const monthActual = client.dailySpend
-    .filter((d) => d.date >= firstDay && d.date <= lastDay)
-    .reduce((sum, d) => sum + d.spend, 0);
+  const monthActual = sumEffectiveSpend(monthSprints, client.dailySpend);
   const monthStatus = classifySpendStatus(monthActual, monthPlanned, monthPlanned);
 
   const taskCounts = { total: 0, done: 0, pending: 0, overdue: 0 };

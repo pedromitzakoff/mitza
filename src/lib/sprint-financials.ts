@@ -39,6 +39,40 @@ export function resolveSprintActualSpend(
   return metaSpendSum;
 }
 
+/** Fonte única do gasto real de UMA sprint: soma o daily_spend do período
+ * dela e resolve manual x meta_api. Todo lugar que precisa do gasto real de
+ * uma sprint (mensal consolidado, cartão da sprint, gráfico) passa por
+ * aqui — nunca duplica o filtro+soma de daily_spend por conta própria. */
+export function computeSprintEffectiveSpend(
+  sprint: {
+    start_date: string;
+    end_date: string;
+    spend_source: SpendSource;
+    manual_actual_spend: number | null;
+  },
+  dailySpend: { date: string; spend: number }[],
+): number {
+  const metaSpendSum = dailySpend
+    .filter((d) => d.date >= sprint.start_date && d.date <= sprint.end_date)
+    .reduce((sum, d) => sum + d.spend, 0);
+  return resolveSprintActualSpend(sprint, metaSpendSum);
+}
+
+/** Soma o gasto real efetivo de várias sprints — usado pra consolidar o
+ * gasto realizado do mês (soma do effective_spend de cada sprint do mês,
+ * nunca a soma direta de daily_spend). */
+export function sumEffectiveSpend(
+  sprints: {
+    start_date: string;
+    end_date: string;
+    spend_source: SpendSource;
+    manual_actual_spend: number | null;
+  }[],
+  dailySpend: { date: string; spend: number }[],
+): number {
+  return sprints.reduce((sum, sprint) => sum + computeSprintEffectiveSpend(sprint, dailySpend), 0);
+}
+
 function daysBetweenInclusive(a: Date, b: Date): number {
   return Math.floor((b.getTime() - a.getTime()) / 86_400_000) + 1;
 }

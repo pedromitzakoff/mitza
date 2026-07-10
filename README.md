@@ -511,7 +511,32 @@ automático da sync, refinamentos de UX, etc.
     reaproveitado também em `/sprints`) com "X% utilizado" integrado ao
     mesmo bloco financeiro — escopo limitado à página do cliente: Sprints,
     Visão Geral, `/clients` e o gráfico diário continuam somando
-    `daily_spend` normalmente, sem refletir valores manuais
+    `daily_spend` normalmente, sem refletir valores manuais (corrigido na
+    Etapa 32 abaixo)
+32. ✅ Fonte única do gasto real + barra financeira com marcador de ritmo
+    (nova migration `sprint-manual-spend-updated-at.sql`): a Etapa 31 só
+    fazia o gasto manual valer dentro da própria página do cliente —
+    `buildOperationClientCard` (usado por `/sprints`, Visão Geral, `/clients`
+    e o cabeçalho fixo do cliente) continuava somando `daily_spend` bruto
+    sem checar `spend_source`; agora duas funções centralizadas
+    (`computeSprintEffectiveSpend`/`sumEffectiveSpend` em
+    `sprint-financials.ts`) resolvem o gasto real de cada sprint uma única
+    vez e são reaproveitadas em todo lugar que soma gasto do mês — nenhum
+    componente filtra/soma `daily_spend` por conta própria; o gráfico
+    "Planejado acumulado x gasto real acumulado" (`computeCumulativeSpendSeries`)
+    também passou a considerar sprints manuais: em vez de inventar uma
+    distribuição diária, lança o valor manual inteiro no dia da última edição
+    (`manual_spend_updated_at`, novo) e ignora o `daily_spend` daquele período
+    pra nunca contar em dobro; as actions de editar/reverter gasto real agora
+    chamam `revalidatePath` em `/`, `/clients` e `/sprints`, além da própria
+    página do cliente, pra essas telas nunca servirem cache desatualizado;
+    `SprintFinancialBar` ganhou um marcador vertical do "gasto esperado até
+    hoje" (dias corridos — confirmado que o sistema só tem regra de dias
+    úteis pra atividade operacional, não pra investimento) com tooltip, e um
+    resumo abaixo ("35% gasto · 43% esperado até hoje · 8 p.p. abaixo/acima
+    do ritmo" ou "Dentro do ritmo esperado"), reaproveitando a mesma
+    classificação/tolerância de sempre (`classifySpendStatus`, ±10%) sem
+    inventar uma nova
 
 ## Deploy
 

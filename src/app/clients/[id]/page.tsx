@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { computeSprintFinancials, currentMonthRange, resolveSprintActualSpend } from "@/lib/sprint-financials";
+import { computeSprintEffectiveSpend, computeSprintFinancials, currentMonthRange } from "@/lib/sprint-financials";
 import { computeCumulativeSpendSeries } from "@/lib/spend-chart-data";
 import { computeMonthProjection, computeTaskCounts } from "@/lib/client-metrics";
 import { classifySpendStatus } from "@/lib/spend-status";
@@ -109,7 +109,7 @@ export default async function ClientPage({
   const [{ data: sprints }, { data: dailySpend }, { data: lastSync }] = await Promise.all([
     supabase
       .from("sprints")
-      .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
+      .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, manual_spend_updated_at")
       .eq("client_id", id)
       .gte("start_date", firstDay)
       .lte("start_date", lastDay)
@@ -136,11 +136,7 @@ export default async function ClientPage({
     .maybeSingle();
 
   const sprintFinancials = (sprints ?? []).map((sprint) => {
-    const metaSpendSum = (dailySpend ?? [])
-      .filter((row) => row.date >= sprint.start_date && row.date <= sprint.end_date)
-      .reduce((sum, row) => sum + row.spend, 0);
-    const actualSpend = resolveSprintActualSpend(sprint, metaSpendSum);
-
+    const actualSpend = computeSprintEffectiveSpend(sprint, dailySpend ?? []);
     return computeSprintFinancials(sprint, actualSpend, today, sprint.spend_source);
   });
 

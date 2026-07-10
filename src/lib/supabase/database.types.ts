@@ -220,6 +220,7 @@ export interface Database {
           planned_spend: number;
           spend_source: "manual" | "meta_api";
           manual_actual_spend: number | null;
+          manual_spend_updated_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -230,6 +231,7 @@ export interface Database {
           planned_spend?: number;
           spend_source?: "manual" | "meta_api";
           manual_actual_spend?: number | null;
+          manual_spend_updated_at?: string | null;
           created_at?: string;
         };
         Update: {
@@ -240,6 +242,7 @@ export interface Database {
           planned_spend?: number;
           spend_source?: "manual" | "meta_api";
           manual_actual_spend?: number | null;
+          manual_spend_updated_at?: string | null;
           created_at?: string;
         };
         Relationships: [

@@ -55,13 +55,23 @@ export async function updateSprintActualSpendAction(
   const supabase = await createSupabaseClient();
   const { error } = await supabase
     .from("sprints")
-    .update({ spend_source: "manual", manual_actual_spend: actualSpend })
+    .update({
+      spend_source: "manual",
+      manual_actual_spend: actualSpend,
+      manual_spend_updated_at: new Date().toISOString(),
+    })
     .eq("id", sprintId);
 
   if (error) {
     redirect(`/clients/${clientId}?error=${encodeURIComponent(error.message)}`);
   }
 
+  // O gasto manual entra na consolidação mensal (buildOperationClientCard) e
+  // no gráfico acumulado dessas 3 rotas — sem isso elas serviriam uma versão
+  // desatualizada do cache até a próxima revalidação natural.
+  revalidatePath("/");
+  revalidatePath("/clients");
+  revalidatePath("/sprints");
   revalidatePath(`/clients/${clientId}`);
   redirect(`/clients/${clientId}`);
 }
@@ -79,6 +89,9 @@ export async function resetSprintSpendSourceAction(sprintId: string, clientId: s
     redirect(`/clients/${clientId}?error=${encodeURIComponent(error.message)}`);
   }
 
+  revalidatePath("/");
+  revalidatePath("/clients");
+  revalidatePath("/sprints");
   revalidatePath(`/clients/${clientId}`);
   redirect(`/clients/${clientId}`);
 }

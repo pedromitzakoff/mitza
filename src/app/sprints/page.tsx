@@ -78,7 +78,7 @@ export default async function SprintsPage({
     supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
     supabase
       .from("sprints")
-      .select("id, client_id, start_date, end_date, planned_spend")
+      .select("id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
       .gte("start_date", firstDay)
       .lte("start_date", lastDay),
     supabase
@@ -115,7 +115,15 @@ export default async function SprintsPage({
     managersByClient.set(row.client_id, list);
   }
 
-  type SprintRow = { id: string; client_id: string; start_date: string; end_date: string; planned_spend: number };
+  type SprintRow = {
+    id: string;
+    client_id: string;
+    start_date: string;
+    end_date: string;
+    planned_spend: number;
+    spend_source: "manual" | "meta_api";
+    manual_actual_spend: number | null;
+  };
   const sprintsByClient = new Map<string, SprintRow[]>();
   for (const s of sprints ?? []) {
     const list = sprintsByClient.get(s.client_id) ?? [];

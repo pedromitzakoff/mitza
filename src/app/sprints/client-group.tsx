@@ -115,7 +115,7 @@ export function SprintClientGroup({
 
           {card.sprint && (
             <div className="mt-1">
-              <SprintFinancialBar actualSpend={card.sprint.actualSpend} plannedSpend={card.sprint.plannedSpend} />
+              <SprintFinancialBar sprint={card.sprint} />
             </div>
           )}
 

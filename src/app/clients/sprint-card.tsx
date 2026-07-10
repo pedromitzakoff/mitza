@@ -264,12 +264,7 @@ export function SprintCard({
           </div>
 
           <div className="mt-2">
-            <SprintFinancialBar actualSpend={sprint.actualSpend} plannedSpend={sprint.plannedSpend} />
-            {sprint.plannedSpend > 0 && (
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                {Math.round(sprint.progressPct)}% utilizado
-              </p>
-            )}
+            <SprintFinancialBar sprint={sprint} />
           </div>
         </div>
 

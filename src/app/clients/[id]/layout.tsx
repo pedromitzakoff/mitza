@@ -45,7 +45,7 @@ export default async function ClientLayout({
       supabase.from("client_managers").select("user_id, profiles(id, name)").eq("client_id", id),
       supabase
         .from("sprints")
-        .select("id, start_date, end_date, planned_spend")
+        .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
         .eq("client_id", id)
         .gte("start_date", firstDay)
         .lte("start_date", lastDay),
