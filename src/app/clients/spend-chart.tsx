@@ -5,8 +5,14 @@ import type { CumulativeSpendPoint } from "@/lib/spend-chart-data";
 import { formatCurrency } from "@/lib/format";
 
 const WIDTH = 720;
-const HEIGHT = 90;
-const PADDING = { top: 8, right: 16, bottom: 16, left: 56 };
+
+/** "compact" é o padrão (card de sprint, dentro do cliente); "large" é
+ * usado no gráfico consolidado da agência (Visão Geral), que precisa de
+ * mais altura por concentrar todos os clientes numa linha só. */
+const SIZES = {
+  compact: { height: 90, padding: { top: 8, right: 16, bottom: 16, left: 56 } },
+  large: { height: 220, padding: { top: 14, right: 16, bottom: 24, left: 64 } },
+} as const;
 
 const dayFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", timeZone: "UTC" });
 
@@ -14,9 +20,17 @@ function formatDay(date: string): string {
   return dayFormatter.format(new Date(`${date}T00:00:00Z`));
 }
 
-export function SpendChart({ points }: { points: CumulativeSpendPoint[] }) {
+export function SpendChart({
+  points,
+  size = "compact",
+}: {
+  points: CumulativeSpendPoint[];
+  size?: "compact" | "large";
+}) {
   const gradientId = useId();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const HEIGHT = SIZES[size].height;
+  const PADDING = SIZES[size].padding;
 
   const { plannedPath, actualPath, maxValue, xFor, yFor } = useMemo(() => {
     const innerWidth = WIDTH - PADDING.left - PADDING.right;
@@ -47,7 +61,7 @@ export function SpendChart({ points }: { points: CumulativeSpendPoint[] }) {
       xFor,
       yFor,
     };
-  }, [points]);
+  }, [points, HEIGHT, PADDING]);
 
   if (points.length === 0) {
     return <p className="text-sm text-muted-foreground">Sem dados neste mês ainda.</p>;

@@ -23,7 +23,29 @@ export function computeMonthProjection(
   const year = today.getUTCFullYear();
   const month = today.getUTCMonth();
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  const daysElapsed = Math.min(today.getUTCDate(), daysInMonth);
+  const firstDay = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+  const lastDay = new Date(Date.UTC(year, month, daysInMonth)).toISOString().slice(0, 10);
+  return computeMonthProjectionForRange(monthPlanned, monthActualSoFar, { firstDay, lastDay }, today);
+}
+
+/**
+ * Mesma projeção por ritmo, mas para um mês qualquer (não necessariamente o
+ * mês corrente) — usado pelo dashboard da agência, que respeita o mês
+ * selecionado no filtro. Dias decorridos são contados dentro do próprio
+ * intervalo: 0 se o mês ainda não começou (mês futuro), o mês inteiro se já
+ * terminou (mês passado, projeção = realizado final).
+ */
+export function computeMonthProjectionForRange(
+  monthPlanned: number,
+  monthActualSoFar: number,
+  monthRange: { firstDay: string; lastDay: string },
+  today: Date = todayUTC(),
+): MonthProjection {
+  const start = new Date(`${monthRange.firstDay}T00:00:00Z`);
+  const end = new Date(`${monthRange.lastDay}T00:00:00Z`);
+  const daysInMonth = Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1;
+  const daysElapsed =
+    today < start ? 0 : today > end ? daysInMonth : Math.floor((today.getTime() - start.getTime()) / 86_400_000) + 1;
 
   const projectedSpend = daysElapsed > 0 ? (monthActualSoFar / daysElapsed) * daysInMonth : 0;
   const status = classifySpendStatus(projectedSpend, monthPlanned, monthPlanned);

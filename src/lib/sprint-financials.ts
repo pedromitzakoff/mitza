@@ -71,3 +71,23 @@ export function currentMonthRange(today: Date = todayUTC()): { firstDay: string;
     lastDay: lastDay.toISOString().slice(0, 10),
   };
 }
+
+/** Lê o mês selecionado (`?month=YYYY-MM`) da URL, ou usa o mês corrente se
+ * ausente/inválido — mesmo parsing reutilizado por Operação e pela Visão
+ * Geral, pra nunca duplicar essa regra. */
+export function monthRangeFromParam(
+  monthParam: string | undefined,
+  today: Date = todayUTC(),
+): { firstDay: string; lastDay: string } {
+  if (monthParam) {
+    const [yearStr, monthStr] = monthParam.split("-");
+    const year = Number(yearStr);
+    const month = Number(monthStr) - 1;
+    if (Number.isFinite(year) && Number.isFinite(month) && month >= 0 && month <= 11) {
+      const firstDay = new Date(Date.UTC(year, month, 1));
+      const lastDay = new Date(Date.UTC(year, month + 1, 0));
+      return { firstDay: firstDay.toISOString().slice(0, 10), lastDay: lastDay.toISOString().slice(0, 10) };
+    }
+  }
+  return currentMonthRange(today);
+}

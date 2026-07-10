@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
-import { currentMonthRange } from "@/lib/sprint-financials";
+import { monthRangeFromParam } from "@/lib/sprint-financials";
 import { formatFullDate } from "@/lib/format";
 import type { CommentItem } from "@/app/clients/comment-thread";
 import {
@@ -15,20 +15,6 @@ import {
 } from "./operation-data";
 import { OperationClientCard } from "./client-card";
 import { TaskDrawerPanel } from "./task-drawer-panel";
-
-function monthRangeFromParam(monthParam: string | undefined, today: Date) {
-  if (monthParam) {
-    const [yearStr, monthStr] = monthParam.split("-");
-    const year = Number(yearStr);
-    const month = Number(monthStr) - 1;
-    if (Number.isFinite(year) && Number.isFinite(month) && month >= 0 && month <= 11) {
-      const firstDay = new Date(Date.UTC(year, month, 1));
-      const lastDay = new Date(Date.UTC(year, month + 1, 0));
-      return { firstDay: firstDay.toISOString().slice(0, 10), lastDay: lastDay.toISOString().slice(0, 10) };
-    }
-  }
-  return currentMonthRange(today);
-}
 
 const MODE_LABEL: Record<OperationMode, string> = {
   hoje: "Hoje",
@@ -88,7 +74,11 @@ export default async function OperationPage({
       .select("id, client_id, start_date, end_date, planned_spend")
       .gte("start_date", firstDay)
       .lte("start_date", lastDay),
-    supabase.from("daily_spend").select("client_id, date, spend").gte("date", firstDay).lte("date", lastDay),
+    supabase
+      .from("daily_spend")
+      .select("client_id, date, spend, synced_at")
+      .gte("date", firstDay)
+      .lte("date", lastDay),
     supabase
       .from("tasks")
       .select(
@@ -127,10 +117,16 @@ export default async function OperationPage({
   }
 
   const dailySpendByClient = new Map<string, { date: string; spend: number }[]>();
+  const lastSyncedByClient = new Map<string, string>();
   for (const d of dailySpend ?? []) {
     const list = dailySpendByClient.get(d.client_id) ?? [];
     list.push({ date: d.date, spend: d.spend });
     dailySpendByClient.set(d.client_id, list);
+
+    const current = lastSyncedByClient.get(d.client_id);
+    if (!current || d.synced_at > current) {
+      lastSyncedByClient.set(d.client_id, d.synced_at);
+    }
   }
 
   const tasksByClient = new Map<string, OperationClientRawData["tasks"]>();
@@ -158,6 +154,7 @@ export default async function OperationPage({
       tasks: tasksByClient.get(client.id) ?? [],
       clientLastActivityAt: clientActivityById.get(client.id) ?? null,
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
+      lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
     };
   });
 

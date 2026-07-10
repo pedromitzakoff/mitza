@@ -19,6 +19,11 @@ export function formatDateRange(startDate: string, endDate: string): string {
   return `${start} – ${end}`;
 }
 
+/** Data curta (DD/MM), pra colunas densas de tabela. */
+export function formatShortDate(value: string): string {
+  return dayMonthFormatter.format(new Date(`${value}T00:00:00Z`));
+}
+
 const weekdayLongFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: "UTC" });
 const weekdayShortFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "UTC" });
 const dayMonthLongFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -79,4 +84,16 @@ const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
 
 export function formatDateTime(value: string): string {
   return dateTimeFormatter.format(new Date(value));
+}
+
+const monthYearFormatter = new Intl.DateTimeFormat("pt-BR", {
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/** Rótulo do mês selecionado no dashboard da agência (ex.: "Julho de 2026"). */
+export function formatMonthLabel(firstDayOfMonth: string): string {
+  const [month, year] = monthYearFormatter.format(new Date(`${firstDayOfMonth}T00:00:00Z`)).split(" de ");
+  return `${capitalize(month)} de ${year}`;
 }

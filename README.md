@@ -365,6 +365,17 @@ automático da sync, refinamentos de UX, etc.
     tarefa, financeiro em 3 colunas com edição inline, barra de progresso
     de tarefas, cards de tarefa mais compactos — só visual, nenhuma regra
     de negócio mudou
+18. ✅ Visão Geral vira o dashboard principal da agência (rota `/`, home
+    após login): filtros globais (mês, gestor, status da conta, atividade
+    operacional, ritmo de investimento, tarefas, busca), indicadores de
+    portfólio e financeiro consolidados, gráfico planejado x real
+    acumulado da agência, indicadores de sprint (em dia/atenção/crítica/sem
+    execução + taxa de execução), bloco "Precisa de atenção" e "Contas
+    prioritárias" no nível da agência, resumo por gestor ("Minha Operação"
+    pro gestor), tabela de clientes densa com CTAs pra Operação — tudo
+    reaproveitando `buildOperationClientCard` (agora com mês selecionável)
+    e as mesmas regras de saúde/ritmo/atividade já usadas em Operação e na
+    página do cliente, sem duplicar lógica
 
 ## Deploy
 

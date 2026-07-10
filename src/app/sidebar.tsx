@@ -15,7 +15,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Clientes", href: "/", isActive: (p) => p === "/" },
+  { label: "Visão Geral", href: "/", isActive: (p) => p === "/" },
   {
     label: "Operação",
     href: "/operation",
@@ -72,7 +72,9 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col">
       <div className="p-4">
-        <p className="text-lg font-semibold text-foreground">Mitza</p>
+        <Link href="/" className="text-lg font-semibold text-foreground">
+          Mitza
+        </Link>
       </div>
 
       {isAdmin && (
@@ -133,7 +135,9 @@ export function Sidebar({ profile }: { profile: { name: string; role: UserRole }
   return (
     <>
       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card px-4 py-3 md:hidden">
-        <p className="text-lg font-semibold text-foreground">Mitza</p>
+        <Link href="/" className="text-lg font-semibold text-foreground">
+          Mitza
+        </Link>
         <button
           type="button"
           onClick={() => setMobileOpen(true)}

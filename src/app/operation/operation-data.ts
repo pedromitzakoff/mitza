@@ -1,5 +1,5 @@
 import { computeSprintFinancials, currentMonthRange, type SprintFinancials } from "@/lib/sprint-financials";
-import { classifySpendStatus } from "@/lib/spend-status";
+import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { buildAttentionAlerts, computeAccountHealth, type AttentionAlert, type AccountHealth } from "@/lib/attention-alerts";
 import { buildSprintExecutionAlert } from "@/lib/sprint-execution";
@@ -29,6 +29,7 @@ export interface OperationClientRawData {
   tasks: OperationTaskItem[];
   clientLastActivityAt: string | null;
   sprintLastActivityAt: string | null;
+  lastSyncedAt: string | null;
 }
 
 export interface OperationClientCard {
@@ -47,14 +48,28 @@ export interface OperationClientCard {
   activityStatus: OperationalActivityStatus;
   activityLabel: string;
   sprintFilterBucket: SprintFilterBucket;
+  monthPlanned: number;
+  monthActual: number;
+  monthStatus: SpendStatus;
+  hasMonthGoal: boolean;
+  /** Prazo da otimização concluída mais recente (qualquer mês), ou null se
+   * nunca houve uma. */
+  lastOptimizationAt: string | null;
+  lastSyncedAt: string | null;
 }
 
 /** Monta o card operacional de um cliente a partir dos dados já buscados
  * em lote (nunca uma query por cliente) — reaproveita as mesmas funções
- * puras da página individual do cliente. */
-export function buildOperationClientCard(client: OperationClientRawData, today: Date): OperationClientCard {
+ * puras da página individual do cliente. `monthRange` é opcional (default:
+ * mês corrente) — o dashboard da agência passa um mês selecionado; a tela
+ * Operação continua sem passar nada, então o comportamento dela não muda. */
+export function buildOperationClientCard(
+  client: OperationClientRawData,
+  today: Date,
+  monthRange?: { firstDay: string; lastDay: string },
+): OperationClientCard {
   const todayStr = today.toISOString().slice(0, 10);
-  const { firstDay, lastDay } = currentMonthRange(today);
+  const { firstDay, lastDay } = monthRange ?? currentMonthRange(today);
 
   const currentSprintRow = client.sprints.find(
     (s) => s.start_date <= todayStr && s.end_date >= todayStr,
@@ -101,6 +116,14 @@ export function buildOperationClientCard(client: OperationClientRawData, today: 
     recentOptimizationTasks.length === 0 ||
     recentOptimizationTasks.some((t) => effectiveTaskStatus(t, today) === "feito");
 
+  const completedOptimizations = client.tasks.filter(
+    (t) => t.type === "otimizacao" && effectiveTaskStatus(t, today) === "feito",
+  );
+  const lastOptimizationAt =
+    completedOptimizations.length > 0
+      ? completedOptimizations.reduce((latest, t) => (t.due_date > latest ? t.due_date : latest), completedOptimizations[0].due_date)
+      : null;
+
   const lastActivityDate = client.clientLastActivityAt ? new Date(client.clientLastActivityAt) : null;
   const clientInactivityBusinessDays = lastActivityDate
     ? businessDaysSince(lastActivityDate, today)
@@ -112,7 +135,7 @@ export function buildOperationClientCard(client: OperationClientRawData, today: 
     monthStatus,
     overdueTasksCount: taskCounts.overdue,
     optimizationRecentlyDone,
-    lastSyncedAt: null,
+    lastSyncedAt: client.lastSyncedAt,
     currentSprintPlannedSpend: sprint?.plannedSpend ?? null,
     currentSprintTaskCount: sprintTasks.length,
     currentSprintUnassignedCount: sprintTasks.filter((t) => !t.assignee).length,
@@ -162,6 +185,12 @@ export function buildOperationClientCard(client: OperationClientRawData, today: 
     activityStatus,
     activityLabel,
     sprintFilterBucket,
+    monthPlanned,
+    monthActual,
+    monthStatus,
+    hasMonthGoal: monthPlanned > 0,
+    lastOptimizationAt,
+    lastSyncedAt: client.lastSyncedAt,
   };
 }
 
