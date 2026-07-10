@@ -1,4 +1,4 @@
-import type { SpendSource } from "./sprint-financials";
+import { daysBetweenInclusive, type SpendSource } from "./sprint-financials";
 
 function parseDateUTC(value: string): Date {
   return new Date(`${value}T00:00:00Z`);
@@ -6,12 +6,6 @@ function parseDateUTC(value: string): Date {
 
 function toDateString(date: Date): string {
   return date.toISOString().slice(0, 10);
-}
-
-function clampDateString(date: string, min: string, max: string): string {
-  if (date < min) return min;
-  if (date > max) return max;
-  return date;
 }
 
 export interface CumulativeSpendPoint {
@@ -28,12 +22,17 @@ export interface CumulativeSpendPoint {
  * real pra esses dias).
  *
  * Sprints com spend_source "manual" não têm distribuição diária real — o
- * valor manual é um número agregado só. Em vez de inventar uma distribuição
- * ao longo da sprint, o valor inteiro entra de uma vez no dia da última
- * edição manual (manual_spend_updated_at, ou o fim da sprint se esse dado
- * não existir) e permanece acumulado dali em diante. Os dias de daily_spend
- * dentro do período de uma sprint manual são ignorados aqui pra não contar
- * o gasto duas vezes (uma pela sync do Meta, outra pelo valor manual).
+ * valor manual é um número agregado só. O valor é distribuído igualmente
+ * entre os dias já decorridos da sprint (start_date até min(hoje,
+ * end_date) — sprint em andamento só distribui até hoje; sprint encerrada
+ * distribui por todo o período), nunca pela data em que o usuário editou o
+ * valor: reeditar um gasto de uma sprint passada recalcula a distribuição
+ * inteira sobre as datas originais da sprint, não cria gasto na data da
+ * edição. Eventual sobra de centavos do arredondamento vai pro último dia
+ * decorrido, garantindo que a soma bata exatamente com o valor informado.
+ * Os dias de daily_spend dentro do período de uma sprint manual são
+ * ignorados aqui pra não contar o gasto duas vezes (uma pela sync do Meta,
+ * outra pelo valor manual).
  */
 export function computeCumulativeSpendSeries(
   sprints: {
@@ -42,7 +41,6 @@ export function computeCumulativeSpendSeries(
     planned_spend: number;
     spend_source?: SpendSource;
     manual_actual_spend?: number | null;
-    manual_spend_updated_at?: string | null;
   }[],
   dailySpend: { date: string; spend: number }[],
   monthRange: { firstDay: string; lastDay: string },
@@ -60,11 +58,24 @@ export function computeCumulativeSpendSeries(
 
   for (const sprint of manualSprints) {
     const manualValue = sprint.manual_actual_spend ?? 0;
-    const anchorRaw = sprint.manual_spend_updated_at
-      ? sprint.manual_spend_updated_at.slice(0, 10)
-      : sprint.end_date;
-    const anchor = clampDateString(anchorRaw, monthRange.firstDay, monthRange.lastDay);
-    spendByDate.set(anchor, (spendByDate.get(anchor) ?? 0) + manualValue);
+    const start = parseDateUTC(sprint.start_date);
+    const end = parseDateUTC(sprint.end_date);
+    const effectiveEnd = today < end ? today : end;
+
+    if (effectiveEnd < start) continue; // sprint futura: nada decorrido ainda
+
+    const elapsedDays = daysBetweenInclusive(start, effectiveEnd);
+    const totalCents = Math.round(manualValue * 100);
+    const baseCents = Math.floor(totalCents / elapsedDays);
+    const remainderCents = totalCents - baseCents * elapsedDays;
+
+    let dayIndex = 0;
+    for (let d = new Date(start); d <= effectiveEnd; d.setUTCDate(d.getUTCDate() + 1), dayIndex++) {
+      const dateStr = toDateString(d);
+      const isLastElapsedDay = dayIndex === elapsedDays - 1;
+      const dayCents = baseCents + (isLastElapsedDay ? remainderCents : 0);
+      spendByDate.set(dateStr, (spendByDate.get(dateStr) ?? 0) + dayCents / 100);
+    }
   }
 
   const dailyPlannedRate = new Map<string, number>();

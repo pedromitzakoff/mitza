@@ -73,7 +73,7 @@ export function sumEffectiveSpend(
   return sprints.reduce((sum, sprint) => sum + computeSprintEffectiveSpend(sprint, dailySpend), 0);
 }
 
-function daysBetweenInclusive(a: Date, b: Date): number {
+export function daysBetweenInclusive(a: Date, b: Date): number {
   return Math.floor((b.getTime() - a.getTime()) / 86_400_000) + 1;
 }
 

@@ -537,6 +537,20 @@ automático da sync, refinamentos de UX, etc.
     do ritmo" ou "Dentro do ritmo esperado"), reaproveitando a mesma
     classificação/tolerância de sempre (`classifySpendStatus`, ±10%) sem
     inventar uma nova
+33. ✅ Correção da alocação temporal do gasto manual (sem migration): a
+    Etapa 32 lançava o valor manual inteiro de uma vez no dia da última
+    edição — incorreto, porque o gasto manual representa o investimento
+    do período inteiro da sprint, não de um único dia. `computeCumulativeSpendSeries`
+    agora distribui o valor igualmente entre os dias já decorridos da
+    sprint (`start_date` até `min(hoje, end_date)` — sprint em andamento só
+    distribui até hoje, sprint encerrada distribui pelo período inteiro),
+    trabalhando em centavos e jogando a sobra de arredondamento no último
+    dia decorrido, pra soma bater exatamente com o valor informado; a data
+    em que o usuário edita não influencia mais nada — reeditar o gasto de
+    uma sprint passada recalcula a distribuição sobre as datas originais da
+    sprint, nunca cria gasto na data da edição. A coluna
+    `manual_spend_updated_at` (Etapa 32) continua existindo e sendo
+    preenchida pela action, só não é mais usada por essa conta
 
 ## Deploy
 
