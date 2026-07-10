@@ -406,6 +406,15 @@ automático da sync, refinamentos de UX, etc.
     vez de mostrar observações/comentários permanentemente na linha;
     comentários da sprint viraram "Ver detalhes da sprint" — nenhuma
     informação removida, só reorganizada por prioridade de decisão
+23. ✅ Correção da hierarquia do App Shell: Top Bar agora ocupa 100% da
+    largura, acima de tudo (antes ela só começava depois da Sidebar); a
+    Sidebar passou a começar exatamente abaixo da Top Bar, com scroll
+    próprio (`calc(100vh - altura da Top Bar)`) e dimensões centralizadas
+    (`app-shell-dimensions.ts`); ganhou ícones (nova dependência
+    `lucide-react`, primeira biblioteca de ícones do projeto), recolhe pra
+    uma faixa só de ícones com tooltip (botão integrado no topo dela, não
+    mais um círculo flutuando na borda), e no mobile o drawer some abaixo
+    da Top Bar (que continua sempre visível e clicável)
 
 ## Deploy
 

@@ -3,6 +3,7 @@ import { formatDateRange } from "@/lib/format";
 import type { AccountHealth } from "@/lib/attention-alerts";
 import { HEALTH_BADGE_CLASSES, HEALTH_LABEL } from "./client-header";
 import { syncClientMetaAction } from "./meta-actions";
+import { TOP_BAR_OFFSET_CLASS } from "@/app/app-shell-dimensions";
 
 /**
  * Subheader sticky do cliente — fica abaixo da Top Bar global em toda rota
@@ -36,7 +37,7 @@ export function ClientContextBar({
   const gestorLabel = managerNames.length > 0 ? `Gestor: ${managerNames.join(", ")}` : "Sem gestor atribuído";
 
   return (
-    <div className="sticky top-12 z-20 border-b border-border bg-card">
+    <div className={`sticky z-20 border-b border-border bg-card ${TOP_BAR_OFFSET_CLASS}`}>
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-1.5">
         <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
           <p className="min-w-0 shrink truncate border-l-2 border-brand pl-2.5 text-sm font-semibold text-foreground">

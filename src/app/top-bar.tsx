@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { formatAgencyDateTime } from "@/lib/format";
+import { TOP_BAR_HEIGHT_CLASS } from "./app-shell-dimensions";
 
 function subscribeToClock(callback: () => void) {
   const interval = setInterval(callback, 30_000);
@@ -45,7 +46,9 @@ function AgencyClock() {
 
 export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   return (
-    <header className="sticky top-0 z-30 flex h-12 shrink-0 items-center justify-between border-b border-border bg-card px-4">
+    <header
+      className={`sticky top-0 z-30 flex w-full shrink-0 items-center justify-between border-b border-border bg-card px-4 ${TOP_BAR_HEIGHT_CLASS}`}
+    >
       <div className="flex items-center gap-3">
         <button
           type="button"
