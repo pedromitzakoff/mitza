@@ -572,6 +572,17 @@ automático da sync, refinamentos de UX, etc.
     existe padrão equivalente hoje em nenhuma tela, então "Editar" continua
     sendo a única ação. `/clients`, Visão Geral, Sprints, tarefas, regras
     financeiras, Meta API, autenticação, permissões e RLS não foram tocados
+35. ✅ Simplificação da tabela de clientes da Visão Geral (sem migration):
+    título passou a acompanhar o mês selecionado no dashboard ("Clientes ·
+    Julho de 2026", nunca a data atual); colunas Tarefas e Projeção do mês
+    removidas desta tabela (os cálculos de tarefas e projeção continuam
+    intactos no resto do sistema — só pararam de aparecer aqui); nova coluna
+    "% Realizado" (`gasto real do mês / investimento planejado do mês`,
+    arredondado, sem casas decimais), mostrando "—" em vez de 0%/NaN/Infinity
+    quando não há meta configurada; estrutura final: Cliente, Gestor,
+    Investimento, % Realizado, Última atividade, Situação, Ação — mesma
+    regra de Situação de sempre (`classifySpendStatus`, sem mudança); tabela
+    continua com a mesma altura de linha compacta, sem cards novos
 
 ## Deploy
 

@@ -13,7 +13,6 @@ import type { AccountHealth } from "@/lib/attention-alerts";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import { type SpendStatus } from "@/lib/spend-status";
 import { computeCumulativeSpendSeries } from "@/lib/spend-chart-data";
-import { computeMonthProjectionForRange } from "@/lib/client-metrics";
 import { SpendChart } from "@/app/clients/spend-chart";
 import { buildAgencyAttentionAlerts } from "@/lib/agency-alerts";
 import {
@@ -583,7 +582,9 @@ export default async function Home({
           rápido o estágio do mês de cada conta. */}
       <div className="mt-5">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Clientes</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Clientes · {formatMonthLabel(monthRange.firstDay)}
+          </h2>
           <div className="flex items-center gap-2 text-xs">
             <span className="text-muted-foreground">{sortedCards.length} cliente{sortedCards.length !== 1 ? "s" : ""}</span>
             <Link
@@ -603,16 +604,16 @@ export default async function Home({
                   <th className="py-1.5 px-3">Cliente</th>
                   <th className="py-1.5 px-3">Gestor</th>
                   <th className="py-1.5 px-3">Investimento</th>
-                  <th className="py-1.5 px-3">Projeção do mês</th>
-                  <th className="py-1.5 px-3">Tarefas</th>
+                  <th className="py-1.5 px-3">% Realizado</th>
                   <th className="py-1.5 px-3">Última atividade</th>
                   <th className="py-1.5 px-3">Situação</th>
-                  <th className="py-1.5 px-3" />
+                  <th className="py-1.5 px-3">Ação</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedCards.map((card) => {
-                  const projection = computeMonthProjectionForRange(card.monthPlanned, card.monthActual, monthRange, today);
+                  const pctRealizado =
+                    card.monthPlanned > 0 ? Math.round((card.monthActual / card.monthPlanned) * 100) : null;
                   return (
                     <tr key={card.clientId} className="border-b border-border/60 last:border-0">
                       <td className="py-1.5 px-3 font-semibold text-foreground">{card.clientName}</td>
@@ -623,22 +624,7 @@ export default async function Home({
                         {formatCurrency(card.monthActual)} / {formatCurrency(card.monthPlanned)}
                       </td>
                       <td className="py-1.5 px-3 tabular-nums text-muted-foreground">
-                        {card.hasMonthGoal ? (
-                          <>
-                            {formatCurrency(projection.projectedSpend)}
-                            {projection.projectedPct !== null && ` · ${Math.round(projection.projectedPct)}%`}
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="py-1.5 px-3 text-muted-foreground">
-                        {card.taskCounts.done}/{card.taskCounts.total}
-                        {card.taskCounts.overdue > 0 && (
-                          <span className="ml-1 font-medium text-red-600 dark:text-red-400">
-                            · {card.taskCounts.overdue} atrasada{card.taskCounts.overdue !== 1 ? "s" : ""}
-                          </span>
-                        )}
+                        {pctRealizado !== null ? `${pctRealizado}%` : "—"}
                       </td>
                       <td className="py-1.5 px-3 text-muted-foreground">{card.activityLabel}</td>
                       <td className="py-1.5 px-3">
