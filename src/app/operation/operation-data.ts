@@ -10,7 +10,7 @@ import {
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { buildAttentionAlerts, computeAccountHealth, type AttentionAlert, type AccountHealth } from "@/lib/attention-alerts";
-import { buildSprintExecutionAlert } from "@/lib/sprint-execution";
+import { buildSprintExecutionAlert, computeSprintExecutionInfo, type SprintExecutionInfo } from "@/lib/sprint-execution";
 import { businessDaysSince } from "@/lib/business-days";
 import {
   classifyOperationalActivityStatus,
@@ -75,6 +75,13 @@ export interface OperationClientCard {
    * nunca houve uma. */
   lastOptimizationAt: string | null;
   lastSyncedAt: string | null;
+  /** Tarefas do mês selecionado com status efetivo "atrasado" — usado pela
+   * Central de Atenção (Visão Geral) pra agrupar por cliente sem precisar
+   * de uma query nova (mesmo `monthTasks` já calculado abaixo). */
+  overdueTasks: { id: string; due_date: string }[];
+  /** Mesma regra de "sprint sem execução" de sempre — null se a sprint
+   * atual não está sem execução (ou não há sprint atual). */
+  sprintExecutionInfo: SprintExecutionInfo | null;
 }
 
 /** Monta o card operacional de um cliente a partir dos dados já buscados
@@ -114,11 +121,14 @@ export function buildOperationClientCard(
   const monthStatus = classifySpendStatus(monthActual, monthPlanned, monthPlanned);
 
   const taskCounts = { total: 0, done: 0, pending: 0, overdue: 0 };
+  const overdueTasks: { id: string; due_date: string }[] = [];
   for (const task of monthTasks) {
     const status = effectiveTaskStatus(task, today);
     if (status === "feito") taskCounts.done++;
-    else if (status === "atrasado") taskCounts.overdue++;
-    else taskCounts.pending++;
+    else if (status === "atrasado") {
+      taskCounts.overdue++;
+      overdueTasks.push({ id: task.id, due_date: task.due_date });
+    } else taskCounts.pending++;
     taskCounts.total++;
   }
 
@@ -165,6 +175,9 @@ export function buildOperationClientCard(
   const sprintExecutionAlert = sprint
     ? buildSprintExecutionAlert(sprint, sprintLastActivityDate, today)
     : null;
+  const sprintExecutionInfo = sprint
+    ? computeSprintExecutionInfo(sprint, sprintLastActivityDate, today)
+    : null;
 
   const allAlerts = sprintExecutionAlert ? [...alerts, sprintExecutionAlert] : alerts;
   const accountHealth = computeAccountHealth(allAlerts);
@@ -208,6 +221,8 @@ export function buildOperationClientCard(
     hasMonthGoal: monthPlanned > 0,
     lastOptimizationAt,
     lastSyncedAt: client.lastSyncedAt,
+    overdueTasks,
+    sprintExecutionInfo,
   };
 }
 

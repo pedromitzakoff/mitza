@@ -12,16 +12,21 @@ import {
 import type { AccountHealth } from "@/lib/attention-alerts";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import { buildAgencyAttentionAlerts } from "@/lib/agency-alerts";
 import {
   computeFinancialSummary,
   computeManagerSummary,
   computeSpendRhythmCounts,
-  computeSprintOpsSummary,
   sortCardsBySpendRhythm,
 } from "@/lib/agency-metrics";
+import {
+  buildAttentionCenterItems,
+  computeAttentionCenterCounts,
+  selectTopAttentionItems,
+  type AttentionCenterCategory,
+} from "@/lib/attention-center";
 import { AgencyFilters } from "./agency-filters";
 import { AgencyInvestmentBar } from "./agency-investment-bar";
+import { AttentionCenterDrawer, AttentionCenterPanel } from "./attention-center";
 
 /** Rótulos da "situação" financeira do mês nesta tabela — mesma
  * classificação de sempre (card.monthStatus, ±10% central), só um texto
@@ -126,6 +131,8 @@ export default async function Home({
     sync?: string;
     meta?: string;
     sort?: string;
+    atencao?: string;
+    atencaoCategoria?: string;
   }>;
 }) {
   const profile = await getCurrentProfile();
@@ -322,8 +329,6 @@ export default async function Home({
 
   const spendRhythm = computeSpendRhythmCounts(cards);
   const financial = computeFinancialSummary(cards);
-  const sprintOps = computeSprintOpsSummary(cards, todayStr);
-  const agencyAlerts = buildAgencyAttentionAlerts(cards);
 
   const managersForSummary = isAdmin ? gestores ?? [] : [{ id: profile.id, name: profile.name }];
   const managerSummary = computeManagerSummary(managersForSummary, filteredBase, todayStr);
@@ -334,10 +339,11 @@ export default async function Home({
   const investmentDiffTone =
     investmentRitmoStatus === "acima" ? "critical" : investmentRitmoStatus === "abaixo" ? "warning" : "neutral";
 
-  const sprintDistributionTotal = Math.max(
-    1,
-    sprintOps.emDia + sprintOps.atencao + sprintOps.criticas + sprintOps.semExecucao,
-  );
+  const attentionItems = buildAttentionCenterItems(cards, today);
+  const attentionCounts = computeAttentionCenterCounts(attentionItems);
+  const attentionTop = selectTopAttentionItems(attentionItems, 5, 2);
+  const attentionOpen = params.atencao === "1";
+  const attentionCategory = (params.atencaoCategoria ?? "todos") as AttentionCenterCategory | "todos";
 
   // Preserva TODOS os filtros ativos — usado na navegação de mês e na
   // ordenação da tabela, que não devem resetar o resto do contexto.
@@ -376,16 +382,15 @@ export default async function Home({
     return `/?${next.toString()}`;
   };
 
-  const FILTER_KEY_TO_PARAM: Record<string, Record<string, string>> = {
-    critico: { health: "critico" },
-    acima: { ritmo: "acima" },
-    abaixo: { ritmo: "abaixo" },
-    atrasadas: { tasks: "atrasadas" },
-    sem_execucao: { sprintBucket: "sem_execucao" },
-    inativo: { activity: "inativo" },
-    sem_meta: { meta: "sem" },
-    sem_sync: { sync: "stale" },
-  };
+  // Abre/fecha o drawer "Ver tudo" da Central de Atenção por cima do que já
+  // está na URL (filtros, mês, ordenação) — igual ao drawer de tarefa já
+  // usado em Operação/Sprints, só que os parâmetros são próprios daqui.
+  const attentionUrl = (overrides: { atencao?: string; atencaoCategoria?: string }) =>
+    buildUrl({ atencao: overrides.atencao ?? "", atencaoCategoria: overrides.atencaoCategoria ?? "" });
+  const openAttentionHref = attentionUrl({ atencao: "1" });
+  const closeAttentionHref = attentionUrl({});
+  const attentionCategoryHref = (category: AttentionCenterCategory | "todos") =>
+    attentionUrl({ atencao: "1", atencaoCategoria: category === "todos" ? "" : category });
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-6">
@@ -492,112 +497,25 @@ export default async function Home({
             tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
           />
         </MetricGroup>
-
-        <MetricGroup
-          title="Operação"
-          extra={
-            <>
-              <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full border border-border">
-                {sprintOps.emDia > 0 && (
-                  <div
-                    className="bg-green-500"
-                    style={{ width: `${(sprintOps.emDia / sprintDistributionTotal) * 100}%` }}
-                    title={`Em dia: ${sprintOps.emDia}`}
-                  />
-                )}
-                {sprintOps.atencao > 0 && (
-                  <div
-                    className="bg-amber-500"
-                    style={{ width: `${(sprintOps.atencao / sprintDistributionTotal) * 100}%` }}
-                    title={`Atenção: ${sprintOps.atencao}`}
-                  />
-                )}
-                {sprintOps.criticas > 0 && (
-                  <div
-                    className="bg-red-500"
-                    style={{ width: `${(sprintOps.criticas / sprintDistributionTotal) * 100}%` }}
-                    title={`Críticas: ${sprintOps.criticas}`}
-                  />
-                )}
-                {sprintOps.semExecucao > 0 && (
-                  <div
-                    className="bg-zinc-400 dark:bg-zinc-600"
-                    style={{ width: `${(sprintOps.semExecucao / sprintDistributionTotal) * 100}%` }}
-                    title={`Sem execução: ${sprintOps.semExecucao}`}
-                  />
-                )}
-              </div>
-              <div className="mt-1.5 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-green-500" /> Em dia
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-amber-500" /> Atenção
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-red-500" /> Críticas
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-zinc-400 dark:bg-zinc-600" /> Sem execução
-                </span>
-              </div>
-            </>
-          }
-        >
-          <StatItem label="Sprints em andamento" value={String(sprintOps.emAndamento)} />
-          <StatItem
-            label="Taxa de execução"
-            value={sprintOps.taxaExecucao !== null ? `${Math.round(sprintOps.taxaExecucao)}%` : "—"}
-          />
-          <StatItem
-            label="Tarefas atrasadas"
-            value={String(sprintOps.atrasadas)}
-            href={drillDownUrl({ tasks: "atrasadas" })}
-          />
-          <StatItem label="Tarefas hoje" value={String(sprintOps.paraHoje)} href="/sprints?mode=hoje" />
-          <StatItem
-            label="Sem execução"
-            value={String(sprintOps.semExecucao)}
-            href="/sprints?sprint=sem_execucao"
-          />
-        </MetricGroup>
       </div>
 
-      {/* Precisa de atenção */}
-      <div className="mt-3 rounded-lg border border-border bg-card p-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Precisa de atenção</h2>
-        {agencyAlerts.length > 0 ? (
-          <ul className="mt-2 flex flex-col gap-1.5">
-            {agencyAlerts.map((alert) => (
-              <li key={alert.filterKey}>
-                <Link
-                  href={drillDownUrl(FILTER_KEY_TO_PARAM[alert.filterKey] ?? {})}
-                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900 ${
-                    alert.severity === "critico"
-                      ? "text-red-700 dark:text-red-300"
-                      : alert.severity === "atencao"
-                        ? "text-amber-700 dark:text-amber-300"
-                        : "text-muted-foreground"
-                  }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                      alert.severity === "critico"
-                        ? "bg-red-500"
-                        : alert.severity === "atencao"
-                          ? "bg-amber-500"
-                          : "bg-zinc-400"
-                    }`}
-                  />
-                  {alert.message}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-2 text-sm text-muted-foreground">Nenhum problema relevante neste recorte.</p>
-        )}
+      <div className="mt-3">
+        <AttentionCenterPanel
+          items={attentionTop}
+          counts={attentionCounts}
+          totalCount={attentionItems.length}
+          viewAllHref={openAttentionHref}
+        />
       </div>
+
+      {attentionOpen && (
+        <AttentionCenterDrawer
+          items={attentionItems}
+          category={attentionCategory}
+          closeHref={closeAttentionHref}
+          buildCategoryHref={attentionCategoryHref}
+        />
+      )}
 
       {/* Tabela única de clientes — consolida o que antes eram duas tabelas
           (Contas prioritárias + Clientes), só com o essencial pra entender

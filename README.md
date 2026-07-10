@@ -608,6 +608,28 @@ automático da sync, refinamentos de UX, etc.
     só troquei a ordem das colunas Situação/Última atividade e renomeei o
     rótulo "Meta não configurada" para "Sem planejamento"; blocos
     "Operação" e "Precisa de atenção" não foram alterados
+37. ✅ Blocos "Operação" e "Precisa de atenção" viram "Central de Atenção"
+    (sem migration): em vez de contadores genéricos, mostra até 5 situações
+    concretas (cliente + problema + contexto + ação), priorizadas por um
+    score determinístico calculado em memória (nunca salvo, nunca exibido).
+    Três categorias implementadas: **Sem execução** (reaproveita a regra já
+    existente de sprint sem execução — extraída para
+    `computeSprintExecutionInfo` em `sprint-execution.ts`, única fonte
+    tanto do alerta da página do cliente quanto da Central); **Tarefas
+    críticas** (agrupadas por cliente — só entra quando a tarefa mais
+    antiga está atrasada há ≥2 dias úteis OU o cliente tem ≥3 tarefas
+    atrasadas no mês, nunca uma por tarefa) e **Investimento fora do
+    ritmo** (reaproveita `monthStatus`/`classifySpendStatus`, o mesmo
+    cálculo do "Ritmo do mês" — sem regra financeira nova). **Comentários
+    pendentes não foi implementada**: `comments` não tem hoje nenhum campo
+    de pendência/resolução (só `content`/`created_at`/`author_id`), e uma
+    heurística baseada só em "comentário mais recente" seria uma regra
+    inventada — o contador correspondente fica oculto (não aparece como
+    zero falso) e a arquitetura (`AttentionCenterCategory`) já reserva o
+    valor `"comentarios"` pra quando existir estado confiável; no máximo 2
+    itens do mesmo cliente na lista principal, com "Ver tudo" abrindo um
+    drawer lateral (mesmo padrão do drawer de tarefa já usado em
+    Operação/Sprints) com filtro simples por categoria — sem página nova
 
 ## Deploy
 
