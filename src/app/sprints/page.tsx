@@ -16,6 +16,7 @@ import {
 } from "@/app/operation/operation-data";
 import { SprintClientGroup } from "./client-group";
 import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
+import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
 
 const MODE_LABEL: Record<OperationMode, string> = {
   hoje: "Hoje",
@@ -240,6 +241,7 @@ export default async function SprintsPage({
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
+      <ScrollRestoreOnMount />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Sprints</h1>

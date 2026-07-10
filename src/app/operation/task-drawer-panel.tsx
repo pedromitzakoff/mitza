@@ -1,9 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { TASK_STATUS_BADGE_CLASSES, TASK_STATUS_LABEL, TASK_TYPE_LABEL } from "@/app/clients/task-labels";
 import { formatDueDate } from "@/app/clients/task-row";
 import { completeTaskAction } from "@/app/clients/tasks-actions";
 import { createCommentAction } from "@/app/clients/comments-actions";
+import { saveScrollForReturn } from "@/lib/scroll-restore";
 import type { CommentItem } from "@/app/clients/comment-thread";
 import type { OperationTaskItem } from "./operation-data";
 
@@ -97,6 +100,7 @@ export function TaskDrawerPanel({
           )}
           <Link
             href={`/clients/${clientId}/tasks/${task.id}/edit?return_to=${encodeURIComponent(returnTo)}`}
+            onClick={() => saveScrollForReturn(returnTo)}
             className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
           >
             Editar tarefa

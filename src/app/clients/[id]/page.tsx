@@ -22,6 +22,7 @@ import type { CommentItem } from "../comment-thread";
 import type { TaskListItem } from "../task-row";
 import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
 import type { OperationTaskItem } from "@/app/operation/operation-data";
+import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
 
 const OPTIMIZATION_LOOKBACK_DAYS = 14;
 
@@ -271,6 +272,7 @@ export default async function ClientPage({
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-5">
+      <ScrollRestoreOnMount />
       <div>
         <ClientHeader
           clientName={client.name}
