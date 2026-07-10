@@ -631,6 +631,75 @@ automático da sync, refinamentos de UX, etc.
     drawer lateral (mesmo padrão do drawer de tarefa já usado em
     Operação/Sprints) com filtro simples por categoria — sem página nova
 
+38. ✅ Orçamento mensal do cliente com redistribuição financeira das sprints
+    (nova migration `monthly-budget.sql`): até aqui `sprints.planned_spend`
+    era um número único por sprint, editado direto e sem histórico — não
+    dava pra representar "parte da sprint atual já está consolidada (dias
+    que já passaram), parte ainda pode ser redistribuída (dias futuros)".
+    Duas tabelas novas resolvem isso: `sprint_planned_allocations` (uma
+    linha por sprint+dia, planejado em centavos) vira a fonte de verdade —
+    `sprints.planned_spend` passa a ser só um valor **derivado**, sempre
+    igual à soma das alocações daquela sprint, escrito só por uma função
+    transacional (nunca mais atualizado célula a célula); e
+    `monthly_budget_changes` guarda o histórico auditável de cada alteração
+    (data de efeito, quem alterou, valor anterior/novo, consolidado,
+    distribuído no futuro, total resultante), nunca sobrescrito. A função
+    `apply_monthly_budget_change` (Postgres, chamada via RPC) faz tudo numa
+    operação atômica só: trava as sprints do cliente/mês, calcula o
+    consolidado (dias `<= data de efeito`, que nunca mudam), calcula o
+    saldo futuro, redistribui em centavos exatos entre os dias futuros
+    (sobra no último dia), recalcula `planned_spend` de cada sprint a
+    partir da soma das alocações e grava o histórico — tudo ou nada. Editar
+    o mês corrente usa hoje (fuso `America/Sao_Paulo`) como data de efeito;
+    editar um mês futuro usa o dia anterior ao primeiro dia do mês (não há
+    período consolidado ainda, então 100% do novo orçamento é redistribuído
+    pelos dias); editar um mês encerrado é bloqueado tanto na aplicação
+    quanto dentro da própria função no banco (mensagem "Mês encerrado. O
+    orçamento histórico não pode ser alterado por este fluxo."). Se o novo
+    orçamento for menor que o já consolidado, não é bloqueado — o saldo
+    futuro vira zero e o total do mês fica acima do novo valor (sinalizado
+    como "excedente histórico" na prévia e na confirmação), nunca inventado
+    como se o passado pudesse ser desfeito. Backfill idempotente
+    (`backfill_sprint_planned_allocations`) reconstruiu a alocação de cada
+    sprint já existente distribuindo o `planned_spend` atual igualmente
+    pelos dias dela — reconstrução técnica só, não gera histórico de
+    alteração nem muda nenhum total.
+
+    Na página do cliente, a área "Orçamento de [mês]" (antes das sprints)
+    mostra o valor atual, "Distribuído em N sprints deste mês" e, só pra
+    admin, "Editar orçamento" — um painel com prévia completa do impacto
+    antes de salvar (nada é gravado enquanto se digita): planejamento
+    preservado até hoje, saldo futuro atual/novo, total resultante e a
+    lista "Sprint N: R$X → R$Y" de cada sprint afetada, com um passo de
+    confirmação com texto específico pra aumento/redução normal/redução
+    abaixo do consolidado. Quando já houve alteração, aparece um indicador
+    discreto (●, com tooltip e foco por teclado) e "Alterado em DD/MM/AAAA";
+    com mais de uma alteração no mês, "Ver histórico" abre um drawer lateral
+    (mesmo padrão visual da Central de Atenção) com a lista completa,
+    mais recente primeiro. A edição direta de `planned_spend` por sprint
+    (o "Editar" que existia no card da sprint) foi removida — o valor
+    continua visível ali, só que como "Definido pelo orçamento do mês"; a
+    única forma de mudar o planejado agora é pelo orçamento mensal, senão a
+    invariante "soma das alocações = orçamento" quebraria em silêncio.
+    Permissões: leitura do orçamento/indicador segue a mesma regra
+    financeira já usada em sprints/daily_spend (admin ou gestor do
+    cliente, tanto na RLS quanto na aplicação); só admin pode editar (RLS
+    admin-only nas duas tabelas novas) e só admin vê o link "Ver
+    histórico" completo — mesmo padrão já usado no card da sprint, onde a
+    leitura é ampla mas a ação sensível é restrita na UI.
+
+    O gráfico "Planejado acumulado x gasto real acumulado" da página do
+    cliente (`computeCumulativeSpendSeries`) parou de calcular uma taxa
+    fixa por sprint e passou a ler `sprint_planned_allocations` dia a dia —
+    é isso que garante que o gráfico preserva a história: uma alteração de
+    orçamento nunca reescreve os dias já passados, só os dias futuros à
+    data de efeito refletem a redistribuição nova. `computeSprintFinancials`,
+    `computeSprintExpectedToDate`, `classifySpendStatus`, a barra financeira
+    da sprint, o cartão da sprint, `/sprints`, `/clients` e a Visão Geral não
+    precisaram de nenhuma mudança de regra — todos continuam lendo
+    `sprint.planned_spend`, que agora só passou a ser mantido certo por
+    baixo dos panos.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

@@ -16,10 +16,16 @@ export interface CumulativeSpendPoint {
 }
 
 /**
- * Planejado acumulado (o ritmo esperado, espalhado uniformemente pelos dias
- * de cada sprint) x gasto real acumulado, dia a dia, do início ao fim do
+ * Planejado acumulado x gasto real acumulado, dia a dia, do início ao fim do
  * mês. actualCumulative fica null a partir de amanhã (ainda não temos dado
  * real pra esses dias).
+ *
+ * O planejado vem direto de `sprint_planned_allocations` (Etapa 38) — dia a
+ * dia, não mais uma taxa fixa por sprint. É isso que garante que o gráfico
+ * preserva a história: dias já consolidados (passado) nunca mudam depois de
+ * uma alteração de orçamento, só os dias futuros à data de efeito é que
+ * refletem a redistribuição nova. `plannedByDate` sem entrada pra um dia
+ * conta como R$ 0 planejado nesse dia (sprint sem orçamento configurado).
  *
  * Sprints com spend_source "manual" não têm distribuição diária real — o
  * valor manual é um número agregado só. O valor é distribuído igualmente
@@ -38,11 +44,11 @@ export function computeCumulativeSpendSeries(
   sprints: {
     start_date: string;
     end_date: string;
-    planned_spend: number;
     spend_source?: SpendSource;
     manual_actual_spend?: number | null;
   }[],
   dailySpend: { date: string; spend: number }[],
+  dailyPlanned: { date: string; planned_amount: number }[],
   monthRange: { firstDay: string; lastDay: string },
   today: Date,
 ): CumulativeSpendPoint[] {
@@ -78,16 +84,9 @@ export function computeCumulativeSpendSeries(
     }
   }
 
-  const dailyPlannedRate = new Map<string, number>();
-  for (const sprint of sprints) {
-    const start = parseDateUTC(sprint.start_date);
-    const end = parseDateUTC(sprint.end_date);
-    const totalDays = Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1;
-    const rate = totalDays > 0 ? sprint.planned_spend / totalDays : 0;
-
-    for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
-      dailyPlannedRate.set(toDateString(d), rate);
-    }
+  const plannedByDate = new Map<string, number>();
+  for (const row of dailyPlanned) {
+    plannedByDate.set(row.date, (plannedByDate.get(row.date) ?? 0) + row.planned_amount);
   }
 
   const points: CumulativeSpendPoint[] = [];
@@ -99,7 +98,7 @@ export function computeCumulativeSpendSeries(
 
   for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
     const dateStr = toDateString(d);
-    plannedCumulative += dailyPlannedRate.get(dateStr) ?? 0;
+    plannedCumulative += plannedByDate.get(dateStr) ?? 0;
 
     const isFuture = d > today;
     if (!isFuture) {

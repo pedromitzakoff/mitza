@@ -589,6 +589,108 @@ export interface Database {
           },
         ];
       };
+      sprint_planned_allocations: {
+        Row: {
+          id: string;
+          sprint_id: string;
+          client_id: string;
+          date: string;
+          planned_amount: number;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          sprint_id: string;
+          client_id: string;
+          date: string;
+          planned_amount?: number;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          sprint_id?: string;
+          client_id?: string;
+          date?: string;
+          planned_amount?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "sprint_planned_allocations_sprint_id_fkey";
+            columns: ["sprint_id"];
+            isOneToOne: false;
+            referencedRelation: "sprints";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "sprint_planned_allocations_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      monthly_budget_changes: {
+        Row: {
+          id: string;
+          client_id: string;
+          month: string;
+          effective_date: string;
+          changed_by: string | null;
+          previous_amount: number;
+          new_amount: number;
+          consolidated_amount: number;
+          future_amount_distributed: number;
+          resulting_total: number;
+          is_below_consolidated: boolean;
+          changed_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          month: string;
+          effective_date: string;
+          changed_by?: string | null;
+          previous_amount: number;
+          new_amount: number;
+          consolidated_amount: number;
+          future_amount_distributed: number;
+          resulting_total: number;
+          is_below_consolidated?: boolean;
+          changed_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          month?: string;
+          effective_date?: string;
+          changed_by?: string | null;
+          previous_amount?: number;
+          new_amount?: number;
+          consolidated_amount?: number;
+          future_amount_distributed?: number;
+          resulting_total?: number;
+          is_below_consolidated?: boolean;
+          changed_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "monthly_budget_changes_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "monthly_budget_changes_changed_by_fkey";
+            columns: ["changed_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       client_last_operational_activity: {
@@ -614,6 +716,27 @@ export interface Database {
       backfill_operational_activities: {
         Args: Record<PropertyKey, never>;
         Returns: void;
+      };
+      backfill_sprint_planned_allocations: {
+        Args: Record<PropertyKey, never>;
+        Returns: void;
+      };
+      apply_monthly_budget_change: {
+        Args: {
+          p_client_id: string;
+          p_first_day: string;
+          p_last_day: string;
+          p_effective_date: string;
+          p_new_budget: number;
+          p_today: string;
+          p_changed_by: string;
+        };
+        Returns: {
+          consolidatedAmount: number;
+          futureBudgetAvailable: number;
+          resultingTotal: number;
+          isBelowConsolidated: boolean;
+        };
       };
     };
     Enums: {

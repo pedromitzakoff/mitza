@@ -6,11 +6,7 @@ import { todayUTC } from "@/lib/today";
 import { CommentThread, type CommentItem } from "./comment-thread";
 import { SprintTaskList } from "./sprint-task-list";
 import type { TaskListItem } from "./task-row";
-import {
-  resetSprintSpendSourceAction,
-  updateSprintActualSpendAction,
-  updateSprintPlannedSpendAction,
-} from "./sprint-actions";
+import { resetSprintSpendSourceAction, updateSprintActualSpendAction } from "./sprint-actions";
 import { MoneyInput } from "./money-input";
 import { SprintFinancialBar } from "./sprint-financial-bar";
 
@@ -68,7 +64,6 @@ export function SprintCard({
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
 
   const isCurrent = sprint.temporalStatus === "atual";
-  const editPlannedToggleId = `edit-planned-${sprint.sprintId}`;
   const editActualToggleId = `edit-actual-${sprint.sprintId}`;
   const revertSourceToggleId = `revert-source-${sprint.sprintId}`;
   const isManualSource = sprint.spendSource === "manual";
@@ -130,44 +125,10 @@ export function SprintCard({
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Investimento planejado
               </p>
-              {isAdmin ? (
-                <>
-                  <input type="checkbox" id={editPlannedToggleId} className="peer hidden" />
-                  <div className="mt-0.5 flex items-center gap-1.5 peer-checked:hidden">
-                    <p className="text-base font-semibold text-foreground">
-                      {formatCurrency(sprint.plannedSpend)}
-                    </p>
-                    <label
-                      htmlFor={editPlannedToggleId}
-                      className="cursor-pointer text-[11px] font-medium text-brand hover:underline"
-                    >
-                      Editar
-                    </label>
-                  </div>
-                  <form
-                    action={updateSprintPlannedSpendAction.bind(null, sprint.sprintId, clientId)}
-                    className="mt-1 hidden flex-wrap items-center gap-1.5 peer-checked:flex"
-                  >
-                    <MoneyInput name="planned_spend" defaultValue={sprint.plannedSpend} autoFocus />
-                    <button
-                      type="submit"
-                      className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                    >
-                      Salvar
-                    </button>
-                    <label
-                      htmlFor={editPlannedToggleId}
-                      className="cursor-pointer text-[11px] text-muted-foreground hover:underline"
-                    >
-                      Cancelar
-                    </label>
-                  </form>
-                </>
-              ) : (
-                <p className="mt-0.5 text-base font-semibold text-foreground">
-                  {formatCurrency(sprint.plannedSpend)}
-                </p>
-              )}
+              <p className="mt-0.5 text-base font-semibold text-foreground">
+                {formatCurrency(sprint.plannedSpend)}
+              </p>
+              <p className="text-[11px] text-muted-foreground">Definido pelo orçamento do mês</p>
             </div>
 
             <div>

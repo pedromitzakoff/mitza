@@ -11,6 +11,9 @@ import { buildSprintExecutionAlert } from "@/lib/sprint-execution";
 import { businessDaysSince } from "@/lib/business-days";
 import { classifyOperationalActivityStatus, formatLastActivityLabel } from "@/lib/operational-activity";
 import { effectiveTaskStatus } from "@/lib/task-status";
+import { resolveBudgetEffectiveDate } from "@/lib/monthly-budget";
+import { todayDateString } from "@/lib/today";
+import { formatMonthLabel } from "@/lib/format";
 import { ClientMetricsCards } from "../client-metrics-cards";
 import { AttentionPanel } from "../attention-panel";
 import { SpendChart } from "../spend-chart";
@@ -22,6 +25,8 @@ import type { TaskListItem } from "../task-row";
 import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
 import type { OperationTaskItem } from "@/app/operation/operation-data";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
+import { MonthlyBudgetPanel } from "../monthly-budget-panel";
+import { MonthlyBudgetHistoryDrawer } from "../monthly-budget-history-drawer";
 
 const OPTIMIZATION_LOOKBACK_DAYS = 14;
 
@@ -83,10 +88,21 @@ export default async function ClientPage({
     taskError?: string;
     commentError?: string;
     task?: string;
+    budgetSaved?: string;
+    historicoOrcamento?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, synced, saved, taskError, commentError, task: openTaskId } = await searchParams;
+  const {
+    error,
+    synced,
+    saved,
+    taskError,
+    commentError,
+    task: openTaskId,
+    budgetSaved,
+    historicoOrcamento,
+  } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
   const supabase = await createSupabaseClient();
@@ -105,8 +121,17 @@ export default async function ClientPage({
 
   const { firstDay, lastDay } = currentMonthRange();
   const today = new Date();
+  const todayStr = todayDateString();
+  const monthParam = firstDay.slice(0, 7);
+  const monthLabel = formatMonthLabel(firstDay);
 
-  const [{ data: sprints }, { data: dailySpend }, { data: lastSync }] = await Promise.all([
+  const [
+    { data: sprints },
+    { data: dailySpend },
+    { data: lastSync },
+    { data: plannedAllocations },
+    { data: budgetChanges },
+  ] = await Promise.all([
     supabase
       .from("sprints")
       .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, manual_spend_updated_at")
@@ -127,6 +152,20 @@ export default async function ClientPage({
       .order("synced_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from("sprint_planned_allocations")
+      .select("date, planned_amount")
+      .eq("client_id", id)
+      .gte("date", firstDay)
+      .lte("date", lastDay),
+    supabase
+      .from("monthly_budget_changes")
+      .select(
+        "id, effective_date, changed_at, previous_amount, new_amount, consolidated_amount, future_amount_distributed, resulting_total, is_below_consolidated, changed_by_profile:profiles!monthly_budget_changes_changed_by_fkey(name)",
+      )
+      .eq("client_id", id)
+      .eq("month", firstDay)
+      .order("changed_at", { ascending: false }),
   ]);
 
   const { data: clientActivity } = await supabase
@@ -145,6 +184,27 @@ export default async function ClientPage({
   const monthStatus = classifySpendStatus(monthActual, monthPlanned, monthPlanned);
   const projection = computeMonthProjection(monthPlanned, monthActual, today);
   const currentSprint = sprintFinancials.find((sprint) => sprint.temporalStatus === "atual") ?? null;
+
+  const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate({ firstDay, lastDay }, todayStr);
+  const budgetSprints = sprintFinancials.map((sprint, index) => ({
+    sprintId: sprint.sprintId,
+    startDate: sprint.startDate,
+    endDate: sprint.endDate,
+    sprintNumber: index + 1,
+  }));
+  const currentAllocations = (plannedAllocations ?? []).map((row) => ({
+    date: row.date,
+    amount: row.planned_amount,
+  }));
+  const lastBudgetChange = (budgetChanges ?? [])[0] ?? null;
+  const lastChange = lastBudgetChange
+    ? {
+        lastEffectiveDate: lastBudgetChange.effective_date,
+        lastPreviousAmount: lastBudgetChange.previous_amount,
+        lastNewAmount: lastBudgetChange.new_amount,
+        changeCountThisMonth: (budgetChanges ?? []).length,
+      }
+    : null;
 
   const { data: sprintActivity } = currentSprint
     ? await supabase
@@ -234,6 +294,7 @@ export default async function ClientPage({
   const chartPoints = computeCumulativeSpendSeries(
     sprints ?? [],
     dailySpend ?? [],
+    plannedAllocations ?? [],
     { firstDay, lastDay },
     today,
   );
@@ -244,9 +305,12 @@ export default async function ClientPage({
     taskError && { tone: "red", text: taskError },
     synced && { tone: "green", text: `${synced} dia(s) de spend sincronizado(s) com o Meta.` },
     saved && { tone: "green", text: "Dados do cliente atualizados." },
+    budgetSaved && { tone: "green", text: "Orçamento do mês atualizado." },
   ].filter((banner): banner is { tone: "red" | "green"; text: string } => Boolean(banner));
 
   const returnTo = `/clients/${client.id}`;
+  const historyDrawerHref = `${returnTo}?historicoOrcamento=1`;
+  const historyDrawerCloseHref = returnTo;
   const openTaskRow = openTaskId ? (tasks ?? []).find((t) => t.id === openTaskId) ?? null : null;
   const openTask: OperationTaskItem | null = openTaskRow
     ? {
@@ -309,6 +373,24 @@ export default async function ClientPage({
         </div>
       </div>
 
+      <div className="mt-3">
+        <MonthlyBudgetPanel
+          clientId={client.id}
+          monthParam={monthParam}
+          monthLabel={monthLabel}
+          totalPlanned={monthPlanned}
+          sprintCount={sprintFinancials.length}
+          sprints={budgetSprints}
+          currentAllocations={currentAllocations}
+          monthRange={{ firstDay, lastDay }}
+          effectiveDate={effectiveDate}
+          isAdmin={isAdmin}
+          isClosedMonth={isClosedMonth}
+          lastChange={lastChange}
+          historyHref={historyDrawerHref}
+        />
+      </div>
+
       <Section title="Sprints do mês">
         <div className="flex flex-col gap-2">
           {sprintFinancials.length > 0 ? (
@@ -361,6 +443,25 @@ export default async function ClientPage({
           comments={taskCommentsById.get(openTask.id) ?? []}
           closeHref={returnTo}
           returnTo={returnTo}
+        />
+      )}
+
+      {isAdmin && historicoOrcamento && (
+        <MonthlyBudgetHistoryDrawer
+          monthLabel={monthLabel}
+          changes={(budgetChanges ?? []).map((change) => ({
+            id: change.id,
+            effectiveDate: change.effective_date,
+            changedAt: change.changed_at,
+            changedByName: change.changed_by_profile?.name ?? null,
+            previousAmount: change.previous_amount,
+            newAmount: change.new_amount,
+            consolidatedAmount: change.consolidated_amount,
+            futureAmountDistributed: change.future_amount_distributed,
+            resultingTotal: change.resulting_total,
+            isBelowConsolidated: change.is_below_consolidated,
+          }))}
+          closeHref={historyDrawerCloseHref}
         />
       )}
     </div>
