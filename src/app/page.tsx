@@ -7,7 +7,6 @@ import {
   formatCurrency,
   formatDateRange,
   formatDateTime,
-  formatFullDate,
   formatMonthLabel,
   formatShortDate,
 } from "@/lib/format";
@@ -34,6 +33,7 @@ import {
   computeSprintOpsSummary,
   buildRitmoSummaryText,
 } from "@/lib/agency-metrics";
+import { AgencyFilters } from "./agency-filters";
 
 const HEALTH_LABEL: Record<AccountHealth, string> = {
   saudavel: "Saudável",
@@ -359,14 +359,8 @@ export default async function Home({
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">VISÃO GERAL DA AGÊNCIA</h1>
-          <p className="text-sm text-muted-foreground">{formatFullDate(today)}</p>
-          <p className="text-xs text-muted-foreground">
-            {profile.name} · {profile.role === "admin" ? "Admin" : "Gestor"}
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold text-foreground">Visão Geral</h1>
 
         <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
           <Link
@@ -394,101 +388,23 @@ export default async function Home({
         </div>
       </div>
 
-      <form
-        method="get"
-        className="mt-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-card p-2"
-      >
-        {params.month && <input type="hidden" name="month" value={params.month} />}
-        {sprintBucketFilter && <input type="hidden" name="sprintBucket" value={sprintBucketFilter} />}
-        {syncFilter && <input type="hidden" name="sync" value={syncFilter} />}
-        {metaFilter && <input type="hidden" name="meta" value={metaFilter} />}
-        {sort !== "prioridade" && <input type="hidden" name="sort" value={sort} />}
-
-        <select
-          name="manager"
-          defaultValue={managerFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-        >
-          <option value="me">Meus clientes</option>
-          <option value="all">Todos os clientes</option>
-          {(gestores ?? []).map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          name="health"
-          defaultValue={healthFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-        >
-          <option value="todos">Status da conta: todos</option>
-          <option value="saudavel">Saudável</option>
-          <option value="atencao">Atenção</option>
-          <option value="critico">Crítico</option>
-        </select>
-
-        <select
-          name="activity"
-          defaultValue={activityFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-        >
-          <option value="todos">Atividade: todas</option>
-          <option value="ativo">Ativos</option>
-          <option value="atencao">Atenção por inatividade</option>
-          <option value="inativo">Inativos</option>
-        </select>
-
-        <select
-          name="ritmo"
-          defaultValue={ritmoFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-        >
-          <option value="todos">Ritmo de investimento: todos</option>
-          <option value="abaixo">Abaixo</option>
-          <option value="dentro">No ritmo</option>
-          <option value="acima">Acima</option>
-          <option value="sem_meta">Meta não configurada</option>
-        </select>
-
-        <select
-          name="tasks"
-          defaultValue={tasksFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-        >
-          <option value="todas">Tarefas: todas</option>
-          <option value="atrasadas">Com tarefas atrasadas</option>
-          <option value="sem_atrasadas">Sem tarefas atrasadas</option>
-        </select>
-
-        <input
-          name="search"
-          defaultValue={search}
-          placeholder="Buscar cliente..."
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none"
-        />
-
-        <button
-          type="submit"
-          className="rounded-md bg-brand px-3 py-1 text-sm font-medium text-white hover:bg-brand-hover"
-        >
-          Filtrar
-        </button>
-
-        {(healthFilter !== "todos" ||
-          activityFilter !== "todos" ||
-          ritmoFilter !== "todos" ||
-          tasksFilter !== "todas" ||
-          search ||
-          sprintBucketFilter ||
-          syncFilter ||
-          metaFilter) && (
-          <Link href={drillDownUrl({})} className="text-xs text-brand hover:underline">
-            Limpar filtros
-          </Link>
-        )}
-      </form>
+      <AgencyFilters
+        defaultManager={isAdmin ? "all" : "me"}
+        gestores={gestores ?? []}
+        manager={managerFilter}
+        search={search}
+        health={healthFilter}
+        activity={activityFilter}
+        ritmo={ritmoFilter}
+        tasks={tasksFilter}
+        preserved={{
+          month: params.month,
+          sprintBucket: sprintBucketFilter,
+          sync: syncFilter,
+          meta: metaFilter,
+          sort: sort !== "prioridade" ? sort : undefined,
+        }}
+      />
 
       {/* Resumo consolidado: no máximo 4 grupos, métricas compactas dentro
           de cada um em vez de uma grade de cards soltos. */}
