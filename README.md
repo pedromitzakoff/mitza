@@ -790,6 +790,48 @@ automático da sync, refinamentos de UX, etc.
     e não toquei a Central de Atenção (não lê `?mode=`, não tem visão
     "Hoje").
 
+41. ✅ Refinamento visual exclusivo da Visão Geral (sem migration, sem
+    mudança de dado/cálculo/filtro/navegação): rodada só de design —
+    hierarquia visual, superfícies, tipografia, espaçamento, bordas,
+    sombras e estados de interação. Novos tokens em `globals.css`
+    (`--overview-bg`, `--navy`, `--shadow-card`, `--shadow-float`) —
+    **adicionados**, nunca sobrescrevendo `--background`/`--card`/
+    `--border-default`/`--brand` existentes, porque esses já alimentam
+    Sidebar/TopBar/todas as outras telas via herança do fundo do `<body>`;
+    mudar os tokens compartilhados mudaria visualmente todo o resto do
+    sistema, o que a rodada pediu explicitamente pra não fazer. Em vez
+    disso, só a Visão Geral ganhou um fundo próprio (`bg-overview-bg`,
+    cinza-azulado frio, mais perceptível que o off-white quase-branco de
+    antes), aplicado num wrapper que preenche a área de conteúdo — Sidebar,
+    TopBar e as demais páginas continuam exatamente como estavam.
+
+    Hierarquia de superfícies: fundo da aplicação (nível 1, sem sombra) →
+    cards/blocos (nível 2, branco, `shadow-card` leve, `rounded-xl`) →
+    popover/drawer (nível 3, `shadow-float` mais perceptível). "Ritmo do
+    mês" ganhou divisores verticais sutis entre as 4 métricas (mesmo
+    container, sem virar 4 caixinhas); "Investimento do mês" ganhou uma
+    borda de destaque discreta à esquerda (mais importância visual sem
+    aumentar a altura) e hierarquia tipográfica real — Planejado/Realizado
+    (os dois números mais importantes) em navy/2xl/bold, os demais
+    (%realizado/esperado/diferença) em peso secundário; a barra
+    (`AgencyInvestmentBar`) ficou mais espessa, com transição curta ao
+    mudar de filtro/mês e uma legenda de apoio ("X% realizado · Y%
+    esperado até hoje"). Central de Atenção: linhas com hover sutil, ponto
+    de prioridade um pouco maior, ação "Abrir" discreta. Tabela: cabeçalho
+    mais alto, hover por linha, valores financeiros alinhados à direita
+    com números tabulares (não estavam antes), nome do cliente em
+    semibold. Foco por teclado (`focus-visible`) padronizado em azul em
+    todos os links/botões/selects tocados. Nenhum texto, cálculo, filtro,
+    rota ou comportamento mudou — só a apresentação visual dos mesmos
+    dados.
+
+    Componentes reaproveitados/refinados (nenhum criado do zero além dos
+    tokens): `StatItem`/`MetricGroup` (`page.tsx`, ganharam `size`/
+    `divided`/`accent`), `AgencyInvestmentBar`, `AttentionCenterPanel`/
+    `AttentionRow`/`SummaryStrip` (`attention-center.tsx`), `AgencyFilters`
+    e `ClientCombobox` (Etapa 39/40, só receberam os novos tokens de
+    sombra/foco).
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

@@ -86,7 +86,7 @@ export function ClientCombobox({
       <button
         type="button"
         onClick={() => (open ? setOpen(false) : openCombobox())}
-        className="flex w-full min-w-0 flex-1 items-center gap-1.5 rounded-md border border-border bg-transparent px-2 py-1 text-left text-sm text-foreground sm:w-48"
+        className="flex w-full min-w-0 flex-1 items-center gap-1.5 rounded-md border border-border bg-transparent px-2 py-1 text-left text-sm text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand sm:w-48"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -98,7 +98,7 @@ export function ClientCombobox({
           type="button"
           onClick={() => onSelect("")}
           aria-label="Limpar cliente selecionado"
-          className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
         >
           <X className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
@@ -112,7 +112,10 @@ export function ClientCombobox({
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-40"
           />
-          <div className="absolute left-0 z-50 mt-1 w-72 rounded-lg border border-border bg-card p-2 shadow-lg" style={{ top: "100%" }}>
+          <div
+            className="absolute left-0 z-50 mt-1 w-72 rounded-xl border border-border bg-card p-2 shadow-[var(--shadow-float)]"
+            style={{ top: "100%" }}
+          >
             <input
               ref={inputRef}
               type="text"

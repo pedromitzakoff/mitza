@@ -10,10 +10,10 @@ const CATEGORY_DOT_CLASSES: Record<AttentionCenterCategory, string> = {
 
 function AttentionRow({ item }: { item: AttentionCenterItem }) {
   return (
-    <li className="flex items-start justify-between gap-3 py-2">
+    <li className="-mx-2 flex items-start justify-between gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${CATEGORY_DOT_CLASSES[item.category]}`} />
+          <span className={`h-2 w-2 shrink-0 rounded-full ${CATEGORY_DOT_CLASSES[item.category]}`} />
           <span className="truncate text-sm font-semibold text-foreground">{item.clientName}</span>
           <span className="shrink-0 text-xs text-muted-foreground">· {item.title}</span>
         </div>
@@ -22,7 +22,7 @@ function AttentionRow({ item }: { item: AttentionCenterItem }) {
       </div>
       <Link
         href={item.actionHref}
-        className="shrink-0 self-center rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+        className="shrink-0 self-center rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:border-brand hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       >
         {item.actionLabel}
       </Link>
@@ -69,11 +69,14 @@ export function AttentionCenterPanel({
   viewAllHref: string;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-3">
+    <div className="rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-card)]">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Central de atenção</h2>
         {totalCount > items.length && (
-          <Link href={viewAllHref} className="text-xs font-medium text-brand hover:underline">
+          <Link
+            href={viewAllHref}
+            className="rounded-md text-xs font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          >
             Ver tudo ({totalCount})
           </Link>
         )}
@@ -81,7 +84,7 @@ export function AttentionCenterPanel({
 
       {items.length > 0 ? (
         <>
-          <div className="mt-1.5">
+          <div className="mt-2">
             <SummaryStrip counts={counts} />
           </div>
           <ul className="mt-1 divide-y divide-border">
@@ -125,13 +128,13 @@ export function AttentionCenterDrawer({
   return (
     <>
       <Link href={closeHref} scroll={false} className="fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
+      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-[var(--shadow-float)]">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-foreground">Central de atenção</h2>
+          <h2 className="text-lg font-semibold text-navy">Central de atenção</h2>
           <Link
             href={closeHref}
             scroll={false}
-            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
           >
             Fechar
           </Link>
@@ -143,7 +146,7 @@ export function AttentionCenterDrawer({
               key={option.value}
               href={buildCategoryHref(option.value)}
               scroll={false}
-              className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+              className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
                 category === option.value
                   ? "bg-brand text-white"
                   : "border border-border text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"

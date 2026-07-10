@@ -88,10 +88,11 @@ export function AgencyFilters({
     setOpen(false);
   }
 
-  const selectClasses = "w-full sm:w-auto rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground";
+  const selectClasses =
+    "w-full sm:w-auto rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
 
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <div className="flex items-center gap-1.5">
         <span className="text-xs text-muted-foreground">Carteira</span>
         <select
@@ -120,7 +121,7 @@ export function AgencyFilters({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-sm font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-sm font-medium text-foreground transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
         >
           <Filter className="h-3.5 w-3.5" aria-hidden="true" />
           Filtros
@@ -139,7 +140,7 @@ export function AgencyFilters({
               onClick={() => setOpen(false)}
               className="fixed inset-0 z-40"
             />
-            <div className="absolute right-0 z-50 mt-2 w-72 rounded-lg border border-border bg-card p-3 shadow-lg">
+            <div className="absolute right-0 z-50 mt-2 w-72 rounded-xl border border-border bg-card p-3 shadow-[var(--shadow-float)]">
               <div className="flex flex-col gap-2">
                 <select
                   value={health}
@@ -191,7 +192,11 @@ export function AgencyFilters({
       </div>
 
       {hasAnythingToClear && (
-        <button type="button" onClick={clearFilters} className="text-xs text-brand hover:underline">
+        <button
+          type="button"
+          onClick={clearFilters}
+          className="rounded text-xs text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        >
           Limpar filtros
         </button>
       )}

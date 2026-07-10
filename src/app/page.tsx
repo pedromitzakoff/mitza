@@ -59,29 +59,41 @@ const STAT_TONE_CLASSES = {
   critical: "text-red-600 dark:text-red-400",
 } as const;
 
-/** Uma métrica compacta dentro de um grupo (Ritmo do mês/Investimento/Operação)
- * — nunca um card com borda própria, pra não voltar a virar uma grade de
- * caixinhas competindo por atenção. */
+/** Uma métrica compacta dentro de um grupo (Ritmo do mês/Investimento) —
+ * nunca um card com borda própria, pra não voltar a virar uma grade de
+ * caixinhas competindo por atenção. `size="lg"` marca os dois números mais
+ * importantes de "Investimento do mês" (Planejado/Realizado) com mais peso
+ * visual (navy, maior) — os demais ficam secundários por padrão. */
 function StatItem({
   label,
   value,
   href,
   tone = "neutral",
+  size = "md",
 }: {
   label: string;
   value: string;
   href?: string;
   tone?: keyof typeof STAT_TONE_CLASSES;
+  size?: "md" | "lg";
 }) {
+  const valueClass =
+    size === "lg"
+      ? `text-2xl font-bold ${tone === "neutral" ? "text-navy" : STAT_TONE_CLASSES[tone]}`
+      : `text-base font-semibold ${STAT_TONE_CLASSES[tone]}`;
+
   const content = (
     <div>
       <p className="text-[11px] text-muted-foreground">{label}</p>
-      <p className={`text-lg font-semibold tabular-nums ${STAT_TONE_CLASSES[tone]}`}>{value}</p>
+      <p className={`tabular-nums ${valueClass}`}>{value}</p>
     </div>
   );
 
   return href ? (
-    <Link href={href} className="-mx-1 rounded-md px-1 hover:bg-zinc-100 dark:hover:bg-zinc-900">
+    <Link
+      href={href}
+      className="-mx-1.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+    >
       {content}
     </Link>
   ) : (
@@ -89,22 +101,42 @@ function StatItem({
   );
 }
 
-/** Um grupo (Carteira/Investimento/Operação) — no máximo 4 no primeiro
- * viewport, cada um com métricas compactas dentro em vez de vários cards
- * soltos e iguais. */
+/** Um grupo (Ritmo do mês/Investimento do mês) — cada métrica compacta
+ * dentro, nunca vários cards soltos e iguais. `divided` separa as métricas
+ * com um divisor vertical sutil (Ritmo do mês); `accent` dá um leve destaque
+ * de borda esquerda pro bloco mais importante (Investimento do mês) sem
+ * aumentar a altura. */
 function MetricGroup({
   title,
   children,
   extra,
+  divided = false,
+  accent = false,
 }: {
   title: string;
   children: React.ReactNode;
   extra?: React.ReactNode;
+  divided?: boolean;
+  accent?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-3">
+    <div
+      className={`rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-card)] ${
+        accent ? "border-l-2 border-l-brand" : ""
+      }`}
+    >
       <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
-      <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">{children}</div>
+      <div className={`mt-2.5 flex flex-wrap gap-x-6 gap-y-2 ${divided ? "sm:divide-x sm:divide-border" : ""}`}>
+        {divided
+          ? Array.isArray(children)
+            ? children.map((child, index) => (
+                <div key={index} className={index > 0 ? "sm:pl-6" : ""}>
+                  {child}
+                </div>
+              ))
+            : children
+          : children}
+      </div>
       {extra}
     </div>
   );
@@ -404,217 +436,233 @@ export default async function Home({
     attentionUrl({ atencao: "1", atencaoCategoria: category === "todos" ? "" : category });
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold text-foreground">Visão Geral</h1>
+    <div className="min-h-[calc(100dvh_-_3rem)] bg-overview-bg">
+      <div className="mx-auto max-w-7xl px-6 py-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold tracking-tight text-navy">Visão Geral</h1>
 
-        <div className="flex items-center gap-0.5 text-sm">
-          <Link
-            href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
-            className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            aria-label="Mês anterior"
-          >
-            &lsaquo;
-          </Link>
-          <span className="min-w-[8.5rem] text-center font-medium text-foreground">
-            {formatMonthLabel(monthRange.firstDay)}
-          </span>
-          <Link
-            href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
-            className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            aria-label="Próximo mês"
-          >
-            &rsaquo;
-          </Link>
-          {params.month && (
-            <Link href={buildUrl({ month: "" })} className="ml-1.5 text-xs text-brand hover:underline">
-              Mês atual
+          <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card px-1 py-1 text-sm shadow-[var(--shadow-card)]">
+            <Link
+              href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
+              className="rounded-md px-1.5 py-0.5 text-foreground transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+              aria-label="Mês anterior"
+            >
+              &lsaquo;
             </Link>
+            <span className="min-w-[8.5rem] text-center font-medium text-foreground">
+              {formatMonthLabel(monthRange.firstDay)}
+            </span>
+            <Link
+              href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
+              className="rounded-md px-1.5 py-0.5 text-foreground transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+              aria-label="Próximo mês"
+            >
+              &rsaquo;
+            </Link>
+            {params.month && (
+              <Link
+                href={buildUrl({ month: "" })}
+                className="ml-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              >
+                Mês atual
+              </Link>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-2.5">
+          <AgencyFilters
+            defaultManager={isAdmin ? "all" : "me"}
+            gestores={gestores ?? []}
+            manager={managerFilter}
+            clients={clientOptions}
+            selectedClientId={clientFilter}
+            health={healthFilter}
+            activity={activityFilter}
+            ritmo={ritmoFilter}
+            tasks={tasksFilter}
+            preserved={{
+              month: params.month,
+              sprintBucket: sprintBucketFilter,
+              sync: syncFilter,
+              meta: metaFilter,
+              sort: sort !== "prioridade" ? sort : undefined,
+            }}
+          />
+        </div>
+
+        {/* Resumo consolidado: no máximo 4 grupos, métricas compactas dentro
+            de cada um em vez de uma grade de cards soltos. */}
+        <div className="mt-3 flex flex-col gap-2.5">
+          <MetricGroup title="Ritmo do mês" divided>
+            <StatItem label="Clientes totais" value={String(spendRhythm.total)} />
+            <StatItem
+              label="Dentro do esperado"
+              value={String(spendRhythm.dentro)}
+              href={drillDownUrl({ ritmo: "dentro" })}
+              tone="positive"
+            />
+            <StatItem
+              label="Abaixo do esperado"
+              value={String(spendRhythm.abaixo)}
+              href={drillDownUrl({ ritmo: "abaixo" })}
+              tone="warning"
+            />
+            <StatItem
+              label="Acima do esperado"
+              value={String(spendRhythm.acima)}
+              href={drillDownUrl({ ritmo: "acima" })}
+              tone="critical"
+            />
+          </MetricGroup>
+
+          <MetricGroup
+            title="Investimento do mês"
+            accent
+            extra={
+              <div className="mt-3.5">
+                <AgencyInvestmentBar
+                  planned={financial.planned}
+                  actual={financial.actual}
+                  expectedToDate={financial.expectedToDate}
+                />
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  {financial.semMeta > 0 ? (
+                    <Link
+                      href={drillDownUrl({ meta: "sem" })}
+                      className="rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                    >
+                      {financial.semMeta} cliente{financial.semMeta !== 1 ? "s" : ""} sem planejamento configurado
+                    </Link>
+                  ) : (
+                    "Todos os clientes possuem planejamento configurado"
+                  )}
+                </p>
+              </div>
+            }
+          >
+            <StatItem label="Planejado" value={formatCurrency(financial.planned)} size="lg" />
+            <StatItem label="Realizado" value={formatCurrency(financial.actual)} size="lg" />
+            <StatItem label="% realizado" value={financial.pct !== null ? `${Math.round(financial.pct)}%` : "—"} />
+            <StatItem label="Esperado até hoje" value={formatCurrency(financial.expectedToDate)} />
+            <StatItem
+              label="Diferença p/ ritmo esperado"
+              value={financial.planned > 0 ? formatCurrency(investmentDiff) : "—"}
+              tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
+            />
+          </MetricGroup>
+        </div>
+
+        <div className="mt-3">
+          <AttentionCenterPanel
+            items={attentionTop}
+            counts={attentionCounts}
+            totalCount={attentionItems.length}
+            viewAllHref={openAttentionHref}
+          />
+        </div>
+
+        {attentionOpen && (
+          <AttentionCenterDrawer
+            items={attentionItems}
+            category={attentionCategory}
+            closeHref={closeAttentionHref}
+            buildCategoryHref={attentionCategoryHref}
+          />
+        )}
+
+        {/* Tabela única de clientes — consolida o que antes eram duas tabelas
+            (Contas prioritárias + Clientes), só com o essencial pra entender
+            rápido o estágio do mês de cada conta. */}
+        <div className="mt-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Clientes · {formatMonthLabel(monthRange.firstDay)}
+            </h2>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">{sortedCards.length} cliente{sortedCards.length !== 1 ? "s" : ""}</span>
+              <Link
+                href={buildUrl({ sort: sort === "nome" ? "prioridade" : "nome" })}
+                className="rounded font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              >
+                Ordenar por {sort === "nome" ? "situação" : "nome"}
+              </Link>
+            </div>
+          </div>
+
+          {sortedCards.length > 0 ? (
+            <div className="mt-2 overflow-x-auto rounded-xl border border-border shadow-[var(--shadow-card)]">
+              <table className="w-full min-w-[900px] text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-muted-foreground dark:bg-zinc-900">
+                    <th className="py-2 px-3">Cliente</th>
+                    <th className="py-2 px-3">Gestor</th>
+                    <th className="py-2 px-3 text-right">Investimento</th>
+                    <th className="py-2 px-3 text-right">% Realizado</th>
+                    <th className="py-2 px-3">Situação</th>
+                    <th className="py-2 px-3">Última atividade</th>
+                    <th className="py-2 px-3 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedCards.map((card) => {
+                    const pctRealizado =
+                      card.monthPlanned > 0 ? Math.round((card.monthActual / card.monthPlanned) * 100) : null;
+                    return (
+                      <tr
+                        key={card.clientId}
+                        className="border-b border-border/60 transition-colors last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                      >
+                        <td className="py-2 px-3 font-semibold text-foreground">{card.clientName}</td>
+                        <td className="py-2 px-3 text-muted-foreground">
+                          {primaryManagerNameByClient.get(card.clientId) ?? "Sem gestor"}
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
+                          {formatCurrency(card.monthActual)} / {formatCurrency(card.monthPlanned)}
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
+                          {pctRealizado !== null ? `${pctRealizado}%` : "—"}
+                        </td>
+                        <td className="py-2 px-3">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SITUATION_BADGE_CLASSES[card.monthStatus]}`}
+                          >
+                            {SITUATION_LABEL[card.monthStatus]}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-muted-foreground">{card.activityLabel}</td>
+                        <td className="py-2 px-3 text-right">
+                          <Link
+                            href={`/clients/${card.clientId}`}
+                            className="rounded-md border border-transparent px-2 py-1 text-xs font-medium text-brand transition-colors hover:border-border hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+                          >
+                            Abrir
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mt-2 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground shadow-[var(--shadow-card)]">
+              Nenhum cliente encontrado com esses filtros.
+            </p>
           )}
         </div>
-      </div>
 
-      <AgencyFilters
-        defaultManager={isAdmin ? "all" : "me"}
-        gestores={gestores ?? []}
-        manager={managerFilter}
-        clients={clientOptions}
-        selectedClientId={clientFilter}
-        health={healthFilter}
-        activity={activityFilter}
-        ritmo={ritmoFilter}
-        tasks={tasksFilter}
-        preserved={{
-          month: params.month,
-          sprintBucket: sprintBucketFilter,
-          sync: syncFilter,
-          meta: metaFilter,
-          sort: sort !== "prioridade" ? sort : undefined,
-        }}
-      />
+        {/* Análises secundárias — fora do primeiro viewport de propósito */}
+        <details className="mt-5 rounded-xl border border-border bg-card shadow-[var(--shadow-card)] [&_summary]:cursor-pointer [&_summary]:list-none">
+          <summary className="flex items-center justify-between p-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-brand">
+            Ver análises adicionais
+            <span className="text-sm">▾</span>
+          </summary>
 
-      {/* Resumo consolidado: no máximo 4 grupos, métricas compactas dentro
-          de cada um em vez de uma grade de cards soltos. */}
-      <div className="mt-3 flex flex-col gap-2.5">
-        <MetricGroup title="Ritmo do mês">
-          <StatItem label="Clientes totais" value={String(spendRhythm.total)} />
-          <StatItem
-            label="Dentro do esperado"
-            value={String(spendRhythm.dentro)}
-            href={drillDownUrl({ ritmo: "dentro" })}
-            tone="positive"
-          />
-          <StatItem
-            label="Abaixo do esperado"
-            value={String(spendRhythm.abaixo)}
-            href={drillDownUrl({ ritmo: "abaixo" })}
-            tone="warning"
-          />
-          <StatItem
-            label="Acima do esperado"
-            value={String(spendRhythm.acima)}
-            href={drillDownUrl({ ritmo: "acima" })}
-            tone="critical"
-          />
-        </MetricGroup>
-
-        <MetricGroup
-          title="Investimento do mês"
-          extra={
-            <div className="mt-3">
-              <AgencyInvestmentBar
-                planned={financial.planned}
-                actual={financial.actual}
-                expectedToDate={financial.expectedToDate}
-              />
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                {financial.semMeta > 0 ? (
-                  <Link href={drillDownUrl({ meta: "sem" })} className="hover:underline">
-                    {financial.semMeta} cliente{financial.semMeta !== 1 ? "s" : ""} sem planejamento configurado
-                  </Link>
-                ) : (
-                  "Todos os clientes possuem planejamento configurado"
-                )}
-              </p>
-            </div>
-          }
-        >
-          <StatItem label="Planejado" value={formatCurrency(financial.planned)} />
-          <StatItem label="Realizado" value={formatCurrency(financial.actual)} />
-          <StatItem label="% realizado" value={financial.pct !== null ? `${Math.round(financial.pct)}%` : "—"} />
-          <StatItem label="Esperado até hoje" value={formatCurrency(financial.expectedToDate)} />
-          <StatItem
-            label="Diferença p/ ritmo esperado"
-            value={financial.planned > 0 ? formatCurrency(investmentDiff) : "—"}
-            tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
-          />
-        </MetricGroup>
-      </div>
-
-      <div className="mt-3">
-        <AttentionCenterPanel
-          items={attentionTop}
-          counts={attentionCounts}
-          totalCount={attentionItems.length}
-          viewAllHref={openAttentionHref}
-        />
-      </div>
-
-      {attentionOpen && (
-        <AttentionCenterDrawer
-          items={attentionItems}
-          category={attentionCategory}
-          closeHref={closeAttentionHref}
-          buildCategoryHref={attentionCategoryHref}
-        />
-      )}
-
-      {/* Tabela única de clientes — consolida o que antes eram duas tabelas
-          (Contas prioritárias + Clientes), só com o essencial pra entender
-          rápido o estágio do mês de cada conta. */}
-      <div className="mt-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Clientes · {formatMonthLabel(monthRange.firstDay)}
-          </h2>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground">{sortedCards.length} cliente{sortedCards.length !== 1 ? "s" : ""}</span>
-            <Link
-              href={buildUrl({ sort: sort === "nome" ? "prioridade" : "nome" })}
-              className="font-medium text-brand hover:underline"
-            >
-              Ordenar por {sort === "nome" ? "situação" : "nome"}
-            </Link>
-          </div>
-        </div>
-
-        {sortedCards.length > 0 ? (
-          <div className="mt-2 overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[900px] text-sm">
-              <thead>
-                <tr className="border-b border-border bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-muted-foreground dark:bg-zinc-900">
-                  <th className="py-1.5 px-3">Cliente</th>
-                  <th className="py-1.5 px-3">Gestor</th>
-                  <th className="py-1.5 px-3">Investimento</th>
-                  <th className="py-1.5 px-3">% Realizado</th>
-                  <th className="py-1.5 px-3">Situação</th>
-                  <th className="py-1.5 px-3">Última atividade</th>
-                  <th className="py-1.5 px-3">Ação</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedCards.map((card) => {
-                  const pctRealizado =
-                    card.monthPlanned > 0 ? Math.round((card.monthActual / card.monthPlanned) * 100) : null;
-                  return (
-                    <tr key={card.clientId} className="border-b border-border/60 last:border-0">
-                      <td className="py-1.5 px-3 font-semibold text-foreground">{card.clientName}</td>
-                      <td className="py-1.5 px-3 text-muted-foreground">
-                        {primaryManagerNameByClient.get(card.clientId) ?? "Sem gestor"}
-                      </td>
-                      <td className="py-1.5 px-3 tabular-nums text-muted-foreground">
-                        {formatCurrency(card.monthActual)} / {formatCurrency(card.monthPlanned)}
-                      </td>
-                      <td className="py-1.5 px-3 tabular-nums text-muted-foreground">
-                        {pctRealizado !== null ? `${pctRealizado}%` : "—"}
-                      </td>
-                      <td className="py-1.5 px-3">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SITUATION_BADGE_CLASSES[card.monthStatus]}`}
-                        >
-                          {SITUATION_LABEL[card.monthStatus]}
-                        </span>
-                      </td>
-                      <td className="py-1.5 px-3 text-muted-foreground">{card.activityLabel}</td>
-                      <td className="py-1.5 px-3 text-right">
-                        <Link href={`/clients/${card.clientId}`} className="text-xs font-medium text-brand hover:underline">
-                          Abrir
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="mt-2 rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-            Nenhum cliente encontrado com esses filtros.
-          </p>
-        )}
-      </div>
-
-      {/* Análises secundárias — fora do primeiro viewport de propósito */}
-      <details className="mt-5 rounded-lg border border-border bg-card [&_summary]:cursor-pointer [&_summary]:list-none">
-        <summary className="flex items-center justify-between p-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-brand">
-          Ver análises adicionais
-          <span className="text-sm">▾</span>
-        </summary>
-
-        <div className="border-t border-border p-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {isAdmin ? "Operação por gestor" : "Minha operação"}
-          </h3>
+          <div className="border-t border-border p-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {isAdmin ? "Operação por gestor" : "Minha operação"}
+            </h3>
           {managerSummary.length > 0 ? (
             <div className="mt-2 overflow-x-auto">
               <table className="w-full min-w-[720px] text-sm">
@@ -663,8 +711,9 @@ export default async function Home({
           ) : (
             <p className="mt-2 text-sm text-muted-foreground">Nenhum gestor encontrado.</p>
           )}
-        </div>
-      </details>
+          </div>
+        </details>
+      </div>
     </div>
   );
 }

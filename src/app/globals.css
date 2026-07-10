@@ -15,6 +15,15 @@
   --border-default: #e7e5e4;
   --brand: #4169e1;
   --brand-hover: #3151b8;
+
+  /* Tokens novos (Etapa 41) — usados só pela Visão Geral por enquanto, pra
+     não alterar o visual de nenhuma outra tela nesta rodada. Ficam aqui
+     (não espalhados por componente) pra já existirem prontos se um dia
+     alguma outra tela quiser o mesmo refinamento. */
+  --overview-bg: #eef1f6;
+  --navy: #0f1c42;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-float: 0 4px 12px rgba(16, 24, 40, 0.10), 0 2px 6px rgba(16, 24, 40, 0.06);
 }
 
 @theme inline {
@@ -25,6 +34,8 @@
   --color-border: var(--border-default);
   --color-brand: var(--brand);
   --color-brand-hover: var(--brand-hover);
+  --color-overview-bg: var(--overview-bg);
+  --color-navy: var(--navy);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -38,6 +49,11 @@
     --border-default: #34332f;
     --brand: #7b93e8;
     --brand-hover: #5b78d6;
+
+    --overview-bg: #0b0d12;
+    --navy: #dde4fb;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
   }
 }
 

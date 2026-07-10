@@ -1,13 +1,14 @@
 import { formatCurrency } from "@/lib/format";
 
 /**
- * Barra compacta do resumo "Investimento do mês" da Visão Geral — preenchimento
- * azul MITZA (realizado / planejado, nunca passa de 100% de largura; vermelho
- * discreto só quando ultrapassa o planejado) com um marcador circular
- * destacado (não um traço fino) sobre "esperado até hoje", com tooltip.
- * Mesma linguagem visual de `SprintFinancialBar`, mas o marcador aqui é mais
- * visível — pedido explícito pra este resumo, que é a peça central do
- * dashboard da agência.
+ * Barra do resumo "Investimento do mês" da Visão Geral — o componente mais
+ * característico do dashboard (Etapa 41): trilha neutra mais espessa,
+ * preenchimento azul MITZA (realizado / planejado, nunca passa de 100% de
+ * largura; vermelho discreto só quando ultrapassa o planejado) com
+ * transição curta ao mudar de mês/filtro, e um marcador circular — não um
+ * traço fino — sobre "esperado até hoje", com tooltip nativo. Mesma
+ * linguagem visual de `SprintFinancialBar`, com mais presença aqui porque é
+ * a peça central da tela.
  */
 export function AgencyInvestmentBar({
   planned,
@@ -21,8 +22,8 @@ export function AgencyInvestmentBar({
   if (planned <= 0) {
     return (
       <div>
-        <div className="h-2 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />
-        <p className="mt-1 text-[11px] text-muted-foreground">Nenhum planejamento configurado neste recorte.</p>
+        <div className="h-3 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />
+        <p className="mt-1.5 text-[11px] text-muted-foreground">Nenhum planejamento configurado neste recorte.</p>
       </div>
     );
   }
@@ -34,18 +35,23 @@ export function AgencyInvestmentBar({
   const isOver = actualPct > 100;
 
   return (
-    <div className="relative h-2.5">
-      <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+    <div>
+      <div className="relative h-3">
+        <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+          <div
+            className={`h-full rounded-full transition-[width] duration-300 ease-out ${isOver ? "bg-red-500" : "bg-brand"}`}
+            style={{ width: `${fillWidth}%` }}
+          />
+        </div>
         <div
-          className={`h-full rounded-full ${isOver ? "bg-red-500" : "bg-brand"}`}
-          style={{ width: `${fillWidth}%` }}
+          className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 cursor-help rounded-full border-2 border-white bg-navy shadow-[var(--shadow-float)] transition-[left] duration-300 ease-out dark:border-zinc-950"
+          style={{ left: `${markerPos}%` }}
+          title={`Esperado até hoje\n${formatCurrency(expectedToDate)}\n${Math.round(expectedPct)}% do planejado`}
         />
       </div>
-      <div
-        className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 cursor-help rounded-full border-2 border-white bg-zinc-700 shadow-sm dark:border-zinc-950 dark:bg-zinc-300"
-        style={{ left: `${markerPos}%` }}
-        title={`Esperado até hoje\n${formatCurrency(expectedToDate)}\n${Math.round(expectedPct)}% do planejado`}
-      />
+      <p className="mt-1.5 text-[11px] text-muted-foreground">
+        {Math.round(actualPct)}% realizado · {Math.round(expectedPct)}% esperado até hoje
+      </p>
     </div>
   );
 }
