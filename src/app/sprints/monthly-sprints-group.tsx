@@ -3,7 +3,7 @@ import { formatCurrency } from "@/lib/format";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import type { OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
 import type { CommentItem } from "@/app/clients/comment-thread";
-import { resolveMonthPeriodSummary, computeRitmoDiff } from "@/lib/financial-period";
+import { resolveMonthPeriodSummary, computeRitmoDiff, computeExpectedPct, formatRitmoDiffText } from "@/lib/financial-period";
 import { SprintCard } from "@/app/clients/sprint-card";
 
 const ACTIVITY_TEXT_CLASSES: Record<OperationalActivityStatus, string> = {
@@ -12,29 +12,19 @@ const ACTIVITY_TEXT_CLASSES: Record<OperationalActivityStatus, string> = {
   inativo: "text-red-600 dark:text-red-400",
 };
 
-/** Mesmo texto de ritmo usado em SprintFinancialBar (sprint), aqui reaplicado
- * ao período mensal — nunca compara o realizado com 100% do orçamento antes
- * do mês acabar, sempre com o esperado até a data observada. */
-function ritmoText(status: "dentro" | "acima" | "abaixo" | "sem_meta", diffPct: number): string | null {
-  if (status === "acima") return `${Math.round(diffPct)} p.p. acima do ritmo`;
-  if (status === "abaixo") return `${Math.round(diffPct)} p.p. abaixo do ritmo`;
-  if (status === "dentro") return "Dentro do ritmo esperado";
-  return null;
-}
-
 /**
- * Grupo por cliente na visão "Mensal" da tela Sprints (Etapa 42) — cabeçalho
- * recolhido com o resumo mensal do cliente (orçamento/realizado/%/esperado/
- * ritmo — nunca os valores de uma sprint específica, ver seção 8 do pedido);
- * ao expandir, mostra as sprints do mês usando o mesmo `SprintCard` da
- * página individual do cliente, cada uma começando recolhida por sua vez
+ * Grupo por cliente na visão "Mensal > Por sprints" da tela Sprints (Etapa
+ * 42/43) — cabeçalho recolhido com o resumo mensal do cliente (orçamento/
+ * realizado/%/esperado/ritmo — nunca os valores de uma sprint específica);
+ * ao expandir, mostra as sprints reais do mês usando o mesmo `SprintCard`
+ * da página individual do cliente, cada uma começando recolhida por sua vez
  * (dois níveis aqui fazem sentido: um controla "ver as sprints deste
  * cliente", outro controla "ver o detalhe desta sprint específica" — não é
  * a mesma informação duas vezes). Alertas só aparecem dentro do SprintCard
  * da sprint atual (quando ela está neste mês) — não duplicados aqui no
  * resumo, seguindo a mesma regra de "um local só" da visão Sprint atual.
  */
-export function SprintMonthlyClientGroup({
+export function SprintMonthlyBySprintsGroup({
   card,
   monthLabel,
   monthRange,
@@ -53,8 +43,7 @@ export function SprintMonthlyClientGroup({
 }) {
   const summary = resolveMonthPeriodSummary(card, monthLabel, monthRange);
   const diff = computeRitmoDiff(summary);
-  const expectedPct = summary.planned > 0 ? (summary.expectedToDate / summary.planned) * 100 : 0;
-  const diffPct = Math.abs((summary.pct ?? 0) - expectedPct);
+  const expectedPct = computeExpectedPct(summary);
   const activityLabel = card.activityLabel === "Nunca houve atividade" ? "Nunca" : card.activityLabel;
 
   return (
@@ -93,7 +82,7 @@ export function SprintMonthlyClientGroup({
 
           {summary.planned > 0 && (
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {ritmoText(summary.status, diffPct)}
+              {formatRitmoDiffText(summary)}
               {" · "}
               Diferença pro ritmo esperado no mês: {formatCurrency(diff)}
             </p>

@@ -73,3 +73,22 @@ export function resolveMonthPeriodSummary(
 export function computeRitmoDiff(summary: FinancialPeriodSummary): number {
   return summary.actual - summary.expectedToDate;
 }
+
+/** % do esperado até hoje sobre o planejado do período — só pra exibição
+ * (o valor em R$ que importa pro cálculo já está em `expectedToDate`). */
+export function computeExpectedPct(summary: FinancialPeriodSummary): number {
+  return summary.planned > 0 ? (summary.expectedToDate / summary.planned) * 100 : 0;
+}
+
+/** Texto de ritmo ("N p.p. acima/abaixo do ritmo" ou "Dentro do ritmo
+ * esperado") — mesma frase em qualquer período (sprint ou mês), reaplicada
+ * por quem já usa `SprintFinancialBar`/`AgencyInvestmentBar` como legenda
+ * textual equivalente pros resumos que não têm uma barra com tooltip. */
+export function formatRitmoDiffText(summary: FinancialPeriodSummary): string | null {
+  const expectedPct = computeExpectedPct(summary);
+  const diffPct = Math.round(Math.abs((summary.pct ?? 0) - expectedPct));
+  if (summary.status === "acima") return `${diffPct} p.p. acima do ritmo`;
+  if (summary.status === "abaixo") return `${diffPct} p.p. abaixo do ritmo`;
+  if (summary.status === "dentro") return "Dentro do ritmo esperado";
+  return null;
+}

@@ -887,6 +887,66 @@ automático da sync, refinamentos de UX, etc.
     a renderização própria de financeiro/tarefas/alertas que existia em
     `current-client-group.tsx` e `monthly-client-group.tsx`.
 
+43. ✅ Segunda forma de ver o modo Mensal da tela Sprints — Consolidado
+    (padrão) e Por sprints (sem migration, sem mudança de regra financeira/
+    RLS/permissões/dado): o nível principal continua exatamente
+    `[Sprint atual] [Mensal]` (`?view=current|monthly`), sem terceira aba do
+    mesmo peso. Quando **Mensal** está selecionado, aparece um controle
+    secundário e visualmente subordinado, **Consolidado** / **Por sprints**
+    (`grouping-label` em segmented control, não switch on/off), persistido
+    na URL como `?view=monthly&grouping=consolidated|sprints&month=...` —
+    qualquer `grouping` ausente ou inválido cai em `consolidated` (o mesmo
+    fallback seguro já usado pra `view`/`sprint`/`health`/`activity`).
+
+    **Consolidado** (`monthly-consolidated-group.tsx`, novo) é um único
+    bloco por cliente pro mês inteiro — nada de "Sprint 1"/"Sprint 2" aqui:
+    cliente, gestor, mês, orçamento mensal, gasto realizado, %, esperado até
+    hoje, diferença de ritmo, barra financeira mensal (`AgencyInvestmentBar`,
+    já usada na Visão Geral), resumo de tarefas do mês, última atividade e
+    alertas mensais consolidados (mesma `AlertsSummaryLine` já existente,
+    sem duplicar). Ao expandir, mostra **todas** as tarefas do mês numa
+    lista cronológica só (`orderTasks`/`TaskRow` de sempre, sobre o novo
+    campo `monthTasks` do card operacional — todas as tarefas do mês, sem
+    filtrar por sprint), sem nenhum agrupamento visual por sprint.
+
+    **Por sprints** é exatamente o que a Etapa 42 já tinha construído em
+    `monthly-client-group.tsx` — renomeado pra `monthly-sprints-group.tsx`
+    (`SprintMonthlyBySprintsGroup`, mesmo comportamento, só reaproveitando
+    os novos helpers de `financial-period.ts` no lugar da conta de ritmo que
+    estava duplicada ali): cabeçalho mensal recolhido, e dentro dele as
+    sprints reais do mês, cada uma no mesmo `SprintCard` da página
+    individual do cliente.
+
+    Pra nunca misturar período (bug que essa etapa tomou cuidado explícito
+    de não introduzir): os dois grupos usam sempre `resolveMonthPeriodSummary`
+    pro resumo do cabeçalho (nunca o financeiro de uma sprint isolada), e o
+    `SprintCard` dentro de "Por sprints" continua usando só os campos da
+    própria sprint — nenhum dos dois lê o valor errado do outro período.
+    Novos helpers puros em `financial-period.ts` (`computeExpectedPct`,
+    `formatRitmoDiffText`) só empacotam/formatam valores que já vinham de
+    `resolveMonthPeriodSummary`/`computeRitmoDiff` — nenhum cálculo novo.
+
+    Filtro de sprint (atrasadas/sem execução/em dia): some em Consolidado
+    (não faz sentido resumir o mês inteiro por status de uma sprint) e
+    continua disponível em Por sprints e em Sprint atual. Pra não perder o
+    valor escolhido ao alternar Consolidado ↔ Por sprints, quando o filtro
+    está escondido ele continua indo pra URL/formulário via campo oculto —
+    só não filtra nem aparece o `<select>`. Mês, cliente e gestor continuam
+    preservados normalmente ao trocar de agrupamento (mesmo `buildUrl` de
+    sempre); estados de expansão incompatíveis (um bloco consolidado aberto)
+    não precisam persistir — trocar de agrupamento não tenta abrir sprint
+    nenhuma automaticamente.
+
+    Arquivos: `operation-data.ts` (novo campo `monthTasks` no card, tarefas
+    do mês sem filtrar por sprint, já calculado antes só não exposto),
+    `financial-period.ts` (`computeExpectedPct`, `formatRitmoDiffText`),
+    `sprint-card.tsx` (`AlertsSummaryLine` passou a ser exportada),
+    `monthly-sprints-group.tsx` (renomeado de `monthly-client-group.tsx`),
+    `monthly-consolidated-group.tsx` (novo), `sprints-client-filter.tsx`
+    (nova prop `grouping`) e `sprints/page.tsx` (segmented control, parsing
+    de `grouping` com fallback, guarda do filtro de sprint, `buildUrl`
+    incluindo `grouping` no modo Mensal).
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

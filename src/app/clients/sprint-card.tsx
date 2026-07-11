@@ -42,9 +42,10 @@ const EXECUTION_LABEL_CLASSES: Record<"atencao" | "critico" | "neutro", string> 
  * ordenados por severidade em buildAttentionAlerts, então `alerts[0]` já é
  * o mais prioritário sem recalcular nada) + quantos restam. Vermelho só
  * quando esse alerta é crítico. Vive aqui (não em cada tela que usa
- * SprintCard) porque é sempre a mesma apresentação nos dois lugares que a
- * usam (resumo recolhido + toggle "Ver alertas" expandido). */
-function AlertsSummaryLine({ topAlert, remaining }: { topAlert: AttentionAlert; remaining: number }) {
+ * SprintCard) porque é sempre a mesma apresentação nos lugares que a usam
+ * (resumo recolhido + toggle "Ver alertas" expandido; também exportada pra
+ * o resumo mensal consolidado da tela Sprints, que não tem SprintCard). */
+export function AlertsSummaryLine({ topAlert, remaining }: { topAlert: AttentionAlert; remaining: number }) {
   const isCritical = topAlert.severity === "critico";
   return (
     <>

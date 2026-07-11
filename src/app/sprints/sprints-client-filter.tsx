@@ -13,6 +13,7 @@ export function SprintsClientFilter({
   clients,
   selectedClientId,
   view,
+  grouping,
   manager,
   month,
   health,
@@ -22,6 +23,7 @@ export function SprintsClientFilter({
   clients: ClientComboboxOption[];
   selectedClientId: string | undefined;
   view: "current" | "monthly";
+  grouping: "consolidated" | "sprints";
   manager: string;
   month: string | undefined;
   health: string;
@@ -33,6 +35,7 @@ export function SprintsClientFilter({
   function buildUrl(overrides: Record<string, string>) {
     const next = new URLSearchParams();
     next.set("view", view);
+    if (view === "monthly") next.set("grouping", grouping);
     next.set("manager", manager);
     if (selectedClientId) next.set("client", selectedClientId);
     if (view === "monthly" && month) next.set("month", month);

@@ -95,6 +95,11 @@ export interface OperationClientCard {
    * SprintCard da página do cliente pra qualquer sprint do mês (não só a
    * atual), sem duplicar o filtro de tarefas por sprint. */
   monthSprintTasks: Record<string, OperationTaskItem[]>;
+  /** Todas as tarefas do mês selecionado, sem separação por sprint — usado
+   * pela visão Mensal > Consolidado da tela Sprints (lista cronológica
+   * única). Mesmo filtro por due_date que já gera `taskCounts`/`overdueTasks`,
+   * só exposto como lista completa em vez de só contagem. */
+  monthTasks: OperationTaskItem[];
   /** Mesmo texto ("Hoje"/"Ontem"/"Há N dias úteis") que a página do cliente
    * mostra em "Última execução da sprint" — null se não há sprint atual.
    * Só faz sentido pra sprint atual (quem renderiza decide isso). */
@@ -260,5 +265,6 @@ export function buildOperationClientCard(
     monthSprints,
     monthSprintTasks,
     sprintExecutionLabel,
+    monthTasks,
   };
 }

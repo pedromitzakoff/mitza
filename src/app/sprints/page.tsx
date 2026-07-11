@@ -14,16 +14,23 @@ import {
   type SprintFilterBucket,
 } from "@/app/operation/operation-data";
 import { SprintCurrentClientGroup } from "./current-client-group";
-import { SprintMonthlyClientGroup } from "./monthly-client-group";
+import { SprintMonthlyBySprintsGroup } from "./monthly-sprints-group";
+import { SprintMonthlyConsolidatedGroup } from "./monthly-consolidated-group";
 import { SprintsClientFilter } from "./sprints-client-filter";
 import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
 
 type SprintsView = "current" | "monthly";
+type MonthlyGrouping = "consolidated" | "sprints";
 
 const VIEW_LABEL: Record<SprintsView, string> = {
   current: "Sprint atual",
   monthly: "Mensal",
+};
+
+const GROUPING_LABEL: Record<MonthlyGrouping, string> = {
+  consolidated: "Consolidado",
+  sprints: "Por sprints",
 };
 
 export default async function SprintsPage({
@@ -31,6 +38,7 @@ export default async function SprintsPage({
 }: {
   searchParams: Promise<{
     view?: string;
+    grouping?: string;
     manager?: string;
     client?: string;
     month?: string;
@@ -49,6 +57,9 @@ export default async function SprintsPage({
   const params = await searchParams;
 
   const view: SprintsView = params.view === "monthly" ? "monthly" : "current";
+  // Grouping só existe dentro do modo Mensal — qualquer valor ausente ou
+  // desconhecido cai em "consolidated" (o padrão ao entrar em Mensal).
+  const grouping: MonthlyGrouping = params.grouping === "sprints" ? "sprints" : "consolidated";
   const managerFilter = params.manager ?? (isAdmin ? "all" : "me");
   const healthFilter = params.health ?? "todos";
   const activityFilter = params.activity ?? "todos";
@@ -224,7 +235,13 @@ export default async function SprintsPage({
     cards = cards.filter((card) => card.activityStatus === activityFilter);
   }
 
-  if (sprintFilter !== "todas") {
+  // O filtro de status de sprint só faz sentido onde existe uma sprint em
+  // foco (Sprint atual, ou Mensal > Por sprints) — em Mensal > Consolidado
+  // ele fica oculto (seção 8 do pedido) e também não filtra escondido: o
+  // valor continua guardado na URL (preservado se o usuário voltar pra Por
+  // sprints), só não afeta o que aparece enquanto Consolidado está ativo.
+  const sprintFilterApplies = view === "current" || (view === "monthly" && grouping === "sprints");
+  if (sprintFilterApplies && sprintFilter !== "todas") {
     cards = cards.filter((card) => card.sprintFilterBucket === sprintFilter);
   }
 
@@ -240,6 +257,7 @@ export default async function SprintsPage({
   const buildUrl = (overrides: Record<string, string>) => {
     const next = new URLSearchParams();
     next.set("view", view);
+    if (view === "monthly") next.set("grouping", grouping);
     next.set("manager", managerFilter);
     if (clientFilter) next.set("client", clientFilter);
     if (view === "monthly" && params.month) next.set("month", params.month);
@@ -309,7 +327,14 @@ export default async function SprintsPage({
           {(Object.keys(VIEW_LABEL) as SprintsView[]).map((v) => (
             <Link
               key={v}
-              href={buildUrl({ view: v, month: v === "monthly" ? (params.month ?? "") : "" })}
+              href={buildUrl({
+                view: v,
+                month: v === "monthly" ? (params.month ?? "") : "",
+                // Entrar em Mensal vindo de Sprint atual sempre cai em
+                // Consolidado (o padrão); reclicar na aba já ativa preserva
+                // o agrupamento que já estava selecionado.
+                grouping: v === "monthly" ? (v === view ? grouping : "consolidated") : "",
+              })}
               className={`rounded-md px-3 py-1 text-sm font-medium ${
                 v === view
                   ? "bg-brand text-white"
@@ -345,10 +370,32 @@ export default async function SprintsPage({
             )}
           </div>
         )}
+
+        {view === "monthly" && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-muted-foreground">Visualização do mês</span>
+            <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
+              {(Object.keys(GROUPING_LABEL) as MonthlyGrouping[]).map((g) => (
+                <Link
+                  key={g}
+                  href={buildUrl({ grouping: g })}
+                  className={`rounded px-2 py-1 font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
+                    g === grouping
+                      ? "bg-brand/10 text-brand"
+                      : "text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                  }`}
+                >
+                  {GROUPING_LABEL[g]}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <form method="get" className="mt-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-card p-2">
         <input type="hidden" name="view" value={view} />
+        {view === "monthly" && <input type="hidden" name="grouping" value={grouping} />}
         {clientFilter && <input type="hidden" name="client" value={clientFilter} />}
         {view === "monthly" && params.month && <input type="hidden" name="month" value={params.month} />}
 
@@ -388,16 +435,24 @@ export default async function SprintsPage({
           <option value="inativo">Inativos</option>
         </select>
 
-        <select
-          name="sprint"
-          defaultValue={sprintFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-        >
-          <option value="todas">Sprint: todas</option>
-          <option value="atrasadas">Com tarefas atrasadas</option>
-          <option value="sem_execucao">Sem execução</option>
-          <option value="em_dia">Em dia</option>
-        </select>
+        {sprintFilterApplies ? (
+          <select
+            name="sprint"
+            defaultValue={sprintFilter}
+            className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
+          >
+            <option value="todas">Sprint: todas</option>
+            <option value="atrasadas">Com tarefas atrasadas</option>
+            <option value="sem_execucao">Sem execução</option>
+            <option value="em_dia">Em dia</option>
+          </select>
+        ) : (
+          // Escondido em Mensal > Consolidado (não faz sentido ali), mas o
+          // valor guardado é preservado num campo oculto — se o usuário
+          // voltar pra Por sprints, o filtro continua exatamente como
+          // estava, em vez de ser perdido numa submissão do formulário.
+          sprintFilter !== "todas" && <input type="hidden" name="sprint" value={sprintFilter} />
+        )}
 
         <button
           type="submit"
@@ -422,6 +477,7 @@ export default async function SprintsPage({
           clients={clientOptions}
           selectedClientId={clientFilter}
           view={view}
+          grouping={grouping}
           manager={managerFilter}
           month={view === "monthly" ? params.month : undefined}
           health={healthFilter}
@@ -447,9 +503,20 @@ export default async function SprintsPage({
                 comments={card.sprint ? sprintCommentsById.get(card.sprint.sprintId) ?? [] : []}
               />
             ))
+          ) : grouping === "consolidated" ? (
+            cards.map((card) => (
+              <SprintMonthlyConsolidatedGroup
+                key={card.clientId}
+                card={card}
+                monthLabel={monthLabel}
+                monthRange={monthRange}
+                primaryManagerName={primaryManagerNameByClient.get(card.clientId) ?? null}
+                returnTo={buildUrl({})}
+              />
+            ))
           ) : (
             cards.map((card) => (
-              <SprintMonthlyClientGroup
+              <SprintMonthlyBySprintsGroup
                 key={card.clientId}
                 card={card}
                 monthLabel={monthLabel}
