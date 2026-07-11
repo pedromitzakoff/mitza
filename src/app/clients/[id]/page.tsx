@@ -12,7 +12,7 @@ import { computeCumulativeSpendSeries } from "@/lib/spend-chart-data";
 import { computeMonthProjection, computeTaskCounts } from "@/lib/client-metrics";
 import { classifySpendStatus } from "@/lib/spend-status";
 import { buildAttentionAlerts } from "@/lib/attention-alerts";
-import { buildSprintExecutionAlert } from "@/lib/sprint-execution";
+import { buildSprintExecutionAlert, formatSprintExecutionLabel } from "@/lib/sprint-execution";
 import { businessDaysSince } from "@/lib/business-days";
 import { classifyOperationalActivityStatus, formatLastActivityLabel } from "@/lib/operational-activity";
 import { effectiveTaskStatus } from "@/lib/task-status";
@@ -297,7 +297,7 @@ export default async function ClientPage({
     : null;
   const alerts = sprintExecutionAlert ? [...baseAlerts, sprintExecutionAlert] : baseAlerts;
   const sprintExecutionLabel = currentSprint
-    ? formatLastActivityLabel(sprintLastActivityDate ?? new Date(`${currentSprint.startDate}T00:00:00Z`), today)
+    ? formatSprintExecutionLabel(sprintLastActivityDate, currentSprint.startDate, today)
     : null;
 
   const chartPoints = computeCumulativeSpendSeries(

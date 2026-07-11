@@ -1,8 +1,11 @@
+import Link from "next/link";
+import { TriangleAlert } from "lucide-react";
 import type { SprintFinancials } from "@/lib/sprint-financials";
 import { formatCurrency, formatDateRange, formatWeekdayAndDayMonth } from "@/lib/format";
 import { SPEND_STATUS_BADGE_CLASSES, SPEND_STATUS_LABEL } from "@/lib/spend-status";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayUTC } from "@/lib/today";
+import type { AttentionAlert } from "@/lib/attention-alerts";
 import { CommentThread, type CommentItem } from "./comment-thread";
 import { SprintTaskList } from "./sprint-task-list";
 import type { TaskListItem } from "./task-row";
@@ -35,6 +38,49 @@ const EXECUTION_LABEL_CLASSES: Record<"atencao" | "critico" | "neutro", string> 
   critico: "text-red-600 dark:text-red-400",
 };
 
+/** Linha compacta de alertas — 1 ícone + o alerta mais prioritário (já vêm
+ * ordenados por severidade em buildAttentionAlerts, então `alerts[0]` já é
+ * o mais prioritário sem recalcular nada) + quantos restam. Vermelho só
+ * quando esse alerta é crítico. Vive aqui (não em cada tela que usa
+ * SprintCard) porque é sempre a mesma apresentação nos dois lugares que a
+ * usam (resumo recolhido + toggle "Ver alertas" expandido). */
+function AlertsSummaryLine({ topAlert, remaining }: { topAlert: AttentionAlert; remaining: number }) {
+  const isCritical = topAlert.severity === "critico";
+  return (
+    <>
+      <TriangleAlert
+        className={`h-3 w-3 shrink-0 ${isCritical ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}
+        aria-hidden="true"
+      />
+      <span className={isCritical ? "font-medium text-red-600 dark:text-red-400" : ""}>{topAlert.message}</span>
+      {remaining > 0 && <span>· +{remaining} alerta{remaining !== 1 ? "s" : ""}</span>}
+    </>
+  );
+}
+
+/**
+ * Card único de sprint — implementação compartilhada entre a página
+ * individual do cliente e o painel Sprints (Etapa 42): mesmo componente,
+ * mesma estrutura visual, mesmas informações e ações nos dois lugares.
+ * Tudo que é específico de onde a sprint está sendo mostrada entra por
+ * prop, nunca por uma segunda implementação:
+ *
+ * - `defaultOpen`: a página do cliente deixa a sprint atual já aberta por
+ *   padrão (omitir a prop preserva esse comportamento); o painel Sprints
+ *   passa sempre `false` (toda sprint começa recolhida lá).
+ * - `alerts`: só o painel Sprints passa (a página do cliente já tem seu
+ *   próprio AttentionPanel client-wide, acima da lista de sprints — não
+ *   duplicar mostrando alerta dentro E fora do card). Quando fornecido,
+ *   aparece um indicador compacto já no resumo recolhido (pra não perder a
+ *   leitura rápida que o painel Sprints já tinha) e a lista completa no
+ *   corpo expandido, exatamente como antes.
+ * - `openClientHref`: só o painel Sprints passa ("Abrir cliente" não faz
+ *   sentido dentro da própria página do cliente).
+ * - `buildTaskHref`: como cada tela abre o drawer de tarefa a partir de uma
+ *   URL diferente (a própria página do cliente vs. o painel Sprints
+ *   preservando filtros/mês/modo), quem chama decide a URL; o padrão
+ *   preserva o comportamento já existente na página do cliente.
+ */
 export function SprintCard({
   sprint,
   sprintNumber,
@@ -44,6 +90,10 @@ export function SprintCard({
   tasks,
   executionLabel,
   executionSeverity,
+  defaultOpen,
+  alerts,
+  openClientHref,
+  buildTaskHref,
 }: {
   sprint: SprintFinancials;
   sprintNumber: number;
@@ -53,6 +103,10 @@ export function SprintCard({
   tasks: TaskListItem[];
   executionLabel?: string | null;
   executionSeverity?: "atencao" | "critico" | null;
+  defaultOpen?: boolean;
+  alerts?: AttentionAlert[];
+  openClientHref?: string;
+  buildTaskHref?: (taskId: string) => string;
 }) {
   const saldo = sprint.plannedSpend - sprint.actualSpend;
   const saldoText =
@@ -64,14 +118,18 @@ export function SprintCard({
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
 
   const isCurrent = sprint.temporalStatus === "atual";
+  const isOpen = defaultOpen ?? isCurrent;
   const editActualToggleId = `edit-actual-${sprint.sprintId}`;
   const revertSourceToggleId = `revert-source-${sprint.sprintId}`;
   const isManualSource = sprint.spendSource === "manual";
 
+  const topAlert = alerts?.[0];
+  const remainingAlerts = (alerts?.length ?? 0) - 1;
+
   return (
     <details
       id={`sprint-${sprint.sprintId}`}
-      open={isCurrent}
+      open={isOpen}
       className={`group scroll-mt-4 rounded-lg border bg-card [&_summary::-webkit-details-marker]:hidden ${
         isCurrent ? "border-l-4 border-l-brand border-y-border border-r-border" : "border-border"
       }`}
@@ -104,6 +162,12 @@ export function SprintCard({
             {SPEND_STATUS_LABEL[sprint.status]}
           </span>
         </span>
+
+        {topAlert && (
+          <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+            <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
+          </span>
+        )}
       </summary>
 
       <div className="border-t border-border p-3">
@@ -229,7 +293,35 @@ export function SprintCard({
           </div>
         </div>
 
-        <SprintTaskList tasks={tasks} clientId={clientId} sprintId={sprint.sprintId} />
+        {topAlert && (
+          <details className="group/alerts mt-3">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
+              <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
+              <span className="ml-auto shrink-0 font-medium text-brand">
+                <span className="group-open/alerts:hidden">{(alerts?.length ?? 0) > 1 ? "Ver todos" : "Ver detalhe"}</span>
+                <span className="hidden group-open/alerts:inline">Ocultar alertas</span>
+              </span>
+            </summary>
+            <ul className="mt-1.5 flex flex-col gap-0.5 border-l-2 border-border pl-2">
+              {alerts?.map((alert, index) => (
+                <li
+                  key={index}
+                  className={`text-xs leading-tight ${
+                    alert.severity === "critico"
+                      ? "text-red-600 dark:text-red-400"
+                      : alert.severity === "atencao"
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-muted-foreground"
+                  }`}
+                >
+                  {alert.message}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+
+        <SprintTaskList tasks={tasks} clientId={clientId} sprintId={sprint.sprintId} buildTaskHref={buildTaskHref} />
 
         <details className="mt-3 border-t border-border pt-2 [&_summary]:cursor-pointer [&_summary]:list-none">
           <summary className="text-xs font-medium text-muted-foreground hover:text-brand">
@@ -244,6 +336,14 @@ export function SprintCard({
             />
           </div>
         </details>
+
+        {openClientHref && (
+          <div className="mt-3 border-t border-border pt-2 text-xs">
+            <Link href={openClientHref} className="text-muted-foreground hover:underline">
+              Abrir cliente
+            </Link>
+          </div>
+        )}
       </div>
     </details>
   );

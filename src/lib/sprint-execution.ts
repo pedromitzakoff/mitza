@@ -1,5 +1,5 @@
 import { businessDaysSince } from "./business-days";
-import { OPERATIONAL_ACTIVITY_THRESHOLDS } from "./operational-activity";
+import { formatLastActivityLabel, OPERATIONAL_ACTIVITY_THRESHOLDS } from "./operational-activity";
 import type { AttentionAlert } from "./attention-alerts";
 import type { SprintTemporalStatus } from "./sprint-financials";
 
@@ -42,6 +42,18 @@ export function computeSprintExecutionInfo(
     return { businessDays, referenceDate, severity: "critico" };
   }
   return null;
+}
+
+/** "Última execução da sprint" — mesmo texto ("Hoje"/"Ontem"/"Há N dias
+ * úteis") usado pela página do cliente e pelo painel Sprints, pra nunca
+ * divergir: última atividade vinculada à sprint, ou o início dela se nunca
+ * houve nenhuma. Só faz sentido pra sprint atual (chamador decide isso). */
+export function formatSprintExecutionLabel(
+  lastSprintActivityAt: Date | null,
+  sprintStartDate: string,
+  today: Date,
+): string {
+  return formatLastActivityLabel(lastSprintActivityAt ?? new Date(`${sprintStartDate}T00:00:00Z`), today);
 }
 
 export function buildSprintExecutionAlert(

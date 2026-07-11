@@ -7,10 +7,16 @@ export function SprintTaskList({
   tasks,
   clientId,
   sprintId,
+  buildTaskHref,
 }: {
   tasks: TaskListItem[];
   clientId: string;
   sprintId: string;
+  /** Cada tela abre o drawer de tarefa a partir de uma URL diferente (a
+   * própria página do cliente vs. o painel Sprints, preservando filtros/mês/
+   * modo) — por isso quem chama decide a URL. Omitir preserva o link direto
+   * pra página do cliente, de sempre. */
+  buildTaskHref?: (taskId: string) => string;
 }) {
   const ordered = orderTasks(tasks);
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
@@ -51,7 +57,7 @@ export function SprintTaskList({
               key={task.id}
               task={task}
               clientId={clientId}
-              detailsHref={`/clients/${clientId}?task=${task.id}`}
+              detailsHref={buildTaskHref ? buildTaskHref(task.id) : `/clients/${clientId}?task=${task.id}`}
             />
           ))}
         </ul>

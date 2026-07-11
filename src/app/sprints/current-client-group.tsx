@@ -1,193 +1,59 @@
 import Link from "next/link";
-import { TriangleAlert } from "lucide-react";
-import { formatCurrency, formatDateRange } from "@/lib/format";
-import { effectiveTaskStatus } from "@/lib/task-status";
-import { TaskRow } from "@/app/clients/task-row";
-import { orderTasks } from "@/app/clients/task-list";
-import type { AttentionAlert } from "@/lib/attention-alerts";
-import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import type { OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
-import { SprintFinancialBar } from "@/app/clients/sprint-financial-bar";
-
-/** Cor discreta (texto, não badge) pro rótulo de última atividade — só
- * chama atenção quando ultrapassa a regra de inatividade já existente. */
-const ACTIVITY_TEXT_CLASSES: Record<OperationalActivityStatus, string> = {
-  ativo: "text-muted-foreground",
-  atencao: "text-amber-600 dark:text-amber-400",
-  inativo: "text-red-600 dark:text-red-400",
-};
-
-/** Linha compacta de alertas — 1 ícone + o alerta mais prioritário (os
- * alertas já vêm ordenados por severidade de buildAttentionAlerts, então
- * `alerts[0]` já é o mais prioritário sem recalcular nada) + quantos
- * restam. Vermelho só quando esse alerta é crítico. Reaproveitada no resumo
- * (sempre visível, sem clique) e no toggle "Ver alertas" dentro do corpo
- * expandido. Exportada pra `monthly-client-group.tsx` reaproveitar, nunca
- * duplicar. */
-export function AlertsSummaryLine({ topAlert, remaining }: { topAlert: AttentionAlert; remaining: number }) {
-  const isCritical = topAlert.severity === "critico";
-  return (
-    <>
-      <TriangleAlert
-        className={`h-3 w-3 shrink-0 ${isCritical ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}
-        aria-hidden="true"
-      />
-      <span className={isCritical ? "font-medium text-red-600 dark:text-red-400" : ""}>{topAlert.message}</span>
-      {remaining > 0 && <span>· +{remaining} alerta{remaining !== 1 ? "s" : ""}</span>}
-    </>
-  );
-}
+import type { CommentItem } from "@/app/clients/comment-thread";
+import { SprintCard } from "@/app/clients/sprint-card";
 
 /**
- * Grupo colapsável por cliente na visão "Sprint atual" da tela Sprints —
- * cabeçalho compacto (identidade, gestor principal, sprint, financeiro da
- * sprint, progresso, última atividade, resumo de alertas), sem badge de
- * saúde ao lado do nome: a prioridade já aparece na ordenação
- * (sortSprintClientsByUrgency). Inicia sempre recolhido. Todos os valores
- * financeiros aqui são exclusivamente da sprint atual (`card.sprint`) —
- * nunca do mês (isso é responsabilidade de `monthly-client-group.tsx`).
- * Reaproveita buildOperationClientCard — nenhuma query nova por cliente.
+ * Bloco por cliente na visão "Sprint atual" da tela Sprints (Etapa 42) —
+ * cabeçalho de identidade do cliente (nome + gestor principal, sem toggle
+ * próprio) seguido do mesmo `SprintCard` usado na página individual do
+ * cliente. Como só existe uma sprint por cliente aqui, não há um segundo
+ * nível de accordion em volta do card: o próprio `<details>` do SprintCard
+ * (sempre recolhido nesta tela, via `defaultOpen={false}`) é o único
+ * controle de expandir/recolher — um clique, uma seta, não dois.
  */
 export function SprintCurrentClientGroup({
   card,
   returnTo,
   primaryManagerName,
+  isAdmin,
+  comments,
 }: {
   card: OperationClientCardData;
   returnTo: string;
   primaryManagerName: string | null;
+  isAdmin: boolean;
+  comments: CommentItem[];
 }) {
-  const tasksToShow = orderTasks(card.sprintTasks);
-  const sprintTasksDone = card.sprintTasks.filter((t) => effectiveTaskStatus(t) === "feito").length;
-  const sprintTasksOverdue = card.sprintTasks.filter((t) => effectiveTaskStatus(t) === "atrasado").length;
-
-  const topAlert = card.alerts[0];
-  const remainingAlerts = card.alerts.length - 1;
-  const activityLabel = card.activityLabel === "Nunca houve atividade" ? "Nunca" : card.activityLabel;
-
   return (
-    <details className="group/client rounded-lg border border-border bg-card [&_summary::-webkit-details-marker]:hidden">
-      <summary className="flex cursor-pointer list-none items-start gap-2 px-3 py-2">
-        <span className="mt-0.5 shrink-0 text-xs text-muted-foreground transition-transform group-open/client:rotate-90">
-          ▸
-        </span>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-            <Link href={`/clients/${card.clientId}`} className="font-bold text-foreground hover:underline">
-              {card.clientName}
-            </Link>
-            {primaryManagerName && (
-              <span className="shrink-0 text-xs text-muted-foreground">{primaryManagerName}</span>
-            )}
-          </div>
-
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {card.sprint
-              ? `Sprint ${card.sprintNumber} · ${formatDateRange(card.sprint.startDate, card.sprint.endDate)}`
-              : "Sem sprint em andamento"}
-          </p>
-
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-            {card.sprint && (
-              <span className="tabular-nums">
-                {formatCurrency(card.sprint.actualSpend)} / {formatCurrency(card.sprint.plannedSpend)}
-                {card.sprint.plannedSpend > 0 && ` · ${Math.round(card.sprint.progressPct)}% realizado da sprint`}
-              </span>
-            )}
-            {card.sprint && (
-              <span>
-                {sprintTasksDone}/{card.sprintTasks.length} tarefas
-                {sprintTasksOverdue > 0 && (
-                  <span className="font-medium text-red-600 dark:text-red-400">
-                    {" "}
-                    · {sprintTasksOverdue} atrasada{sprintTasksOverdue !== 1 ? "s" : ""}
-                  </span>
-                )}
-              </span>
-            )}
-            <span className={ACTIVITY_TEXT_CLASSES[card.activityStatus]}>Última atividade: {activityLabel}</span>
-          </div>
-
-          {card.sprint && (
-            <div className="mt-1">
-              <SprintFinancialBar sprint={card.sprint} />
-            </div>
-          )}
-
-          {topAlert && (
-            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-              <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
-            </div>
-          )}
-        </div>
-      </summary>
-
-      <div className="border-t border-border p-3">
-        {topAlert && (
-          <details className="group/alerts mb-3">
-            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
-              <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
-              <span className="ml-auto shrink-0 font-medium text-brand">
-                <span className="group-open/alerts:hidden">{card.alerts.length > 1 ? "Ver todos" : "Ver detalhe"}</span>
-                <span className="hidden group-open/alerts:inline">Ocultar alertas</span>
-              </span>
-            </summary>
-            <ul className="mt-1.5 flex flex-col gap-0.5 border-l-2 border-border pl-2">
-              {card.alerts.map((alert, index) => (
-                <li
-                  key={index}
-                  className={`text-xs leading-tight ${
-                    alert.severity === "critico"
-                      ? "text-red-600 dark:text-red-400"
-                      : alert.severity === "atencao"
-                        ? "text-amber-600 dark:text-amber-400"
-                        : "text-muted-foreground"
-                  }`}
-                >
-                  {alert.message}
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
-
-        {tasksToShow.length > 0 ? (
-          <ul className="overflow-hidden rounded-lg border border-border">
-            {tasksToShow.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                clientId={card.clientId}
-                detailsHref={`${returnTo}&task=${task.id}`}
-                hideAssigneeIfName={primaryManagerName ?? undefined}
-              />
-            ))}
-          </ul>
-        ) : (
-          <p className="text-xs text-muted-foreground">Sem tarefas na sprint atual.</p>
-        )}
-
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
-          <Link
-            href={`/clients/${card.clientId}/tasks/new${card.sprint ? `?sprintId=${card.sprint.sprintId}` : ""}`}
-            className="font-medium text-brand hover:underline"
-          >
-            + Nova tarefa
-          </Link>
-          {card.sprint && (
-            <Link
-              href={`/clients/${card.clientId}#sprint-${card.sprint.sprintId}`}
-              className="text-muted-foreground hover:underline"
-            >
-              Abrir sprint
-            </Link>
-          )}
-          <Link href={`/clients/${card.clientId}`} className="text-muted-foreground hover:underline">
-            Abrir cliente
-          </Link>
-        </div>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-0.5">
+        <Link href={`/clients/${card.clientId}`} className="font-bold text-foreground hover:underline">
+          {card.clientName}
+        </Link>
+        {primaryManagerName && <span className="shrink-0 text-xs text-muted-foreground">{primaryManagerName}</span>}
       </div>
-    </details>
+
+      {card.sprint ? (
+        <SprintCard
+          sprint={card.sprint}
+          sprintNumber={card.sprintNumber ?? 1}
+          comments={comments}
+          clientId={card.clientId}
+          isAdmin={isAdmin}
+          tasks={card.sprintTasks}
+          executionLabel={card.sprintExecutionLabel}
+          executionSeverity={card.sprintExecutionInfo?.severity ?? null}
+          defaultOpen={false}
+          alerts={card.alerts}
+          openClientHref={`/clients/${card.clientId}`}
+          buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
+        />
+      ) : (
+        <p className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+          Sem sprint em andamento.
+        </p>
+      )}
+    </div>
   );
 }

@@ -10,7 +10,12 @@ import {
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { buildAttentionAlerts, computeAccountHealth, type AttentionAlert, type AccountHealth } from "@/lib/attention-alerts";
-import { buildSprintExecutionAlert, computeSprintExecutionInfo, type SprintExecutionInfo } from "@/lib/sprint-execution";
+import {
+  buildSprintExecutionAlert,
+  computeSprintExecutionInfo,
+  formatSprintExecutionLabel,
+  type SprintExecutionInfo,
+} from "@/lib/sprint-execution";
 import { businessDaysSince } from "@/lib/business-days";
 import {
   classifyOperationalActivityStatus,
@@ -86,6 +91,14 @@ export interface OperationClientCard {
    * Sprints. Reaproveita computeSprintFinancials pra cada uma, nunca
    * duplica a conta de planejado/realizado/esperado. */
   monthSprints: SprintFinancials[];
+  /** Tarefas de cada sprint do mês, por sprintId — pra montar o mesmo
+   * SprintCard da página do cliente pra qualquer sprint do mês (não só a
+   * atual), sem duplicar o filtro de tarefas por sprint. */
+  monthSprintTasks: Record<string, OperationTaskItem[]>;
+  /** Mesmo texto ("Hoje"/"Ontem"/"Há N dias úteis") que a página do cliente
+   * mostra em "Última execução da sprint" — null se não há sprint atual.
+   * Só faz sentido pra sprint atual (quem renderiza decide isso). */
+  sprintExecutionLabel: string | null;
 }
 
 /** Monta o card operacional de um cliente a partir dos dados já buscados
@@ -133,6 +146,10 @@ export function buildOperationClientCard(
     const actualSpend = computeSprintEffectiveSpend(row, client.dailySpend);
     return computeSprintFinancials(row, actualSpend, today, row.spend_source);
   });
+  const monthSprintTasks: Record<string, OperationTaskItem[]> = {};
+  for (const row of monthSprintRows) {
+    monthSprintTasks[row.id] = client.tasks.filter((t) => t.sprint_id === row.id);
+  }
 
   const taskCounts = { total: 0, done: 0, pending: 0, overdue: 0 };
   const overdueTasks: { id: string; due_date: string }[] = [];
@@ -192,6 +209,9 @@ export function buildOperationClientCard(
   const sprintExecutionInfo = sprint
     ? computeSprintExecutionInfo(sprint, sprintLastActivityDate, today)
     : null;
+  const sprintExecutionLabel = currentSprintRow
+    ? formatSprintExecutionLabel(sprintLastActivityDate, currentSprintRow.start_date, today)
+    : null;
 
   const allAlerts = sprintExecutionAlert ? [...alerts, sprintExecutionAlert] : alerts;
   const accountHealth = computeAccountHealth(allAlerts);
@@ -238,5 +258,7 @@ export function buildOperationClientCard(
     overdueTasks,
     sprintExecutionInfo,
     monthSprints,
+    monthSprintTasks,
+    sprintExecutionLabel,
   };
 }

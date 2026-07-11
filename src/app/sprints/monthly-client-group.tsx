@@ -2,20 +2,9 @@ import Link from "next/link";
 import { formatCurrency } from "@/lib/format";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import type { OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
+import type { CommentItem } from "@/app/clients/comment-thread";
 import { resolveMonthPeriodSummary, computeRitmoDiff } from "@/lib/financial-period";
-import { AlertsSummaryLine } from "./current-client-group";
-
-const TEMPORAL_LABEL = {
-  futura: "futura",
-  atual: "atual",
-  concluida: "concluída",
-} as const;
-
-const TEMPORAL_TEXT_CLASSES = {
-  futura: "text-muted-foreground",
-  atual: "font-medium text-brand",
-  concluida: "text-muted-foreground",
-} as const;
+import { SprintCard } from "@/app/clients/sprint-card";
 
 const ACTIVITY_TEXT_CLASSES: Record<OperationalActivityStatus, string> = {
   ativo: "text-muted-foreground",
@@ -34,31 +23,38 @@ function ritmoText(status: "dentro" | "acima" | "abaixo" | "sem_meta", diffPct: 
 }
 
 /**
- * Resumo mensal compacto por cliente — visão "Mensal" da tela Sprints.
- * Todo valor financeiro aqui vem de `resolveMonthPeriodSummary` (empacota
- * `card.monthPlanned/monthActual/monthExpectedToDate/monthStatus`, os
- * mesmos campos que a Visão Geral e a página do cliente já usam — nenhuma
- * conta nova). Recolhido por padrão; ao expandir mostra a lista das sprints
- * do mês com o status de cada uma (concluída/atual/futura), sem abrir
- * nenhuma sprint individual automaticamente.
+ * Grupo por cliente na visão "Mensal" da tela Sprints (Etapa 42) — cabeçalho
+ * recolhido com o resumo mensal do cliente (orçamento/realizado/%/esperado/
+ * ritmo — nunca os valores de uma sprint específica, ver seção 8 do pedido);
+ * ao expandir, mostra as sprints do mês usando o mesmo `SprintCard` da
+ * página individual do cliente, cada uma começando recolhida por sua vez
+ * (dois níveis aqui fazem sentido: um controla "ver as sprints deste
+ * cliente", outro controla "ver o detalhe desta sprint específica" — não é
+ * a mesma informação duas vezes). Alertas só aparecem dentro do SprintCard
+ * da sprint atual (quando ela está neste mês) — não duplicados aqui no
+ * resumo, seguindo a mesma regra de "um local só" da visão Sprint atual.
  */
 export function SprintMonthlyClientGroup({
   card,
   monthLabel,
   monthRange,
   primaryManagerName,
+  isAdmin,
+  returnTo,
+  sprintCommentsById,
 }: {
   card: OperationClientCardData;
   monthLabel: string;
   monthRange: { firstDay: string; lastDay: string };
   primaryManagerName: string | null;
+  isAdmin: boolean;
+  returnTo: string;
+  sprintCommentsById: Map<string, CommentItem[]>;
 }) {
   const summary = resolveMonthPeriodSummary(card, monthLabel, monthRange);
   const diff = computeRitmoDiff(summary);
   const expectedPct = summary.planned > 0 ? (summary.expectedToDate / summary.planned) * 100 : 0;
   const diffPct = Math.abs((summary.pct ?? 0) - expectedPct);
-  const topAlert = card.alerts[0];
-  const remainingAlerts = card.alerts.length - 1;
   const activityLabel = card.activityLabel === "Nunca houve atividade" ? "Nunca" : card.activityLabel;
 
   return (
@@ -102,37 +98,34 @@ export function SprintMonthlyClientGroup({
               Diferença pro ritmo esperado no mês: {formatCurrency(diff)}
             </p>
           )}
-
-          {topAlert && (
-            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-              <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
-            </div>
-          )}
         </div>
       </summary>
 
-      <div className="border-t border-border p-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sprints do mês</p>
+      <div className="flex flex-col gap-2 border-t border-border p-3">
         {card.monthSprints.length > 0 ? (
-          <ul className="mt-1.5 flex flex-col gap-0.5 text-xs">
-            {card.monthSprints.map((sprint, index) => (
-              <li key={sprint.sprintId} className="flex items-center justify-between">
-                <span className="text-foreground">Sprint {index + 1}</span>
-                <span className={TEMPORAL_TEXT_CLASSES[sprint.temporalStatus]}>
-                  {TEMPORAL_LABEL[sprint.temporalStatus]}
-                </span>
-              </li>
-            ))}
-          </ul>
+          card.monthSprints.map((sprint, index) => {
+            const isCurrent = sprint.temporalStatus === "atual";
+            return (
+              <SprintCard
+                key={sprint.sprintId}
+                sprint={sprint}
+                sprintNumber={index + 1}
+                comments={sprintCommentsById.get(sprint.sprintId) ?? []}
+                clientId={card.clientId}
+                isAdmin={isAdmin}
+                tasks={card.monthSprintTasks[sprint.sprintId] ?? []}
+                executionLabel={isCurrent ? card.sprintExecutionLabel : null}
+                executionSeverity={isCurrent ? (card.sprintExecutionInfo?.severity ?? null) : null}
+                alerts={isCurrent ? card.alerts : undefined}
+                defaultOpen={false}
+                openClientHref={`/clients/${card.clientId}`}
+                buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
+              />
+            );
+          })
         ) : (
-          <p className="mt-1.5 text-xs text-muted-foreground">Nenhuma sprint neste mês.</p>
+          <p className="text-xs text-muted-foreground">Nenhuma sprint neste mês.</p>
         )}
-
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
-          <Link href={`/clients/${card.clientId}`} className="font-medium text-brand hover:underline">
-            Abrir cliente
-          </Link>
-        </div>
       </div>
     </details>
   );

@@ -101,18 +101,37 @@ export default async function SprintsPage({
   ]);
 
   const clientIds = (clients ?? []).map((c) => c.id);
+  const allSprintIds = (sprints ?? []).map((s) => s.id);
   const currentSprintIds = (sprints ?? [])
     .filter((s) => s.start_date <= todayStr && s.end_date >= todayStr)
     .map((s) => s.id);
 
-  const [{ data: clientActivity }, { data: sprintActivity }] = await Promise.all([
+  // Comentários de TODAS as sprints visíveis, buscados em lote uma única vez
+  // (não por card) — pra o mesmo SprintCard da página do cliente também
+  // mostrar comentários aqui, sem virar N+1.
+  const [{ data: clientActivity }, { data: sprintActivity }, { data: sprintComments }] = await Promise.all([
     clientIds.length > 0
       ? supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds)
       : Promise.resolve({ data: [] }),
     currentSprintIds.length > 0
       ? supabase.from("sprint_last_operational_activity").select("sprint_id, last_activity_at").in("sprint_id", currentSprintIds)
       : Promise.resolve({ data: [] }),
+    allSprintIds.length > 0
+      ? supabase
+          .from("comments")
+          .select("id, commentable_id, content, created_at, author:profiles!comments_author_id_fkey(name)")
+          .eq("commentable_type", "sprint")
+          .in("commentable_id", allSprintIds)
+          .order("created_at")
+      : Promise.resolve({ data: [] }),
   ]);
+
+  const sprintCommentsById = new Map<string, CommentItem[]>();
+  for (const comment of sprintComments ?? []) {
+    const list = sprintCommentsById.get(comment.commentable_id) ?? [];
+    list.push(comment);
+    sprintCommentsById.set(comment.commentable_id, list);
+  }
 
   const managersByClient = new Map<string, { id: string; name: string }[]>();
   for (const row of clientManagers ?? []) {
@@ -424,6 +443,8 @@ export default async function SprintsPage({
                 card={card}
                 returnTo={buildUrl({})}
                 primaryManagerName={primaryManagerNameByClient.get(card.clientId) ?? null}
+                isAdmin={isAdmin}
+                comments={card.sprint ? sprintCommentsById.get(card.sprint.sprintId) ?? [] : []}
               />
             ))
           ) : (
@@ -434,6 +455,9 @@ export default async function SprintsPage({
                 monthLabel={monthLabel}
                 monthRange={monthRange}
                 primaryManagerName={primaryManagerNameByClient.get(card.clientId) ?? null}
+                isAdmin={isAdmin}
+                returnTo={buildUrl({})}
+                sprintCommentsById={sprintCommentsById}
               />
             ))
           )

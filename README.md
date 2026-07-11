@@ -832,6 +832,61 @@ automático da sync, refinamentos de UX, etc.
     e `ClientCombobox` (Etapa 39/40, só receberam os novos tokens de
     sombra/foco).
 
+42. ✅ SprintCard única, compartilhada entre a página do cliente e a tela
+    Sprints (sem migration, sem mudança de regra financeira/RLS/
+    permissões): até aqui existiam duas representações da mesma sprint —
+    `sprint-card.tsx` (completa, na página do cliente: grid financeiro,
+    edição de gasto manual, comentários, "Hoje", execução) e uma versão
+    simplificada, inline, dentro de `current-client-group.tsx`/
+    `monthly-client-group.tsx` (sem comentários, sem edição, sem grid,
+    tarefas e alertas numa apresentação diferente). Agora as duas telas
+    renderizam o mesmo `SprintCard` (`src/app/clients/sprint-card.tsx`),
+    sem exceção.
+
+    Diferenças de contexto controladas por prop, nunca por uma segunda
+    implementação: `defaultOpen` (a página do cliente deixa a sprint atual
+    já aberta, omitindo a prop; a tela Sprints sempre passa `false` — toda
+    sprint começa recolhida lá); `alerts` (só a tela Sprints passa — a
+    página do cliente já tem seu próprio `AttentionPanel` client-wide,
+    então não duplica alerta dentro E fora do card; quando fornecido,
+    aparece um indicador compacto já no resumo recolhido do card, pra não
+    perder a leitura rápida que a tela Sprints já tinha, e a lista completa
+    no corpo expandido); `openClientHref` (só a tela Sprints — "Abrir
+    cliente" não faz sentido dentro da própria página do cliente);
+    `buildTaskHref` (cada tela abre o drawer de tarefa preservando sua
+    própria URL — filtros/mês/modo na tela Sprints, direto na página do
+    cliente).
+
+    **Sem accordion duplo**: no modo Sprint atual, cada cliente é só um
+    cabeçalho de identidade (nome + gestor, sem toggle) seguido do
+    SprintCard — como só existe uma sprint por cliente ali, o próprio
+    `<details>` do card é o único controle de expandir, nunca dois níveis
+    pra a mesma informação. No modo Mensal, o accordion por cliente
+    continua existindo (controla "ver as sprints deste cliente", uma
+    informação genuinamente diferente de "ver o detalhe desta sprint"),
+    e dentro dele cada sprint do mês usa o mesmo SprintCard, todas
+    recolhidas por padrão. Em nenhum dos dois modos os valores de uma
+    sprint são substituídos pelos do mês — o resumo mensal (planejado/
+    realizado/%/esperado do mês) fica só no cabeçalho do cliente; dentro de
+    cada SprintCard continuam exclusivamente os valores daquela sprint.
+
+    Pra viabilizar o compartilhamento sem duplicar consulta: as tarefas de
+    cada sprint do mês e o texto de "última execução da sprint" passaram a
+    ser calculados uma vez dentro de `buildOperationClientCard`
+    (`monthSprintTasks`, `sprintExecutionLabel` — reaproveita a nova função
+    `formatSprintExecutionLabel`, também adotada pela página do cliente no
+    lugar da conta que ela fazia sozinha) em vez de espalhados; e a tela
+    Sprints passou a buscar os comentários de todas as sprints visíveis
+    numa única query em lote (antes não buscava nenhum) — sem N+1, mesmo
+    padrão já usado pra atividade/gestor/tarefas nessa página.
+
+    Componentes consolidados: `SprintCard` (agora com `alerts`,
+    `defaultOpen`, `openClientHref`, `buildTaskHref`), `SprintTaskList`
+    (aceita `buildTaskHref`), `AlertsSummaryLine` (movida pra dentro de
+    `sprint-card.tsx`, deixou de existir em duplicidade). Removidos:
+    a renderização própria de financeiro/tarefas/alertas que existia em
+    `current-client-group.tsx` e `monthly-client-group.tsx`.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis
