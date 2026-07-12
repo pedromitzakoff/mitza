@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useSyncExternalStore } from "react";
 import {
   Building2,
+  FileText,
   LayoutGrid,
   ListChecks,
   LogOut,
@@ -78,6 +79,13 @@ const NAV_ITEMS: NavItem[] = [
     href: "/sprints",
     icon: ListChecks,
     isActive: (p) => p === "/sprints" || p === "/operation",
+    group: "principal",
+  },
+  {
+    label: "Relatórios",
+    href: "/reports",
+    icon: FileText,
+    isActive: (p) => p.startsWith("/reports"),
     group: "principal",
   },
   { label: "Reuniões", icon: Video, group: "moderado" },

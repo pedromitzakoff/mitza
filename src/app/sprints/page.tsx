@@ -162,10 +162,17 @@ export default async function SprintsPage({
       : Promise.resolve({ data: [] }),
   ]);
 
+  const allCommentIds = (sprintComments ?? []).map((c) => c.id);
+  const { data: reportSelections } =
+    allCommentIds.length > 0
+      ? await supabase.from("report_comment_selections").select("comment_id").in("comment_id", allCommentIds)
+      : { data: [] };
+  const includedCommentIds = new Set((reportSelections ?? []).map((r) => r.comment_id));
+
   const sprintCommentsById = new Map<string, CommentItem[]>();
   for (const comment of sprintComments ?? []) {
     const list = sprintCommentsById.get(comment.commentable_id) ?? [];
-    list.push(comment);
+    list.push({ ...comment, includedInReport: includedCommentIds.has(comment.id) });
     sprintCommentsById.set(comment.commentable_id, list);
   }
 

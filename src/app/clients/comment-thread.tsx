@@ -1,5 +1,6 @@
 import type { CommentableType } from "@/lib/supabase/database.types";
 import { createCommentAction } from "./comments-actions";
+import { toggleCommentReportSelectionAction } from "@/app/reports/report-actions";
 
 export interface CommentItem {
   id: string;
@@ -7,6 +8,11 @@ export interface CommentItem {
   content: string;
   created_at: string;
   author: { name: string } | null;
+  /** Só populado por quem já sabe se este comentário está marcado "incluir
+   * no fechamento mensal" (hoje, só a tela Sprints) — undefined em qualquer
+   * outro lugar que renderize CommentThread simplesmente esconde a ação,
+   * em vez de arriscar mostrar um estado desatualizado. */
+  includedInReport?: boolean;
 }
 
 const commentDateFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -38,6 +44,24 @@ export function CommentThread({
               <span className="font-medium text-foreground">{comment.author?.name ?? "Alguém"}</span>{" "}
               · {commentDateFormatter.format(new Date(comment.created_at))}
               <p>{comment.content}</p>
+              {commentableType === "sprint" && comment.includedInReport !== undefined && (
+                <form
+                  action={toggleCommentReportSelectionAction.bind(
+                    null,
+                    comment.id,
+                    commentableId,
+                    clientId,
+                    comment.includedInReport,
+                  )}
+                >
+                  <button
+                    type="submit"
+                    className={comment.includedInReport ? "font-medium text-brand hover:underline" : "hover:text-brand hover:underline"}
+                  >
+                    {comment.includedInReport ? "✓ Incluído no relatório mensal" : "Adicionar ao relatório mensal"}
+                  </button>
+                </form>
+              )}
             </li>
           ))}
         </ul>

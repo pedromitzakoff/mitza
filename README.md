@@ -1029,6 +1029,107 @@ automático da sync, refinamentos de UX, etc.
     (filtros/ordenação/resumo novos). `priority-accounts.ts` e
     `sprint-priority.ts` removidos (substituídos por `account-priority.ts`).
 
+    **Correção pós-entrega**: o link do nome do cliente dentro do novo
+    `AccountCardSummary` tinha um `onClick={(e) => e.stopPropagation()}` —
+    como esse componente é um Server Component e `Link` é um Client
+    Component do Next.js, isso quebrava a tela inteira ("Event handlers
+    cannot be passed to Client Component props"). Corrigido removendo o
+    handler (mesmo padrão que já funcionava antes, sem `stopPropagation`).
+
+45. ✅ Nova área **Relatórios** — Relatório Mensal de Gestão da Conta (nova
+    migration `supabase/monthly-reports.sql`; não altera nenhuma tabela,
+    regra financeira ou RLS existente, só adiciona). Objetivo: consolidar
+    num único lugar por cliente/mês o que a operação inteira já produz
+    (investimento, execução, tarefas, comentários) mais o que só um humano
+    sabe dizer (decisões, aprendizados, próximos passos) — nunca só
+    performance de mídia, nunca só tarefas concluídas.
+
+    **Reaproveitado, não duplicado** (regra explícita do pedido): situação
+    financeira do mês vem de `sumEffectiveSpend`/`sumExpectedToDate`/
+    `classifySpendStatus`, os mesmos de sempre; "execução da agência" conta
+    `tasks` já existentes (só qualifica dois tipos novos — `reuniao` e
+    `entrega_criativo` — como valores adicionais do `check` de
+    `tasks.type`, em vez de inventar uma tabela de eventos paralela pra algo
+    que já é uma tarefa com prazo/responsável); "Enviar para próxima sprint"
+    cria uma tarefa de verdade na primeira sprint do mês seguinte.
+
+    **Tabelas novas** (só o que é específico do relatório): `client_kpi_
+    definitions` (quais KPIs cada cliente acompanha — nome, unidade, meta,
+    direção "maior é melhor"/"menor é melhor", pra CPL/CPA não ficarem com
+    a situação invertida de Leads/ROAS); `monthly_reports` (um registro por
+    cliente+mês — status, resumo executivo, os 4 campos de "próximo mês",
+    e `snapshot` jsonb); `report_kpi_values` (resultado mensal de cada KPI —
+    "resultado do mês anterior" nunca é duplicado, é lido buscando o valor
+    do relatório do mês anterior pro mesmo KPI); `report_timeline_events`
+    (Bloco 4); `report_comment_selections` (comentários marcados "incluir
+    no fechamento", referenciando `comments.id`, nunca copiando o texto);
+    `report_action_items` (plano de ação do próximo mês).
+
+    **Fluxo de status**: não iniciado → em andamento → pronto para revisão
+    → finalizado. Só admin finaliza (`finalizeReportAction`, `requireAdmin`)
+    e só a partir de "pronto para revisão"; finalizar congela um `snapshot`
+    com tudo que a tela mostra ao vivo (financeiro, KPIs, execução, linha do
+    tempo, ações) — reaproveita a mesma função que monta os dados ao vivo
+    (`buildReportViewData`), nunca uma segunda lógica de agregação só pro
+    snapshot. A partir daí, mudanças futuras no orçamento/tarefas/KPIs não
+    alteram mais aquele relatório (`clients/[id]` de agosto não pode mexer
+    no relatório de julho já finalizado) — um `check` no banco garante que
+    nada fica "finalizado" sem `finalized_by`/`finalized_at` preenchidos.
+    Admin pode "Reabrir" um relatório finalizado por engano.
+
+    **Os 5 blocos da página individual** (`/reports/[clientId]`, navegação
+    interna por âncora no topo): Resumo do mês (planejado/realizado/%/
+    situação + KPIs + resumo executivo em texto livre); Performance (tabela
+    KPI/meta/resultado/mês anterior/variação/situação, edição inline linha a
+    linha); Execução da agência (só contagens — otimizações, reuniões,
+    entregas, tarefas concluídas/atrasadas, cadências não cumpridas — nunca
+    a lista completa de tarefas, que fica atrás de "Ver execução completa",
+    reaproveitando a própria página do cliente); Acontecimentos e decisões
+    (linha do tempo com data/tipo/descrição/responsável, manual ou vinda de
+    um comentário marcado); Próximos passos (prioridade/problemas/
+    oportunidades/testes em texto livre + plano de ação estruturado com
+    "Enviar para próxima sprint").
+
+    **Lista de relatórios** (`/reports`): mês no topo, cliente e gestor
+    escondidos num botão "Filtros" discreto (mesmo padrão de popover já
+    usado em Sprints/Visão Geral), resumo compacto de uma linha ("N clientes
+    acompanhados · X completos · Y pendentes · Z exigem atenção") e uma
+    tabela única (cliente em negrito preto, gestor, investimento, %
+    realizado, situação do mês, status do relatório, "Abrir relatório").
+
+    **"Adicionar ao relatório mensal"** (seção 11 do pedido): todo comentário
+    de sprint (`comment-thread.tsx`) ganhou essa ação — ao marcar, o
+    comentário vira automaticamente um item da linha do tempo do relatório
+    do mês daquela sprint, sem passo manual extra; ao desmarcar, os dois
+    somem juntos. A ação só aparece onde quem carrega os comentários já
+    verificou o estado real (hoje, só a tela Sprints, via nova consulta em
+    lote a `report_comment_selections`) — em qualquer outro lugar que
+    reaproveite `CommentThread` sem passar esse dado, a ação simplesmente
+    não aparece, em vez de arriscar mostrar um estado desatualizado.
+
+    **KPIs por cliente**: configurados em Configurações > Editar cliente,
+    nova seção "KPIs do Relatório Mensal" (nome, unidade, direção, meta
+    opcional) — controla o que aparece no Bloco 2 de todos os meses daquele
+    cliente.
+
+    **Preparado pra automação futura, não implementada agora** (seção 14 do
+    pedido é explícita sobre isso): resumo executivo, problemas,
+    aprendizados e recomendações continuam 100% preenchidos manualmente;
+    só a ligação comentário→linha do tempo já é automática hoje.
+
+    Novo menu **Relatórios** na Sidebar, logo depois de Sprints.
+
+    Arquivos: `supabase/monthly-reports.sql` (migration), `database.types.ts`
+    (6 tabelas novas + `tasks.type` estendido), `lib/monthly-reports.ts`
+    (helpers puros), `app/reports/report-data.ts` (dados ao vivo vs.
+    snapshot), `app/reports/report-actions.ts` (Server Actions), `app/
+    reports/page.tsx`, `app/reports/[clientId]/page.tsx`, `app/reports/
+    reports-filters.tsx`, `app/sidebar.tsx`, `app/clients/[id]/edit/page.tsx`
+    (seção de KPIs), `app/clients/comment-thread.tsx` (ação "Adicionar ao
+    relatório mensal"), `app/sprints/page.tsx` (busca em lote de comentários
+    já incluídos), `app/clients/task-labels.ts` (rótulos dos 2 tipos novos
+    de tarefa).
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

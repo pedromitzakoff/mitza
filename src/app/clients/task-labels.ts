@@ -5,6 +5,8 @@ export const TASK_TYPE_LABEL: Record<TaskType, string> = {
   verificacao_saldo: "Verificação de saldo",
   report: "Report",
   outro: "Outro",
+  reuniao: "Reunião",
+  entrega_criativo: "Entrega de criativo",
 };
 
 /** Título gerado automaticamente pro template de sprint a partir do tipo —
@@ -15,6 +17,8 @@ export const TASK_TYPE_DEFAULT_TITLE: Record<Exclude<TaskType, "outro">, string>
   otimizacao: "Otimização",
   verificacao_saldo: "Checar Saldo",
   report: "Report",
+  reuniao: "Reunião",
+  entrega_criativo: "Entrega de criativo",
 };
 
 export const TASK_RECURRENCE_LABEL: Record<TaskRecurrence, string> = {

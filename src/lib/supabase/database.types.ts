@@ -1,6 +1,6 @@
 export type UserRole = "admin" | "gestor";
 
-export type TaskType = "otimizacao" | "verificacao_saldo" | "report" | "outro";
+export type TaskType = "otimizacao" | "verificacao_saldo" | "report" | "outro" | "reuniao" | "entrega_criativo";
 export type TaskStatus = "pendente" | "feito" | "atrasado";
 export type TaskRecurrence = "nenhuma" | "diaria" | "semanal" | "mensal";
 
@@ -22,6 +22,24 @@ export type OperationalActivityType =
   | "task_updated"
   | "task_commented"
   | "sprint_commented";
+
+export type KpiUnit = "numero" | "moeda" | "percentual";
+export type KpiDirection = "maior_melhor" | "menor_melhor";
+export type MonthlyReportStatus = "nao_iniciado" | "em_andamento" | "pronto_revisao" | "finalizado";
+export type ReportTimelineEventType =
+  | "orcamento"
+  | "investimento"
+  | "otimizacao"
+  | "estrategia"
+  | "teste_iniciado"
+  | "teste_encerrado"
+  | "problema"
+  | "reuniao"
+  | "entrega_criativo"
+  | "performance"
+  | "comentario"
+  | "outro";
+export type ReportActionItemStatus = "pendente" | "em_andamento" | "concluido";
 
 export interface Database {
   public: {
@@ -687,6 +705,304 @@ export interface Database {
             columns: ["changed_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      client_kpi_definitions: {
+        Row: {
+          id: string;
+          client_id: string;
+          name: string;
+          unit: KpiUnit;
+          target: number | null;
+          direction: KpiDirection;
+          display_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          name: string;
+          unit?: KpiUnit;
+          target?: number | null;
+          direction?: KpiDirection;
+          display_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          name?: string;
+          unit?: KpiUnit;
+          target?: number | null;
+          direction?: KpiDirection;
+          display_order?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_kpi_definitions_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      monthly_reports: {
+        Row: {
+          id: string;
+          client_id: string;
+          month_start: string;
+          status: MonthlyReportStatus;
+          executive_summary: string | null;
+          next_month_priority: string | null;
+          next_month_problems: string | null;
+          next_month_opportunities: string | null;
+          next_month_tests: string | null;
+          finalized_by: string | null;
+          finalized_at: string | null;
+          snapshot: Record<string, unknown> | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          month_start: string;
+          status?: MonthlyReportStatus;
+          executive_summary?: string | null;
+          next_month_priority?: string | null;
+          next_month_problems?: string | null;
+          next_month_opportunities?: string | null;
+          next_month_tests?: string | null;
+          finalized_by?: string | null;
+          finalized_at?: string | null;
+          snapshot?: Record<string, unknown> | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          month_start?: string;
+          status?: MonthlyReportStatus;
+          executive_summary?: string | null;
+          next_month_priority?: string | null;
+          next_month_problems?: string | null;
+          next_month_opportunities?: string | null;
+          next_month_tests?: string | null;
+          finalized_by?: string | null;
+          finalized_at?: string | null;
+          snapshot?: Record<string, unknown> | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "monthly_reports_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "monthly_reports_finalized_by_fkey";
+            columns: ["finalized_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      report_kpi_values: {
+        Row: {
+          id: string;
+          report_id: string;
+          kpi_definition_id: string;
+          result: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          report_id: string;
+          kpi_definition_id: string;
+          result?: number | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          report_id?: string;
+          kpi_definition_id?: string;
+          result?: number | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "report_kpi_values_report_id_fkey";
+            columns: ["report_id"];
+            isOneToOne: false;
+            referencedRelation: "monthly_reports";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "report_kpi_values_kpi_definition_id_fkey";
+            columns: ["kpi_definition_id"];
+            isOneToOne: false;
+            referencedRelation: "client_kpi_definitions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      report_timeline_events: {
+        Row: {
+          id: string;
+          report_id: string;
+          event_date: string;
+          type: ReportTimelineEventType;
+          description: string;
+          responsible_id: string | null;
+          source_comment_id: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          report_id: string;
+          event_date: string;
+          type?: ReportTimelineEventType;
+          description: string;
+          responsible_id?: string | null;
+          source_comment_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          report_id?: string;
+          event_date?: string;
+          type?: ReportTimelineEventType;
+          description?: string;
+          responsible_id?: string | null;
+          source_comment_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "report_timeline_events_report_id_fkey";
+            columns: ["report_id"];
+            isOneToOne: false;
+            referencedRelation: "monthly_reports";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "report_timeline_events_responsible_id_fkey";
+            columns: ["responsible_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "report_timeline_events_source_comment_id_fkey";
+            columns: ["source_comment_id"];
+            isOneToOne: false;
+            referencedRelation: "comments";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      report_comment_selections: {
+        Row: {
+          id: string;
+          report_id: string;
+          comment_id: string;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          report_id: string;
+          comment_id: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          report_id?: string;
+          comment_id?: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "report_comment_selections_report_id_fkey";
+            columns: ["report_id"];
+            isOneToOne: false;
+            referencedRelation: "monthly_reports";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "report_comment_selections_comment_id_fkey";
+            columns: ["comment_id"];
+            isOneToOne: false;
+            referencedRelation: "comments";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      report_action_items: {
+        Row: {
+          id: string;
+          report_id: string;
+          description: string;
+          responsible_id: string | null;
+          due_date: string | null;
+          status: ReportActionItemStatus;
+          sent_to_task_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          report_id: string;
+          description: string;
+          responsible_id?: string | null;
+          due_date?: string | null;
+          status?: ReportActionItemStatus;
+          sent_to_task_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          report_id?: string;
+          description?: string;
+          responsible_id?: string | null;
+          due_date?: string | null;
+          status?: ReportActionItemStatus;
+          sent_to_task_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "report_action_items_report_id_fkey";
+            columns: ["report_id"];
+            isOneToOne: false;
+            referencedRelation: "monthly_reports";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "report_action_items_responsible_id_fkey";
+            columns: ["responsible_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "report_action_items_sent_to_task_id_fkey";
+            columns: ["sent_to_task_id"];
+            isOneToOne: false;
+            referencedRelation: "tasks";
             referencedColumns: ["id"];
           },
         ];

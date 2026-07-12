@@ -6,6 +6,8 @@ import { deleteClientAction, updateClientAction } from "../../actions";
 import { ClientForm } from "../../client-form";
 import { DeleteClientButton } from "../../delete-client-button";
 import { Section } from "../../section";
+import { addClientKpiAction, deleteClientKpiAction } from "@/app/reports/report-actions";
+import { KPI_DIRECTION_LABEL, KPI_UNIT_LABEL, formatKpiValue } from "@/lib/monthly-reports";
 
 export default async function EditClientPage({
   params,
@@ -20,10 +22,11 @@ export default async function EditClientPage({
   const returnTo = return_to && return_to.startsWith("/") ? return_to : `/clients/${id}`;
 
   const supabase = await createSupabaseClient();
-  const [{ data: client }, { data: allManagers }, { data: assigned }] = await Promise.all([
+  const [{ data: client }, { data: allManagers }, { data: assigned }, { data: kpis }] = await Promise.all([
     supabase.from("clients").select("*").eq("id", id).is("deleted_at", null).single(),
     supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
     supabase.from("client_managers").select("user_id, profiles(id, name)").eq("client_id", id),
+    supabase.from("client_kpi_definitions").select("*").eq("client_id", id).order("display_order"),
   ]);
 
   if (!client) notFound();
@@ -49,6 +52,81 @@ export default async function EditClientPage({
         submitLabel="Salvar"
         cancelHref={returnTo}
       />
+
+      <Section title="KPIs do Relatório Mensal">
+        <p className="mb-3 text-xs text-zinc-500">
+          Controla quais KPIs aparecem no Bloco 2 (Performance) do Relatório Mensal deste cliente. &ldquo;Menor é
+          melhor&rdquo; serve pra métricas de custo (CPL, CPA); &ldquo;Maior é melhor&rdquo; pra Leads, ROAS, Vendas etc.
+        </p>
+
+        {(kpis ?? []).length > 0 && (
+          <ul className="mb-3 flex flex-col gap-1.5">
+            {(kpis ?? []).map((kpi) => (
+              <li
+                key={kpi.id}
+                className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 px-3 py-1.5 text-sm dark:border-zinc-800"
+              >
+                <span className="text-black dark:text-zinc-50">
+                  {kpi.name}
+                  <span className="ml-2 text-xs text-zinc-500">
+                    {KPI_UNIT_LABEL[kpi.unit]} · {KPI_DIRECTION_LABEL[kpi.direction]}
+                    {kpi.target !== null ? ` · meta ${formatKpiValue(kpi.target, kpi.unit)}` : ""}
+                  </span>
+                </span>
+                <form action={deleteClientKpiAction.bind(null, kpi.id, id)}>
+                  <button type="submit" className="text-xs text-zinc-500 hover:text-red-600 dark:hover:text-red-400">
+                    Remover
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <form action={addClientKpiAction.bind(null, id)} className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-zinc-500">Nome</label>
+            <input
+              name="name"
+              required
+              placeholder="Ex.: CPL"
+              className="rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm text-black dark:border-zinc-700 dark:text-zinc-50"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-zinc-500">Unidade</label>
+            <select name="unit" defaultValue="numero" className="rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm text-black dark:border-zinc-700 dark:text-zinc-50">
+              {Object.entries(KPI_UNIT_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-zinc-500">Direção</label>
+            <select name="direction" defaultValue="maior_melhor" className="rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm text-black dark:border-zinc-700 dark:text-zinc-50">
+              {Object.entries(KPI_DIRECTION_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-zinc-500">Meta (opcional)</label>
+            <input
+              type="number"
+              step="0.01"
+              name="target"
+              className="w-28 rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm text-black dark:border-zinc-700 dark:text-zinc-50"
+            />
+          </div>
+          <button type="submit" className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
+            Adicionar KPI
+          </button>
+        </form>
+      </Section>
 
       <Section title="Excluir cliente">
         <p className="mb-3 text-xs text-zinc-500">
