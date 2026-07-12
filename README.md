@@ -947,6 +947,88 @@ automático da sync, refinamentos de UX, etc.
     de `grouping` com fallback, guarda do filtro de sprint, `buildUrl`
     incluindo `grouping` no modo Mensal).
 
+44. ✅ Simplificação visual e UX da tela Sprints — "fila operacional
+    inteligente" (sem migration, sem mudança de regra financeira/RLS/
+    permissões/dado; só a tela Sprints, nada fora dela): rodada pedida pra
+    reduzir esforço cognitivo do gestor — regra central "card fechado =
+    decisão e priorização, card aberto = investigação e execução".
+
+    **Cabeçalho compacto**: `[Sprint atual] [Mensal]` continuam o nível
+    principal; navegação de mês e o controle secundário Consolidado/Por
+    sprints (Etapa 43) ficam na mesma linha, sem crescer a altura do topo —
+    já eram uma única `flex-wrap` antes, só removi o rótulo redundante
+    "Visualização do mês" ao lado do próprio seletor.
+
+    **Filtros — só 3 controles visíveis por padrão**: carteira, busca de
+    cliente (combobox, igual à Visão Geral) e o botão **Filtros**. Os 6
+    filtros secundários (situação do investimento, situação operacional,
+    tarefas, última otimização, atividade operacional, exibir) foram pra
+    dentro de um popover — mesmo componente visual/comportamento do botão
+    "Filtros" da Visão Geral (`agency-filters.tsx`), reaproveitado num novo
+    `sprints-filters.tsx` (substitui `sprints-client-filter.tsx`): aplicação
+    automática (sem botão "Filtrar", sem formulário GET), contador
+    "Filtros (N)" só com os 6 secundários (mês/carteira/cliente não contam),
+    "Limpar filtros" que preserva período/mês e volta carteira ao padrão do
+    papel. A busca de cliente filtra localmente a lista já carregada — não
+    faz uma chamada por tecla digitada, então não precisou de debounce.
+    **Removido**: o filtro global "Sprint: todas" (redundante — Sprint atual
+    já é um período só, Mensal Consolidado é o mês inteiro, e Por sprints
+    decompõe dentro do próprio cliente); as opções que ele cobria viraram
+    parte da nova "Situação operacional" (`sem_execucao`) e "Tarefas"
+    (`atrasadas`).
+
+    Todo filtro novo (`ritmo`, `health` estendido, `tasks`, `optimization`,
+    `activity`, `display`) usa dado já existente no card operacional — nenhum
+    foi implementado com comportamento simulado: situação do investimento
+    (`card.sprint.status`/`card.monthStatus`, conforme o período), situação
+    operacional (`accountHealth` + `sprintFilterBucket`), tarefas
+    (contagem de atrasadas do período em foco + `todayAndOverdueTasks`),
+    última otimização (`lastOptimizationAt`, já calculado), atividade
+    (`activityStatus` simplificado pra 2 estados) e exibir (`accountHealth`).
+
+    **Ordenação por prioridade** (novo `src/lib/account-priority.ts`,
+    substitui `priority-accounts.ts`/`sprint-priority.ts` — que só existiam
+    dentro da própria tela Sprints, não em uso em nenhuma outra tela):
+    função única `sortAccountsByPriority(cards, period)`, mesmo critério nas
+    três visões, só trocando o período (sprint atual ou mês selecionado).
+    Tier de prioridade (cada um só avaliado se os anteriores não bateram):
+    0 conta crítica (`accountHealth`) → 1 investimento fora do ritmo (±10%)
+    → 2 tarefas atrasadas do período → 3 sem otimização recente → 4 sem
+    atividade recente → 5 dentro do esperado. Desempate determinístico:
+    quantidade/severidade de pendências → data da pendência mais antiga →
+    nome do cliente. Não é health score nem ranking de gestor — cada tier
+    reaproveita uma classificação que já existia (`computeAccountHealth`,
+    `classifySpendStatus`, `sprintFilterBucket`, `activityStatus`, alertas
+    `kind: "otimizacao"`); a única coisa nova é a ordem em que essas regras
+    são consultadas.
+
+    **Cards fechados simplificados** (regra "card fechado = decisão"): novo
+    `AccountCardSummary` (`account-card-summary.tsx`), reaproveitado pelas
+    três visões — nome do cliente, período, % investido, % esperado, selo
+    de situação financeira, uma única informação operacional (nunca a lista
+    de alertas nem "+N alertas") e a barra de investimento com marcador
+    esperado (`AgencyInvestmentBar`, já existente). Removido do fechado:
+    diferença em R$ (fica só no aberto), contagem de tarefas concluídas,
+    "Última atividade: Nunca" permanente em vermelho (a informação
+    operacional central já resume isso como "Sem atividade recente" só
+    quando é o problema mais importante daquele cliente). Em Sprint atual,
+    isso exigiu um `<details>` próprio por cliente (antes o único nível de
+    accordion era o do `SprintCard` da sprint, que por padrão já abria
+    sozinho pra sprint atual); pra reaproveitar o financeiro/tarefas/
+    comentários sem duplicar, `SprintCard` foi dividido em `SprintCardBody`
+    (conteúdo investigativo, exportado) + `SprintCard` (wrapper fino de
+    sempre, usado sem nenhuma mudança pela página do cliente e por Mensal >
+    Por sprints). **Todos os cards agora iniciam fechados** em qualquer
+    visão — Sprint atual não abria mais sozinha por engano.
+
+    Arquivos: `account-priority.ts` (novo), `account-card-summary.tsx`
+    (novo), `sprint-card.tsx` (`SprintCardBody` extraído), `current-client-
+    group.tsx`, `monthly-consolidated-group.tsx`, `monthly-sprints-group.tsx`
+    (resumo trocado pro novo `AccountCardSummary`), `sprints-filters.tsx`
+    (novo, substitui `sprints-client-filter.tsx`) e `sprints/page.tsx`
+    (filtros/ordenação/resumo novos). `priority-accounts.ts` e
+    `sprint-priority.ts` removidos (substituídos por `account-priority.ts`).
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

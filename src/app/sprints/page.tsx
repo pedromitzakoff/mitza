@@ -4,19 +4,30 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
 import { currentMonthRange, monthRangeFromParam, shiftMonthParam } from "@/lib/sprint-financials";
 import { formatFullDate, formatMonthLabel } from "@/lib/format";
-import { sortByPriority } from "@/lib/priority-accounts";
-import { sortSprintClientsByUrgency } from "@/lib/sprint-priority";
+import {
+  sortAccountsByPriority,
+  financialStatusForPeriod,
+  periodOverdueCount,
+  type PriorityPeriod,
+} from "@/lib/account-priority";
 import type { CommentItem } from "@/app/clients/comment-thread";
 import {
   buildOperationClientCard,
   type OperationClientRawData,
   type OperationTaskItem,
-  type SprintFilterBucket,
 } from "@/app/operation/operation-data";
 import { SprintCurrentClientGroup } from "./current-client-group";
 import { SprintMonthlyBySprintsGroup } from "./monthly-sprints-group";
 import { SprintMonthlyConsolidatedGroup } from "./monthly-consolidated-group";
-import { SprintsClientFilter } from "./sprints-client-filter";
+import {
+  SprintsFilters,
+  type SprintsActivityFilter,
+  type SprintsDisplayFilter,
+  type SprintsHealthFilter,
+  type SprintsOptimizationFilter,
+  type SprintsRitmoFilter,
+  type SprintsTasksFilter,
+} from "./sprints-filters";
 import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
 
@@ -33,6 +44,8 @@ const GROUPING_LABEL: Record<MonthlyGrouping, string> = {
   sprints: "Por sprints",
 };
 
+const OPTIMIZATION_DAY_MS = 86_400_000;
+
 export default async function SprintsPage({
   searchParams,
 }: {
@@ -43,8 +56,11 @@ export default async function SprintsPage({
     client?: string;
     month?: string;
     health?: string;
+    ritmo?: string;
+    tasks?: string;
+    optimization?: string;
     activity?: string;
-    sprint?: string;
+    display?: string;
     task?: string;
     taskError?: string;
     commentError?: string;
@@ -61,9 +77,18 @@ export default async function SprintsPage({
   // desconhecido cai em "consolidated" (o padrão ao entrar em Mensal).
   const grouping: MonthlyGrouping = params.grouping === "sprints" ? "sprints" : "consolidated";
   const managerFilter = params.manager ?? (isAdmin ? "all" : "me");
-  const healthFilter = params.health ?? "todos";
-  const activityFilter = params.activity ?? "todos";
-  const sprintFilter = (params.sprint ?? "todas") as SprintFilterBucket | "todas";
+  const healthFilter = (params.health ?? "todos") as SprintsHealthFilter;
+  const ritmoFilter = (params.ritmo ?? "todos") as SprintsRitmoFilter;
+  const tasksFilter = (params.tasks ?? "todas") as SprintsTasksFilter;
+  const optimizationFilter = (params.optimization ?? "todas") as SprintsOptimizationFilter;
+  const activityFilter = (params.activity ?? "todos") as SprintsActivityFilter;
+  const displayFilter = (params.display ?? "todos") as SprintsDisplayFilter;
+
+  // Período em foco pra tudo que é "prioridade"/situação financeira/tarefas
+  // atrasadas: sprint atual na visão Sprint atual, mês selecionado nas duas
+  // visões Mensais (Consolidado e Por sprints combinam pelo mesmo resumo
+  // mensal por cliente) — nunca mistura sprint com mês no mesmo cálculo.
+  const period: PriorityPeriod = view === "current" ? "sprint" : "month";
 
   const today = todayUTC();
   const todayStr = todayDateString();
@@ -227,24 +252,6 @@ export default async function SprintsPage({
     cards = cards.filter((card) => card.managerIds.includes(managerFilter));
   }
 
-  if (healthFilter !== "todos") {
-    cards = cards.filter((card) => card.accountHealth === healthFilter);
-  }
-
-  if (activityFilter !== "todos") {
-    cards = cards.filter((card) => card.activityStatus === activityFilter);
-  }
-
-  // O filtro de status de sprint só faz sentido onde existe uma sprint em
-  // foco (Sprint atual, ou Mensal > Por sprints) — em Mensal > Consolidado
-  // ele fica oculto (seção 8 do pedido) e também não filtra escondido: o
-  // valor continua guardado na URL (preservado se o usuário voltar pra Por
-  // sprints), só não afeta o que aparece enquanto Consolidado está ativo.
-  const sprintFilterApplies = view === "current" || (view === "monthly" && grouping === "sprints");
-  if (sprintFilterApplies && sprintFilter !== "todas") {
-    cards = cards.filter((card) => card.sprintFilterBucket === sprintFilter);
-  }
-
   // Cliente inválido, inacessível, ou fora da carteira selecionada é
   // ignorado com segurança — mesma regra da Visão Geral (Etapa 39).
   const clientFilter = params.client && cards.some((card) => card.clientId === params.client) ? params.client : undefined;
@@ -252,7 +259,58 @@ export default async function SprintsPage({
     cards = cards.filter((card) => card.clientId === clientFilter);
   }
 
-  cards = view === "current" ? sortSprintClientsByUrgency(cards, todayStr) : sortByPriority(cards);
+  // "N clientes"/"N de M clientes" (seção 13): base = escopo escolhido
+  // (carteira + cliente), antes dos filtros secundários abaixo.
+  const baseCount = cards.length;
+
+  if (ritmoFilter !== "todos") {
+    cards = cards.filter((card) => financialStatusForPeriod(card, period) === ritmoFilter);
+  }
+
+  if (healthFilter === "sem_execucao") {
+    cards = cards.filter((card) => card.sprintFilterBucket === "sem_execucao");
+  } else if (healthFilter !== "todos") {
+    cards = cards.filter((card) => card.accountHealth === healthFilter);
+  }
+
+  if (tasksFilter === "atrasadas") {
+    cards = cards.filter((card) => periodOverdueCount(card, period, today) > 0);
+  } else if (tasksFilter === "hoje") {
+    cards = cards.filter((card) => card.todayAndOverdueTasks.some((t) => t.due_date === todayStr));
+  } else if (tasksFilter === "sem_atrasadas") {
+    cards = cards.filter((card) => periodOverdueCount(card, period, today) === 0);
+  }
+
+  if (optimizationFilter !== "todas") {
+    cards = cards.filter((card) => {
+      if (!card.lastOptimizationAt) return optimizationFilter === "nunca";
+      if (optimizationFilter === "nunca") return false;
+      const diffDays = Math.floor(
+        (today.getTime() - new Date(`${card.lastOptimizationAt}T00:00:00Z`).getTime()) / OPTIMIZATION_DAY_MS,
+      );
+      if (optimizationFilter === "hoje") return diffDays <= 0;
+      if (optimizationFilter === "7dias") return diffDays > 0 && diffDays <= 7;
+      return diffDays > 7; // mais7
+    });
+  }
+
+  if (activityFilter === "recente") {
+    cards = cards.filter((card) => card.activityStatus === "ativo");
+  } else if (activityFilter === "sem_recente") {
+    cards = cards.filter((card) => card.activityStatus !== "ativo");
+  }
+
+  if (displayFilter === "atencao") {
+    cards = cards.filter((card) => card.accountHealth !== "saudavel");
+  } else if (displayFilter === "em_dia") {
+    cards = cards.filter((card) => card.accountHealth === "saudavel");
+  }
+
+  // Fila operacional (seção 11): ordenação única por prioridade, sempre —
+  // não é um filtro, é a ordem padrão das três visões.
+  cards = sortAccountsByPriority(cards, period, today);
+
+  const attentionCount = cards.filter((card) => card.accountHealth !== "saudavel").length;
 
   const buildUrl = (overrides: Record<string, string>) => {
     const next = new URLSearchParams();
@@ -262,8 +320,11 @@ export default async function SprintsPage({
     if (clientFilter) next.set("client", clientFilter);
     if (view === "monthly" && params.month) next.set("month", params.month);
     if (healthFilter !== "todos") next.set("health", healthFilter);
+    if (ritmoFilter !== "todos") next.set("ritmo", ritmoFilter);
+    if (tasksFilter !== "todas") next.set("tasks", tasksFilter);
+    if (optimizationFilter !== "todas") next.set("optimization", optimizationFilter);
     if (activityFilter !== "todos") next.set("activity", activityFilter);
-    if (sprintFilter !== "todas") next.set("sprint", sprintFilter);
+    if (displayFilter !== "todos") next.set("display", displayFilter);
 
     for (const [key, value] of Object.entries(overrides)) {
       if (value === "") next.delete(key);
@@ -286,7 +347,17 @@ export default async function SprintsPage({
 
   if (openTaskId) {
     for (const card of cards) {
-      const found = card.sprintTasks.find((t) => t.id === openTaskId);
+      // Procura em qualquer tarefa visível do cliente nesta tela — sprint
+      // atual, tarefas do mês (Consolidado) ou de qualquer sprint do mês
+      // (Por sprints) — nunca só na sprint atual, senão o link de uma
+      // tarefa de outra sprint do mês abriria a URL sem nunca achar a
+      // tarefa (drawer nunca aparecia).
+      const allClientTasks = [
+        ...card.sprintTasks,
+        ...card.monthTasks,
+        ...Object.values(card.monthSprintTasks).flat(),
+      ];
+      const found = allClientTasks.find((t) => t.id === openTaskId);
       if (found) {
         const { data: comments } = await supabase
           .from("comments")
@@ -372,122 +443,46 @@ export default async function SprintsPage({
         )}
 
         {view === "monthly" && (
-          <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="text-muted-foreground">Visualização do mês</span>
-            <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
-              {(Object.keys(GROUPING_LABEL) as MonthlyGrouping[]).map((g) => (
-                <Link
-                  key={g}
-                  href={buildUrl({ grouping: g })}
-                  className={`rounded px-2 py-1 font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
-                    g === grouping
-                      ? "bg-brand/10 text-brand"
-                      : "text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                  }`}
-                >
-                  {GROUPING_LABEL[g]}
-                </Link>
-              ))}
-            </div>
+          <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5 text-xs">
+            {(Object.keys(GROUPING_LABEL) as MonthlyGrouping[]).map((g) => (
+              <Link
+                key={g}
+                href={buildUrl({ grouping: g })}
+                className={`rounded px-2 py-1 font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
+                  g === grouping
+                    ? "bg-brand/10 text-brand"
+                    : "text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                }`}
+              >
+                {GROUPING_LABEL[g]}
+              </Link>
+            ))}
           </div>
         )}
       </div>
 
-      <form method="get" className="mt-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-card p-2">
-        <input type="hidden" name="view" value={view} />
-        {view === "monthly" && <input type="hidden" name="grouping" value={grouping} />}
-        {clientFilter && <input type="hidden" name="client" value={clientFilter} />}
-        {view === "monthly" && params.month && <input type="hidden" name="month" value={params.month} />}
-
-        <select
-          name="manager"
-          defaultValue={managerFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-        >
-          <option value="me">Meus clientes</option>
-          <option value="all">Todos os clientes</option>
-          {(gestores ?? []).map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          name="health"
-          defaultValue={healthFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-        >
-          <option value="todos">Status da conta: todos</option>
-          <option value="saudavel">Saudável</option>
-          <option value="atencao">Atenção</option>
-          <option value="critico">Crítico</option>
-        </select>
-
-        <select
-          name="activity"
-          defaultValue={activityFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-        >
-          <option value="todos">Atividade: todas</option>
-          <option value="ativo">Ativos</option>
-          <option value="atencao">Atenção por inatividade</option>
-          <option value="inativo">Inativos</option>
-        </select>
-
-        {sprintFilterApplies ? (
-          <select
-            name="sprint"
-            defaultValue={sprintFilter}
-            className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-          >
-            <option value="todas">Sprint: todas</option>
-            <option value="atrasadas">Com tarefas atrasadas</option>
-            <option value="sem_execucao">Sem execução</option>
-            <option value="em_dia">Em dia</option>
-          </select>
-        ) : (
-          // Escondido em Mensal > Consolidado (não faz sentido ali), mas o
-          // valor guardado é preservado num campo oculto — se o usuário
-          // voltar pra Por sprints, o filtro continua exatamente como
-          // estava, em vez de ser perdido numa submissão do formulário.
-          sprintFilter !== "todas" && <input type="hidden" name="sprint" value={sprintFilter} />
-        )}
-
-        <button
-          type="submit"
-          className="rounded-md bg-brand px-3 py-1 text-sm font-medium text-white hover:bg-brand-hover"
-        >
-          Filtrar
-        </button>
-
-        {(managerFilter !== (isAdmin ? "all" : "me") ||
-          healthFilter !== "todos" ||
-          activityFilter !== "todos" ||
-          sprintFilter !== "todas") && (
-          <Link
-            href={buildUrl({ manager: isAdmin ? "all" : "me", health: "", activity: "", sprint: "" })}
-            className="text-xs text-brand hover:underline"
-          >
-            Limpar filtros
-          </Link>
-        )}
-
-        <SprintsClientFilter
+      <div className="mt-3">
+        <SprintsFilters
           clients={clientOptions}
           selectedClientId={clientFilter}
           view={view}
           grouping={grouping}
-          manager={managerFilter}
           month={view === "monthly" ? params.month : undefined}
+          isAdmin={isAdmin}
+          gestores={gestores ?? []}
+          manager={managerFilter}
           health={healthFilter}
+          ritmo={ritmoFilter}
+          tasks={tasksFilter}
+          optimization={optimizationFilter}
           activity={activityFilter}
-          sprint={sprintFilter}
+          display={displayFilter}
         />
-      </form>
+      </div>
 
       <p className="mt-3 text-xs text-muted-foreground">
-        {cards.length} cliente{cards.length !== 1 ? "s" : ""}
+        {cards.length !== baseCount ? `${cards.length} de ${baseCount} clientes` : `${baseCount} cliente${baseCount !== 1 ? "s" : ""}`}
+        {attentionCount > 0 && ` · ${attentionCount} precisa${attentionCount !== 1 ? "m" : ""} de atenção`}
       </p>
 
       <div className="mt-3 flex flex-col gap-2">

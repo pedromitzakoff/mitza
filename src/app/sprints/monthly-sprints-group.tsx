@@ -1,23 +1,17 @@
-import Link from "next/link";
-import { formatCurrency } from "@/lib/format";
-import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import type { OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
 import type { CommentItem } from "@/app/clients/comment-thread";
-import { resolveMonthPeriodSummary, computeRitmoDiff, computeExpectedPct, formatRitmoDiffText } from "@/lib/financial-period";
+import { resolveMonthPeriodSummary } from "@/lib/financial-period";
+import { operationalSummary } from "@/lib/account-priority";
 import { SprintCard } from "@/app/clients/sprint-card";
-
-const ACTIVITY_TEXT_CLASSES: Record<OperationalActivityStatus, string> = {
-  ativo: "text-muted-foreground",
-  atencao: "text-amber-600 dark:text-amber-400",
-  inativo: "text-red-600 dark:text-red-400",
-};
+import { AccountCardSummary } from "./account-card-summary";
 
 /**
  * Grupo por cliente na visão "Mensal > Por sprints" da tela Sprints (Etapa
- * 42/43) — cabeçalho recolhido com o resumo mensal do cliente (orçamento/
- * realizado/%/esperado/ritmo — nunca os valores de uma sprint específica);
- * ao expandir, mostra as sprints reais do mês usando o mesmo `SprintCard`
- * da página individual do cliente, cada uma começando recolhida por sua vez
+ * 42/43, resumo simplificado na Etapa 44) — resumo fechado igual ao de
+ * Mensal Consolidado (mesmo `AccountCardSummary`, mesmo período mensal:
+ * "card fechado = decisão", nunca dados de uma sprint específica); ao
+ * expandir, mostra as sprints reais do mês usando o mesmo `SprintCard` da
+ * página individual do cliente, cada uma começando recolhida por sua vez
  * (dois níveis aqui fazem sentido: um controla "ver as sprints deste
  * cliente", outro controla "ver o detalhe desta sprint específica" — não é
  * a mesma informação duas vezes). Alertas só aparecem dentro do SprintCard
@@ -42,53 +36,18 @@ export function SprintMonthlyBySprintsGroup({
   sprintCommentsById: Map<string, CommentItem[]>;
 }) {
   const summary = resolveMonthPeriodSummary(card, monthLabel, monthRange);
-  const diff = computeRitmoDiff(summary);
-  const expectedPct = computeExpectedPct(summary);
-  const activityLabel = card.activityLabel === "Nunca houve atividade" ? "Nunca" : card.activityLabel;
+  const operational = operationalSummary(card, "month");
 
   return (
-    <details className="group/client rounded-lg border border-border bg-card [&_summary::-webkit-details-marker]:hidden">
-      <summary className="flex cursor-pointer list-none items-start gap-2 px-3 py-2">
-        <span className="mt-0.5 shrink-0 text-xs text-muted-foreground transition-transform group-open/client:rotate-90">
-          ▸
-        </span>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-            <Link href={`/clients/${card.clientId}`} className="font-bold text-foreground hover:underline">
-              {card.clientName}
-            </Link>
-            {primaryManagerName && (
-              <span className="shrink-0 text-xs text-muted-foreground">{primaryManagerName}</span>
-            )}
-          </div>
-
-          <p className="mt-0.5 text-xs text-muted-foreground">{monthLabel}</p>
-
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
-            <span className="tabular-nums text-muted-foreground">
-              {formatCurrency(summary.actual)} / {formatCurrency(summary.planned)}
-            </span>
-            <span className="tabular-nums text-muted-foreground">
-              {summary.pct !== null ? `${Math.round(summary.pct)}% realizado no mês` : "Sem orçamento mensal"}
-            </span>
-            {summary.planned > 0 && (
-              <span className="tabular-nums text-muted-foreground">
-                Esperado até hoje no mês: {Math.round(expectedPct)}%
-              </span>
-            )}
-            <span className={ACTIVITY_TEXT_CLASSES[card.activityStatus]}>Última atividade: {activityLabel}</span>
-          </div>
-
-          {summary.planned > 0 && (
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {formatRitmoDiffText(summary)}
-              {" · "}
-              Diferença pro ritmo esperado no mês: {formatCurrency(diff)}
-            </p>
-          )}
-        </div>
-      </summary>
+    <details className="group rounded-lg border border-border bg-card [&_summary::-webkit-details-marker]:hidden">
+      <AccountCardSummary
+        clientId={card.clientId}
+        clientName={card.clientName}
+        managerName={primaryManagerName}
+        periodLabel={monthLabel}
+        summary={summary}
+        operational={operational}
+      />
 
       <div className="flex flex-col gap-2 border-t border-border p-3">
         {card.monthSprints.length > 0 ? (

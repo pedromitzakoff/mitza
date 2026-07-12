@@ -1,16 +1,21 @@
-import Link from "next/link";
 import type { OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
 import type { CommentItem } from "@/app/clients/comment-thread";
-import { SprintCard } from "@/app/clients/sprint-card";
+import { SprintCardBody } from "@/app/clients/sprint-card";
+import { resolveSprintPeriodSummary } from "@/lib/financial-period";
+import { operationalSummary } from "@/lib/account-priority";
+import { formatDateRange } from "@/lib/format";
+import { AccountCardSummary } from "./account-card-summary";
 
 /**
- * Bloco por cliente na visão "Sprint atual" da tela Sprints (Etapa 42) —
- * cabeçalho de identidade do cliente (nome + gestor principal, sem toggle
- * próprio) seguido do mesmo `SprintCard` usado na página individual do
- * cliente. Como só existe uma sprint por cliente aqui, não há um segundo
- * nível de accordion em volta do card: o próprio `<details>` do SprintCard
- * (sempre recolhido nesta tela, via `defaultOpen={false}`) é o único
- * controle de expandir/recolher — um clique, uma seta, não dois.
+ * Card de conta na visão "Sprint atual" da tela Sprints (Etapa 44) — regra
+ * "card fechado = decisão, card aberto = investigação": um único `<details>`
+ * por cliente, com o mesmo resumo compacto (`AccountCardSummary`) usado
+ * pelas visões Mensais, e o corpo investigativo reaproveitado de
+ * `SprintCard` (`SprintCardBody` — mesmo financeiro/tarefas/comentários da
+ * página do cliente, sem duplicar). Antes (Etapa 42) o próprio `SprintCard`
+ * era o único nível de accordion aqui, sempre aberto por padrão; agora o
+ * nível é este `<details>` externo, sempre fechado ao entrar na tela (regra
+ * "cards iniciam fechados" — o gestor decide o que investigar).
  */
 export function SprintCurrentClientGroup({
   card,
@@ -25,35 +30,40 @@ export function SprintCurrentClientGroup({
   isAdmin: boolean;
   comments: CommentItem[];
 }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-0.5">
-        <Link href={`/clients/${card.clientId}`} className="font-bold text-foreground hover:underline">
-          {card.clientName}
-        </Link>
-        {primaryManagerName && <span className="shrink-0 text-xs text-muted-foreground">{primaryManagerName}</span>}
+  if (!card.sprint) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-sm">
+        <span className="font-semibold text-foreground">{card.clientName}</span>
+        <span className="text-xs text-muted-foreground">Sem sprint em andamento</span>
       </div>
+    );
+  }
 
-      {card.sprint ? (
-        <SprintCard
-          sprint={card.sprint}
-          sprintNumber={card.sprintNumber ?? 1}
-          comments={comments}
-          clientId={card.clientId}
-          isAdmin={isAdmin}
-          tasks={card.sprintTasks}
-          executionLabel={card.sprintExecutionLabel}
-          executionSeverity={card.sprintExecutionInfo?.severity ?? null}
-          defaultOpen={false}
-          alerts={card.alerts}
-          openClientHref={`/clients/${card.clientId}`}
-          buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
-        />
-      ) : (
-        <p className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
-          Sem sprint em andamento.
-        </p>
-      )}
-    </div>
+  const summary = resolveSprintPeriodSummary(card.sprint, formatDateRange(card.sprint.startDate, card.sprint.endDate));
+  const operational = operationalSummary(card, "sprint");
+
+  return (
+    <details className="group rounded-lg border border-border bg-card [&_summary::-webkit-details-marker]:hidden">
+      <AccountCardSummary
+        clientId={card.clientId}
+        clientName={card.clientName}
+        managerName={primaryManagerName}
+        periodLabel={summary.label}
+        summary={summary}
+        operational={operational}
+      />
+
+      <SprintCardBody
+        sprint={card.sprint}
+        comments={comments}
+        clientId={card.clientId}
+        isAdmin={isAdmin}
+        tasks={card.sprintTasks}
+        executionLabel={card.sprintExecutionLabel}
+        executionSeverity={card.sprintExecutionInfo?.severity ?? null}
+        alerts={card.alerts}
+        buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
+      />
+    </details>
   );
 }

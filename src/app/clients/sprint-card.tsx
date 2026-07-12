@@ -60,51 +60,34 @@ export function AlertsSummaryLine({ topAlert, remaining }: { topAlert: Attention
 }
 
 /**
- * Card único de sprint — implementação compartilhada entre a página
- * individual do cliente e o painel Sprints (Etapa 42): mesmo componente,
- * mesma estrutura visual, mesmas informações e ações nos dois lugares.
- * Tudo que é específico de onde a sprint está sendo mostrada entra por
- * prop, nunca por uma segunda implementação:
- *
- * - `defaultOpen`: a página do cliente deixa a sprint atual já aberta por
- *   padrão (omitir a prop preserva esse comportamento); o painel Sprints
- *   passa sempre `false` (toda sprint começa recolhida lá).
- * - `alerts`: só o painel Sprints passa (a página do cliente já tem seu
- *   próprio AttentionPanel client-wide, acima da lista de sprints — não
- *   duplicar mostrando alerta dentro E fora do card). Quando fornecido,
- *   aparece um indicador compacto já no resumo recolhido (pra não perder a
- *   leitura rápida que o painel Sprints já tinha) e a lista completa no
- *   corpo expandido, exatamente como antes.
- * - `openClientHref`: só o painel Sprints passa ("Abrir cliente" não faz
- *   sentido dentro da própria página do cliente).
- * - `buildTaskHref`: como cada tela abre o drawer de tarefa a partir de uma
- *   URL diferente (a própria página do cliente vs. o painel Sprints
- *   preservando filtros/mês/modo), quem chama decide a URL; o padrão
- *   preserva o comportamento já existente na página do cliente.
+ * Conteúdo investigativo de uma sprint (Etapa 44: "card aberto = investigação
+ * e execução") — grid financeiro com edição de gasto manual, alertas
+ * detalhados, lista de tarefas, comentários e "abrir cliente". Extraído de
+ * dentro do próprio `<details>` de `SprintCard` pra poder ser reaproveitado
+ * também pelo card compacto de conta da tela Sprints (Sprint atual), que
+ * precisa do mesmo conteúdo de investigação mas sob um `<details>` próprio,
+ * com um resumo fechado diferente (mais simples) — nunca uma segunda
+ * implementação do financeiro/tarefas/comentários da sprint.
  */
-export function SprintCard({
+export function SprintCardBody({
   sprint,
-  sprintNumber,
   comments,
   clientId,
   isAdmin,
   tasks,
   executionLabel,
   executionSeverity,
-  defaultOpen,
   alerts,
   openClientHref,
   buildTaskHref,
 }: {
   sprint: SprintFinancials;
-  sprintNumber: number;
   comments: CommentItem[];
   clientId: string;
   isAdmin: boolean;
   tasks: TaskListItem[];
   executionLabel?: string | null;
   executionSeverity?: "atencao" | "critico" | null;
-  defaultOpen?: boolean;
   alerts?: AttentionAlert[];
   openClientHref?: string;
   buildTaskHref?: (taskId: string) => string;
@@ -116,10 +99,8 @@ export function SprintCard({
       : saldo === 0
         ? "Planejamento atingido"
         : `${formatCurrency(Math.abs(saldo))} acima do planejado`;
-  const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
 
   const isCurrent = sprint.temporalStatus === "atual";
-  const isOpen = defaultOpen ?? isCurrent;
   const editActualToggleId = `edit-actual-${sprint.sprintId}`;
   const revertSourceToggleId = `revert-source-${sprint.sprintId}`;
   const isManualSource = sprint.spendSource === "manual";
@@ -128,50 +109,7 @@ export function SprintCard({
   const remainingAlerts = (alerts?.length ?? 0) - 1;
 
   return (
-    <details
-      id={`sprint-${sprint.sprintId}`}
-      open={isOpen}
-      className={`group scroll-mt-4 rounded-lg border bg-card [&_summary::-webkit-details-marker]:hidden ${
-        isCurrent ? "border-l-4 border-l-brand border-y-border border-r-border" : "border-border"
-      }`}
-    >
-      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
-        <span className="shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90">
-          ▸
-        </span>
-        <span className="shrink-0 text-sm font-semibold text-foreground">Sprint {sprintNumber}</span>
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {formatDateRange(sprint.startDate, sprint.endDate)}
-        </span>
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
-        >
-          {TEMPORAL_LABEL[sprint.temporalStatus]}
-        </span>
-
-        <span className="ml-auto flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span className="tabular-nums">
-            {formatCurrency(sprint.actualSpend)} / {formatCurrency(sprint.plannedSpend)}
-          </span>
-          <span className="hidden tabular-nums sm:inline">{Math.round(sprint.progressPct)}%</span>
-          <span className="hidden sm:inline">
-            {tasksDone}/{tasks.length} tarefas
-          </span>
-          <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[sprint.status]}`}
-          >
-            {SPEND_STATUS_LABEL[sprint.status]}
-          </span>
-        </span>
-
-        {topAlert && (
-          <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
-            <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
-          </span>
-        )}
-      </summary>
-
-      <div className="border-t border-border p-3">
+    <div className="border-t border-border p-3">
         {isCurrent && (
           <div className="mb-3 inline-flex flex-col rounded-md border border-brand/30 bg-brand/5 px-3 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-brand">Hoje</span>
@@ -345,7 +283,127 @@ export function SprintCard({
             </Link>
           </div>
         )}
-      </div>
+    </div>
+  );
+}
+
+/**
+ * Card único de sprint — implementação compartilhada entre a página
+ * individual do cliente e o agrupamento "Mensal > Por sprints" do painel
+ * Sprints (Etapa 42): mesmo componente, mesma estrutura visual, mesmas
+ * informações e ações nos dois lugares. Wrapper fino em volta de
+ * `SprintCardBody` (Etapa 44) — o próprio resumo/`<details>` não muda,
+ * só o conteúdo expandido foi extraído pra ser reaproveitado também pelo
+ * card compacto de conta da visão "Sprint atual" (`account-card.tsx`), que
+ * precisa de um resumo fechado diferente (mais simples) em volta do mesmo
+ * conteúdo investigativo.
+ *
+ * - `defaultOpen`: a página do cliente deixa a sprint atual já aberta por
+ *   padrão (omitir a prop preserva esse comportamento); o painel Sprints
+ *   passa sempre `false` (toda sprint começa recolhida lá).
+ * - `alerts`: só o painel Sprints passa (a página do cliente já tem seu
+ *   próprio AttentionPanel client-wide, acima da lista de sprints — não
+ *   duplicar mostrando alerta dentro E fora do card). Quando fornecido,
+ *   aparece um indicador compacto já no resumo recolhido (pra não perder a
+ *   leitura rápida que o painel Sprints já tinha) e a lista completa no
+ *   corpo expandido, exatamente como antes.
+ * - `openClientHref`: só o painel Sprints passa ("Abrir cliente" não faz
+ *   sentido dentro da própria página do cliente).
+ * - `buildTaskHref`: como cada tela abre o drawer de tarefa a partir de uma
+ *   URL diferente (a própria página do cliente vs. o painel Sprints
+ *   preservando filtros/mês/modo), quem chama decide a URL; o padrão
+ *   preserva o comportamento já existente na página do cliente.
+ */
+export function SprintCard({
+  sprint,
+  sprintNumber,
+  comments,
+  clientId,
+  isAdmin,
+  tasks,
+  executionLabel,
+  executionSeverity,
+  defaultOpen,
+  alerts,
+  openClientHref,
+  buildTaskHref,
+}: {
+  sprint: SprintFinancials;
+  sprintNumber: number;
+  comments: CommentItem[];
+  clientId: string;
+  isAdmin: boolean;
+  tasks: TaskListItem[];
+  executionLabel?: string | null;
+  executionSeverity?: "atencao" | "critico" | null;
+  defaultOpen?: boolean;
+  alerts?: AttentionAlert[];
+  openClientHref?: string;
+  buildTaskHref?: (taskId: string) => string;
+}) {
+  const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
+  const isCurrent = sprint.temporalStatus === "atual";
+  const isOpen = defaultOpen ?? isCurrent;
+
+  const topAlert = alerts?.[0];
+  const remainingAlerts = (alerts?.length ?? 0) - 1;
+
+  return (
+    <details
+      id={`sprint-${sprint.sprintId}`}
+      open={isOpen}
+      className={`group scroll-mt-4 rounded-lg border bg-card [&_summary::-webkit-details-marker]:hidden ${
+        isCurrent ? "border-l-4 border-l-brand border-y-border border-r-border" : "border-border"
+      }`}
+    >
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+        <span className="shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90">
+          ▸
+        </span>
+        <span className="shrink-0 text-sm font-semibold text-foreground">Sprint {sprintNumber}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {formatDateRange(sprint.startDate, sprint.endDate)}
+        </span>
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
+        >
+          {TEMPORAL_LABEL[sprint.temporalStatus]}
+        </span>
+
+        <span className="ml-auto flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span className="tabular-nums">
+            {formatCurrency(sprint.actualSpend)} / {formatCurrency(sprint.plannedSpend)}
+          </span>
+          <span className="hidden tabular-nums sm:inline">{Math.round(sprint.progressPct)}%</span>
+          <span className="hidden sm:inline">
+            {tasksDone}/{tasks.length} tarefas
+          </span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[sprint.status]}`}
+          >
+            {SPEND_STATUS_LABEL[sprint.status]}
+          </span>
+        </span>
+
+        {topAlert && (
+          <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+            <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
+          </span>
+        )}
+      </summary>
+
+      <SprintCardBody
+        sprint={sprint}
+        comments={comments}
+        clientId={clientId}
+        isAdmin={isAdmin}
+        tasks={tasks}
+        executionLabel={executionLabel}
+        executionSeverity={executionSeverity}
+        alerts={alerts}
+        openClientHref={openClientHref}
+        buildTaskHref={buildTaskHref}
+      />
     </details>
   );
 }
