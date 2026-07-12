@@ -1130,6 +1130,104 @@ automático da sync, refinamentos de UX, etc.
     já incluídos), `app/clients/task-labels.ts` (rótulos dos 2 tipos novos
     de tarefa).
 
+46. ✅ Reformulação da Visão Geral — painel de abertura do dia (sem
+    migration, sem mudança de regra financeira/permissões/dado; cálculos
+    financeiros continuam vindo de `computeFinancialSummary`/
+    `computeSpendRhythmCounts`/`classifySpendStatus`, sem tocar nenhum).
+    Princípio: "mostrar tudo que exige decisão, não tudo que aconteceu" —
+    cabeçalho compacto (só título + mês, sem subtítulo/data/e-mail/papel,
+    que já existem globalmente), filtros já minimalistas mantidos como
+    estavam, e o resto da tela reordenado: Saúde da operação → Controle de
+    investimento → Prioridades de hoje → tabela de clientes.
+
+    **Removido "Ritmo do mês"** (clientes totais/dentro/abaixo/acima) —
+    misturava classificação de investimento com saúde operacional (um
+    cliente "abaixo do ritmo" não é o mesmo problema que um cliente com
+    tarefas atrasadas). **Novo "Saúde da operação"**: clientes monitorados,
+    operação normal, precisam de atenção, críticos — 100% reaproveitado de
+    `computePortfolioCounts(cards)`, que já classificava cada cliente numa
+    única categoria (accountHealth, hierarquia crítico > atenção > normal já
+    embutida em `computeAccountHealth`) — nenhum cálculo novo, só um bloco
+    novo pra um dado que já existia. Cliente sem orçamento continua
+    "normal" a menos que tenha outro problema real — `buildAttentionAlerts`
+    nunca gerou alerta só por `monthStatus = sem_meta`.
+
+    **"Controle de investimento"** (renomeado de "Investimento do mês", pra
+    responder diretamente "estamos gastando o que deveríamos gastar
+    agora?") ganhou o indicador **Contas fora do ritmo** (`abaixo + acima`,
+    de `computeSpendRhythmCounts`, já existente) — breakdown "X abaixo · Y
+    acima" só num tooltip nativo (`title`), sem poluir o bloco com dois
+    números permanentes. Clicável, filtra a tabela via um novo valor de
+    atalho `ritmo=fora_do_ritmo` (só existe como link direto, mesmo padrão
+    de `sprintBucket`/`sync`/`meta`; o popover de Filtros continua com as 4
+    opções reais, sem mudança).
+
+    **Substituída "Central de Atenção" por "Prioridades de hoje"** — a
+    mudança mais estrutural desta etapa. A Central de Atenção listava um
+    item por PROBLEMA (um cliente com 3 problemas virava 3 linhas, até 2
+    delas cabendo no resumo); "Prioridades de hoje" mostra uma linha por
+    CLIENTE, sempre. Novo `src/lib/client-priority.ts`, função central
+    `getClientPriority(card, today)`, não inventa nenhum sinal novo — só
+    decide, com uma hierarquia determinística, qual É o problema principal
+    quando o cliente tem vários:
+
+    1. Investimento significativamente acima do ritmo
+    2. Tarefa(s) crítica(s) atrasada(s) (mesmo limiar de 2 dias/3 tarefas já
+       usado pela antiga Central de Atenção)
+    3. Sprint sem execução
+    4. Investimento significativamente abaixo do ritmo
+    5. Otimização vencida
+    6. Entrega de criativo atrasada (novo tipo de tarefa da Etapa 45)
+    7. Tarefa atrasada abaixo do limiar de "crítica"
+    8. Sem atividade operacional recente
+    9. Qualquer outro alerta já calculado (nunca deixa um cliente
+       não-saudável sem nenhum texto de problema)
+
+    Itens fora do que o sistema calcula hoje com confiança (saldo da conta,
+    reuniões agendadas, entregas via WhatsApp, relacionamento) ficam de
+    fora de propósito — a arquitetura (uma lista de candidatos com
+    `tier`, ordenada, primeiro item vira o principal) já está pronta pra
+    crescer sem mudar quem chama a função. `severity` do resultado é sempre
+    igual a `card.accountHealth` — nunca uma segunda classificação
+    divergente de "Saúde da operação". Ordenação da fila
+    (`sortClientPriorities`): severidade → posição na hierarquia acima →
+    tempo em aberto (dias úteis, mais antigo primeiro) → nome — sem
+    IA, sem pontuação de gestor, só regras.
+
+    Componente novo `priorities-panel.tsx` (substitui `attention-center.tsx`/
+    `.ts`, removidos): até 6 clientes no resumo, cada linha com nome,
+    severidade, problema principal, idade do problema (quando é um dado
+    real — nunca inventada pra ritmo de investimento), gestor responsável e
+    uma ação contextual ("Abrir sprint"/"Abrir cliente", nunca "Ver mais"),
+    "+N outros" discreto com tooltip pros problemas secundários. "Ver todas"
+    abre o mesmo padrão de drawer lateral já usado no sistema, agora com
+    filtro por severidade em vez de categoria.
+
+    **Tabela de clientes** simplificada: `Cliente · Gestor · Investimento
+    (% + situação, sem repetir R$ realizado/planejado/esperado/diferença,
+    que já pertencem ao painel do cliente) · Prioridade · Última otimização
+    · Ação`. Duas decisões deliberadas, divergindo levemente do pedido
+    literal, disclosed aqui: (1) as colunas "Operação" e "Prioridade"
+    pedidas separadamente usam a mesma taxonomia (Normal/Atenção/Crítico)
+    e o mesmo dado (`accountHealth`) — mostrar as duas seria repetir a
+    mesma informação lado a lado, contra o princípio central desta etapa
+    ("reduzir informações redundantes"), então viraram uma coluna só,
+    "Prioridade" (tooltip mostra o motivo); (2) "Próxima reunião" não tem
+    dado confiável no sistema hoje (nenhum agendamento, só tarefas do tipo
+    reunião já concluídas) — em vez de uma coluna inteira repetindo "Não
+    disponível" em toda linha (zero informação, poluição visual), a coluna
+    foi omitida por enquanto, exatamente como a própria seção 20 do pedido
+    permite. Ordenação padrão da tabela trocou de "ritmo de investimento"
+    pra "prioridade operacional" (mesma ordem de `sortClientPriorities`),
+    coerente com o resto da tela — "Ordenar por nome" continua disponível.
+
+    Arquivos: `lib/client-priority.ts` (novo), `app/priorities-panel.tsx`
+    (novo, substitui `app/attention-center.tsx`), `lib/agency-metrics.ts`
+    (`computePortfolioCounts` reaproveitado, `sortCardsBySpendRhythm`
+    removido por ficar sem uso), `lib/monthly-reports.ts`
+    (`formatLastOptimizationLabel`), `app/page.tsx` (reescrita). Removidos:
+    `lib/attention-center.ts`, `app/attention-center.tsx`.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

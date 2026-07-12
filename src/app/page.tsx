@@ -12,30 +12,19 @@ import {
 import type { AccountHealth } from "@/lib/attention-alerts";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import {
-  computeFinancialSummary,
-  computeManagerSummary,
-  computeSpendRhythmCounts,
-  sortCardsBySpendRhythm,
-} from "@/lib/agency-metrics";
-import {
-  buildAttentionCenterItems,
-  computeAttentionCenterCounts,
-  selectTopAttentionItems,
-  type AttentionCenterCategory,
-} from "@/lib/attention-center";
+import { formatLastOptimizationLabel } from "@/lib/monthly-reports";
+import { computeFinancialSummary, computeManagerSummary, computePortfolioCounts, computeSpendRhythmCounts } from "@/lib/agency-metrics";
+import { getClientPriority, sortClientPriorities } from "@/lib/client-priority";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
 import { AgencyInvestmentBar } from "./agency-investment-bar";
-import { AttentionCenterDrawer, AttentionCenterPanel } from "./attention-center";
+import { PrioritiesDrawer, PrioritiesPanel } from "./priorities-panel";
 
-/** Rótulos da "situação" financeira do mês nesta tabela — mesma
- * classificação de sempre (card.monthStatus, ±10% central), só um texto
- * mais descritivo nesse contexto específico (SPEND_STATUS_LABEL/"Bateu
- * meta" continua igual em todo o resto do sistema). */
+/** Rótulos da "situação" financeira do mês — mesma classificação de sempre
+ * (card.monthStatus, ±10% central). */
 const SITUATION_LABEL: Record<SpendStatus, string> = {
-  dentro: "Dentro do esperado",
-  acima: "Acima do esperado",
-  abaixo: "Abaixo do esperado",
+  dentro: "Dentro",
+  acima: "Acima",
+  abaixo: "Abaixo",
   sem_meta: "Sem planejamento",
 };
 
@@ -46,8 +35,24 @@ const SITUATION_BADGE_CLASSES: Record<SpendStatus, string> = {
   sem_meta: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
 };
 
+const SEVERITY_LABEL: Record<AccountHealth, string> = {
+  critico: "Crítico",
+  atencao: "Atenção",
+  saudavel: "Normal",
+};
+
+const SEVERITY_BADGE_CLASSES: Record<AccountHealth, string> = {
+  critico: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+  atencao: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  saudavel: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
+};
+
 type ManagerFilter = "all" | "me" | string;
-type RitmoFilter = "todos" | SpendStatus;
+/** "fora_do_ritmo" é só um atalho de drill-down (abaixo + acima combinados)
+ * pro indicador "Contas fora do ritmo" — não aparece como opção no popover
+ * de Filtros (que continua com as 4 opções reais), só via link direto,
+ * mesmo padrão já usado por `sprintBucket`/`sync`/`meta`. */
+type RitmoFilter = "todos" | SpendStatus | "fora_do_ritmo";
 type TasksFilter = "todas" | "atrasadas" | "sem_atrasadas";
 
 /** Cor do valor — só sinalização discreta no texto, nunca um card ou fundo
@@ -59,23 +64,25 @@ const STAT_TONE_CLASSES = {
   critical: "text-red-600 dark:text-red-400",
 } as const;
 
-/** Uma métrica compacta dentro de um grupo (Ritmo do mês/Investimento) —
- * nunca um card com borda própria, pra não voltar a virar uma grade de
- * caixinhas competindo por atenção. `size="lg"` marca os dois números mais
- * importantes de "Investimento do mês" (Planejado/Realizado) com mais peso
- * visual (navy, maior) — os demais ficam secundários por padrão. */
+/** Uma métrica compacta dentro de um grupo (Saúde da operação/Controle de
+ * investimento) — nunca um card com borda própria, pra não virar uma grade
+ * de caixinhas competindo por atenção. `size="lg"` marca os dois números
+ * mais importantes de "Controle de investimento" (Planejado/Realizado) com
+ * mais peso visual (navy, maior) — os demais ficam secundários por padrão. */
 function StatItem({
   label,
   value,
   href,
   tone = "neutral",
   size = "md",
+  title,
 }: {
   label: string;
   value: string;
   href?: string;
   tone?: keyof typeof STAT_TONE_CLASSES;
   size?: "md" | "lg";
+  title?: string;
 }) {
   const valueClass =
     size === "lg"
@@ -83,7 +90,7 @@ function StatItem({
       : `text-base font-semibold ${STAT_TONE_CLASSES[tone]}`;
 
   const content = (
-    <div>
+    <div title={title}>
       <p className="text-[11px] text-muted-foreground">{label}</p>
       <p className={`tabular-nums ${valueClass}`}>{value}</p>
     </div>
@@ -101,11 +108,10 @@ function StatItem({
   );
 }
 
-/** Um grupo (Ritmo do mês/Investimento do mês) — cada métrica compacta
- * dentro, nunca vários cards soltos e iguais. `divided` separa as métricas
- * com um divisor vertical sutil (Ritmo do mês); `accent` dá um leve destaque
- * de borda esquerda pro bloco mais importante (Investimento do mês) sem
- * aumentar a altura. */
+/** Um grupo (Saúde da operação/Controle de investimento) — cada métrica
+ * compacta dentro, nunca vários cards soltos e iguais. `divided` separa as
+ * métricas com um divisor vertical sutil; `accent` dá um leve destaque de
+ * borda esquerda pro bloco mais importante sem aumentar a altura. */
 function MetricGroup({
   title,
   children,
@@ -157,8 +163,8 @@ export default async function Home({
     sync?: string;
     meta?: string;
     sort?: string;
-    atencao?: string;
-    atencaoCategoria?: string;
+    prioridades?: string;
+    prioridadeSeveridade?: string;
   }>;
 }) {
   const profile = await getCurrentProfile();
@@ -330,7 +336,9 @@ export default async function Home({
   if (activityFilter !== "todos") {
     filteredBase = filteredBase.filter((card) => card.activityStatus === activityFilter);
   }
-  if (ritmoFilter !== "todos") {
+  if (ritmoFilter === "fora_do_ritmo") {
+    filteredBase = filteredBase.filter((card) => card.monthStatus === "abaixo" || card.monthStatus === "acima");
+  } else if (ritmoFilter !== "todos") {
     filteredBase = filteredBase.filter((card) => card.monthStatus === ritmoFilter);
   }
   if (tasksFilter === "atrasadas") {
@@ -366,10 +374,25 @@ export default async function Home({
     cards = cards.filter((card) => card.clientId === clientFilter);
   }
 
-  const sortedCards =
-    sort === "nome" ? [...cards].sort((a, b) => a.clientName.localeCompare(b.clientName)) : sortCardsBySpendRhythm(cards);
+  // Prioridade de cada cliente — uma única fonte (getClientPriority),
+  // reaproveitada pro bloco "Prioridades de hoje", pela coluna "Prioridade"
+  // da tabela e pela ordenação padrão dela (severidade primeiro).
+  const cardById = new Map(cards.map((c) => [c.clientId, c]));
+  const allPriorities = cards.map((card) => getClientPriority(card, today));
+  const priorityByClientId = new Map(allPriorities.map((p) => [p.clientId, p]));
+  const priorityQueue = sortClientPriorities(allPriorities.filter((p) => p.primaryIssue !== null));
+  const prioritiesTop = priorityQueue.slice(0, 6);
+  const prioritiesOpen = params.prioridades === "1";
+  const prioritySeverity = (params.prioridadeSeveridade ?? "todos") as AccountHealth | "todos";
 
+  const sortedCards =
+    sort === "nome"
+      ? [...cards].sort((a, b) => a.clientName.localeCompare(b.clientName))
+      : sortClientPriorities(allPriorities).map((p) => cardById.get(p.clientId)!);
+
+  const portfolio = computePortfolioCounts(cards);
   const spendRhythm = computeSpendRhythmCounts(cards);
+  const outOfRhythmCount = spendRhythm.abaixo + spendRhythm.acima;
   const financial = computeFinancialSummary(cards);
 
   const managersForSummary = isAdmin ? gestores ?? [] : [{ id: profile.id, name: profile.name }];
@@ -381,14 +404,10 @@ export default async function Home({
   const investmentDiffTone =
     investmentRitmoStatus === "acima" ? "critical" : investmentRitmoStatus === "abaixo" ? "warning" : "neutral";
 
-  const attentionItems = buildAttentionCenterItems(cards, today);
-  const attentionCounts = computeAttentionCenterCounts(attentionItems);
-  const attentionTop = selectTopAttentionItems(attentionItems, 5, 2);
-  const attentionOpen = params.atencao === "1";
-  const attentionCategory = (params.atencaoCategoria ?? "todos") as AttentionCenterCategory | "todos";
-
   // Preserva TODOS os filtros ativos — usado na navegação de mês e na
-  // ordenação da tabela, que não devem resetar o resto do contexto.
+  // ordenação da tabela, que não devem resetar o resto do contexto. Não
+  // inclui prioridades/prioridadeSeveridade de propósito — abrir/fechar o
+  // drawer não deve "grudar" em outras navegações (ver prioritiesUrl).
   const buildUrl = (overrides: Record<string, string>) => {
     const next = new URLSearchParams();
     if (params.month) next.set("month", params.month);
@@ -412,8 +431,8 @@ export default async function Home({
   };
 
   // Drill-down "de uma casa só": zera os filtros de recorte (mantendo só
-  // mês e gestor) e aplica exatamente o filtro clicado — usado pelos cards
-  // de portfólio, pelo bloco "Precisa de atenção" e pelo resumo por gestor.
+  // mês e gestor) e aplica exatamente o filtro clicado — usado pelos
+  // indicadores de Saúde da operação/Controle de investimento.
   const drillDownUrl = (overrides: Record<string, string>) => {
     const next = new URLSearchParams();
     if (params.month) next.set("month", params.month);
@@ -425,15 +444,15 @@ export default async function Home({
     return `/?${next.toString()}`;
   };
 
-  // Abre/fecha o drawer "Ver tudo" da Central de Atenção por cima do que já
-  // está na URL (filtros, mês, ordenação) — igual ao drawer de tarefa já
-  // usado em Operação/Sprints, só que os parâmetros são próprios daqui.
-  const attentionUrl = (overrides: { atencao?: string; atencaoCategoria?: string }) =>
-    buildUrl({ atencao: overrides.atencao ?? "", atencaoCategoria: overrides.atencaoCategoria ?? "" });
-  const openAttentionHref = attentionUrl({ atencao: "1" });
-  const closeAttentionHref = attentionUrl({});
-  const attentionCategoryHref = (category: AttentionCenterCategory | "todos") =>
-    attentionUrl({ atencao: "1", atencaoCategoria: category === "todos" ? "" : category });
+  // Abre/fecha o drawer "Ver todas" das Prioridades por cima do que já está
+  // na URL (filtros, mês, ordenação) — igual ao drawer de tarefa já usado
+  // em Sprints, só que os parâmetros são próprios daqui.
+  const prioritiesUrl = (overrides: { prioridades?: string; prioridadeSeveridade?: string }) =>
+    buildUrl({ prioridades: overrides.prioridades ?? "", prioridadeSeveridade: overrides.prioridadeSeveridade ?? "" });
+  const openPrioritiesHref = prioritiesUrl({ prioridades: "1" });
+  const closePrioritiesHref = prioritiesUrl({});
+  const prioritiesSeverityHref = (severity: AccountHealth | "todos") =>
+    prioritiesUrl({ prioridades: "1", prioridadeSeveridade: severity === "todos" ? "" : severity });
 
   return (
     <div className="min-h-[calc(100dvh_-_3rem)] bg-overview-bg">
@@ -479,7 +498,7 @@ export default async function Home({
             selectedClientId={clientFilter}
             health={healthFilter}
             activity={activityFilter}
-            ritmo={ritmoFilter}
+            ritmo={ritmoFilter === "fora_do_ritmo" ? "todos" : ritmoFilter}
             tasks={tasksFilter}
             preserved={{
               month: params.month,
@@ -491,33 +510,34 @@ export default async function Home({
           />
         </div>
 
-        {/* Resumo consolidado: no máximo 4 grupos, métricas compactas dentro
-            de cada um em vez de uma grade de cards soltos. */}
+        {/* Saúde da operação + Controle de investimento: no máximo 2 grupos,
+            métricas compactas dentro de cada um em vez de uma grade de
+            cards soltos. */}
         <div className="mt-3 flex flex-col gap-2.5">
-          <MetricGroup title="Ritmo do mês" divided>
-            <StatItem label="Clientes totais" value={String(spendRhythm.total)} />
+          <MetricGroup title="Saúde da operação" divided>
+            <StatItem label="Clientes monitorados" value={String(cards.length)} />
             <StatItem
-              label="Dentro do esperado"
-              value={String(spendRhythm.dentro)}
-              href={drillDownUrl({ ritmo: "dentro" })}
+              label="Operação normal"
+              value={String(portfolio.saudaveis)}
+              href={drillDownUrl({ health: "saudavel" })}
               tone="positive"
             />
             <StatItem
-              label="Abaixo do esperado"
-              value={String(spendRhythm.abaixo)}
-              href={drillDownUrl({ ritmo: "abaixo" })}
+              label="Precisam de atenção"
+              value={String(portfolio.atencao)}
+              href={drillDownUrl({ health: "atencao" })}
               tone="warning"
             />
             <StatItem
-              label="Acima do esperado"
-              value={String(spendRhythm.acima)}
-              href={drillDownUrl({ ritmo: "acima" })}
+              label="Críticos"
+              value={String(portfolio.criticos)}
+              href={drillDownUrl({ health: "critico" })}
               tone="critical"
             />
           </MetricGroup>
 
           <MetricGroup
-            title="Investimento do mês"
+            title="Controle de investimento"
             accent
             extra={
               <div className="mt-3.5">
@@ -550,30 +570,40 @@ export default async function Home({
               value={financial.planned > 0 ? formatCurrency(investmentDiff) : "—"}
               tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
             />
+            <StatItem
+              label="Contas fora do ritmo"
+              value={String(outOfRhythmCount)}
+              href={drillDownUrl({ ritmo: "fora_do_ritmo" })}
+              tone={outOfRhythmCount > 0 ? "warning" : "neutral"}
+              title={`${spendRhythm.abaixo} abaixo · ${spendRhythm.acima} acima`}
+            />
           </MetricGroup>
         </div>
 
         <div className="mt-3">
-          <AttentionCenterPanel
-            items={attentionTop}
-            counts={attentionCounts}
-            totalCount={attentionItems.length}
-            viewAllHref={openAttentionHref}
+          <PrioritiesPanel
+            priorities={prioritiesTop}
+            managerNameByClient={primaryManagerNameByClient}
+            totalCount={priorityQueue.length}
+            viewAllHref={openPrioritiesHref}
           />
         </div>
 
-        {attentionOpen && (
-          <AttentionCenterDrawer
-            items={attentionItems}
-            category={attentionCategory}
-            closeHref={closeAttentionHref}
-            buildCategoryHref={attentionCategoryHref}
+        {prioritiesOpen && (
+          <PrioritiesDrawer
+            priorities={priorityQueue}
+            managerNameByClient={primaryManagerNameByClient}
+            severity={prioritySeverity}
+            closeHref={closePrioritiesHref}
+            buildSeverityHref={prioritiesSeverityHref}
           />
         )}
 
-        {/* Tabela única de clientes — consolida o que antes eram duas tabelas
-            (Contas prioritárias + Clientes), só com o essencial pra entender
-            rápido o estágio do mês de cada conta. */}
+        {/* Tabela única de clientes — "Investimento"/"Prioridade" resumidos
+            (sem repetir realizado/planejado/esperado/diferença, que já
+            pertencem ao painel do cliente); "Prioridade" reaproveita
+            exatamente o mesmo dado de "Saúde da operação" e de
+            "Prioridades de hoje" — nunca uma segunda classificação. */}
         <div className="mt-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -585,22 +615,21 @@ export default async function Home({
                 href={buildUrl({ sort: sort === "nome" ? "prioridade" : "nome" })}
                 className="rounded font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               >
-                Ordenar por {sort === "nome" ? "situação" : "nome"}
+                Ordenar por {sort === "nome" ? "prioridade" : "nome"}
               </Link>
             </div>
           </div>
 
           {sortedCards.length > 0 ? (
             <div className="mt-2 overflow-x-auto rounded-xl border border-border shadow-[var(--shadow-card)]">
-              <table className="w-full min-w-[900px] text-sm">
+              <table className="w-full min-w-[820px] text-sm">
                 <thead>
                   <tr className="border-b border-border bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-muted-foreground dark:bg-zinc-900">
                     <th className="py-2 px-3">Cliente</th>
                     <th className="py-2 px-3">Gestor</th>
                     <th className="py-2 px-3 text-right">Investimento</th>
-                    <th className="py-2 px-3 text-right">% Realizado</th>
-                    <th className="py-2 px-3">Situação</th>
-                    <th className="py-2 px-3">Última atividade</th>
+                    <th className="py-2 px-3">Prioridade</th>
+                    <th className="py-2 px-3">Última otimização</th>
                     <th className="py-2 px-3 text-right">Ação</th>
                   </tr>
                 </thead>
@@ -608,6 +637,7 @@ export default async function Home({
                   {sortedCards.map((card) => {
                     const pctRealizado =
                       card.monthPlanned > 0 ? Math.round((card.monthActual / card.monthPlanned) * 100) : null;
+                    const priority = priorityByClientId.get(card.clientId)!;
                     return (
                       <tr
                         key={card.clientId}
@@ -617,26 +647,35 @@ export default async function Home({
                         <td className="py-2 px-3 text-muted-foreground">
                           {primaryManagerNameByClient.get(card.clientId) ?? "Sem gestor"}
                         </td>
-                        <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
-                          {formatCurrency(card.monthActual)} / {formatCurrency(card.monthPlanned)}
-                        </td>
-                        <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
-                          {pctRealizado !== null ? `${pctRealizado}%` : "—"}
+                        <td className="py-2 px-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="tabular-nums text-muted-foreground">
+                              {pctRealizado !== null ? `${pctRealizado}%` : "—"}
+                            </span>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SITUATION_BADGE_CLASSES[card.monthStatus]}`}
+                            >
+                              {SITUATION_LABEL[card.monthStatus]}
+                            </span>
+                          </div>
                         </td>
                         <td className="py-2 px-3">
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SITUATION_BADGE_CLASSES[card.monthStatus]}`}
+                            title={priority.primaryIssue?.title ?? "Nenhuma condição operacional relevante"}
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SEVERITY_BADGE_CLASSES[priority.severity]}`}
                           >
-                            {SITUATION_LABEL[card.monthStatus]}
+                            {SEVERITY_LABEL[priority.severity]}
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-muted-foreground">{card.activityLabel}</td>
+                        <td className="py-2 px-3 text-muted-foreground">
+                          {formatLastOptimizationLabel(card.lastOptimizationAt, today)}
+                        </td>
                         <td className="py-2 px-3 text-right">
                           <Link
-                            href={`/clients/${card.clientId}`}
+                            href={priority.primaryIssue?.actionHref ?? `/clients/${card.clientId}`}
                             className="rounded-md border border-transparent px-2 py-1 text-xs font-medium text-brand transition-colors hover:border-border hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
                           >
-                            Abrir
+                            {priority.primaryIssue?.actionLabel ?? "Abrir"}
                           </Link>
                         </td>
                       </tr>

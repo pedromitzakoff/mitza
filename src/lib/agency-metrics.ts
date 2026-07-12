@@ -41,25 +41,6 @@ export function computeSpendRhythmCounts(cards: OperationClientCard[]): SpendRhy
   };
 }
 
-const SPEND_RHYTHM_ORDER: Record<OperationClientCard["monthStatus"], number> = {
-  acima: 0,
-  abaixo: 1,
-  dentro: 2,
-  sem_meta: 3,
-};
-
-/** Ordenação da tabela consolidada da Visão Geral: acima do esperado primeiro
- * (precisa de atenção), depois abaixo, depois dentro — dentro do mesmo
- * grupo, alfabético. Não é a mesma ordenação de sortByPriority (saúde da
- * conta) — aqui o critério é puramente o ritmo financeiro do mês. */
-export function sortCardsBySpendRhythm(cards: OperationClientCard[]): OperationClientCard[] {
-  return [...cards].sort((a, b) => {
-    const diff = SPEND_RHYTHM_ORDER[a.monthStatus] - SPEND_RHYTHM_ORDER[b.monthStatus];
-    if (diff !== 0) return diff;
-    return a.clientName.localeCompare(b.clientName);
-  });
-}
-
 export interface FinancialSummary {
   planned: number;
   actual: number;
