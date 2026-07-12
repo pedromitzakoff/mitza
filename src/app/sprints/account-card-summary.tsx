@@ -57,11 +57,7 @@ export function AccountCardSummary({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-          <Link
-            href={`/clients/${clientId}`}
-            onClick={(e) => e.stopPropagation()}
-            className="font-semibold text-foreground hover:underline"
-          >
+          <Link href={`/clients/${clientId}`} className="font-semibold text-foreground hover:underline">
             {clientName}
           </Link>
           <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
