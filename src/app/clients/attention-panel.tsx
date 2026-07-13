@@ -33,18 +33,20 @@ function byPriority(a: AttentionAlert, b: AttentionAlert): number {
 }
 
 /**
- * Faixa compacta "Atenção" — no máximo 3 alertas (os mais prioritários),
- * altura mínima, cor semântica só no texto do alerta crítico (nunca o
- * componente inteiro). O restante só aparece ao clicar "Ver todos", num
- * <details> que expande localmente — sem navegar pra outra página nem
- * aumentar permanentemente a altura do dashboard.
+ * Faixa compacta "Prioridades" (Etapa 54: antes "Atenção") — no máximo 3
+ * alertas (os mais prioritários), altura mínima, cor semântica só no texto
+ * do alerta crítico (nunca o componente inteiro). O restante só aparece ao
+ * clicar "Ver todas", num <details> que expande localmente — sem navegar
+ * pra outra página nem aumentar permanentemente a altura da página. Mesma
+ * lógica de severidade/agrupamento de antes (buildAttentionAlerts,
+ * KIND_PRIORITY) — só o rótulo mudou, nenhum score novo foi criado.
  */
 export function AttentionPanel({ alerts }: { alerts: AttentionAlert[] }) {
   if (alerts.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card px-3 py-2">
         <p className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Atenção</span> · Nenhuma ação urgente nesta conta.
+          <span className="font-medium text-foreground">Prioridades</span> · Nenhuma ação urgente nesta conta.
         </p>
       </div>
     );
@@ -58,7 +60,7 @@ export function AttentionPanel({ alerts }: { alerts: AttentionAlert[] }) {
     <div className="rounded-lg border border-border bg-card px-3 py-2">
       <details className="group/panel">
         <summary className="flex cursor-pointer list-none flex-wrap items-baseline gap-x-2 gap-y-1 [&::-webkit-details-marker]:hidden">
-          <span className="shrink-0 text-sm font-medium text-foreground">Atenção</span>
+          <span className="shrink-0 text-sm font-medium text-foreground">Prioridades</span>
           <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-sm">
             {visible.map((alert, index) => (
               <span key={index}>
@@ -71,7 +73,7 @@ export function AttentionPanel({ alerts }: { alerts: AttentionAlert[] }) {
           </span>
           {remaining > 0 && (
             <span className="ml-auto shrink-0 text-xs font-medium text-brand group-open/panel:hidden">
-              Ver todos ({ordered.length})
+              Ver todas as {ordered.length} prioridades
             </span>
           )}
           {remaining > 0 && (

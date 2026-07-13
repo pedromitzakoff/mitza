@@ -12,8 +12,7 @@ import {
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
-import { computeCumulativeSpendSeries } from "@/lib/spend-chart-data";
-import { computeMonthProjection, computeTaskCounts } from "@/lib/client-metrics";
+import { computeTaskCounts } from "@/lib/client-metrics";
 import { classifySpendStatus } from "@/lib/spend-status";
 import { buildAttentionAlerts } from "@/lib/attention-alerts";
 import { buildSprintExecutionAlert, formatSprintExecutionLabel } from "@/lib/sprint-execution";
@@ -24,9 +23,8 @@ import { resolveBudgetEffectiveDate } from "@/lib/monthly-budget";
 import { todayDateString, todayUTC } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
 import { computeOperationalTracking } from "@/lib/operational-tracking";
-import { ClientMetricsCards } from "../client-metrics-cards";
 import { AttentionPanel } from "../attention-panel";
-import { SpendChart } from "../spend-chart";
+import { MonthInvestmentSummary } from "../month-investment-summary";
 import { SprintCard } from "../sprint-card";
 import { TaskList } from "../task-list";
 import { Section } from "../section";
@@ -220,8 +218,10 @@ export default async function ClientPage({
   // antes do mês acabar (mesma regra agora usada em toda a Visão Geral/
   // Sprints — ver operation-data.ts).
   const monthStatus = classifySpendStatus(monthActual, monthExpectedToDate, monthPlanned);
-  const projection = computeMonthProjection(monthPlanned, monthActual, today);
   const currentSprint = sprintFinancials.find((sprint) => sprint.temporalStatus === "atual") ?? null;
+  // Histórico do mês (Etapa 54): todas as sprints do mês exceto a atual,
+  // já ordenadas cronologicamente (mesma ordem da query original).
+  const otherSprints = sprintFinancials.filter((sprint) => sprint.temporalStatus !== "atual");
 
   const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate({ firstDay, lastDay }, todayStr);
   const budgetSprints = sprintFinancials.map((sprint) => ({
@@ -258,7 +258,10 @@ export default async function ClientPage({
     ? businessDaysSince(clientLastActivityDate, today)
     : null;
   const activityStatus = classifyOperationalActivityStatus(clientInactivityBusinessDays);
-  const activityLabel = formatLastActivityLabel(clientLastActivityDate, today);
+  // Etapa 54: "Sem registro" (neutro) em vez de "Nunca houve atividade" só
+  // aqui, no cabeçalho de Acompanhamento operacional — formatLastActivityLabel
+  // continua igual pra quem mais usa (Operação, Visão Geral, Sprints).
+  const lastExecutionLabel = clientLastActivityDate ? formatLastActivityLabel(clientLastActivityDate, today) : "Sem registro";
 
   const { data: tasks } = await supabase
     .from("tasks")
@@ -329,14 +332,6 @@ export default async function ClientPage({
     ? formatSprintExecutionLabel(sprintLastActivityDate, currentSprint.startDate, today)
     : null;
 
-  const chartPoints = computeCumulativeSpendSeries(
-    sprints ?? [],
-    dailySpend ?? [],
-    plannedAllocations ?? [],
-    { firstDay, lastDay },
-    today,
-  );
-
   const banners = [
     error && { tone: "red", text: error },
     commentError && { tone: "red", text: commentError },
@@ -390,35 +385,15 @@ export default async function ClientPage({
         </div>
       )}
 
-      <div className="mt-3">
-        <ClientMetricsCards
-          monthPlanned={monthPlanned}
-          monthActual={monthActual}
-          projection={projection}
-          taskCounts={taskCounts}
-          activityStatus={activityStatus}
-          activityLabel={activityLabel}
+      {/* 1. Investimento do mês — resumo financeiro central + edição de
+          orçamento (mesma ação de sempre, só reposicionada). */}
+      <div className="mt-3 flex flex-col gap-3">
+        <MonthInvestmentSummary
+          planned={monthPlanned}
+          actual={monthActual}
+          expectedToDate={monthExpectedToDate}
+          status={monthStatus}
         />
-      </div>
-
-      <div className="mt-3">
-        <AttentionPanel alerts={alerts} />
-      </div>
-
-      <div className="mt-3">
-        <OperationalTrackingPanel tracking={operationalTracking} today={today} />
-      </div>
-
-      <div className="mt-3 rounded-lg border border-border bg-card p-3">
-        <h2 className="text-sm font-medium text-foreground">
-          Planejado acumulado x gasto real acumulado
-        </h2>
-        <div className="mt-2">
-          <SpendChart points={chartPoints} />
-        </div>
-      </div>
-
-      <div className="mt-3">
         <MonthlyBudgetPanel
           clientId={client.id}
           monthParam={monthParam}
@@ -436,10 +411,51 @@ export default async function ClientPage({
         />
       </div>
 
-      <Section title="Sprints do mês">
+      {/* 2. Acompanhamento operacional */}
+      <div className="mt-3">
+        <OperationalTrackingPanel
+          tracking={operationalTracking}
+          today={today}
+          lastExecutionLabel={lastExecutionLabel}
+          lastExecutionStatus={activityStatus}
+        />
+      </div>
+
+      {/* 3. Prioridades (antes "Atenção") */}
+      <div className="mt-3">
+        <AttentionPanel alerts={alerts} />
+      </div>
+
+      {/* 4. Sprint atual — só a sprint classificada como atual pela regra
+          temporal central (getSprintTemporalStatus); nunca escolhida
+          arbitrariamente. Se nenhuma existir, estado claro em vez de
+          silenciosamente não mostrar nada. */}
+      <Section title="Sprint atual">
+        {currentSprint ? (
+          <SprintCard
+            sprint={currentSprint}
+            comments={sprintCommentsById.get(currentSprint.sprintId) ?? []}
+            clientId={client.id}
+            isAdmin={isAdmin}
+            tasks={tasksBySprintId.get(currentSprint.sprintId) ?? []}
+            executionLabel={sprintExecutionLabel}
+            executionSeverity={
+              sprintExecutionAlert?.severity !== "informativo" ? (sprintExecutionAlert?.severity ?? null) : null
+            }
+          />
+        ) : (
+          <p className="text-sm text-zinc-500">
+            Nenhuma sprint atual encontrada para este período — verifique se as sprints do mês já foram geradas.
+          </p>
+        )}
+      </Section>
+
+      {/* 5. Histórico do mês — demais sprints do mês (concluídas e futuras),
+          recolhidas por padrão; a sprint atual não se repete aqui. */}
+      <Section title="Histórico do mês">
         <div className="flex flex-col gap-2">
-          {sprintFinancials.length > 0 ? (
-            sprintFinancials.map((sprint) => (
+          {otherSprints.length > 0 ? (
+            otherSprints.map((sprint) => (
               <SprintCard
                 key={sprint.sprintId}
                 sprint={sprint}
@@ -447,16 +463,11 @@ export default async function ClientPage({
                 clientId={client.id}
                 isAdmin={isAdmin}
                 tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
-                executionLabel={sprint.temporalStatus === "atual" ? sprintExecutionLabel : null}
-                executionSeverity={
-                  sprint.temporalStatus === "atual" && sprintExecutionAlert?.severity !== "informativo"
-                    ? (sprintExecutionAlert?.severity ?? null)
-                    : null
-                }
+                defaultOpen={false}
               />
             ))
           ) : (
-            <p className="text-sm text-zinc-500">Nenhuma sprint neste mês ainda.</p>
+            <p className="text-sm text-zinc-500">Nenhuma outra sprint neste mês.</p>
           )}
         </div>
       </Section>

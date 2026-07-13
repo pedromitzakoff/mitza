@@ -1872,6 +1872,87 @@ automático da sync, refinamentos de UX, etc.
     `app/reports/page.tsx`, `app/reports/[clientId]/page.tsx`,
     `app/sprints/account-card-summary.tsx`.
 
+54 ✅ Reorganização de conteúdo e hierarquia da Página do Cliente (exclusiva
+    desta tela — banco, RLS, cálculos financeiros, identificação de sprints,
+    tarefas, Meta API, Relatórios, Sidebar/Topbar e identidade visual geral
+    não foram tocados).
+
+    **Levantamento**: os 4 cards do topo vinham de `ClientMetricsCards`
+    (`app/clients/client-metrics-cards.tsx`), só usada nesta página.
+    Projeção do mês vinha de `computeMonthProjection` (`lib/client-metrics.ts`)
+    — mantida no arquivo (é possível que volte a ser útil), só parou de ser
+    chamada aqui. O gráfico vinha de `SpendChart`/`computeCumulativeSpendSeries`
+    (`app/clients/spend-chart.tsx`+`lib/spend-chart-data.ts`), usados só
+    aqui. Acompanhamento operacional e Prioridades (antes "Atenção") já
+    existiam (Etapa 51/anteriores) — só precisavam de reordenação, ajuste de
+    rótulo e duas lacunas reais: nenhum dos três nunca tinha nenhum registro
+    mostrava "Nunca" em destaque, e uma reunião/otimização/entrega atrasada
+    (nunca concluída) ficava invisível (nem "última" nem "próxima" a
+    capturavam). Sprints do mês listava todas as sprints juntas, sem separar
+    a atual das demais.
+
+    **Removido do topo** (nenhum apagado do sistema, só reapresentado):
+    `ClientMetricsCards`, `SpendChart`, `spend-chart-data.ts` — como não
+    tinham nenhum outro consumidor, foram deletados por completo (ver
+    padrão de "não deixar código morto" já seguido nas etapas anteriores).
+    `computeMonthProjection` continua em `lib/client-metrics.ts`, só sem uso
+    nesta página.
+
+    **Bloco 1 — Investimento do mês** (`month-investment-summary.tsx`,
+    novo): planejado, realizado, % realizado, % esperado, diferença em R$
+    pro ritmo esperado e situação (Dentro/Acima/Abaixo/Sem planejamento — a
+    mesma nomenclatura da Etapa 53, nunca "Bateu meta"). Reaproveita
+    `AgencyInvestmentBar` (já usada na Visão Geral e em Relatórios — nenhuma
+    barra nova) no lugar do gráfico removido. Nenhum cálculo novo: os
+    mesmos `monthPlanned`/`monthActual`/`monthExpectedToDate`/`monthStatus`
+    de sempre (`sumPlannedForMonth`/`sumActualSpendForMonth`/
+    `sumExpectedToDateForMonth`/`classifySpendStatus`). `MonthlyBudgetPanel`
+    (edição de orçamento) continua logo abaixo, mesmo componente e mesma
+    regra de sempre.
+
+    **Bloco 2 — Acompanhamento operacional**: "Última execução operacional"
+    (Etapa 15: tarefa criada/concluída/editada/comentada ou sprint
+    comentada — nunca sync do Meta ou login) integrada ao cabeçalho da
+    própria seção em vez de card isolado; texto local "Sem registro" no
+    lugar de "Nunca" (só aqui — `formatLastActivityLabel`/
+    `formatLastOptimizationLabel` continuam retornando o texto de sempre
+    pra quem mais os usa, Visão Geral inclusive). `computeOperationalTracking`
+    (`lib/operational-tracking.ts`) ganhou a detecção que faltava: uma
+    tarefa atrasada (nunca concluída) agora sempre vence uma futura como
+    "próxima" — antes ficava invisível, sem aparecer nem como última nem
+    como próxima; a UI marca esse caso com "(atrasada)" em âmbar.
+
+    **Bloco 3 — Prioridades** (antes "Atenção", `attention-panel.tsx`): só o
+    rótulo mudou — a lógica de severidade/agrupamento (`buildAttentionAlerts`,
+    `KIND_PRIORITY`) já existia e já limitava a 3 visíveis com "Ver
+    todas as N" (só o texto do link foi ajustado); nenhum score novo.
+
+    **Bloco 4 — Sprint atual**: passa a mostrar só a sprint com
+    `temporalStatus === "atual"` (regra central da Etapa 53), nunca todas
+    juntas. Se nenhuma existir, mensagem explícita em vez de escolher
+    qualquer uma. Mesmo `SprintCard` de sempre, mesmas ações.
+
+    **Bloco 5 — Histórico do mês** (novo): as demais sprints do mês
+    (concluídas e futuras), recolhidas por padrão (`defaultOpen={false}`) —
+    cada uma já mostra seu próprio selo temporal (Concluída/Futura), sem
+    repetir a sprint atual.
+
+    **Testes**: não há suíte automatizada neste projeto. Confirmado
+    manualmente: os 4 cards antigos, a projeção e o gráfico não aparecem
+    mais; investimento/realizado/esperado/diferença continuam batendo com
+    os mesmos números de antes (nenhuma fonte de dado trocada); existe
+    sempre no máximo uma "Sprint atual" (mesma garantia de
+    `assertSingleCurrentSprint` da Etapa 53); tarefas, comentários e ações
+    da sprint continuam funcionando (mesmo componente); informações
+    essenciais continuam acessíveis, sem mudança de posição relativa às
+    outras seções secundárias. `tsc --noEmit`, lint e build sem erros.
+
+    Arquivos novos: `app/clients/month-investment-summary.tsx`. Removidos:
+    `app/clients/client-metrics-cards.tsx`, `app/clients/spend-chart.tsx`,
+    `lib/spend-chart-data.ts`. Alterados: `app/clients/[id]/page.tsx`,
+    `app/clients/attention-panel.tsx`, `app/clients/operational-tracking-panel.tsx`,
+    `lib/operational-tracking.ts`.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis
