@@ -2,7 +2,13 @@ import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
-import { currentMonthRange, monthRangeFromParam, shiftMonthParam } from "@/lib/sprint-financials";
+import {
+  currentMonthRange,
+  findSprintForDate,
+  isDateWithinPeriod,
+  monthRangeFromParam,
+  shiftMonthParam,
+} from "@/lib/sprint-financials";
 import { formatFullDate, formatMonthLabel } from "@/lib/format";
 import {
   sortAccountsByPriority,
@@ -147,7 +153,7 @@ export default async function SprintsPage({
   const clientIds = (clients ?? []).map((c) => c.id);
   const allSprintIds = (sprints ?? []).map((s) => s.id);
   const currentSprintIds = (sprints ?? [])
-    .filter((s) => s.start_date <= todayStr && s.end_date >= todayStr)
+    .filter((s) => isDateWithinPeriod(todayStr, s.start_date, s.end_date))
     .map((s) => s.id);
 
   // Comentários de TODAS as sprints visíveis, buscados em lote uma única vez
@@ -243,7 +249,7 @@ export default async function SprintsPage({
 
   const rawClients: OperationClientRawData[] = (clients ?? []).map((client) => {
     const clientSprints = sprintsByClient.get(client.id) ?? [];
-    const currentSprint = clientSprints.find((s) => s.start_date <= todayStr && s.end_date >= todayStr);
+    const currentSprint = findSprintForDate(clientSprints, todayStr);
 
     return {
       id: client.id,

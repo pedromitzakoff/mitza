@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
-import { currentMonthRange } from "@/lib/sprint-financials";
+import { currentMonthRange, findSprintForDate } from "@/lib/sprint-financials";
 import { buildOperationClientCard, type OperationClientRawData } from "@/app/operation/operation-data";
 import { ClientContextBar } from "../client-context-bar";
 
@@ -83,7 +83,7 @@ export default async function ClientLayout({
       .lte("date", lastDay),
   ]);
 
-  const currentSprint = (sprints ?? []).find((s) => s.start_date <= todayStr && s.end_date >= todayStr);
+  const currentSprint = findSprintForDate(sprints ?? [], todayStr);
 
   const { data: sprintActivity } = currentSprint
     ? await supabase

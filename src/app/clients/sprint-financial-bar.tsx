@@ -29,9 +29,15 @@ export function SprintFinancialBar({ sprint }: { sprint: SprintFinancials }) {
   const markerPos = Math.min(Math.max(expectedPct, 1), 99);
   const isOver = actualPct > 100;
   const ppDiff = Math.round(Math.abs(actualPct - expectedPct));
+  // Sprint que ainda não começou: nunca "Dentro do ritmo esperado" (0
+  // gasto vs 0 esperado não é sucesso, é só ausência de dados ainda) — o
+  // marcador de esperado some (não faz sentido marcar 0% como referência)
+  // e a legenda vira neutra.
+  const notStarted = status === "nao_iniciado";
 
-  const ritmoText =
-    status === "acima"
+  const ritmoText = notStarted
+    ? "Período ainda não iniciado"
+    : status === "acima"
       ? `${ppDiff} p.p. acima do ritmo`
       : status === "abaixo"
         ? `${ppDiff} p.p. abaixo do ritmo`
@@ -49,15 +55,16 @@ export function SprintFinancialBar({ sprint }: { sprint: SprintFinancials }) {
             title={`Gasto real\n${formatCurrency(actualSpend)}\n${Math.round(actualPct)}% do planejado`}
           />
         </div>
-        <div
-          className="absolute top-1/2 h-2.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-zinc-700 dark:bg-zinc-300"
-          style={{ left: `${markerPos}%` }}
-          title={`Esperado até hoje\n${formatCurrency(expectedToDate)}\n${Math.round(expectedPct)}% do planejado`}
-        />
+        {!notStarted && (
+          <div
+            className="absolute top-1/2 h-2.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-zinc-700 dark:bg-zinc-300"
+            style={{ left: `${markerPos}%` }}
+            title={`Esperado até hoje\n${formatCurrency(expectedToDate)}\n${Math.round(expectedPct)}% do planejado`}
+          />
+        )}
       </div>
       <p className="mt-0.5 text-[11px] text-muted-foreground">
-        {Math.round(actualPct)}% gasto · {Math.round(expectedPct)}% esperado até hoje
-        {ritmoText ? ` · ${ritmoText}` : ""}
+        {notStarted ? ritmoText : `${Math.round(actualPct)}% gasto · ${Math.round(expectedPct)}% esperado até hoje${ritmoText ? ` · ${ritmoText}` : ""}`}
       </p>
     </div>
   );

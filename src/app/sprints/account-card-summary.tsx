@@ -13,6 +13,7 @@ export const PERIOD_STATUS_LABEL: Record<FinancialPeriodSummary["status"], strin
   acima: "Acima do ritmo",
   abaixo: "Abaixo do ritmo",
   sem_meta: "Sem planejamento",
+  nao_iniciado: "Ainda não iniciada",
 };
 
 const OPERATIONAL_TONE_CLASSES = {

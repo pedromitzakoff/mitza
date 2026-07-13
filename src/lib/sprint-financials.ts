@@ -81,6 +81,86 @@ function parseDateUTC(value: string): Date {
   return new Date(`${value}T00:00:00Z`);
 }
 
+/** Compara datas civis YYYY-MM-DD por ordem lexicográfica (sem nenhuma
+ * conversão de timezone) — `date` pertence ao período `[startDate, endDate]`,
+ * ambos inclusivos. Fonte única pra "essa data está dentro desse período?",
+ * reaproveitada por `findSprintForDate` e por qualquer tela que precise da
+ * mesma pergunta, pra nunca duplicar essa comparação. */
+export function isDateWithinPeriod(date: string, startDate: string, endDate: string): boolean {
+  return date >= startDate && date <= endDate;
+}
+
+/** Encontra, numa lista de sprints, aquela cujo período contém `date`
+ * (normalmente `todayDateString()`) — a "sprint atual" de um cliente.
+ * Fonte única: antes esse mesmo filtro (`start_date <= todayStr && end_date
+ * >= todayStr`) estava duplicado em 4 páginas diferentes (Visão Geral,
+ * Sprints, /clients, layout do cliente); agora todas chamam esta função. */
+export function findSprintForDate<T extends { start_date: string; end_date: string }>(
+  sprints: T[],
+  date: string,
+): T | null {
+  return sprints.find((sprint) => isDateWithinPeriod(date, sprint.start_date, sprint.end_date)) ?? null;
+}
+
+/**
+ * Status temporal de UMA sprint — concluída (já terminou), atual (hoje cai
+ * dentro do período, os dois limites inclusivos) ou futura (ainda não
+ * começou). Único lugar que faz essa comparação: `today` e as bordas da
+ * sprint (`start`/`end`) precisam ser o MESMO tipo de valor (meia-noite UTC
+ * do dia civil no fuso da agência, via `todayUTC()`) — passar um `today` que
+ * seja um instante real (`new Date()` puro, sem passar por `todayUTC()`)
+ * quebra esta conta character durante a janela em que o UTC já virou o dia
+ * seguinte mas ainda é o dia anterior em São Paulo (21h–23h59 no horário de
+ * verão desligado, já que o Brasil é UTC-3).
+ */
+export function getSprintTemporalStatus(
+  sprint: { start_date: string; end_date: string },
+  today: Date,
+): SprintTemporalStatus {
+  const start = parseDateUTC(sprint.start_date);
+  const end = parseDateUTC(sprint.end_date);
+  return today < start ? "futura" : today > end ? "concluida" : "atual";
+}
+
+/** Confirma que no máximo uma sprint da lista está "atual" — nunca duas ao
+ * mesmo tempo. Isso só pode acontecer se os próprios dados tiverem sprints
+ * sobrepostas (o que a constraint `sprints_no_overlap`, Etapa 50, já deveria
+ * impedir no banco); esta função é uma segunda camada de defesa, puramente
+ * de diagnóstico — nunca lança exceção pra não derrubar a página, só avisa
+ * no console em desenvolvimento. */
+export function assertSingleCurrentSprint(
+  sprints: { start_date: string; end_date: string }[],
+  today: Date,
+): void {
+  if (process.env.NODE_ENV === "production") return;
+  const current = sprints.filter((sprint) => getSprintTemporalStatus(sprint, today) === "atual");
+  if (current.length > 1) {
+    console.warn(
+      `[sprint-financials] ${current.length} sprints simultaneamente "atual" — dados com sobreposição:`,
+      current.map((s) => `${s.start_date}–${s.end_date}`),
+    );
+  }
+}
+
+/** Classifica o status financeiro de UMA sprint sem nunca misturar status
+ * temporal com status financeiro: uma sprint que ainda não começou é sempre
+ * "nao_iniciado", mesmo que o planejamento já esteja configurado — os
+ * números (realizado=0, esperado=0) NUNCA são interpretados como "dentro do
+ * esperado"/"bateu meta" só porque ainda não há nada pra comparar. Fonte
+ * única usada tanto por `computeSprintFinancials` (cartão da sprint) quanto
+ * por `computeSprintBehaviorRows` (Comportamento por Sprint do Relatório) —
+ * nunca duas implementações dessa regra. */
+export function classifySprintSpendStatus(
+  sprint: { start_date: string; end_date: string },
+  actual: number,
+  expected: number,
+  plannedTotal: number,
+  today: Date,
+): SpendStatus {
+  if (getSprintTemporalStatus(sprint, today) === "futura") return "nao_iniciado";
+  return classifySpendStatus(actual, expected, plannedTotal);
+}
+
 /**
  * Gasto esperado até hoje de UMA sprint, proporcional aos dias já passados
  * dentro dela: sprint futura = R$ 0; sprint encerrada = 100% do planejado;
@@ -113,7 +193,8 @@ export function sumExpectedToDate(
 
 /**
  * Calcula o financeiro de uma sprint: gasto esperado até hoje, status
- * (dentro/acima/abaixo) e % de progresso da barra (gasto / planejado).
+ * (dentro/acima/abaixo/não iniciado/sem planejamento) e % de progresso da
+ * barra (gasto / planejado).
  */
 export function computeSprintFinancials(
   sprint: { id: string; start_date: string; end_date: string; planned_spend: number },
@@ -121,14 +202,10 @@ export function computeSprintFinancials(
   today: Date = todayUTC(),
   spendSource: SpendSource = "meta_api",
 ): SprintFinancials {
-  const start = parseDateUTC(sprint.start_date);
-  const end = parseDateUTC(sprint.end_date);
-
   const expectedToDate = computeSprintExpectedToDate(sprint, today);
-  const status = classifySpendStatus(actualSpend, expectedToDate, sprint.planned_spend);
+  const status = classifySprintSpendStatus(sprint, actualSpend, expectedToDate, sprint.planned_spend, today);
   const progressPct = sprint.planned_spend > 0 ? (actualSpend / sprint.planned_spend) * 100 : 0;
-  const temporalStatus: SprintTemporalStatus =
-    today < start ? "futura" : today > end ? "concluida" : "atual";
+  const temporalStatus = getSprintTemporalStatus(sprint, today);
 
   return {
     sprintId: sprint.id,

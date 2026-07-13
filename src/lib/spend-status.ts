@@ -1,7 +1,11 @@
 /** Margem de tolerância pra considerar um gasto "dentro do esperado". */
 export const SPEND_STATUS_MARGIN = 0.1; // ±10%
 
-export type SpendStatus = "dentro" | "acima" | "abaixo" | "sem_meta";
+/** "nao_iniciado" é status TEMPORAL disfarçado de financeiro — só existe
+ * pra sprints que ainda não começaram (ver `classifySprintSpendStatus` em
+ * sprint-financials.ts), nunca produzido por esta função (`classifySpendStatus`
+ * lida só com números, sem saber se o período já começou). */
+export type SpendStatus = "dentro" | "acima" | "abaixo" | "sem_meta" | "nao_iniciado";
 
 /**
  * Compara um valor gasto com um valor esperado e classifica dentro da
@@ -36,12 +40,14 @@ export function classifySpendStatus(
 
 /** Rótulo usado quando o status compara com o planejado total (sem
  * prorateio por dia) — painel geral do mês e resumo do mês na página do
- * cliente. */
+ * cliente. Etapa 53: nunca mais "Bateu meta"/"Meta atingida" — o
+ * acompanhamento é de RITMO de investimento, não de conquista de meta. */
 export const SPEND_STATUS_LABEL: Record<SpendStatus, string> = {
-  dentro: "Bateu meta",
+  dentro: "Dentro",
   acima: "Acima",
   abaixo: "Abaixo",
-  sem_meta: "Meta não configurada",
+  sem_meta: "Sem planejamento",
+  nao_iniciado: "Ainda não iniciada",
 };
 
 export const SPEND_STATUS_BADGE_CLASSES: Record<SpendStatus, string> = {
@@ -49,4 +55,5 @@ export const SPEND_STATUS_BADGE_CLASSES: Record<SpendStatus, string> = {
   acima: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
   abaixo: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   sem_meta: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  nao_iniciado: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
 };

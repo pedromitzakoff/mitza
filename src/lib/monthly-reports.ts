@@ -10,8 +10,11 @@ import type {
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { formatCurrency } from "@/lib/format";
 import type { SpendStatus } from "@/lib/spend-status";
-import { classifySpendStatus } from "@/lib/spend-status";
-import { computeSprintExpectedToDate, computeSprintMonthActualSpend } from "@/lib/sprint-financials";
+import {
+  classifySprintSpendStatus,
+  computeSprintExpectedToDate,
+  computeSprintMonthActualSpend,
+} from "@/lib/sprint-financials";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 
 export const MONTHLY_REPORT_STATUS_LABEL: Record<MonthlyReportStatus, string> = {
@@ -182,7 +185,7 @@ export function computeSprintBehaviorRows(
         .reduce((sum, a) => sum + a.amount, 0);
       const actual = computeSprintMonthActualSpend(sprint, monthRange, dailySpend);
       const expectedToDate = computeSprintExpectedToDate(sprint, today);
-      const status = classifySpendStatus(actual, expectedToDate, planned);
+      const status = classifySprintSpendStatus(sprint, actual, expectedToDate, planned, today);
       const pct = planned > 0 ? (actual / planned) * 100 : null;
 
       const sprintTasks = tasks.filter((t) => t.sprint_id === sprint.id);

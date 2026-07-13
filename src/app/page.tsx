@@ -2,7 +2,13 @@ import { Inter } from "next/font/google";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
-import { currentMonthRange, monthRangeFromParam, shiftMonthParam } from "@/lib/sprint-financials";
+import {
+  currentMonthRange,
+  findSprintForDate,
+  isDateWithinPeriod,
+  monthRangeFromParam,
+  shiftMonthParam,
+} from "@/lib/sprint-financials";
 import { formatCurrency, formatMonthLabel } from "@/lib/format";
 import {
   buildOperationClientCard,
@@ -39,6 +45,7 @@ const SITUATION_LABEL: Record<SpendStatus, string> = {
   acima: "Acima",
   abaixo: "Abaixo",
   sem_meta: "Sem planejamento",
+  nao_iniciado: "Ainda não iniciada",
 };
 
 const SITUATION_TONE: Record<SpendStatus, StatusTone> = {
@@ -46,6 +53,7 @@ const SITUATION_TONE: Record<SpendStatus, StatusTone> = {
   acima: "danger",
   abaixo: "warning",
   sem_meta: "neutral",
+  nao_iniciado: "neutral",
 };
 
 type ManagerFilter = "all" | "me" | string;
@@ -150,7 +158,7 @@ export default async function Home({
 
   const clientIds = (clients ?? []).map((c) => c.id);
   const currentSprintIds = (sprints ?? [])
-    .filter((s) => s.start_date <= todayStr && s.end_date >= todayStr)
+    .filter((s) => isDateWithinPeriod(todayStr, s.start_date, s.end_date))
     .map((s) => s.id);
 
   const [{ data: clientActivity }, { data: sprintActivity }] = await Promise.all([
@@ -222,7 +230,7 @@ export default async function Home({
 
   const rawClients: OperationClientRawData[] = (clients ?? []).map((client) => {
     const clientSprints = sprintsByClient.get(client.id) ?? [];
-    const currentSprint = clientSprints.find((s) => s.start_date <= todayStr && s.end_date >= todayStr);
+    const currentSprint = findSprintForDate(clientSprints, todayStr);
 
     return {
       id: client.id,

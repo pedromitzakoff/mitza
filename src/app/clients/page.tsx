@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
-import { currentMonthRange } from "@/lib/sprint-financials";
+import { currentMonthRange, findSprintForDate, isDateWithinPeriod } from "@/lib/sprint-financials";
 import { computeMonthProjection } from "@/lib/client-metrics";
 import { formatCurrency, formatRelationshipDuration } from "@/lib/format";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
@@ -85,7 +85,7 @@ export default async function ClientsPage({
 
   const clientIds = (clients ?? []).map((c) => c.id);
   const currentSprintIds = (sprints ?? [])
-    .filter((s) => s.start_date <= todayStr && s.end_date >= todayStr)
+    .filter((s) => isDateWithinPeriod(todayStr, s.start_date, s.end_date))
     .map((s) => s.id);
 
   const [{ data: clientActivity }, { data: sprintActivity }] = await Promise.all([
@@ -153,7 +153,7 @@ export default async function ClientsPage({
 
   const rawClients: OperationClientRawData[] = (clients ?? []).map((client) => {
     const clientSprints = sprintsByClient.get(client.id) ?? [];
-    const currentSprint = clientSprints.find((s) => s.start_date <= todayStr && s.end_date >= todayStr);
+    const currentSprint = findSprintForDate(clientSprints, todayStr);
 
     return {
       id: client.id,

@@ -1784,6 +1784,94 @@ automático da sync, refinamentos de UX, etc.
     `formatWeekdayAndDate`, que só era usada aqui, foi substituída por
     `formatCompactTaskDate`).
 
+53 ✅ Dois erros na identificação e exibição das sprints.
+
+    **Causa raiz #1 — "Bateu meta" em sprint futura/sem planejamento**:
+    `lib/spend-status.ts` tinha `SPEND_STATUS_LABEL.dentro = "Bateu meta"` —
+    e `classifySpendStatus` tratava um período que ainda não começou
+    (`expected <= 0` com planejamento configurado) como `"dentro"`, já que 0
+    gasto vs. 0 esperado batia matematicamente. Uma sprint futura com
+    orçamento definido caía exatamente nesse ramo e mostrava "Bateu meta".
+
+    **Causa raiz #2 — sprint errada marcada como atual**: `app/clients/[id]/page.tsx`
+    calculava "hoje" com `new Date()` puro (instante real do relógio),
+    diferente de toda outra tela do sistema, que já usa `todayUTC()`
+    (meia-noite UTC do dia civil em `America/Sao_Paulo`, `lib/today.ts`).
+    Como o Brasil é UTC-3, entre ~21h e 23h59 (horário de SP) o relógio UTC
+    real já virou o dia seguinte — nesse intervalo, `new Date()` produzia um
+    "hoje" adiantado em 1 dia, fazendo a sprint 06–12/jul virar "concluída"
+    e a 13–19/jul virar "atual" horas antes do dia realmente virar.
+
+    **Correção — Bloco 1: remover "Bateu meta"**. `spend-status.ts`:
+    `dentro` → **"Dentro"**, `sem_meta` → **"Sem planejamento"** (nunca
+    "Meta não configurada"/"Bateu meta"/"Meta atingida"). Estados
+    financeiros permitidos: Abaixo/Dentro/Acima/Sem planejamento — mais um
+    quinto estado novo, temporal-mas-tratado-como-financeiro, explicado
+    abaixo.
+
+    **Correção — Bloco 2: sprint futura nunca tem classificação financeira
+    normal**. `SpendStatus` ganha `"nao_iniciado"` ("Ainda não iniciada") —
+    só produzido por `classifySprintSpendStatus` (nova, `sprint-financials.ts`),
+    nunca por `classifySpendStatus` (que continua puramente numérica, sem
+    saber se o período já começou). Uma sprint futura mostra 0% gasto, 0%
+    esperado, badge "Ainda não iniciada", saldo "Período ainda não
+    iniciado" e a barra sem marcador — nunca "Dentro"/"Bateu meta".
+
+    **Correção — Bloco 4/5/6/7: uma única regra de sprint atual**.
+    Centralizado em `lib/sprint-financials.ts`:
+    - `isDateWithinPeriod(date, start, end)` — comparação civil YYYY-MM-DD,
+      bordas inclusivas, sem nenhuma conversão de timezone.
+    - `findSprintForDate(sprints, date)` — substitui a mesma expressão
+      `s.start_date <= todayStr && s.end_date >= todayStr` que estava
+      duplicada em 4 arquivos (`app/page.tsx`, `app/sprints/page.tsx`,
+      `app/clients/page.tsx`, `app/clients/[id]/layout.tsx`).
+    - `getSprintTemporalStatus(sprint, today)` — única fonte de
+      concluída/atual/futura, usada por `computeSprintFinancials`.
+    - `classifySprintSpendStatus(sprint, actual, expected, plannedTotal, today)` —
+      única fonte do status financeiro por sprint (futura → sempre
+      "nao_iniciado"), usada tanto por `computeSprintFinancials` (cartão da
+      sprint) quanto por `computeSprintBehaviorRows` (Comportamento por
+      Sprint do Relatório, Etapa 51) — essa segunda função chamava
+      `classifySpendStatus` direto, sem saber se a sprint tinha começado, e
+      também mostraria "Bateu meta" pra sprints futuras dentro do mês do
+      relatório.
+    - `assertSingleCurrentSprint(sprints, today)` — validação de
+      desenvolvimento (não lança exceção, só avisa no console fora de
+      produção) que detecta mais de uma sprint "atual" simultânea — segunda
+      camada de defesa além da constraint `sprints_no_overlap` (Etapa 50).
+
+    **Timezone operacional**: `America/Sao_Paulo`, já centralizado em
+    `lib/today.ts` desde antes desta etapa (`APP_TIMEZONE`) — o problema
+    nunca foi a ausência de uma constante central, foi um único call site
+    (`[id]/page.tsx`) que não a usava. Nenhuma outra tela tinha esse bug —
+    confirmado grepando todo `new Date()` sem argumento no repositório: só
+    havia esse, os demais são todos timestamps reais (`updated_at`,
+    `synced_at`), não "hoje" operacional.
+
+    **Reutilização global**: página do cliente, `/clients`, `/sprints`,
+    Visão Geral e Relatórios (Comportamento por Sprint) passaram a usar as
+    mesmas 4 funções centrais acima — nenhuma tela ficou com sua própria
+    comparação de data ou sua própria regra de status.
+
+    **Testes**: não há suíte automatizada neste projeto. A lógica de data/
+    status foi extraída e executada de verdade num script ad-hoc (não
+    commitado) reproduzindo os dois bugs originais bit a bit (`new Date()`
+    puro às 22h de 12/07 em SP vira 13/07 em UTC → 06–12 "concluída" e
+    13–19 "atual", exatamente o reportado) e confirmando a correção
+    (`todayUTC()` mantém 06–12 "atual" e 13–19 "futura" no mesmo instante),
+    além de bordas inclusivas, virada de mês, virada de ano, planejado
+    zero, sprint concluída sem planejamento (continua "sem_meta", não
+    "nao_iniciado") e ausência de NaN/Infinity em qualquer cenário.
+    `tsc --noEmit`, lint e build sem erros.
+
+    Arquivos alterados: `lib/spend-status.ts`, `lib/sprint-financials.ts`,
+    `lib/monthly-reports.ts`, `app/clients/[id]/page.tsx`,
+    `app/clients/[id]/layout.tsx`, `app/clients/page.tsx`, `app/page.tsx`,
+    `app/sprints/page.tsx`, `app/clients/sprint-card.tsx`,
+    `app/clients/sprint-financial-bar.tsx`, `app/clients/client-metrics-cards.tsx`,
+    `app/reports/page.tsx`, `app/reports/[clientId]/page.tsx`,
+    `app/sprints/account-card-summary.tsx`.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

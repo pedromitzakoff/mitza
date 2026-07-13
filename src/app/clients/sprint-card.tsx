@@ -31,6 +31,7 @@ const DIFFERENCE_TEXT_CLASSES = {
   acima: "text-red-600 dark:text-red-400",
   abaixo: "text-amber-600 dark:text-amber-400",
   sem_meta: "text-foreground",
+  nao_iniciado: "text-muted-foreground",
 } as const;
 
 const EXECUTION_LABEL_CLASSES: Record<"atencao" | "critico" | "neutro", string> = {
@@ -95,11 +96,13 @@ export function SprintCardBody({
 }) {
   const saldo = sprint.plannedSpend - sprint.actualSpend;
   const saldoText =
-    saldo > 0
-      ? `${formatCurrency(saldo)} restantes`
-      : saldo === 0
-        ? "Planejamento atingido"
-        : `${formatCurrency(Math.abs(saldo))} acima do planejado`;
+    sprint.temporalStatus === "futura"
+      ? "Período ainda não iniciado"
+      : saldo > 0
+        ? `${formatCurrency(saldo)} restantes`
+        : saldo === 0
+          ? "Planejamento atingido"
+          : `${formatCurrency(Math.abs(saldo))} acima do planejado`;
 
   const isCurrent = sprint.temporalStatus === "atual";
   const editActualToggleId = `edit-actual-${sprint.sprintId}`;

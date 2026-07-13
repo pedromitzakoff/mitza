@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import {
+  assertSingleCurrentSprint,
   computeSprintEffectiveSpend,
   computeSprintFinancials,
   currentMonthRange,
@@ -20,7 +21,7 @@ import { businessDaysSince } from "@/lib/business-days";
 import { classifyOperationalActivityStatus, formatLastActivityLabel } from "@/lib/operational-activity";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { resolveBudgetEffectiveDate } from "@/lib/monthly-budget";
-import { todayDateString } from "@/lib/today";
+import { todayDateString, todayUTC } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
 import { computeOperationalTracking } from "@/lib/operational-tracking";
 import { ClientMetricsCards } from "../client-metrics-cards";
@@ -132,8 +133,13 @@ export default async function ClientPage({
 
   if (!client) notFound();
 
+  // Etapa 53: "hoje" tinha que ser SEMPRE todayUTC() (meia-noite UTC do dia
+  // civil no fuso America/Sao_Paulo) — usar `new Date()` puro aqui fazia a
+  // sprint atual virar errada bem à noite no Brasil (21h–23h59), quando o
+  // relógio UTC real já tinha virado o dia seguinte mas em São Paulo ainda
+  // era o dia anterior.
   const { firstDay, lastDay } = currentMonthRange();
-  const today = new Date();
+  const today = todayUTC();
   const todayStr = todayDateString();
   const monthParam = firstDay.slice(0, 7);
   const monthLabel = formatMonthLabel(firstDay);
@@ -192,6 +198,7 @@ export default async function ClientPage({
     .eq("client_id", id)
     .maybeSingle();
 
+  assertSingleCurrentSprint(sprints ?? [], today);
   const sprintFinancials = (sprints ?? []).map((sprint) => {
     const actualSpend = computeSprintEffectiveSpend(sprint, dailySpend ?? []);
     return computeSprintFinancials(sprint, actualSpend, today, sprint.spend_source);

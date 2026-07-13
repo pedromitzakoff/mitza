@@ -8,7 +8,8 @@ const PROJECTION_LABEL: Record<SpendStatus, string> = {
   dentro: "No ritmo",
   acima: "Acima",
   abaixo: "Abaixo",
-  sem_meta: "Meta não configurada",
+  sem_meta: "Sem planejamento",
+  nao_iniciado: "Ainda não iniciada",
 };
 
 /** Cor de acento da última atividade — o mesmo sinal que já vira alerta em

@@ -42,6 +42,7 @@ const SITUATION_LABEL = {
   acima: "Acima do esperado",
   abaixo: "Abaixo do esperado",
   sem_meta: "Sem planejamento",
+  nao_iniciado: "Ainda não iniciada",
 } as const;
 
 const TIMELINE_TYPE_LABEL: Record<ReportTimelineEventType, string> = {
