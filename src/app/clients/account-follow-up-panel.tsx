@@ -4,6 +4,9 @@ import { formatLastOptimizationLabel } from "@/lib/monthly-reports";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
 import { CLIENT_UPDATE_STATUS_LABEL, type ClientUpdateStatus } from "@/lib/client-updates";
 import type { AccountReviewCadenceStatus } from "@/lib/account-review-cadence";
+import type { OperationalTrackingRow } from "@/lib/operational-tracking";
+import { completeTaskAction, markTaskNotDoneAction } from "./tasks-actions";
+import { todayDateString } from "@/lib/today";
 import type { AccountReviewOutcome, OptimizationType } from "@/lib/supabase/database.types";
 
 export interface AccountReviewPreviewItem {
@@ -61,15 +64,107 @@ export function ReviewPreviewRow({
   );
 }
 
+const TRACKED_TYPE_LABEL: Record<OperationalTrackingRow["type"], string> = {
+  reuniao: "Próxima reunião",
+  entrega_criativo: "Próxima entrega",
+};
+
+const TRACKED_TYPE_EMPTY_LABEL: Record<OperationalTrackingRow["type"], string> = {
+  reuniao: "Nenhuma reunião agendada",
+  entrega_criativo: "Nenhuma entrega agendada",
+};
+
+const TRACKED_TYPE_SCHEDULE_LABEL: Record<OperationalTrackingRow["type"], string> = {
+  reuniao: "Agendar reunião",
+  entrega_criativo: "Agendar entrega",
+};
+
 /**
- * "ACOMPANHAMENTO DA CONTA" (Etapa 58) — renomeado só na UI a partir de
- * "Análises da conta"/`AccountReviewCadencePanel` (as tabelas `account_reviews`
- * etc. continuam com o mesmo nome no banco). Vira o bloco operacional
- * principal da página: resumo de cadência (mesma lógica pura de
- * `computeAccountReviewCadenceStatus`, sem nenhum cálculo novo aqui) + as 2
- * análises mais recentes (já vêm prontas de `accountReviews.slice(0, 2)` na
- * página, nenhuma query nova) + CTA principal "+ Registrar análise", que
- * antes só existia dentro do card da Sprint.
+ * Célula de reunião/entrega dentro do Acompanhamento da Conta — reaproveita
+ * `computeOperationalTracking` (já existia, movida pra cá de "Rotina do
+ * Cliente", que deixou de existir como bloco separado). Os 5 estados do
+ * pedido (sem agendamento / agendada / data chegou / realizada / não
+ * realizada) mapeiam direto pro que já existe em `tasks`:
+ * - "agendar"/"reagendar" = createTaskAction/updateTaskAction (já existem);
+ * - "marcar como realizada" = completeTaskAction (já existe, já emite
+ *   meeting_completed/creative_delivery_completed);
+ * - "marcar como não realizada" = markTaskNotDoneAction (novo, mesma
+ *   transação atômica, emite meeting_cancelled/creative_delivery_late).
+ * Nunca sobrescreve a ocorrência anterior: "agendar próxima" é sempre uma
+ * tarefa NOVA (createTaskAction), a anterior já resolvida permanece no
+ * histórico de tarefas do cliente.
+ */
+function TrackedOccurrenceCell({
+  row,
+  clientId,
+  returnTo,
+}: {
+  row: OperationalTrackingRow;
+  clientId: string;
+  returnTo: string;
+}) {
+  const scheduleHref = `/clients/${clientId}/tasks/new?type=${row.type}&return_to=${encodeURIComponent(returnTo)}`;
+
+  if (row.nextTaskId === null) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          {TRACKED_TYPE_LABEL[row.type]}
+        </p>
+        <p className="text-sm text-muted-foreground">{TRACKED_TYPE_EMPTY_LABEL[row.type]}</p>
+        <Link href={scheduleHref} scroll={false} className="text-xs font-medium text-brand hover:underline">
+          {TRACKED_TYPE_SCHEDULE_LABEL[row.type]}
+        </Link>
+      </div>
+    );
+  }
+
+  const isDue = row.nextIsOverdue || (row.nextDueDate !== null && row.nextDueDate <= todayDateString());
+  const editHref = `/clients/${clientId}/tasks/${row.nextTaskId}/edit?return_to=${encodeURIComponent(returnTo)}`;
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {TRACKED_TYPE_LABEL[row.type]}
+      </p>
+      <p className={`text-sm ${row.nextIsOverdue ? "font-medium text-red-600 dark:text-red-400" : "text-foreground"}`}>
+        {row.nextDueDate ? formatShortDate(row.nextDueDate) : "—"}
+        {row.nextIsOverdue ? " · atrasada" : " · agendada"}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href={editHref} scroll={false} className="text-xs font-medium text-brand hover:underline">
+          Editar/Reagendar
+        </Link>
+        {isDue && (
+          <>
+            <form action={completeTaskAction.bind(null, row.nextTaskId, clientId)}>
+              <button type="submit" className="text-xs font-medium text-brand hover:underline">
+                Marcar como realizada
+              </button>
+            </form>
+            <form action={markTaskNotDoneAction.bind(null, row.nextTaskId, clientId)}>
+              <button type="submit" className="text-xs font-medium text-muted-foreground hover:underline">
+                Marcar como não realizada
+              </button>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "ACOMPANHAMENTO DA CONTA" — principal bloco operacional da página do
+ * cliente. Absorve reuniões e entregas de criativo (que antes viviam num
+ * bloco separado, "Rotina do cliente", removido da interface — os dados,
+ * tabela e lógica de `tasks`/`computeOperationalTracking` continuam
+ * exatamente os mesmos, só a apresentação muda). "Cadência" e "Intervalo
+ * atual" foram removidos da interface por pedido explícito (funcionalidade
+ * ainda não bem definida operacionalmente) — `account_review_cadences` e
+ * `computeAccountReviewCadenceStatus` continuam existindo por baixo,
+ * intactos, só não são mais exibidos aqui; podem voltar futuramente sem
+ * nenhuma alteração de schema.
  */
 export function AccountFollowUpPanel({
   status,
@@ -79,8 +174,9 @@ export function AccountFollowUpPanel({
   newReviewHref,
   historyHref,
   buildReviewDetailHref,
-  cadenceConfigHref,
-  isAdmin,
+  tracking,
+  clientId,
+  returnTo,
 }: {
   status: AccountReviewCadenceStatus;
   today: Date;
@@ -89,34 +185,14 @@ export function AccountFollowUpPanel({
   newReviewHref: string;
   historyHref: string;
   buildReviewDetailHref: (reviewId: string) => string;
-  cadenceConfigHref: string;
-  isAdmin: boolean;
+  tracking: Record<"reuniao" | "entrega_criativo", OperationalTrackingRow>;
+  clientId: string;
+  returnTo: string;
 }) {
   const lastReviewLabel =
     status.lastReviewedAt === null
       ? "Sem análise registrada"
       : formatLastOptimizationLabel(status.lastReviewedAt.slice(0, 10), today);
-
-  const cadenceStateLabel =
-    status.cadenceGoal === null
-      ? null
-      : status.cadenceMet
-        ? "Em dia"
-        : status.reviewsThisWeek === 0
-          ? "Em risco"
-          : "Atenção";
-
-  const cadenceLabel =
-    status.cadenceGoal === null
-      ? "Sem cadência configurada"
-      : `${status.reviewsThisWeek} de ${status.cadenceGoal} nesta semana${cadenceStateLabel ? ` · ${cadenceStateLabel}` : ""}`;
-
-  const intervalLabel =
-    status.daysSinceLastReview === null
-      ? "Sem análise registrada"
-      : status.daysSinceLastReview === 0
-        ? "Analisada hoje"
-        : `${status.daysSinceLastReview} ${status.daysSinceLastReview === 1 ? "dia útil" : "dias úteis"} sem análise`;
 
   const lastOptimizationLabel =
     status.lastOptimizationType === null
@@ -143,34 +219,17 @@ export function AccountFollowUpPanel({
         </div>
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">
+      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-4">
         <div className="flex flex-col gap-0.5">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Última análise</p>
           <p className="text-sm text-foreground">{lastReviewLabel}</p>
         </div>
         <div className="flex flex-col gap-0.5">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Cadência</p>
-          <p
-            className={`text-sm ${status.cadenceMet === false ? "font-medium text-amber-600 dark:text-amber-400" : "text-foreground"}`}
-          >
-            {cadenceLabel}
-          </p>
-          {status.cadenceGoal === null && isAdmin && (
-            <Link href={cadenceConfigHref} className="text-[11px] font-medium text-brand hover:underline">
-              Configurar
-            </Link>
-          )}
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Intervalo atual</p>
-          <p className={`text-sm ${status.isOverdue ? "font-medium text-red-600 dark:text-red-400" : "text-foreground"}`}>
-            {intervalLabel}
-          </p>
-        </div>
-        <div className="flex flex-col gap-0.5">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Última otimização</p>
           <p className="text-sm text-foreground">{lastOptimizationLabel}</p>
         </div>
+        <TrackedOccurrenceCell row={tracking.reuniao} clientId={clientId} returnTo={returnTo} />
+        <TrackedOccurrenceCell row={tracking.entrega_criativo} clientId={clientId} returnTo={returnTo} />
       </div>
 
       <div className="mt-3 border-t border-border pt-1.5">

@@ -32,10 +32,12 @@ export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
   pendente: "Pendente",
   feito: "Feito",
   atrasado: "Atrasado",
+  nao_realizado: "Não realizado",
 };
 
 export const TASK_STATUS_BADGE_CLASSES: Record<TaskStatus, string> = {
   pendente: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
   feito: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
   atrasado: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+  nao_realizado: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
 };

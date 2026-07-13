@@ -28,7 +28,6 @@ import { MonthInvestmentSummary } from "../month-investment-summary";
 import { SprintCard } from "../sprint-card";
 import { TaskList } from "../task-list";
 import { Section } from "../section";
-import { OperationalTrackingPanel } from "../operational-tracking-panel";
 import { AccountFollowUpPanel, type AccountReviewPreviewItem } from "../account-follow-up-panel";
 import { AccountReviewsHistoryDrawer } from "../account-reviews-history-drawer";
 import { EssentialInfoPanel } from "../essential-info-panel";
@@ -257,6 +256,10 @@ export default async function ClientPage({
     sprintId: sprint.sprintId,
     startDate: sprint.startDate,
     endDate: sprint.endDate,
+    spendSource: sprint.spendSource,
+    // actualSpend já É o manual_actual_spend quando spendSource === "manual"
+    // (resolveSprintActualSpend) — nunca precisa buscar esse campo de novo.
+    manualActualSpend: sprint.spendSource === "manual" ? sprint.actualSpend : null,
   }));
   const currentAllocations = (plannedAllocations ?? []).map((row) => ({
     date: row.date,
@@ -507,7 +510,6 @@ export default async function ClientPage({
   const historyDrawerCloseHref = returnTo;
   const reviewsHistoryHref = `${returnTo}?reviewsHistory=1`;
   const buildReviewDetailHref = (reviewId: string) => `${returnTo}?reviewDetail=${reviewId}`;
-  const cadenceConfigHref = `/clients/${client.id}/edit`;
   const openTaskRow = openTaskId ? (tasks ?? []).find((t) => t.id === openTaskId) ?? null : null;
   const openTask: OperationTaskItem | null = openTaskRow
     ? {
@@ -590,8 +592,9 @@ export default async function ClientPage({
           newReviewHref={`${returnTo}?review=new`}
           historyHref={reviewsHistoryHref}
           buildReviewDetailHref={buildReviewDetailHref}
-          cadenceConfigHref={cadenceConfigHref}
-          isAdmin={isAdmin}
+          tracking={operationalTracking}
+          clientId={client.id}
+          returnTo={returnTo}
         />
       </div>
 
@@ -611,6 +614,7 @@ export default async function ClientPage({
           monthLabel={monthLabel}
           sprints={budgetSprints}
           currentAllocations={currentAllocations}
+          dailySpend={dailySpend ?? []}
           monthRange={{ firstDay, lastDay }}
           effectiveDate={effectiveDate}
           isAdmin={isAdmin}
@@ -634,11 +638,6 @@ export default async function ClientPage({
       )}
 
       {/* 4. Restante da página — mesma ordem relativa de sempre. */}
-
-      {/* Rotinas do cliente (Etapa 58: antes "Acompanhamento operacional") */}
-      <div className="mt-3">
-        <OperationalTrackingPanel tracking={operationalTracking} today={today} />
-      </div>
 
       {/* Sprint atual — só a sprint classificada como atual pela regra
           temporal central (getSprintTemporalStatus); nunca escolhida

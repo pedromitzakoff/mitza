@@ -31,6 +31,7 @@ export function MonthInvestmentSummary({
   monthLabel,
   sprints,
   currentAllocations,
+  dailySpend,
   monthRange,
   effectiveDate,
   isAdmin,
@@ -47,6 +48,7 @@ export function MonthInvestmentSummary({
   monthLabel: string;
   sprints: MonthlyBudgetSprintInput[];
   currentAllocations: { date: string; amount: number }[];
+  dailySpend: { date: string; spend: number }[];
   monthRange: { firstDay: string; lastDay: string };
   effectiveDate: string | null;
   isAdmin: boolean;
@@ -96,6 +98,7 @@ export function MonthInvestmentSummary({
                   monthLabel={monthLabel}
                   sprints={sprints}
                   currentAllocations={currentAllocations}
+                  dailySpend={dailySpend}
                   monthRange={monthRange}
                   effectiveDate={effectiveDate}
                 />

@@ -22,10 +22,14 @@ export interface OperationalTrackingRow {
   lastDoneDate: string | null;
   nextDueDate: string | null;
   nextIsOverdue: boolean;
+  /** id da tarefa "próxima" (pendente ou atrasada) — usado pra montar os
+   * links/ações (editar, marcar como realizada/não realizada). null quando
+   * não há nenhuma ocorrência pendente desse tipo. */
+  nextTaskId: string | null;
 }
 
 export function computeOperationalTracking(
-  tasks: { type: TaskType; status: TaskStatus; due_date: string }[],
+  tasks: { id: string; type: TaskType; status: TaskStatus; due_date: string }[],
   today: Date,
 ): Record<TrackedTaskType, OperationalTrackingRow> {
   const types: TrackedTaskType[] = ["reuniao", "entrega_criativo"];
@@ -38,11 +42,14 @@ export function computeOperationalTracking(
     let lastDoneDate: string | null = null;
     let nextDueDate: string | null = null;
     let nextIsOverdue = false;
+    let nextTaskId: string | null = null;
 
     for (const task of ofType) {
       const status = effectiveTaskStatus(task, today);
-      if (status === "feito") {
-        if (!lastDoneDate || task.due_date > lastDoneDate) lastDoneDate = task.due_date;
+      // "não realizado" é terminal igual "feito" — nunca candidata a
+      // "próxima" — mas não conta como lastDoneDate (não aconteceu).
+      if (status === "feito" || status === "nao_realizado") {
+        if (status === "feito" && (!lastDoneDate || task.due_date > lastDoneDate)) lastDoneDate = task.due_date;
         continue;
       }
 
@@ -55,10 +62,11 @@ export function computeOperationalTracking(
       if (beatsCurrent) {
         nextDueDate = task.due_date;
         nextIsOverdue = isOverdue;
+        nextTaskId = task.id;
       }
     }
 
-    result[type] = { type, lastDoneDate, nextDueDate, nextIsOverdue };
+    result[type] = { type, lastDoneDate, nextDueDate, nextIsOverdue, nextTaskId };
   }
 
   return result;

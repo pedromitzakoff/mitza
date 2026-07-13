@@ -32,6 +32,7 @@ export function MonthlyBudgetEditor({
   monthLabel,
   sprints,
   currentAllocations,
+  dailySpend,
   monthRange,
   effectiveDate,
 }: {
@@ -40,6 +41,7 @@ export function MonthlyBudgetEditor({
   monthLabel: string;
   sprints: MonthlyBudgetSprintInput[];
   currentAllocations: { date: string; amount: number }[];
+  dailySpend: { date: string; spend: number }[];
   monthRange: { firstDay: string; lastDay: string };
   effectiveDate: string;
 }) {
@@ -63,11 +65,12 @@ export function MonthlyBudgetEditor({
       computeMonthlyBudgetRedistribution({
         sprints,
         currentAllocations: allocationsMap,
+        dailySpend,
         monthRange,
         effectiveDate,
         newBudget,
       }),
-    [sprints, allocationsMap, monthRange, effectiveDate, newBudget],
+    [sprints, allocationsMap, dailySpend, monthRange, effectiveDate, newBudget],
   );
 
   if (!isOpen) {
@@ -130,8 +133,10 @@ export function MonthlyBudgetEditor({
               <p className="font-semibold text-foreground">Prévia do impacto</p>
               <dl className="mt-1.5 flex flex-col gap-1">
                 <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Planejamento preservado até hoje</dt>
-                  <dd className="tabular-nums text-foreground">{formatCurrency(preview.consolidatedAmount)}</dd>
+                  <dt className="text-muted-foreground">Já investido antes desta alteração</dt>
+                  <dd className="tabular-nums text-foreground">
+                    {formatCurrency(preview.actualSpendBeforeEffectiveDate)}
+                  </dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Saldo futuro atual</dt>
@@ -149,7 +154,7 @@ export function MonthlyBudgetEditor({
 
               {preview.isBelowConsolidated && (
                 <p className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                  Excedente histórico: o consolidado até hoje já é maior que o novo orçamento. Nenhum dia futuro
+                  Excedente histórico: o que já foi investido é maior que o novo orçamento. Nenhum dia futuro
                   recebe planejamento até o próximo ajuste.
                 </p>
               )}

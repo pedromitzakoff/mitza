@@ -1,7 +1,7 @@
 export type UserRole = "admin" | "gestor";
 
 export type TaskType = "otimizacao" | "verificacao_saldo" | "report" | "outro" | "reuniao" | "entrega_criativo";
-export type TaskStatus = "pendente" | "feito" | "atrasado";
+export type TaskStatus = "pendente" | "feito" | "atrasado" | "nao_realizado";
 export type TaskRecurrence = "nenhuma" | "diaria" | "semanal" | "mensal";
 
 export type CommentableType = "sprint" | "task";
@@ -1636,6 +1636,18 @@ export interface Database {
           correlationId: string;
           wasOnTime: boolean;
           delaySeconds: number;
+        };
+      };
+      mark_task_not_done_and_record_event: {
+        Args: {
+          p_task_id: string;
+          p_actor_team_member_id: string;
+          p_actor_auth_user_id: string | null;
+          p_source?: OperationalEventSource;
+        };
+        Returns: {
+          status: string;
+          resolvedAt: string;
         };
       };
       record_account_review: {
