@@ -61,6 +61,7 @@ export function TaskRow({
 }) {
   const effectiveStatus = effectiveTaskStatus(task);
   const isDone = effectiveStatus === "feito";
+  const isNotDone = effectiveStatus === "nao_realizado";
   const isOverdue = effectiveStatus === "atrasado";
   const isToday = task.due_date === todayDateString();
   const isFuture = effectiveStatus === "pendente" && !isToday && task.due_date > todayDateString();
@@ -72,7 +73,7 @@ export function TaskRow({
       ? "text-brand"
       : "text-muted-foreground";
 
-  const rowOpacityClass = isDone ? "opacity-60" : isFuture ? "opacity-70" : "";
+  const rowOpacityClass = isDone || isNotDone ? "opacity-60" : isFuture ? "opacity-70" : "";
 
   return (
     <li className="border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
@@ -80,6 +81,14 @@ export function TaskRow({
         {isDone ? (
           <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none text-green-700 dark:bg-green-950 dark:text-green-300">
             ✓
+          </span>
+        ) : isNotDone ? (
+          <span
+            aria-label="Não realizado"
+            title="Não realizado"
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[10px] leading-none text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+          >
+            ×
           </span>
         ) : (
           <form action={completeTaskAction.bind(null, task.id, clientId)}>
@@ -119,6 +128,11 @@ export function TaskRow({
           )}
           {!isDone && !isOverdue && isToday && (
             <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">Hoje</span>
+          )}
+          {isNotDone && (
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+              Não realizado
+            </span>
           )}
         </span>
 

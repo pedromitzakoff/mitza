@@ -10,10 +10,11 @@ export default async function NewTaskPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; sprintId?: string }>;
+  searchParams: Promise<{ error?: string; sprintId?: string; type?: string; return_to?: string }>;
 }) {
   const { id } = await params;
-  const { error, sprintId } = await searchParams;
+  const { error, sprintId, type: typeParam, return_to: returnTo } = await searchParams;
+  const defaultType = typeParam && typeParam in TASK_TYPE_LABEL ? typeParam : "outro";
 
   const supabase = await createSupabaseClient();
 
@@ -65,6 +66,7 @@ export default async function NewTaskPage({
         )}
 
         {sprint && <input type="hidden" name="sprint_id" value={sprint.id} />}
+        {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
 
         <label className="flex flex-col gap-1 text-sm text-zinc-700 dark:text-zinc-300">
           Título
@@ -79,7 +81,7 @@ export default async function NewTaskPage({
           Tipo
           <select
             name="type"
-            defaultValue="outro"
+            defaultValue={defaultType}
             className="rounded-md border border-zinc-300 px-3 py-2 text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           >
             {Object.entries(TASK_TYPE_LABEL).map(([value, label]) => (

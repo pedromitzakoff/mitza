@@ -275,6 +275,48 @@ export async function completeTaskAction(taskId: string, clientId: string) {
 }
 
 /**
+ * Marca uma reunião ou entrega de criativo como NÃO realizada — terceiro
+ * estado terminal (nem "feito" nem "atrasado" pra sempre), espelhando
+ * completeTaskAction: status + evento operacional gravados atomicamente na
+ * mesma RPC (mark_task_not_done_and_record_event). Só existe pra
+ * reuniao/entrega_criativo (a própria RPC recusa outros tipos) — nunca
+ * escreve completed_at, só resolved_at, pra não inflar o indicador
+ * "Tarefas concluídas" da Visão Geral com tarefas que não foram concluídas.
+ */
+export async function markTaskNotDoneAction(taskId: string, clientId: string) {
+  const supabase = await createSupabaseClient();
+  const profile = await getCurrentProfile();
+
+  if (!profile) {
+    redirect(`/clients/${clientId}?taskError=${encodeURIComponent("Sessão expirada, faça login de novo")}`);
+  }
+
+  const { error: rpcError } = await supabase.rpc("mark_task_not_done_and_record_event", {
+    p_task_id: taskId,
+    p_actor_team_member_id: profile.id,
+    p_actor_auth_user_id: profile.authUserId,
+    p_source: "web",
+  });
+
+  if (rpcError) {
+    redirect(`/clients/${clientId}?taskError=${encodeURIComponent(rpcError.message)}`);
+  }
+
+  await logOperationalActivity(supabase, {
+    clientId,
+    sprintId: null,
+    taskId,
+    userId: profile.id,
+    activityType: "task_updated",
+  });
+
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/operation");
+  revalidatePath("/sprints");
+  revalidatePath("/clients");
+}
+
+/**
  * Exclusão definitiva de tarefa — só admin (gestor não tem acesso a esta
  * action nem vê o botão na UI). Diferente de clientes (soft delete, pra
  * preservar histórico comercial), tarefa é um item operacional do dia a dia:
