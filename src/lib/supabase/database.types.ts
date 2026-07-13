@@ -1054,16 +1054,11 @@ export interface Database {
           isBelowConsolidated: boolean;
         };
       };
-      ensure_weekly_sprints: {
+      ensure_client_sprints: {
         Args: {
           p_client_id: string;
-          p_today: string;
-          p_horizon_weeks?: number;
+          p_horizon_months?: number;
         };
-        Returns: void;
-      };
-      backfill_weekly_sprints: {
-        Args: Record<PropertyKey, never>;
         Returns: void;
       };
     };

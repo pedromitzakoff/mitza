@@ -1503,6 +1503,111 @@ automático da sync, refinamentos de UX, etc.
     consistência). Nenhuma mudança de design, fonte, cor ou identidade
     visual — só arquitetura, dados e cálculo.
 
+50.1 ✅ Correção crítica: a geração de sprints das duas rodadas anteriores
+    ficou com **duas regras simultaneamente ativas** — a antiga
+    (`generate_sprints_for_month`, blocos 1–7/8–14/15–21/22–28/29-fim, já
+    tinha gerado sprints pra este mês antes desta etapa existir) e a nova
+    (`ensure_weekly_sprints`, semanas segunda-domingo) rodaram por cima uma
+    da outra sem nenhuma verificação de sobreposição — a única proteção
+    existente (`unique(client_id, start_date)`) só barra duas sprints com
+    o MESMO dia de início, nunca duas com datas diferentes que se cruzam.
+    Resultado real reportado: 9 sprints em julho/2026 (5 blocos antigos +
+    4 semanas novas), com dias se repetindo em até duas sprints e duas
+    sprints classificadas como "atual" ao mesmo tempo.
+
+    **Regra de calendário única e definitiva**, verificada executando a
+    lógica (não só lendo o código) contra ~20 meses diferentes — início em
+    qualquer dia da semana, fevereiro bissexto e não bissexto, meses de
+    28/29/30/31 dias (script em `scratchpad/verify-calendar.mjs`, resultado
+    completo na entrega desta correção):
+    - primeiro período: dia 1 do mês até o domingo seguinte (parcial se o
+      mês não começar numa segunda);
+    - períodos do meio: sempre segunda a domingo, 7 dias;
+    - último período: da última segunda-feira até o fim do mês (parcial se
+      o mês não terminar num domingo);
+    - nenhuma lacuna, nenhuma sobreposição, nenhuma sprint atravessa mês.
+    Para julho/2026: exatamente 5 sprints — 01–05, 06–12, 13–19, 20–26,
+    27–31.
+
+    **Migration** (`supabase/sprint-calendar-reconciliation.sql`, roda
+    depois de `sprint-month-boundary-fix.sql`):
+    - `compute_month_sprint_periods(year, month)`: a única fonte da regra
+      de calendário — todo o resto do sistema (geração e reconciliação)
+      usa essa mesma função, nunca reimplementa o cálculo.
+    - `reconcile_client_month_sprints`/`reconcile_all_client_sprints`:
+      detecta automaticamente todo cliente/mês com sobreposição real (não
+      mexe em meses históricos que só têm o formato antigo sem conflito —
+      esses continuam preservados como estavam) e consolida pro calendário
+      canônico. Tarefas são reatribuídas pelo próprio `due_date` (nunca
+      pela sprint antiga); alocações de planejado (`sprint_planned_allocations`)
+      são reatribuídas pela própria `date` — ambas já granulares por dia,
+      então a soma financeira do mês é preservada exatamente, sem inventar
+      nenhuma distribuição nova. Comentários e gasto manual
+      (`manual_actual_spend`), que não têm granularidade diária, vão pro
+      período canônico que contém a data de início do bloco antigo — uma
+      aproximação documentada (RAISE NOTICE avisa quando isso acontece,
+      pra revisão manual em "Editar gasto real"). Nenhum registro é
+      apagado antes de seus dados serem migrados; no pior caso (uma
+      tarefa cujo `due_date` não bate com nenhum período do mês, o que não
+      deveria acontecer em uso normal) a tarefa fica sem sprint vinculada
+      (`sprint_id = null`, `on delete set null` na FK) em vez de ser
+      apagada — sempre visível em "Outras tarefas".
+    - **Proteção de banco real contra sobreposição**: a constraint
+      `unique(client_id, start_date)` nunca impedia dois intervalos
+      diferentes se cruzarem — só valores idênticos. Adicionada uma
+      `exclude using gist (client_id with =, date_range with &&)` (extensão
+      `btree_gist`, coluna gerada `date_range`) que bloqueia fisicamente
+      qualquer INSERT/UPDATE que crie sobreposição, não importa qual código
+      tente fazer isso no futuro.
+    - `generate_sprints_for_month`/`generate_next_month_sprints` (blocos de
+      dia): **removidas de vez** (não só paradas de chamar) — elas serem
+      mantidas como funções chamáveis foi exatamente a causa raiz desta
+      correção ("duas regras ativas"). `ensure_weekly_sprints`/
+      `backfill_weekly_sprints` também removidas, substituídas por
+      `ensure_client_sprints` (mesma regra única de calendário).
+    - Validação (`validate_client_sprint_calendar`) roda ao final da
+      migration pra todo cliente — se sobrar qualquer sobreposição ou
+      sprint atravessando mês, a migration para com erro em vez de deixar
+      o banco parcialmente corrigido.
+
+    **Geração deixa de rodar durante o carregamento de página** (Etapa 50
+    original chamava `ensure_weekly_sprints` a cada visita a `/clients/[id]`
+    — a própria leitura da página gerando registros repetidamente, prática
+    que este pedido identificou como incorreta). Removido de
+    `app/clients/[id]/layout.tsx` e `app/clients/[id]/page.tsx`; a geração
+    contínua agora só acontece via `GET /api/cron/ensure-sprints`
+    (`lib/sprint-generation.ts`, mesmo padrão de `/api/cron/sync-meta`) —
+    chamada manual ou por cron externo, nunca client-side, nunca dentro de
+    um Server Component de página.
+
+    **Distribuição financeira**: como o planejado já é granular por dia
+    (`sprint_planned_allocations`) e a reconciliação move essas linhas (não
+    recria), o total do orçamento do mês é preservado exatamente — nenhuma
+    duplicação, nenhuma perda. `apply_monthly_budget_change` (correção
+    anterior) já distribui por dia e soma por sprint automaticamente, então
+    sprints de tamanho variável (5/7/7/7/5 dias) já recebem
+    `orçamento_diário × dias_da_sprint` sem precisar de nenhuma mudança
+    nova aqui.
+
+    **Testes**: não há suíte automatizada de testes neste projeto (mesma
+    situação de todas as etapas anteriores). A lógica de calendário foi
+    verificada executando (não só lendo) o algoritmo em
+    `scratchpad/verify-calendar.mjs` contra os casos pedidos — janeiro
+    (início em dia útil), meses começando numa segunda, meses começando
+    num domingo, fevereiro bissexto (2024) e não bissexto (2026), meses de
+    28/29/30/31 dias — todos passaram (sem lacuna, sem sobreposição, sem
+    sprint atravessando mês, soma de dias = dias do mês, primeiro/último
+    período correto). A reconciliação de dados (migração de tarefas/
+    alocações/comentários) **não pôde ser executada aqui** — este ambiente
+    não tem acesso à base Supabase real; ao rodar a migration, o próprio
+    SQL Editor mostra um relatório linha a linha (RAISE NOTICE) do que foi
+    movido/removido para os dados reais.
+
+    Arquivos novos: `supabase/sprint-calendar-reconciliation.sql`,
+    `lib/sprint-generation.ts`, `app/api/cron/ensure-sprints/route.ts`.
+    Alterados: `app/clients/[id]/layout.tsx`, `app/clients/[id]/page.tsx`,
+    `lib/sprint-week.ts` (comentário), `lib/supabase/database.types.ts`.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

@@ -133,10 +133,8 @@ export default async function ClientPage({
   const monthParam = firstDay.slice(0, 7);
   const monthLabel = formatMonthLabel(firstDay);
 
-  // Auto-cura (Etapa 50): garante que a semana atual (+ 4 à frente) já
-  // existe pra este cliente, sem depender de cron externo nenhum.
-  await supabase.rpc("ensure_weekly_sprints", { p_client_id: id, p_today: todayStr, p_horizon_weeks: 4 });
-
+  // Etapa 50 (correção): a geração de sprints não roda mais durante o
+  // carregamento da página — só via /api/cron/ensure-sprints.
   const [
     { data: sprints },
     { data: dailySpend },

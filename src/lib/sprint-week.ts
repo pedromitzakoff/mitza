@@ -3,8 +3,9 @@
  * domingo) — nunca mais um bloco fixo de dias do mês (1-7, 8-14...). Uma
  * sprint nunca atravessa a fronteira do mês: quando a semana cruzaria a
  * virada, ela é cortada no último dia do mês e uma nova sprint começa no
- * dia 1 do mês seguinte (ver `ensure_weekly_sprints` em
- * supabase/weekly-sprints.sql / supabase/sprint-month-boundary-fix.sql).
+ * dia 1 do mês seguinte (regra única em `compute_month_sprint_periods`,
+ * gerada por `ensure_client_sprints` — ver
+ * supabase/sprint-calendar-reconciliation.sql).
  */
 
 function parseDateString(value: string): Date {

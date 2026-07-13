@@ -40,12 +40,10 @@ export default async function ClientLayout({
   const todayStr = todayDateString();
   const { firstDay, lastDay } = currentMonthRange(today);
 
-  // Auto-cura (Etapa 50): garante que a semana atual (+ 4 à frente) já
-  // existe pra este cliente, sem depender de nenhum cron externo — não
-  // existia agendamento automático nenhum pra isso antes (só rodava via SQL
-  // manual). Idempotente e barato (on conflict do nothing).
-  await supabase.rpc("ensure_weekly_sprints", { p_client_id: id, p_today: todayStr, p_horizon_weeks: 4 });
-
+  // Etapa 50 (correção): a geração de sprints NÃO roda mais durante o
+  // carregamento da página (rodava aqui antes e causou geração duplicada
+  // por cima de sprints já existentes) — agora só acontece sob demanda via
+  // /api/cron/ensure-sprints, numa operação controlada no servidor.
   const [
     { data: managers },
     { data: sprints },
