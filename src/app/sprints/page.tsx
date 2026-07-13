@@ -111,6 +111,8 @@ export default async function SprintsPage({
     { data: sprints },
     { data: dailySpend },
     { data: tasks },
+    { data: plannedAllocations },
+    { data: manualSpendByMonth },
   ] = await Promise.all([
     supabase
       .from("clients")
@@ -119,11 +121,13 @@ export default async function SprintsPage({
       .order("name"),
     supabase.from("client_managers").select("client_id, user_id, profiles(id, name)"),
     supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
+    // Sobreposição com a janela (não "começa na janela") — sprint que
+    // atravessa mês precisa ser encontrada mesmo com start_date fora dela.
     supabase
       .from("sprints")
       .select("id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
-      .gte("start_date", rangeStart)
-      .lte("start_date", rangeEnd),
+      .lte("start_date", rangeEnd)
+      .gte("end_date", rangeStart),
     supabase
       .from("daily_spend")
       .select("client_id, date, spend, synced_at")
@@ -134,6 +138,16 @@ export default async function SprintsPage({
       .select(
         "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:profiles!tasks_assignee_id_fkey(name)",
       ),
+    supabase
+      .from("sprint_planned_allocations")
+      .select("client_id, sprint_id, date, planned_amount")
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd),
+    supabase
+      .from("sprint_manual_spend_by_month")
+      .select("client_id, sprint_id, month_start, amount")
+      .gte("month_start", rangeStart)
+      .lte("month_start", rangeEnd),
   ]);
 
   const clientIds = (clients ?? []).map((c) => c.id);
@@ -220,6 +234,20 @@ export default async function SprintsPage({
     tasksByClient.set(t.client_id, list);
   }
 
+  const plannedAllocationsByClient = new Map<string, OperationClientRawData["plannedAllocations"]>();
+  for (const a of plannedAllocations ?? []) {
+    const list = plannedAllocationsByClient.get(a.client_id) ?? [];
+    list.push({ date: a.date, sprintId: a.sprint_id, amount: a.planned_amount });
+    plannedAllocationsByClient.set(a.client_id, list);
+  }
+
+  const manualSpendByMonthByClient = new Map<string, OperationClientRawData["manualSpendByMonth"]>();
+  for (const m of manualSpendByMonth ?? []) {
+    const list = manualSpendByMonthByClient.get(m.client_id) ?? [];
+    list.push({ sprintId: m.sprint_id, monthStart: m.month_start, amount: m.amount });
+    manualSpendByMonthByClient.set(m.client_id, list);
+  }
+
   const clientActivityById = new Map((clientActivity ?? []).map((r) => [r.client_id, r.last_activity_at]));
   const sprintActivityById = new Map((sprintActivity ?? []).map((r) => [r.sprint_id, r.last_activity_at]));
   const primaryManagerNameByClient = new Map(
@@ -238,6 +266,8 @@ export default async function SprintsPage({
       managerIds: (managersByClient.get(client.id) ?? []).map((m) => m.id),
       sprints: clientSprints,
       dailySpend: dailySpendByClient.get(client.id) ?? [],
+      plannedAllocations: plannedAllocationsByClient.get(client.id) ?? [],
+      manualSpendByMonth: manualSpendByMonthByClient.get(client.id) ?? [],
       tasks: tasksByClient.get(client.id) ?? [],
       clientLastActivityAt: clientActivityById.get(client.id) ?? null,
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
@@ -348,7 +378,7 @@ export default async function SprintsPage({
     task: OperationTaskItem;
     clientId: string;
     clientName: string;
-    sprintNumber: number | null;
+    sprintPeriodLabel: string | null;
     comments: CommentItem[];
   } | null = null;
 
@@ -376,7 +406,7 @@ export default async function SprintsPage({
           task: found,
           clientId: card.clientId,
           clientName: card.clientName,
-          sprintNumber: card.sprintNumber,
+          sprintPeriodLabel: card.sprintPeriodLabel,
           comments: comments ?? [],
         };
         break;
@@ -542,7 +572,7 @@ export default async function SprintsPage({
           task={openTask.task}
           clientId={openTask.clientId}
           clientName={openTask.clientName}
-          sprintNumber={openTask.sprintNumber}
+          sprintPeriodLabel={openTask.sprintPeriodLabel}
           comments={openTask.comments}
           closeHref={buildUrl({ task: "" })}
           returnTo={buildUrl({ task: "" })}

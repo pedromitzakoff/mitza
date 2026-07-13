@@ -38,7 +38,7 @@ export function MonthlyBudgetPanel({
   monthLabel: string;
   totalPlanned: number;
   sprintCount: number;
-  sprints: (MonthlyBudgetSprintInput & { sprintNumber: number })[];
+  sprints: MonthlyBudgetSprintInput[];
   currentAllocations: { date: string; amount: number }[];
   monthRange: { firstDay: string; lastDay: string };
   effectiveDate: string | null;

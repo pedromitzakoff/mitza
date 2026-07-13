@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { createTaskAction } from "../../../tasks-actions";
 import { TASK_RECURRENCE_LABEL, TASK_TYPE_LABEL } from "../../../task-labels";
-import { formatDateRange } from "@/lib/format";
+import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 
 export default async function NewTaskPage({
   params,
@@ -39,18 +39,6 @@ export default async function NewTaskPage({
 
   const assignees = (managers ?? []).flatMap((m) => (m.profiles ? [m.profiles] : []));
 
-  let sprintNumber: number | null = null;
-  if (sprint) {
-    const monthStart = `${sprint.start_date.slice(0, 7)}-01`;
-    const { count } = await supabase
-      .from("sprints")
-      .select("id", { count: "exact", head: true })
-      .eq("client_id", id)
-      .gte("start_date", monthStart)
-      .lte("start_date", sprint.start_date);
-    sprintNumber = count ?? null;
-  }
-
   return (
     <div className="mx-auto max-w-lg px-6 py-12">
       <Link href={`/clients/${id}`} className="text-sm text-zinc-500 hover:underline">
@@ -62,7 +50,7 @@ export default async function NewTaskPage({
       </h1>
       {sprint && (
         <p className="text-sm text-zinc-500">
-          Vinculada à Sprint {sprintNumber} · {formatDateRange(sprint.start_date, sprint.end_date)}
+          Vinculada à semana {formatSprintPeriodLabel(sprint.start_date, sprint.end_date)}
         </p>
       )}
 

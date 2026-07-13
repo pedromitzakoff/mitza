@@ -51,13 +51,13 @@ export function SprintMonthlyBySprintsGroup({
 
       <div className="flex flex-col gap-2 border-t border-border p-3">
         {card.monthSprints.length > 0 ? (
-          card.monthSprints.map((sprint, index) => {
+          card.monthSprints.map((sprint) => {
             const isCurrent = sprint.temporalStatus === "atual";
+            const split = card.monthSprintSplits[sprint.sprintId];
             return (
               <SprintCard
                 key={sprint.sprintId}
                 sprint={sprint}
-                sprintNumber={index + 1}
                 comments={sprintCommentsById.get(sprint.sprintId) ?? []}
                 clientId={card.clientId}
                 isAdmin={isAdmin}
@@ -68,6 +68,7 @@ export function SprintMonthlyBySprintsGroup({
                 defaultOpen={false}
                 openClientHref={`/clients/${card.clientId}`}
                 buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
+                monthSplit={split ? { monthLabel, ...split } : null}
               />
             );
           })

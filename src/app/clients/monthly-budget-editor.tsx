@@ -8,6 +8,7 @@ import {
   type MonthlyBudgetScenario,
   type MonthlyBudgetSprintInput,
 } from "@/lib/monthly-budget";
+import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { applyMonthlyBudgetChangeAction } from "./monthly-budget-actions";
 
 const SCENARIO_CONFIRM_COPY: Record<MonthlyBudgetScenario, string> = {
@@ -37,7 +38,7 @@ export function MonthlyBudgetEditor({
   clientId: string;
   monthParam: string;
   monthLabel: string;
-  sprints: (MonthlyBudgetSprintInput & { sprintNumber: number })[];
+  sprints: MonthlyBudgetSprintInput[];
   currentAllocations: { date: string; amount: number }[];
   monthRange: { firstDay: string; lastDay: string };
   effectiveDate: string;
@@ -155,9 +156,11 @@ export function MonthlyBudgetEditor({
 
               <p className="mt-2 font-medium text-foreground">Sprints afetadas</p>
               <ul className="mt-1 flex flex-col gap-0.5">
-                {preview.sprintPreviews.map((sprint, index) => (
+                {preview.sprintPreviews.map((sprint) => (
                   <li key={sprint.sprintId} className="flex justify-between tabular-nums">
-                    <span className="text-muted-foreground">Sprint {index + 1}</span>
+                    <span className="text-muted-foreground">
+                      {formatSprintPeriodLabel(sprint.startDate, sprint.endDate)}
+                    </span>
                     <span className="text-foreground">
                       {formatCurrency(sprint.previousPlannedSpend)} → {formatCurrency(sprint.newPlannedSpend)}
                     </span>

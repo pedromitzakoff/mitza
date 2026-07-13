@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { currentMonthRange } from "@/lib/sprint-financials";
+import { currentMonthRange, sumPlannedForMonth, type PlannedAllocationRow } from "@/lib/sprint-financials";
 import {
   classifySpendStatus,
   SPEND_STATUS_BADGE_CLASSES,
@@ -16,13 +16,16 @@ export default async function PainelMensalPage() {
   const supabase = await createSupabaseClient();
   const { firstDay, lastDay } = currentMonthRange();
 
-  const [{ data: clients }, { data: sprints }, { data: dailySpend }] = await Promise.all([
+  const [{ data: clients }, { data: plannedAllocations }, { data: dailySpend }] = await Promise.all([
     supabase.from("clients").select("id, name").is("deleted_at", null).order("name"),
+    // Soma direta das alocações diárias no intervalo do mês (Etapa 50) —
+    // não mais `sprint.planned_spend` filtrando sprint por start_date, que
+    // atribuía 100% de uma sprint que atravessa mês ao mês em que começou.
     supabase
-      .from("sprints")
-      .select("client_id, planned_spend")
-      .gte("start_date", firstDay)
-      .lte("start_date", lastDay),
+      .from("sprint_planned_allocations")
+      .select("client_id, date, planned_amount")
+      .gte("date", firstDay)
+      .lte("date", lastDay),
     supabase
       .from("daily_spend")
       .select("client_id, spend")
@@ -30,12 +33,15 @@ export default async function PainelMensalPage() {
       .lte("date", lastDay),
   ]);
 
+  const allocationsByClient = new Map<string, PlannedAllocationRow[]>();
+  for (const row of plannedAllocations ?? []) {
+    const list = allocationsByClient.get(row.client_id) ?? [];
+    list.push({ date: row.date, sprintId: "", amount: row.planned_amount });
+    allocationsByClient.set(row.client_id, list);
+  }
   const plannedByClient = new Map<string, number>();
-  for (const sprint of sprints ?? []) {
-    plannedByClient.set(
-      sprint.client_id,
-      (plannedByClient.get(sprint.client_id) ?? 0) + sprint.planned_spend,
-    );
+  for (const [clientId, rows] of allocationsByClient) {
+    plannedByClient.set(clientId, sumPlannedForMonth(rows, { firstDay, lastDay }));
   }
 
   const actualByClient = new Map<string, number>();

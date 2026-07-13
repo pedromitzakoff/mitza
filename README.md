@@ -1400,6 +1400,136 @@ automático da sync, refinamentos de UX, etc.
     hoje", ordenação padrão e todos os cálculos por trás continuam
     exatamente iguais).
 
+50. ✅ Refatoração completa da lógica de sprints: de blocos fixos de dias do
+    mês (1–7, 8–14, 15–21, 22–28, resto) para **semanas operacionais reais
+    do calendário** (sempre segunda a domingo, podendo atravessar mês e
+    ano), com **operação** (semana) e **financeiro** (mês civil) tratados
+    como dois conceitos explicitamente separados em todo o sistema.
+
+    **Investigação prévia** (antes de tocar no banco): o esquema já tinha
+    granularidade diária em dois pontos-chave — `sprint_planned_allocations`
+    (planejado por dia, Etapa 38) e `daily_spend` (gasto sincronizado por
+    dia, Etapa 4). Isso significa que o "planejado do mês" e o "realizado
+    sincronizado do mês" já podiam ser somados corretamente por interseção
+    de data, sem precisar de nenhuma tabela nova — o bug real estava só na
+    CAMADA DE APLICAÇÃO, que filtrava sprints por "começa neste mês"
+    (`start_date` dentro do range) em vez de "se sobrepõe a este mês", em 5
+    arquivos diferentes. O único ponto sem granularidade suficiente era o
+    **gasto manual** (`manual_actual_spend`), um número único por sprint
+    inteira — esse sim precisou de uma tabela nova (abaixo). `sprint_number`
+    nunca foi uma coluna do banco: era recalculado de forma independente em
+    4 lugares diferentes (todos assumindo 1 sprint = 1 mês), removido nesta
+    rodada.
+
+    **Migration** (`supabase/weekly-sprints.sql`, roda depois de
+    `monthly-budget.sql`):
+    - `sprint_manual_spend_by_month` (nova tabela): `sprint_id`,
+      `month_start`, `amount` — só ganha linha quando uma sprint atravessa
+      a fronteira do mês E está em modo manual. Sprint manual que não
+      atravessa mês continua usando só `manual_actual_spend`, sem nenhuma
+      linha aqui (experiência simples preservada, como pedido). **Sem
+      backfill**: como nenhuma sprint jamais atravessou um mês sob a regra
+      antiga, não existe dado histórico incorreto pra migrar aqui — o
+      cenário é inteiramente novo a partir de agora.
+    - `ensure_weekly_sprints(client_id, today, horizon_weeks)` (nova
+      função): substitui `generate_sprints_for_month` — gera semanas
+      segunda-domingo da semana atual até N semanas à frente, sempre a
+      partir de "hoje" (nunca do formato das sprints que já existem, pra
+      não criar uma semana "de transição" torta entre o bloco antigo e a
+      nova semana). Idempotente (mesma `unique(client_id, start_date)` de
+      sempre). Chamada pelo trigger `trg_create_initial_sprints` (cliente
+      novo já nasce com 8 semanas) e, a partir de agora, também pelas
+      páginas Sprints/Cliente a cada carregamento (auto-cura — ver nota
+      abaixo).
+    - `apply_monthly_budget_change` (redefinida): a seleção de "sprints
+      deste mês" trocou de `start_date between` para **sobreposição**
+      (`start_date <= last_day and end_date >= first_day`) — sem essa
+      troca, editar o orçamento de agosto nunca encontraria uma sprint que
+      começa em julho e termina em agosto, e os dias 01–02/08 dela nunca
+      receberiam alocação. `sprints.planned_spend` também passou a ser
+      recalculado somando TODAS as alocações da sprint (não só as do mês
+      editado), senão editar agosto apagaria a parcela de julho já
+      calculada antes.
+    - `generate_sprints_for_month`/`generate_next_month_sprints`: não
+      removidas (sprints antigas em blocos de dia continuam existindo e
+      consultáveis, histórico preservado), só não são mais chamadas por
+      nenhum fluxo — deprecadas.
+    - **Limitação documentada**: sprints antigas no formato de blocos de
+      dia (1–7, 8–14...) não são convertidas nem divididas em semanas —
+      ficam exatamente como estão. Não existe uma correspondência correta
+      entre "dia 3 de um bloco de 7 dias" e "dia 3 de uma semana real", e
+      inventar essa conversão distorceria o histórico; por isso, seguindo a
+      instrução do pedido, o dado antigo foi preservado tal como está, e só
+      a geração de sprints **novas** (a partir de agora) usa a regra
+      semanal.
+
+    **Centralização do cálculo** (`lib/sprint-week.ts`, novo +
+    `lib/sprint-financials.ts`, estendido): `getOperationalWeekBounds`
+    (limites segunda-domingo), `formatSprintPeriodLabel` (identidade
+    "13–19 jul" / "27 jul – 02 ago" — substitui "Sprint N" em toda a
+    interface), `sprintCrossesMonthBoundary`, `intersectDateRanges`.
+    Financeiro por mês: `sumPlannedForMonth`/`sumPlannedForSprintAndMonth`
+    (soma direta das alocações diárias por interseção de data — não precisa
+    mais saber "de qual sprint" pro total do mês), `sumExpectedToDateForMonth`
+    (mesma ideia, mais precisa que o cálculo proporcional antigo porque usa
+    o valor real de cada dia em vez de assumir uma taxa diária uniforme),
+    `computeSprintMonthActualSpend`/`sumActualSpendForMonth` (gasto real
+    recortado pela interseção sprint×mês, usando `sprint_manual_spend_by_month`
+    só quando a sprint atravessa mês e está em modo manual). Todas as telas
+    (Visão Geral, Sprints, página do cliente, Relatórios, painel-mensal
+    legado) passaram a usar essas mesmas funções — nenhuma reimplementa o
+    filtro por conta própria.
+
+    **Auto-cura da geração de sprints**: o sistema nunca teve um cron
+    automatizado gerando sprints do mês seguinte (`generate_next_month_sprints`
+    existia mas nunca era chamada por nada — gap já existente, confirmado
+    na investigação). Em vez de depender de agendamento externo, as páginas
+    Sprints e Cliente agora chamam `ensure_weekly_sprints` a cada
+    carregamento (idempotente, seguro, barato) — a semana atual e as
+    próximas sempre existem, sem precisar configurar nada a mais.
+
+    **Páginas atualizadas**: Visão Geral (`app/page.tsx` — coluna "Sprint
+    atual" mostra o período da semana, não mais "Sprint N"), Sprints
+    (`app/sprints/*` — mesmo período em toda visão, divisão financeira por
+    mês exibida quando uma semana atravessa a fronteira), página do cliente
+    (`app/clients/[id]/page.tsx`, `client-context-bar.tsx` — "Semana atual ·
+    13–19 jul", `SprintCard` mostra "Resultado financeiro de [mês] (parte
+    desta semana)" quando a semana atravessa mês), edição de gasto manual
+    (`sprint-actions.ts`/`sprint-card.tsx` — campo único quando a sprint não
+    atravessa mês; quando atravessa, o pedido de um segundo campo por mês
+    fica para uma próxima rodada — ver limitação abaixo), Relatórios
+    (`reports/report-data.ts`), orçamento mensal (`monthly-budget.ts`/
+    `monthly-budget-editor.tsx` — rótulo "Sprints afetadas" também usa o
+    período em vez de "Sprint N"), gráfico financeiro (`spend-chart-data.ts`
+    — sprint manual que atravessa mês distribui só a parcela daquele mês,
+    nunca o total bruto pelos dois meses juntos).
+
+    **Limitação conhecida**: a interface de edição de gasto manual
+    (`SprintCardBody`) ainda tem um único campo "Gasto real", mesmo quando a
+    sprint atravessa mês — o cálculo por trás (`sprint_manual_spend_by_month`)
+    já suporta guardar valores separados por mês, mas a tela ainda não tem
+    os dois campos lado a lado pra preenchê-los (o pedido descreve esse
+    formulário duplo na seção 5). Enquanto isso não existe, uma sprint
+    manual que atravessa mês salva o valor único como se fosse de um mês só
+    — funciona sem erro, mas não permite a divisão exata ainda. Fica
+    registrado como próximo passo.
+
+    Arquivos novos: `supabase/weekly-sprints.sql`, `lib/sprint-week.ts`.
+    Alterados: `lib/sprint-financials.ts`, `lib/monthly-budget.ts`,
+    `lib/spend-chart-data.ts`, `lib/supabase/database.types.ts`,
+    `app/operation/operation-data.ts`, `app/operation/task-drawer-panel.tsx`,
+    `app/page.tsx`, `app/clients/page.tsx`, `app/clients/[id]/page.tsx`,
+    `app/clients/[id]/layout.tsx`, `app/clients/[id]/tasks/new/page.tsx`,
+    `app/clients/client-context-bar.tsx`, `app/clients/sprint-card.tsx`,
+    `app/clients/monthly-budget-panel.tsx`,
+    `app/clients/monthly-budget-editor.tsx`, `app/sprints/page.tsx`,
+    `app/sprints/current-client-group.tsx`,
+    `app/sprints/monthly-sprints-group.tsx`, `app/reports/page.tsx`,
+    `app/reports/report-data.ts`, `app/painel-mensal/page.tsx` (tela legada,
+    sem link em nenhum menu, corrigida só no cálculo de planejado por
+    consistência). Nenhuma mudança de design, fonte, cor ou identidade
+    visual — só arquitetura, dados e cálculo.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

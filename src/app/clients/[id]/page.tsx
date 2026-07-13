@@ -6,8 +6,13 @@ import {
   computeSprintEffectiveSpend,
   computeSprintFinancials,
   currentMonthRange,
-  sumExpectedToDate,
+  sumActualSpendForMonth,
+  sumExpectedToDateForMonth,
+  sumPlannedForMonth,
+  sumPlannedForSprintAndMonth,
+  computeSprintMonthActualSpend,
 } from "@/lib/sprint-financials";
+import { formatSprintPeriodLabel, sprintCrossesMonthBoundary } from "@/lib/sprint-week";
 import { computeCumulativeSpendSeries } from "@/lib/spend-chart-data";
 import { computeMonthProjection, computeTaskCounts } from "@/lib/client-metrics";
 import { classifySpendStatus } from "@/lib/spend-status";
@@ -130,19 +135,27 @@ export default async function ClientPage({
   const monthParam = firstDay.slice(0, 7);
   const monthLabel = formatMonthLabel(firstDay);
 
+  // Auto-cura (Etapa 50): garante que a semana atual (+ 4 à frente) já
+  // existe pra este cliente, sem depender de cron externo nenhum.
+  await supabase.rpc("ensure_weekly_sprints", { p_client_id: id, p_today: todayStr, p_horizon_weeks: 4 });
+
   const [
     { data: sprints },
     { data: dailySpend },
     { data: lastSync },
     { data: plannedAllocations },
     { data: budgetChanges },
+    { data: manualSpendByMonth },
   ] = await Promise.all([
+    // Sobreposição com o mês (não "começa no mês") — uma sprint que
+    // atravessa a fronteira (ex.: 27/jul-02/ago) precisa aparecer aqui
+    // mesmo com start_date no mês anterior.
     supabase
       .from("sprints")
       .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, manual_spend_updated_at")
       .eq("client_id", id)
-      .gte("start_date", firstDay)
       .lte("start_date", lastDay)
+      .gte("end_date", firstDay)
       .order("start_date"),
     supabase
       .from("daily_spend")
@@ -159,7 +172,7 @@ export default async function ClientPage({
       .maybeSingle(),
     supabase
       .from("sprint_planned_allocations")
-      .select("date, planned_amount")
+      .select("sprint_id, date, planned_amount")
       .eq("client_id", id)
       .gte("date", firstDay)
       .lte("date", lastDay),
@@ -171,6 +184,11 @@ export default async function ClientPage({
       .eq("client_id", id)
       .eq("month", firstDay)
       .order("changed_at", { ascending: false }),
+    supabase
+      .from("sprint_manual_spend_by_month")
+      .select("sprint_id, month_start, amount")
+      .eq("client_id", id)
+      .eq("month_start", firstDay),
   ]);
 
   const { data: clientActivity } = await supabase
@@ -184,9 +202,47 @@ export default async function ClientPage({
     return computeSprintFinancials(sprint, actualSpend, today, sprint.spend_source);
   });
 
-  const monthPlanned = sprintFinancials.reduce((sum, sprint) => sum + sprint.plannedSpend, 0);
-  const monthActual = sprintFinancials.reduce((sum, sprint) => sum + sprint.actualSpend, 0);
-  const monthExpectedToDate = sumExpectedToDate(sprints ?? [], today);
+  const monthlyManualSpendRows = (manualSpendByMonth ?? []).map((m) => ({
+    sprintId: m.sprint_id,
+    monthStart: m.month_start,
+    amount: m.amount,
+  }));
+  const monthPlannedAllocationRows = (plannedAllocations ?? []).map((a) => ({
+    date: a.date,
+    sprintId: a.sprint_id,
+    amount: a.planned_amount,
+  }));
+  // Somas por interseção sprint×mês (não mais total bruto da sprint) —
+  // sprint que atravessa a fronteira do mês só entra com a parcela que cai
+  // dentro de [firstDay, lastDay], mesma regra usada na Visão Geral/Sprints.
+  const monthPlanned = sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay });
+  const monthActual = sumActualSpendForMonth(
+    sprints ?? [],
+    { firstDay, lastDay },
+    dailySpend ?? [],
+    monthlyManualSpendRows,
+  );
+  const monthExpectedToDate = sumExpectedToDateForMonth(monthPlannedAllocationRows, { firstDay, lastDay }, today);
+  // Divisão financeira por mês, só pras semanas que atravessam a fronteira
+  // — mostrada ao lado do total da semana inteira no SprintCard, nunca no
+  // lugar dele (Etapa 50, seção 7/9 do pedido).
+  const monthSplitBySprintId = new Map(
+    (sprints ?? [])
+      .filter((s) => sprintCrossesMonthBoundary(s.start_date, s.end_date))
+      .map((s) => [
+        s.id,
+        {
+          monthLabel,
+          plannedForMonth: sumPlannedForSprintAndMonth(s.id, monthPlannedAllocationRows, { firstDay, lastDay }),
+          actualForMonth: computeSprintMonthActualSpend(
+            s,
+            { firstDay, lastDay },
+            dailySpend ?? [],
+            monthlyManualSpendRows,
+          ),
+        },
+      ]),
+  );
   // Ritmo do mês: realizado x esperado até hoje, nunca x 100% do planejado
   // antes do mês acabar (mesma regra agora usada em toda a Visão Geral/
   // Sprints — ver operation-data.ts).
@@ -195,11 +251,10 @@ export default async function ClientPage({
   const currentSprint = sprintFinancials.find((sprint) => sprint.temporalStatus === "atual") ?? null;
 
   const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate({ firstDay, lastDay }, todayStr);
-  const budgetSprints = sprintFinancials.map((sprint, index) => ({
+  const budgetSprints = sprintFinancials.map((sprint) => ({
     sprintId: sprint.sprintId,
     startDate: sprint.startDate,
     endDate: sprint.endDate,
-    sprintNumber: index + 1,
   }));
   const currentAllocations = (plannedAllocations ?? []).map((row) => ({
     date: row.date,
@@ -306,6 +361,7 @@ export default async function ClientPage({
     plannedAllocations ?? [],
     { firstDay, lastDay },
     today,
+    monthlyManualSpendRows,
   );
 
   const banners = [
@@ -333,8 +389,11 @@ export default async function ClientPage({
         notes: openTaskRow.notes,
       }
     : null;
-  const openTaskSprintNumber = openTaskRow?.sprint_id
-    ? sprintFinancials.findIndex((s) => s.sprintId === openTaskRow.sprint_id) + 1 || null
+  const openTaskSprint = openTaskRow?.sprint_id
+    ? (sprintFinancials.find((s) => s.sprintId === openTaskRow.sprint_id) ?? null)
+    : null;
+  const openTaskSprintPeriodLabel = openTaskSprint
+    ? formatSprintPeriodLabel(openTaskSprint.startDate, openTaskSprint.endDate)
     : null;
 
   return (
@@ -403,15 +462,15 @@ export default async function ClientPage({
       <Section title="Sprints do mês">
         <div className="flex flex-col gap-2">
           {sprintFinancials.length > 0 ? (
-            sprintFinancials.map((sprint, index) => (
+            sprintFinancials.map((sprint) => (
               <SprintCard
                 key={sprint.sprintId}
                 sprint={sprint}
-                sprintNumber={index + 1}
                 comments={sprintCommentsById.get(sprint.sprintId) ?? []}
                 clientId={client.id}
                 isAdmin={isAdmin}
                 tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
+                monthSplit={monthSplitBySprintId.get(sprint.sprintId) ?? null}
                 executionLabel={sprint.temporalStatus === "atual" ? sprintExecutionLabel : null}
                 executionSeverity={
                   sprint.temporalStatus === "atual" && sprintExecutionAlert?.severity !== "informativo"
@@ -448,7 +507,7 @@ export default async function ClientPage({
           task={openTask}
           clientId={client.id}
           clientName={client.name}
-          sprintNumber={openTaskSprintNumber}
+          sprintPeriodLabel={openTaskSprintPeriodLabel}
           comments={taskCommentsById.get(openTask.id) ?? []}
           closeHref={returnTo}
           returnTo={returnTo}

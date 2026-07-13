@@ -21,7 +21,7 @@ export function TaskDrawerPanel({
   task,
   clientId,
   clientName,
-  sprintNumber,
+  sprintPeriodLabel,
   comments,
   closeHref,
   returnTo,
@@ -29,7 +29,7 @@ export function TaskDrawerPanel({
   task: OperationTaskItem;
   clientId: string;
   clientName: string;
-  sprintNumber: number | null;
+  sprintPeriodLabel: string | null;
   comments: CommentItem[];
   closeHref: string;
   returnTo: string;
@@ -49,7 +49,7 @@ export function TaskDrawerPanel({
           <div>
             <p className="text-xs text-muted-foreground">
               {clientName}
-              {sprintNumber !== null ? ` · Sprint ${sprintNumber}` : ""}
+              {sprintPeriodLabel ? ` · ${sprintPeriodLabel}` : ""}
             </p>
             <h2 className="mt-0.5 text-lg font-semibold text-foreground">{task.title}</h2>
           </div>

@@ -40,29 +40,55 @@ export default async function ClientLayout({
   const todayStr = todayDateString();
   const { firstDay, lastDay } = currentMonthRange(today);
 
-  const [{ data: managers }, { data: sprints }, { data: dailySpend }, { data: tasks }, { data: clientActivity }] =
-    await Promise.all([
-      supabase.from("client_managers").select("user_id, profiles(id, name)").eq("client_id", id),
-      supabase
-        .from("sprints")
-        .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
-        .eq("client_id", id)
-        .gte("start_date", firstDay)
-        .lte("start_date", lastDay),
-      supabase
-        .from("daily_spend")
-        .select("date, spend, synced_at")
-        .eq("client_id", id)
-        .gte("date", firstDay)
-        .lte("date", lastDay),
-      supabase
-        .from("tasks")
-        .select(
-          "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:profiles!tasks_assignee_id_fkey(name)",
-        )
-        .eq("client_id", id),
-      supabase.from("client_last_operational_activity").select("last_activity_at").eq("client_id", id).maybeSingle(),
-    ]);
+  // Auto-cura (Etapa 50): garante que a semana atual (+ 4 à frente) já
+  // existe pra este cliente, sem depender de nenhum cron externo — não
+  // existia agendamento automático nenhum pra isso antes (só rodava via SQL
+  // manual). Idempotente e barato (on conflict do nothing).
+  await supabase.rpc("ensure_weekly_sprints", { p_client_id: id, p_today: todayStr, p_horizon_weeks: 4 });
+
+  const [
+    { data: managers },
+    { data: sprints },
+    { data: dailySpend },
+    { data: tasks },
+    { data: clientActivity },
+    { data: plannedAllocations },
+    { data: manualSpendByMonth },
+  ] = await Promise.all([
+    supabase.from("client_managers").select("user_id, profiles(id, name)").eq("client_id", id),
+    // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
+    // mês precisa aparecer mesmo com start_date no mês anterior.
+    supabase
+      .from("sprints")
+      .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
+      .eq("client_id", id)
+      .lte("start_date", lastDay)
+      .gte("end_date", firstDay),
+    supabase
+      .from("daily_spend")
+      .select("date, spend, synced_at")
+      .eq("client_id", id)
+      .gte("date", firstDay)
+      .lte("date", lastDay),
+    supabase
+      .from("tasks")
+      .select(
+        "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:profiles!tasks_assignee_id_fkey(name)",
+      )
+      .eq("client_id", id),
+    supabase.from("client_last_operational_activity").select("last_activity_at").eq("client_id", id).maybeSingle(),
+    supabase
+      .from("sprint_planned_allocations")
+      .select("sprint_id, date, planned_amount")
+      .eq("client_id", id)
+      .gte("date", firstDay)
+      .lte("date", lastDay),
+    supabase
+      .from("sprint_manual_spend_by_month")
+      .select("sprint_id, month_start, amount")
+      .eq("client_id", id)
+      .eq("month_start", firstDay),
+  ]);
 
   const currentSprint = (sprints ?? []).find((s) => s.start_date <= todayStr && s.end_date >= todayStr);
 
@@ -87,6 +113,16 @@ export default async function ClientLayout({
     managerIds: (managers ?? []).flatMap((m) => (m.profiles ? [m.profiles.id] : [])),
     sprints: sprints ?? [],
     dailySpend: (dailySpend ?? []).map((d) => ({ date: d.date, spend: d.spend })),
+    plannedAllocations: (plannedAllocations ?? []).map((a) => ({
+      date: a.date,
+      sprintId: a.sprint_id,
+      amount: a.planned_amount,
+    })),
+    manualSpendByMonth: (manualSpendByMonth ?? []).map((m) => ({
+      sprintId: m.sprint_id,
+      monthStart: m.month_start,
+      amount: m.amount,
+    })),
     tasks: tasks ?? [],
     clientLastActivityAt: clientActivity?.last_activity_at ?? null,
     sprintLastActivityAt: sprintActivity?.last_activity_at ?? null,
@@ -102,7 +138,7 @@ export default async function ClientLayout({
         clientName={card.clientName}
         metaAdAccountId={card.metaAdAccountId}
         managerNames={card.managerNames}
-        sprintNumber={card.sprintNumber}
+        sprintPeriodLabel={card.sprintPeriodLabel}
         sprint={card.sprint}
         isAdmin={profile.role === "admin"}
       />

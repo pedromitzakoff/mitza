@@ -112,6 +112,8 @@ export default async function Home({
     { data: sprints },
     { data: dailySpend },
     { data: tasks },
+    { data: plannedAllocations },
+    { data: manualSpendByMonth },
   ] = await Promise.all([
     supabase
       .from("clients")
@@ -120,13 +122,16 @@ export default async function Home({
       .order("name"),
     supabase.from("client_managers").select("client_id, user_id, profiles(id, name)"),
     supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
+    // Sobreposição com a janela (não "começa na janela") — uma sprint que
+    // atravessa mês (ex.: 27/jul-02/ago) precisa ser encontrada mesmo com
+    // start_date fora do intervalo, senão sua parcela do outro mês some.
     supabase
       .from("sprints")
       .select(
         "id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, manual_spend_updated_at",
       )
-      .gte("start_date", rangeStart)
-      .lte("start_date", rangeEnd),
+      .lte("start_date", rangeEnd)
+      .gte("end_date", rangeStart),
     supabase
       .from("daily_spend")
       .select("client_id, date, spend, synced_at")
@@ -137,6 +142,16 @@ export default async function Home({
       .select(
         "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:profiles!tasks_assignee_id_fkey(name)",
       ),
+    supabase
+      .from("sprint_planned_allocations")
+      .select("client_id, sprint_id, date, planned_amount")
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd),
+    supabase
+      .from("sprint_manual_spend_by_month")
+      .select("client_id, sprint_id, month_start, amount")
+      .gte("month_start", rangeStart)
+      .lte("month_start", rangeEnd),
   ]);
 
   const clientIds = (clients ?? []).map((c) => c.id);
@@ -198,6 +213,20 @@ export default async function Home({
     tasksByClient.set(t.client_id, list);
   }
 
+  const plannedAllocationsByClient = new Map<string, OperationClientRawData["plannedAllocations"]>();
+  for (const a of plannedAllocations ?? []) {
+    const list = plannedAllocationsByClient.get(a.client_id) ?? [];
+    list.push({ date: a.date, sprintId: a.sprint_id, amount: a.planned_amount });
+    plannedAllocationsByClient.set(a.client_id, list);
+  }
+
+  const manualSpendByMonthByClient = new Map<string, OperationClientRawData["manualSpendByMonth"]>();
+  for (const m of manualSpendByMonth ?? []) {
+    const list = manualSpendByMonthByClient.get(m.client_id) ?? [];
+    list.push({ sprintId: m.sprint_id, monthStart: m.month_start, amount: m.amount });
+    manualSpendByMonthByClient.set(m.client_id, list);
+  }
+
   const clientActivityById = new Map((clientActivity ?? []).map((r) => [r.client_id, r.last_activity_at]));
   const sprintActivityById = new Map((sprintActivity ?? []).map((r) => [r.sprint_id, r.last_activity_at]));
   const primaryManagerNameByClient = new Map(
@@ -216,6 +245,8 @@ export default async function Home({
       managerIds: (managersByClient.get(client.id) ?? []).map((m) => m.id),
       sprints: clientSprints,
       dailySpend: dailySpendByClient.get(client.id) ?? [],
+      plannedAllocations: plannedAllocationsByClient.get(client.id) ?? [],
+      manualSpendByMonth: manualSpendByMonthByClient.get(client.id) ?? [],
       tasks: tasksByClient.get(client.id) ?? [],
       clientLastActivityAt: clientActivityById.get(client.id) ?? null,
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
@@ -559,7 +590,7 @@ export default async function Home({
                           {pctEsperado !== null ? `${pctEsperado}%` : "—"}
                         </td>
                         <td className="py-2.5 px-3.5 text-overview-text-secondary">
-                          {card.sprintNumber !== null ? `Sprint ${card.sprintNumber}` : "—"}
+                          {card.sprintPeriodLabel ?? "—"}
                         </td>
                         <td className="py-2.5 px-3.5">
                           <StatusDot tone={SITUATION_TONE[card.monthStatus]} label={SITUATION_LABEL[card.monthStatus]} />

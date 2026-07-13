@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { formatDateRange } from "@/lib/format";
 import { syncClientMetaAction } from "./meta-actions";
 import { TOP_BAR_OFFSET_CLASS } from "@/app/app-shell-dimensions";
 
@@ -17,7 +16,7 @@ export function ClientContextBar({
   clientName,
   metaAdAccountId,
   managerNames,
-  sprintNumber,
+  sprintPeriodLabel,
   sprint,
   isAdmin,
 }: {
@@ -25,14 +24,11 @@ export function ClientContextBar({
   clientName: string;
   metaAdAccountId: string;
   managerNames: string[];
-  sprintNumber: number | null;
+  sprintPeriodLabel: string | null;
   sprint: { startDate: string; endDate: string } | null;
   isAdmin: boolean;
 }) {
-  const sprintLabel =
-    sprint && sprintNumber
-      ? `Sprint ${sprintNumber} atual · ${formatDateRange(sprint.startDate, sprint.endDate)}`
-      : "Sem sprint atual";
+  const sprintLabel = sprint && sprintPeriodLabel ? `Semana atual · ${sprintPeriodLabel}` : "Sem semana atual";
 
   const gestorLabel = managerNames.length > 0 ? `Gestor: ${managerNames.join(", ")}` : "Sem gestor atribuído";
 

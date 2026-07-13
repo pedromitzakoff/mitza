@@ -3,7 +3,7 @@ import type { CommentItem } from "@/app/clients/comment-thread";
 import { SprintCardBody } from "@/app/clients/sprint-card";
 import { resolveSprintPeriodSummary } from "@/lib/financial-period";
 import { operationalSummary } from "@/lib/account-priority";
-import { formatDateRange } from "@/lib/format";
+import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { AccountCardSummary } from "./account-card-summary";
 
 /**
@@ -39,7 +39,10 @@ export function SprintCurrentClientGroup({
     );
   }
 
-  const summary = resolveSprintPeriodSummary(card.sprint, formatDateRange(card.sprint.startDate, card.sprint.endDate));
+  const summary = resolveSprintPeriodSummary(
+    card.sprint,
+    formatSprintPeriodLabel(card.sprint.startDate, card.sprint.endDate),
+  );
   const operational = operationalSummary(card, "sprint");
 
   return (

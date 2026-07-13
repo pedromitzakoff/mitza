@@ -48,6 +48,8 @@ export default async function ClientsPage({
     { data: sprints },
     { data: dailySpend },
     { data: tasks },
+    { data: plannedAllocations },
+    { data: manualSpendByMonth },
   ] = await Promise.all([
     supabase
       .from("clients")
@@ -58,11 +60,13 @@ export default async function ClientsPage({
       .order("name"),
     supabase.from("client_managers").select("client_id, user_id, profiles(id, name)"),
     supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
+    // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
+    // mês precisa ser encontrada mesmo com start_date do mês anterior.
     supabase
       .from("sprints")
       .select("id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
-      .gte("start_date", firstDay)
-      .lte("start_date", lastDay),
+      .lte("start_date", lastDay)
+      .gte("end_date", firstDay),
     supabase
       .from("daily_spend")
       .select("client_id, date, spend, synced_at")
@@ -73,6 +77,15 @@ export default async function ClientsPage({
       .select(
         "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:profiles!tasks_assignee_id_fkey(name)",
       ),
+    supabase
+      .from("sprint_planned_allocations")
+      .select("client_id, sprint_id, date, planned_amount")
+      .gte("date", firstDay)
+      .lte("date", lastDay),
+    supabase
+      .from("sprint_manual_spend_by_month")
+      .select("client_id, sprint_id, month_start, amount")
+      .eq("month_start", firstDay),
   ]);
 
   const clientIds = (clients ?? []).map((c) => c.id);
@@ -133,6 +146,20 @@ export default async function ClientsPage({
     tasksByClient.set(t.client_id, list);
   }
 
+  const plannedAllocationsByClient = new Map<string, OperationClientRawData["plannedAllocations"]>();
+  for (const a of plannedAllocations ?? []) {
+    const list = plannedAllocationsByClient.get(a.client_id) ?? [];
+    list.push({ date: a.date, sprintId: a.sprint_id, amount: a.planned_amount });
+    plannedAllocationsByClient.set(a.client_id, list);
+  }
+
+  const manualSpendByMonthByClient = new Map<string, OperationClientRawData["manualSpendByMonth"]>();
+  for (const m of manualSpendByMonth ?? []) {
+    const list = manualSpendByMonthByClient.get(m.client_id) ?? [];
+    list.push({ sprintId: m.sprint_id, monthStart: m.month_start, amount: m.amount });
+    manualSpendByMonthByClient.set(m.client_id, list);
+  }
+
   const clientActivityById = new Map((clientActivity ?? []).map((r) => [r.client_id, r.last_activity_at]));
   const sprintActivityById = new Map((sprintActivity ?? []).map((r) => [r.sprint_id, r.last_activity_at]));
 
@@ -148,6 +175,8 @@ export default async function ClientsPage({
       managerIds: (managersByClient.get(client.id) ?? []).map((m) => m.id),
       sprints: clientSprints,
       dailySpend: dailySpendByClient.get(client.id) ?? [],
+      plannedAllocations: plannedAllocationsByClient.get(client.id) ?? [],
+      manualSpendByMonth: manualSpendByMonthByClient.get(client.id) ?? [],
       tasks: tasksByClient.get(client.id) ?? [],
       clientLastActivityAt: clientActivityById.get(client.id) ?? null,
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,

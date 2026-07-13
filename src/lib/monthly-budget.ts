@@ -50,6 +50,8 @@ export interface MonthlyBudgetRedistributionInput {
 
 export interface MonthlyBudgetSprintPreview {
   sprintId: string;
+  startDate: string;
+  endDate: string;
   previousPlannedSpend: number;
   newPlannedSpend: number;
 }
@@ -121,6 +123,8 @@ export function computeMonthlyBudgetRedistribution(
     const sprintDates = allDates.filter((date) => date >= sprint.startDate && date <= sprint.endDate);
     return {
       sprintId: sprint.sprintId,
+      startDate: sprint.startDate,
+      endDate: sprint.endDate,
       previousPlannedSpend: sumAllocations(sprintDates),
       newPlannedSpend: sprintDates.reduce((sum, date) => sum + (allocationsByDate.get(date) ?? 0), 0),
     };
