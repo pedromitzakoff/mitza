@@ -1631,6 +1631,23 @@ automático da sync, refinamentos de UX, etc.
     que sempre há um destino válido (tarefas por `due_date`, alocações por
     `date`, sem duplicar nem perder valor).
 
+    **2ª correção pós-entrega**: a correção acima expôs um segundo erro —
+    `duplicate key value violates unique constraint
+    "tasks_template_sprint_unique"` — ao realinhar uma tarefa recorrente
+    pra uma sprint canônica recém-criada, essa sprint já tinha sua própria
+    tarefa gerada automaticamente a partir do mesmo template (criada no
+    próprio passo 3a, por `generate_sprint_tasks_from_templates`), violando
+    `unique(template_id, sprint_id)`. Corrigido com a função nova
+    `reconcile_move_task_to_sprint(task_id, target_sprint_id)`, usada nos
+    dois lugares que movem tarefas (realinhamento pós-conversão e migração
+    de blocos antigos, uma única regra pras duas): antes de mover, checa se
+    o destino já tem uma tarefa do mesmo template — se tiver, essa
+    duplicada foi criada nesta própria migration e não pode ter nenhuma
+    interação real ainda (concluída, comentário, responsável), então é
+    descartada com segurança (comentários que porventura já tenha são
+    migrados antes de apagar) em favor da tarefa que está sendo movida, que
+    pode carregar histórico real.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

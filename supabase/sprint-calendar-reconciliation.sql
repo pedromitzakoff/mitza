@@ -58,6 +58,22 @@
 -- start_date mas end_date diferente — nunca mais um INSERT concorrente com
 -- a mesma chave. A mesma regra foi aplicada em ensure_client_sprints (passo
 -- 7), que tinha o mesmo risco latente.
+--
+-- CORREÇÃO (3ª rodada): a 2ª versão travava com "duplicate key value
+-- violates unique constraint tasks_template_sprint_unique" — ao mover uma
+-- tarefa recorrente (com template_id) pra uma sprint canônica que acabou
+-- de ser criada no passo 3a, essa sprint já tinha sua PRÓPRIA tarefa
+-- gerada automaticamente a partir do mesmo template
+-- (`generate_sprint_tasks_from_templates`, chamada no próprio passo 3a) —
+-- duas tarefas do mesmo template na mesma sprint violam
+-- unique(template_id, sprint_id). Corrigido com a função
+-- `reconcile_move_task_to_sprint`, que checa esse conflito antes de mover:
+-- se a sprint destino já tem uma tarefa do mesmo template, ela foi criada
+-- nesta própria migration (não pode ter nenhuma interação real ainda) e é
+-- descartada — comentários que porventura já tenha são preservados,
+-- migrados pra tarefa que está sendo movida antes de apagar a duplicada.
+-- Usada nos dois lugares que movem tarefas (3a-bis e 3b), pra nunca haver
+-- duas regras de migração de tarefa diferentes.
 
 -- ---------------------------------------------------------------------------
 -- 1) REGRA ÚNICA DE CALENDÁRIO
@@ -127,6 +143,41 @@ $$ language plpgsql stable;
 --   - Nada é apagado antes de migrar: a sprint antiga só é removida depois
 --     que tarefas e alocações dela já foram movidas.
 -- ---------------------------------------------------------------------------
+
+-- Move uma tarefa pra outra sprint com segurança em relação à constraint
+-- unique(template_id, sprint_id): se a sprint destino já tiver uma tarefa
+-- do MESMO template (caso comum aqui — a sprint canônica destino acabou de
+-- ser criada no passo 3a, com sua própria tarefa gerada automaticamente a
+-- partir do mesmo template recorrente), essa duplicada na sprint destino
+-- é descartada em favor da tarefa que está sendo movida — ela acabou de
+-- ser criada nesta mesma migration e não pode ter nenhuma interação real
+-- (concluída, comentário, responsável), então nunca há perda de dado real
+-- ao removê-la. Comentários eventualmente ligados a ela são preservados,
+-- migrados pra tarefa que sobrevive antes de apagar.
+create or replace function reconcile_move_task_to_sprint(p_task_id uuid, p_target_sprint_id uuid)
+returns void as $$
+declare
+  v_template_id uuid;
+  v_dup_task_id uuid;
+begin
+  select template_id into v_template_id from tasks where id = p_task_id;
+
+  if v_template_id is not null then
+    select id into v_dup_task_id from tasks
+      where sprint_id = p_target_sprint_id and template_id = v_template_id and id <> p_task_id;
+
+    if v_dup_task_id is not null then
+      update comments set commentable_id = p_task_id
+        where commentable_type = 'task' and commentable_id = v_dup_task_id;
+      delete from tasks where id = v_dup_task_id;
+      raise notice '    tarefa duplicada (mesmo template) na sprint destino removida, mantendo a tarefa %', p_task_id;
+    end if;
+  end if;
+
+  update tasks set sprint_id = p_target_sprint_id where id = p_task_id;
+end;
+$$ language plpgsql;
+
 create or replace function reconcile_client_month_sprints(p_client_id uuid, p_year int, p_month int)
 returns void as $$
 declare
@@ -134,6 +185,7 @@ declare
   v_sprint_id uuid;
   v_existing_end_date date;
   old_sprint record;
+  v_move record;
   v_canonical_id uuid;
   v_month_start date := make_date(p_year, p_month, 1);
   v_month_end date := (make_date(p_year, p_month, 1) + interval '1 month - 1 day')::date;
@@ -183,20 +235,21 @@ begin
   -- UPDATE acima. Só pode rodar DEPOIS do loop 3a inteiro, porque o destino
   -- certo (ex.: a sprint canônica 06-12) pode só existir a partir de uma
   -- iteração posterior do mesmo loop.
-  with moved as (
-    update tasks t set sprint_id = ns.id
-    from sprints os, sprints ns
-    where t.sprint_id = os.id
-      and os.client_id = p_client_id
-      and ns.client_id = p_client_id
-      and ns.id <> os.id
+  v_tasks_moved := 0;
+  for v_move in
+    select t.id as task_id, ns.id as target_sprint_id
+    from tasks t
+    join sprints os on os.id = t.sprint_id
+    join sprints ns on ns.client_id = os.client_id and ns.id <> os.id
+    where os.client_id = p_client_id
       and os.start_date between v_month_start and v_month_end
       and ns.start_date between v_month_start and v_month_end
       and (t.due_date < os.start_date or t.due_date > os.end_date)
       and t.due_date between ns.start_date and ns.end_date
-    returning t.id
-  )
-  select count(*) into v_tasks_moved from moved;
+  loop
+    perform reconcile_move_task_to_sprint(v_move.task_id, v_move.target_sprint_id);
+    v_tasks_moved := v_tasks_moved + 1;
+  end loop;
   if v_tasks_moved > 0 then
     raise notice '  tarefas realinhadas após conversão de sprint: %', v_tasks_moved;
   end if;
@@ -266,16 +319,17 @@ begin
       limit 1;
 
     -- tarefas: reatribuídas pelo próprio due_date.
-    with moved as (
-      update tasks t set sprint_id = ns.id
-      from sprints ns
+    v_tasks_moved := 0;
+    for v_move in
+      select t.id as task_id, ns.id as target_sprint_id
+      from tasks t
+      join sprints ns on ns.client_id = p_client_id and ns.id <> old_sprint.id
       where t.sprint_id = old_sprint.id
-        and ns.client_id = p_client_id
-        and ns.id <> old_sprint.id
         and t.due_date between ns.start_date and ns.end_date
-      returning t.id
-    )
-    select count(*) into v_tasks_moved from moved;
+    loop
+      perform reconcile_move_task_to_sprint(v_move.task_id, v_move.target_sprint_id);
+      v_tasks_moved := v_tasks_moved + 1;
+    end loop;
     raise notice '    tarefas movidas: %', v_tasks_moved;
 
     -- alocações de planejado: reatribuídas pela própria date. Se o destino
