@@ -79,7 +79,7 @@ export default async function NewTaskPage({
           Tipo
           <select
             name="type"
-            defaultValue="otimizacao"
+            defaultValue="outro"
             className="rounded-md border border-zinc-300 px-3 py-2 text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           >
             {Object.entries(TASK_TYPE_LABEL).map(([value, label]) => (

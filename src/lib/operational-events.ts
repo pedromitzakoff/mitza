@@ -58,6 +58,13 @@ export const OperationalEventType = {
   MONTHLY_REPORT_READY_FOR_REVIEW: "monthly_report_ready_for_review",
   MONTHLY_REPORT_FINALIZED: "monthly_report_finalized",
   MONTHLY_REPORT_REOPENED: "monthly_report_reopened",
+
+  // Etapa 57 — Análises da Conta e Otimizações.
+  ACCOUNT_REVIEW_RECORDED: "account_review_recorded",
+  ACCOUNT_REVIEW_NO_CHANGE: "account_review_no_change",
+  ACCOUNT_REVIEW_OPTIMIZATION_PERFORMED: "account_review_optimization_performed",
+  ACCOUNT_REVIEW_ISSUE_IDENTIFIED: "account_review_issue_identified",
+  ACCOUNT_OPTIMIZATION_RECORDED: "account_optimization_recorded",
 } as const satisfies Record<string, OperationalEventTypeValue>;
 
 export type OperationalEventType = (typeof OperationalEventType)[keyof typeof OperationalEventType];
@@ -80,6 +87,13 @@ export type OperationalEventType = (typeof OperationalEventType)[keyof typeof Op
  * - CREATIVE_DELIVERY_LATE: evento de TRANSIÇÃO DE ESTADO (seção 21/20 do
  *   pedido) — exigiria um job de monitoramento que este round explicitamente
  *   não implementa ("não criar jobs complexos de monitoramento").
+ *
+ * OPTIMIZATION_COMPLETED (Etapa 56) passa a ser só histórico/legado a partir
+ * da Etapa 57 — o template global "Otimização" foi desativado (não gera mais
+ * tarefas novas desse tipo), então este evento só volta a ser emitido se uma
+ * tarefa de otimização já existente (anterior a esta etapa) for concluída.
+ * O conceito vivo agora é ACCOUNT_OPTIMIZATION_RECORDED, ligado a uma
+ * Análise da Conta.
  */
 export const NOT_YET_EMITTED_EVENT_TYPES: readonly OperationalEventType[] = [
   OperationalEventType.TASK_REOPENED,
@@ -122,6 +136,11 @@ export const OPERATIONAL_EVENT_TYPE_LABEL: Record<OperationalEventType, string> 
   monthly_report_ready_for_review: "Enviou relatório pra revisão",
   monthly_report_finalized: "Finalizou relatório mensal",
   monthly_report_reopened: "Reabriu relatório mensal",
+  account_review_recorded: "Analisou a conta",
+  account_review_no_change: "Analisou a conta — sem alteração",
+  account_review_optimization_performed: "Analisou a conta — otimização realizada",
+  account_review_issue_identified: "Analisou a conta — problema identificado",
+  account_optimization_recorded: "Registrou otimização",
 };
 
 /** Converte segundos de atraso pra um texto compacto (horas/dias) — usado

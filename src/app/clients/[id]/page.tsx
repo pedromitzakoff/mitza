@@ -18,20 +18,24 @@ import { buildAttentionAlerts } from "@/lib/attention-alerts";
 import { buildSprintExecutionAlert, formatSprintExecutionLabel } from "@/lib/sprint-execution";
 import { businessDaysSince } from "@/lib/business-days";
 import { classifyOperationalActivityStatus, formatLastActivityLabel } from "@/lib/operational-activity";
-import { effectiveTaskStatus } from "@/lib/task-status";
 import { resolveBudgetEffectiveDate } from "@/lib/monthly-budget";
 import { todayDateString, todayUTC } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
 import { computeOperationalTracking } from "@/lib/operational-tracking";
+import { computeAccountReviewCadenceStatus } from "@/lib/account-review-cadence";
 import { AttentionPanel } from "../attention-panel";
 import { MonthInvestmentSummary } from "../month-investment-summary";
 import { SprintCard } from "../sprint-card";
 import { TaskList } from "../task-list";
 import { Section } from "../section";
 import { OperationalTrackingPanel } from "../operational-tracking-panel";
+import { AccountReviewCadencePanel } from "../account-review-cadence-panel";
 import { EssentialInfoPanel } from "../essential-info-panel";
 import type { CommentItem } from "../comment-thread";
 import type { TaskListItem } from "../task-row";
+import type { AccountReviewSummaryItem } from "../account-reviews-section";
+import { RecordAccountReviewDrawer } from "../record-account-review-drawer";
+import { AccountReviewDetailDrawer, type AccountReviewDetail } from "../account-review-detail-drawer";
 import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
 import type { OperationTaskItem } from "@/app/operation/operation-data";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
@@ -39,6 +43,18 @@ import { MonthlyBudgetPanel } from "../monthly-budget-panel";
 import { MonthlyBudgetHistoryDrawer } from "../monthly-budget-history-drawer";
 
 const OPTIMIZATION_LOOKBACK_DAYS = 14;
+
+function groupAccountReviewsBySprintId(
+  reviews: (AccountReviewSummaryItem & { sprintId: string })[],
+): Map<string, AccountReviewSummaryItem[]> {
+  const map = new Map<string, AccountReviewSummaryItem[]>();
+  for (const { sprintId, ...review } of reviews) {
+    const list = map.get(sprintId) ?? [];
+    list.push(review);
+    map.set(sprintId, list);
+  }
+  return map;
+}
 
 async function fetchCommentsByType(
   supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
@@ -100,6 +116,9 @@ export default async function ClientPage({
     task?: string;
     budgetSaved?: string;
     historicoOrcamento?: string;
+    review?: string;
+    reviewDetail?: string;
+    reviewError?: string;
   }>;
 }) {
   const { id } = await params;
@@ -112,6 +131,9 @@ export default async function ClientPage({
     task: openTaskId,
     budgetSaved,
     historicoOrcamento,
+    review: openReview,
+    reviewDetail: openReviewDetailId,
+    reviewError,
   } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
@@ -271,6 +293,63 @@ export default async function ClientPage({
     .eq("client_id", id)
     .order("due_date");
 
+  // Etapa 57 — Análises da Conta: janela de 60 dias é suficiente pra
+  // cadência semanal/dias úteis; "análise anterior" completa já vem
+  // calculada e gravada em cada linha (seconds_since_previous_review),
+  // nunca recalculada aqui.
+  const reviewWindowStart = new Date(today.getTime() - 60 * 86_400_000).toISOString().slice(0, 10);
+  const [{ data: accountReviewRows }, { data: lastOptimizationRow }, { data: cadenceConfig }, { data: managers }] =
+    await Promise.all([
+      supabase
+        .from("account_reviews")
+        .select(
+          "id, sprint_id, reviewed_at, reason, reason_other_description, outcome, notes, issue_description, issue_category, seconds_since_previous_review, team_member:team_members!account_reviews_team_member_id_fkey(name), optimizations:account_optimizations(id, optimization_type, optimization_action, description, reason, expected_impact), issue_task:tasks!account_reviews_issue_task_id_fkey(title)",
+        )
+        .eq("client_id", id)
+        .gte("reviewed_at", `${reviewWindowStart}T00:00:00Z`)
+        .order("reviewed_at", { ascending: false }),
+      supabase
+        .from("account_optimizations")
+        .select("optimization_type, created_at")
+        .eq("client_id", id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("account_review_cadences")
+        .select("reviews_per_week, max_business_days_without_review, is_active")
+        .eq("client_id", id)
+        .maybeSingle(),
+      supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
+    ]);
+
+  const accountReviews = accountReviewRows ?? [];
+  const accountReviewSummaries = accountReviews.map((review) => ({
+    id: review.id,
+    sprintId: review.sprint_id,
+    reviewedAt: review.reviewed_at,
+    reason: review.reason,
+    reasonOtherDescription: review.reason_other_description,
+    outcome: review.outcome,
+    managerName: review.team_member?.name ?? "Membro removido",
+    optimizationCount: review.optimizations.length,
+    issueDescription: review.issue_description,
+  }));
+  const accountReviewsBySprintId = groupAccountReviewsBySprintId(accountReviewSummaries);
+
+  const accountReviewCadenceStatus = computeAccountReviewCadenceStatus(
+    accountReviews.map((r) => r.reviewed_at),
+    cadenceConfig
+      ? {
+          reviewsPerWeek: cadenceConfig.reviews_per_week,
+          maxBusinessDaysWithoutReview: cadenceConfig.max_business_days_without_review,
+          isActive: cadenceConfig.is_active,
+        }
+      : null,
+    today,
+    lastOptimizationRow ? { type: lastOptimizationRow.optimization_type, occurredAt: lastOptimizationRow.created_at } : null,
+  );
+
   const [sprintComments, taskComments] = await Promise.all([
     fetchCommentsByType(
       supabase,
@@ -294,18 +373,11 @@ export default async function ClientPage({
   );
   const taskCounts = computeTaskCounts(tasksThisMonth, today);
 
-  const lookbackStart = new Date(today.getTime() - OPTIMIZATION_LOOKBACK_DAYS * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-  const recentOptimizationTasks = (tasks ?? []).filter(
-    (task) =>
-      task.type === "otimizacao" &&
-      task.due_date >= lookbackStart &&
-      task.due_date <= today.toISOString().slice(0, 10),
-  );
-  const optimizationRecentlyDone =
-    recentOptimizationTasks.length === 0 ||
-    recentOptimizationTasks.some((task) => effectiveTaskStatus(task, today) === "feito");
+  // Etapa 57: o sinal de "otimização recente" agora vem de account_reviews
+  // (Análise da Conta), não mais de tasks.type === 'otimizacao' — o template
+  // que gerava essa tarefa foi desativado (seção 2 do pedido).
+  const optimizationLookbackStart = new Date(today.getTime() - OPTIMIZATION_LOOKBACK_DAYS * 86_400_000).toISOString();
+  const optimizationRecentlyDone = accountReviews.some((review) => review.reviewed_at >= optimizationLookbackStart);
 
   const currentSprintTasks = currentSprint ? tasksBySprintId.get(currentSprint.sprintId) ?? [] : [];
 
@@ -336,12 +408,37 @@ export default async function ClientPage({
     error && { tone: "red", text: error },
     commentError && { tone: "red", text: commentError },
     taskError && { tone: "red", text: taskError },
+    reviewError && { tone: "red", text: reviewError },
     synced && { tone: "green", text: `${synced} dia(s) de spend sincronizado(s) com o Meta.` },
     saved && { tone: "green", text: "Dados do cliente atualizados." },
     budgetSaved && { tone: "green", text: "Orçamento do mês atualizado." },
   ].filter((banner): banner is { tone: "red" | "green"; text: string } => Boolean(banner));
 
   const returnTo = `/clients/${client.id}`;
+  const openReviewDetail = openReviewDetailId ? accountReviews.find((r) => r.id === openReviewDetailId) ?? null : null;
+  const reviewDetail: AccountReviewDetail | null = openReviewDetail
+    ? {
+        id: openReviewDetail.id,
+        reviewedAt: openReviewDetail.reviewed_at,
+        managerName: openReviewDetail.team_member?.name ?? "Membro removido",
+        reason: openReviewDetail.reason,
+        reasonOtherDescription: openReviewDetail.reason_other_description,
+        outcome: openReviewDetail.outcome,
+        notes: openReviewDetail.notes,
+        issueDescription: openReviewDetail.issue_description,
+        issueCategory: openReviewDetail.issue_category,
+        issueTaskTitle: openReviewDetail.issue_task?.title ?? null,
+        secondsSincePreviousReview: openReviewDetail.seconds_since_previous_review,
+        optimizations: openReviewDetail.optimizations.map((opt) => ({
+          id: opt.id,
+          type: opt.optimization_type,
+          action: opt.optimization_action,
+          description: opt.description,
+          reason: opt.reason,
+          expectedImpact: opt.expected_impact,
+        })),
+      }
+    : null;
   const historyDrawerHref = `${returnTo}?historicoOrcamento=1`;
   const historyDrawerCloseHref = returnTo;
   const openTaskRow = openTaskId ? (tasks ?? []).find((t) => t.id === openTaskId) ?? null : null;
@@ -412,13 +509,14 @@ export default async function ClientPage({
       </div>
 
       {/* 2. Acompanhamento operacional */}
-      <div className="mt-3">
+      <div className="mt-3 flex flex-col gap-3">
         <OperationalTrackingPanel
           tracking={operationalTracking}
           today={today}
           lastExecutionLabel={lastExecutionLabel}
           lastExecutionStatus={activityStatus}
         />
+        <AccountReviewCadencePanel status={accountReviewCadenceStatus} today={today} />
       </div>
 
       {/* 3. Prioridades (antes "Atenção") */}
@@ -442,6 +540,9 @@ export default async function ClientPage({
             executionSeverity={
               sprintExecutionAlert?.severity !== "informativo" ? (sprintExecutionAlert?.severity ?? null) : null
             }
+            accountReviews={accountReviewsBySprintId.get(currentSprint.sprintId) ?? []}
+            newReviewHref={`${returnTo}?review=new`}
+            buildReviewDetailHref={(reviewId) => `${returnTo}?reviewDetail=${reviewId}`}
           />
         ) : (
           <p className="text-sm text-zinc-500">
@@ -464,6 +565,9 @@ export default async function ClientPage({
                 isAdmin={isAdmin}
                 tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
                 defaultOpen={false}
+                accountReviews={accountReviewsBySprintId.get(sprint.sprintId) ?? []}
+                newReviewHref={`${returnTo}?review=new`}
+                buildReviewDetailHref={(reviewId) => `${returnTo}?reviewDetail=${reviewId}`}
               />
             ))
           ) : (
@@ -535,6 +639,17 @@ export default async function ClientPage({
           closeHref={historyDrawerCloseHref}
         />
       )}
+
+      {openReview === "new" && (
+        <RecordAccountReviewDrawer
+          clientId={client.id}
+          closeHref={returnTo}
+          managers={managers ?? []}
+          error={reviewError}
+        />
+      )}
+
+      {reviewDetail && <AccountReviewDetailDrawer review={reviewDetail} closeHref={returnTo} />}
     </div>
   );
 }

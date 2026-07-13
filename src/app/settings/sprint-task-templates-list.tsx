@@ -41,7 +41,15 @@ function TemplateFields({
   managers: { id: string; name: string }[];
   clients: { id: string; name: string }[];
 }) {
-  const [type, setType] = useState<TaskType>(template?.type ?? "otimizacao");
+  const [type, setType] = useState<TaskType>(template?.type ?? "verificacao_saldo");
+
+  // Etapa 57: "Otimização" não é mais oferecida pra criar template NOVO — o
+  // conceito virou Análise da Conta (account_reviews), com cadência própria.
+  // Um template já existente desse tipo (histórico, hoje desativado) ainda
+  // aparece corretamente se algum dia for aberto pra edição.
+  const typeOptions = Object.entries(TASK_TYPE_LABEL).filter(
+    ([value]) => value !== "otimizacao" || template?.type === "otimizacao",
+  );
 
   return (
     <div className="flex flex-1 flex-col gap-2">
@@ -52,7 +60,7 @@ function TemplateFields({
           onChange={(event) => setType(event.target.value as TaskType)}
           className={fieldClasses}
         >
-          {Object.entries(TASK_TYPE_LABEL).map(([value, label]) => (
+          {typeOptions.map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>

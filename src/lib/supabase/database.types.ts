@@ -82,10 +82,44 @@ export type OperationalEventType =
   | "monthly_report_started"
   | "monthly_report_ready_for_review"
   | "monthly_report_finalized"
-  | "monthly_report_reopened";
+  | "monthly_report_reopened"
+  | "account_review_recorded"
+  | "account_review_no_change"
+  | "account_review_optimization_performed"
+  | "account_review_issue_identified"
+  | "account_optimization_recorded";
 
-export type OperationalEntityType = "task" | "client" | "team_member" | "monthly_budget_change" | "monthly_report";
+export type OperationalEntityType =
+  | "task"
+  | "client"
+  | "team_member"
+  | "monthly_budget_change"
+  | "monthly_report"
+  | "account_review"
+  | "account_optimization";
 export type OperationalEventSource = "web" | "server" | "system" | "integration" | "migration" | "automation";
+
+/** Etapa 57 — Análises da Conta e Otimizações (taxonomias). Rótulos em
+ * lib/account-reviews.ts. */
+export type AccountReviewReason =
+  | "ROUTINE"
+  | "PERFORMANCE_ALERT"
+  | "INVESTMENT_ALERT"
+  | "CLIENT_REQUEST"
+  | "OPPORTUNITY"
+  | "OTHER";
+export type AccountReviewOutcome = "NO_CHANGE" | "OPTIMIZATION_PERFORMED" | "ISSUE_IDENTIFIED";
+export type OptimizationType =
+  | "CREATIVE"
+  | "AUDIENCE"
+  | "BID"
+  | "BUDGET"
+  | "CAMPAIGN"
+  | "AD_SET"
+  | "PLACEMENT"
+  | "ACCOUNT_STRUCTURE"
+  | "TRACKING"
+  | "OTHER";
 
 export interface Database {
   public: {
@@ -834,6 +868,190 @@ export interface Database {
           },
         ];
       };
+      account_review_cadences: {
+        Row: {
+          client_id: string;
+          reviews_per_week: number;
+          max_business_days_without_review: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          client_id: string;
+          reviews_per_week?: number;
+          max_business_days_without_review?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          client_id?: string;
+          reviews_per_week?: number;
+          max_business_days_without_review?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "account_review_cadences_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: true;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      account_reviews: {
+        Row: {
+          id: string;
+          organization_id: string;
+          client_id: string;
+          sprint_id: string;
+          team_member_id: string | null;
+          performed_by_auth_user_id: string | null;
+          reviewed_at: string;
+          reason: AccountReviewReason;
+          reason_other_description: string | null;
+          outcome: AccountReviewOutcome;
+          notes: string | null;
+          issue_description: string | null;
+          issue_category: string | null;
+          issue_task_id: string | null;
+          previous_review_at: string | null;
+          seconds_since_previous_review: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          client_id: string;
+          sprint_id: string;
+          team_member_id?: string | null;
+          performed_by_auth_user_id?: string | null;
+          reviewed_at?: string;
+          reason: AccountReviewReason;
+          reason_other_description?: string | null;
+          outcome: AccountReviewOutcome;
+          notes?: string | null;
+          issue_description?: string | null;
+          issue_category?: string | null;
+          issue_task_id?: string | null;
+          previous_review_at?: string | null;
+          seconds_since_previous_review?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          client_id?: string;
+          sprint_id?: string;
+          team_member_id?: string | null;
+          performed_by_auth_user_id?: string | null;
+          reviewed_at?: string;
+          reason?: AccountReviewReason;
+          reason_other_description?: string | null;
+          outcome?: AccountReviewOutcome;
+          notes?: string | null;
+          issue_description?: string | null;
+          issue_category?: string | null;
+          issue_task_id?: string | null;
+          previous_review_at?: string | null;
+          seconds_since_previous_review?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "account_reviews_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "account_reviews_sprint_id_fkey";
+            columns: ["sprint_id"];
+            isOneToOne: false;
+            referencedRelation: "sprints";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "account_reviews_team_member_id_fkey";
+            columns: ["team_member_id"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "account_reviews_issue_task_id_fkey";
+            columns: ["issue_task_id"];
+            isOneToOne: false;
+            referencedRelation: "tasks";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      account_optimizations: {
+        Row: {
+          id: string;
+          organization_id: string;
+          account_review_id: string;
+          client_id: string;
+          sprint_id: string;
+          optimization_type: OptimizationType;
+          optimization_action: string;
+          description: string | null;
+          reason: string | null;
+          expected_impact: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          account_review_id: string;
+          client_id: string;
+          sprint_id: string;
+          optimization_type: OptimizationType;
+          optimization_action: string;
+          description?: string | null;
+          reason?: string | null;
+          expected_impact?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          account_review_id?: string;
+          client_id?: string;
+          sprint_id?: string;
+          optimization_type?: OptimizationType;
+          optimization_action?: string;
+          description?: string | null;
+          reason?: string | null;
+          expected_impact?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "account_optimizations_account_review_id_fkey";
+            columns: ["account_review_id"];
+            isOneToOne: false;
+            referencedRelation: "account_reviews";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "account_optimizations_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       sprint_planned_allocations: {
         Row: {
           id: string;
@@ -1320,6 +1538,29 @@ export interface Database {
           correlationId: string;
           wasOnTime: boolean;
           delaySeconds: number;
+        };
+      };
+      record_account_review: {
+        Args: {
+          p_client_id: string;
+          p_team_member_id: string;
+          p_auth_user_id: string | null;
+          p_reason: AccountReviewReason;
+          p_reason_other_description: string | null;
+          p_outcome: AccountReviewOutcome;
+          p_notes: string | null;
+          p_issue_description: string | null;
+          p_issue_category: string | null;
+          p_optimizations: unknown;
+          p_create_task: boolean;
+          p_task_responsible_id: string | null;
+          p_task_due_date: string | null;
+          p_source?: OperationalEventSource;
+        };
+        Returns: {
+          reviewId: string;
+          sprintId: string;
+          taskId: string | null;
         };
       };
     };

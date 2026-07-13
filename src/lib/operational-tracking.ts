@@ -1,17 +1,22 @@
 import type { TaskStatus, TaskType } from "@/lib/supabase/database.types";
 import { effectiveTaskStatus } from "@/lib/task-status";
 
-type TrackedTaskType = "otimizacao" | "reuniao" | "entrega_criativo";
+type TrackedTaskType = "reuniao" | "entrega_criativo";
 
 /** Bloco "Acompanhamento operacional" da página do cliente (Etapa 51,
- * ajustado na Etapa 54) — última/próxima ocorrência de cada tipo de tarefa
- * recorrente que já existe no sistema (otimização, reunião, entrega de
- * criativo). Nunca inventa uma regra de cadência: "próxima" é só a próxima
- * tarefa já cadastrada desse tipo, não uma previsão calculada. Uma tarefa
- * ATRASADA desse tipo sempre vence sobre uma futura como "próxima" — do
- * contrário uma reunião vencida e nunca reagendada ficaria invisível aqui
- * (nem "última", que exige status feito, nem "próxima", que antes só
- * olhava due_date >= hoje). `nextIsOverdue` deixa a UI destacar esse caso. */
+ * ajustado na Etapa 54 e 57) — última/próxima ocorrência de cada tipo de
+ * tarefa recorrente que já existe no sistema (reunião, entrega de
+ * criativo). "Otimização" saiu deste tracker na Etapa 57: virou Análise da
+ * Conta (account_reviews/account_optimizations), com cadência configurável
+ * própria — ver `lib/account-review-cadence.ts` e
+ * `account-review-cadence-panel.tsx`, exibido ao lado deste painel. Nunca
+ * inventa uma regra de cadência pros dois tipos que sobraram aqui: "próxima"
+ * é só a próxima tarefa já cadastrada desse tipo, não uma previsão
+ * calculada. Uma tarefa ATRASADA desse tipo sempre vence sobre uma futura
+ * como "próxima" — do contrário uma reunião vencida e nunca reagendada
+ * ficaria invisível aqui (nem "última", que exige status feito, nem
+ * "próxima", que antes só olhava due_date >= hoje). `nextIsOverdue` deixa a
+ * UI destacar esse caso. */
 export interface OperationalTrackingRow {
   type: TrackedTaskType;
   lastDoneDate: string | null;
@@ -23,7 +28,7 @@ export function computeOperationalTracking(
   tasks: { type: TaskType; status: TaskStatus; due_date: string }[],
   today: Date,
 ): Record<TrackedTaskType, OperationalTrackingRow> {
-  const types: TrackedTaskType[] = ["otimizacao", "reuniao", "entrega_criativo"];
+  const types: TrackedTaskType[] = ["reuniao", "entrega_criativo"];
 
   const result = {} as Record<TrackedTaskType, OperationalTrackingRow>;
 

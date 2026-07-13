@@ -2243,6 +2243,135 @@ automático da sync, refinamentos de UX, etc.
     `app/reports/report-data.ts`, `app/team/actions.ts`,
     `app/team/page.tsx`, `app/team/team-member-drawer.tsx`.
 
+57. ✅ **Análises da Conta e Otimizações (substitui a tarefa recorrente "Otimização")**
+
+    **Estrutura anterior**: "otimização" era só `tasks.type = 'otimizacao'`,
+    gerada automaticamente por um template global (`sprint_task_templates`,
+    Etapa 12) — o gestor só marcava a tarefa como feita, sem nenhum registro
+    do que foi analisado/alterado, sem cadência configurável (só um lookback
+    fixo de 14 dias já usado em `buildAttentionAlerts`), sem correlação com
+    otimizações específicas. `lib/operational-tracking.ts` já documentava
+    explicitamente essa ausência de regra de cadência.
+
+    **Remoção da geração futura**: o(s) template(s) globais com
+    `type = 'otimizacao'` foram desativados (`is_active = false`, nunca
+    apagados) — identificado pelo `type` sistêmico da coluna, nunca por
+    comparação de título (título de template não-"outro" é derivado,
+    inclusive não editável na UI). Tarefas antigas desse tipo permanecem
+    intactas para histórico/auditoria; a tela de templates globais
+    (`/settings/sprint-task-templates`) não deixa mais criar um NOVO
+    template do tipo Otimização (a opção só aparece se um template já
+    existente desse tipo estiver sendo editado), fechando o loop de alguém
+    recriar o padrão antigo sem querer. O formulário de nova tarefa avulsa
+    também parou de sugerir "Otimização" como tipo padrão.
+
+    **`account_reviews`**: uma linha por análise — sem data fixa, `reviewed_at`
+    sempre resolvido no servidor (nunca aceito do frontend), vínculo
+    automático e obrigatório com a sprint (`start_date <= reviewed_at <=
+    end_date` no fuso operacional; zero ou mais de uma sprint correspondente
+    vira erro explícito, nunca salva silenciosamente). `previous_review_at`/
+    `seconds_since_previous_review` gravados no momento da criação (nunca
+    recalculados depois). Motivo (`reason`, 6 opções) e resultado
+    (`outcome`: `NO_CHANGE`/`OPTIMIZATION_PERFORMED`/`ISSUE_IDENTIFIED`) como
+    taxonomia centralizada (`lib/account-reviews.ts`), com `check` no banco
+    garantindo as regras de negócio (NO_CHANGE sem otimizações,
+    OPTIMIZATION_PERFORMED com pelo menos uma, ISSUE_IDENTIFIED com
+    descrição). Imutável nesta primeira versão — sem policy de update/delete
+    pra ninguém.
+
+    **`account_optimizations`**: sempre pertence a uma análise (nunca isolada);
+    10 tipos × ações compatíveis por tipo (seções 7/8 do pedido), com `check`
+    no banco validando a combinação tipo↔ação (defesa em profundidade — a UI
+    já só mostra ações compatíveis com o tipo selecionado).
+
+    **Transação**: `record_account_review` (função de banco) grava a
+    análise + as otimizações + a tarefa opcional da pendência + todos os
+    `operational_events` correspondentes numa única transação — nunca
+    análise salva sem otimização obrigatória, nunca evento sem entidade.
+    `account_review_recorded` (sempre) + o evento específico do resultado
+    (`account_review_no_change`/`_optimization_performed`/`_issue_identified`)
+    + um `account_optimization_recorded` por otimização + `task_created`
+    (se a pendência virou tarefa) compartilham o mesmo `correlation_id`.
+
+    **Registro rápido**: drawer com motivo → resultado → seção condicional
+    (otimizações realizadas / problema identificado). Primeiro componente
+    verdadeiramente client-side do app (decisão deliberada, ver comentário
+    no próprio arquivo) — o fluxo tem 3 seções condicionais + um repetidor
+    dinâmico de otimizações que o padrão CSS-only (`<details>`/`peer`) já
+    usado no projeto não cobre sem gambiarra; ainda assim submete por uma
+    única Server Action nativa, sem API própria. Cada otimização é um
+    registro independente (permite mais de uma do mesmo tipo, ex.: Criativo
+    → Pausou + Criativo → Criou teste).
+
+    **Cadência**: `account_review_cadences` (uma linha por cliente,
+    configurável em Editar cliente — `reviews_per_week`,
+    `max_business_days_without_review`) — nunca datas fixas, só a meta e o
+    intervalo tolerado. Conta no máximo 1 análise por dia civil por cliente
+    pra frequência semanal (evita múltiplas análises no mesmo dia inflarem a
+    meta, sem nunca descartar os eventos em si — o histórico completo
+    continua existindo). `businessDaysSince` (já existente, Etapa 15) é
+    reaproveitado pro intervalo atual, nunca duplicado.
+
+    **UI**: seção "Análises da conta" dentro do componente compartilhado de
+    Sprint (logo depois de Tarefas — usado nos 4 pontos onde `SprintCard`/
+    `SprintCardBody` já é chamado), resumo compacto no card fechado
+    ("N análises"), drawer de detalhe (sem JSON bruto, sem IDs técnicos). Na
+    página do cliente, o bloco "Acompanhamento operacional" perdeu a coluna
+    fixa de Otimização (virou só Reunião/Entrega de criativo,
+    `lib/operational-tracking.ts` reduzido de 3 pra 2 tipos rastreados) e
+    ganhou um painel irmão "Análises da conta" com os 5 dados pedidos:
+    Última análise / Cadência / Intervalo atual / Última otimização /
+    Próximo limite.
+
+    **Áreas que dependiam da tarefa Otimização — o que foi ajustado e o que
+    ficou como gap explícito**: o sinal "otimização recente" usado em
+    `buildAttentionAlerts` (Prioridades da página do cliente) e os textos de
+    `lib/client-priority.ts`/`lib/account-priority.ts` ("Otimização vencida"
+    → "Análise da conta vencida" etc.) já usam `account_reviews`. **Gap
+    conhecido, não corrigido nesta rodada** (disclosure explícito): o mesmo
+    sinal em `app/operation/operation-data.ts` (Visão Geral/Sprints) e o
+    contador `optimizationsDone` de `lib/monthly-reports.ts`
+    (`computeAgencyExecutionSummary`, usado no Relatório Mensal) continuam
+    lendo `tasks.type === 'otimizacao'` — funcionam sem quebrar hoje (tarefas
+    históricas ainda existem), mas como nenhuma tarefa nova desse tipo será
+    gerada, esses dois pontos vão parar de refletir a realidade em poucas
+    semanas (o lookback de 14 dias vai esvaziar) se não forem migrados pra
+    `account_reviews` numa etapa seguinte — sinalizado aqui de propósito em
+    vez de ser descoberto depois.
+
+    **Não implementado nesta etapa** (fora do pedido): dashboard completo de
+    Inteligência Operacional (as queries por gestor/cliente/sprint/tipo já
+    são possíveis diretamente contra `account_reviews`/`account_optimizations`,
+    que carregam todas as chaves necessárias — `team_member_id`, `client_id`,
+    `sprint_id`, `optimization_type` — sem precisar de schema novo); jobs de
+    monitoramento automático; edição/correção de análise já registrada
+    (imutável nesta versão); gamificação, score, ranking, bônus.
+
+    **Testes**: não há suíte automatizada neste projeto. Confirmado por
+    leitura/rastreamento manual: `record_account_review` valida motivo/
+    resultado antes de gravar (mesmas regras do `check` do banco, mensagem
+    mais amigável); `reviewed_at`/`team_member_id`/`organization_id` sempre
+    resolvidos no servidor, nunca aceitos do formulário; a RLS de insert
+    exige `team_member_id = current_team_member_id()`; zero ou duas sprints
+    candidatas vira exceção (nunca salva errado); tarefas históricas de
+    Otimização continuam existindo e navegáveis; Reporte/Checar saldo
+    continuam sendo gerados normalmente pelos templates ativos. `tsc
+    --noEmit`, `npm run lint` e `npm run build` sem erros.
+
+    Arquivos novos: `supabase/account-reviews.sql`, `lib/account-reviews.ts`,
+    `lib/account-review-cadence.ts`, `app/clients/account-review-actions.ts`,
+    `app/clients/account-reviews-section.tsx`,
+    `app/clients/record-account-review-drawer.tsx`,
+    `app/clients/account-review-detail-drawer.tsx`,
+    `app/clients/account-review-cadence-panel.tsx`. Alterados:
+    `lib/supabase/database.types.ts`, `lib/operational-events.ts`,
+    `lib/operational-tracking.ts`, `lib/attention-alerts.ts`,
+    `lib/client-priority.ts`, `lib/account-priority.ts`,
+    `app/clients/[id]/page.tsx`, `app/clients/[id]/edit/page.tsx`,
+    `app/clients/[id]/tasks/new/page.tsx`, `app/clients/sprint-card.tsx`,
+    `app/clients/operational-tracking-panel.tsx`,
+    `app/settings/sprint-task-templates-list.tsx`.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

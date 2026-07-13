@@ -13,6 +13,7 @@ import type { TaskListItem } from "./task-row";
 import { resetSprintSpendSourceAction, updateSprintActualSpendAction } from "./sprint-actions";
 import { MoneyInput } from "./money-input";
 import { SprintFinancialBar } from "./sprint-financial-bar";
+import { AccountReviewsSection, type AccountReviewSummaryItem } from "./account-reviews-section";
 
 const TEMPORAL_LABEL = {
   futura: "Futura",
@@ -82,6 +83,9 @@ export function SprintCardBody({
   alerts,
   openClientHref,
   buildTaskHref,
+  accountReviews,
+  newReviewHref,
+  buildReviewDetailHref,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -93,6 +97,12 @@ export function SprintCardBody({
   alerts?: AttentionAlert[];
   openClientHref?: string;
   buildTaskHref?: (taskId: string) => string;
+  /** Análises da Conta desta sprint (Etapa 57) — opcional: só quem já
+   * consulta account_reviews passa isto (mesmo padrão de `alerts`/
+   * `executionLabel`, nem toda tela que usa este componente precisa). */
+  accountReviews?: AccountReviewSummaryItem[];
+  newReviewHref?: string;
+  buildReviewDetailHref?: (reviewId: string) => string;
 }) {
   const saldo = sprint.plannedSpend - sprint.actualSpend;
   const saldoText =
@@ -266,6 +276,14 @@ export function SprintCardBody({
 
         <SprintTaskList tasks={tasks} clientId={clientId} sprintId={sprint.sprintId} buildTaskHref={buildTaskHref} />
 
+        {accountReviews && newReviewHref && buildReviewDetailHref && (
+          <AccountReviewsSection
+            reviews={accountReviews}
+            newReviewHref={newReviewHref}
+            buildDetailHref={buildReviewDetailHref}
+          />
+        )}
+
         <details className="mt-3 border-t border-border pt-2 [&_summary]:cursor-pointer [&_summary]:list-none">
           <summary className="text-xs font-medium text-muted-foreground hover:text-brand">
             Ver detalhes da sprint {comments.length > 0 ? `(${comments.length} comentário${comments.length !== 1 ? "s" : ""})` : ""}
@@ -330,6 +348,9 @@ export function SprintCard({
   alerts,
   openClientHref,
   buildTaskHref,
+  accountReviews,
+  newReviewHref,
+  buildReviewDetailHref,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -342,6 +363,9 @@ export function SprintCard({
   alerts?: AttentionAlert[];
   openClientHref?: string;
   buildTaskHref?: (taskId: string) => string;
+  accountReviews?: AccountReviewSummaryItem[];
+  newReviewHref?: string;
+  buildReviewDetailHref?: (reviewId: string) => string;
 }) {
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
   const isCurrent = sprint.temporalStatus === "atual";
@@ -379,6 +403,11 @@ export function SprintCard({
           <span className="hidden sm:inline">
             {tasksDone}/{tasks.length} tarefas
           </span>
+          {accountReviews && (
+            <span className="hidden sm:inline">
+              {accountReviews.length} {accountReviews.length === 1 ? "análise" : "análises"}
+            </span>
+          )}
           <span
             className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[sprint.status]}`}
           >
@@ -404,6 +433,9 @@ export function SprintCard({
         alerts={alerts}
         openClientHref={openClientHref}
         buildTaskHref={buildTaskHref}
+        accountReviews={accountReviews}
+        newReviewHref={newReviewHref}
+        buildReviewDetailHref={buildReviewDetailHref}
       />
     </details>
   );

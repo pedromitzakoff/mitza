@@ -4,7 +4,6 @@ import { formatShortDate } from "@/lib/format";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 
 const TYPE_LABEL: Record<OperationalTrackingRow["type"], string> = {
-  otimizacao: "Otimização",
   reuniao: "Reunião",
   entrega_criativo: "Entrega de criativo",
 };
@@ -38,12 +37,12 @@ export function OperationalTrackingPanel({
   lastExecutionLabel,
   lastExecutionStatus,
 }: {
-  tracking: Record<"otimizacao" | "reuniao" | "entrega_criativo", OperationalTrackingRow>;
+  tracking: Record<"reuniao" | "entrega_criativo", OperationalTrackingRow>;
   today: Date;
   lastExecutionLabel: string;
   lastExecutionStatus: OperationalActivityStatus;
 }) {
-  const rows = (["otimizacao", "reuniao", "entrega_criativo"] as const).map((type) => tracking[type]);
+  const rows = (["reuniao", "entrega_criativo"] as const).map((type) => tracking[type]);
 
   return (
     <div className="rounded-lg border border-border bg-card p-3">
@@ -53,7 +52,7 @@ export function OperationalTrackingPanel({
           Última execução operacional: {lastExecutionLabel}
         </p>
       </div>
-      <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {rows.map((row) => {
           const lastLabel = row.lastDoneDate === null ? "Sem registro" : formatLastOptimizationLabel(row.lastDoneDate, today);
           return (
