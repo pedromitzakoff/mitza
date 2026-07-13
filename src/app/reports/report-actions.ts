@@ -11,6 +11,7 @@ import type {
   KpiDirection,
   KpiUnit,
   MonthlyReportStatus,
+  ReportActionItemDependency,
   ReportActionItemStatus,
   ReportTimelineEventType,
 } from "@/lib/supabase/database.types";
@@ -38,6 +39,11 @@ export async function updateReportFieldsAction(clientId: string, monthStart: str
     "next_month_problems",
     "next_month_opportunities",
     "next_month_tests",
+    "analysis_what_worked",
+    "analysis_what_didnt_work",
+    "analysis_problems",
+    "analysis_opportunities",
+    "analysis_learnings",
   ]) {
     if (formData.has(key)) {
       update[key] = String(formData.get(key) ?? "").trim() || null;
@@ -131,20 +137,24 @@ export async function addActionItemAction(clientId: string, monthStart: string, 
   const supabase = await createSupabaseClient();
   const { id: reportId } = await getOrCreateReport(supabase, clientId, monthStart);
 
+  const title = String(formData.get("title") ?? "").trim() || null;
   const description = String(formData.get("description") ?? "").trim();
   const responsibleId = String(formData.get("responsible_id") ?? "") || null;
   const dueDate = String(formData.get("due_date") ?? "") || null;
+  const dependency = String(formData.get("dependency") ?? "") || null;
 
   const returnTo = reportsUrl(clientId, monthStart);
   if (!description) {
-    redirect(`${returnTo}&error=${encodeURIComponent("Descrição da ação é obrigatória")}`);
+    redirect(`${returnTo}&error=${encodeURIComponent("Descrição da pendência é obrigatória")}`);
   }
 
   const { error } = await supabase.from("report_action_items").insert({
     report_id: reportId,
+    title,
     description,
     responsible_id: responsibleId,
     due_date: dueDate,
+    dependency: dependency as ReportActionItemDependency | null,
   });
 
   if (error) redirect(`${returnTo}&error=${encodeURIComponent(error.message)}`);
@@ -326,6 +336,7 @@ export async function finalizeReportAction(clientId: string, monthStart: string)
     financial: view.financial,
     kpis: view.kpis,
     execution: view.execution,
+    sprintBehavior: view.sprintBehavior,
     timelineEvents: view.timelineEvents,
     comments: view.comments,
     actionItems: view.actionItems,

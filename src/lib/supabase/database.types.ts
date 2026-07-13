@@ -40,6 +40,7 @@ export type ReportTimelineEventType =
   | "comentario"
   | "outro";
 export type ReportActionItemStatus = "pendente" | "em_andamento" | "concluido";
+export type ReportActionItemDependency = "agencia" | "cliente" | "terceiro";
 
 export interface Database {
   public: {
@@ -761,6 +762,11 @@ export interface Database {
           next_month_problems: string | null;
           next_month_opportunities: string | null;
           next_month_tests: string | null;
+          analysis_what_worked: string | null;
+          analysis_what_didnt_work: string | null;
+          analysis_problems: string | null;
+          analysis_opportunities: string | null;
+          analysis_learnings: string | null;
           finalized_by: string | null;
           finalized_at: string | null;
           snapshot: Record<string, unknown> | null;
@@ -777,6 +783,11 @@ export interface Database {
           next_month_problems?: string | null;
           next_month_opportunities?: string | null;
           next_month_tests?: string | null;
+          analysis_what_worked?: string | null;
+          analysis_what_didnt_work?: string | null;
+          analysis_problems?: string | null;
+          analysis_opportunities?: string | null;
+          analysis_learnings?: string | null;
           finalized_by?: string | null;
           finalized_at?: string | null;
           snapshot?: Record<string, unknown> | null;
@@ -793,6 +804,11 @@ export interface Database {
           next_month_problems?: string | null;
           next_month_opportunities?: string | null;
           next_month_tests?: string | null;
+          analysis_what_worked?: string | null;
+          analysis_what_didnt_work?: string | null;
+          analysis_problems?: string | null;
+          analysis_opportunities?: string | null;
+          analysis_learnings?: string | null;
           finalized_by?: string | null;
           finalized_at?: string | null;
           snapshot?: Record<string, unknown> | null;
@@ -956,9 +972,11 @@ export interface Database {
         Row: {
           id: string;
           report_id: string;
+          title: string | null;
           description: string;
           responsible_id: string | null;
           due_date: string | null;
+          dependency: ReportActionItemDependency | null;
           status: ReportActionItemStatus;
           sent_to_task_id: string | null;
           created_at: string;
@@ -966,9 +984,11 @@ export interface Database {
         Insert: {
           id?: string;
           report_id: string;
+          title?: string | null;
           description: string;
           responsible_id?: string | null;
           due_date?: string | null;
+          dependency?: ReportActionItemDependency | null;
           status?: ReportActionItemStatus;
           sent_to_task_id?: string | null;
           created_at?: string;
@@ -976,9 +996,11 @@ export interface Database {
         Update: {
           id?: string;
           report_id?: string;
+          title?: string | null;
           description?: string;
           responsible_id?: string | null;
           due_date?: string | null;
+          dependency?: ReportActionItemDependency | null;
           status?: ReportActionItemStatus;
           sent_to_task_id?: string | null;
           created_at?: string;

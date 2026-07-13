@@ -1648,6 +1648,98 @@ automático da sync, refinamentos de UX, etc.
     migrados antes de apagar) em favor da tarefa que está sendo movida, que
     pode carregar histórico real.
 
+51 ✅ Reorganização da relação Página do Cliente x Relatório do Cliente —
+    as duas telas continuam separadas (objetivos diferentes: Cliente =
+    acompanhar/decidir/executar; Relatório = revisar/analisar/explicar/
+    planejar), mas ganharam navegação direta uma pra outra e dois blocos que
+    faltavam no Relatório pra ele funcionar como fechamento mensal de
+    gestão, não só painel de mídia.
+
+    **Levantamento (antes de qualquer código)**: a única duplicação real
+    entre as duas páginas era o resumo financeiro do mês (planejado/
+    realizado/%) — já apresentado de formas diferentes (cards + gráfico no
+    Cliente; bloco compacto + barra no Relatório) e já vindo das mesmas
+    funções centrais (`sumPlannedForMonth`/`sumActualSpendForMonth`/
+    `classifySpendStatus`), então não havia cálculo duplicado, só a mesma
+    pergunta respondida nos dois lugares — mantido, é a informação
+    compartilhada que o próprio pedido permite (seção 23). Dois blocos do
+    pedido não existiam em lugar nenhum: "Acompanhamento operacional" (Bloco
+    do Cliente) e "Comportamento por sprint" + "Análise do gestor" (Blocos
+    do Relatório). "Pendências" já existia como `report_action_items`, mas
+    misturado dentro de "Próximo mês" — sem separação de "execução em
+    aberto" (Pendências) x "síntese estratégica" (Próximos Passos). As
+    informações estruturais do cliente (Etapa 27) só apareciam em
+    Configurações > Clientes, nunca na própria página do cliente.
+
+    **Migration** (`supabase/report-manager-analysis.sql`): `monthly_reports`
+    ganha 5 colunas pro Bloco "Análise do gestor" (retrospectivo: o que
+    funcionou, o que não funcionou, problemas, oportunidades, aprendizados
+    — nunca confundido com `next_month_*`, que é prospectivo); `report_action_items`
+    ganha `title` e `dependency` (agência/cliente/terceiro) pras Pendências.
+    Aditiva — nenhuma coluna existente muda, nenhum dado é migrado ou
+    reatribuído.
+
+    **Página do Cliente** (central operacional, sem virar relatório):
+    - `ClientContextBar`: ação "Ver relatório" (linka direto pro relatório
+      do cliente no mês atual, sem passar pela lista geral) e status
+      contratual + tempo de relacionamento (reaproveita `CLIENT_STATUS_*`/
+      `formatRelationshipDuration`, já existentes desde a Etapa 27/30.4).
+    - `OperationalTrackingPanel` (novo): última/próxima otimização, reunião
+      e entrega de criativo, numa faixa compacta — nunca inventa cadência:
+      "próxima" é sempre a próxima tarefa desse tipo já cadastrada, nunca
+      uma previsão calculada. Lógica pura em `lib/operational-tracking.ts`.
+    - `EssentialInfoPanel` (novo): as informações estruturais do cliente
+      (Etapa 27 — objetivo, produto/serviço principal, região, público,
+      diferenciais, restrições, datas sazonais, resumo operacional,
+      observações), num `<details>` recolhível por padrão — referência de
+      contexto, não compete com o operacional acima.
+    - Nada removido: Sprint Atual, tarefas, orçamento, gráfico e alertas
+      continuam exatamente como estavam.
+
+    **Relatório do Cliente** (fechamento mensal de gestão): 3 blocos novos/
+    reorganizados, usando sempre dados e regras já centrais:
+    - **Comportamento por sprint** (novo): uma linha por sprint do mês
+      (período/planejado/realizado/%/situação/execução), via
+      `computeSprintBehaviorRows` (`lib/monthly-reports.ts`) — reaproveita
+      `computeSprintMonthActualSpend`/`computeSprintExpectedToDate`/
+      `classifySpendStatus`/`formatSprintPeriodLabel`, nenhum cálculo novo.
+    - **Análise do gestor** (novo): os 5 campos estruturados do pedido,
+      editáveis pela mesma action genérica (`updateReportFieldsAction`) já
+      usada pelo resumo executivo e por Próximos Passos.
+    - **Pendências** (separado de "Próximo mês"): a lista que já existia
+      (`report_action_items`) agora é sua própria seção, com título e
+      dependência (agência/cliente/terceiro) — nunca substitui as tarefas
+      operacionais da sprint, que continuam só em `/clients/[id]`.
+    - **Próximos Passos**: os campos `next_month_*` que já existiam,
+      isolados da lista de pendências — síntese estratégica, não checklist.
+    - "Voltar ao cliente" no cabeçalho, ao lado de "← Relatórios" — preserva
+      a navegação direta nos dois sentidos pedida na seção 24.
+    - Snapshot de finalização (`finalizeReportAction`) passa a incluir
+      `sprintBehavior`, pro relatório finalizado congelar também esse bloco
+      novo — os 5 campos de Análise do Gestor não entram no snapshot pelo
+      mesmo motivo que `next_month_*` nunca entraram: são colunas de
+      `monthly_reports`, não dado recalculado a partir de sprints/tarefas.
+
+    **Não implementado nesta rodada** (fora de escopo, por pedido explícito):
+    seletor de mês na própria página do cliente (ela sempre mostra o mês
+    atual — "Ver relatório" linka pro relatório desse mesmo mês); PDF, IA,
+    link público, novas integrações, automação de "enviar pendência pra
+    tarefa" além da que já existia.
+
+    **Testes**: não há suíte automatizada de testes neste projeto (mesma
+    situação de todas as etapas anteriores). Verificado manualmente: nenhum
+    `onClick`/`onChange`/`onSubmit` novo em Server Component (todas as ações
+    novas usam `action={...}` de Server Actions, mesmo padrão de sempre);
+    `tsc --noEmit`, lint e build sem erros.
+
+    Arquivos novos: `supabase/report-manager-analysis.sql`,
+    `lib/operational-tracking.ts`, `app/clients/operational-tracking-panel.tsx`,
+    `app/clients/essential-info-panel.tsx`. Alterados:
+    `lib/supabase/database.types.ts`, `lib/monthly-reports.ts`,
+    `app/reports/report-data.ts`, `app/reports/report-actions.ts`,
+    `app/reports/[clientId]/page.tsx`, `app/clients/[id]/layout.tsx`,
+    `app/clients/client-context-bar.tsx`, `app/clients/[id]/page.tsx`.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

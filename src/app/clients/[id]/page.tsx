@@ -22,12 +22,15 @@ import { effectiveTaskStatus } from "@/lib/task-status";
 import { resolveBudgetEffectiveDate } from "@/lib/monthly-budget";
 import { todayDateString } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
+import { computeOperationalTracking } from "@/lib/operational-tracking";
 import { ClientMetricsCards } from "../client-metrics-cards";
 import { AttentionPanel } from "../attention-panel";
 import { SpendChart } from "../spend-chart";
 import { SprintCard } from "../sprint-card";
 import { TaskList } from "../task-list";
 import { Section } from "../section";
+import { OperationalTrackingPanel } from "../operational-tracking-panel";
+import { EssentialInfoPanel } from "../essential-info-panel";
 import type { CommentItem } from "../comment-thread";
 import type { TaskListItem } from "../task-row";
 import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
@@ -120,7 +123,9 @@ export default async function ClientPage({
   // retorna linha, o que aqui vira 404 (sem revelar que o cliente existe).
   const { data: client } = await supabase
     .from("clients")
-    .select("id, name")
+    .select(
+      "id, name, main_objective, main_product_or_service, operation_region, primary_audience, client_differentials, client_restrictions, important_seasonal_dates, operational_summary, important_notes",
+    )
     .eq("id", id)
     .is("deleted_at", null)
     .single();
@@ -272,6 +277,7 @@ export default async function ClientPage({
   const sprintCommentsById = groupByCommentableId(sprintComments);
   const taskCommentsById = groupByCommentableId(taskComments);
   const { bySprintId: tasksBySprintId, unlinked: unlinkedTasks } = groupBySprintId(tasks ?? []);
+  const operationalTracking = computeOperationalTracking(tasks ?? [], today);
 
   const tasksThisMonth = (tasks ?? []).filter(
     (task) => task.due_date >= firstDay && task.due_date <= lastDay,
@@ -392,6 +398,10 @@ export default async function ClientPage({
         <AttentionPanel alerts={alerts} />
       </div>
 
+      <div className="mt-3">
+        <OperationalTrackingPanel tracking={operationalTracking} today={today} />
+      </div>
+
       <div className="mt-3 rounded-lg border border-border bg-card p-3">
         <h2 className="text-sm font-medium text-foreground">
           Planejado acumulado x gasto real acumulado
@@ -460,6 +470,22 @@ export default async function ClientPage({
         </p>
         <TaskList tasks={unlinkedTasks} clientId={client.id} />
       </Section>
+
+      <div className="mt-3">
+        <EssentialInfoPanel
+          mainObjective={client.main_objective}
+          mainProductOrService={client.main_product_or_service}
+          operationRegion={client.operation_region}
+          primaryAudience={client.primary_audience}
+          clientDifferentials={client.client_differentials}
+          clientRestrictions={client.client_restrictions}
+          importantSeasonalDates={client.important_seasonal_dates}
+          operationalSummary={client.operational_summary}
+          importantNotes={client.important_notes}
+          isAdmin={isAdmin}
+          editHref={`/clients/${client.id}/edit`}
+        />
+      </div>
 
       {openTask && (
         <TaskDrawerPanel

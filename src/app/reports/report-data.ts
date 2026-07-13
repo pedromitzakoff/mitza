@@ -7,11 +7,17 @@ import {
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import { computeAgencyExecutionSummary, type AgencyExecutionSummary } from "@/lib/monthly-reports";
+import {
+  computeAgencyExecutionSummary,
+  computeSprintBehaviorRows,
+  type AgencyExecutionSummary,
+  type SprintBehaviorRow,
+} from "@/lib/monthly-reports";
 import type {
   KpiDirection,
   KpiUnit,
   MonthlyReportStatus,
+  ReportActionItemDependency,
   ReportActionItemStatus,
   ReportTimelineEventType,
 } from "@/lib/supabase/database.types";
@@ -73,10 +79,12 @@ export interface ReportTimelineEventRow {
 
 export interface ReportActionItemRow {
   id: string;
+  title: string | null;
   description: string;
   responsibleId: string | null;
   responsibleName: string | null;
   dueDate: string | null;
+  dependency: ReportActionItemDependency | null;
   status: ReportActionItemStatus;
   sentToTaskId: string | null;
 }
@@ -103,8 +111,14 @@ export interface ReportViewData {
   financial: { planned: number; actual: number; expectedToDate: number; status: SpendStatus };
   kpis: ReportKpiRow[];
   execution: AgencyExecutionSummary;
+  sprintBehavior: SprintBehaviorRow[];
   timelineEvents: ReportTimelineEventRow[];
   comments: ReportCommentRow[];
+  analysisWhatWorked: string | null;
+  analysisWhatDidntWork: string | null;
+  analysisProblems: string | null;
+  analysisOpportunities: string | null;
+  analysisLearnings: string | null;
   nextMonthPriority: string | null;
   nextMonthProblems: string | null;
   nextMonthOpportunities: string | null;
@@ -139,7 +153,7 @@ export async function buildReportViewData(
   const { data: report } = await supabase
     .from("monthly_reports")
     .select(
-      "id, status, executive_summary, next_month_priority, next_month_problems, next_month_opportunities, next_month_tests, snapshot, finalized_at, finalized_by:profiles!monthly_reports_finalized_by_fkey(name)",
+      "id, status, executive_summary, next_month_priority, next_month_problems, next_month_opportunities, next_month_tests, analysis_what_worked, analysis_what_didnt_work, analysis_problems, analysis_opportunities, analysis_learnings, snapshot, finalized_at, finalized_by:profiles!monthly_reports_finalized_by_fkey(name)",
     )
     .eq("client_id", clientId)
     .eq("month_start", monthRange.firstDay)
@@ -162,8 +176,14 @@ export async function buildReportViewData(
       financial: snap.financial as ReportViewData["financial"],
       kpis: snap.kpis as ReportKpiRow[],
       execution: snap.execution as AgencyExecutionSummary,
+      sprintBehavior: (snap.sprintBehavior as SprintBehaviorRow[]) ?? [],
       timelineEvents: snap.timelineEvents as ReportTimelineEventRow[],
       comments: snap.comments as ReportCommentRow[],
+      analysisWhatWorked: report.analysis_what_worked,
+      analysisWhatDidntWork: report.analysis_what_didnt_work,
+      analysisProblems: report.analysis_problems,
+      analysisOpportunities: report.analysis_opportunities,
+      analysisLearnings: report.analysis_learnings,
       nextMonthPriority: report.next_month_priority,
       nextMonthProblems: report.next_month_problems,
       nextMonthOpportunities: report.next_month_opportunities,
@@ -192,25 +212,37 @@ export async function buildReportViewData(
       .lte("date", monthRange.lastDay),
     supabase
       .from("tasks")
-      .select("id, type, status, due_date, recurrence")
+      .select("id, type, status, due_date, recurrence, sprint_id")
       .eq("client_id", clientId)
       .gte("due_date", monthRange.firstDay)
       .lte("due_date", monthRange.lastDay),
     supabase
       .from("sprint_planned_allocations")
-      .select("date, planned_amount")
+      .select("sprint_id, date, planned_amount")
       .eq("client_id", clientId)
       .gte("date", monthRange.firstDay)
       .lte("date", monthRange.lastDay),
   ]);
 
   const monthSprintRows = sprints ?? [];
-  const plannedAllocationRows = (plannedAllocations ?? []).map((a) => ({ date: a.date, sprintId: "", amount: a.planned_amount }));
+  const plannedAllocationRows = (plannedAllocations ?? []).map((a) => ({
+    date: a.date,
+    sprintId: a.sprint_id,
+    amount: a.planned_amount,
+  }));
   const planned = sumPlannedForMonth(plannedAllocationRows, monthRange);
   const actual = sumActualSpendForMonth(monthSprintRows, monthRange, dailySpend ?? []);
   const expectedToDate = sumExpectedToDateForMonth(plannedAllocationRows, monthRange, today);
   const status = classifySpendStatus(actual, expectedToDate, planned);
   const execution = computeAgencyExecutionSummary(tasks ?? [], today);
+  const sprintBehavior = computeSprintBehaviorRows(
+    monthSprintRows,
+    plannedAllocationRows,
+    dailySpend ?? [],
+    tasks ?? [],
+    monthRange,
+    today,
+  );
 
   if (!report) {
     return {
@@ -228,8 +260,14 @@ export async function buildReportViewData(
       financial: { planned, actual, expectedToDate, status },
       kpis: [],
       execution,
+      sprintBehavior,
       timelineEvents: [],
       comments: [],
+      analysisWhatWorked: null,
+      analysisWhatDidntWork: null,
+      analysisProblems: null,
+      analysisOpportunities: null,
+      analysisLearnings: null,
       nextMonthPriority: null,
       nextMonthProblems: null,
       nextMonthOpportunities: null,
@@ -270,7 +308,7 @@ export async function buildReportViewData(
       .eq("report_id", report.id),
     supabase
       .from("report_action_items")
-      .select("id, description, due_date, status, sent_to_task_id, responsible_id, responsible:profiles(name)")
+      .select("id, title, description, due_date, dependency, status, sent_to_task_id, responsible_id, responsible:profiles(name)")
       .eq("report_id", report.id)
       .order("created_at"),
   ]);
@@ -311,6 +349,7 @@ export async function buildReportViewData(
     financial: { planned, actual, expectedToDate, status },
     kpis,
     execution,
+    sprintBehavior,
     timelineEvents: (timelineEvents ?? []).map((e) => ({
       id: e.id,
       date: e.event_date,
@@ -326,16 +365,23 @@ export async function buildReportViewData(
         authorName: s.comment!.author?.name ?? null,
         createdAt: s.comment!.created_at,
       })),
+    analysisWhatWorked: report.analysis_what_worked,
+    analysisWhatDidntWork: report.analysis_what_didnt_work,
+    analysisProblems: report.analysis_problems,
+    analysisOpportunities: report.analysis_opportunities,
+    analysisLearnings: report.analysis_learnings,
     nextMonthPriority: report.next_month_priority,
     nextMonthProblems: report.next_month_problems,
     nextMonthOpportunities: report.next_month_opportunities,
     nextMonthTests: report.next_month_tests,
     actionItems: (actionItems ?? []).map((a) => ({
       id: a.id,
+      title: a.title,
       description: a.description,
       responsibleId: a.responsible_id,
       responsibleName: a.responsible?.name ?? null,
       dueDate: a.due_date,
+      dependency: a.dependency,
       status: a.status,
       sentToTaskId: a.sent_to_task_id,
     })),

@@ -11,10 +11,12 @@ import {
   MONTHLY_REPORT_STATUS_LABEL,
   KPI_TARGET_STATUS_BADGE_CLASSES,
   KPI_TARGET_STATUS_LABEL,
+  REPORT_ACTION_ITEM_DEPENDENCY_LABEL,
   classifyKpiTargetStatus,
   computeKpiVariationPct,
   formatKpiValue,
 } from "@/lib/monthly-reports";
+import { SPEND_STATUS_BADGE_CLASSES } from "@/lib/spend-status";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
 import { buildReportViewData } from "../report-data";
 import {
@@ -29,7 +31,18 @@ import {
   updateReportFieldsAction,
   updateReportStatusAction,
 } from "../report-actions";
-import type { ReportActionItemStatus, ReportTimelineEventType } from "@/lib/supabase/database.types";
+import type {
+  ReportActionItemDependency,
+  ReportActionItemStatus,
+  ReportTimelineEventType,
+} from "@/lib/supabase/database.types";
+
+const SITUATION_LABEL = {
+  dentro: "Dentro do esperado",
+  acima: "Acima do esperado",
+  abaixo: "Abaixo do esperado",
+  sem_meta: "Sem planejamento",
+} as const;
 
 const TIMELINE_TYPE_LABEL: Record<ReportTimelineEventType, string> = {
   orcamento: "Orçamento",
@@ -51,6 +64,8 @@ const ACTION_ITEM_STATUS_LABEL: Record<ReportActionItemStatus, string> = {
   em_andamento: "Em andamento",
   concluido: "Concluído",
 };
+
+const DEPENDENCY_OPTIONS: ReportActionItemDependency[] = ["agencia", "cliente", "terceiro"];
 
 function SectionCard({ id, title, action, children }: { id: string; title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -100,9 +115,17 @@ export default async function ClientReportPage({
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-6">
-      <Link href={`/reports${month ? `?month=${month}` : ""}`} className="text-sm text-muted-foreground hover:underline">
-        &larr; Relatórios
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link href={`/reports${month ? `?month=${month}` : ""}`} className="text-sm text-muted-foreground hover:underline">
+          &larr; Relatórios
+        </Link>
+        <Link
+          href={`/clients/${clientId}`}
+          className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+        >
+          Voltar ao cliente
+        </Link>
+      </div>
 
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -138,14 +161,17 @@ export default async function ClientReportPage({
         </p>
       )}
 
-      {/* Navegação interna — 5 blocos */}
+      {/* Navegação interna */}
       <nav className="mt-4 flex flex-wrap gap-1 border-b border-border pb-2 text-xs">
         {[
           ["#resumo", "Resumo do mês"],
           ["#performance", "Performance"],
           ["#execucao", "Execução da agência"],
+          ["#comportamento-sprint", "Comportamento por sprint"],
           ["#linha-do-tempo", "Acontecimentos e decisões"],
-          ["#proximo-mes", "Próximo mês"],
+          ["#analise-gestor", "Análise do gestor"],
+          ["#pendencias", "Pendências"],
+          ["#proximos-passos", "Próximos passos"],
         ].map(([href, label]) => (
           <a key={href} href={href} className="rounded-md px-2 py-1 font-medium text-muted-foreground hover:bg-zinc-100 hover:text-foreground dark:hover:bg-zinc-900">
             {label}
@@ -318,7 +344,49 @@ export default async function ClientReportPage({
           </div>
         </SectionCard>
 
-        {/* Bloco 4 — Acontecimentos e decisões */}
+        {/* Bloco 4 — Comportamento por sprint */}
+        <SectionCard id="comportamento-sprint" title="Comportamento por sprint">
+          {data.sprintBehavior.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <th className="py-1.5 pr-3">Sprint</th>
+                    <th className="py-1.5 pr-3 text-right">Planejado</th>
+                    <th className="py-1.5 pr-3 text-right">Realizado</th>
+                    <th className="py-1.5 pr-3 text-right">%</th>
+                    <th className="py-1.5 pr-3">Situação</th>
+                    <th className="py-1.5 pr-3 text-right">Execução</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.sprintBehavior.map((sprint) => (
+                    <tr key={sprint.sprintId} className="border-b border-border/60 last:border-0">
+                      <td className="py-1.5 pr-3 font-medium text-foreground">{sprint.periodLabel}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">{formatCurrency(sprint.planned)}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">{formatCurrency(sprint.actual)}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">
+                        {sprint.pct !== null ? `${Math.round(sprint.pct)}%` : "—"}
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[sprint.status]}`}>
+                          {SITUATION_LABEL[sprint.status]}
+                        </span>
+                      </td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">
+                        {sprint.executionPct !== null ? `${Math.round(sprint.executionPct)}%` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nenhuma sprint neste mês ainda.</p>
+          )}
+        </SectionCard>
+
+        {/* Bloco 5 — Acontecimentos e decisões */}
         <SectionCard id="linha-do-tempo" title="Acontecimentos e decisões">
           {data.timelineEvents.length > 0 ? (
             <ul className="flex flex-col gap-2">
@@ -386,8 +454,187 @@ export default async function ClientReportPage({
           )}
         </SectionCard>
 
-        {/* Bloco 5 — Próximo mês */}
-        <SectionCard id="proximo-mes" title="Próximos passos">
+        {/* Bloco 6 — Análise do gestor: retrospectiva do mês (diferente do
+            Bloco 8, que é prospectivo — nunca a mesma pergunta duas vezes). */}
+        <SectionCard id="analise-gestor" title="Análise do gestor">
+          {isReadOnly ? (
+            <div className="flex flex-col gap-3 text-sm">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">O que funcionou?</p>
+                <p className="text-foreground">{data.analysisWhatWorked || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">O que não funcionou?</p>
+                <p className="text-foreground">{data.analysisWhatDidntWork || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Quais problemas foram identificados?</p>
+                <p className="text-foreground">{data.analysisProblems || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Quais oportunidades foram identificadas?</p>
+                <p className="text-foreground">{data.analysisOpportunities || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">O que aprendemos neste mês?</p>
+                <p className="text-foreground">{data.analysisLearnings || "—"}</p>
+              </div>
+            </div>
+          ) : (
+            <form action={updateReportFieldsAction.bind(null, clientId, data.monthStart)} className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">O que funcionou?</label>
+                <textarea
+                  name="analysis_what_worked"
+                  defaultValue={data.analysisWhatWorked ?? ""}
+                  rows={2}
+                  className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:border-zinc-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">O que não funcionou?</label>
+                <textarea
+                  name="analysis_what_didnt_work"
+                  defaultValue={data.analysisWhatDidntWork ?? ""}
+                  rows={2}
+                  className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:border-zinc-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Quais problemas foram identificados?</label>
+                <textarea
+                  name="analysis_problems"
+                  defaultValue={data.analysisProblems ?? ""}
+                  rows={2}
+                  className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:border-zinc-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Quais oportunidades foram identificadas?</label>
+                <textarea
+                  name="analysis_opportunities"
+                  defaultValue={data.analysisOpportunities ?? ""}
+                  rows={2}
+                  className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:border-zinc-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">O que aprendemos neste mês?</label>
+                <textarea
+                  name="analysis_learnings"
+                  defaultValue={data.analysisLearnings ?? ""}
+                  rows={2}
+                  className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:border-zinc-500"
+                />
+              </div>
+              <button type="submit" className="self-end rounded-md bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand-hover">
+                Salvar
+              </button>
+            </form>
+          )}
+        </SectionCard>
+
+        {/* Bloco 7 — Pendências: execução em aberto (responsável/prazo/
+            dependência/status) — nunca as tarefas da sprint, que continuam
+            só em /clients/[id]. Diferente do Bloco 8 (síntese estratégica,
+            sem checklist). */}
+        <SectionCard id="pendencias" title="Pendências">
+          {data.actionItems.length > 0 ? (
+            <ul className="flex flex-col gap-2">
+              {data.actionItems.map((item) => (
+                <li key={item.id} className="rounded-md border border-border px-3 py-2 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium text-foreground">{item.title || item.description}</p>
+                    {!isReadOnly && (
+                      <form action={updateActionItemStatusAction.bind(null, item.id, clientId, data.monthStart)} className="flex items-center gap-1">
+                        <select
+                          name="status"
+                          defaultValue={item.status}
+                          className="rounded-md border border-border bg-transparent px-1.5 py-0.5 text-xs text-foreground"
+                        >
+                          {Object.entries(ACTION_ITEM_STATUS_LABEL).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                        <button type="submit" className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900">
+                          Salvar
+                        </button>
+                      </form>
+                    )}
+                    {isReadOnly && (
+                      <span className="text-xs text-muted-foreground">{ACTION_ITEM_STATUS_LABEL[item.status]}</span>
+                    )}
+                  </div>
+                  {item.title && <p className="mt-0.5 text-foreground">{item.description}</p>}
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    {item.responsibleName && <span>{item.responsibleName}</span>}
+                    {item.dueDate && <span>Prazo: {formatShortDate(item.dueDate)}</span>}
+                    {item.dependency && <span>Depende de: {REPORT_ACTION_ITEM_DEPENDENCY_LABEL[item.dependency]}</span>}
+                    {!isReadOnly && !item.sentToTaskId && (
+                      <form action={sendActionItemToSprintAction.bind(null, item.id, clientId, data.monthStart)}>
+                        <button type="submit" className="font-medium text-brand hover:underline">
+                          Enviar para próxima sprint
+                        </button>
+                      </form>
+                    )}
+                    {item.sentToTaskId && <span className="text-brand">Enviado para a próxima sprint</span>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nenhuma pendência registrada.</p>
+          )}
+
+          {!isReadOnly && (
+            <form action={addActionItemAction.bind(null, clientId, data.monthStart)} className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] text-muted-foreground">Título</label>
+                <input name="title" placeholder="Título curto" className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground" />
+              </div>
+              <div className="flex min-w-[220px] flex-1 flex-col gap-1">
+                <label className="text-[11px] text-muted-foreground">Descrição</label>
+                <input name="description" required placeholder="O que precisa acontecer?" className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] text-muted-foreground">Responsável</label>
+                <select name="responsible_id" defaultValue="" className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground">
+                  <option value="">—</option>
+                  {responsibleOptions.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] text-muted-foreground">Prazo</label>
+                <input type="date" name="due_date" className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] text-muted-foreground">Depende de</label>
+                <select name="dependency" defaultValue="" className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground">
+                  <option value="">—</option>
+                  {DEPENDENCY_OPTIONS.map((value) => (
+                    <option key={value} value={value}>
+                      {REPORT_ACTION_ITEM_DEPENDENCY_LABEL[value]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover">
+                Adicionar
+              </button>
+            </form>
+          )}
+        </SectionCard>
+
+        {/* Bloco 8 — Próximos passos: síntese estratégica, nunca um checklist
+            operacional (isso são as Pendências, acima, ou as tarefas da
+            sprint em /clients/[id]). */}
+        <SectionCard id="proximos-passos" title="Próximos passos">
           {isReadOnly ? (
             <div className="flex flex-col gap-3 text-sm">
               <div>
@@ -395,15 +642,15 @@ export default async function ClientReportPage({
                 <p className="text-foreground">{data.nextMonthPriority || "—"}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Problemas a resolver</p>
+                <p className="text-xs font-medium text-muted-foreground">Ajustes recomendados</p>
                 <p className="text-foreground">{data.nextMonthProblems || "—"}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Oportunidades identificadas</p>
+                <p className="text-xs font-medium text-muted-foreground">Oportunidades e recomendações</p>
                 <p className="text-foreground">{data.nextMonthOpportunities || "—"}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Testes recomendados</p>
+                <p className="text-xs font-medium text-muted-foreground">Testes planejados</p>
                 <p className="text-foreground">{data.nextMonthTests || "—"}</p>
               </div>
             </div>
@@ -418,7 +665,7 @@ export default async function ClientReportPage({
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Problemas que precisam ser resolvidos</label>
+                <label className="text-xs font-medium text-muted-foreground">Ajustes recomendados</label>
                 <textarea
                   name="next_month_problems"
                   defaultValue={data.nextMonthProblems ?? ""}
@@ -427,7 +674,7 @@ export default async function ClientReportPage({
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Oportunidades identificadas</label>
+                <label className="text-xs font-medium text-muted-foreground">Oportunidades e recomendações</label>
                 <textarea
                   name="next_month_opportunities"
                   defaultValue={data.nextMonthOpportunities ?? ""}
@@ -436,7 +683,7 @@ export default async function ClientReportPage({
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Testes recomendados</label>
+                <label className="text-xs font-medium text-muted-foreground">Testes planejados</label>
                 <textarea
                   name="next_month_tests"
                   defaultValue={data.nextMonthTests ?? ""}
@@ -449,83 +696,6 @@ export default async function ClientReportPage({
               </button>
             </form>
           )}
-
-          <div className="mt-4 border-t border-border pt-3">
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Plano de ação</p>
-            {data.actionItems.length > 0 ? (
-              <ul className="flex flex-col gap-2">
-                {data.actionItems.map((item) => (
-                  <li key={item.id} className="rounded-md border border-border px-3 py-2 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-foreground">{item.description}</p>
-                      {!isReadOnly && (
-                        <form action={updateActionItemStatusAction.bind(null, item.id, clientId, data.monthStart)} className="flex items-center gap-1">
-                          <select
-                            name="status"
-                            defaultValue={item.status}
-                            className="rounded-md border border-border bg-transparent px-1.5 py-0.5 text-xs text-foreground"
-                          >
-                            {Object.entries(ACTION_ITEM_STATUS_LABEL).map(([value, label]) => (
-                              <option key={value} value={value}>
-                                {label}
-                              </option>
-                            ))}
-                          </select>
-                          <button type="submit" className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900">
-                            Salvar
-                          </button>
-                        </form>
-                      )}
-                      {isReadOnly && (
-                        <span className="text-xs text-muted-foreground">{ACTION_ITEM_STATUS_LABEL[item.status]}</span>
-                      )}
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      {item.responsibleName && <span>{item.responsibleName}</span>}
-                      {item.dueDate && <span>Prazo: {formatShortDate(item.dueDate)}</span>}
-                      {!isReadOnly && !item.sentToTaskId && (
-                        <form action={sendActionItemToSprintAction.bind(null, item.id, clientId, data.monthStart)}>
-                          <button type="submit" className="font-medium text-brand hover:underline">
-                            Enviar para próxima sprint
-                          </button>
-                        </form>
-                      )}
-                      {item.sentToTaskId && <span className="text-brand">Enviado para a próxima sprint</span>}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">Nenhuma ação registrada para o próximo mês.</p>
-            )}
-
-            {!isReadOnly && (
-              <form action={addActionItemAction.bind(null, clientId, data.monthStart)} className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
-                <div className="flex min-w-[220px] flex-1 flex-col gap-1">
-                  <label className="text-[11px] text-muted-foreground">Descrição</label>
-                  <input name="description" required placeholder="O que precisa acontecer?" className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[11px] text-muted-foreground">Responsável</label>
-                  <select name="responsible_id" defaultValue="" className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground">
-                    <option value="">—</option>
-                    {responsibleOptions.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[11px] text-muted-foreground">Prazo</label>
-                  <input type="date" name="due_date" className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground" />
-                </div>
-                <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover">
-                  Adicionar
-                </button>
-              </form>
-            )}
-          </div>
         </SectionCard>
 
         {/* Status do relatório */}

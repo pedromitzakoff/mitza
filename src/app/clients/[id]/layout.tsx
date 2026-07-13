@@ -29,7 +29,7 @@ export default async function ClientLayout({
 
   const { data: client } = await supabase
     .from("clients")
-    .select("id, name, meta_ad_account_id")
+    .select("id, name, meta_ad_account_id, status, contract_start_date")
     .eq("id", id)
     .is("deleted_at", null)
     .single();
@@ -39,6 +39,7 @@ export default async function ClientLayout({
   const today = todayUTC();
   const todayStr = todayDateString();
   const { firstDay, lastDay } = currentMonthRange(today);
+  const monthParam = firstDay.slice(0, 7);
 
   // Etapa 50 (correção): a geração de sprints NÃO roda mais durante o
   // carregamento da página (rodava aqui antes e causou geração duplicada
@@ -128,6 +129,9 @@ export default async function ClientLayout({
         sprintPeriodLabel={card.sprintPeriodLabel}
         sprint={card.sprint}
         isAdmin={profile.role === "admin"}
+        contractStatus={client.status}
+        contractStartDate={client.contract_start_date}
+        reportHref={`/reports/${client.id}?month=${monthParam}`}
       />
       {children}
     </>
