@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth";
+import { getCurrentProfile, requireAdmin } from "@/lib/auth";
 import { todayUTC, todayDateString } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
 import { getOrCreateReport, buildReportViewData } from "./report-data";
@@ -96,9 +96,7 @@ export async function addTimelineEventAction(clientId: string, monthStart: strin
   const supabase = await createSupabaseClient();
   const { id: reportId } = await getOrCreateReport(supabase, clientId, monthStart);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const profile = await getCurrentProfile();
 
   const eventDate = String(formData.get("event_date") ?? "").trim() || todayDateString();
   const type = String(formData.get("type") ?? "outro") as ReportTimelineEventType;
@@ -116,7 +114,7 @@ export async function addTimelineEventAction(clientId: string, monthStart: strin
     type,
     description,
     responsible_id: responsibleId,
-    created_by: user?.id ?? null,
+    created_by: profile?.id ?? null,
   });
 
   if (error) redirect(`${returnTo}&error=${encodeURIComponent(error.message)}`);
@@ -270,9 +268,7 @@ export async function toggleCommentReportSelectionAction(
     await supabase.from("report_comment_selections").delete().eq("report_id", reportId).eq("comment_id", commentId);
     await supabase.from("report_timeline_events").delete().eq("report_id", reportId).eq("source_comment_id", commentId);
   } else {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const profile = await getCurrentProfile();
 
     const { data: comment } = await supabase
       .from("comments")
@@ -282,7 +278,7 @@ export async function toggleCommentReportSelectionAction(
 
     await supabase
       .from("report_comment_selections")
-      .insert({ report_id: reportId, comment_id: commentId, created_by: user?.id ?? null });
+      .insert({ report_id: reportId, comment_id: commentId, created_by: profile?.id ?? null });
 
     if (comment) {
       await supabase.from("report_timeline_events").insert({
@@ -292,7 +288,7 @@ export async function toggleCommentReportSelectionAction(
         description: comment.content,
         responsible_id: comment.author_id,
         source_comment_id: commentId,
-        created_by: user?.id ?? null,
+        created_by: profile?.id ?? null,
       });
     }
   }

@@ -62,11 +62,11 @@ export default async function ReportsPage({
   ] = await Promise.all([
     supabase
       .from("clients")
-      .select("id, name, meta_ad_account_id, primary_manager:profiles!clients_primary_manager_id_fkey(name)")
+      .select("id, name, meta_ad_account_id, primary_manager:team_members!clients_primary_manager_id_fkey(name)")
       .is("deleted_at", null)
       .order("name"),
-    supabase.from("client_managers").select("client_id, user_id, profiles(id, name)"),
-    supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
+    supabase.from("client_managers").select("client_id, user_id, team_members(id, name)"),
+    supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
     // Sobreposição com a janela (não "começa na janela") — sprint que
     // atravessa mês precisa ser encontrada mesmo com start_date fora dela.
     supabase
@@ -77,7 +77,7 @@ export default async function ReportsPage({
     supabase.from("daily_spend").select("client_id, date, spend, synced_at").gte("date", rangeStart).lte("date", rangeEnd),
     supabase
       .from("tasks")
-      .select("id, client_id, sprint_id, title, type, due_date, status, notes, assignee:profiles!tasks_assignee_id_fkey(name)"),
+      .select("id, client_id, sprint_id, title, type, due_date, status, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)"),
     supabase.from("monthly_reports").select("client_id, status").eq("month_start", monthRange.firstDay),
     supabase
       .from("sprint_planned_allocations")
@@ -88,9 +88,9 @@ export default async function ReportsPage({
 
   const managersByClient = new Map<string, { id: string; name: string }[]>();
   for (const row of clientManagers ?? []) {
-    if (!row.profiles) continue;
+    if (!row.team_members) continue;
     const list = managersByClient.get(row.client_id) ?? [];
-    list.push(row.profiles);
+    list.push(row.team_members);
     managersByClient.set(row.client_id, list);
   }
 

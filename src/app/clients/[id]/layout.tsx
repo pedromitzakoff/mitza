@@ -53,7 +53,7 @@ export default async function ClientLayout({
     { data: clientActivity },
     { data: plannedAllocations },
   ] = await Promise.all([
-    supabase.from("client_managers").select("user_id, profiles(id, name)").eq("client_id", id),
+    supabase.from("client_managers").select("user_id, team_members(id, name)").eq("client_id", id),
     // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
     // mês precisa aparecer mesmo com start_date no mês anterior.
     supabase
@@ -71,7 +71,7 @@ export default async function ClientLayout({
     supabase
       .from("tasks")
       .select(
-        "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:profiles!tasks_assignee_id_fkey(name)",
+        "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
       )
       .eq("client_id", id),
     supabase.from("client_last_operational_activity").select("last_activity_at").eq("client_id", id).maybeSingle(),
@@ -102,8 +102,8 @@ export default async function ClientLayout({
     id: client.id,
     name: client.name,
     metaAdAccountId: client.meta_ad_account_id,
-    managerNames: (managers ?? []).flatMap((m) => (m.profiles ? [m.profiles.name] : [])),
-    managerIds: (managers ?? []).flatMap((m) => (m.profiles ? [m.profiles.id] : [])),
+    managerNames: (managers ?? []).flatMap((m) => (m.team_members ? [m.team_members.name] : [])),
+    managerIds: (managers ?? []).flatMap((m) => (m.team_members ? [m.team_members.id] : [])),
     sprints: sprints ?? [],
     dailySpend: (dailySpend ?? []).map((d) => ({ date: d.date, spend: d.spend })),
     plannedAllocations: (plannedAllocations ?? []).map((a) => ({

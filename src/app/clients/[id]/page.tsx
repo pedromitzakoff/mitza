@@ -49,7 +49,7 @@ async function fetchCommentsByType(
 
   const { data } = await supabase
     .from("comments")
-    .select("id, commentable_id, content, created_at, author:profiles!comments_author_id_fkey(name)")
+    .select("id, commentable_id, content, created_at, author:team_members!comments_author_id_fkey(name)")
     .eq("commentable_type", type)
     .in("commentable_id", ids)
     .order("created_at");
@@ -183,7 +183,7 @@ export default async function ClientPage({
     supabase
       .from("monthly_budget_changes")
       .select(
-        "id, effective_date, changed_at, previous_amount, new_amount, consolidated_amount, future_amount_distributed, resulting_total, is_below_consolidated, changed_by_profile:profiles!monthly_budget_changes_changed_by_fkey(name)",
+        "id, effective_date, changed_at, previous_amount, new_amount, consolidated_amount, future_amount_distributed, resulting_total, is_below_consolidated, changed_by_profile:team_members!monthly_budget_changes_changed_by_fkey(name)",
       )
       .eq("client_id", id)
       .eq("month", firstDay)
@@ -266,7 +266,7 @@ export default async function ClientPage({
   const { data: tasks } = await supabase
     .from("tasks")
     .select(
-      "id, title, type, due_date, status, sprint_id, notes, assignee:profiles!tasks_assignee_id_fkey(name)",
+      "id, title, type, due_date, status, sprint_id, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
     )
     .eq("client_id", id)
     .order("due_date");

@@ -142,7 +142,7 @@ export async function buildReportViewData(
 
   const { data: client } = await supabase
     .from("clients")
-    .select("id, name, primary_manager:profiles!clients_primary_manager_id_fkey(name)")
+    .select("id, name, primary_manager:team_members!clients_primary_manager_id_fkey(name)")
     .eq("id", clientId)
     .is("deleted_at", null)
     .single();
@@ -153,7 +153,7 @@ export async function buildReportViewData(
   const { data: report } = await supabase
     .from("monthly_reports")
     .select(
-      "id, status, executive_summary, next_month_priority, next_month_problems, next_month_opportunities, next_month_tests, analysis_what_worked, analysis_what_didnt_work, analysis_problems, analysis_opportunities, analysis_learnings, snapshot, finalized_at, finalized_by:profiles!monthly_reports_finalized_by_fkey(name)",
+      "id, status, executive_summary, next_month_priority, next_month_problems, next_month_opportunities, next_month_tests, analysis_what_worked, analysis_what_didnt_work, analysis_problems, analysis_opportunities, analysis_learnings, snapshot, finalized_at, finalized_by:team_members!monthly_reports_finalized_by_fkey(name)",
     )
     .eq("client_id", clientId)
     .eq("month_start", monthRange.firstDay)
@@ -299,16 +299,16 @@ export async function buildReportViewData(
       .maybeSingle(),
     supabase
       .from("report_timeline_events")
-      .select("id, event_date, type, description, responsible:profiles!report_timeline_events_responsible_id_fkey(name)")
+      .select("id, event_date, type, description, responsible:team_members!report_timeline_events_responsible_id_fkey(name)")
       .eq("report_id", report.id)
       .order("event_date", { ascending: false }),
     supabase
       .from("report_comment_selections")
-      .select("id, comment:comments(id, content, created_at, author:profiles!comments_author_id_fkey(name))")
+      .select("id, comment:comments(id, content, created_at, author:team_members!comments_author_id_fkey(name))")
       .eq("report_id", report.id),
     supabase
       .from("report_action_items")
-      .select("id, title, description, due_date, dependency, status, sent_to_task_id, responsible_id, responsible:profiles(name)")
+      .select("id, title, description, due_date, dependency, status, sent_to_task_id, responsible_id, responsible:team_members(name)")
       .eq("report_id", report.id)
       .order("created_at"),
   ]);

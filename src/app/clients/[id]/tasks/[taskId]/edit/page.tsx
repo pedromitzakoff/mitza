@@ -27,13 +27,13 @@ export default async function EditTaskPage({
       .single(),
     supabase
       .from("client_managers")
-      .select("profiles(id, name)")
+      .select("team_members(id, name)")
       .eq("client_id", id),
   ]);
 
   if (!task) notFound();
 
-  const assignees = (managers ?? []).flatMap((m) => (m.profiles ? [m.profiles] : []));
+  const assignees = (managers ?? []).flatMap((m) => (m.team_members ? [m.team_members] : []));
 
   return (
     <div className="mx-auto max-w-lg px-6 py-12">

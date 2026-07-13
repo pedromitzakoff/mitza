@@ -190,7 +190,7 @@ export function ClientForm({
           <legend className="text-sm text-zinc-700 dark:text-zinc-300">Gestores de apoio</legend>
           {managers.length === 0 && (
             <p className="text-sm text-zinc-500">
-              Nenhum gestor cadastrado ainda (crie usuários no Supabase Auth primeiro).
+              Nenhum membro da equipe cadastrado ainda (cadastre em Equipe).
             </p>
           )}
           {managers.map((manager) => (

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth";
 import { nextDueDate } from "@/lib/task-recurrence";
 import { logOperationalActivity } from "@/lib/operational-activity-log";
 import type { TaskRecurrence, TaskType } from "@/lib/supabase/database.types";
@@ -46,15 +47,13 @@ export async function createTaskAction(clientId: string, formData: FormData) {
     );
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (user) {
+  const profile = await getCurrentProfile();
+  if (profile) {
     await logOperationalActivity(supabase, {
       clientId,
       sprintId,
       taskId: created.id,
-      userId: user.id,
+      userId: profile.id,
       activityType: "task_created",
     });
   }
@@ -95,15 +94,13 @@ export async function updateTaskAction(taskId: string, clientId: string, formDat
     redirect(`/clients/${clientId}/tasks/${taskId}/edit?error=${encodeURIComponent(error.message)}`);
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (user) {
+  const profile = await getCurrentProfile();
+  if (profile) {
     await logOperationalActivity(supabase, {
       clientId,
       sprintId: updated?.sprint_id ?? null,
       taskId,
-      userId: user.id,
+      userId: profile.id,
       activityType: "task_updated",
     });
   }
@@ -137,15 +134,13 @@ export async function completeTaskAction(taskId: string, clientId: string) {
     redirect(`/clients/${clientId}?taskError=${encodeURIComponent(updateError.message)}`);
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (user) {
+  const profile = await getCurrentProfile();
+  if (profile) {
     await logOperationalActivity(supabase, {
       clientId,
       sprintId: task.sprint_id,
       taskId,
-      userId: user.id,
+      userId: profile.id,
       activityType: "task_completed",
     });
   }

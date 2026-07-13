@@ -13,9 +13,9 @@ export default async function NewClientPage({
 
   const supabase = await createSupabaseClient();
   const { data: managers } = await supabase
-    .from("profiles")
+    .from("team_members")
     .select("id, name")
-    .eq("role", "gestor")
+    .eq("status", "ativo")
     .order("name");
 
   return (

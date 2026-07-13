@@ -89,7 +89,7 @@ const NAV_ITEMS: NavItem[] = [
     group: "principal",
   },
   { label: "Reuniões", icon: Video, group: "moderado" },
-  { label: "Equipe", icon: Users, adminOnly: true, group: "moderado" },
+  { label: "Equipe", href: "/team", icon: Users, isActive: (p) => p.startsWith("/team"), group: "moderado" },
   {
     label: "Configurações",
     href: "/settings",

@@ -42,6 +42,12 @@ export type ReportTimelineEventType =
 export type ReportActionItemStatus = "pendente" | "em_andamento" | "concluido";
 export type ReportActionItemDependency = "agencia" | "cliente" | "terceiro";
 
+/** Papel no SISTEMA (autorização) — não confundir com `job_title`, que é o
+ * cargo operacional (descritivo, texto livre). */
+export type TeamSystemRole = "admin" | "gestor";
+export type TeamMemberStatus = "ativo" | "inativo";
+export type TeamInvitationStatus = "sem_acesso" | "convite_pendente" | "acesso_ativo";
+
 export interface Database {
   public: {
     Tables: {
@@ -63,6 +69,78 @@ export interface Database {
           name?: string;
           role?: UserRole;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      organizations: {
+        Row: {
+          id: string;
+          name: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      team_members: {
+        Row: {
+          id: string;
+          organization_id: string;
+          name: string;
+          email: string;
+          job_title: string | null;
+          system_role: TeamSystemRole;
+          status: TeamMemberStatus;
+          avatar_url: string | null;
+          auth_user_id: string | null;
+          invitation_status: TeamInvitationStatus;
+          invited_at: string | null;
+          invited_by: string | null;
+          created_at: string;
+          updated_at: string;
+          created_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          name: string;
+          email: string;
+          job_title?: string | null;
+          system_role?: TeamSystemRole;
+          status?: TeamMemberStatus;
+          avatar_url?: string | null;
+          auth_user_id?: string | null;
+          invitation_status?: TeamInvitationStatus;
+          invited_at?: string | null;
+          invited_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          created_by?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          name?: string;
+          email?: string;
+          job_title?: string | null;
+          system_role?: TeamSystemRole;
+          status?: TeamMemberStatus;
+          avatar_url?: string | null;
+          auth_user_id?: string | null;
+          invitation_status?: TeamInvitationStatus;
+          invited_at?: string | null;
+          invited_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          created_by?: string | null;
         };
         Relationships: [];
       };
@@ -198,7 +276,7 @@ export interface Database {
             foreignKeyName: "clients_primary_manager_id_fkey";
             columns: ["primary_manager_id"];
             isOneToOne: false;
-            referencedRelation: "profiles";
+            referencedRelation: "team_members";
             referencedColumns: ["id"];
           },
         ];
@@ -228,7 +306,7 @@ export interface Database {
             foreignKeyName: "client_managers_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
-            referencedRelation: "profiles";
+            referencedRelation: "team_members";
             referencedColumns: ["id"];
           },
         ];
@@ -364,7 +442,7 @@ export interface Database {
             foreignKeyName: "tasks_assignee_id_fkey";
             columns: ["assignee_id"];
             isOneToOne: false;
-            referencedRelation: "profiles";
+            referencedRelation: "team_members";
             referencedColumns: ["id"];
           },
           {
@@ -419,7 +497,7 @@ export interface Database {
             foreignKeyName: "sprint_task_templates_default_assignee_id_fkey";
             columns: ["default_assignee_id"];
             isOneToOne: false;
-            referencedRelation: "profiles";
+            referencedRelation: "team_members";
             referencedColumns: ["id"];
           },
         ];
@@ -532,7 +610,7 @@ export interface Database {
             foreignKeyName: "comments_author_id_fkey";
             columns: ["author_id"];
             isOneToOne: false;
-            referencedRelation: "profiles";
+            referencedRelation: "team_members";
             referencedColumns: ["id"];
           },
         ];
@@ -603,7 +681,7 @@ export interface Database {
             foreignKeyName: "operational_activities_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
-            referencedRelation: "profiles";
+            referencedRelation: "team_members";
             referencedColumns: ["id"];
           },
         ];
@@ -705,7 +783,7 @@ export interface Database {
             foreignKeyName: "monthly_budget_changes_changed_by_fkey";
             columns: ["changed_by"];
             isOneToOne: false;
-            referencedRelation: "profiles";
+            referencedRelation: "team_members";
             referencedColumns: ["id"];
           },
         ];
@@ -827,7 +905,7 @@ export interface Database {
             foreignKeyName: "monthly_reports_finalized_by_fkey";
             columns: ["finalized_by"];
             isOneToOne: false;
-            referencedRelation: "profiles";
+            referencedRelation: "team_members";
             referencedColumns: ["id"];
           },
         ];
@@ -917,7 +995,7 @@ export interface Database {
             foreignKeyName: "report_timeline_events_responsible_id_fkey";
             columns: ["responsible_id"];
             isOneToOne: false;
-            referencedRelation: "profiles";
+            referencedRelation: "team_members";
             referencedColumns: ["id"];
           },
           {
@@ -1017,7 +1095,7 @@ export interface Database {
             foreignKeyName: "report_action_items_responsible_id_fkey";
             columns: ["responsible_id"];
             isOneToOne: false;
-            referencedRelation: "profiles";
+            referencedRelation: "team_members";
             referencedColumns: ["id"];
           },
           {

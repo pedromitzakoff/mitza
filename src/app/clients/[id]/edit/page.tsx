@@ -24,8 +24,8 @@ export default async function EditClientPage({
   const supabase = await createSupabaseClient();
   const [{ data: client }, { data: allManagers }, { data: assigned }, { data: kpis }] = await Promise.all([
     supabase.from("clients").select("*").eq("id", id).is("deleted_at", null).single(),
-    supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
-    supabase.from("client_managers").select("user_id, profiles(id, name)").eq("client_id", id),
+    supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
+    supabase.from("client_managers").select("user_id, team_members(id, name)").eq("client_id", id),
     supabase.from("client_kpi_definitions").select("*").eq("client_id", id).order("display_order"),
   ]);
 

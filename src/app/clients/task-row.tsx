@@ -2,7 +2,7 @@ import Link from "next/link";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
 import { formatCompactTaskDate } from "@/lib/format";
-import type { TaskStatus, TaskType } from "@/lib/supabase/database.types";
+import type { TaskStatus, TaskType, TeamMemberStatus } from "@/lib/supabase/database.types";
 import { completeTaskAction } from "./tasks-actions";
 
 export interface TaskListItem {
@@ -11,7 +11,7 @@ export interface TaskListItem {
   type: TaskType;
   due_date: string;
   status: TaskStatus;
-  assignee: { name: string } | null;
+  assignee: { name: string; status: TeamMemberStatus } | null;
 }
 
 const dueDateFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -107,6 +107,7 @@ export function TaskRow({
         {(!hideAssigneeIfName || task.assignee?.name !== hideAssigneeIfName) && (
           <span className="hidden w-28 shrink-0 truncate text-xs text-muted-foreground md:block">
             {task.assignee?.name ?? "Sem responsável"}
+            {task.assignee?.status === "inativo" && " (inativo)"}
           </span>
         )}
 

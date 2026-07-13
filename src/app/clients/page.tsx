@@ -53,12 +53,12 @@ export default async function ClientsPage({
     supabase
       .from("clients")
       .select(
-        "id, name, meta_ad_account_id, status, contract_start_date, primary_manager:profiles!clients_primary_manager_id_fkey(name)",
+        "id, name, meta_ad_account_id, status, contract_start_date, primary_manager:team_members!clients_primary_manager_id_fkey(name)",
       )
       .is("deleted_at", null)
       .order("name"),
-    supabase.from("client_managers").select("client_id, user_id, profiles(id, name)"),
-    supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
+    supabase.from("client_managers").select("client_id, user_id, team_members(id, name)"),
+    supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
     // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
     // mês precisa ser encontrada mesmo com start_date do mês anterior.
     supabase
@@ -74,7 +74,7 @@ export default async function ClientsPage({
     supabase
       .from("tasks")
       .select(
-        "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:profiles!tasks_assignee_id_fkey(name)",
+        "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
       ),
     supabase
       .from("sprint_planned_allocations")
@@ -99,9 +99,9 @@ export default async function ClientsPage({
 
   const managersByClient = new Map<string, { id: string; name: string }[]>();
   for (const row of clientManagers ?? []) {
-    if (!row.profiles) continue;
+    if (!row.team_members) continue;
     const list = managersByClient.get(row.client_id) ?? [];
-    list.push(row.profiles);
+    list.push(row.team_members);
     managersByClient.set(row.client_id, list);
   }
 

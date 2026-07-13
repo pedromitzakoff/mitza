@@ -49,11 +49,11 @@ export default async function SettingsClientsPage({
     supabase
       .from("clients")
       .select(
-        "id, name, status, contract_start_date, primary_manager_id, cnpj, main_contact_email, agency_monthly_fee, primary_manager:profiles!clients_primary_manager_id_fkey(name)",
+        "id, name, status, contract_start_date, primary_manager_id, cnpj, main_contact_email, agency_monthly_fee, primary_manager:team_members!clients_primary_manager_id_fkey(name)",
       )
       .is("deleted_at", null)
       .order("name"),
-    supabase.from("profiles").select("id, name").eq("role", "gestor").order("name"),
+    supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
   ]);
 
   let rows = clients ?? [];

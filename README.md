@@ -1953,6 +1953,156 @@ automático da sync, refinamentos de UX, etc.
     `app/clients/attention-panel.tsx`, `app/clients/operational-tracking-panel.tsx`,
     `lib/operational-tracking.ts`.
 
+55. ✅ **Área Equipe — membros da equipe desacoplados de `auth.users`**
+
+    **Investigação prévia**: o único registro de identidade existente era
+    `profiles` (`id uuid primary key references auth.users (id) on delete
+    cascade`) — 1:1 obrigatório com uma conta de login, papel
+    `role check (role in ('admin','gestor'))` misturando cargo e autorização
+    no mesmo campo. 13 colunas em 8 arquivos SQL diferentes apontavam direto
+    pra `profiles(id)` (`client_managers.user_id`, `tasks.assignee_id`,
+    `comments.author_id`, `clients.primary_manager_id`,
+    `sprint_task_templates.default_assignee_id`,
+    `monthly_budget_changes.changed_by`, `monthly_reports.finalized_by`,
+    `report_timeline_events.responsible_id`/`created_by`,
+    `report_comment_selections.created_by`,
+    `report_action_items.responsible_id`, `operational_activities.user_id`,
+    além de `client_task_templates.default_assignee_id` — essa última numa
+    tabela já desativada desde a Etapa 12, sem nenhum código lendo dela, por
+    isso ficou de fora do repoint). Não existia nenhum conceito de
+    organização/agência/tenant em lugar nenhum do schema. `is_admin()` e
+    `is_client_manager()` (`supabase/policies.sql`) resolviam tudo comparando
+    com `auth.uid()` direto. `getCurrentProfile()` (`lib/auth.ts`) buscava em
+    `profiles` e devolvia `{id, name, role}` — mais de 30 pontos do app usam
+    esse retorno. Não existe tabela de reuniões: "reunião" já é
+    `tasks.type = 'reuniao'` desde a Etapa 45. Não havia rota `/team`
+    preparada; o item "Equipe" na Sidebar já existia, sem `href`, mostrando
+    "Em breve".
+
+    **Decisão de arquitetura**: nova tabela `team_members` como identidade
+    operacional canônica, com `auth_user_id` **opcional** (nullable,
+    `references auth.users on delete set null`) — um membro pode existir,
+    ser responsável por clientes/tarefas e aparecer no histórico sem nunca
+    ter login. `profiles` **não foi apagada** (dado preservado, mesmo
+    espírito da Etapa 12 com `client_task_templates`: fica desativada, nada
+    no app volta a lê-la). Pra repontar as 12 colunas sem precisar de
+    `UPDATE` em nenhuma linha, o backfill reaproveita o mesmo `id` de cada
+    `profiles` existente como `id` do `team_member` correspondente — todo
+    valor já gravado nessas colunas (que hoje é um `profiles.id`) já bate
+    certinho com o novo `team_members.id`, então só a *constraint* muda de
+    tabela-alvo, o dado em si nunca muda. `is_admin()`/`is_client_manager()`
+    mantiveram o mesmo nome e assinatura (só o corpo passou a consultar
+    `team_members`), então nenhuma policy escrita em nenhuma migration
+    anterior precisou ser reescrita. `getCurrentProfile()` manteve o retorno
+    `{id, name, role}` (ganhou só `organizationId` a mais) — como
+    `team_members.id` substitui `profiles.id` com o mesmo valor pros
+    membros migrados, todo `.eq("assignee_id", profile.id)`/`created_by:
+    profile.id` já existente no app passou a apontar certo sem precisar
+    tocar em cada chamada individualmente.
+
+    **Multi-agência (preparado, não implementado por completo)**: nova
+    tabela `organizations` com uma única linha semeada
+    ("Organização principal", nenhum nome de agência hardcoded); todo
+    `team_member` tem `organization_id not null`; RLS de `team_members`
+    isola por organização (`organization_id = current_organization_id()`).
+    Não foi construída nenhuma UI de troca de organização nem convite
+    entre agências — fora de escopo desta etapa.
+
+    **Dois conceitos separados**: `job_title` (cargo operacional, texto
+    livre — "Gestor de tráfego", "Coordenador de mídia") nunca decide
+    autorização; `system_role` (`admin`/`gestor`) é só isso. `status`
+    (Ativo/Inativo, nunca apaga) é independente de `invitation_status`
+    (Sem acesso/Convite pendente/Acesso ativo) — um membro pode estar
+    "Ativo na equipe" e "Sem acesso ao sistema" ao mesmo tempo.
+
+    **Fluxo de convite** (`app/team/actions.ts`, só server-side): admin
+    clica "Convidar para o sistema" → valida admin + mesma organização +
+    e-mail válido + ainda sem `auth_user_id` → `createAdminClient()`
+    (service_role, já existia em `lib/supabase/admin.ts` pro sync do Meta)
+    chama `auth.admin.inviteUserByEmail` → se o e-mail já existir no
+    Supabase Auth, localiza o usuário no servidor (`listUsers` paginado) em
+    vez de tentar criar duplicado, e nunca revela detalhes da conta
+    encontrada na resposta → vincula `auth_user_id` e marca
+    `invitation_status` (`convite_pendente` pra usuário novo,
+    `acesso_ativo` pra usuário já existente vinculado) → se qualquer passo
+    falhar, o membro continua existindo (nunca é apagado por causa de falha
+    no envio). "Revogar acesso" bloqueia login via
+    `auth.admin.updateUserById(id, { ban_duration: "876000h" })` sem apagar
+    a conta (preserva autoria de comentários antigos, que sempre apontou
+    pra `team_members.id`, nunca pra `auth.users` diretamente). A
+    `service_role` key nunca é importada fora de `app/team/actions.ts` /
+    `lib/meta-sync.ts` / `lib/sprint-generation.ts` (os únicos arquivos que
+    usam `createAdminClient()`), nunca é `NEXT_PUBLIC_`, nunca aparece em
+    log nem em mensagem de erro (toda falha vira um redirect com texto
+    curto, nunca o objeto de erro cru do Supabase).
+
+    **Vínculo `auth.users` ↔ `team_members`**: escrito no momento do
+    convite (a chamada admin já devolve o id do usuário criado/localizado);
+    como rede de segurança, `getCurrentProfile()` também tenta um vínculo
+    idempotente pós-login (só quando ainda não há `auth_user_id`, buscando
+    por e-mail com `invitation_status = 'convite_pendente'`) — nunca
+    reautoriza só por e-mail depois que o vínculo já existe, e usuário
+    autenticado sem `team_member` correspondente não recebe nenhum acesso
+    automático (a Sidebar simplesmente não aparece, mesmo padrão que já
+    existia pra qualquer `profile` nulo).
+
+    **Página `/team`**: tabela compacta (Membro/Cargo/Papel/Clientes/
+    Status/Acesso/Ação), resumo discreto no topo ("X ativos · Y com acesso ·
+    Z convites pendentes"), sem cards grandes, sem jargão técnico visível.
+    Aberta pra Admin e Gestor (Gestor só visualiza — RLS de
+    `team_members_insert`/`update` é admin-only, e o botão "+ Novo membro" e
+    as ações de convite/desativação somem da UI pra Gestor, mas a garantia
+    real está no servidor). "+Novo membro"/"Editar" abrem um drawer lateral
+    (mesmo padrão de `MonthlyBudgetHistoryDrawer`), com Dados/Operação
+    (clientes atribuídos, tarefas pendentes, reuniões futuras — calculadas
+    a partir de `tasks` já existentes, sem tabela nova)/Acesso. Desativar
+    mostra o impacto (nº de clientes/tarefas) antes de confirmar
+    (`window.confirm`, mesmo padrão do `DeleteClientButton`).
+
+    **Seletores/atribuição**: `clients.primary_manager_id`,
+    `client_managers` (gestores de apoio), `tasks.assignee_id` e
+    `sprint_task_templates.default_assignee_id` agora listam membros ativos
+    da equipe (`team_members` com `status = 'ativo'`), sem mais filtrar por
+    `role = 'gestor'` — qualquer membro ativo pode ser responsável,
+    reforçando que cargo/autorização são coisas diferentes. Visibilidade de
+    clientes entre gestores **não mudou** (RLS de `clients_select`
+    intocada). Tarefa com responsável desativado preserva o histórico e
+    mostra "(inativo)" ao lado do nome; nunca é reatribuída
+    automaticamente.
+
+    **Não implementado nesta etapa** (fora do pedido): exclusão permanente
+    de membro pela interface principal; filtros dedicados de
+    gestor/responsável (não existiam antes — nada pra migrar); troca de
+    organização/convite entre agências; gamificação, bonificação, folha de
+    pagamento.
+
+    **Testes**: não há suíte automatizada neste projeto. Confirmado
+    manualmente/por leitura: exatamente as 12 colunas repontadas continuam
+    com os mesmos valores após o backfill (mesmo `id` reaproveitado, sem
+    `UPDATE` de dado); `is_admin()`/`is_client_manager()` mantiveram nome e
+    assinatura; nenhuma chamada restante grava `auth.users.id` cru em
+    `author_id`/`assignee_id`/`user_id` de log (`tasks-actions.ts`,
+    `comments-actions.ts` e `report-actions.ts` foram corrigidos pra usar
+    `getCurrentProfile().id`); `client-form.tsx` não referencia mais
+    "Supabase Auth" na mensagem de lista vazia. `tsc --noEmit`, `npm run
+    lint` e `npm run build` sem erros.
+
+    Arquivos novos: `supabase/team-members.sql`, `lib/team-members.ts`,
+    `app/team/page.tsx`, `app/team/team-table.tsx`,
+    `app/team/team-member-drawer.tsx`, `app/team/deactivate-member-button.tsx`,
+    `app/team/actions.ts`. Alterados: `lib/auth.ts`,
+    `lib/supabase/database.types.ts`, `app/sidebar.tsx`,
+    `app/clients/task-row.tsx`, `app/clients/client-form.tsx`,
+    `app/clients/tasks-actions.ts`, `app/clients/comments-actions.ts`,
+    `app/reports/report-actions.ts`, `app/reports/report-data.ts`, e as
+    consultas a `profiles` em `app/page.tsx`, `app/clients/page.tsx`,
+    `app/clients/[id]/page.tsx`, `app/clients/[id]/layout.tsx`,
+    `app/clients/new/page.tsx`, `app/clients/[id]/edit/page.tsx`,
+    `app/clients/[id]/tasks/new/page.tsx`,
+    `app/clients/[id]/tasks/[taskId]/edit/page.tsx`, `app/sprints/page.tsx`,
+    `app/reports/page.tsx`, `app/settings/clients/page.tsx`,
+    `app/settings/sprint-task-templates/page.tsx`.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

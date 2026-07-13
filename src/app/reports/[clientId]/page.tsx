@@ -101,9 +101,9 @@ export default async function ClientReportPage({
 
   const { data: managers } = await supabase
     .from("client_managers")
-    .select("profiles(id, name)")
+    .select("team_members(id, name)")
     .eq("client_id", clientId);
-  const responsibleOptions = (managers ?? []).flatMap((m) => (m.profiles ? [m.profiles] : []));
+  const responsibleOptions = (managers ?? []).flatMap((m) => (m.team_members ? [m.team_members] : []));
 
   const monthRange = monthRangeFromParam(month, today);
   const monthParam = (overrideMonth: string) => `?month=${overrideMonth}`;

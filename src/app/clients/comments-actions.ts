@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth";
 import { logOperationalActivity } from "@/lib/operational-activity-log";
 import type { CommentableType } from "@/lib/supabase/database.types";
 
@@ -13,12 +14,9 @@ export async function createCommentAction(
   formData: FormData,
 ) {
   const supabase = await createSupabaseClient();
+  const profile = await getCurrentProfile();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!profile) {
     redirect(`/clients/${clientId}?commentError=${encodeURIComponent("Sessão expirada, faça login de novo")}`);
   }
 
@@ -28,7 +26,7 @@ export async function createCommentAction(
     const { error } = await supabase.from("comments").insert({
       commentable_type: commentableType,
       commentable_id: commentableId,
-      author_id: user.id,
+      author_id: profile.id,
       content,
     });
 
@@ -55,7 +53,7 @@ export async function createCommentAction(
       clientId,
       sprintId,
       taskId,
-      userId: user.id,
+      userId: profile.id,
       activityType: commentableType === "sprint" ? "sprint_commented" : "task_commented",
       sourceType: "comment",
     });
