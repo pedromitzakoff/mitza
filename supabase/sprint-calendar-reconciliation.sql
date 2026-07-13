@@ -46,6 +46,18 @@
 -- necessidade. Só clientes/meses com sobreposição REAL são reconciliados.
 --
 -- Rode depois de supabase/sprint-month-boundary-fix.sql.
+--
+-- CORREÇÃO (2ª rodada, após rodar pela 1ª vez): a 1ª versão desta migration
+-- travava com "duplicate key value violates unique constraint
+-- sprints_client_id_start_date_key" — porque o passo 3a tentava INSERIR uma
+-- sprint canônica pro 1º período do mês (ex.: 01-05) sem checar que o bloco
+-- antigo (ex.: 01-07) já ocupava esse mesmo start_date (os dois sempre
+-- começam no dia 1 do mês, só o end_date difere). A correção troca o INSERT
+-- cego por uma checagem por start_date que CONVERTE a sprint antiga em
+-- lugar (UPDATE do end_date, id preservado) quando ela já existe com esse
+-- start_date mas end_date diferente — nunca mais um INSERT concorrente com
+-- a mesma chave. A mesma regra foi aplicada em ensure_client_sprints (passo
+-- 7), que tinha o mesmo risco latente.
 
 -- ---------------------------------------------------------------------------
 -- 1) REGRA ÚNICA DE CALENDÁRIO
@@ -120,6 +132,7 @@ returns void as $$
 declare
   period record;
   v_sprint_id uuid;
+  v_existing_end_date date;
   old_sprint record;
   v_canonical_id uuid;
   v_month_start date := make_date(p_year, p_month, 1);
@@ -129,11 +142,25 @@ declare
 begin
   raise notice '--- Reconciliando cliente % — %-%  ---', p_client_id, p_year, p_month;
 
-  -- 3a) garante que cada período canônico do mês tem uma sprint (reaproveita
-  -- se já existir com o intervalo exato — não recria à toa).
+  -- 3a) garante que cada período canônico do mês tem uma sprint. Bloco
+  -- antigo e período canônico QUASE SEMPRE compartilham o start_date do
+  -- primeiro período do mês (ambos começam no dia 1) — por isso a busca é
+  -- por start_date, não pelo intervalo exato. Se já existir uma sprint com
+  -- esse start_date e o MESMO end_date, reaproveita sem tocar em nada. Se
+  -- existir uma sprint com o MESMO start_date mas end_date DIFERENTE (ex.:
+  -- bloco antigo 01-07 vs período canônico 01-05), ela é CONVERTIDA em
+  -- lugar (UPDATE do end_date, id preservado) em vez de tentar inserir uma
+  -- segunda linha — um INSERT à parte violaria
+  -- unique(client_id, start_date), que foi exatamente o erro
+  -- "duplicate key value violates unique constraint sprints_client_id_start_date_key"
+  -- reportado ao rodar esta migration pela primeira vez. Converter em lugar
+  -- também preserva de graça tudo que já estava ligado ao id (tarefas,
+  -- alocações, comentários, gasto manual) sem precisar mover nada.
   for period in select * from compute_month_sprint_periods(p_year, p_month) loop
-    select id into v_sprint_id from sprints
-      where client_id = p_client_id and start_date = period.start_date and end_date = period.end_date;
+    v_sprint_id := null;
+    v_existing_end_date := null;
+    select id, end_date into v_sprint_id, v_existing_end_date from sprints
+      where client_id = p_client_id and start_date = period.start_date;
 
     if v_sprint_id is null then
       insert into sprints (client_id, start_date, end_date, planned_spend)
@@ -141,12 +168,84 @@ begin
       returning id into v_sprint_id;
       perform generate_sprint_tasks_from_templates(p_client_id, v_sprint_id, period.start_date, period.end_date);
       raise notice '  criada sprint canônica % (%-%)', v_sprint_id, period.start_date, period.end_date;
+    elsif v_existing_end_date <> period.end_date then
+      raise notice '  convertendo sprint % (%-%) na sprint canônica %-% (mesmo id, dados preservados)',
+        v_sprint_id, period.start_date, v_existing_end_date, period.start_date, period.end_date;
+      update sprints set end_date = period.end_date where id = v_sprint_id;
     end if;
   end loop;
 
+  -- 3a-bis) agora que todo período canônico do mês já tem uma sprint (nova
+  -- ou convertida em lugar no passo acima), realinha tarefas e alocações
+  -- que ficaram "para trás" numa sprint convertida — dias que pertenciam ao
+  -- intervalo antigo mais longo (ex.: dia 06 e 07 do bloco 01-07 antigo)
+  -- mas caíram fora do intervalo canônico mais curto (01-05) depois do
+  -- UPDATE acima. Só pode rodar DEPOIS do loop 3a inteiro, porque o destino
+  -- certo (ex.: a sprint canônica 06-12) pode só existir a partir de uma
+  -- iteração posterior do mesmo loop.
+  with moved as (
+    update tasks t set sprint_id = ns.id
+    from sprints os, sprints ns
+    where t.sprint_id = os.id
+      and os.client_id = p_client_id
+      and ns.client_id = p_client_id
+      and ns.id <> os.id
+      and os.start_date between v_month_start and v_month_end
+      and ns.start_date between v_month_start and v_month_end
+      and (t.due_date < os.start_date or t.due_date > os.end_date)
+      and t.due_date between ns.start_date and ns.end_date
+    returning t.id
+  )
+  select count(*) into v_tasks_moved from moved;
+  if v_tasks_moved > 0 then
+    raise notice '  tarefas realinhadas após conversão de sprint: %', v_tasks_moved;
+  end if;
+
+  v_allocations_moved := 0;
+  declare
+    alloc record;
+    v_target_sprint_id uuid;
+    v_existing_amount numeric;
+  begin
+    for alloc in
+      select a.* from sprint_planned_allocations a
+      join sprints os on os.id = a.sprint_id
+      where os.client_id = p_client_id
+        and os.start_date between v_month_start and v_month_end
+        and (a.date < os.start_date or a.date > os.end_date)
+    loop
+      select id into v_target_sprint_id from sprints
+        where client_id = p_client_id and alloc.date between start_date and end_date and id <> alloc.sprint_id
+        limit 1;
+
+      if v_target_sprint_id is not null then
+        select planned_amount into v_existing_amount from sprint_planned_allocations
+          where sprint_id = v_target_sprint_id and date = alloc.date;
+
+        if v_existing_amount is null then
+          update sprint_planned_allocations set sprint_id = v_target_sprint_id
+            where id = alloc.id;
+        else
+          raise notice '  ATENÇÃO: já existia alocação em % para a sprint destino — valores somados (R$ % + R$ %)',
+            alloc.date, v_existing_amount, alloc.planned_amount;
+          update sprint_planned_allocations set planned_amount = planned_amount + alloc.planned_amount
+            where sprint_id = v_target_sprint_id and date = alloc.date;
+          delete from sprint_planned_allocations where id = alloc.id;
+        end if;
+        v_allocations_moved := v_allocations_moved + 1;
+      end if;
+    end loop;
+  end;
+  if v_allocations_moved > 0 then
+    raise notice '  alocações realinhadas após conversão de sprint: %', v_allocations_moved;
+  end if;
+
   -- 3b) para cada sprint do cliente que TOCA este mês mas não é um período
-  -- canônico exato (blocos antigos, ou qualquer sobra de geração anterior),
-  -- migra os dados e remove o registro.
+  -- canônico exato — blocos antigos que NÃO compartilham start_date com
+  -- nenhum período canônico (ex.: bloco 08-14 vs períodos 06-12/13-19: não
+  -- foram resolvidos pela conversão em lugar do passo 3a porque o start_date
+  -- é diferente de qualquer período do mês), ou qualquer outra sobra de
+  -- geração anterior — migra os dados e remove o registro.
   for old_sprint in
     select s.* from sprints s
     where s.client_id = p_client_id
@@ -357,20 +456,29 @@ declare
   v_target_month int;
   period record;
   v_sprint_id uuid;
+  v_existing_end_date date;
 begin
   for m in 0..p_horizon_months loop
     v_target_year := extract(year from (date_trunc('month', v_today) + (m || ' months')::interval))::int;
     v_target_month := extract(month from (date_trunc('month', v_today) + (m || ' months')::interval))::int;
 
+    -- Mesma regra de conversão-em-lugar usada em reconcile_client_month_sprints
+    -- (passo 3a): busca por start_date, não pelo intervalo exato, e nunca faz
+    -- um INSERT que colidiria com unique(client_id, start_date). Uma única
+    -- regra de colisão, usada pelas duas únicas funções que criam sprints.
     for period in select * from compute_month_sprint_periods(v_target_year, v_target_month) loop
       v_sprint_id := null;
-      insert into sprints (client_id, start_date, end_date, planned_spend)
-      values (p_client_id, period.start_date, period.end_date, 0)
-      on conflict (client_id, start_date) do nothing
-      returning id into v_sprint_id;
+      v_existing_end_date := null;
+      select id, end_date into v_sprint_id, v_existing_end_date from sprints
+        where client_id = p_client_id and start_date = period.start_date;
 
-      if v_sprint_id is not null then
+      if v_sprint_id is null then
+        insert into sprints (client_id, start_date, end_date, planned_spend)
+        values (p_client_id, period.start_date, period.end_date, 0)
+        returning id into v_sprint_id;
         perform generate_sprint_tasks_from_templates(p_client_id, v_sprint_id, period.start_date, period.end_date);
+      elsif v_existing_end_date <> period.end_date then
+        update sprints set end_date = period.end_date where id = v_sprint_id;
       end if;
     end loop;
   end loop;

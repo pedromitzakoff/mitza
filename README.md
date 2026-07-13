@@ -1611,6 +1611,26 @@ automático da sync, refinamentos de UX, etc.
     Alterados: `app/clients/[id]/layout.tsx`, `app/clients/[id]/page.tsx`,
     `lib/sprint-week.ts` (comentário), `lib/supabase/database.types.ts`.
 
+    **Correção pós-entrega**: ao rodar a migration acima pela primeira vez,
+    o passo que cria a sprint canônica do 1º período do mês (ex.: julho
+    01–05) colidia com o bloco antigo (01–07) porque os dois sempre
+    **começam no mesmo dia 1 do mês** — só o fim difere. A migration fazia
+    um `INSERT` cego pra cada período, o que violava a constraint
+    `unique(client_id, start_date)` com o erro `duplicate key value
+    violates unique constraint "sprints_client_id_start_date_key"`.
+    Corrigido em `reconcile_client_month_sprints` e `ensure_client_sprints`
+    (mesma regra nas duas, pra nunca haver comportamento divergente): em
+    vez de checar o intervalo exato antes de inserir, a busca agora é por
+    `start_date` — se já existir uma sprint com esse início e fim
+    diferente, ela é **convertida em lugar** (`UPDATE` do `end_date`, id
+    preservado, todo dado já ligado ao id continua ligado sem precisar
+    mover nada) em vez de tentar inserir uma segunda linha. Os dias que
+    "sobravam" do intervalo antigo mais longo (ex.: dia 06 e 07 do bloco
+    01–07 encolhido pra 01–05) são realinhados num passo novo que só roda
+    depois que todos os períodos canônicos do mês já existem, garantindo
+    que sempre há um destino válido (tarefas por `due_date`, alocações por
+    `date`, sem duplicar nem perder valor).
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis
