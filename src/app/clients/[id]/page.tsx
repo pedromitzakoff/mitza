@@ -22,6 +22,7 @@ import { todayDateString, todayUTC } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
 import { computeOperationalTracking } from "@/lib/operational-tracking";
 import { computeAccountReviewCadenceStatus } from "@/lib/account-review-cadence";
+import { computeClientUpdateStatus } from "@/lib/client-updates";
 import { AttentionPanel } from "../attention-panel";
 import { MonthInvestmentSummary } from "../month-investment-summary";
 import { SprintCard } from "../sprint-card";
@@ -36,6 +37,7 @@ import type { TaskListItem } from "../task-row";
 import type { AccountReviewSummaryItem } from "../account-reviews-section";
 import { RecordAccountReviewDrawer } from "../record-account-review-drawer";
 import { AccountReviewDetailDrawer, type AccountReviewDetail } from "../account-review-detail-drawer";
+import { generateClientUpdateAction } from "../client-update-actions";
 import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
 import type { OperationTaskItem } from "@/app/operation/operation-data";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
@@ -119,6 +121,8 @@ export default async function ClientPage({
     reviewDetail?: string;
     reviewError?: string;
     reviewsHistory?: string;
+    reviewSaved?: string;
+    clientUpdateError?: string;
   }>;
 }) {
   const { id } = await params;
@@ -135,6 +139,8 @@ export default async function ClientPage({
     reviewDetail: openReviewDetailId,
     reviewError,
     reviewsHistory,
+    reviewSaved,
+    clientUpdateError,
   } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
@@ -294,43 +300,65 @@ export default async function ClientPage({
   // calculada e gravada em cada linha (seconds_since_previous_review),
   // nunca recalculada aqui.
   const reviewWindowStart = new Date(today.getTime() - 60 * 86_400_000).toISOString().slice(0, 10);
-  const [{ data: accountReviewRows }, { data: lastOptimizationRow }, { data: cadenceConfig }, { data: managers }] =
-    await Promise.all([
-      supabase
-        .from("account_reviews")
-        .select(
-          "id, sprint_id, reviewed_at, reason, reason_other_description, outcome, notes, issue_description, issue_category, seconds_since_previous_review, team_member:team_members!account_reviews_team_member_id_fkey(name), optimizations:account_optimizations(id, optimization_type, optimization_action, description, reason, expected_impact), issue_task:tasks!account_reviews_issue_task_id_fkey(title)",
-        )
-        .eq("client_id", id)
-        .gte("reviewed_at", `${reviewWindowStart}T00:00:00Z`)
-        .order("reviewed_at", { ascending: false }),
-      supabase
-        .from("account_optimizations")
-        .select("optimization_type, created_at")
-        .eq("client_id", id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("account_review_cadences")
-        .select("reviews_per_week, max_business_days_without_review, is_active")
-        .eq("client_id", id)
-        .maybeSingle(),
-      supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
-    ]);
+  const [
+    { data: accountReviewRows },
+    { data: lastOptimizationRow },
+    { data: cadenceConfig },
+    { data: managers },
+    { data: clientUpdateRows },
+  ] = await Promise.all([
+    supabase
+      .from("account_reviews")
+      .select(
+        "id, sprint_id, reviewed_at, reason, reason_other_description, outcome, notes, issue_description, issue_category, seconds_since_previous_review, team_member:team_members!account_reviews_team_member_id_fkey(name), optimizations:account_optimizations(id, optimization_type, optimization_action, description, reason, expected_impact), issue_task:tasks!account_reviews_issue_task_id_fkey(title)",
+      )
+      .eq("client_id", id)
+      .gte("reviewed_at", `${reviewWindowStart}T00:00:00Z`)
+      .order("reviewed_at", { ascending: false }),
+    supabase
+      .from("account_optimizations")
+      .select("optimization_type, created_at")
+      .eq("client_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("account_review_cadences")
+      .select("reviews_per_week, max_business_days_without_review, is_active")
+      .eq("client_id", id)
+      .maybeSingle(),
+    supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
+    // Etapa 59 — Atualização para o Cliente: uma linha por análise (no
+    // máximo), buscada junto com o resto da página; nenhuma query separada
+    // por análise (nem pro indicador discreto nem pro conteúdo do drawer).
+    supabase
+      .from("client_updates")
+      .select(
+        "id, account_review_id, content, copied_at, sent_at, sent_by_profile:team_members!client_updates_sent_by_fkey(name)",
+      )
+      .eq("client_id", id),
+  ]);
+
+  const clientUpdatesByReviewId = new Map((clientUpdateRows ?? []).map((row) => [row.account_review_id, row]));
 
   const accountReviews = accountReviewRows ?? [];
-  const accountReviewSummaries = accountReviews.map((review) => ({
-    id: review.id,
-    sprintId: review.sprint_id,
-    reviewedAt: review.reviewed_at,
-    reason: review.reason,
-    reasonOtherDescription: review.reason_other_description,
-    outcome: review.outcome,
-    managerName: review.team_member?.name ?? "Membro removido",
-    optimizationCount: review.optimizations.length,
-    issueDescription: review.issue_description,
-  }));
+  const accountReviewSummaries = accountReviews.map((review) => {
+    const update = clientUpdatesByReviewId.get(review.id) ?? null;
+    return {
+      id: review.id,
+      sprintId: review.sprint_id,
+      reviewedAt: review.reviewed_at,
+      reason: review.reason,
+      reasonOtherDescription: review.reason_other_description,
+      outcome: review.outcome,
+      managerName: review.team_member?.name ?? "Membro removido",
+      optimizationCount: review.optimizations.length,
+      issueDescription: review.issue_description,
+      updateStatus: computeClientUpdateStatus(
+        update ? { copiedAt: update.copied_at, sentAt: update.sent_at } : null,
+      ),
+    };
+  });
   const accountReviewsBySprintId = groupAccountReviewsBySprintId(accountReviewSummaries);
 
   const accountReviewCadenceStatus = computeAccountReviewCadenceStatus(
@@ -358,6 +386,7 @@ export default async function ClientPage({
         : review.outcome === "ISSUE_IDENTIFIED"
           ? review.issue_description
           : review.notes;
+    const update = clientUpdatesByReviewId.get(review.id) ?? null;
     return {
       id: review.id,
       reviewedAt: review.reviewed_at,
@@ -365,6 +394,9 @@ export default async function ClientPage({
       outcome: review.outcome,
       optimizationTypes,
       summaryText,
+      updateStatus: computeClientUpdateStatus(
+        update ? { copiedAt: update.copied_at, sentAt: update.sent_at } : null,
+      ),
     };
   });
   const recentAccountReviews = accountReviewPreviewItems.slice(0, 2);
@@ -429,6 +461,7 @@ export default async function ClientPage({
     commentError && { tone: "red", text: commentError },
     taskError && { tone: "red", text: taskError },
     reviewError && { tone: "red", text: reviewError },
+    clientUpdateError && { tone: "red", text: clientUpdateError },
     synced && { tone: "green", text: `${synced} dia(s) de spend sincronizado(s) com o Meta.` },
     saved && { tone: "green", text: "Dados do cliente atualizados." },
     budgetSaved && { tone: "green", text: "Orçamento do mês atualizado." },
@@ -457,6 +490,17 @@ export default async function ClientPage({
           reason: opt.reason,
           expectedImpact: opt.expected_impact,
         })),
+        clientUpdate: (() => {
+          const update = clientUpdatesByReviewId.get(openReviewDetail.id);
+          return update
+            ? {
+                id: update.id,
+                content: update.content,
+                sentAt: update.sent_at,
+                sentByName: update.sent_by_profile?.name ?? null,
+              }
+            : null;
+        })(),
       }
     : null;
   const historyDrawerHref = `${returnTo}?historicoOrcamento=1`;
@@ -503,6 +547,30 @@ export default async function ClientPage({
               {banner.text}
             </p>
           ))}
+        </div>
+      )}
+
+      {/* Etapa 59, seção 16: ação rápida depois de registrar uma análise —
+          opcional, nunca gera a atualização automaticamente. */}
+      {reviewSaved && !clientUpdatesByReviewId.has(reviewSaved) && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
+          <span className="text-foreground">Análise registrada com sucesso.</span>
+          <div className="flex items-center gap-2">
+            <form action={generateClientUpdateAction.bind(null, reviewSaved, `${returnTo}?reviewDetail=${reviewSaved}`)}>
+              <button
+                type="submit"
+                className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
+              >
+                Gerar atualização
+              </button>
+            </form>
+            <Link
+              href={returnTo}
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Fechar
+            </Link>
+          </div>
         </div>
       )}
 
@@ -701,7 +769,9 @@ export default async function ClientPage({
         />
       )}
 
-      {reviewDetail && <AccountReviewDetailDrawer review={reviewDetail} closeHref={returnTo} />}
+      {reviewDetail && (
+        <AccountReviewDetailDrawer review={reviewDetail} clientId={client.id} closeHref={returnTo} />
+      )}
     </div>
   );
 }

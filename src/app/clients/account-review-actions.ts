@@ -115,7 +115,10 @@ export async function recordAccountReviewAction(clientId: string, returnTo: stri
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/sprints");
-  redirect(returnTo);
+  // Etapa 59, seção 16: ação rápida "Gerar atualização" depois de registrar
+  // — o banner de sucesso na página do cliente usa este id, nunca o
+  // gestor precisa reabrir a análise manualmente pra chegar lá.
+  redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}reviewSaved=${data.reviewId}`);
 }
 
 /** Configuração de cadência (Etapa 57, seção 25) — admin-only, mesmo padrão

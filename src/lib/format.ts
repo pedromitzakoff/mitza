@@ -97,6 +97,24 @@ export function formatDateTime(value: string): string {
   return dateTimeFormatter.format(new Date(value));
 }
 
+const dateTimeWithYearFormatter = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/** Data + hora com ano, no formato "13/07/2026 às 14:32" — usado onde o
+ * momento precisa ficar registrado de forma inequívoca fora do contexto do
+ * mês corrente (ex.: "Enviada em ... por ..." da Atualização para o
+ * Cliente), diferente de `formatDateTime` (sem ano, pra listas do mês). */
+export function formatDateTimeWithYear(value: string): string {
+  const parts = dateTimeWithYearFormatter.formatToParts(new Date(value));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")}/${get("year")} às ${get("hour")}:${get("minute")}`;
+}
+
 const monthYearFormatter = new Intl.DateTimeFormat("pt-BR", {
   month: "long",
   year: "numeric",

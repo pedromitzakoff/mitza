@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatDateTime, formatShortDate } from "@/lib/format";
 import { formatLastOptimizationLabel } from "@/lib/monthly-reports";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
+import { CLIENT_UPDATE_STATUS_LABEL, type ClientUpdateStatus } from "@/lib/client-updates";
 import type { AccountReviewCadenceStatus } from "@/lib/account-review-cadence";
 import type { AccountReviewOutcome, OptimizationType } from "@/lib/supabase/database.types";
 
@@ -12,6 +13,9 @@ export interface AccountReviewPreviewItem {
   outcome: AccountReviewOutcome;
   optimizationTypes: OptimizationType[];
   summaryText: string | null;
+  /** Etapa 59 — indicador discreto de Atualização para o Cliente (seção 14
+   * do pedido); "none" não é mostrado. */
+  updateStatus: ClientUpdateStatus;
 }
 
 const OUTCOME_TEXT_CLASSES: Record<AccountReviewOutcome, string> = {
@@ -45,13 +49,14 @@ export function ReviewPreviewRow({
         </p>
       )}
       {review.summaryText && <p className="mt-0.5 truncate text-xs text-muted-foreground">{review.summaryText}</p>}
-      <Link
-        href={detailHref}
-        scroll={false}
-        className="mt-0.5 inline-block text-xs font-medium text-brand hover:underline"
-      >
-        Ver análise
-      </Link>
+      <div className="mt-0.5 flex items-center justify-between gap-2">
+        <Link href={detailHref} scroll={false} className="inline-block text-xs font-medium text-brand hover:underline">
+          Ver análise
+        </Link>
+        {review.updateStatus !== "none" && (
+          <span className="text-[11px] text-muted-foreground">{CLIENT_UPDATE_STATUS_LABEL[review.updateStatus]}</span>
+        )}
+      </div>
     </li>
   );
 }

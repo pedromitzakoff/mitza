@@ -65,6 +65,13 @@ export const OperationalEventType = {
   ACCOUNT_REVIEW_OPTIMIZATION_PERFORMED: "account_review_optimization_performed",
   ACCOUNT_REVIEW_ISSUE_IDENTIFIED: "account_review_issue_identified",
   ACCOUNT_OPTIMIZATION_RECORDED: "account_optimization_recorded",
+
+  // Etapa 59 — Atualização para o Cliente.
+  CLIENT_UPDATE_GENERATED: "client_update_generated",
+  CLIENT_UPDATE_EDITED: "client_update_edited",
+  CLIENT_UPDATE_COPIED: "client_update_copied",
+  CLIENT_UPDATE_MARKED_SENT: "client_update_marked_sent",
+  CLIENT_UPDATE_MARKED_UNSENT: "client_update_marked_unsent",
 } as const satisfies Record<string, OperationalEventTypeValue>;
 
 export type OperationalEventType = (typeof OperationalEventType)[keyof typeof OperationalEventType];
@@ -141,6 +148,11 @@ export const OPERATIONAL_EVENT_TYPE_LABEL: Record<OperationalEventType, string> 
   account_review_optimization_performed: "Analisou a conta — otimização realizada",
   account_review_issue_identified: "Analisou a conta — problema identificado",
   account_optimization_recorded: "Registrou otimização",
+  client_update_generated: "Gerou atualização para o cliente",
+  client_update_edited: "Editou atualização para o cliente",
+  client_update_copied: "Copiou atualização para o cliente",
+  client_update_marked_sent: "Marcou atualização como enviada",
+  client_update_marked_unsent: "Marcou atualização como não enviada",
 };
 
 /** Converte segundos de atraso pra um texto compacto (horas/dias) — usado

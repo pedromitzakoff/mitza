@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { formatDateTime } from "@/lib/format";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL } from "@/lib/account-reviews";
+import { CLIENT_UPDATE_STATUS_LABEL, type ClientUpdateStatus } from "@/lib/client-updates";
 import type { AccountReviewOutcome, AccountReviewReason } from "@/lib/supabase/database.types";
 
 export interface AccountReviewSummaryItem {
@@ -12,6 +13,10 @@ export interface AccountReviewSummaryItem {
   managerName: string;
   optimizationCount: number;
   issueDescription: string | null;
+  /** Etapa 59 — indicador discreto de Atualização para o Cliente; "none"
+   * nunca é mostrado (seção 15 do pedido: análise sem atualização gerada não
+   * exibe nada). */
+  updateStatus: ClientUpdateStatus;
 }
 
 const OUTCOME_TEXT_CLASSES: Record<AccountReviewOutcome, string> = {
@@ -75,6 +80,11 @@ export function AccountReviewsSection({
                     <span className="truncate text-xs text-muted-foreground">· {reviewSubtitle(review)}</span>
                   )}
                 </div>
+                {review.updateStatus !== "none" && (
+                  <span className="text-[11px] text-muted-foreground">
+                    {CLIENT_UPDATE_STATUS_LABEL[review.updateStatus]}
+                  </span>
+                )}
               </Link>
             </li>
           ))}

@@ -8,6 +8,15 @@ import {
   OPTIMIZATION_TYPE_LABEL,
 } from "@/lib/account-reviews";
 import type { AccountReviewOutcome, AccountReviewReason, OptimizationType } from "@/lib/supabase/database.types";
+import { generateClientUpdateAction } from "./client-update-actions";
+import { ClientUpdateEditor } from "./client-update-editor";
+
+export interface ClientUpdateDetail {
+  id: string;
+  content: string;
+  sentAt: string | null;
+  sentByName: string | null;
+}
 
 export interface AccountOptimizationDetail {
   id: string;
@@ -31,6 +40,7 @@ export interface AccountReviewDetail {
   issueTaskTitle: string | null;
   secondsSincePreviousReview: number | null;
   optimizations: AccountOptimizationDetail[];
+  clientUpdate: ClientUpdateDetail | null;
 }
 
 function reasonLabel(review: AccountReviewDetail): string {
@@ -44,7 +54,15 @@ function reasonLabel(review: AccountReviewDetail): string {
  * Drawer de LEITURA (Etapa 57, seção 22/23) — nunca mostra JSON bruto nem
  * IDs técnicos, só os campos já resolvidos em linguagem simples.
  */
-export function AccountReviewDetailDrawer({ review, closeHref }: { review: AccountReviewDetail; closeHref: string }) {
+export function AccountReviewDetailDrawer({
+  review,
+  clientId,
+  closeHref,
+}: {
+  review: AccountReviewDetail;
+  clientId: string;
+  closeHref: string;
+}) {
   return (
     <>
       <Link href={closeHref} scroll={false} className="fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
@@ -141,6 +159,41 @@ export function AccountReviewDetailDrawer({ review, closeHref }: { review: Accou
             <p className="mt-2 text-sm text-foreground">{review.notes}</p>
           </section>
         )}
+
+        <section className="mt-4 border-t border-border pt-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Atualização para o cliente
+          </h3>
+          {review.clientUpdate ? (
+            <ClientUpdateEditor
+              clientUpdateId={review.clientUpdate.id}
+              clientId={clientId}
+              initialContent={review.clientUpdate.content}
+              initialSentAt={review.clientUpdate.sentAt}
+              initialSentByName={review.clientUpdate.sentByName}
+            />
+          ) : (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">
+                Transforme esta análise em uma atualização pronta para enviar ao cliente.
+              </p>
+              <form
+                action={generateClientUpdateAction.bind(
+                  null,
+                  review.id,
+                  `${closeHref}${closeHref.includes("?") ? "&" : "?"}reviewDetail=${review.id}`,
+                )}
+              >
+                <button
+                  type="submit"
+                  className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
+                >
+                  Gerar atualização
+                </button>
+              </form>
+            </div>
+          )}
+        </section>
       </div>
     </>
   );

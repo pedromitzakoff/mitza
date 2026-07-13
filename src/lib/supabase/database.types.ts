@@ -87,7 +87,12 @@ export type OperationalEventType =
   | "account_review_no_change"
   | "account_review_optimization_performed"
   | "account_review_issue_identified"
-  | "account_optimization_recorded";
+  | "account_optimization_recorded"
+  | "client_update_generated"
+  | "client_update_edited"
+  | "client_update_copied"
+  | "client_update_marked_sent"
+  | "client_update_marked_unsent";
 
 export type OperationalEntityType =
   | "task"
@@ -96,7 +101,8 @@ export type OperationalEntityType =
   | "monthly_budget_change"
   | "monthly_report"
   | "account_review"
-  | "account_optimization";
+  | "account_optimization"
+  | "client_update";
 export type OperationalEventSource = "web" | "server" | "system" | "integration" | "migration" | "automation";
 
 /** Etapa 57 — Análises da Conta e Otimizações (taxonomias). Rótulos em
@@ -120,6 +126,9 @@ export type OptimizationType =
   | "ACCOUNT_STRUCTURE"
   | "TRACKING"
   | "OTHER";
+
+/** Etapa 59 — Atualização para o Cliente. Rótulos em lib/client-updates.ts. */
+export type ClientUpdateGenerationMethod = "template" | "ai";
 
 export interface Database {
   public: {
@@ -1048,6 +1057,93 @@ export interface Database {
             columns: ["client_id"];
             isOneToOne: false;
             referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      client_updates: {
+        Row: {
+          id: string;
+          organization_id: string;
+          client_id: string;
+          account_review_id: string;
+          created_by: string | null;
+          content: string;
+          generation_method: ClientUpdateGenerationMethod;
+          generated_at: string;
+          updated_at: string;
+          copied_at: string | null;
+          copied_by: string | null;
+          sent_at: string | null;
+          sent_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          client_id: string;
+          account_review_id: string;
+          created_by?: string | null;
+          content: string;
+          generation_method?: ClientUpdateGenerationMethod;
+          generated_at?: string;
+          updated_at?: string;
+          copied_at?: string | null;
+          copied_by?: string | null;
+          sent_at?: string | null;
+          sent_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          client_id?: string;
+          account_review_id?: string;
+          created_by?: string | null;
+          content?: string;
+          generation_method?: ClientUpdateGenerationMethod;
+          generated_at?: string;
+          updated_at?: string;
+          copied_at?: string | null;
+          copied_by?: string | null;
+          sent_at?: string | null;
+          sent_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_updates_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_updates_account_review_id_fkey";
+            columns: ["account_review_id"];
+            isOneToOne: true;
+            referencedRelation: "account_reviews";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_updates_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_updates_copied_by_fkey";
+            columns: ["copied_by"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_updates_sent_by_fkey";
+            columns: ["sent_by"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
             referencedColumns: ["id"];
           },
         ];

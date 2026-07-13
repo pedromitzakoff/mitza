@@ -2450,6 +2450,109 @@ automático da sync, refinamentos de UX, etc.
     `app/clients/attention-panel.tsx`,
     `app/clients/monthly-budget-history-drawer.tsx` (comentário).
 
+59. ✅ **Atualização para o Cliente (a partir de uma Análise da Conta)**
+
+    Primeira evolução do sistema de Análises da Conta (Etapa 57): gera, a
+    partir de uma análise já registrada, um texto pronto pra colar no
+    WhatsApp do cliente — sem nenhuma IA nesta versão (`generation_method`
+    já vem preparado pra aceitar `'ai'` no futuro, mas só `'template'` é de
+    fato gerado).
+
+    **`client_updates`** (`supabase/client-updates.sql`, roda depois de
+    `account-reviews.sql`): `account_review_id` é `unique` — no máximo uma
+    atualização por análise; um segundo clique em "Gerar atualização" nunca
+    cria duplicata, só reabre a existente (checado na própria action antes
+    de inserir). RLS: select/insert seguem exatamente `is_admin() or
+    is_client_manager(client_id)` de `account_reviews`, sem matriz nova de
+    permissões; diferente de `account_reviews` (imutável), aqui existe
+    policy de update — o texto é editável e os campos de cópia/envio mudam
+    depois de criada — mas nunca de delete.
+
+    **Geração (`lib/client-updates.ts`, `buildClientUpdateText`)**: função
+    pura, só com dados já registrados na análise (motivo do ponto:
+    `account_optimizations.reason`; ação: `.description`, com fallback pro
+    par tipo/ação quando a descrição está vazia; `issue_description`;
+    `notes`) — nunca inventa frase nenhuma. "Próximos passos" nunca aparece
+    nesta versão: não existe campo estruturado equivalente no modelo atual
+    de análise, e o pedido explicitamente proíbe inventar conteúdo — a
+    seção some por completo em vez de aparecer vazia ou genérica (mesma
+    regra "se não houver, não mostrar a seção" aplicada às outras duas
+    seções). Verificado manualmente com 6 cenários (otimização com 3 ações,
+    sem otimização com/sem observação, problema identificado, uma única
+    ação sem motivo preenchido, caracteres especiais/emoji/texto longo) —
+    todos batem com os exemplos do pedido.
+
+    **Onde vive**: dentro do `AccountReviewDetailDrawer` já existente (Etapa
+    57) — nenhum drawer novo. Seção "Atualização para o cliente" logo depois
+    de Observações: sem atualização, um CTA compacto de uma linha; com
+    atualização, `ClientUpdateEditor` (segundo componente client-side do
+    app, mesma justificativa de `RecordAccountReviewDrawer`: textarea com
+    autosave debounced 700ms e clipboard não têm como ser `<form>` +
+    Server Action + redirect). Ação rápida "Gerar atualização" também
+    aparece no banner de sucesso logo depois de registrar uma análise
+    (`?reviewSaved=<id>`), sempre opcional, nunca automática.
+
+    **Autosave/cópia/envio**: as 4 Server Actions de mutação
+    (`client-update-actions.ts`) são chamadas diretamente do componente
+    cliente (sem `<form>`, sem redirect) — `updateClientUpdateContentAction`
+    sempre salva o conteúdo, mas só grava `CLIENT_UPDATE_EDITED` se o último
+    evento gerado/editado desta atualização tiver mais de 2 minutos
+    (deduplicação simples, não um sistema de versionamento); "Copiar texto"
+    faz o clipboard no navegador e só então chama a action (registra
+    `copied_at`/`copied_by`/evento, nunca abre WhatsApp); "Marcar como
+    enviada" tem confirmação compacta inline antes de gravar `sent_at`/
+    `sent_by`; "Marcar como não enviada" só aparece no menu "⋯" depois de já
+    enviada.
+
+    **Eventos operacionais** (estende a taxonomia existente, mesma tabela
+    `operational_events` — nenhuma tabela paralela): `client_update_generated`,
+    `client_update_edited`, `client_update_copied`, `client_update_marked_sent`,
+    `client_update_marked_unsent`, entidade nova `client_update`. Payload
+    inclui `client_id`/`account_review_id` (em `metadata` no evento de
+    geração) — nunca duplica o conteúdo da mensagem no evento, que já está
+    em `client_updates.content`. Com isso dá pra medir no futuro: % de
+    análises que geram atualização, tempo análise→geração→cópia→envio,
+    gestores que mais comunicam, clientes que recebem atualização com mais
+    frequência, análises sem comunicação posterior — nenhuma dessas métricas
+    foi implementada agora, só os eventos que as tornam possíveis depois.
+
+    **Indicadores discretos** (seções 14/15): mesmo componente `ReviewPreviewRow`
+    (reaproveitado do Acompanhamento da Conta e do "Ver histórico") e a lista
+    de análises dentro da Sprint (`AccountReviewsSection`) ganharam um texto
+    secundário — "Atualização gerada"/"Atualização copiada"/"Atualização
+    enviada" — que só aparece quando existe uma atualização; sem atualização
+    gerada, nada é mostrado (nenhum "Sem atualização" repetido em toda
+    linha). Sem badge grande, sem coluna nova.
+
+    **Não implementado nesta etapa** (fora do pedido, seção 19): integração
+    com WhatsApp (nem oficial nem por link `wa.me`); envio automático; IA/LLM;
+    áudio; PDF; relatório completo; templates customizáveis por agência;
+    aprovação do admin; notificações; dashboard de comunicação; qualquer
+    métrica visual nova na Inteligência Operacional — só os eventos que as
+    viabilizarão depois.
+
+    **Testes**: não há suíte automatizada neste projeto. `buildClientUpdateText`
+    verificado manualmente com os 6 cenários acima (script ad-hoc, descartado
+    depois). Confirmado por leitura/rastreamento manual: `account_review_id`
+    unique impede duplicata mesmo em duplo clique; RLS de update permite só
+    quem já podia ver/editar a análise (`is_admin()`/`is_client_manager`);
+    `updateClientUpdateContentAction` sempre persiste o conteúdo mesmo
+    quando o evento é deduplicado; nenhuma regra de orçamento/investimento/
+    sprint/tarefa/otimização/relatório/equipe foi tocada — só a tabela nova
+    e a taxonomia estendida de eventos. `tsc --noEmit`, `npm run lint` e
+    `npm run build` sem erros. Sem acesso a credenciais do Supabase neste
+    ambiente — não foi possível abrir a página num navegador contra dados
+    reais.
+
+    Arquivos novos: `supabase/client-updates.sql`, `lib/client-updates.ts`,
+    `app/clients/client-update-actions.ts`, `app/clients/client-update-editor.tsx`.
+    Alterados: `lib/supabase/database.types.ts`, `lib/operational-events.ts`,
+    `lib/format.ts` (`formatDateTimeWithYear`),
+    `app/clients/account-review-detail-drawer.tsx`,
+    `app/clients/account-reviews-section.tsx`,
+    `app/clients/account-follow-up-panel.tsx`, `app/clients/[id]/page.tsx`,
+    `app/clients/account-review-actions.ts` (redirect com `reviewSaved`).
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis
