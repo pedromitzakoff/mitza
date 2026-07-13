@@ -508,7 +508,6 @@ export default async function ClientPage({
   const reviewsHistoryHref = `${returnTo}?reviewsHistory=1`;
   const buildReviewDetailHref = (reviewId: string) => `${returnTo}?reviewDetail=${reviewId}`;
   const cadenceConfigHref = `/clients/${client.id}/edit`;
-  const hasCriticalAlert = alerts.some((alert) => alert.severity === "critico");
   const openTaskRow = openTaskId ? (tasks ?? []).find((t) => t.id === openTaskId) ?? null : null;
   const openTask: OperationTaskItem | null = openTaskRow
     ? {
@@ -574,9 +573,33 @@ export default async function ClientPage({
         </div>
       )}
 
-      {/* 1. Investimento do mês — resumo financeiro central + edição/histórico
+      {/* 1. Acompanhamento da conta — primeiro bloco principal da página:
+          ao abrir um cliente, a primeira pergunta operacional é "essa conta
+          está sendo acompanhada corretamente e o que foi feito recentemente?"
+          (reordenação de hierarquia — antes vinha depois de Investimento e
+          Prioridades). Resumo de cadência + CTA de registrar análise +
+          preview das 2 análises mais recentes, tudo num único bloco
+          compacto — nenhuma regra de negócio, cálculo ou funcionalidade
+          alterada aqui, só a posição. */}
+      <div className="mt-3">
+        <AccountFollowUpPanel
+          status={accountReviewCadenceStatus}
+          today={today}
+          recentReviews={recentAccountReviews}
+          hasMoreReviews={hasMoreAccountReviews}
+          newReviewHref={`${returnTo}?review=new`}
+          historyHref={reviewsHistoryHref}
+          buildReviewDetailHref={buildReviewDetailHref}
+          cadenceConfigHref={cadenceConfigHref}
+          isAdmin={isAdmin}
+        />
+      </div>
+
+      {/* 2. Investimento do mês — resumo financeiro central + edição/histórico
           de orçamento, tudo num único bloco (Etapa 58: antes eram 2 cards
-          separados repetindo o mesmo valor planejado). */}
+          separados repetindo o mesmo valor planejado). Nenhuma regra de
+          cálculo, integração Meta ou fallback manual foi alterada — só a
+          posição (agora depois de Acompanhamento da Conta). */}
       <div className="mt-3">
         <MonthInvestmentSummary
           planned={monthPlanned}
@@ -597,46 +620,27 @@ export default async function ClientPage({
         />
       </div>
 
-      {/* Prioridades (Etapa 58, seção 16): quando existe alerta crítico, o
-          bloco aparece logo aqui, ainda antes do Acompanhamento da Conta —
-          quando não há crítico, ele volta pra posição padrão mais abaixo.
-          Sem nenhum alerta, AttentionPanel retorna null e nada é renderizado. */}
-      {alerts.length > 0 && hasCriticalAlert && (
+      {/* 3. Prioridades — posição única e fixa (a promoção condicional pra
+          antes do Acompanhamento da Conta em caso de alerta crítico, da
+          Etapa 58, foi removida: a nova hierarquia pedida é sempre
+          Acompanhamento → Investimento → Prioridades, independente de
+          severidade). Motor de prioridades, critérios e cálculos
+          inalterados — só a posição. Sem nenhum alerta, AttentionPanel
+          retorna null e nada é renderizado. */}
+      {alerts.length > 0 && (
         <div className="mt-3">
           <AttentionPanel alerts={alerts} />
         </div>
       )}
 
-      {/* 2. Acompanhamento da conta — bloco operacional principal da página
-          (Etapa 58): resumo de cadência + CTA de registrar análise + preview
-          das 2 análises mais recentes, tudo num único bloco compacto. */}
-      <div className="mt-3">
-        <AccountFollowUpPanel
-          status={accountReviewCadenceStatus}
-          today={today}
-          recentReviews={recentAccountReviews}
-          hasMoreReviews={hasMoreAccountReviews}
-          newReviewHref={`${returnTo}?review=new`}
-          historyHref={reviewsHistoryHref}
-          buildReviewDetailHref={buildReviewDetailHref}
-          cadenceConfigHref={cadenceConfigHref}
-          isAdmin={isAdmin}
-        />
-      </div>
+      {/* 4. Restante da página — mesma ordem relativa de sempre. */}
 
-      {/* 3. Rotinas do cliente (Etapa 58: antes "Acompanhamento operacional") */}
+      {/* Rotinas do cliente (Etapa 58: antes "Acompanhamento operacional") */}
       <div className="mt-3">
         <OperationalTrackingPanel tracking={operationalTracking} today={today} />
       </div>
 
-      {/* Prioridades — posição padrão, quando não há alerta crítico. */}
-      {alerts.length > 0 && !hasCriticalAlert && (
-        <div className="mt-3">
-          <AttentionPanel alerts={alerts} />
-        </div>
-      )}
-
-      {/* 4. Sprint atual — só a sprint classificada como atual pela regra
+      {/* Sprint atual — só a sprint classificada como atual pela regra
           temporal central (getSprintTemporalStatus); nunca escolhida
           arbitrariamente. Se nenhuma existir, estado claro em vez de
           silenciosamente não mostrar nada. */}

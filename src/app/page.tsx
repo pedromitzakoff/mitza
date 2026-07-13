@@ -19,8 +19,9 @@ import type { AccountHealth } from "@/lib/attention-alerts";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { formatLastOptimizationLabel } from "@/lib/monthly-reports";
-import { computeFinancialSummary, computeManagerSummary, computePortfolioCounts, computeSpendRhythmCounts } from "@/lib/agency-metrics";
+import { computeFinancialSummary, computeManagerSummary, computeSpendRhythmCounts } from "@/lib/agency-metrics";
 import { getClientPriority, sortClientPriorities } from "@/lib/client-priority";
+import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
 import { PrioritiesDrawer, PrioritiesPanel } from "./priorities-panel";
 import { Button, IconButton } from "@/components/workspace/button";
@@ -113,6 +114,12 @@ export default async function Home({
 
   const supabase = await createSupabaseClient();
 
+  // Etapa "Indicadores da operação": janela do mês selecionado em
+  // timestamptz — mesma conversão já usada em account_reviews na página do
+  // cliente (`${firstDay}T00:00:00Z` / até o fim do último dia).
+  const indicatorsMonthStart = `${monthRange.firstDay}T00:00:00Z`;
+  const indicatorsMonthEnd = `${monthRange.lastDay}T23:59:59.999Z`;
+
   const [
     { data: clients },
     { data: clientManagers },
@@ -121,10 +128,16 @@ export default async function Home({
     { data: dailySpend },
     { data: tasks },
     { data: plannedAllocations },
+    { data: teamMembersForIndicators },
+    { data: completedTasksForIndicators },
+    { data: reviewsForIndicators },
+    { data: optimizationsForIndicators },
   ] = await Promise.all([
     supabase
       .from("clients")
-      .select("id, name, meta_ad_account_id, primary_manager:team_members!clients_primary_manager_id_fkey(name)")
+      .select(
+        "id, name, meta_ad_account_id, status, primary_manager:team_members!clients_primary_manager_id_fkey(name)",
+      )
       .is("deleted_at", null)
       .order("name"),
     supabase.from("client_managers").select("client_id, user_id, team_members(id, name)"),
@@ -154,6 +167,27 @@ export default async function Home({
       .select("client_id, sprint_id, date, planned_amount")
       .gte("date", rangeStart)
       .lte("date", rangeEnd),
+    // Consulta própria (independente de `gestores`, que serve o dropdown de
+    // filtro e não pode ter seu comportamento alterado): precisa do papel de
+    // cada membro pra nunca contar admin como gestor no indicador "Gestores
+    // ativos".
+    supabase.from("team_members").select("id, system_role, status"),
+    supabase
+      .from("tasks")
+      .select("client_id")
+      .not("completed_at", "is", null)
+      .gte("completed_at", indicatorsMonthStart)
+      .lte("completed_at", indicatorsMonthEnd),
+    supabase
+      .from("account_reviews")
+      .select("client_id")
+      .gte("reviewed_at", indicatorsMonthStart)
+      .lte("reviewed_at", indicatorsMonthEnd),
+    supabase
+      .from("account_optimizations")
+      .select("client_id")
+      .gte("created_at", indicatorsMonthStart)
+      .lte("created_at", indicatorsMonthEnd),
   ]);
 
   const clientIds = (clients ?? []).map((c) => c.id);
@@ -307,6 +341,32 @@ export default async function Home({
     cards = cards.filter((card) => card.clientId === clientFilter);
   }
 
+  // Indicadores da operação: respeitam só mês + carteira + cliente — nunca
+  // os filtros de recorte (saúde/ritmo/tarefas/sincronização/meta), que
+  // continuam existindo só para a tabela de clientes e "Resumo por Gestor"
+  // (`filteredBase`/`cards`). Por isso partem de `allCards` (sem nenhum
+  // filtro) e reaplicam só carteira/cliente, em vez de reaproveitar `cards`.
+  let indicatorCards = allCards;
+  if (managerFilter === "me") {
+    indicatorCards = indicatorCards.filter((card) => card.managerIds.includes(profile.id));
+  } else if (managerFilter !== "all") {
+    indicatorCards = indicatorCards.filter((card) => card.managerIds.includes(managerFilter));
+  }
+  if (clientFilter) {
+    indicatorCards = indicatorCards.filter((card) => card.clientId === clientFilter);
+  }
+
+  const clientStatusById = new Map((clients ?? []).map((c) => [c.id, c.status]));
+  const operationIndicators = computeOperationIndicators({
+    cards: indicatorCards,
+    clientStatusById,
+    teamMembers: (teamMembersForIndicators ?? []).map((m) => ({ id: m.id, systemRole: m.system_role, status: m.status })),
+    completedTaskClientIds: (completedTasksForIndicators ?? []).map((t) => t.client_id),
+    reviewClientIds: (reviewsForIndicators ?? []).map((r) => r.client_id),
+    optimizationClientIds: (optimizationsForIndicators ?? []).map((o) => o.client_id),
+    hasClientFilter: Boolean(clientFilter),
+  });
+
   // Prioridade de cada cliente — uma única fonte (getClientPriority),
   // reaproveitada pelo bloco "Prioridades de hoje" e pela ordenação padrão
   // da tabela (severidade primeiro). A tabela em si não exibe mais uma
@@ -324,7 +384,6 @@ export default async function Home({
       ? [...cards].sort((a, b) => a.clientName.localeCompare(b.clientName))
       : sortClientPriorities(allPriorities).map((p) => cardById.get(p.clientId)!);
 
-  const portfolio = computePortfolioCounts(cards);
   const spendRhythm = computeSpendRhythmCounts(cards);
   const outOfRhythmCount = spendRhythm.abaixo + spendRhythm.acima;
   const financial = computeFinancialSummary(cards);
@@ -366,7 +425,8 @@ export default async function Home({
 
   // Drill-down "de uma casa só": zera os filtros de recorte (mantendo só
   // mês e gestor) e aplica exatamente o filtro clicado — usado pelos
-  // indicadores de Saúde da operação/Controle de investimento.
+  // indicadores de "Controle de investimento" (os "Indicadores da operação"
+  // não têm drill-down de propósito, ver comentário acima do bloco).
   const drillDownUrl = (overrides: Record<string, string>) => {
     const next = new URLSearchParams();
     if (params.month) next.set("month", params.month);
@@ -444,25 +504,63 @@ export default async function Home({
           />
         </div>
 
-        {/* Saúde da operação + Controle de investimento compartilham uma
-            única superfície contínua (seção 7 do pedido: "algumas áreas
-            podem compartilhar uma mesma superfície principal"), separadas
-            por um divisor horizontal em vez de dois cards com sombra. */}
+        {/* Indicadores da operação + Controle de investimento compartilham
+            uma única superfície contínua (seção 7 do pedido original: "algumas
+            áreas podem compartilhar uma mesma superfície principal"),
+            separadas por um divisor horizontal em vez de dois cards com
+            sombra. "Saúde da operação" (saudável/atenção/crítico) foi
+            substituído por 6 indicadores quantitativos e objetivos — sem
+            classificação qualitativa, sem cores decorativas, sem drill-down
+            (nenhum destes é clicável de propósito). */}
         <div className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
           <div className="p-3.5">
-            <SectionHeader title="Saúde da operação" />
+            <SectionHeader title="Indicadores da operação" />
             <div className="mt-2.5 flex flex-wrap gap-x-6 gap-y-2 sm:divide-x sm:divide-overview-border">
               <div>
-                <Metric label="Clientes monitorados" value={String(cards.length)} />
+                <Metric
+                  label="Clientes ativos"
+                  value={String(operationIndicators.activeClientsCount)}
+                  title="Clientes ativos no contexto selecionado."
+                />
               </div>
               <div className="sm:pl-6">
-                <Metric label="Operação normal" value={String(portfolio.saudaveis)} href={drillDownUrl({ health: "saudavel" })} tone="success" />
+                <Metric
+                  label={operationIndicators.managersLabel}
+                  value={String(operationIndicators.activeManagersCount)}
+                  title="Gestores ativos vinculados ao contexto selecionado."
+                />
               </div>
               <div className="sm:pl-6">
-                <Metric label="Precisam de atenção" value={String(portfolio.atencao)} href={drillDownUrl({ health: "atencao" })} tone="warning" />
+                <Metric
+                  label="Tarefas concluídas"
+                  value={String(operationIndicators.completedTasksCount)}
+                  title="Tarefas concluídas dentro do mês selecionado."
+                />
               </div>
               <div className="sm:pl-6">
-                <Metric label="Críticos" value={String(portfolio.criticos)} href={drillDownUrl({ health: "critico" })} tone="danger" />
+                <Metric
+                  label="Taxa de conclusão"
+                  value={
+                    operationIndicators.completionRatePct !== null
+                      ? `${Math.round(operationIndicators.completionRatePct)}%`
+                      : "—"
+                  }
+                  title="Percentual das tarefas previstas no período que foram concluídas."
+                />
+              </div>
+              <div className="sm:pl-6">
+                <Metric
+                  label="Análises realizadas"
+                  value={String(operationIndicators.reviewsCount)}
+                  title="Análises de conta registradas dentro do mês selecionado."
+                />
+              </div>
+              <div className="sm:pl-6">
+                <Metric
+                  label="Otimizações registradas"
+                  value={String(operationIndicators.optimizationsCount)}
+                  title="Otimizações registradas dentro do mês selecionado."
+                />
               </div>
             </div>
           </div>
@@ -524,9 +622,10 @@ export default async function Home({
 
         {/* Tabela única de clientes (Etapa 49) — coluna "Prioridade" removida
             por duplicar "Status" sem contexto adicional (a classificação
-            detalhada de severidade continua só em "Saúde da operação" e
-            "Prioridades de hoje", que já tinham sua própria fonte de
-            verdade, `getClientPriority`). "Esperado até hoje" usa a mesma
+            detalhada de severidade continua em "Prioridades de hoje", que já
+            tinha sua própria fonte de verdade, `getClientPriority` — "Saúde
+            da operação" foi removida, ver "Indicadores da operação" acima,
+            que não usa mais accountHealth). "Esperado até hoje" usa a mesma
             base (`monthExpectedToDate`) que já decide "Status"
             (classifySpendStatus) — nunca um cálculo paralelo. Ordenação
             padrão ("Ordenar por prioridade") continua reaproveitando
