@@ -247,9 +247,10 @@ export default async function ClientPage({
   // Sprints — ver operation-data.ts).
   const monthStatus = classifySpendStatus(monthActual, monthExpectedToDate, monthPlanned);
   const currentSprint = sprintFinancials.find((sprint) => sprint.temporalStatus === "atual") ?? null;
-  // Histórico do mês (Etapa 54): todas as sprints do mês exceto a atual,
-  // já ordenadas cronologicamente (mesma ordem da query original).
-  const otherSprints = sprintFinancials.filter((sprint) => sprint.temporalStatus !== "atual");
+  // Etapa 61: única lista "Sprints de {mês}" (ver render abaixo) — mesma
+  // ordem cronológica crescente por data de início já usada em todo o
+  // resto do sistema, aqui explícita em vez de depender da ordem da query.
+  const sortedSprints = [...sprintFinancials].sort((a, b) => a.startDate.localeCompare(b.startDate));
 
   const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate({ firstDay, lastDay }, todayStr);
   const budgetSprints = sprintFinancials.map((sprint) => ({
@@ -639,39 +640,17 @@ export default async function ClientPage({
 
       {/* 4. Restante da página — mesma ordem relativa de sempre. */}
 
-      {/* Sprint atual — só a sprint classificada como atual pela regra
-          temporal central (getSprintTemporalStatus); nunca escolhida
-          arbitrariamente. Se nenhuma existir, estado claro em vez de
-          silenciosamente não mostrar nada. */}
-      <Section title="Sprint atual">
-        {currentSprint ? (
-          <SprintCard
-            sprint={currentSprint}
-            comments={sprintCommentsById.get(currentSprint.sprintId) ?? []}
-            clientId={client.id}
-            isAdmin={isAdmin}
-            tasks={tasksBySprintId.get(currentSprint.sprintId) ?? []}
-            executionLabel={sprintExecutionLabel}
-            executionSeverity={
-              sprintExecutionAlert?.severity !== "informativo" ? (sprintExecutionAlert?.severity ?? null) : null
-            }
-            accountReviews={accountReviewsBySprintId.get(currentSprint.sprintId) ?? []}
-            newReviewHref={`${returnTo}?review=new`}
-            buildReviewDetailHref={buildReviewDetailHref}
-          />
-        ) : (
-          <p className="text-sm text-zinc-500">
-            Nenhuma sprint atual encontrada para este período — verifique se as sprints do mês já foram geradas.
-          </p>
-        )}
-      </Section>
-
-      {/* 5. Histórico do mês — demais sprints do mês (concluídas e futuras),
-          recolhidas por padrão; a sprint atual não se repete aqui. */}
-      <Section title="Histórico do mês">
+      {/* Sprints do mês — uma única sequência cronológica (start_date ASC),
+          sem separar "sprint atual" de "histórico": misturar concluídas e
+          futuras sob "Histórico do mês" dava a impressão de que a atual
+          acontecia antes das demais. A sprint atual continua destacada
+          (borda azul + badge) e aberta por padrão — SprintCard já decide
+          isso sozinho (`defaultOpen ?? isCurrent`) quando `defaultOpen` não
+          é passado, por isso nenhuma sprint aqui recebe a prop. */}
+      <Section title={`Sprints de ${monthLabel}`}>
         <div className="flex flex-col gap-2">
-          {otherSprints.length > 0 ? (
-            otherSprints.map((sprint) => (
+          {sortedSprints.length > 0 ? (
+            sortedSprints.map((sprint) => (
               <SprintCard
                 key={sprint.sprintId}
                 sprint={sprint}
@@ -679,14 +658,21 @@ export default async function ClientPage({
                 clientId={client.id}
                 isAdmin={isAdmin}
                 tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
-                defaultOpen={false}
+                executionLabel={sprint.temporalStatus === "atual" ? sprintExecutionLabel : null}
+                executionSeverity={
+                  sprint.temporalStatus === "atual" && sprintExecutionAlert?.severity !== "informativo"
+                    ? (sprintExecutionAlert?.severity ?? null)
+                    : null
+                }
                 accountReviews={accountReviewsBySprintId.get(sprint.sprintId) ?? []}
                 newReviewHref={`${returnTo}?review=new`}
                 buildReviewDetailHref={buildReviewDetailHref}
               />
             ))
           ) : (
-            <p className="text-sm text-zinc-500">Nenhuma outra sprint neste mês.</p>
+            <p className="text-sm text-zinc-500">
+              Nenhuma sprint encontrada para este período — verifique se as sprints do mês já foram geradas.
+            </p>
           )}
         </div>
       </Section>
