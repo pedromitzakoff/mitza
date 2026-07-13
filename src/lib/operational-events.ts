@@ -27,6 +27,7 @@ export const OperationalEventType = {
   TEAM_MEMBER_INVITED: "team_member_invited",
   TEAM_MEMBER_ACCESS_ACTIVATED: "team_member_access_activated",
   TEAM_MEMBER_ACCESS_REVOKED: "team_member_access_revoked",
+  TEAM_MEMBER_DELETED: "team_member_deleted",
 
   CLIENT_CREATED: "client_created",
   CLIENT_MANAGER_ASSIGNED: "client_manager_assigned",
@@ -39,6 +40,7 @@ export const OperationalEventType = {
   TASK_DUE_DATE_CHANGED: "task_due_date_changed",
   TASK_COMPLETED: "task_completed",
   TASK_REOPENED: "task_reopened",
+  TASK_DELETED: "task_deleted",
 
   OPTIMIZATION_COMPLETED: "optimization_completed",
 
@@ -90,7 +92,10 @@ export type OperationalEventType = (typeof OperationalEventType)[keyof typeof Op
  *   `tasks.type`, sem tabela própria — "agendar"/"reagendar" já SÃO
  *   task_created/task_due_date_changed (o mesmo acontecimento, seria
  *   duplicar o evento sem informação nova). Só "cancelar" seria um evento
- *   genuinamente novo, e não existe exclusão de tarefa no app hoje.
+ *   genuinamente novo: excluir uma tarefa de reunião/criativo hoje emite
+ *   TASK_DELETED (genérico), não um MEETING_CANCELLED/CREATIVE_DELIVERY_*
+ *   próprio — não há como saber, só pelo delete, se o motivo foi
+ *   cancelamento ou outra coisa (ex.: tarefa criada por engano).
  * - CREATIVE_DELIVERY_LATE: evento de TRANSIÇÃO DE ESTADO (seção 21/20 do
  *   pedido) — exigiria um job de monitoramento que este round explicitamente
  *   não implementa ("não criar jobs complexos de monitoramento").
@@ -119,6 +124,7 @@ export const OPERATIONAL_EVENT_TYPE_LABEL: Record<OperationalEventType, string> 
   team_member_invited: "Convite enviado",
   team_member_access_activated: "Acesso ativado",
   team_member_access_revoked: "Acesso revogado",
+  team_member_deleted: "Excluiu membro definitivamente",
   client_created: "Cliente cadastrado",
   client_manager_assigned: "Gestor atribuído",
   client_manager_changed: "Gestor alterado",
@@ -129,6 +135,7 @@ export const OPERATIONAL_EVENT_TYPE_LABEL: Record<OperationalEventType, string> 
   task_due_date_changed: "Alterou prazo da tarefa",
   task_completed: "Concluiu tarefa",
   task_reopened: "Reabriu tarefa",
+  task_deleted: "Excluiu tarefa",
   optimization_completed: "Realizou otimização",
   meeting_scheduled: "Agendou reunião",
   meeting_rescheduled: "Reagendou reunião",

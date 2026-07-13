@@ -730,6 +730,7 @@ export default async function ClientPage({
           comments={taskCommentsById.get(openTask.id) ?? []}
           closeHref={returnTo}
           returnTo={returnTo}
+          isAdmin={isAdmin}
         />
       )}
 

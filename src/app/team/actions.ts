@@ -356,3 +356,68 @@ export async function revokeAccessAction(memberId: string) {
   revalidateTeam();
   success("Acesso revogado.");
 }
+
+/**
+ * Exclusão definitiva do cadastro — diferente de Desativar (preserva tudo),
+ * esta apaga de vez o auth.users (login) e a linha de team_members. Exige
+ * que o membro já esteja "inativo" (Desativar primeiro é uma etapa
+ * separada, de propósito: reduz o risco de excluir por engano alguém que
+ * ainda está em atividade) e que não seja mais gestor principal de nenhum
+ * cliente ativo (senão o cliente ficaria sem gestor principal do nada).
+ * Tarefas, comentários e eventos antigos deste membro continuam existindo
+ * — as FKs pra team_members(id) são todas "on delete set null" (só
+ * client_managers usa cascade, e ali é só a linha de atribuição, não dado
+ * de negócio). Nunca permite excluir o próprio cadastro de quem está
+ * logado.
+ */
+export async function deleteTeamMemberAction(memberId: string) {
+  const profile = await requireAdmin();
+  const supabase = await createSupabaseClient();
+
+  if (memberId === profile.id) failure("Você não pode excluir o próprio cadastro.");
+
+  const { data: member } = await supabase
+    .from("team_members")
+    .select("id, name, status, auth_user_id")
+    .eq("id", memberId)
+    .eq("organization_id", profile.organizationId)
+    .maybeSingle();
+
+  if (!member) failure("Membro não encontrado.");
+  if (member.status !== "inativo") failure('Desative o membro antes de excluir definitivamente.');
+
+  const { count: primaryManagerCount } = await supabase
+    .from("clients")
+    .select("id", { count: "exact", head: true })
+    .eq("primary_manager_id", memberId)
+    .is("deleted_at", null);
+
+  if (primaryManagerCount && primaryManagerCount > 0) {
+    failure(`Este membro ainda é gestor principal de ${primaryManagerCount} cliente(s) — reatribua antes de excluir.`);
+  }
+
+  if (member.auth_user_id) {
+    const admin = createAdminClient();
+    const { error: deleteAuthError } = await admin.auth.admin.deleteUser(member.auth_user_id);
+    if (deleteAuthError) failure("Não foi possível excluir o acesso do membro. Tente novamente.");
+  }
+
+  const { error } = await supabase
+    .from("team_members")
+    .delete()
+    .eq("id", memberId)
+    .eq("organization_id", profile.organizationId);
+
+  if (error) failure("Não foi possível excluir o membro.");
+
+  await recordOperationalEvent(supabase, actorFromProfile(profile), {
+    eventType: OperationalEventType.TEAM_MEMBER_DELETED,
+    entityType: "team_member",
+    entityId: memberId,
+    source: "web",
+    metadata: { name: member.name },
+  });
+
+  revalidateTeam();
+  success(`${member.name} foi excluído definitivamente.`);
+}

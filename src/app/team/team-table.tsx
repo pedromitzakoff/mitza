@@ -7,7 +7,8 @@ import {
   getTeamMemberInitial,
 } from "@/lib/team-members";
 import type { TeamInvitationStatus, TeamMemberStatus, TeamSystemRole } from "@/lib/supabase/database.types";
-import { deactivateTeamMemberAction, reactivateTeamMemberAction, resendInviteAction } from "./actions";
+import { deactivateTeamMemberAction, deleteTeamMemberAction, reactivateTeamMemberAction, resendInviteAction } from "./actions";
+import { DeleteTeamMemberButton } from "./delete-team-member-button";
 
 export interface TeamTableRow {
   id: string;
@@ -25,8 +26,14 @@ export interface TeamTableRow {
  * pedido). Ações rápidas (Reenviar convite/Desativar/Reativar) ficam
  * inline; edição completa e "Convidar"/"Revogar" (ações mais sensíveis)
  * vivem no drawer (EditTeamMemberDrawer), aberto por "Editar".
+ *
+ * A coluna "Ação" só existe para admin: todas as ações aqui (Editar,
+ * Reenviar convite, Desativar, Reativar) já eram bloqueadas no servidor
+ * (requireAdmin() em cada Server Action), mas antes apareciam pra qualquer
+ * gestor logado mesmo assim — clicáveis, sem nunca funcionar. Gestor só
+ * enxerga os dados da equipe, nunca os controles de gestão.
  */
-export function TeamTable({ rows }: { rows: TeamTableRow[] }) {
+export function TeamTable({ rows, isAdmin }: { rows: TeamTableRow[]; isAdmin: boolean }) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
@@ -46,7 +53,7 @@ export function TeamTable({ rows }: { rows: TeamTableRow[] }) {
             <th className="px-3 py-2 font-medium">Clientes</th>
             <th className="px-3 py-2 font-medium">Status</th>
             <th className="px-3 py-2 font-medium">Acesso</th>
-            <th className="px-3 py-2 font-medium">Ação</th>
+            {isAdmin && <th className="px-3 py-2 font-medium">Ação</th>}
           </tr>
         </thead>
         <tbody>
@@ -84,6 +91,7 @@ export function TeamTable({ rows }: { rows: TeamTableRow[] }) {
                   {TEAM_INVITATION_STATUS_LABEL[member.invitation_status]}
                 </span>
               </td>
+              {isAdmin && (
               <td className="px-3 py-2">
                 <div className="flex items-center gap-2">
                   <Link
@@ -118,19 +126,26 @@ export function TeamTable({ rows }: { rows: TeamTableRow[] }) {
                           </button>
                         </form>
                       ) : (
-                        <form action={reactivateTeamMemberAction.bind(null, member.id)}>
-                          <button
-                            type="submit"
-                            className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                          >
-                            Reativar
-                          </button>
-                        </form>
+                        <>
+                          <form action={reactivateTeamMemberAction.bind(null, member.id)}>
+                            <button
+                              type="submit"
+                              className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                            >
+                              Reativar
+                            </button>
+                          </form>
+                          <DeleteTeamMemberButton
+                            action={deleteTeamMemberAction.bind(null, member.id)}
+                            memberName={member.name}
+                          />
+                        </>
                       )}
                     </div>
                   </details>
                 </div>
               </td>
+              )}
             </tr>
           ))}
         </tbody>
