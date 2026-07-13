@@ -1228,6 +1228,101 @@ automático da sync, refinamentos de UX, etc.
     (`formatLastOptimizationLabel`), `app/page.tsx` (reescrita). Removidos:
     `lib/attention-center.ts`, `app/attention-center.tsx`.
 
+47. ✅ Fundação do novo Design System, aplicada só na Visão Geral (sem
+    migration, sem mudança de regra de negócio/cálculo/query/permissão/
+    filtro/search param/dado exibido — só camada visual). Primeira etapa de
+    uma direção visual nova pro produto inteiro: interação inspirada em
+    ClickUp (já era o padrão do sistema — navegação rápida, ação
+    contextual, edição inline), linguagem visual inspirada em densidade de
+    workspace operacional tipo Meta Ads Manager (superfícies neutras,
+    bordas finas, pouquíssima sombra, azul só pra ação/seleção) — nunca uma
+    cópia literal (sem logotipo, ícones ou layout pixel-perfect de nenhuma
+    ferramenta de terceiros).
+
+    **Fundação de tokens** (`globals.css`, aditivo — nenhum token
+    compartilhado tocado): estendido o prefixo `--overview-*` já aberto na
+    Etapa 41 com `surface`/`surface-subtle`/`surface-hover`/`surface-
+    selected`, `border`/`border-strong`, `text-primary`/`text-secondary`/
+    `text-muted`, `brand-subtle`, `success`/`success-subtle`, `warning`/
+    `warning-subtle`, `danger`/`danger-subtle` (light + dark). Não são
+    cores novas — tokenizam o mesmo azul/verde/laranja/vermelho já usados
+    à mão em badges espalhados pelo sistema, só com nome semântico em vez
+    de classe Tailwind repetida. Prefixo mantido de propósito: quando esse
+    sistema for promovido pras demais telas, esses tokens é que vão virar
+    os globais sem prefixo — não o contrário.
+
+    **10 componentes novos e reutilizáveis** em `src/components/workspace/`
+    — extraídos só onde havia reuso real (nunca um só ponto de uso):
+    `Button`/`IconButton` (variantes primary/secondary/ghost/danger ×
+    tamanhos sm/md — usados 8+ vezes só nesta página: navegação de mês,
+    gatilho de Filtros, ação de linha da tabela/Prioridades, "Ordenar
+    por"), `Select` (o `<select>` padronizado da toolbar e do popover de
+    filtros), `StatusDot` (● + texto — a preferência do novo sistema sobre
+    pills grandes pra severidade/situação), `Badge` (pill discreto, pros
+    poucos casos em que uma etiqueta ainda ajuda), `Metric` (label+valor,
+    generaliza o antigo `StatItem` local), `ProgressBar` (barra de
+    investimento nova, ver nota abaixo), `PageHeader`, `SectionHeader`,
+    `EmptyState`, `Toolbar`.
+
+    **`ProgressBar` é uma variante nova, não uma edição de
+    `AgencyInvestmentBar`** — decisão direta da seção 24 do pedido:
+    `AgencyInvestmentBar` (`app/agency-investment-bar.tsx`) é usada por
+    Sprints (`account-card-summary.tsx`) e Relatórios (`reports/
+    [clientId]/page.tsx`), então editá-la mudaria essas telas também, o que
+    esta rodada proíbe. Por isso a Visão Geral passou a usar um componente
+    novo, com o mesmo contrato de dados (planned/actual/expectedToDate),
+    marcador maior (handle circular, não mais um traço fino) com tooltip
+    nativo — e `AgencyInvestmentBar` continua exatamente como estava.
+
+    **Fonte**: Inter carregada via `next/font/google` e aplicada só no
+    wrapper raiz da Visão Geral (`page.tsx`), nunca em `layout.tsx` — o
+    `body` global continua com a fonte de sempre, então nenhuma outra tela
+    muda. (Achado ao investigar a fonte atual: `Geist`/`Geist Mono` já
+    estavam configuradas em `layout.tsx` mas o `body` em `globals.css`
+    nunca usava `var(--font-sans)`, só `Arial, Helvetica, sans-serif` —
+    ou seja, o sistema inteiro sempre rendeu no fallback do SO. Não mexi
+    nisso agora — é uma mudança global, fora do escopo desta rodada — só
+    registro o achado como dívida técnica.)
+
+    **Workspace contínuo**: "Saúde da operação" e "Controle de
+    investimento" passaram a compartilhar uma única superfície (borda +
+    divisor horizontal, não dois cards com sombra própria) — a página lê
+    como um workspace contínuo, não CARD-espaço-CARD-espaço-CARD. Tabela de
+    clientes com cabeçalho `surface-subtle`, linhas ~44–52px, hover sutil,
+    `StatusDot` no lugar dos badges de situação/prioridade. "Prioridades de
+    hoje" ganhou linhas ~52px (perto do pedido, um pouco acima do teto de
+    56px quando o problema principal + idade + responsável não cabem numa
+    linha só — preferi manter as 3 informações legíveis a forçar truncagem
+    agressiva).
+
+    **Dívida técnica registrada** (pedida explicitamente na seção 17):
+    `ClientCombobox` (compartilhado com Sprints/Relatórios) não foi migrado
+    — continua com o visual antigo dentro da nova toolbar, pra não afetar
+    as outras telas; vira variante ou candidato a promoção quando a
+    migração chegar nessas telas. Tooltip/Popover/DropdownMenu como
+    componentes formais não foram construídos — o popover de Filtros
+    continua com a mesma implementação inline de sempre (só reskinada) e
+    tooltips continuam via `title` nativo, ambos plenamente funcionais mas
+    ainda não abstraídos. Nenhum `loading.tsx`/skeleton foi criado (não
+    existia antes, não é regressão, só uma lacuna que já existia).
+
+    **Estratégia de migração progressiva** (não implementada agora, só
+    descrita): aplicar os componentes de `components/workspace/` uma tela
+    por vez (Clientes → Sprints → Relatórios → Configurações → painel do
+    cliente → Sidebar/Top Bar por último, por serem os elementos mais
+    "chrome" do sistema), sempre com a mesma rodada de validação visual
+    isolada já usada nesta etapa; só depois de todas migradas, promover os
+    tokens `--overview-*` pros nomes globais sem prefixo e aposentar
+    `--background`/`--card`/`--border-default` antigos.
+
+    Arquivos novos: `src/components/workspace/{button,select,status-dot,
+    badge,metric,progress-bar,page-header,section-header,empty-state,
+    toolbar}.tsx`. Alterados (só classes/estrutura visual, nenhuma lógica):
+    `globals.css`, `app/page.tsx`, `app/agency-filters.tsx`, `app/
+    priorities-panel.tsx`. Não tocados: `app/agency-investment-bar.tsx`,
+    `app/client-combobox.tsx`, Sidebar, Top Bar, Clientes, Sprints,
+    Relatórios, Configurações, painel individual do cliente.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

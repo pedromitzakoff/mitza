@@ -1,6 +1,10 @@
 import Link from "next/link";
 import type { AccountHealth } from "@/lib/attention-alerts";
 import type { ClientPriority } from "@/lib/client-priority";
+import { Button } from "@/components/workspace/button";
+import { SectionHeader } from "@/components/workspace/section-header";
+import { EmptyState } from "@/components/workspace/empty-state";
+import { StatusDot, type StatusTone } from "@/components/workspace/status-dot";
 
 const SEVERITY_LABEL: Record<AccountHealth, string> = {
   critico: "Crítico",
@@ -8,10 +12,10 @@ const SEVERITY_LABEL: Record<AccountHealth, string> = {
   saudavel: "Normal",
 };
 
-const SEVERITY_BADGE_CLASSES: Record<AccountHealth, string> = {
-  critico: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-  atencao: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  saudavel: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
+const SEVERITY_TONE: Record<AccountHealth, StatusTone> = {
+  critico: "danger",
+  atencao: "warning",
+  saudavel: "success",
 };
 
 function ageLabel(days: number | null): string {
@@ -28,46 +32,40 @@ function PriorityRow({
 }) {
   const issue = priority.primaryIssue!;
   return (
-    <li className="-mx-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-md px-2 py-2.5 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
+    <li className="flex min-h-[52px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3.5 py-2 transition-colors duration-150 hover:bg-overview-surface-hover">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <Link href={`/clients/${priority.clientId}`} className="truncate text-sm font-semibold text-foreground hover:underline">
+          <Link href={`/clients/${priority.clientId}`} className="truncate text-sm font-semibold text-overview-text-primary hover:underline">
             {priority.clientName}
           </Link>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${SEVERITY_BADGE_CLASSES[priority.severity]}`}>
-            {SEVERITY_LABEL[priority.severity]}
-          </span>
+          <StatusDot tone={SEVERITY_TONE[priority.severity]} label={SEVERITY_LABEL[priority.severity]} emphasize />
           {priority.secondaryCount > 0 && (
             <span
-              className="shrink-0 text-[11px] text-muted-foreground"
+              className="shrink-0 text-[11px] text-overview-text-muted"
               title={priority.secondaryIssues.map((i) => i.title).join(" · ")}
             >
               +{priority.secondaryCount} outro{priority.secondaryCount !== 1 ? "s" : ""}
             </span>
           )}
         </div>
-        <p className="mt-0.5 truncate text-xs text-foreground">{issue.title}</p>
-        <p className="text-[11px] text-muted-foreground">
-          {ageLabel(priority.issueAgeBusinessDays)}
-          {managerName ? ` · ${managerName}` : ""}
+        <p className="mt-0.5 truncate text-xs text-overview-text-secondary">
+          {issue.title}
+          <span className="text-overview-text-muted"> · {ageLabel(priority.issueAgeBusinessDays)}</span>
+          {managerName ? <span className="text-overview-text-muted"> · {managerName}</span> : null}
         </p>
       </div>
-      <Link
-        href={issue.actionHref}
-        className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:border-brand hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-      >
+      <Button href={issue.actionHref} variant="secondary" size="sm">
         {issue.actionLabel}
-      </Link>
+      </Button>
     </li>
   );
 }
 
 /**
- * "Prioridades de hoje" (Etapa 46) — substitui a antiga Central de Atenção:
- * uma linha por CLIENTE (nunca por problema — um cliente com 7 alertas
- * ainda é uma linha só), já ordenada por `sortClientPriorities`. Fila de
- * trabalho, não lista de alertas: no máximo 6 aqui, "Ver todas" abre o
- * resto num drawer.
+ * "Prioridades de hoje" — visual reformulado na Etapa 47 pra se aproximar
+ * de uma lista/tabela operacional densa (linhas de ~52px) em vez de um
+ * card de alertas; lógica idêntica à Etapa 46 (uma linha por cliente, já
+ * ordenada por `sortClientPriorities`).
  */
 export function PrioritiesPanel({
   priorities,
@@ -81,29 +79,29 @@ export function PrioritiesPanel({
   viewAllHref: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-card)]">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prioridades de hoje</h2>
+    <div className="overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
+      <div className="flex items-center justify-between px-3.5 py-2.5">
+        <SectionHeader title="Prioridades de hoje" />
         {totalCount > priorities.length && (
-          <Link
-            href={viewAllHref}
-            className="rounded-md text-xs font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-          >
+          <Button href={viewAllHref} variant="ghost" size="sm">
             Ver todas ({totalCount})
-          </Link>
+          </Button>
         )}
       </div>
 
       {priorities.length > 0 ? (
-        <ul className="mt-1 divide-y divide-border">
+        <ul className="divide-y divide-overview-border border-t border-overview-border">
           {priorities.map((priority) => (
             <PriorityRow key={priority.clientId} priority={priority} managerName={managerNameByClient.get(priority.clientId) ?? null} />
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-sm text-muted-foreground">
-          Nenhuma prioridade crítica hoje. Todas as contas monitoradas estão dentro das condições operacionais esperadas.
-        </p>
+        <div className="border-t border-overview-border">
+          <EmptyState
+            title="Nenhuma prioridade crítica hoje."
+            description="Todas as contas monitoradas estão dentro das condições operacionais esperadas."
+          />
+        </div>
       )}
     </div>
   );
@@ -135,43 +133,30 @@ export function PrioritiesDrawer({
   return (
     <>
       <Link href={closeHref} scroll={false} className="fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-[var(--shadow-float)]">
+      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-overview-border bg-overview-surface p-5 shadow-[var(--shadow-float)]">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-lg font-semibold text-navy">Prioridades de hoje</h2>
-          <Link
-            href={closeHref}
-            scroll={false}
-            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
-          >
+          <Button href={closeHref} variant="secondary" size="sm">
             Fechar
-          </Link>
+          </Button>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {SEVERITY_FILTER_OPTIONS.map((option) => (
-            <Link
-              key={option.value}
-              href={buildSeverityHref(option.value)}
-              scroll={false}
-              className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
-                severity === option.value
-                  ? "bg-brand text-white"
-                  : "border border-border text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              }`}
-            >
+            <Button key={option.value} href={buildSeverityHref(option.value)} variant={severity === option.value ? "primary" : "secondary"} size="sm" className="rounded-full">
               {option.label}
-            </Link>
+            </Button>
           ))}
         </div>
 
         {filtered.length > 0 ? (
-          <ul className="mt-3 divide-y divide-border">
+          <ul className="mt-3 divide-y divide-overview-border">
             {filtered.map((priority) => (
               <PriorityRow key={priority.clientId} priority={priority} managerName={managerNameByClient.get(priority.clientId) ?? null} />
             ))}
           </ul>
         ) : (
-          <p className="mt-3 text-sm text-muted-foreground">Nenhuma prioridade nesta severidade.</p>
+          <p className="mt-3 text-sm text-overview-text-secondary">Nenhuma prioridade nesta severidade.</p>
         )}
       </div>
     </>

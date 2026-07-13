@@ -4,18 +4,20 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Filter } from "lucide-react";
 import { ClientCombobox, type ClientComboboxOption } from "./client-combobox";
+import { Toolbar } from "@/components/workspace/toolbar";
+import { Select } from "@/components/workspace/select";
+import { Button } from "@/components/workspace/button";
 
 export type AgencyClientOption = ClientComboboxOption;
 
 /**
- * Barra de filtros da Visão Geral — sempre visíveis: carteira (gestor),
- * cliente específico (combobox pesquisável, `client-combobox.tsx`) e o
- * botão "Filtros" (status da conta/atividade/ritmo/tarefas, escondidos num
- * popover até o usuário pedir). Nada de botão "Filtrar": toda mudança
- * navega na hora. Roda inteiramente no client porque precisa reagir a
- * onChange/teclado, mas a URL final é montada com a mesma lista de
- * parâmetros que a página já preservava no buildUrl do servidor — só a
- * origem da navegação mudou (clique/tecla em vez de submit).
+ * Toolbar de filtros da Visão Geral (visual reformulado na Etapa 47 — só
+ * classes/componentes novos, nenhuma mudança de lógica/params) — sempre
+ * visíveis: carteira (gestor), cliente específico (combobox pesquisável,
+ * `client-combobox.tsx`, ainda não migrado pro novo Design System — ver
+ * nota de dívida técnica no README) e o botão "Filtros" (status da conta/
+ * atividade/ritmo/tarefas, escondidos num popover até o usuário pedir).
+ * Nada de botão "Filtrar": toda mudança navega na hora.
  *
  * "Carteira" (gestor) e "Cliente" são dois filtros independentes — carteira
  * decide de quem são os clientes mostrados, cliente escolhe um específico
@@ -88,19 +90,11 @@ export function AgencyFilters({
     setOpen(false);
   }
 
-  const selectClasses =
-    "w-full sm:w-auto rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
-
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <Toolbar>
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">Carteira</span>
-        <select
-          value={manager}
-          onChange={(e) => router.push(buildUrl({ manager: e.target.value }))}
-          className={selectClasses}
-          aria-label="Carteira"
-        >
+        <span className="text-xs text-overview-text-muted">Carteira</span>
+        <Select value={manager} onChange={(e) => router.push(buildUrl({ manager: e.target.value }))} aria-label="Carteira">
           <option value="me">Meus clientes</option>
           <option value="all">Todos os clientes</option>
           {gestores.map((g) => (
@@ -108,7 +102,7 @@ export function AgencyFilters({
               {g.name}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       <ClientCombobox
@@ -118,19 +112,15 @@ export function AgencyFilters({
       />
 
       <div className="relative">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-sm font-medium text-foreground transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
-        >
+        <Button variant="secondary" size="sm" onClick={() => setOpen((v) => !v)}>
           <Filter className="h-3.5 w-3.5" aria-hidden="true" />
           Filtros
           {secondaryCount > 0 && (
-            <span className="rounded-full bg-brand/10 px-1.5 text-[11px] font-semibold text-brand">
+            <span className="rounded-full bg-overview-brand-subtle px-1.5 text-[11px] font-semibold text-brand">
               {secondaryCount}
             </span>
           )}
-        </button>
+        </Button>
 
         {open && (
           <>
@@ -140,51 +130,35 @@ export function AgencyFilters({
               onClick={() => setOpen(false)}
               className="fixed inset-0 z-40"
             />
-            <div className="absolute right-0 z-50 mt-2 w-72 rounded-xl border border-border bg-card p-3 shadow-[var(--shadow-float)]">
+            <div className="absolute right-0 z-50 mt-2 w-72 rounded-lg border border-overview-border bg-overview-surface p-3 shadow-[var(--shadow-float)]">
               <div className="flex flex-col gap-2">
-                <select
-                  value={health}
-                  onChange={(e) => router.push(buildUrl({ health: e.target.value }))}
-                  className={selectClasses}
-                >
+                <Select value={health} onChange={(e) => router.push(buildUrl({ health: e.target.value }))} className="w-full">
                   <option value="todos">Status da conta: todos</option>
                   <option value="saudavel">Saudável</option>
                   <option value="atencao">Atenção</option>
                   <option value="critico">Crítico</option>
-                </select>
+                </Select>
 
-                <select
-                  value={activity}
-                  onChange={(e) => router.push(buildUrl({ activity: e.target.value }))}
-                  className={selectClasses}
-                >
+                <Select value={activity} onChange={(e) => router.push(buildUrl({ activity: e.target.value }))} className="w-full">
                   <option value="todos">Atividade: todas</option>
                   <option value="ativo">Ativos</option>
                   <option value="atencao">Atenção por inatividade</option>
                   <option value="inativo">Inativos</option>
-                </select>
+                </Select>
 
-                <select
-                  value={ritmo}
-                  onChange={(e) => router.push(buildUrl({ ritmo: e.target.value }))}
-                  className={selectClasses}
-                >
+                <Select value={ritmo} onChange={(e) => router.push(buildUrl({ ritmo: e.target.value }))} className="w-full">
                   <option value="todos">Ritmo de investimento: todos</option>
                   <option value="abaixo">Abaixo</option>
                   <option value="dentro">No ritmo</option>
                   <option value="acima">Acima</option>
                   <option value="sem_meta">Meta não configurada</option>
-                </select>
+                </Select>
 
-                <select
-                  value={tasks}
-                  onChange={(e) => router.push(buildUrl({ tasks: e.target.value }))}
-                  className={selectClasses}
-                >
+                <Select value={tasks} onChange={(e) => router.push(buildUrl({ tasks: e.target.value }))} className="w-full">
                   <option value="todas">Tarefas: todas</option>
                   <option value="atrasadas">Com tarefas atrasadas</option>
                   <option value="sem_atrasadas">Sem tarefas atrasadas</option>
-                </select>
+                </Select>
               </div>
             </div>
           </>
@@ -192,14 +166,10 @@ export function AgencyFilters({
       </div>
 
       {hasAnythingToClear && (
-        <button
-          type="button"
-          onClick={clearFilters}
-          className="rounded text-xs text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-        >
+        <Button variant="ghost" size="sm" onClick={clearFilters} className="text-brand hover:text-brand hover:bg-overview-brand-subtle">
           Limpar filtros
-        </button>
+        </Button>
       )}
-    </div>
+    </Toolbar>
   );
 }

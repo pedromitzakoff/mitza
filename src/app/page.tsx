@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Inter } from "next/font/google";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
@@ -16,8 +16,21 @@ import { formatLastOptimizationLabel } from "@/lib/monthly-reports";
 import { computeFinancialSummary, computeManagerSummary, computePortfolioCounts, computeSpendRhythmCounts } from "@/lib/agency-metrics";
 import { getClientPriority, sortClientPriorities } from "@/lib/client-priority";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
-import { AgencyInvestmentBar } from "./agency-investment-bar";
 import { PrioritiesDrawer, PrioritiesPanel } from "./priorities-panel";
+import { Button, IconButton } from "@/components/workspace/button";
+import { Metric } from "@/components/workspace/metric";
+import { ProgressBar } from "@/components/workspace/progress-bar";
+import { PageHeader } from "@/components/workspace/page-header";
+import { SectionHeader } from "@/components/workspace/section-header";
+import { EmptyState } from "@/components/workspace/empty-state";
+import { StatusDot, type StatusTone } from "@/components/workspace/status-dot";
+
+/**
+ * Etapa 47: Inter carregada e aplicada SÓ na Visão Geral (className no
+ * wrapper raiz da página, não em layout.tsx) — nenhuma outra tela herda
+ * essa fonte. O `body` global continua com o font-family de sempre.
+ */
+const inter = Inter({ subsets: ["latin"], variable: "--font-overview" });
 
 /** Rótulos da "situação" financeira do mês — mesma classificação de sempre
  * (card.monthStatus, ±10% central). */
@@ -28,11 +41,11 @@ const SITUATION_LABEL: Record<SpendStatus, string> = {
   sem_meta: "Sem planejamento",
 };
 
-const SITUATION_BADGE_CLASSES: Record<SpendStatus, string> = {
-  dentro: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
-  acima: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-  abaixo: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  sem_meta: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+const SITUATION_TONE: Record<SpendStatus, StatusTone> = {
+  dentro: "success",
+  acima: "danger",
+  abaixo: "warning",
+  sem_meta: "neutral",
 };
 
 const SEVERITY_LABEL: Record<AccountHealth, string> = {
@@ -41,10 +54,10 @@ const SEVERITY_LABEL: Record<AccountHealth, string> = {
   saudavel: "Normal",
 };
 
-const SEVERITY_BADGE_CLASSES: Record<AccountHealth, string> = {
-  critico: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-  atencao: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  saudavel: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
+const SEVERITY_TONE: Record<AccountHealth, StatusTone> = {
+  critico: "danger",
+  atencao: "warning",
+  saudavel: "success",
 };
 
 type ManagerFilter = "all" | "me" | string;
@@ -54,99 +67,6 @@ type ManagerFilter = "all" | "me" | string;
  * mesmo padrão já usado por `sprintBucket`/`sync`/`meta`. */
 type RitmoFilter = "todos" | SpendStatus | "fora_do_ritmo";
 type TasksFilter = "todas" | "atrasadas" | "sem_atrasadas";
-
-/** Cor do valor — só sinalização discreta no texto, nunca um card ou fundo
- * inteiro colorido. "neutral" é o padrão (ex.: contagem total). */
-const STAT_TONE_CLASSES = {
-  neutral: "text-foreground",
-  positive: "text-green-600 dark:text-green-400",
-  warning: "text-amber-600 dark:text-amber-400",
-  critical: "text-red-600 dark:text-red-400",
-} as const;
-
-/** Uma métrica compacta dentro de um grupo (Saúde da operação/Controle de
- * investimento) — nunca um card com borda própria, pra não virar uma grade
- * de caixinhas competindo por atenção. `size="lg"` marca os dois números
- * mais importantes de "Controle de investimento" (Planejado/Realizado) com
- * mais peso visual (navy, maior) — os demais ficam secundários por padrão. */
-function StatItem({
-  label,
-  value,
-  href,
-  tone = "neutral",
-  size = "md",
-  title,
-}: {
-  label: string;
-  value: string;
-  href?: string;
-  tone?: keyof typeof STAT_TONE_CLASSES;
-  size?: "md" | "lg";
-  title?: string;
-}) {
-  const valueClass =
-    size === "lg"
-      ? `text-2xl font-bold ${tone === "neutral" ? "text-navy" : STAT_TONE_CLASSES[tone]}`
-      : `text-base font-semibold ${STAT_TONE_CLASSES[tone]}`;
-
-  const content = (
-    <div title={title}>
-      <p className="text-[11px] text-muted-foreground">{label}</p>
-      <p className={`tabular-nums ${valueClass}`}>{value}</p>
-    </div>
-  );
-
-  return href ? (
-    <Link
-      href={href}
-      className="-mx-1.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
-    >
-      {content}
-    </Link>
-  ) : (
-    content
-  );
-}
-
-/** Um grupo (Saúde da operação/Controle de investimento) — cada métrica
- * compacta dentro, nunca vários cards soltos e iguais. `divided` separa as
- * métricas com um divisor vertical sutil; `accent` dá um leve destaque de
- * borda esquerda pro bloco mais importante sem aumentar a altura. */
-function MetricGroup({
-  title,
-  children,
-  extra,
-  divided = false,
-  accent = false,
-}: {
-  title: string;
-  children: React.ReactNode;
-  extra?: React.ReactNode;
-  divided?: boolean;
-  accent?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-card)] ${
-        accent ? "border-l-2 border-l-brand" : ""
-      }`}
-    >
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
-      <div className={`mt-2.5 flex flex-wrap gap-x-6 gap-y-2 ${divided ? "sm:divide-x sm:divide-border" : ""}`}>
-        {divided
-          ? Array.isArray(children)
-            ? children.map((child, index) => (
-                <div key={index} className={index > 0 ? "sm:pl-6" : ""}>
-                  {child}
-                </div>
-              ))
-            : children
-          : children}
-      </div>
-      {extra}
-    </div>
-  );
-}
 
 export default async function Home({
   searchParams,
@@ -401,8 +321,8 @@ export default async function Home({
   const investmentDiff = financial.actual - financial.expectedToDate;
   const investmentRitmoStatus =
     financial.planned > 0 ? classifySpendStatus(financial.actual, financial.expectedToDate, financial.planned) : "sem_meta";
-  const investmentDiffTone =
-    investmentRitmoStatus === "acima" ? "critical" : investmentRitmoStatus === "abaixo" ? "warning" : "neutral";
+  const investmentDiffTone: StatusTone =
+    investmentRitmoStatus === "acima" ? "danger" : investmentRitmoStatus === "abaixo" ? "warning" : "neutral";
 
   // Preserva TODOS os filtros ativos — usado na navegação de mês e na
   // ordenação da tabela, que não devem resetar o resto do contexto. Não
@@ -454,40 +374,40 @@ export default async function Home({
   const prioritiesSeverityHref = (severity: AccountHealth | "todos") =>
     prioritiesUrl({ prioridades: "1", prioridadeSeveridade: severity === "todos" ? "" : severity });
 
-  return (
-    <div className="min-h-[calc(100dvh_-_3rem)] bg-overview-bg">
-      <div className="mx-auto max-w-7xl px-6 py-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold tracking-tight text-navy">Visão Geral</h1>
+  const monthLabel = formatMonthLabel(monthRange.firstDay);
 
-          <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card px-1 py-1 text-sm shadow-[var(--shadow-card)]">
-            <Link
-              href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
-              className="rounded-md px-1.5 py-0.5 text-foreground transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
-              aria-label="Mês anterior"
-            >
-              &lsaquo;
-            </Link>
-            <span className="min-w-[8.5rem] text-center font-medium text-foreground">
-              {formatMonthLabel(monthRange.firstDay)}
-            </span>
-            <Link
-              href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
-              className="rounded-md px-1.5 py-0.5 text-foreground transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
-              aria-label="Próximo mês"
-            >
-              &rsaquo;
-            </Link>
-            {params.month && (
-              <Link
-                href={buildUrl({ month: "" })}
-                className="ml-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+  return (
+    <div className={`min-h-[calc(100dvh_-_3rem)] bg-overview-bg ${inter.variable}`} style={{ fontFamily: "var(--font-overview)" }}>
+      <div className="mx-auto max-w-7xl px-6 py-5">
+        <PageHeader
+          title="Visão Geral"
+          actions={
+            <div className="flex items-center gap-0.5 rounded-md border border-overview-border bg-overview-surface px-1 py-1 text-sm">
+              <IconButton
+                href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
+                aria-label="Mês anterior"
+                variant="ghost"
+                size="sm"
               >
-                Mês atual
-              </Link>
-            )}
-          </div>
-        </div>
+                &lsaquo;
+              </IconButton>
+              <span className="min-w-[8rem] text-center text-sm font-medium text-overview-text-primary">{monthLabel}</span>
+              <IconButton
+                href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
+                aria-label="Próximo mês"
+                variant="ghost"
+                size="sm"
+              >
+                &rsaquo;
+              </IconButton>
+              {params.month && (
+                <Button href={buildUrl({ month: "" })} variant="ghost" size="sm" className="ml-0.5">
+                  Mês atual
+                </Button>
+              )}
+            </div>
+          }
+        />
 
         <div className="mt-2.5">
           <AgencyFilters
@@ -510,74 +430,63 @@ export default async function Home({
           />
         </div>
 
-        {/* Saúde da operação + Controle de investimento: no máximo 2 grupos,
-            métricas compactas dentro de cada um em vez de uma grade de
-            cards soltos. */}
-        <div className="mt-3 flex flex-col gap-2.5">
-          <MetricGroup title="Saúde da operação" divided>
-            <StatItem label="Clientes monitorados" value={String(cards.length)} />
-            <StatItem
-              label="Operação normal"
-              value={String(portfolio.saudaveis)}
-              href={drillDownUrl({ health: "saudavel" })}
-              tone="positive"
-            />
-            <StatItem
-              label="Precisam de atenção"
-              value={String(portfolio.atencao)}
-              href={drillDownUrl({ health: "atencao" })}
-              tone="warning"
-            />
-            <StatItem
-              label="Críticos"
-              value={String(portfolio.criticos)}
-              href={drillDownUrl({ health: "critico" })}
-              tone="critical"
-            />
-          </MetricGroup>
-
-          <MetricGroup
-            title="Controle de investimento"
-            accent
-            extra={
-              <div className="mt-3.5">
-                <AgencyInvestmentBar
-                  planned={financial.planned}
-                  actual={financial.actual}
-                  expectedToDate={financial.expectedToDate}
-                />
-                <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  {financial.semMeta > 0 ? (
-                    <Link
-                      href={drillDownUrl({ meta: "sem" })}
-                      className="rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-                    >
-                      {financial.semMeta} cliente{financial.semMeta !== 1 ? "s" : ""} sem planejamento configurado
-                    </Link>
-                  ) : (
-                    "Todos os clientes possuem planejamento configurado"
-                  )}
-                </p>
+        {/* Saúde da operação + Controle de investimento compartilham uma
+            única superfície contínua (seção 7 do pedido: "algumas áreas
+            podem compartilhar uma mesma superfície principal"), separadas
+            por um divisor horizontal em vez de dois cards com sombra. */}
+        <div className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
+          <div className="p-3.5">
+            <SectionHeader title="Saúde da operação" />
+            <div className="mt-2.5 flex flex-wrap gap-x-6 gap-y-2 sm:divide-x sm:divide-overview-border">
+              <div>
+                <Metric label="Clientes monitorados" value={String(cards.length)} />
               </div>
-            }
-          >
-            <StatItem label="Planejado" value={formatCurrency(financial.planned)} size="lg" />
-            <StatItem label="Realizado" value={formatCurrency(financial.actual)} size="lg" />
-            <StatItem label="% realizado" value={financial.pct !== null ? `${Math.round(financial.pct)}%` : "—"} />
-            <StatItem label="Esperado até hoje" value={formatCurrency(financial.expectedToDate)} />
-            <StatItem
-              label="Diferença p/ ritmo esperado"
-              value={financial.planned > 0 ? formatCurrency(investmentDiff) : "—"}
-              tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
-            />
-            <StatItem
-              label="Contas fora do ritmo"
-              value={String(outOfRhythmCount)}
-              href={drillDownUrl({ ritmo: "fora_do_ritmo" })}
-              tone={outOfRhythmCount > 0 ? "warning" : "neutral"}
-              title={`${spendRhythm.abaixo} abaixo · ${spendRhythm.acima} acima`}
-            />
-          </MetricGroup>
+              <div className="sm:pl-6">
+                <Metric label="Operação normal" value={String(portfolio.saudaveis)} href={drillDownUrl({ health: "saudavel" })} tone="success" />
+              </div>
+              <div className="sm:pl-6">
+                <Metric label="Precisam de atenção" value={String(portfolio.atencao)} href={drillDownUrl({ health: "atencao" })} tone="warning" />
+              </div>
+              <div className="sm:pl-6">
+                <Metric label="Críticos" value={String(portfolio.criticos)} href={drillDownUrl({ health: "critico" })} tone="danger" />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-overview-border p-3.5">
+            <SectionHeader title="Controle de investimento" />
+            <div className="mt-2.5 flex flex-wrap gap-x-6 gap-y-2">
+              <Metric label="Planejado" value={formatCurrency(financial.planned)} size="lg" />
+              <Metric label="Realizado" value={formatCurrency(financial.actual)} size="lg" />
+              <Metric label="% realizado" value={financial.pct !== null ? `${Math.round(financial.pct)}%` : "—"} />
+              <Metric label="Esperado até hoje" value={formatCurrency(financial.expectedToDate)} />
+              <Metric
+                label="Diferença p/ ritmo esperado"
+                value={financial.planned > 0 ? formatCurrency(investmentDiff) : "—"}
+                tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
+              />
+              <Metric
+                label="Contas fora do ritmo"
+                value={String(outOfRhythmCount)}
+                href={drillDownUrl({ ritmo: "fora_do_ritmo" })}
+                tone={outOfRhythmCount > 0 ? "warning" : "neutral"}
+                title={`${spendRhythm.abaixo} abaixo · ${spendRhythm.acima} acima`}
+              />
+            </div>
+
+            <div className="mt-3">
+              <ProgressBar planned={financial.planned} actual={financial.actual} expectedToDate={financial.expectedToDate} />
+              <p className="mt-1.5 text-[11px] text-overview-text-muted">
+                {financial.semMeta > 0 ? (
+                  <Button href={drillDownUrl({ meta: "sem" })} variant="ghost" size="sm" className="h-auto px-0 py-0 font-normal text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary">
+                    {financial.semMeta} cliente{financial.semMeta !== 1 ? "s" : ""} sem planejamento configurado
+                  </Button>
+                ) : (
+                  "Todos os clientes possuem planejamento configurado"
+                )}
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="mt-3">
@@ -604,33 +513,28 @@ export default async function Home({
             pertencem ao painel do cliente); "Prioridade" reaproveita
             exatamente o mesmo dado de "Saúde da operação" e de
             "Prioridades de hoje" — nunca uma segunda classificação. */}
-        <div className="mt-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Clientes · {formatMonthLabel(monthRange.firstDay)}
-            </h2>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground">{sortedCards.length} cliente{sortedCards.length !== 1 ? "s" : ""}</span>
-              <Link
-                href={buildUrl({ sort: sort === "nome" ? "prioridade" : "nome" })}
-                className="rounded font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-              >
+        <div className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
+          <div className="flex items-center justify-between px-3.5 py-2.5">
+            <SectionHeader title={`Clientes · ${monthLabel}`} />
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-overview-text-muted">{sortedCards.length} cliente{sortedCards.length !== 1 ? "s" : ""}</span>
+              <Button href={buildUrl({ sort: sort === "nome" ? "prioridade" : "nome" })} variant="ghost" size="sm">
                 Ordenar por {sort === "nome" ? "prioridade" : "nome"}
-              </Link>
+              </Button>
             </div>
           </div>
 
           {sortedCards.length > 0 ? (
-            <div className="mt-2 overflow-x-auto rounded-xl border border-border shadow-[var(--shadow-card)]">
+            <div className="overflow-x-auto border-t border-overview-border">
               <table className="w-full min-w-[820px] text-sm">
                 <thead>
-                  <tr className="border-b border-border bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-muted-foreground dark:bg-zinc-900">
-                    <th className="py-2 px-3">Cliente</th>
-                    <th className="py-2 px-3">Gestor</th>
-                    <th className="py-2 px-3 text-right">Investimento</th>
-                    <th className="py-2 px-3">Prioridade</th>
-                    <th className="py-2 px-3">Última otimização</th>
-                    <th className="py-2 px-3 text-right">Ação</th>
+                  <tr className="border-b border-overview-border bg-overview-surface-subtle text-left text-[12px] font-semibold text-overview-text-secondary">
+                    <th className="py-2 px-3.5 font-semibold">Cliente</th>
+                    <th className="py-2 px-3.5 font-semibold">Gestor</th>
+                    <th className="py-2 px-3.5 text-right font-semibold">Investimento</th>
+                    <th className="py-2 px-3.5 font-semibold">Prioridade</th>
+                    <th className="py-2 px-3.5 font-semibold">Última otimização</th>
+                    <th className="py-2 px-3.5 text-right font-semibold">Ação</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -641,42 +545,32 @@ export default async function Home({
                     return (
                       <tr
                         key={card.clientId}
-                        className="border-b border-border/60 transition-colors last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                        className="border-b border-overview-border/70 transition-colors duration-150 last:border-0 hover:bg-overview-surface-hover"
                       >
-                        <td className="py-2 px-3 font-semibold text-foreground">{card.clientName}</td>
-                        <td className="py-2 px-3 text-muted-foreground">
+                        <td className="py-2.5 px-3.5 font-semibold text-overview-text-primary">{card.clientName}</td>
+                        <td className="py-2.5 px-3.5 text-overview-text-secondary">
                           {primaryManagerNameByClient.get(card.clientId) ?? "Sem gestor"}
                         </td>
-                        <td className="py-2 px-3 text-right">
+                        <td className="py-2.5 px-3.5 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <span className="tabular-nums text-muted-foreground">
+                            <span className="tabular-nums text-overview-text-secondary">
                               {pctRealizado !== null ? `${pctRealizado}%` : "—"}
                             </span>
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SITUATION_BADGE_CLASSES[card.monthStatus]}`}
-                            >
-                              {SITUATION_LABEL[card.monthStatus]}
-                            </span>
+                            <StatusDot tone={SITUATION_TONE[card.monthStatus]} label={SITUATION_LABEL[card.monthStatus]} />
                           </div>
                         </td>
-                        <td className="py-2 px-3">
-                          <span
-                            title={priority.primaryIssue?.title ?? "Nenhuma condição operacional relevante"}
-                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SEVERITY_BADGE_CLASSES[priority.severity]}`}
-                          >
-                            {SEVERITY_LABEL[priority.severity]}
+                        <td className="py-2.5 px-3.5">
+                          <span title={priority.primaryIssue?.title ?? "Nenhuma condição operacional relevante"}>
+                            <StatusDot tone={SEVERITY_TONE[priority.severity]} label={SEVERITY_LABEL[priority.severity]} emphasize={priority.severity !== "saudavel"} />
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-muted-foreground">
+                        <td className="py-2.5 px-3.5 text-overview-text-secondary">
                           {formatLastOptimizationLabel(card.lastOptimizationAt, today)}
                         </td>
-                        <td className="py-2 px-3 text-right">
-                          <Link
-                            href={priority.primaryIssue?.actionHref ?? `/clients/${card.clientId}`}
-                            className="rounded-md border border-transparent px-2 py-1 text-xs font-medium text-brand transition-colors hover:border-border hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
-                          >
+                        <td className="py-2.5 px-3.5 text-right">
+                          <Button href={priority.primaryIssue?.actionHref ?? `/clients/${card.clientId}`} variant="ghost" size="sm">
                             {priority.primaryIssue?.actionLabel ?? "Abrir"}
-                          </Link>
+                          </Button>
                         </td>
                       </tr>
                     );
@@ -685,28 +579,28 @@ export default async function Home({
               </table>
             </div>
           ) : (
-            <p className="mt-2 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground shadow-[var(--shadow-card)]">
-              Nenhum cliente encontrado com esses filtros.
-            </p>
+            <div className="border-t border-overview-border">
+              <EmptyState title="Nenhum cliente encontrado com esses filtros." description="Ajuste os filtros acima ou limpe-os para ver todos os clientes monitorados." />
+            </div>
           )}
         </div>
 
         {/* Análises secundárias — fora do primeiro viewport de propósito */}
-        <details className="mt-5 rounded-xl border border-border bg-card shadow-[var(--shadow-card)] [&_summary]:cursor-pointer [&_summary]:list-none">
-          <summary className="flex items-center justify-between p-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-brand">
+        <details className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface [&_summary]:cursor-pointer [&_summary]:list-none">
+          <summary className="flex items-center justify-between px-3.5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted hover:text-brand">
             Ver análises adicionais
             <span className="text-sm">▾</span>
           </summary>
 
-          <div className="border-t border-border p-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="border-t border-overview-border p-3.5">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">
               {isAdmin ? "Operação por gestor" : "Minha operação"}
             </h3>
           {managerSummary.length > 0 ? (
             <div className="mt-2 overflow-x-auto">
               <table className="w-full min-w-[720px] text-sm">
                 <thead>
-                  <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <tr className="border-b border-overview-border text-left text-[11px] uppercase tracking-wide text-overview-text-muted">
                     <th className="py-1.5 px-3">Gestor</th>
                     <th className="py-1.5 px-3">Clientes</th>
                     <th className="py-1.5 px-3">Saudáveis</th>
@@ -721,25 +615,25 @@ export default async function Home({
                 </thead>
                 <tbody>
                   {managerSummary.map((row) => (
-                    <tr key={row.id} className="border-b border-border/60 last:border-0">
-                      <td className="py-1.5 px-3 font-medium text-foreground">
+                    <tr key={row.id} className="border-b border-overview-border/70 last:border-0">
+                      <td className="py-1.5 px-3 font-medium text-overview-text-primary">
                         {isAdmin ? (
-                          <Link href={drillDownUrl({ manager: row.id })} className="hover:underline">
+                          <Button href={drillDownUrl({ manager: row.id })} variant="ghost" size="sm" className="h-auto px-0 py-0 font-medium">
                             {row.name}
-                          </Link>
+                          </Button>
                         ) : (
                           row.name
                         )}
                       </td>
-                      <td className="py-1.5 px-3 text-muted-foreground">{row.totalClients}</td>
-                      <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.saudaveis}</td>
-                      <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.atencao}</td>
-                      <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.criticos}</td>
-                      <td className="py-1.5 px-3 text-muted-foreground">{row.portfolio.inativos}</td>
-                      <td className="py-1.5 px-3 text-muted-foreground">{row.semExecucao}</td>
-                      <td className="py-1.5 px-3 text-muted-foreground">{row.atrasadas}</td>
-                      <td className="py-1.5 px-3 text-muted-foreground">{row.paraHoje}</td>
-                      <td className="py-1.5 px-3 text-muted-foreground">
+                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.totalClients}</td>
+                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.portfolio.saudaveis}</td>
+                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.portfolio.atencao}</td>
+                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.portfolio.criticos}</td>
+                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.portfolio.inativos}</td>
+                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.semExecucao}</td>
+                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.atrasadas}</td>
+                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.paraHoje}</td>
+                      <td className="py-1.5 px-3 text-overview-text-secondary">
                         {row.taxaExecucao !== null ? `${Math.round(row.taxaExecucao)}%` : "—"}
                       </td>
                     </tr>
@@ -748,7 +642,7 @@ export default async function Home({
               </table>
             </div>
           ) : (
-            <p className="mt-2 text-sm text-muted-foreground">Nenhum gestor encontrado.</p>
+            <p className="mt-2 text-sm text-overview-text-secondary">Nenhum gestor encontrado.</p>
           )}
           </div>
         </details>
