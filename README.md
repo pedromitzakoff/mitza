@@ -1323,6 +1323,47 @@ automático da sync, refinamentos de UX, etc.
     `app/client-combobox.tsx`, Sidebar, Top Bar, Clientes, Sprints,
     Relatórios, Configurações, painel individual do cliente.
 
+48. ✅ Ajuste pontual na Visão Geral: reversão só da cor de fundo geral
+    introduzida na Etapa 41, mantendo 100% do resto da reformulação visual
+    da Etapa 47 (fonte, densidade, componentes, hierarquia, botões, inputs,
+    selects, tabelas, barras, bordas, sombras, espaçamentos, estados
+    interativos, estrutura). A nova direção visual foi aprovada — só o tom
+    de fundo não foi.
+
+    **Investigação primeiro** (histórico via `git diff`/`git show`, não
+    suposição): o token `--overview-bg` foi criado na Etapa 41 (antes disso
+    o wrapper raiz da Visão Geral não tinha nenhuma classe de fundo própria,
+    então herdava o token compartilhado `--background`). A Etapa 47 não
+    mexeu no valor de `--overview-bg` — só adicionou tokens novos depois
+    dele. Ou seja, o "antes da última reformulação visual" pedido é
+    literalmente o valor de `--background`.
+
+    **Mudança**: `--overview-bg` passou de `#eef1f6` (claro) / `#0b0d12`
+    (escuro) para `var(--background)`, isto é, `#f7f7f5` (claro) / `#141412`
+    (escuro) — os mesmos valores que o resto do sistema sempre usou.
+    Referenciar a variável em vez de repetir o hex evita que os dois valores
+    divirjam de novo por acidente no futuro.
+
+    **Nada mais foi tocado**: todos os tokens da Etapa 47
+    (`--overview-surface*`, `--overview-border*`, `--overview-text-*`,
+    `--overview-brand-subtle`, `--overview-success/warning/danger*`),
+    `--navy`, `--shadow-card`, `--shadow-float`, a fonte Inter, os 10
+    componentes de `components/workspace/`, e a estrutura de `page.tsx`/
+    `agency-filters.tsx`/`priorities-panel.tsx` continuam exatamente como
+    estavam — confirmado por `git diff --stat` mostrando só `globals.css`
+    (9 inserções, 3 remoções) alterado nesta rodada.
+
+    **Contraste verificado, sem necessidade de ajuste**: a separação visual
+    de cards/tabela/toolbar/"Prioridades de hoje"/"Controle de
+    investimento" em relação ao fundo depende principalmente da borda
+    (`--overview-border`, inalterada) e não de um contraste forte entre
+    fundo e superfície — então restaurar o fundo não criou problema real de
+    legibilidade. Por isso nenhum token de superfície/borda/texto/sombra
+    foi tocado, como pedido.
+
+    Arquivo alterado: `globals.css` (só o valor de `--overview-bg`, claro e
+    escuro). Nenhum outro arquivo desta rodada.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis
