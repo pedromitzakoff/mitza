@@ -152,25 +152,16 @@ export interface PlannedAllocationRow {
   amount: number;
 }
 
-/** Uma linha de `sprint_manual_spend_by_month` — gasto manual de UM mês de
- * uma sprint que atravessa a fronteira do mês (ver sprintCrossesMonthBoundary
- * em sprint-week.ts). Sprints que não atravessam mês nunca precisam disso —
- * usam só `manual_actual_spend`, como sempre foi. */
-export interface ManualSpendByMonthRow {
-  sprintId: string;
-  monthStart: string;
-  amount: number;
-}
-
 /**
  * Planejado de um cliente pertencente a um mês — soma direta das alocações
  * diárias (`sprint_planned_allocations`) cujo `date` cai no mês, independente
  * de qual sprint elas pertencem. Substitui a soma antiga de
  * `sprint.planned_spend` filtrando sprints por `start_date` no mês, que
- * atribuía 100% de uma sprint (inclusive a parte de outro mês) ao mês em que
- * ela começou — o bug central que a Etapa 50 corrige. Já é exata mesmo numa
- * sprint que atravessa dois meses com orçamentos diários diferentes, porque
- * cada linha de alocação já guarda o valor real daquele dia específico.
+ * atribuía 100% de uma sprint ao mês em que ela começou — o bug central que
+ * a Etapa 50 corrige (o mesmo bug se repetiria hoje se uma sprint pudesse
+ * cruzar a virada do mês; a correção final da Etapa 50 garante que nenhuma
+ * sprint atravessa mês, mas a soma por interseção de data continua sendo a
+ * fonte de verdade em vez de `sprint.planned_spend` filtrado por sprint).
  */
 export function sumPlannedForMonth(
   plannedAllocations: PlannedAllocationRow[],
@@ -178,19 +169,6 @@ export function sumPlannedForMonth(
 ): number {
   return plannedAllocations
     .filter((a) => a.date >= monthRange.firstDay && a.date <= monthRange.lastDay)
-    .reduce((sum, a) => sum + a.amount, 0);
-}
-
-/** Mesma soma acima, mas só das alocações de UMA sprint — usado pra mostrar
- * a divisão financeira por mês de uma sprint que atravessa a fronteira
- * (ex.: "Semana 27 jul – 02 ago" → Julho R$ 500 / Agosto R$ 200). */
-export function sumPlannedForSprintAndMonth(
-  sprintId: string,
-  plannedAllocations: PlannedAllocationRow[],
-  monthRange: { firstDay: string; lastDay: string },
-): number {
-  return plannedAllocations
-    .filter((a) => a.sprintId === sprintId && a.date >= monthRange.firstDay && a.date <= monthRange.lastDay)
     .reduce((sum, a) => sum + a.amount, 0);
 }
 
@@ -219,15 +197,13 @@ export function sumExpectedToDateForMonth(
  * Gasto realizado de UMA sprint, pertencente a um mês — mesma decisão
  * manual×meta_api de `resolveSprintActualSpend`, recortada pelo mês: sprint
  * sincronizada soma só os dias de `daily_spend` dentro da interseção
- * sprint×mês (já granular por dia, não precisa de tabela nova); sprint
- * manual usa o valor único de sempre quando ela não atravessa mês, ou a
- * parcela daquele mês especificamente quando atravessa
- * (`sprint_manual_spend_by_month` — ausência de linha = 0, nunca inventa
- * distribuição).
+ * sprint×mês (já granular por dia); sprint manual usa o valor único de
+ * sempre (`manual_actual_spend`) — desde a correção da Etapa 50, nenhuma
+ * sprint atravessa mais a fronteira do mês, então toda sprint pertence a
+ * exatamente um mês e esse valor único já é sempre suficiente.
  */
 export function computeSprintMonthActualSpend(
   sprint: {
-    id: string;
     start_date: string;
     end_date: string;
     spend_source: SpendSource;
@@ -235,20 +211,13 @@ export function computeSprintMonthActualSpend(
   },
   monthRange: { firstDay: string; lastDay: string },
   dailySpend: { date: string; spend: number }[],
-  manualSpendByMonth: ManualSpendByMonthRow[],
 ): number {
   const overlapStart = sprint.start_date > monthRange.firstDay ? sprint.start_date : monthRange.firstDay;
   const overlapEnd = sprint.end_date < monthRange.lastDay ? sprint.end_date : monthRange.lastDay;
   if (overlapStart > overlapEnd) return 0;
 
   if (sprint.spend_source === "manual") {
-    const crossesMonth = sprint.start_date.slice(0, 7) !== sprint.end_date.slice(0, 7);
-    if (!crossesMonth) {
-      return sprint.manual_actual_spend ?? 0;
-    }
-    const monthStart = `${monthRange.firstDay.slice(0, 7)}-01`;
-    const split = manualSpendByMonth.find((m) => m.sprintId === sprint.id && m.monthStart === monthStart);
-    return split?.amount ?? 0;
+    return sprint.manual_actual_spend ?? 0;
   }
 
   return dailySpend
@@ -263,7 +232,6 @@ export function computeSprintMonthActualSpend(
  * por `start_date` dentro do mês. */
 export function sumActualSpendForMonth(
   sprints: {
-    id: string;
     start_date: string;
     end_date: string;
     spend_source: SpendSource;
@@ -271,12 +239,8 @@ export function sumActualSpendForMonth(
   }[],
   monthRange: { firstDay: string; lastDay: string },
   dailySpend: { date: string; spend: number }[],
-  manualSpendByMonth: ManualSpendByMonthRow[],
 ): number {
-  return sprints.reduce(
-    (sum, sprint) => sum + computeSprintMonthActualSpend(sprint, monthRange, dailySpend, manualSpendByMonth),
-    0,
-  );
+  return sprints.reduce((sum, sprint) => sum + computeSprintMonthActualSpend(sprint, monthRange, dailySpend), 0);
 }
 
 /** Intervalo (YYYY-MM-DD) do mês corrente, usado pra filtrar sprints e daily_spend. */

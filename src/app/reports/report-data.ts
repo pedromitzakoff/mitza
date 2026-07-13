@@ -175,50 +175,39 @@ export async function buildReportViewData(
   // Dados ao vivo — mesma fonte financeira central de sempre (Etapa 50:
   // sumPlannedForMonth/sumActualSpendForMonth/sumExpectedToDateForMonth/
   // classifySpendStatus), nunca uma conta paralela.
-  const [{ data: sprints }, { data: dailySpend }, { data: tasks }, { data: plannedAllocations }, { data: manualSpendByMonthRaw }] =
-    await Promise.all([
-      // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
-      // mês precisa ser encontrada mesmo com start_date fora do intervalo.
-      supabase
-        .from("sprints")
-        .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
-        .eq("client_id", clientId)
-        .lte("start_date", monthRange.lastDay)
-        .gte("end_date", monthRange.firstDay),
-      supabase
-        .from("daily_spend")
-        .select("date, spend")
-        .eq("client_id", clientId)
-        .gte("date", monthRange.firstDay)
-        .lte("date", monthRange.lastDay),
-      supabase
-        .from("tasks")
-        .select("id, type, status, due_date, recurrence")
-        .eq("client_id", clientId)
-        .gte("due_date", monthRange.firstDay)
-        .lte("due_date", monthRange.lastDay),
-      supabase
-        .from("sprint_planned_allocations")
-        .select("date, planned_amount")
-        .eq("client_id", clientId)
-        .gte("date", monthRange.firstDay)
-        .lte("date", monthRange.lastDay),
-      supabase
-        .from("sprint_manual_spend_by_month")
-        .select("sprint_id, month_start, amount")
-        .eq("client_id", clientId)
-        .eq("month_start", monthRange.firstDay),
-    ]);
+  const [{ data: sprints }, { data: dailySpend }, { data: tasks }, { data: plannedAllocations }] = await Promise.all([
+    // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
+    // mês precisa ser encontrada mesmo com start_date fora do intervalo.
+    supabase
+      .from("sprints")
+      .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
+      .eq("client_id", clientId)
+      .lte("start_date", monthRange.lastDay)
+      .gte("end_date", monthRange.firstDay),
+    supabase
+      .from("daily_spend")
+      .select("date, spend")
+      .eq("client_id", clientId)
+      .gte("date", monthRange.firstDay)
+      .lte("date", monthRange.lastDay),
+    supabase
+      .from("tasks")
+      .select("id, type, status, due_date, recurrence")
+      .eq("client_id", clientId)
+      .gte("due_date", monthRange.firstDay)
+      .lte("due_date", monthRange.lastDay),
+    supabase
+      .from("sprint_planned_allocations")
+      .select("date, planned_amount")
+      .eq("client_id", clientId)
+      .gte("date", monthRange.firstDay)
+      .lte("date", monthRange.lastDay),
+  ]);
 
   const monthSprintRows = sprints ?? [];
   const plannedAllocationRows = (plannedAllocations ?? []).map((a) => ({ date: a.date, sprintId: "", amount: a.planned_amount }));
-  const manualSpendByMonthRows = (manualSpendByMonthRaw ?? []).map((m) => ({
-    sprintId: m.sprint_id,
-    monthStart: m.month_start,
-    amount: m.amount,
-  }));
   const planned = sumPlannedForMonth(plannedAllocationRows, monthRange);
-  const actual = sumActualSpendForMonth(monthSprintRows, monthRange, dailySpend ?? [], manualSpendByMonthRows);
+  const actual = sumActualSpendForMonth(monthSprintRows, monthRange, dailySpend ?? []);
   const expectedToDate = sumExpectedToDateForMonth(plannedAllocationRows, monthRange, today);
   const status = classifySpendStatus(actual, expectedToDate, planned);
   const execution = computeAgencyExecutionSummary(tasks ?? [], today);

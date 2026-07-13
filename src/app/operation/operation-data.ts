@@ -1,18 +1,15 @@
 import {
   computeSprintEffectiveSpend,
   computeSprintFinancials,
-  computeSprintMonthActualSpend,
   currentMonthRange,
   sumActualSpendForMonth,
   sumExpectedToDateForMonth,
   sumPlannedForMonth,
-  sumPlannedForSprintAndMonth,
   type SprintFinancials,
   type SpendSource,
   type PlannedAllocationRow,
-  type ManualSpendByMonthRow,
 } from "@/lib/sprint-financials";
-import { formatSprintPeriodLabel, sprintCrossesMonthBoundary } from "@/lib/sprint-week";
+import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { buildAttentionAlerts, computeAccountHealth, type AttentionAlert, type AccountHealth } from "@/lib/attention-alerts";
@@ -56,9 +53,6 @@ export interface OperationClientRawData {
    * união de meses). Fonte de verdade do planejado por mês — nunca mais
    * derivado de `sprint.planned_spend` filtrando sprint por mês (Etapa 50). */
   plannedAllocations: PlannedAllocationRow[];
-  /** Gasto manual por mês (`sprint_manual_spend_by_month`) — só tem linha
-   * quando uma sprint atravessa a fronteira do mês E está em modo manual. */
-  manualSpendByMonth: ManualSpendByMonthRow[];
   tasks: OperationTaskItem[];
   clientLastActivityAt: string | null;
   sprintLastActivityAt: string | null;
@@ -121,11 +115,6 @@ export interface OperationClientCard {
    * mostra em "Última execução da sprint" — null se não há sprint atual.
    * Só faz sentido pra sprint atual (quem renderiza decide isso). */
   sprintExecutionLabel: string | null;
-  /** Divisão financeira por mês, só das sprints de `monthSprints` que
-   * atravessam a fronteira do mês selecionado (Etapa 50) — indexado por
-   * sprintId. Quem renderiza (ex.: "Mensal > Por sprints" da tela Sprints)
-   * mostra isso ao lado do total da semana inteira, nunca no lugar dele. */
-  monthSprintSplits: Record<string, { plannedForMonth: number; actualForMonth: number }>;
 }
 
 /** Monta o card operacional de um cliente a partir dos dados já buscados
@@ -165,12 +154,7 @@ export function buildOperationClientCard(
     .sort((a, b) => a.start_date.localeCompare(b.start_date));
   const monthRangeArg = { firstDay, lastDay };
   const monthPlanned = sumPlannedForMonth(client.plannedAllocations, monthRangeArg);
-  const monthActual = sumActualSpendForMonth(
-    monthSprintRows,
-    monthRangeArg,
-    client.dailySpend,
-    client.manualSpendByMonth,
-  );
+  const monthActual = sumActualSpendForMonth(monthSprintRows, monthRangeArg, client.dailySpend);
   const monthExpectedToDate = sumExpectedToDateForMonth(client.plannedAllocations, monthRangeArg, today);
   // Ritmo do mês: sempre realizado x esperado até hoje (nunca x 100% do
   // planejado antes do mês acabar — clientes no início do mês não podem
@@ -184,20 +168,6 @@ export function buildOperationClientCard(
   const monthSprintTasks: Record<string, OperationTaskItem[]> = {};
   for (const row of monthSprintRows) {
     monthSprintTasks[row.id] = client.tasks.filter((t) => t.sprint_id === row.id);
-  }
-
-  const monthSprintSplits: OperationClientCard["monthSprintSplits"] = {};
-  for (const row of monthSprintRows) {
-    if (!sprintCrossesMonthBoundary(row.start_date, row.end_date)) continue;
-    monthSprintSplits[row.id] = {
-      plannedForMonth: sumPlannedForSprintAndMonth(row.id, client.plannedAllocations, monthRangeArg),
-      actualForMonth: computeSprintMonthActualSpend(
-        row,
-        monthRangeArg,
-        client.dailySpend,
-        client.manualSpendByMonth,
-      ),
-    };
   }
 
   const taskCounts = { total: 0, done: 0, pending: 0, overdue: 0 };
@@ -310,6 +280,5 @@ export function buildOperationClientCard(
     monthSprintTasks,
     sprintExecutionLabel,
     monthTasks,
-    monthSprintSplits,
   };
 }

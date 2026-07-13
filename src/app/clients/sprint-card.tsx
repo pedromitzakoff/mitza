@@ -70,12 +70,6 @@ export function AlertsSummaryLine({ topAlert, remaining }: { topAlert: Attention
  * com um resumo fechado diferente (mais simples) — nunca uma segunda
  * implementação do financeiro/tarefas/comentários da sprint.
  */
-export interface SprintMonthSplit {
-  monthLabel: string;
-  plannedForMonth: number;
-  actualForMonth: number;
-}
-
 export function SprintCardBody({
   sprint,
   comments,
@@ -87,7 +81,6 @@ export function SprintCardBody({
   alerts,
   openClientHref,
   buildTaskHref,
-  monthSplit,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -99,11 +92,6 @@ export function SprintCardBody({
   alerts?: AttentionAlert[];
   openClientHref?: string;
   buildTaskHref?: (taskId: string) => string;
-  /** Preenchido só quando esta semana atravessa a fronteira do mês
-   * selecionado (Etapa 50) — mostra a parcela financeira pertencente
-   * especificamente a esse mês, ao lado do total da semana inteira (que o
-   * grid acima já mostra), pra nunca misturar os dois conceitos. */
-  monthSplit?: SprintMonthSplit | null;
 }) {
   const saldo = sprint.plannedSpend - sprint.actualSpend;
   const saldoText =
@@ -245,18 +233,6 @@ export function SprintCardBody({
           </div>
         </div>
 
-        {monthSplit && (
-          <div className="mt-2 rounded-md border border-dashed border-border p-2 text-xs">
-            <p className="font-medium text-foreground">
-              Resultado financeiro de {monthSplit.monthLabel} (parte desta semana)
-            </p>
-            <p className="mt-0.5 tabular-nums text-muted-foreground">
-              Planejado: {formatCurrency(monthSplit.plannedForMonth)} · Realizado:{" "}
-              {formatCurrency(monthSplit.actualForMonth)}
-            </p>
-          </div>
-        )}
-
         {topAlert && (
           <details className="group/alerts mt-3">
             <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
@@ -351,7 +327,6 @@ export function SprintCard({
   alerts,
   openClientHref,
   buildTaskHref,
-  monthSplit,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -364,7 +339,6 @@ export function SprintCard({
   alerts?: AttentionAlert[];
   openClientHref?: string;
   buildTaskHref?: (taskId: string) => string;
-  monthSplit?: SprintMonthSplit | null;
 }) {
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
   const isCurrent = sprint.temporalStatus === "atual";
@@ -427,7 +401,6 @@ export function SprintCard({
         alerts={alerts}
         openClientHref={openClientHref}
         buildTaskHref={buildTaskHref}
-        monthSplit={monthSplit}
       />
     </details>
   );

@@ -57,7 +57,6 @@ export default async function ReportsPage({
     { data: tasks },
     { data: reports },
     { data: plannedAllocations },
-    { data: manualSpendByMonth },
   ] = await Promise.all([
     supabase
       .from("clients")
@@ -83,11 +82,6 @@ export default async function ReportsPage({
       .select("client_id, sprint_id, date, planned_amount")
       .gte("date", rangeStart)
       .lte("date", rangeEnd),
-    supabase
-      .from("sprint_manual_spend_by_month")
-      .select("client_id, sprint_id, month_start, amount")
-      .gte("month_start", rangeStart)
-      .lte("month_start", rangeEnd),
   ]);
 
   const managersByClient = new Map<string, { id: string; name: string }[]>();
@@ -129,13 +123,6 @@ export default async function ReportsPage({
     plannedAllocationsByClient.set(a.client_id, list);
   }
 
-  const manualSpendByMonthByClient = new Map<string, OperationClientRawData["manualSpendByMonth"]>();
-  for (const m of manualSpendByMonth ?? []) {
-    const list = manualSpendByMonthByClient.get(m.client_id) ?? [];
-    list.push({ sprintId: m.sprint_id, monthStart: m.month_start, amount: m.amount });
-    manualSpendByMonthByClient.set(m.client_id, list);
-  }
-
   const reportStatusByClient = new Map<string, MonthlyReportStatus>((reports ?? []).map((r) => [r.client_id, r.status]));
   const primaryManagerNameByClient = new Map((clients ?? []).map((c) => [c.id, c.primary_manager?.name ?? null]));
 
@@ -148,7 +135,6 @@ export default async function ReportsPage({
     sprints: sprintsByClient.get(client.id) ?? [],
     dailySpend: dailySpendByClient.get(client.id) ?? [],
     plannedAllocations: plannedAllocationsByClient.get(client.id) ?? [],
-    manualSpendByMonth: manualSpendByMonthByClient.get(client.id) ?? [],
     tasks: tasksByClient.get(client.id) ?? [],
     clientLastActivityAt: null,
     sprintLastActivityAt: null,

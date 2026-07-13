@@ -53,7 +53,6 @@ export function SprintMonthlyBySprintsGroup({
         {card.monthSprints.length > 0 ? (
           card.monthSprints.map((sprint) => {
             const isCurrent = sprint.temporalStatus === "atual";
-            const split = card.monthSprintSplits[sprint.sprintId];
             return (
               <SprintCard
                 key={sprint.sprintId}
@@ -68,7 +67,6 @@ export function SprintMonthlyBySprintsGroup({
                 defaultOpen={false}
                 openClientHref={`/clients/${card.clientId}`}
                 buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
-                monthSplit={split ? { monthLabel, ...split } : null}
               />
             );
           })

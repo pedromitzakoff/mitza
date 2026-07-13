@@ -49,7 +49,6 @@ export default async function ClientsPage({
     { data: dailySpend },
     { data: tasks },
     { data: plannedAllocations },
-    { data: manualSpendByMonth },
   ] = await Promise.all([
     supabase
       .from("clients")
@@ -82,10 +81,6 @@ export default async function ClientsPage({
       .select("client_id, sprint_id, date, planned_amount")
       .gte("date", firstDay)
       .lte("date", lastDay),
-    supabase
-      .from("sprint_manual_spend_by_month")
-      .select("client_id, sprint_id, month_start, amount")
-      .eq("month_start", firstDay),
   ]);
 
   const clientIds = (clients ?? []).map((c) => c.id);
@@ -153,13 +148,6 @@ export default async function ClientsPage({
     plannedAllocationsByClient.set(a.client_id, list);
   }
 
-  const manualSpendByMonthByClient = new Map<string, OperationClientRawData["manualSpendByMonth"]>();
-  for (const m of manualSpendByMonth ?? []) {
-    const list = manualSpendByMonthByClient.get(m.client_id) ?? [];
-    list.push({ sprintId: m.sprint_id, monthStart: m.month_start, amount: m.amount });
-    manualSpendByMonthByClient.set(m.client_id, list);
-  }
-
   const clientActivityById = new Map((clientActivity ?? []).map((r) => [r.client_id, r.last_activity_at]));
   const sprintActivityById = new Map((sprintActivity ?? []).map((r) => [r.sprint_id, r.last_activity_at]));
 
@@ -176,7 +164,6 @@ export default async function ClientsPage({
       sprints: clientSprints,
       dailySpend: dailySpendByClient.get(client.id) ?? [],
       plannedAllocations: plannedAllocationsByClient.get(client.id) ?? [],
-      manualSpendByMonth: manualSpendByMonthByClient.get(client.id) ?? [],
       tasks: tasksByClient.get(client.id) ?? [],
       clientLastActivityAt: clientActivityById.get(client.id) ?? null,
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,

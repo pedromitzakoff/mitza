@@ -649,48 +649,6 @@ export interface Database {
           },
         ];
       };
-      sprint_manual_spend_by_month: {
-        Row: {
-          id: string;
-          sprint_id: string;
-          client_id: string;
-          month_start: string;
-          amount: number;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          sprint_id: string;
-          client_id: string;
-          month_start: string;
-          amount?: number;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          sprint_id?: string;
-          client_id?: string;
-          month_start?: string;
-          amount?: number;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "sprint_manual_spend_by_month_sprint_id_fkey";
-            columns: ["sprint_id"];
-            isOneToOne: false;
-            referencedRelation: "sprints";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "sprint_manual_spend_by_month_client_id_fkey";
-            columns: ["client_id"];
-            isOneToOne: false;
-            referencedRelation: "clients";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
       monthly_budget_changes: {
         Row: {
           id: string;

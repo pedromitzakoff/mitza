@@ -1,5 +1,4 @@
-import { daysBetweenInclusive, type ManualSpendByMonthRow, type SpendSource } from "./sprint-financials";
-import { sprintCrossesMonthBoundary } from "./sprint-week";
+import { daysBetweenInclusive, type SpendSource } from "./sprint-financials";
 
 function parseDateUTC(value: string): Date {
   return new Date(`${value}T00:00:00Z`);
@@ -39,18 +38,12 @@ export interface CumulativeSpendPoint {
  * decorrido, garantindo que a soma bata exatamente com o valor informado.
  * Os dias de daily_spend dentro do período de uma sprint manual são
  * ignorados aqui pra não contar o gasto duas vezes (uma pela sync do Meta,
- * outra pelo valor manual).
- *
- * Etapa 50: sprint manual que atravessa a fronteira do mês distribui só a
- * PARCELA daquele mês (`manualSpendByMonth`) pelos dias daquele mês — nunca
- * mais o total bruto da sprint inteira pelos dias das duas meses juntos
- * (isso inflaria o mês errado). Sprint manual que não atravessa mês
- * continua exatamente como sempre: `manual_actual_spend` inteiro pelos dias
- * dela, já que ela é inteiramente deste mês.
+ * outra pelo valor manual). Desde a correção da Etapa 50, nenhuma sprint
+ * atravessa mais a fronteira do mês — toda sprint pertence a exatamente um
+ * mês, então `manual_actual_spend` já é sempre a parcela deste mês inteira.
  */
 export function computeCumulativeSpendSeries(
   sprints: {
-    id: string;
     start_date: string;
     end_date: string;
     spend_source?: SpendSource;
@@ -60,7 +53,6 @@ export function computeCumulativeSpendSeries(
   dailyPlanned: { date: string; planned_amount: number }[],
   monthRange: { firstDay: string; lastDay: string },
   today: Date,
-  manualSpendByMonth: ManualSpendByMonthRow[] = [],
 ): CumulativeSpendPoint[] {
   const manualSprints = sprints.filter((s) => s.spend_source === "manual");
   const isInsideManualSprint = (date: string) =>
@@ -73,31 +65,12 @@ export function computeCumulativeSpendSeries(
   }
 
   for (const sprint of manualSprints) {
-    const crossesMonth = sprintCrossesMonthBoundary(sprint.start_date, sprint.end_date);
-    const manualValue = crossesMonth
-      ? (manualSpendByMonth.find(
-          (m) => m.sprintId === sprint.id && m.monthStart === `${monthRange.firstDay.slice(0, 7)}-01`,
-        )?.amount ?? 0)
-      : (sprint.manual_actual_spend ?? 0);
-
-    // Sprint que atravessa mês: distribui só pelos dias que caem NESTE mês
-    // (interseção sprint×mês); sprint de um mês só: pelos dias dela inteira.
-    const rangeStart = crossesMonth
-      ? sprint.start_date > monthRange.firstDay
-        ? sprint.start_date
-        : monthRange.firstDay
-      : sprint.start_date;
-    const rangeEnd = crossesMonth
-      ? sprint.end_date < monthRange.lastDay
-        ? sprint.end_date
-        : monthRange.lastDay
-      : sprint.end_date;
-
-    const start = parseDateUTC(rangeStart);
-    const end = parseDateUTC(rangeEnd);
+    const manualValue = sprint.manual_actual_spend ?? 0;
+    const start = parseDateUTC(sprint.start_date);
+    const end = parseDateUTC(sprint.end_date);
     const effectiveEnd = today < end ? today : end;
 
-    if (effectiveEnd < start) continue; // sprint (ou sua parcela do mês) futura: nada decorrido ainda
+    if (effectiveEnd < start) continue; // sprint futura: nada decorrido ainda
 
     const elapsedDays = daysBetweenInclusive(start, effectiveEnd);
     const totalCents = Math.round(manualValue * 100);
