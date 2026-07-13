@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { updateTaskAction } from "../../../../tasks-actions";
+import { getCurrentProfile } from "@/lib/auth";
+import { deleteTaskAction, updateTaskAction } from "../../../../tasks-actions";
 import { TASK_RECURRENCE_LABEL, TASK_TYPE_LABEL } from "../../../../task-labels";
+import { DeleteTaskButton } from "../../../../delete-task-button";
 
 export default async function EditTaskPage({
   params,
@@ -14,6 +16,8 @@ export default async function EditTaskPage({
   const { id, taskId } = await params;
   const { error, return_to: returnTo } = await searchParams;
 
+  const profile = await getCurrentProfile();
+  const isAdmin = profile?.role === "admin";
   const supabase = await createSupabaseClient();
 
   // RLS garante que só quem tem acesso ao cliente (admin ou gestor
@@ -140,6 +144,16 @@ export default async function EditTaskPage({
           Salvar
         </button>
       </form>
+
+      {isAdmin && (
+        <div className="mt-4">
+          <DeleteTaskButton
+            action={deleteTaskAction.bind(null, task.id, id)}
+            taskTitle={task.title}
+            returnTo={returnTo}
+          />
+        </div>
+      )}
     </div>
   );
 }

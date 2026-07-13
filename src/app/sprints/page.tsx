@@ -568,6 +568,7 @@ export default async function SprintsPage({
           comments={openTask.comments}
           closeHref={buildUrl({ task: "" })}
           returnTo={buildUrl({ task: "" })}
+          isAdmin={isAdmin}
         />
       )}
     </div>

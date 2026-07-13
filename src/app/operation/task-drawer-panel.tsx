@@ -4,8 +4,9 @@ import Link from "next/link";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { TASK_STATUS_BADGE_CLASSES, TASK_STATUS_LABEL, TASK_TYPE_LABEL } from "@/app/clients/task-labels";
 import { formatDueDate } from "@/app/clients/task-row";
-import { completeTaskAction } from "@/app/clients/tasks-actions";
+import { completeTaskAction, deleteTaskAction } from "@/app/clients/tasks-actions";
 import { createCommentAction } from "@/app/clients/comments-actions";
+import { DeleteTaskButton } from "@/app/clients/delete-task-button";
 import { saveScrollForReturn } from "@/lib/scroll-restore";
 import type { CommentItem } from "@/app/clients/comment-thread";
 import type { OperationTaskItem } from "./operation-data";
@@ -25,6 +26,7 @@ export function TaskDrawerPanel({
   comments,
   closeHref,
   returnTo,
+  isAdmin,
 }: {
   task: OperationTaskItem;
   clientId: string;
@@ -33,6 +35,7 @@ export function TaskDrawerPanel({
   comments: CommentItem[];
   closeHref: string;
   returnTo: string;
+  isAdmin: boolean;
 }) {
   const status = effectiveTaskStatus(task);
 
@@ -105,6 +108,14 @@ export function TaskDrawerPanel({
           >
             Editar tarefa
           </Link>
+          {isAdmin && (
+            <DeleteTaskButton
+              action={deleteTaskAction.bind(null, task.id, clientId)}
+              taskTitle={task.title}
+              returnTo={returnTo}
+              className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+            />
+          )}
         </div>
 
         <div className="mt-5 border-t border-border pt-4">

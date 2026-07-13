@@ -130,7 +130,7 @@ export default async function TeamPage({
       )}
 
       <div className="mt-4">
-        <TeamTable rows={tableRows} />
+        <TeamTable rows={tableRows} isAdmin={isAdmin} />
       </div>
 
       {isAdmin && openNew && <NewTeamMemberDrawer closeHref="/team" />}

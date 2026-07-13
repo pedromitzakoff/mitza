@@ -25,8 +25,14 @@ export interface TeamTableRow {
  * pedido). Ações rápidas (Reenviar convite/Desativar/Reativar) ficam
  * inline; edição completa e "Convidar"/"Revogar" (ações mais sensíveis)
  * vivem no drawer (EditTeamMemberDrawer), aberto por "Editar".
+ *
+ * A coluna "Ação" só existe para admin: todas as ações aqui (Editar,
+ * Reenviar convite, Desativar, Reativar) já eram bloqueadas no servidor
+ * (requireAdmin() em cada Server Action), mas antes apareciam pra qualquer
+ * gestor logado mesmo assim — clicáveis, sem nunca funcionar. Gestor só
+ * enxerga os dados da equipe, nunca os controles de gestão.
  */
-export function TeamTable({ rows }: { rows: TeamTableRow[] }) {
+export function TeamTable({ rows, isAdmin }: { rows: TeamTableRow[]; isAdmin: boolean }) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
@@ -46,7 +52,7 @@ export function TeamTable({ rows }: { rows: TeamTableRow[] }) {
             <th className="px-3 py-2 font-medium">Clientes</th>
             <th className="px-3 py-2 font-medium">Status</th>
             <th className="px-3 py-2 font-medium">Acesso</th>
-            <th className="px-3 py-2 font-medium">Ação</th>
+            {isAdmin && <th className="px-3 py-2 font-medium">Ação</th>}
           </tr>
         </thead>
         <tbody>
@@ -84,6 +90,7 @@ export function TeamTable({ rows }: { rows: TeamTableRow[] }) {
                   {TEAM_INVITATION_STATUS_LABEL[member.invitation_status]}
                 </span>
               </td>
+              {isAdmin && (
               <td className="px-3 py-2">
                 <div className="flex items-center gap-2">
                   <Link
@@ -131,6 +138,7 @@ export function TeamTable({ rows }: { rows: TeamTableRow[] }) {
                   </details>
                 </div>
               </td>
+              )}
             </tr>
           ))}
         </tbody>

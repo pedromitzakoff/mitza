@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth";
+import { getCurrentProfile, requireAdmin } from "@/lib/auth";
 import { nextDueDate } from "@/lib/task-recurrence";
 import { logOperationalActivity } from "@/lib/operational-activity-log";
 import { OperationalEventType } from "@/lib/operational-events";
@@ -272,4 +272,55 @@ export async function completeTaskAction(taskId: string, clientId: string) {
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
+}
+
+/**
+ * Exclusão definitiva de tarefa — só admin (gestor não tem acesso a esta
+ * action nem vê o botão na UI). Diferente de clientes (soft delete, pra
+ * preservar histórico comercial), tarefa é um item operacional do dia a dia:
+ * apagar de fato uma tarefa criada por engano não tem o mesmo peso de
+ * apagar um cliente. O evento TASK_DELETED guarda os dados principais em
+ * metadata (título, tipo, prazo, responsável) — a auditoria sobrevive à
+ * tarefa mesmo depois que a linha em si deixa de existir, porque
+ * operational_events.entity_id não é uma foreign key (é só uuid, igual às
+ * outras entidades polimórficas desta tabela).
+ */
+export async function deleteTaskAction(taskId: string, clientId: string, formData: FormData) {
+  const profile = await requireAdmin();
+  const supabase = await createSupabaseClient();
+  const returnTo = resolveReturnTo(formData, `/clients/${clientId}`);
+
+  const { data: task } = await supabase
+    .from("tasks")
+    .select("title, type, due_date, assignee_id, sprint_id")
+    .eq("id", taskId)
+    .single();
+
+  const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+
+  if (error) {
+    redirect(`/clients/${clientId}?taskError=${encodeURIComponent("Não foi possível excluir a tarefa.")}`);
+  }
+
+  const actor = actorFromProfile(profile);
+  await recordOperationalEvent(supabase, actor, {
+    eventType: OperationalEventType.TASK_DELETED,
+    entityType: "task",
+    entityId: taskId,
+    clientId,
+    sprintId: task?.sprint_id ?? null,
+    source: "web",
+    metadata: {
+      task_title: task?.title ?? null,
+      task_type: task?.type ?? null,
+      due_date: task?.due_date ?? null,
+      assignee_team_member_id: task?.assignee_id ?? null,
+    },
+  });
+
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/operation");
+  revalidatePath("/sprints");
+  revalidatePath("/clients");
+  redirect(returnTo);
 }

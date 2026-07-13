@@ -69,6 +69,7 @@ export type OperationalEventType =
   | "task_due_date_changed"
   | "task_completed"
   | "task_reopened"
+  | "task_deleted"
   | "optimization_completed"
   | "meeting_scheduled"
   | "meeting_rescheduled"
