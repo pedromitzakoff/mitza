@@ -2103,6 +2103,146 @@ automático da sync, refinamentos de UX, etc.
     `app/reports/page.tsx`, `app/settings/clients/page.tsx`,
     `app/settings/sprint-task-templates/page.tsx`.
 
+56. ✅ **Telemetria operacional interna (`operational_events`)**
+
+    **Investigação prévia**: não existia reabertura de tarefa em lugar
+    nenhum do app (só "reabrir relatório mensal", entidade diferente) —
+    `task_reopened` fica reservado na taxonomia, sem emissão, até essa
+    funcionalidade existir. `updateTaskAction` fazia um `update` cego em
+    `assignee_id`/`due_date` sem nunca ler o valor anterior — não dava pra
+    saber se houve reatribuição/alteração de prazo, nem preservar o prazo
+    original. `tasks` não tinha `completed_at`, nem contadores de
+    reatribuição/alteração de prazo/reabertura. `operational_activities`
+    (Etapa 15) já existe, mas é um log fino e específico (5 tipos, sem
+    prazo/atraso/metadata) que alimenta o painel "Acompanhamento
+    operacional" — não dava pra virar a base desta telemetria sem quebrar
+    esse contrato já lido pela UI, por isso a tabela nova coexiste com ela
+    em vez de substituí-la. Não existe `idempotency_key` em nenhum lugar do
+    schema — a convenção já usada no projeto pra evitar duplicata é índice
+    único parcial + `on conflict do nothing`, replicada aqui. "Reunião" e
+    "entrega de criativos" continuam sendo só `tasks.type`, sem tabela
+    própria (Etapa 45) — não foi criada nenhuma tabela nova só pra gerar
+    evento.
+
+    **Schema**: `operational_events` (append-only, sem policy de
+    update/delete pra ninguém) com a taxonomia completa pedida via `check`
+    de `event_type` (espelhada 1:1 em `lib/operational-events.ts`,
+    `OperationalEventType`, nunca string solta no código), ator separado em
+    `actor_team_member_id`/`actor_auth_user_id`, `expected_at`/
+    `completed_at`/`was_on_time`/`delay_seconds` (segundos, convertido pra
+    horas/dias só na apresentação), `correlation_id` (liga
+    `task_completed` ao `optimization_completed`/`meeting_completed`/
+    `creative_delivery_completed` da mesma conclusão), `idempotency_key`
+    (índice único parcial). `tasks` ganhou `original_due_date` (nunca
+    reescrito depois da criação), `completed_at`, `completion_count`,
+    `reassignment_count`, `due_date_change_count`, `reopened_count` —
+    aditivo, backfill de `original_due_date = due_date` (não recupera um
+    valor anterior à migration, que nunca existiu) e `completed_at` fica
+    `null` pro histórico (sem dado confiável de quando cada tarefa antiga
+    foi concluída — mesma decisão já tomada pelo backfill de
+    `operational_activities`).
+
+    **Serviço central**: `lib/record-operational-event.ts`
+    (`recordOperationalEvent`) — único ponto que grava na tabela; sempre
+    chamado depois de uma mutação já ter tido sucesso, nunca no navegador.
+    Ator/organização sempre resolvidos no servidor via `getCurrentProfile()`
+    (que ganhou `authUserId`); a RLS de insert é a segunda camada de defesa
+    (`organization_id = current_organization_id()` e, quando há ator,
+    `actor_team_member_id = current_team_member_id()`), então mesmo um
+    insert direto forjado não conseguiria gravar em nome de outra
+    organização ou de outro usuário.
+
+    **Transação**: conclusão de tarefa passou a rodar inteira dentro de
+    `complete_task_and_record_event` (função de banco) — atualiza `tasks` e
+    grava `task_completed` (+ o evento específico do tipo, correlacionado)
+    numa única transação; nunca tarefa concluída sem evento nem evento sem
+    conclusão real. `apply_monthly_budget_change` (já existente, Etapa 38)
+    foi estendida do mesmo jeito pra também gravar
+    `monthly_budget_created`/`monthly_budget_changed` atomicamente. Os
+    demais eventos (membro da equipe, cliente, relatório, criação/
+    atribuição/alteração de prazo de tarefa) são gravados sequencialmente
+    na mesma Server Action logo após a mutação principal ter sucesso —
+    disclosure explícito: não são uma transação de banco única, mas o risco
+    é baixo (cada mutação principal já é um único `update`/`insert` que
+    raramente falha parcialmente) e o registro do evento nunca derruba a
+    ação principal se falhar.
+
+    **Idempotência**: `idempotency_key` só nos dois eventos com risco real
+    de duplo clique/retry (`task_completed` e o evento correlacionado do
+    tipo), no formato `evento:tarefa:versão` (usando `completion_count`
+    como versão) — `on conflict (idempotency_key) where idempotency_key is
+    not null do nothing`, mesma convenção de índice único parcial já usada
+    em outras tabelas do projeto.
+
+    **No prazo/atraso**: calculado server-side em
+    `complete_task_and_record_event`, usando `(due_date + 1)::timestamp at
+    time zone 'America/Sao_Paulo'` (o prazo vence à meia-noite do dia
+    seguinte no fuso da agência — a tarefa pode ser concluída o dia inteiro
+    do `due_date`, mesma regra de `lib/task-status.ts`). Guardado tanto em
+    relação ao prazo vigente quanto ao original (`was_on_time_original_due_date`
+    em metadata), pra nunca parecer que uma tarefa sempre esteve no prazo
+    só porque o prazo foi adiado depois de vencida.
+
+    **Eventos instrumentados** (com dado real, sem nada inventado):
+    `team_member_created/updated/deactivated/reactivated/invited/
+    access_activated/access_revoked` (`app/team/actions.ts`, mais o
+    fallback de vínculo pós-login em `lib/auth.ts`); `client_created/
+    manager_assigned/manager_changed/status_changed`
+    (`app/clients/actions.ts`, `app/settings/clients/actions.ts`);
+    `task_created/assigned/reassigned/due_date_changed/completed`
+    (`app/clients/tasks-actions.ts`); `optimization_completed/
+    meeting_completed/creative_delivery_completed` (derivados de
+    `task_completed` conforme `tasks.type`, correlacionados);
+    `monthly_budget_created/changed` (RPC); `monthly_report_started/
+    ready_for_review/finalized/reopened` (`app/reports/report-data.ts`,
+    `app/reports/report-actions.ts`).
+
+    **Ainda não implementados** (disclosure explícito, seção 20 do
+    pedido): `task_reopened` (funcionalidade de reabrir tarefa não existe);
+    `meeting_scheduled/rescheduled/cancelled` e
+    `creative_delivery_scheduled` (reunião/criativo são só `tasks.type` —
+    "agendar"/"reagendar" já SÃO `task_created`/`task_due_date_changed`,
+    duplicar seria o mesmo acontecimento sem informação nova; "cancelar"
+    exigiria exclusão de tarefa, que não existe); `creative_delivery_late`
+    e outros eventos de TRANSIÇÃO DE ESTADO (seção 20/21) — exigem um job
+    de monitoramento, explicitamente fora de escopo nesta etapa.
+
+    **Equipe — Atividade operacional**: nova seção no drawer do membro
+    (`app/team/operational-activity-panel.tsx`), com seletor 7 dias/30
+    dias/Mês atual (padrão Mês atual) — indicadores só descritivos (tarefas
+    concluídas/no prazo/atrasadas, taxa no prazo, atraso médio,
+    otimizações/reuniões/criativos realizados, reaberturas, reatribuições
+    recebidas/repassadas), nunca chamados de "produtividade", sem score nem
+    ranking. Timeline paginada abaixo (15 por página), sem metadata bruto —
+    só rótulo/cliente/tarefa/prazo já resolvidos
+    (`lib/team-member-activity.ts`).
+
+    **Segurança**: nenhuma escrita em `operational_events` acontece no
+    navegador; `actor_id`/`organization_id`/`was_on_time`/`delay_seconds`
+    são sempre calculados no servidor, nunca aceitos de input do cliente; a
+    RLS de insert é a rede de segurança adicional (ver acima); tabela é
+    append-only pra qualquer papel, inclusive admin.
+
+    **Testes**: não há suíte automatizada neste projeto. Confirmado por
+    leitura/rastreamento manual: cada `record_operational_event`/RPC só
+    grava depois da mutação principal ter sucesso; `actor_team_member_id`
+    nunca é copiado do responsável da tarefa (sempre quem está logado,
+    resolvido via `getCurrentProfile()`); `original_due_date` nunca é
+    reescrito em `updateTaskAction`; a constraint `on conflict
+    (idempotency_key) where idempotency_key is not null` previne duplicata
+    de `task_completed` em double-click/retry; nenhum evento de estado
+    (`*_late`) é emitido (não implementados). `tsc --noEmit`, `npm run
+    lint` e `npm run build` sem erros.
+
+    Arquivos novos: `supabase/operational-events.sql`,
+    `lib/operational-events.ts`, `lib/record-operational-event.ts`,
+    `lib/team-member-activity.ts`, `app/team/operational-activity-panel.tsx`.
+    Alterados: `lib/auth.ts`, `lib/supabase/database.types.ts`,
+    `app/clients/tasks-actions.ts`, `app/clients/actions.ts`,
+    `app/settings/clients/actions.ts`, `app/reports/report-actions.ts`,
+    `app/reports/report-data.ts`, `app/team/actions.ts`,
+    `app/team/page.tsx`, `app/team/team-member-drawer.tsx`.
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

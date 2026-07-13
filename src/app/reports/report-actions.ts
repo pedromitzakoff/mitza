@@ -7,6 +7,8 @@ import { getCurrentProfile, requireAdmin } from "@/lib/auth";
 import { todayUTC, todayDateString } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
 import { getOrCreateReport, buildReportViewData } from "./report-data";
+import { OperationalEventType } from "@/lib/operational-events";
+import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
 import type {
   KpiDirection,
   KpiUnit,
@@ -310,6 +312,20 @@ export async function updateReportStatusAction(clientId: string, monthStart: str
 
   await supabase.from("monthly_reports").update({ status, updated_at: new Date().toISOString() }).eq("id", reportId);
 
+  if (status === "pronto_revisao") {
+    const profile = await getCurrentProfile();
+    if (profile) {
+      await recordOperationalEvent(supabase, actorFromProfile(profile), {
+        eventType: OperationalEventType.MONTHLY_REPORT_READY_FOR_REVIEW,
+        entityType: "monthly_report",
+        entityId: reportId,
+        clientId,
+        source: "web",
+        metadata: { month_start: monthStart },
+      });
+    }
+  }
+
   revalidatePath(`/reports/${clientId}`);
   revalidatePath("/reports");
   redirect(reportsUrl(clientId, monthStart));
@@ -351,6 +367,15 @@ export async function finalizeReportAction(clientId: string, monthStart: string)
 
   if (error) redirect(`${returnTo}&error=${encodeURIComponent(error.message)}`);
 
+  await recordOperationalEvent(supabase, actorFromProfile(profile), {
+    eventType: OperationalEventType.MONTHLY_REPORT_FINALIZED,
+    entityType: "monthly_report",
+    entityId: reportId,
+    clientId,
+    source: "web",
+    metadata: { month_start: monthStart },
+  });
+
   revalidatePath(`/reports/${clientId}`);
   revalidatePath("/reports");
   redirect(returnTo);
@@ -360,7 +385,7 @@ export async function finalizeReportAction(clientId: string, monthStart: string)
  * para revisão" e descarta o snapshot; a tela passa a ler dados ao vivo de
  * novo até finalizar mais uma vez. */
 export async function reopenReportAction(clientId: string, monthStart: string) {
-  await requireAdmin();
+  const profile = await requireAdmin();
   const supabase = await createSupabaseClient();
   const { id: reportId } = await getOrCreateReport(supabase, clientId, monthStart);
 
@@ -374,6 +399,15 @@ export async function reopenReportAction(clientId: string, monthStart: string) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", reportId);
+
+  await recordOperationalEvent(supabase, actorFromProfile(profile), {
+    eventType: OperationalEventType.MONTHLY_REPORT_REOPENED,
+    entityType: "monthly_report",
+    entityId: reportId,
+    clientId,
+    source: "web",
+    metadata: { month_start: monthStart },
+  });
 
   revalidatePath(`/reports/${clientId}`);
   revalidatePath("/reports");

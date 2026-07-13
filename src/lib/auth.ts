@@ -1,12 +1,18 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/lib/supabase/database.types";
+import { OperationalEventType } from "@/lib/operational-events";
+import { recordOperationalEvent } from "@/lib/record-operational-event";
 
 export interface CurrentProfile {
   id: string;
   name: string;
   role: UserRole;
   organizationId: string;
+  /** uuid de auth.users de quem está logado — usado só como `actor_auth_user_id`
+   * em operational_events (Etapa 56); nunca usado como identidade
+   * operacional (isso é sempre `id`, o team_members.id). */
+  authUserId: string;
 }
 
 /**
@@ -23,13 +29,33 @@ async function linkPendingTeamMember(authUserId: string, email: string | undefin
   if (!email) return;
   const supabase = await createClient();
 
-  await supabase
+  const { data: linked } = await supabase
     .from("team_members")
     .update({ auth_user_id: authUserId, invitation_status: "acesso_ativo" })
     .eq("invitation_status", "convite_pendente")
     .is("auth_user_id", null)
     .eq("status", "ativo")
-    .ilike("email", email);
+    .ilike("email", email)
+    .select("id, organization_id")
+    .maybeSingle();
+
+  if (linked) {
+    // Ativação de acesso pelo fluxo de fallback (login após aceitar o
+    // convite, sem ter passado pela Server Action de convite) — mesmo
+    // evento que inviteTeamMemberCore registraria se o vínculo já tivesse
+    // acontecido lá.
+    await recordOperationalEvent(
+      supabase,
+      { teamMemberId: linked.id, authUserId, organizationId: linked.organization_id },
+      {
+        eventType: OperationalEventType.TEAM_MEMBER_ACCESS_ACTIVATED,
+        entityType: "team_member",
+        entityId: linked.id,
+        source: "server",
+        metadata: { via: "post_login_fallback" },
+      },
+    );
+  }
 }
 
 export async function getCurrentProfile(): Promise<CurrentProfile | null> {
@@ -48,7 +74,13 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     .maybeSingle();
 
   if (member) {
-    return { id: member.id, name: member.name, role: member.system_role, organizationId: member.organization_id };
+    return {
+      id: member.id,
+      name: member.name,
+      role: member.system_role,
+      organizationId: member.organization_id,
+      authUserId: user.id,
+    };
   }
 
   // Sem vínculo direto ainda — tenta o fallback idempotente e verifica de novo,
@@ -64,7 +96,13 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     .maybeSingle();
 
   if (!linked) return null;
-  return { id: linked.id, name: linked.name, role: linked.system_role, organizationId: linked.organization_id };
+  return {
+    id: linked.id,
+    name: linked.name,
+    role: linked.system_role,
+    organizationId: linked.organization_id,
+    authUserId: user.id,
+  };
 }
 
 /** Redireciona para a home se o usuário logado não for admin. */

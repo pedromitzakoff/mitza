@@ -5,6 +5,8 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { normalizeCnpj, isValidCnpjLength } from "@/lib/cnpj";
 import { isValidEmail } from "@/lib/validation";
+import { OperationalEventType } from "@/lib/operational-events";
+import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
 import type { ClientContractStatus } from "@/lib/supabase/database.types";
 
 const CONTRACT_STATUSES: ClientContractStatus[] = ["ativo", "pausado", "encerrado"];
@@ -20,18 +22,55 @@ function revalidateClientLists() {
 }
 
 export async function updateClientStatusAction(clientId: string, status: string) {
-  await requireAdmin();
+  const profile = await requireAdmin();
   if (!CONTRACT_STATUSES.includes(status as ClientContractStatus)) return;
 
   const supabase = await createSupabaseClient();
+  const { data: previous } = await supabase.from("clients").select("status").eq("id", clientId).single();
   await supabase.from("clients").update({ status: status as ClientContractStatus }).eq("id", clientId);
+
+  if (previous && previous.status !== status) {
+    await recordOperationalEvent(supabase, actorFromProfile(profile), {
+      eventType: OperationalEventType.CLIENT_STATUS_CHANGED,
+      entityType: "client",
+      entityId: clientId,
+      clientId,
+      source: "web",
+      metadata: { previous_status: previous.status, new_status: status },
+    });
+  }
+
   revalidateClientLists();
 }
 
 export async function updateClientPrimaryManagerAction(clientId: string, managerId: string) {
-  await requireAdmin();
+  const profile = await requireAdmin();
   const supabase = await createSupabaseClient();
-  await supabase.from("clients").update({ primary_manager_id: managerId || null }).eq("id", clientId);
+  const { data: previous } = await supabase
+    .from("clients")
+    .select("primary_manager_id")
+    .eq("id", clientId)
+    .single();
+  const newManagerId = managerId || null;
+  await supabase.from("clients").update({ primary_manager_id: newManagerId }).eq("id", clientId);
+
+  if (previous && previous.primary_manager_id !== newManagerId) {
+    await recordOperationalEvent(supabase, actorFromProfile(profile), {
+      eventType: previous.primary_manager_id
+        ? OperationalEventType.CLIENT_MANAGER_CHANGED
+        : OperationalEventType.CLIENT_MANAGER_ASSIGNED,
+      entityType: "client",
+      entityId: clientId,
+      clientId,
+      source: "web",
+      metadata: {
+        role: "primary",
+        previous_manager_team_member_id: previous.primary_manager_id,
+        new_manager_team_member_id: newManagerId,
+      },
+    });
+  }
+
   revalidateClientLists();
 }
 

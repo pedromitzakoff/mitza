@@ -6,6 +6,9 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { nextDueDate } from "@/lib/task-recurrence";
 import { logOperationalActivity } from "@/lib/operational-activity-log";
+import { OperationalEventType } from "@/lib/operational-events";
+import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
+import { todayDateString } from "@/lib/today";
 import type { TaskRecurrence, TaskType } from "@/lib/supabase/database.types";
 
 function resolveReturnTo(formData: FormData, fallback: string): string {
@@ -56,6 +59,35 @@ export async function createTaskAction(clientId: string, formData: FormData) {
       userId: profile.id,
       activityType: "task_created",
     });
+
+    const actor = actorFromProfile(profile);
+    await recordOperationalEvent(supabase, actor, {
+      eventType: OperationalEventType.TASK_CREATED,
+      entityType: "task",
+      entityId: created.id,
+      clientId,
+      sprintId,
+      source: "web",
+      metadata: {
+        task_type: type,
+        task_title: title,
+        due_date: dueDate,
+        assignee_team_member_id: assigneeId,
+        origin: "manual",
+      },
+    });
+
+    if (assigneeId) {
+      await recordOperationalEvent(supabase, actor, {
+        eventType: OperationalEventType.TASK_ASSIGNED,
+        entityType: "task",
+        entityId: created.id,
+        clientId,
+        sprintId,
+        source: "web",
+        metadata: { assignee_team_member_id: assigneeId },
+      });
+    }
   }
 
   revalidatePath(`/clients/${clientId}`);
@@ -76,6 +108,21 @@ export async function updateTaskAction(taskId: string, clientId: string, formDat
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const returnTo = resolveReturnTo(formData, `/clients/${clientId}`);
 
+  // Lê o estado anterior ANTES de sobrescrever — necessário pra detectar
+  // reatribuição/alteração de prazo e preservar original_due_date (achado
+  // da investigação: esta action fazia um update cego, sem nunca ler o
+  // valor anterior de assignee_id/due_date).
+  const { data: previous } = await supabase
+    .from("tasks")
+    .select("assignee_id, due_date, sprint_id, reassignment_count, due_date_change_count")
+    .eq("id", taskId)
+    .single();
+
+  const wasAlreadyOverdue = previous ? previous.due_date < todayDateString() : false;
+  const isReassignment = previous ? assigneeId !== previous.assignee_id : false;
+  const isFirstAssignment = isReassignment && !previous?.assignee_id;
+  const isDueDateChange = previous ? dueDate !== previous.due_date : false;
+
   const { data: updated, error } = await supabase
     .from("tasks")
     .update({
@@ -85,6 +132,11 @@ export async function updateTaskAction(taskId: string, clientId: string, formDat
       due_date: dueDate,
       recurrence,
       notes,
+      reassignment_count: (previous?.reassignment_count ?? 0) + (isReassignment && !isFirstAssignment ? 1 : 0),
+      due_date_change_count: (previous?.due_date_change_count ?? 0) + (isDueDateChange ? 1 : 0),
+      // original_due_date nunca é escrito aqui de propósito — é preenchido
+      // só na criação e nunca sobrescrito, pra nunca perder o prazo
+      // combinado originalmente (seção 12 do pedido).
     })
     .eq("id", taskId)
     .select("sprint_id")
@@ -103,6 +155,43 @@ export async function updateTaskAction(taskId: string, clientId: string, formDat
       userId: profile.id,
       activityType: "task_updated",
     });
+
+    const actor = actorFromProfile(profile);
+    const sprintId = updated?.sprint_id ?? null;
+
+    if (isReassignment) {
+      await recordOperationalEvent(supabase, actor, {
+        eventType: isFirstAssignment ? OperationalEventType.TASK_ASSIGNED : OperationalEventType.TASK_REASSIGNED,
+        entityType: "task",
+        entityId: taskId,
+        clientId,
+        sprintId,
+        source: "web",
+        metadata: {
+          previous_assignee_team_member_id: previous?.assignee_id ?? null,
+          new_assignee_team_member_id: assigneeId,
+          current_due_date: dueDate,
+          was_already_overdue: wasAlreadyOverdue,
+        },
+      });
+    }
+
+    if (isDueDateChange) {
+      await recordOperationalEvent(supabase, actor, {
+        eventType: OperationalEventType.TASK_DUE_DATE_CHANGED,
+        entityType: "task",
+        entityId: taskId,
+        clientId,
+        sprintId,
+        source: "web",
+        metadata: {
+          previous_due_date: previous?.due_date ?? null,
+          new_due_date: dueDate,
+          was_already_overdue: wasAlreadyOverdue,
+          due_date_change_count: (previous?.due_date_change_count ?? 0) + 1,
+        },
+      });
+    }
   }
 
   revalidatePath(`/clients/${clientId}`);
@@ -125,17 +214,25 @@ export async function completeTaskAction(taskId: string, clientId: string) {
     redirect(`/clients/${clientId}?taskError=${encodeURIComponent("Tarefa não encontrada")}`);
   }
 
-  const { error: updateError } = await supabase
-    .from("tasks")
-    .update({ status: "feito" })
-    .eq("id", taskId);
-
-  if (updateError) {
-    redirect(`/clients/${clientId}?taskError=${encodeURIComponent(updateError.message)}`);
-  }
-
   const profile = await getCurrentProfile();
+
+  // tasks.status="feito" + o(s) evento(s) operational_events (task_completed
+  // e, quando aplicável, optimization_completed/meeting_completed/
+  // creative_delivery_completed correlacionados) são gravados atomicamente
+  // nesta única função de banco — nunca tarefa concluída sem evento, nem
+  // evento sem a tarefa realmente concluída (seção 7 do pedido).
   if (profile) {
+    const { error: rpcError } = await supabase.rpc("complete_task_and_record_event", {
+      p_task_id: taskId,
+      p_actor_team_member_id: profile.id,
+      p_actor_auth_user_id: profile.authUserId,
+      p_source: "web",
+    });
+
+    if (rpcError) {
+      redirect(`/clients/${clientId}?taskError=${encodeURIComponent(rpcError.message)}`);
+    }
+
     await logOperationalActivity(supabase, {
       clientId,
       sprintId: task.sprint_id,
@@ -143,6 +240,10 @@ export async function completeTaskAction(taskId: string, clientId: string) {
       userId: profile.id,
       activityType: "task_completed",
     });
+  } else {
+    // Sem sessão resolvida (não deveria acontecer numa Server Action
+    // protegida por auth, mas nunca conclui silenciosamente sem ator).
+    redirect(`/clients/${clientId}?taskError=${encodeURIComponent("Sessão expirada, faça login de novo")}`);
   }
 
   const nextDate = nextDueDate(task.due_date, task.recurrence);
@@ -150,8 +251,8 @@ export async function completeTaskAction(taskId: string, clientId: string) {
     // Sem sprint_id de propósito: a próxima ocorrência pode cair numa
     // sprint diferente da atual, e recalcular isso corretamente exigiria
     // achar qual sprint cobre a nova data — fora do escopo por enquanto.
-    // Também não gera atividade operacional: é o sistema recriando a
-    // próxima ocorrência, não uma ação humana nova.
+    // Também não gera atividade/evento: é o sistema recriando a próxima
+    // ocorrência, não uma ação humana nova.
     await supabase.from("tasks").insert({
       client_id: task.client_id,
       title: task.title,

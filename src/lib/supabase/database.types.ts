@@ -48,6 +48,45 @@ export type TeamSystemRole = "admin" | "gestor";
 export type TeamMemberStatus = "ativo" | "inativo";
 export type TeamInvitationStatus = "sem_acesso" | "convite_pendente" | "acesso_ativo";
 
+/** Taxonomia central de `operational_events` (Etapa 56) — ver
+ * lib/operational-events.ts para os rótulos e o objeto `OperationalEventType`
+ * usado no código (nunca strings soltas espalhadas pelo app). */
+export type OperationalEventType =
+  | "team_member_created"
+  | "team_member_updated"
+  | "team_member_deactivated"
+  | "team_member_reactivated"
+  | "team_member_invited"
+  | "team_member_access_activated"
+  | "team_member_access_revoked"
+  | "client_created"
+  | "client_manager_assigned"
+  | "client_manager_changed"
+  | "client_status_changed"
+  | "task_created"
+  | "task_assigned"
+  | "task_reassigned"
+  | "task_due_date_changed"
+  | "task_completed"
+  | "task_reopened"
+  | "optimization_completed"
+  | "meeting_scheduled"
+  | "meeting_rescheduled"
+  | "meeting_completed"
+  | "meeting_cancelled"
+  | "creative_delivery_scheduled"
+  | "creative_delivery_completed"
+  | "creative_delivery_late"
+  | "monthly_budget_created"
+  | "monthly_budget_changed"
+  | "monthly_report_started"
+  | "monthly_report_ready_for_review"
+  | "monthly_report_finalized"
+  | "monthly_report_reopened";
+
+export type OperationalEntityType = "task" | "client" | "team_member" | "monthly_budget_change" | "monthly_report";
+export type OperationalEventSource = "web" | "server" | "system" | "integration" | "migration" | "automation";
+
 export interface Database {
   public: {
     Tables: {
@@ -401,6 +440,12 @@ export interface Database {
           template_id: string | null;
           notes: string | null;
           created_at: string;
+          original_due_date: string;
+          completed_at: string | null;
+          completion_count: number;
+          reassignment_count: number;
+          due_date_change_count: number;
+          reopened_count: number;
         };
         Insert: {
           id?: string;
@@ -415,6 +460,12 @@ export interface Database {
           template_id?: string | null;
           notes?: string | null;
           created_at?: string;
+          original_due_date?: string;
+          completed_at?: string | null;
+          completion_count?: number;
+          reassignment_count?: number;
+          due_date_change_count?: number;
+          reopened_count?: number;
         };
         Update: {
           id?: string;
@@ -429,6 +480,12 @@ export interface Database {
           template_id?: string | null;
           notes?: string | null;
           created_at?: string;
+          original_due_date?: string;
+          completed_at?: string | null;
+          completion_count?: number;
+          reassignment_count?: number;
+          due_date_change_count?: number;
+          reopened_count?: number;
         };
         Relationships: [
           {
@@ -682,6 +739,97 @@ export interface Database {
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      operational_events: {
+        Row: {
+          id: string;
+          organization_id: string;
+          event_type: OperationalEventType;
+          actor_team_member_id: string | null;
+          actor_auth_user_id: string | null;
+          client_id: string | null;
+          sprint_id: string | null;
+          entity_type: OperationalEntityType;
+          entity_id: string;
+          occurred_at: string;
+          recorded_at: string;
+          expected_at: string | null;
+          completed_at: string | null;
+          was_on_time: boolean | null;
+          delay_seconds: number | null;
+          source: OperationalEventSource;
+          correlation_id: string | null;
+          idempotency_key: string | null;
+          metadata: Record<string, unknown>;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          event_type: OperationalEventType;
+          actor_team_member_id?: string | null;
+          actor_auth_user_id?: string | null;
+          client_id?: string | null;
+          sprint_id?: string | null;
+          entity_type: OperationalEntityType;
+          entity_id: string;
+          occurred_at?: string;
+          recorded_at?: string;
+          expected_at?: string | null;
+          completed_at?: string | null;
+          was_on_time?: boolean | null;
+          delay_seconds?: number | null;
+          source?: OperationalEventSource;
+          correlation_id?: string | null;
+          idempotency_key?: string | null;
+          metadata?: Record<string, unknown>;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          event_type?: OperationalEventType;
+          actor_team_member_id?: string | null;
+          actor_auth_user_id?: string | null;
+          client_id?: string | null;
+          sprint_id?: string | null;
+          entity_type?: OperationalEntityType;
+          entity_id?: string;
+          occurred_at?: string;
+          recorded_at?: string;
+          expected_at?: string | null;
+          completed_at?: string | null;
+          was_on_time?: boolean | null;
+          delay_seconds?: number | null;
+          source?: OperationalEventSource;
+          correlation_id?: string | null;
+          idempotency_key?: string | null;
+          metadata?: Record<string, unknown>;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "operational_events_actor_team_member_id_fkey";
+            columns: ["actor_team_member_id"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "operational_events_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "operational_events_sprint_id_fkey";
+            columns: ["sprint_id"];
+            isOneToOne: false;
+            referencedRelation: "sprints";
             referencedColumns: ["id"];
           },
         ];
@@ -1160,6 +1308,19 @@ export interface Database {
           p_horizon_months?: number;
         };
         Returns: void;
+      };
+      complete_task_and_record_event: {
+        Args: {
+          p_task_id: string;
+          p_actor_team_member_id: string;
+          p_actor_auth_user_id: string | null;
+          p_source?: OperationalEventSource;
+        };
+        Returns: {
+          correlationId: string;
+          wasOnTime: boolean;
+          delaySeconds: number;
+        };
       };
     };
     Enums: {

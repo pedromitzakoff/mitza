@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { normalizeCnpj } from "@/lib/cnpj";
+import { OperationalEventType } from "@/lib/operational-events";
+import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
 import type { ClientContractStatus, ClientMainObjective } from "@/lib/supabase/database.types";
 
 function optionalText(formData: FormData, name: string): string | null {
@@ -83,7 +85,7 @@ function appendSaved(url: string): string {
 }
 
 export async function createClientAction(formData: FormData) {
-  await requireAdmin();
+  const profile = await requireAdmin();
   const { name, meta_ad_account_id, managerIds, ...structural } = readClientFields(formData);
   const supabase = await createSupabaseClient();
 
@@ -103,6 +105,37 @@ export async function createClientAction(formData: FormData) {
       .insert(managerIds.map((user_id) => ({ client_id: client.id, user_id })));
   }
 
+  const actor = actorFromProfile(profile);
+  await recordOperationalEvent(supabase, actor, {
+    eventType: OperationalEventType.CLIENT_CREATED,
+    entityType: "client",
+    entityId: client.id,
+    clientId: client.id,
+    source: "web",
+    metadata: { name },
+  });
+
+  if (structural.primary_manager_id) {
+    await recordOperationalEvent(supabase, actor, {
+      eventType: OperationalEventType.CLIENT_MANAGER_ASSIGNED,
+      entityType: "client",
+      entityId: client.id,
+      clientId: client.id,
+      source: "web",
+      metadata: { role: "primary", manager_team_member_id: structural.primary_manager_id },
+    });
+  }
+  for (const managerId of managerIds) {
+    await recordOperationalEvent(supabase, actor, {
+      eventType: OperationalEventType.CLIENT_MANAGER_ASSIGNED,
+      entityType: "client",
+      entityId: client.id,
+      clientId: client.id,
+      source: "web",
+      metadata: { role: "support", manager_team_member_id: managerId },
+    });
+  }
+
   revalidatePath("/");
   revalidatePath("/clients");
   revalidatePath("/settings/clients");
@@ -110,9 +143,20 @@ export async function createClientAction(formData: FormData) {
 }
 
 export async function updateClientAction(clientId: string, returnTo: string, formData: FormData) {
-  await requireAdmin();
+  const profile = await requireAdmin();
   const { name, meta_ad_account_id, managerIds, ...structural } = readClientFields(formData);
   const supabase = await createSupabaseClient();
+
+  const { data: previous } = await supabase
+    .from("clients")
+    .select("primary_manager_id")
+    .eq("id", clientId)
+    .single();
+  const { data: previousManagers } = await supabase
+    .from("client_managers")
+    .select("user_id")
+    .eq("client_id", clientId);
+  const previousManagerIds = new Set((previousManagers ?? []).map((m) => m.user_id));
 
   const { error } = await supabase
     .from("clients")
@@ -129,6 +173,36 @@ export async function updateClientAction(clientId: string, returnTo: string, for
     await supabase
       .from("client_managers")
       .insert(managerIds.map((user_id) => ({ client_id: clientId, user_id })));
+  }
+
+  const actor = actorFromProfile(profile);
+
+  if (structural.primary_manager_id !== (previous?.primary_manager_id ?? null)) {
+    await recordOperationalEvent(supabase, actor, {
+      eventType: OperationalEventType.CLIENT_MANAGER_CHANGED,
+      entityType: "client",
+      entityId: clientId,
+      clientId,
+      source: "web",
+      metadata: {
+        role: "primary",
+        previous_manager_team_member_id: previous?.primary_manager_id ?? null,
+        new_manager_team_member_id: structural.primary_manager_id,
+      },
+    });
+  }
+
+  for (const managerId of managerIds) {
+    if (!previousManagerIds.has(managerId)) {
+      await recordOperationalEvent(supabase, actor, {
+        eventType: OperationalEventType.CLIENT_MANAGER_ASSIGNED,
+        entityType: "client",
+        entityId: clientId,
+        clientId,
+        source: "web",
+        metadata: { role: "support", manager_team_member_id: managerId },
+      });
+    }
   }
 
   revalidatePath("/");

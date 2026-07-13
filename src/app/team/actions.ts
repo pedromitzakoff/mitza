@@ -7,6 +7,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth";
 import { isValidEmail } from "@/lib/validation";
 import { normalizeTeamMemberEmail } from "@/lib/team-members";
+import { OperationalEventType } from "@/lib/operational-events";
+import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
 import type { TeamSystemRole } from "@/lib/supabase/database.types";
 
 /**
@@ -74,6 +76,14 @@ export async function createTeamMemberAction(formData: FormData) {
 
   if (error || !member) failure("Não foi possível criar o membro.");
 
+  await recordOperationalEvent(supabase, actorFromProfile(profile), {
+    eventType: OperationalEventType.TEAM_MEMBER_CREATED,
+    entityType: "team_member",
+    entityId: member.id,
+    source: "web",
+    metadata: { name, job_title: jobTitle, system_role: systemRole },
+  });
+
   revalidateTeam();
 
   if (grantAccessNow) {
@@ -103,6 +113,14 @@ export async function updateTeamMemberAction(memberId: string, formData: FormDat
 
   if (error) failure("Não foi possível salvar as alterações.");
 
+  await recordOperationalEvent(supabase, actorFromProfile(profile), {
+    eventType: OperationalEventType.TEAM_MEMBER_UPDATED,
+    entityType: "team_member",
+    entityId: memberId,
+    source: "web",
+    metadata: { name, job_title: jobTitle, system_role: systemRole },
+  });
+
   revalidateTeam();
   success("Membro atualizado.");
 }
@@ -119,6 +137,13 @@ export async function deactivateTeamMemberAction(memberId: string) {
 
   if (error) failure("Não foi possível desativar o membro.");
 
+  await recordOperationalEvent(supabase, actorFromProfile(profile), {
+    eventType: OperationalEventType.TEAM_MEMBER_DEACTIVATED,
+    entityType: "team_member",
+    entityId: memberId,
+    source: "web",
+  });
+
   revalidateTeam();
   success("Membro desativado. Clientes, tarefas e histórico foram preservados.");
 }
@@ -134,6 +159,13 @@ export async function reactivateTeamMemberAction(memberId: string) {
     .eq("organization_id", profile.organizationId);
 
   if (error) failure("Não foi possível reativar o membro.");
+
+  await recordOperationalEvent(supabase, actorFromProfile(profile), {
+    eventType: OperationalEventType.TEAM_MEMBER_REACTIVATED,
+    entityType: "team_member",
+    entityId: memberId,
+    source: "web",
+  });
 
   revalidateTeam();
   success("Membro reativado.");
@@ -207,6 +239,25 @@ async function inviteTeamMemberCore(memberId: string): Promise<never> {
     .eq("id", member.id);
 
   if (updateError) failure("Convite enviado, mas houve um erro ao registrar o status. Tente novamente.");
+
+  const actor = actorFromProfile(profile);
+  await recordOperationalEvent(supabase, actor, {
+    eventType: OperationalEventType.TEAM_MEMBER_INVITED,
+    entityType: "team_member",
+    entityId: member.id,
+    source: "server",
+    metadata: { already_existed_in_auth: alreadyExisted },
+  });
+
+  if (alreadyExisted) {
+    await recordOperationalEvent(supabase, actor, {
+      eventType: OperationalEventType.TEAM_MEMBER_ACCESS_ACTIVATED,
+      entityType: "team_member",
+      entityId: member.id,
+      source: "server",
+      metadata: { via: "existing_auth_account" },
+    });
+  }
 
   revalidateTeam();
   success(alreadyExisted ? `${member.name} foi vinculado ao usuário existente.` : `Convite enviado para ${member.name}.`);
@@ -294,6 +345,13 @@ export async function revokeAccessAction(memberId: string) {
     .eq("id", memberId);
 
   if (error) failure("Não foi possível revogar o acesso.");
+
+  await recordOperationalEvent(supabase, actorFromProfile(profile), {
+    eventType: OperationalEventType.TEAM_MEMBER_ACCESS_REVOKED,
+    entityType: "team_member",
+    entityId: memberId,
+    source: "web",
+  });
 
   revalidateTeam();
   success("Acesso revogado.");

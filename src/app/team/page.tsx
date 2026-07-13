@@ -5,16 +5,31 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayDateString } from "@/lib/today";
 import { TeamTable, type TeamTableRow } from "./team-table";
 import { EditTeamMemberDrawer, NewTeamMemberDrawer } from "./team-member-drawer";
+import { computeTeamMemberActivity, fetchTeamMemberTimeline, type ActivityPeriodKey } from "@/lib/team-member-activity";
+
+const ACTIVITY_PERIODS: ActivityPeriodKey[] = ["7d", "30d", "month"];
 
 export default async function TeamPage({
   searchParams,
 }: {
-  searchParams: Promise<{ new?: string; edit?: string; error?: string; saved?: string }>;
+  searchParams: Promise<{
+    new?: string;
+    edit?: string;
+    error?: string;
+    saved?: string;
+    period?: string;
+    timelinePage?: string;
+  }>;
 }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/");
 
-  const { new: openNew, edit: editId, error, saved } = await searchParams;
+  const { new: openNew, edit: editId, error, saved, period: periodParam, timelinePage: timelinePageParam } =
+    await searchParams;
+  const activityPeriod: ActivityPeriodKey = ACTIVITY_PERIODS.includes(periodParam as ActivityPeriodKey)
+    ? (periodParam as ActivityPeriodKey)
+    : "month";
+  const timelinePage = Math.max(0, Number(timelinePageParam) || 0);
   const isAdmin = profile.role === "admin";
   const supabase = await createSupabaseClient();
 
@@ -76,6 +91,13 @@ export default async function TeamPage({
 
   const editingMember = editId ? rows.find((m) => m.id === editId) : undefined;
 
+  const [activitySummary, timeline] = editingMember
+    ? await Promise.all([
+        computeTeamMemberActivity(supabase, profile.organizationId, editingMember.id, activityPeriod),
+        fetchTeamMemberTimeline(supabase, profile.organizationId, editingMember.id, timelinePage),
+      ])
+    : [null, null];
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -112,7 +134,7 @@ export default async function TeamPage({
       </div>
 
       {isAdmin && openNew && <NewTeamMemberDrawer closeHref="/team" />}
-      {isAdmin && editingMember && (
+      {isAdmin && editingMember && activitySummary && timeline && (
         <EditTeamMemberDrawer
           closeHref="/team"
           member={{
@@ -129,6 +151,11 @@ export default async function TeamPage({
             pendingTasksCount: pendingTasksByMember.get(editingMember.id) ?? 0,
             futureMeetingsCount: futureMeetingsByMember.get(editingMember.id) ?? 0,
           }}
+          activityPeriod={activityPeriod}
+          activitySummary={activitySummary}
+          timelineRows={timeline.rows}
+          timelinePage={timelinePage}
+          timelineHasMore={timeline.hasMore}
         />
       )}
     </div>

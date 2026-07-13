@@ -16,6 +16,8 @@ import {
   updateTeamMemberAction,
 } from "./actions";
 import { DeactivateMemberButton } from "./deactivate-member-button";
+import { OperationalActivityPanel } from "./operational-activity-panel";
+import type { ActivityPeriodKey, TeamMemberActivitySummary, TeamMemberTimelineRow } from "@/lib/team-member-activity";
 
 const inputClasses =
   "rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:border-zinc-500";
@@ -110,7 +112,23 @@ export function NewTeamMemberDrawer({ closeHref }: { closeHref: string }) {
 /** Perfil do membro (seção 25 do pedido) — DADOS, OPERAÇÃO e ACESSO num só
  * drawer. Nenhum jargão técnico visível (auth_user_id nunca aparece; só os
  * rótulos em linguagem simples de TEAM_INVITATION_STATUS_LABEL). */
-export function EditTeamMemberDrawer({ member, closeHref }: { member: TeamMemberDetail; closeHref: string }) {
+export function EditTeamMemberDrawer({
+  member,
+  closeHref,
+  activityPeriod,
+  activitySummary,
+  timelineRows,
+  timelinePage,
+  timelineHasMore,
+}: {
+  member: TeamMemberDetail;
+  closeHref: string;
+  activityPeriod: ActivityPeriodKey;
+  activitySummary: TeamMemberActivitySummary;
+  timelineRows: TeamMemberTimelineRow[];
+  timelinePage: number;
+  timelineHasMore: boolean;
+}) {
   return (
     <DrawerShell title={member.name} closeHref={closeHref}>
       <section className="mt-4">
@@ -231,6 +249,15 @@ export function EditTeamMemberDrawer({ member, closeHref }: { member: TeamMember
           )}
         </div>
       </section>
+
+      <OperationalActivityPanel
+        memberId={member.id}
+        period={activityPeriod}
+        summary={activitySummary}
+        timelineRows={timelineRows}
+        timelinePage={timelinePage}
+        timelineHasMore={timelineHasMore}
+      />
     </DrawerShell>
   );
 }

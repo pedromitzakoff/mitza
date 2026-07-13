@@ -1,4 +1,7 @@
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth";
+import { OperationalEventType } from "@/lib/operational-events";
+import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
 import {
   monthRangeFromParam,
   shiftMonthParam,
@@ -55,6 +58,22 @@ export async function getOrCreateReport(
     .eq("client_id", clientId)
     .eq("month_start", monthStart)
     .single();
+
+  // Primeira mutação de relatório deste cliente/mês — registra
+  // monthly_report_started. Resolvido aqui (em vez de em cada uma das 8
+  // Server Actions que chamam esta função) pra não duplicar a lógica de
+  // "só na primeira vez" em cada call site.
+  const profile = await getCurrentProfile();
+  if (profile && created) {
+    await recordOperationalEvent(supabase, actorFromProfile(profile), {
+      eventType: OperationalEventType.MONTHLY_REPORT_STARTED,
+      entityType: "monthly_report",
+      entityId: created.id,
+      clientId,
+      source: "server",
+      metadata: { month_start: monthStart },
+    });
+  }
 
   return created!;
 }
