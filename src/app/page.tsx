@@ -48,18 +48,6 @@ const SITUATION_TONE: Record<SpendStatus, StatusTone> = {
   sem_meta: "neutral",
 };
 
-const SEVERITY_LABEL: Record<AccountHealth, string> = {
-  critico: "Crítico",
-  atencao: "Atenção",
-  saudavel: "Normal",
-};
-
-const SEVERITY_TONE: Record<AccountHealth, StatusTone> = {
-  critico: "danger",
-  atencao: "warning",
-  saudavel: "success",
-};
-
 type ManagerFilter = "all" | "me" | string;
 /** "fora_do_ritmo" é só um atalho de drill-down (abaixo + acima combinados)
  * pro indicador "Contas fora do ritmo" — não aparece como opção no popover
@@ -295,11 +283,12 @@ export default async function Home({
   }
 
   // Prioridade de cada cliente — uma única fonte (getClientPriority),
-  // reaproveitada pro bloco "Prioridades de hoje", pela coluna "Prioridade"
-  // da tabela e pela ordenação padrão dela (severidade primeiro).
+  // reaproveitada pelo bloco "Prioridades de hoje" e pela ordenação padrão
+  // da tabela (severidade primeiro). A tabela em si não exibe mais uma
+  // coluna própria de severidade (Etapa 49 removeu "Prioridade" por
+  // duplicar "Status" sem contexto adicional).
   const cardById = new Map(cards.map((c) => [c.clientId, c]));
   const allPriorities = cards.map((card) => getClientPriority(card, today));
-  const priorityByClientId = new Map(allPriorities.map((p) => [p.clientId, p]));
   const priorityQueue = sortClientPriorities(allPriorities.filter((p) => p.primaryIssue !== null));
   const prioritiesTop = priorityQueue.slice(0, 6);
   const prioritiesOpen = params.prioridades === "1";
@@ -508,11 +497,16 @@ export default async function Home({
           />
         )}
 
-        {/* Tabela única de clientes — "Investimento"/"Prioridade" resumidos
-            (sem repetir realizado/planejado/esperado/diferença, que já
-            pertencem ao painel do cliente); "Prioridade" reaproveita
-            exatamente o mesmo dado de "Saúde da operação" e de
-            "Prioridades de hoje" — nunca uma segunda classificação. */}
+        {/* Tabela única de clientes (Etapa 49) — coluna "Prioridade" removida
+            por duplicar "Status" sem contexto adicional (a classificação
+            detalhada de severidade continua só em "Saúde da operação" e
+            "Prioridades de hoje", que já tinham sua própria fonte de
+            verdade, `getClientPriority`). "Esperado até hoje" usa a mesma
+            base (`monthExpectedToDate`) que já decide "Status"
+            (classifySpendStatus) — nunca um cálculo paralelo. Ordenação
+            padrão ("Ordenar por prioridade") continua reaproveitando
+            `sortClientPriorities` por baixo, mesmo sem mais exibir a
+            severidade em coluna própria. */}
         <div className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
           <div className="flex items-center justify-between px-3.5 py-2.5">
             <SectionHeader title={`Clientes · ${monthLabel}`} />
@@ -526,22 +520,29 @@ export default async function Home({
 
           {sortedCards.length > 0 ? (
             <div className="overflow-x-auto border-t border-overview-border">
-              <table className="w-full min-w-[820px] text-sm">
+              <table className="w-full min-w-[960px] text-sm">
                 <thead>
                   <tr className="border-b border-overview-border bg-overview-surface-subtle text-left text-[12px] font-semibold text-overview-text-secondary">
                     <th className="py-2 px-3.5 font-semibold">Cliente</th>
                     <th className="py-2 px-3.5 font-semibold">Gestor</th>
                     <th className="py-2 px-3.5 text-right font-semibold">Investimento</th>
-                    <th className="py-2 px-3.5 font-semibold">Prioridade</th>
+                    <th className="py-2 px-3.5 text-right font-semibold">Esperado até hoje</th>
+                    <th className="py-2 px-3.5 font-semibold">Sprint atual</th>
+                    <th className="py-2 px-3.5 font-semibold">Status</th>
                     <th className="py-2 px-3.5 font-semibold">Última otimização</th>
-                    <th className="py-2 px-3.5 text-right font-semibold">Ação</th>
+                    <th className="py-2 px-3.5 text-right font-semibold">Abrir cliente</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedCards.map((card) => {
+                    // Mesma regra usada pra classificar o status
+                    // (classifySpendStatus, ±10% sobre `monthExpectedToDate`)
+                    // — "Esperado até hoje" é só esse valor expresso como %
+                    // do planejado, nunca um cálculo paralelo.
                     const pctRealizado =
                       card.monthPlanned > 0 ? Math.round((card.monthActual / card.monthPlanned) * 100) : null;
-                    const priority = priorityByClientId.get(card.clientId)!;
+                    const pctEsperado =
+                      card.monthPlanned > 0 ? Math.round((card.monthExpectedToDate / card.monthPlanned) * 100) : null;
                     return (
                       <tr
                         key={card.clientId}
@@ -551,25 +552,24 @@ export default async function Home({
                         <td className="py-2.5 px-3.5 text-overview-text-secondary">
                           {primaryManagerNameByClient.get(card.clientId) ?? "Sem gestor"}
                         </td>
-                        <td className="py-2.5 px-3.5 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="tabular-nums text-overview-text-secondary">
-                              {pctRealizado !== null ? `${pctRealizado}%` : "—"}
-                            </span>
-                            <StatusDot tone={SITUATION_TONE[card.monthStatus]} label={SITUATION_LABEL[card.monthStatus]} />
-                          </div>
+                        <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">
+                          {pctRealizado !== null ? `${pctRealizado}%` : "—"}
+                        </td>
+                        <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">
+                          {pctEsperado !== null ? `${pctEsperado}%` : "—"}
+                        </td>
+                        <td className="py-2.5 px-3.5 text-overview-text-secondary">
+                          {card.sprintNumber !== null ? `Sprint ${card.sprintNumber}` : "—"}
                         </td>
                         <td className="py-2.5 px-3.5">
-                          <span title={priority.primaryIssue?.title ?? "Nenhuma condição operacional relevante"}>
-                            <StatusDot tone={SEVERITY_TONE[priority.severity]} label={SEVERITY_LABEL[priority.severity]} emphasize={priority.severity !== "saudavel"} />
-                          </span>
+                          <StatusDot tone={SITUATION_TONE[card.monthStatus]} label={SITUATION_LABEL[card.monthStatus]} />
                         </td>
                         <td className="py-2.5 px-3.5 text-overview-text-secondary">
                           {formatLastOptimizationLabel(card.lastOptimizationAt, today)}
                         </td>
                         <td className="py-2.5 px-3.5 text-right">
-                          <Button href={priority.primaryIssue?.actionHref ?? `/clients/${card.clientId}`} variant="ghost" size="sm">
-                            {priority.primaryIssue?.actionLabel ?? "Abrir"}
+                          <Button href={`/clients/${card.clientId}`} variant="ghost" size="sm">
+                            Abrir cliente
                           </Button>
                         </td>
                       </tr>

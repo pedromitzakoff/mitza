@@ -1364,6 +1364,42 @@ automático da sync, refinamentos de UX, etc.
     Arquivo alterado: `globals.css` (só o valor de `--overview-bg`, claro e
     escuro). Nenhum outro arquivo desta rodada.
 
+49. ✅ Ajuste na tabela de clientes da Visão Geral: removida a coluna
+    "Prioridade" (duplicava "Status" sem explicar o motivo da
+    classificação — a severidade detalhada continua só em "Saúde da
+    operação" e "Prioridades de hoje"), adicionada a coluna "Esperado até
+    hoje" e separado "Status" da coluna "Investimento" (antes os dois
+    apareciam juntos na mesma célula). Nova ordem: Cliente | Gestor |
+    Investimento | Esperado até hoje | Sprint atual | Status | Última
+    otimização | Abrir cliente.
+
+    **"Esperado até hoje" não é um cálculo novo**: é `monthExpectedToDate`
+    (o mesmo valor que já decide "Status" via `classifySpendStatus`,
+    comparando realizado × esperado com margem de ±10%) expresso como % do
+    planejado do mês — mesma regra usada em "Investimento", nunca uma conta
+    paralela.
+
+    **"Sprint atual"** reaproveita `card.sprintNumber` (já calculado em
+    `operation-data.ts`, mesmo dado mostrado na página do cliente) —
+    mostra "Sprint N" ou "—" quando não há sprint em andamento nessa data.
+
+    **"Abrir cliente"** (renomeada de "Ação") agora é sempre um link direto
+    pra `/clients/[id]` — antes apontava pra uma ação contextual ligada à
+    prioridade (ex.: "Ver tarefa atrasada"), que deixou de fazer sentido
+    sem a coluna Prioridade.
+
+    **Decisão registrada**: o pedido não mencionava a coluna "Última
+    otimização" na lista de colunas a manter, mas também instruía
+    explicitamente "não remover nenhuma outra coluna além de Prioridade" —
+    por isso ela foi mantida (logo após "Status", antes de "Abrir
+    cliente"), em vez de removida por omissão. Se a intenção era só as 7
+    colunas citadas, é reverter numa próxima rodada.
+
+    Arquivo alterado: `app/page.tsx` (só a tabela de clientes — filtros,
+    "Saúde da operação", "Controle de investimento", "Prioridades de
+    hoje", ordenação padrão e todos os cálculos por trás continuam
+    exatamente iguais).
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis
