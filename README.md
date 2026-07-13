@@ -1518,8 +1518,10 @@ automático da sync, refinamentos de UX, etc.
     **Regra de calendário única e definitiva**, verificada executando a
     lógica (não só lendo o código) contra ~20 meses diferentes — início em
     qualquer dia da semana, fevereiro bissexto e não bissexto, meses de
-    28/29/30/31 dias (script em `scratchpad/verify-calendar.mjs`, resultado
-    completo na entrega desta correção):
+    28/29/30/31 dias — via script de verificação executado durante o
+    desenvolvimento (não commitado, mesma convenção de scripts ad-hoc já
+    usada em etapas anteriores), resultado completo mostrado na entrega
+    desta correção:
     - primeiro período: dia 1 do mês até o domingo seguinte (parcial se o
       mês não começar numa segunda);
     - períodos do meio: sempre segunda a domingo, 7 dias;
@@ -1591,8 +1593,9 @@ automático da sync, refinamentos de UX, etc.
 
     **Testes**: não há suíte automatizada de testes neste projeto (mesma
     situação de todas as etapas anteriores). A lógica de calendário foi
-    verificada executando (não só lendo) o algoritmo em
-    `scratchpad/verify-calendar.mjs` contra os casos pedidos — janeiro
+    verificada executando (não só lendo) o algoritmo num script ad-hoc
+    (mesma convenção já usada em etapas anteriores, não commitado) contra
+    os casos pedidos — janeiro
     (início em dia útil), meses começando numa segunda, meses começando
     num domingo, fevereiro bissexto (2024) e não bissexto (2026), meses de
     28/29/30/31 dias — todos passaram (sem lacuna, sem sobreposição, sem
