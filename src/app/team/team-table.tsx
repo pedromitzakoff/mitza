@@ -7,7 +7,8 @@ import {
   getTeamMemberInitial,
 } from "@/lib/team-members";
 import type { TeamInvitationStatus, TeamMemberStatus, TeamSystemRole } from "@/lib/supabase/database.types";
-import { deactivateTeamMemberAction, reactivateTeamMemberAction, resendInviteAction } from "./actions";
+import { deactivateTeamMemberAction, deleteTeamMemberAction, reactivateTeamMemberAction, resendInviteAction } from "./actions";
+import { DeleteTeamMemberButton } from "./delete-team-member-button";
 
 export interface TeamTableRow {
   id: string;
@@ -125,14 +126,20 @@ export function TeamTable({ rows, isAdmin }: { rows: TeamTableRow[]; isAdmin: bo
                           </button>
                         </form>
                       ) : (
-                        <form action={reactivateTeamMemberAction.bind(null, member.id)}>
-                          <button
-                            type="submit"
-                            className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                          >
-                            Reativar
-                          </button>
-                        </form>
+                        <>
+                          <form action={reactivateTeamMemberAction.bind(null, member.id)}>
+                            <button
+                              type="submit"
+                              className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                            >
+                              Reativar
+                            </button>
+                          </form>
+                          <DeleteTeamMemberButton
+                            action={deleteTeamMemberAction.bind(null, member.id)}
+                            memberName={member.name}
+                          />
+                        </>
                       )}
                     </div>
                   </details>

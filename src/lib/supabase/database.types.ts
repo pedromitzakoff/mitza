@@ -59,6 +59,7 @@ export type OperationalEventType =
   | "team_member_invited"
   | "team_member_access_activated"
   | "team_member_access_revoked"
+  | "team_member_deleted"
   | "client_created"
   | "client_manager_assigned"
   | "client_manager_changed"

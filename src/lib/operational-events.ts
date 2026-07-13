@@ -27,6 +27,7 @@ export const OperationalEventType = {
   TEAM_MEMBER_INVITED: "team_member_invited",
   TEAM_MEMBER_ACCESS_ACTIVATED: "team_member_access_activated",
   TEAM_MEMBER_ACCESS_REVOKED: "team_member_access_revoked",
+  TEAM_MEMBER_DELETED: "team_member_deleted",
 
   CLIENT_CREATED: "client_created",
   CLIENT_MANAGER_ASSIGNED: "client_manager_assigned",
@@ -123,6 +124,7 @@ export const OPERATIONAL_EVENT_TYPE_LABEL: Record<OperationalEventType, string> 
   team_member_invited: "Convite enviado",
   team_member_access_activated: "Acesso ativado",
   team_member_access_revoked: "Acesso revogado",
+  team_member_deleted: "Excluiu membro definitivamente",
   client_created: "Cliente cadastrado",
   client_manager_assigned: "Gestor atribuído",
   client_manager_changed: "Gestor alterado",

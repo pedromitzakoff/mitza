@@ -11,10 +11,16 @@
 -- select (sem mudança), insert/update (continuam admin OU gestor do
 -- cliente, sem mudança de comportamento) e delete (agora só admin).
 --
--- Não apaga nem altera nenhum dado — só substitui as policies de tasks e
--- estende a constraint de event_type de operational_events (mesmo padrão já
--- usado em account-reviews.sql e client-updates.sql) pra aceitar o novo
--- tipo 'task_deleted'.
+-- Também adiciona a exclusão definitiva de membro da equipe (admin-only):
+-- team_members nunca teve policy de delete (RLS sem policy = delete negado
+-- pra todo mundo por padrão), então esta migration cria explicitamente uma,
+-- só pra admin — a Server Action já bloqueia com requireAdmin(), isso é
+-- defesa em profundidade no banco.
+--
+-- Não apaga nem altera nenhum dado — só cria/substitui policies e estende a
+-- constraint de event_type de operational_events (mesmo padrão já usado em
+-- account-reviews.sql e client-updates.sql) pra aceitar os novos tipos
+-- 'task_deleted' e 'team_member_deleted'.
 
 drop policy if exists tasks_write on tasks;
 
@@ -29,13 +35,21 @@ create policy tasks_delete on tasks
   for delete using (is_admin());
 
 -- ---------------------------------------------------------------------------
--- operational_events: novo tipo task_deleted.
+-- team_members: nunca teve policy de delete — cria uma, admin-only.
+-- ---------------------------------------------------------------------------
+drop policy if exists team_members_delete on team_members;
+
+create policy team_members_delete on team_members
+  for delete using (is_admin());
+
+-- ---------------------------------------------------------------------------
+-- operational_events: novos tipos task_deleted e team_member_deleted.
 -- ---------------------------------------------------------------------------
 alter table operational_events drop constraint if exists operational_events_event_type_check;
 alter table operational_events add constraint operational_events_event_type_check check (event_type in (
   'team_member_created', 'team_member_updated', 'team_member_deactivated',
   'team_member_reactivated', 'team_member_invited', 'team_member_access_activated',
-  'team_member_access_revoked',
+  'team_member_access_revoked', 'team_member_deleted',
   'client_created', 'client_manager_assigned', 'client_manager_changed', 'client_status_changed',
   'task_created', 'task_assigned', 'task_reassigned', 'task_due_date_changed',
   'task_completed', 'task_reopened', 'task_deleted',
