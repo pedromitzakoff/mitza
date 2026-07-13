@@ -17,7 +17,6 @@ import { classifySpendStatus } from "@/lib/spend-status";
 import { buildAttentionAlerts } from "@/lib/attention-alerts";
 import { buildSprintExecutionAlert, formatSprintExecutionLabel } from "@/lib/sprint-execution";
 import { businessDaysSince } from "@/lib/business-days";
-import { classifyOperationalActivityStatus, formatLastActivityLabel } from "@/lib/operational-activity";
 import { resolveBudgetEffectiveDate } from "@/lib/monthly-budget";
 import { todayDateString, todayUTC } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
@@ -29,7 +28,8 @@ import { SprintCard } from "../sprint-card";
 import { TaskList } from "../task-list";
 import { Section } from "../section";
 import { OperationalTrackingPanel } from "../operational-tracking-panel";
-import { AccountReviewCadencePanel } from "../account-review-cadence-panel";
+import { AccountFollowUpPanel, type AccountReviewPreviewItem } from "../account-follow-up-panel";
+import { AccountReviewsHistoryDrawer } from "../account-reviews-history-drawer";
 import { EssentialInfoPanel } from "../essential-info-panel";
 import type { CommentItem } from "../comment-thread";
 import type { TaskListItem } from "../task-row";
@@ -39,7 +39,6 @@ import { AccountReviewDetailDrawer, type AccountReviewDetail } from "../account-
 import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
 import type { OperationTaskItem } from "@/app/operation/operation-data";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
-import { MonthlyBudgetPanel } from "../monthly-budget-panel";
 import { MonthlyBudgetHistoryDrawer } from "../monthly-budget-history-drawer";
 
 const OPTIMIZATION_LOOKBACK_DAYS = 14;
@@ -119,6 +118,7 @@ export default async function ClientPage({
     review?: string;
     reviewDetail?: string;
     reviewError?: string;
+    reviewsHistory?: string;
   }>;
 }) {
   const { id } = await params;
@@ -134,6 +134,7 @@ export default async function ClientPage({
     review: openReview,
     reviewDetail: openReviewDetailId,
     reviewError,
+    reviewsHistory,
   } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
@@ -279,11 +280,6 @@ export default async function ClientPage({
   const clientInactivityBusinessDays = clientLastActivityDate
     ? businessDaysSince(clientLastActivityDate, today)
     : null;
-  const activityStatus = classifyOperationalActivityStatus(clientInactivityBusinessDays);
-  // Etapa 54: "Sem registro" (neutro) em vez de "Nunca houve atividade" só
-  // aqui, no cabeçalho de Acompanhamento operacional — formatLastActivityLabel
-  // continua igual pra quem mais usa (Operação, Visão Geral, Sprints).
-  const lastExecutionLabel = clientLastActivityDate ? formatLastActivityLabel(clientLastActivityDate, today) : "Sem registro";
 
   const { data: tasks } = await supabase
     .from("tasks")
@@ -349,6 +345,30 @@ export default async function ClientPage({
     today,
     lastOptimizationRow ? { type: lastOptimizationRow.optimization_type, occurredAt: lastOptimizationRow.created_at } : null,
   );
+
+  // Etapa 58: preview de análises recentes no bloco "Acompanhamento da conta"
+  // — reaproveita a mesma janela de 60 dias já buscada acima (accountReviews),
+  // nenhuma query nova só pra mostrar as 2 mais recentes com detalhe de
+  // otimização.
+  const accountReviewPreviewItems: AccountReviewPreviewItem[] = accountReviews.map((review) => {
+    const optimizationTypes = Array.from(new Set(review.optimizations.map((opt) => opt.optimization_type)));
+    const summaryText =
+      review.outcome === "OPTIMIZATION_PERFORMED"
+        ? (review.optimizations[0]?.description ?? null)
+        : review.outcome === "ISSUE_IDENTIFIED"
+          ? review.issue_description
+          : review.notes;
+    return {
+      id: review.id,
+      reviewedAt: review.reviewed_at,
+      managerName: review.team_member?.name ?? "Membro removido",
+      outcome: review.outcome,
+      optimizationTypes,
+      summaryText,
+    };
+  });
+  const recentAccountReviews = accountReviewPreviewItems.slice(0, 2);
+  const hasMoreAccountReviews = accountReviewPreviewItems.length > 2;
 
   const [sprintComments, taskComments] = await Promise.all([
     fetchCommentsByType(
@@ -441,6 +461,10 @@ export default async function ClientPage({
     : null;
   const historyDrawerHref = `${returnTo}?historicoOrcamento=1`;
   const historyDrawerCloseHref = returnTo;
+  const reviewsHistoryHref = `${returnTo}?reviewsHistory=1`;
+  const buildReviewDetailHref = (reviewId: string) => `${returnTo}?reviewDetail=${reviewId}`;
+  const cadenceConfigHref = `/clients/${client.id}/edit`;
+  const hasCriticalAlert = alerts.some((alert) => alert.severity === "critico");
   const openTaskRow = openTaskId ? (tasks ?? []).find((t) => t.id === openTaskId) ?? null : null;
   const openTask: OperationTaskItem | null = openTaskRow
     ? {
@@ -482,21 +506,18 @@ export default async function ClientPage({
         </div>
       )}
 
-      {/* 1. Investimento do mês — resumo financeiro central + edição de
-          orçamento (mesma ação de sempre, só reposicionada). */}
-      <div className="mt-3 flex flex-col gap-3">
+      {/* 1. Investimento do mês — resumo financeiro central + edição/histórico
+          de orçamento, tudo num único bloco (Etapa 58: antes eram 2 cards
+          separados repetindo o mesmo valor planejado). */}
+      <div className="mt-3">
         <MonthInvestmentSummary
           planned={monthPlanned}
           actual={monthActual}
           expectedToDate={monthExpectedToDate}
           status={monthStatus}
-        />
-        <MonthlyBudgetPanel
           clientId={client.id}
           monthParam={monthParam}
           monthLabel={monthLabel}
-          totalPlanned={monthPlanned}
-          sprintCount={sprintFinancials.length}
           sprints={budgetSprints}
           currentAllocations={currentAllocations}
           monthRange={{ firstDay, lastDay }}
@@ -508,21 +529,44 @@ export default async function ClientPage({
         />
       </div>
 
-      {/* 2. Acompanhamento operacional */}
-      <div className="mt-3 flex flex-col gap-3">
-        <OperationalTrackingPanel
-          tracking={operationalTracking}
+      {/* Prioridades (Etapa 58, seção 16): quando existe alerta crítico, o
+          bloco aparece logo aqui, ainda antes do Acompanhamento da Conta —
+          quando não há crítico, ele volta pra posição padrão mais abaixo.
+          Sem nenhum alerta, AttentionPanel retorna null e nada é renderizado. */}
+      {alerts.length > 0 && hasCriticalAlert && (
+        <div className="mt-3">
+          <AttentionPanel alerts={alerts} />
+        </div>
+      )}
+
+      {/* 2. Acompanhamento da conta — bloco operacional principal da página
+          (Etapa 58): resumo de cadência + CTA de registrar análise + preview
+          das 2 análises mais recentes, tudo num único bloco compacto. */}
+      <div className="mt-3">
+        <AccountFollowUpPanel
+          status={accountReviewCadenceStatus}
           today={today}
-          lastExecutionLabel={lastExecutionLabel}
-          lastExecutionStatus={activityStatus}
+          recentReviews={recentAccountReviews}
+          hasMoreReviews={hasMoreAccountReviews}
+          newReviewHref={`${returnTo}?review=new`}
+          historyHref={reviewsHistoryHref}
+          buildReviewDetailHref={buildReviewDetailHref}
+          cadenceConfigHref={cadenceConfigHref}
+          isAdmin={isAdmin}
         />
-        <AccountReviewCadencePanel status={accountReviewCadenceStatus} today={today} />
       </div>
 
-      {/* 3. Prioridades (antes "Atenção") */}
+      {/* 3. Rotinas do cliente (Etapa 58: antes "Acompanhamento operacional") */}
       <div className="mt-3">
-        <AttentionPanel alerts={alerts} />
+        <OperationalTrackingPanel tracking={operationalTracking} today={today} />
       </div>
+
+      {/* Prioridades — posição padrão, quando não há alerta crítico. */}
+      {alerts.length > 0 && !hasCriticalAlert && (
+        <div className="mt-3">
+          <AttentionPanel alerts={alerts} />
+        </div>
+      )}
 
       {/* 4. Sprint atual — só a sprint classificada como atual pela regra
           temporal central (getSprintTemporalStatus); nunca escolhida
@@ -542,7 +586,7 @@ export default async function ClientPage({
             }
             accountReviews={accountReviewsBySprintId.get(currentSprint.sprintId) ?? []}
             newReviewHref={`${returnTo}?review=new`}
-            buildReviewDetailHref={(reviewId) => `${returnTo}?reviewDetail=${reviewId}`}
+            buildReviewDetailHref={buildReviewDetailHref}
           />
         ) : (
           <p className="text-sm text-zinc-500">
@@ -567,7 +611,7 @@ export default async function ClientPage({
                 defaultOpen={false}
                 accountReviews={accountReviewsBySprintId.get(sprint.sprintId) ?? []}
                 newReviewHref={`${returnTo}?review=new`}
-                buildReviewDetailHref={(reviewId) => `${returnTo}?reviewDetail=${reviewId}`}
+                buildReviewDetailHref={buildReviewDetailHref}
               />
             ))
           ) : (
@@ -637,6 +681,14 @@ export default async function ClientPage({
             isBelowConsolidated: change.is_below_consolidated,
           }))}
           closeHref={historyDrawerCloseHref}
+        />
+      )}
+
+      {reviewsHistory && (
+        <AccountReviewsHistoryDrawer
+          reviews={accountReviewPreviewItems}
+          buildReviewDetailHref={buildReviewDetailHref}
+          closeHref={returnTo}
         />
       )}
 

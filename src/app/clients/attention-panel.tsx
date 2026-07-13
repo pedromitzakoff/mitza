@@ -40,16 +40,15 @@ function byPriority(a: AttentionAlert, b: AttentionAlert): number {
  * pra outra página nem aumentar permanentemente a altura da página. Mesma
  * lógica de severidade/agrupamento de antes (buildAttentionAlerts,
  * KIND_PRIORITY) — só o rótulo mudou, nenhum score novo foi criado.
+ *
+ * Etapa 58 (seção 16): Prioridades passou a representar só exceções que
+ * exigem ação — sem nenhum alerta, o bloco não aparece de jeito nenhum
+ * (nem card vazio, nem "Nenhuma ação urgente"), pra não ocupar espaço sem
+ * necessidade.
  */
 export function AttentionPanel({ alerts }: { alerts: AttentionAlert[] }) {
   if (alerts.length === 0) {
-    return (
-      <div className="rounded-lg border border-border bg-card px-3 py-2">
-        <p className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Prioridades</span> · Nenhuma ação urgente nesta conta.
-        </p>
-      </div>
-    );
+    return null;
   }
 
   const ordered = [...alerts].sort(byPriority);

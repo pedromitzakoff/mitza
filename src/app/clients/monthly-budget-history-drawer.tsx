@@ -18,7 +18,7 @@ export interface MonthlyBudgetChangeRow {
  * "Ver histórico" — mesmo padrão visual de drawer usado em AttentionCenterDrawer
  * e TaskDrawerPanel (link fixed-overlay + painel fixo à direita, aberto via
  * query param, sem JS de estado próprio). Só é linkado pra admin (ver
- * monthly-budget-panel.tsx); a query da lista completa também só roda pro
+ * month-investment-summary.tsx); a query da lista completa também só roda pro
  * admin no server component que monta a página do cliente.
  */
 export function MonthlyBudgetHistoryDrawer({

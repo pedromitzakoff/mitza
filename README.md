@@ -2372,6 +2372,84 @@ automático da sync, refinamentos de UX, etc.
     `app/clients/operational-tracking-panel.tsx`,
     `app/settings/sprint-task-templates-list.tsx`.
 
+58. ✅ **Reorganização da hierarquia visual e densidade de informação da página do cliente**
+
+    Tarefa só de UX/reorganização — nenhuma regra de negócio, cálculo,
+    RLS ou tabela mudou. Nova ordem de blocos: Cabeçalho → Investimento do
+    mês → Prioridades (só se houver alerta crítico) → Acompanhamento da
+    conta → Rotinas do cliente → Prioridades (posição padrão) → Sprint
+    atual → Histórico do mês → demais conteúdos.
+
+    **Investimento do mês**: absorveu o card separado "Orçamento de
+    [mês]" (`monthly-budget-panel.tsx`, removido) — o mesmo valor
+    planejado não aparece mais duas vezes. `MonthInvestmentSummary` ganhou
+    os props de edição/histórico de orçamento; "Editar orçamento"
+    (`MonthlyBudgetEditor`) e o indicador discreto "●" com tooltip nativo
+    (valor anterior/atual/data, mesmo `title=` de antes) continuam
+    idênticos, só reposicionados dentro do mesmo card. "Ver histórico"
+    permanece restrito a admin com mais de 1 alteração no mês, abrindo o
+    mesmo `MonthlyBudgetHistoryDrawer` de sempre.
+
+    **Acompanhamento da conta** (renomeado só na UI — `account_reviews`/
+    `account_optimizations` continuam com o mesmo nome no banco) virou o
+    bloco operacional central da página, substituindo
+    `account-review-cadence-panel.tsx` por `account-follow-up-panel.tsx`:
+    mesmo resumo de cadência (`computeAccountReviewCadenceStatus`, sem
+    nenhum cálculo novo — só o rótulo de estado "Em dia"/"Atenção"/"Em
+    risco" derivado dos mesmos números) + CTA principal "+ Registrar
+    análise" (antes só existia dentro do card da Sprint) + preview das 2
+    análises mais recentes com tipo de otimização, reaproveitando a
+    mesma janela de 60 dias já buscada na página (`accountReviews.slice(0,
+    2)`, nenhuma query nova). "Ver histórico" abre
+    `AccountReviewsHistoryDrawer` (novo, mesmo padrão de drawer da página
+    inteira), que lista a janela de 60 dias completa — de novo, sem query
+    adicional. "Configurar" cadência (quando não configurada, admin) linka
+    pro formulário que já existia em `/clients/[id]/edit` desde a Etapa 57
+    — nenhuma tela nova.
+
+    **Rotinas do cliente** (renomeado de "Acompanhamento operacional",
+    mesmo motivo de nome — ficava parecido demais com "Acompanhamento da
+    conta"): removida a linha "Última execução operacional" (ficou
+    redundante com os indicadores mais específicos que já existem). O
+    dado (`client_last_operational_activity`) continua sendo lido e usado
+    normalmente em Prioridades — só a linha de exibição saiu da tela.
+
+    **Prioridades**: `AttentionPanel` agora retorna `null` quando não há
+    nenhum alerta (antes mostrava um card "Nenhuma ação urgente"). Quando
+    existe alerta crítico, a página renderiza o bloco logo após
+    Investimento do mês; caso contrário, ele volta pra posição padrão
+    (depois de Rotinas do cliente). Mesma lógica de severidade/agrupamento
+    de sempre (`buildAttentionAlerts`, `KIND_PRIORITY`) — só a posição e a
+    exibição vazia mudaram.
+
+    **Sprint atual**: `sprint-card.tsx`/`account-reviews-section.tsx` não
+    foram tocados (exigência explícita do pedido) — o CTA e o preview de
+    análises de nível de página são um componente novo e independente,
+    não uma segunda implementação do que já existe dentro do card da
+    Sprint (que continua mostrando só as análises daquela sprint
+    específica).
+
+    **Testes**: não há suíte automatizada neste projeto. Confirmado por
+    leitura/rastreamento manual: nenhuma query nova foi adicionada (grep
+    confirma que os 5 componentes reorganizados só eram importados por
+    `app/clients/[id]/page.tsx`, seguro reorganizar sem efeito colateral
+    em outras telas); `AgencyInvestmentBar`, `SprintFinancialBar`,
+    `MonthlyBudgetEditor`, `computeAccountReviewCadenceStatus`,
+    `computeOperationalTracking`, `buildAttentionAlerts` não foram
+    alterados. `tsc --noEmit`, `npm run lint` e `npm run build` sem erros.
+    Sem acesso a credenciais do Supabase neste ambiente — não foi possível
+    abrir a página num navegador contra dados reais; verificação feita por
+    leitura de código e pelos três comandos acima.
+
+    Arquivos novos: `app/clients/account-follow-up-panel.tsx`,
+    `app/clients/account-reviews-history-drawer.tsx`. Removidos:
+    `app/clients/monthly-budget-panel.tsx`,
+    `app/clients/account-review-cadence-panel.tsx`. Alterados:
+    `app/clients/[id]/page.tsx`, `app/clients/month-investment-summary.tsx`,
+    `app/clients/operational-tracking-panel.tsx`,
+    `app/clients/attention-panel.tsx`,
+    `app/clients/monthly-budget-history-drawer.tsx` (comentário).
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis
