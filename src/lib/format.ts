@@ -52,21 +52,17 @@ function capitalize(value: string): string {
 }
 
 /**
- * Dia da semana + data (DD/MM), em duas variantes — longa ("Segunda-feira
- * · 13/07") pra telas maiores e curta ("Seg · 13/07") pra telas pequenas.
- * Reutilizada em qualquer lugar que mostre uma data operacional (prazo de
- * tarefa, datas da sprint etc.), pra nunca hardcodar dia da semana.
+ * Data + dia da semana em 3 letras maiúsculas, sempre no mesmo formato em
+ * qualquer largura de tela (ex.: "07/07 · TER") — largura previsível, pra
+ * manter as datas alinhadas verticalmente numa lista de tarefas. Etapa 52:
+ * substitui o formato anterior por extenso ("Terça-feira · 07/07"), que
+ * ocupava espaço desproporcional numa linha densa de tarefa.
  */
-export function formatWeekdayAndDate(value: string): { long: string; short: string } {
+export function formatCompactTaskDate(value: string): string {
   const date = new Date(`${value}T00:00:00Z`);
   const dayMonth = dayMonthFormatter.format(date);
-  const weekdayLong = capitalize(weekdayLongFormatter.format(date));
-  const weekdayShort = capitalize(weekdayShortFormatter.format(date).replace(/\.$/, ""));
-
-  return {
-    long: `${weekdayLong} · ${dayMonth}`,
-    short: `${weekdayShort} · ${dayMonth}`,
-  };
+  const weekday = weekdayShortFormatter.format(date).replace(/\.$/, "").toUpperCase();
+  return `${dayMonth} · ${weekday}`;
 }
 
 /** Dia da semana + dia/mês por extenso, sem ano (ex.: "Quinta-feira · 09 de

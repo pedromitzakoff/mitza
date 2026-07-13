@@ -1740,6 +1740,50 @@ automático da sync, refinamentos de UX, etc.
     `app/reports/[clientId]/page.tsx`, `app/clients/[id]/layout.tsx`,
     `app/clients/client-context-bar.tsx`, `app/clients/[id]/page.tsx`.
 
+52 ✅ Hierarquia visual e UX de "Tarefas da Sprint" — só apresentação, sem
+    tocar em regra de negócio, geração de tarefas, banco de dados, conclusão/
+    edição/exclusão, responsáveis, filtros ou outras telas.
+
+    **Levantamento**: `TaskRow` (`app/clients/task-row.tsx`) já era o
+    componente único reaproveitado por `TaskList` (tarefas soltas),
+    `SprintTaskList` (tarefas da sprint, dentro de `SprintCard`) e a tela
+    Sprints (`monthly-consolidated-group.tsx`) — nenhuma duplicação de
+    componente encontrada. `SprintTaskList` é usada exclusivamente por
+    `SprintCard`, que por sua vez é reaproveitado pela página do cliente e
+    pelas duas telas de Sprints — qualquer ajuste em `TaskRow`/
+    `SprintTaskList` reflete nos três lugares automaticamente.
+
+    **Mudanças** (todas em `TaskRow` e `SprintTaskList`, mesma ordem
+    [conclusão] [data] [tarefa] [responsável] [status] [ações] de antes):
+    - Data: nova `formatCompactTaskDate` (`lib/format.ts`) — "07/07 · TER"
+      em largura fixa, substitui o dia da semana por extenso.
+    - Nome da tarefa: removido o tipo (`TASK_TYPE_LABEL`) ao lado do
+      título — tarefas geradas por template já têm o tipo como próprio
+      título (ex.: "Otimização"), mostrar os dois repetia a mesma palavra.
+    - Tarefas concluídas: removido o tachado e o badge "Feito" — agora só
+      o check verde + opacidade reduzida da linha (um sinal em vez de três).
+    - Tarefas atrasadas: círculo e data em vermelho discreto (sem negrito) +
+      badge "Atrasado"; o nome da tarefa continua em cor neutra.
+    - Status temporal: badge só aparece quando agrega informação
+      ("Atrasado", "Hoje") — removido pra tarefas futuras normais
+      (eliminado o badge "Pendente" redundante com o próprio check vazio).
+    - Cabeçalho da lista: "2 de 4 concluídas" subiu pra mesma linha do
+      título/ação (antes ficava isolado abaixo da barra); barra mais fina;
+      "+ Adicionar tarefa na sprint" virou "+ Tarefa".
+    - Densidade: padding vertical da linha reduzido levemente.
+
+    **Testes**: não há suíte automatizada neste projeto. Confirmado
+    manualmente que nenhum `onClick`/`onChange`/`onSubmit` foi introduzido
+    em Server Component; `completeTaskAction` (concluir), os links do drawer
+    (editar/excluir/comentar) e a busca de responsável continuam
+    exatamente como estavam — só o CSS/JSX da apresentação mudou.
+    `tsc --noEmit`, lint e build sem erros.
+
+    Arquivos alterados: `app/clients/task-row.tsx`,
+    `app/clients/sprint-task-list.tsx`, `lib/format.ts` (função
+    `formatWeekdayAndDate`, que só era usada aqui, foi substituída por
+    `formatCompactTaskDate`).
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

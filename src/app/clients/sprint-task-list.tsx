@@ -24,29 +24,31 @@ export function SprintTaskList({
 
   return (
     <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-900">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
           Tarefas da sprint
         </p>
-        <Link
-          href={`/clients/${clientId}/tasks/new?sprintId=${sprintId}`}
-          className="text-xs text-zinc-500 hover:underline"
-        >
-          + Adicionar tarefa na sprint
-        </Link>
+        <div className="flex shrink-0 items-center gap-2.5">
+          {tasks.length > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              {tasksDone} de {tasks.length} concluída{tasks.length !== 1 ? "s" : ""}
+            </p>
+          )}
+          <Link
+            href={`/clients/${clientId}/tasks/new?sprintId=${sprintId}`}
+            className="text-xs text-zinc-500 hover:underline"
+          >
+            + Tarefa
+          </Link>
+        </div>
       </div>
 
       {tasks.length > 0 && (
-        <div className="mt-1.5 flex items-center gap-2">
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-            <div
-              className="h-full rounded-full bg-brand"
-              style={{ width: `${Math.min(Math.max(progressPct, 0), 100)}%` }}
-            />
-          </div>
-          <p className="shrink-0 text-[11px] text-muted-foreground">
-            {tasksDone} de {tasks.length} concluída{tasks.length !== 1 ? "s" : ""}
-          </p>
+        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+          <div
+            className="h-full rounded-full bg-brand"
+            style={{ width: `${Math.min(Math.max(progressPct, 0), 100)}%` }}
+          />
         </div>
       )}
 

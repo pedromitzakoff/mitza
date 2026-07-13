@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
-import { formatWeekdayAndDate } from "@/lib/format";
+import { formatCompactTaskDate } from "@/lib/format";
 import type { TaskStatus, TaskType } from "@/lib/supabase/database.types";
-import { TASK_STATUS_BADGE_CLASSES, TASK_STATUS_LABEL, TASK_TYPE_LABEL } from "./task-labels";
 import { completeTaskAction } from "./tasks-actions";
 
 export interface TaskListItem {
@@ -27,16 +26,23 @@ export function formatDueDate(value: string): string {
 }
 
 /**
- * Linha densa de tarefa — status como um círculo clicável no início, depois
- * prazo/dia da semana, título, responsável, situação e ações. Prioridade
- * visual: prazo > título > responsável > status > ações (a data vem antes
- * do nome porque a lista é lida cronologicamente). Observações, editar e
- * comentários não ficam permanentemente na linha — clicar no título ou no
- * "•••" abre o drawer lateral (TaskDrawerPanel) com os detalhes completos.
- * Os links pro drawer usam `scroll={false}`: é a mesma página (só o
- * search param `task` muda), então não faz sentido pular pro topo.
- * Reaproveitada em TaskList (tarefas soltas), SprintTaskList (tarefas da
- * sprint) e SprintClientGroup (tela Sprints).
+ * Linha densa de tarefa — ordem fixa [conclusão] [data] [tarefa]
+ * [responsável] [status temporal] [ações], seguindo a prioridade de leitura
+ * do gestor (feito? quando? o quê? quem? precisa de atenção?). Cada sinal
+ * aparece uma única vez — tarefa feita é só o check verde + linha com
+ * opacidade reduzida (sem tachado nem badge "Feito"); tarefa atrasada é só
+ * o círculo/data em vermelho discreto + badge "Atrasado" (nunca a linha
+ * inteira vermelha); tarefa futura normal não tem nenhum badge. O tipo da
+ * tarefa não aparece ao lado do título porque as tarefas geradas por
+ * template já têm o tipo como próprio título (ex.: "Otimização") — mostrar
+ * os dois seria repetir a mesma palavra duas vezes na mesma linha.
+ * Observações, editar e comentários não ficam permanentemente na linha —
+ * clicar no título ou no "•••" abre o drawer lateral (TaskDrawerPanel) com
+ * os detalhes completos. Os links pro drawer usam `scroll={false}`: é a
+ * mesma página (só o search param `task` muda), então não faz sentido
+ * pular pro topo. Reaproveitada em TaskList (tarefas soltas), SprintTaskList
+ * (tarefas da sprint) e SprintClientGroup (tela Sprints) — qualquer ajuste
+ * visual aqui reflete nos três lugares.
  */
 export function TaskRow({
   task,
@@ -58,17 +64,19 @@ export function TaskRow({
   const isOverdue = effectiveStatus === "atrasado";
   const isToday = task.due_date === todayDateString();
   const isFuture = effectiveStatus === "pendente" && !isToday && task.due_date > todayDateString();
-  const dueDate = formatWeekdayAndDate(task.due_date);
+  const dueDate = formatCompactTaskDate(task.due_date);
 
   const dateClasses = isOverdue
-    ? "font-medium text-red-600 dark:text-red-400"
+    ? "text-red-600 dark:text-red-400"
     : isToday && !isDone
-      ? "font-medium text-brand"
+      ? "text-brand"
       : "text-muted-foreground";
 
+  const rowOpacityClass = isDone ? "opacity-60" : isFuture ? "opacity-70" : "";
+
   return (
-    <li className="border-b border-border/60 px-2 py-1.5 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
-      <div className={`flex items-center gap-2.5 ${isFuture ? "opacity-70" : ""}`}>
+    <li className="border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
+      <div className={`flex items-center gap-2.5 ${rowOpacityClass}`}>
         {isDone ? (
           <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none text-green-700 dark:bg-green-950 dark:text-green-300">
             ✓
@@ -90,16 +98,10 @@ export function TaskRow({
           </form>
         )}
 
-        <span className={`w-20 shrink-0 text-xs sm:w-28 ${dateClasses}`}>
-          <span className="hidden sm:inline">{dueDate.long}</span>
-          <span className="sm:hidden">{dueDate.short}</span>
-        </span>
+        <span className={`w-20 shrink-0 text-xs tabular-nums ${dateClasses}`}>{dueDate}</span>
 
         <Link href={detailsHref} scroll={false} className="min-w-0 flex-1 truncate">
-          <span className={`text-sm ${isDone ? "text-muted-foreground line-through" : "font-medium text-foreground"}`}>
-            {task.title}
-          </span>
-          <span className="ml-1.5 hidden text-xs text-muted-foreground lg:inline">{TASK_TYPE_LABEL[task.type]}</span>
+          <span className="text-sm font-medium text-foreground">{task.title}</span>
         </Link>
 
         {(!hideAssigneeIfName || task.assignee?.name !== hideAssigneeIfName) && (
@@ -109,14 +111,13 @@ export function TaskRow({
         )}
 
         <span className="hidden w-16 shrink-0 sm:block">
-          {isToday && !isDone ? (
-            <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">Hoje</span>
-          ) : (
-            <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TASK_STATUS_BADGE_CLASSES[effectiveStatus]}`}
-            >
-              {TASK_STATUS_LABEL[effectiveStatus]}
+          {!isDone && isOverdue && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
+              Atrasado
             </span>
+          )}
+          {!isDone && !isOverdue && isToday && (
+            <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">Hoje</span>
           )}
         </span>
 
