@@ -2553,6 +2553,105 @@ automático da sync, refinamentos de UX, etc.
     `app/clients/account-follow-up-panel.tsx`, `app/clients/[id]/page.tsx`,
     `app/clients/account-review-actions.ts` (redirect com `reviewSaved`).
 
+60. ✅ **Integração Meta — gasto diário (fase 1)**
+
+    Primeira fase da integração com a Meta Marketing API, depois do sistema
+    já estar em produção: traz só o **gasto diário real** das contas de
+    anúncio (`date_start`/`spend`, `time_increment=1`) — nenhum outro dado
+    (leads, CPL, ROAS, campanhas, criativos, saldo). Desenvolvida na branch
+    `feature/meta-daily-spend`, a partir da branch de produção
+    (`claude/project-generation-bbwfyh`), sem push/deploy/execução de SQL
+    remoto — aguardando validação.
+
+    **O que já existia e foi reaproveitado sem alteração**: a tabela
+    `daily_spend` (schema desde a Etapa 1: `client_id, date, spend,
+    synced_at`, `unique(client_id, date)`) já era exatamente o que essa fase
+    precisava — nenhuma migration nela. `computeSprintEffectiveSpend`/
+    `sumActualSpendForMonth` (soma de `daily_spend` dentro do período real da
+    sprint/mês, nunca por data de sincronização) e o mecanismo
+    `sprints.spend_source`/`manual_actual_spend` (Etapa 31, "gasto manual
+    nunca soma com o do Meta, um sempre substitui o outro") já implementavam
+    exatamente a arquitetura pedida — zero mudança de lógica de cálculo.
+
+    **O que estava incorreto e foi corrigido**: `syncClientMetaSpend`
+    buscava o gasto a partir do início da *sprint atual* (e falhava se
+    nenhuma sprint atual existisse) em vez de "primeiro dia do mês →
+    hoje", acoplando a sincronização à existência de sprint sem
+    necessidade — agora usa `currentMonthRange()` e nunca depende de
+    sprint nenhuma. `syncClientMetaAction` (botão por cliente) não tinha
+    nenhuma checagem de admin — como a escrita em `daily_spend` acontece via
+    `service_role` (que ignora RLS), qualquer gestor autenticado podia
+    disparar a sincronização; agora chama `requireAdmin()` (mesmo padrão já
+    usado em `syncAllMetaAction`, que já estava correto).
+
+    **`meta_ad_account_id` virou opcional**: antes era `not null` com
+    `check` exigindo literalmente o prefixo `act_`, obrigando todo cliente a
+    ter uma conta configurada. Migration (`supabase/meta-daily-spend.sql`,
+    **não executada**) relaxa pra `null` permitido, mantendo o mesmo `check`
+    pro formato quando preenchido. Cliente sem conta configurada é
+    simplesmente ignorado pela sincronização (`status: "skipped_no_account"`,
+    nunca um erro) — o gasto real desses clientes continua vindo do
+    mecanismo manual já existente (`spend_source = "manual"`), sem nenhuma
+    UI nova. `lib/meta.ts` ganhou `normalizeMetaAdAccountId()` (aceita com ou
+    sem `act_`, string vazia vira `null`) usado em `readClientFields()`
+    antes de gravar — validado com 7 casos (dígitos puros, já com prefixo,
+    espaços, vazio, `null`, formato preservado quando já não-canônico).
+
+    **Classificação de erros** (`MetaSyncError`, em `lib/meta.ts`): token
+    inválido/expirado, conta inexistente/sem permissão, rate limit,
+    resposta inválida, erro HTTP genérico — pelos códigos documentados da
+    Graph API (`error.code`/HTTP status), nunca por texto livre da mensagem
+    (que pode mudar). Validado com 7 cenários mockando `fetch` (sem tocar a
+    API real) + paginação (`paging.next`) + resposta sem campo `data`.
+    **Nenhum desses erros nunca inclui o token** — nem lançado, nem
+    logado, nem em mensagem de erro pro usuário.
+
+    **Resumo estruturado da sincronização** (`SyncSummary`, em
+    `lib/meta-sync.ts`): `processed/synced/skipped/failed/totalDaysSynced/
+    syncedAt` + o resultado individual de cada cliente — uma falha numa
+    conta nunca impede as demais (`syncAllClientsMetaSpend` continua
+    iterando cliente a cliente, cada um isolado).
+
+    **Teste com uma única conta antes de sincronizar todas**
+    (`scripts/test-meta-sync.ts`, `npm run test:meta -- <client_id>
+    [--commit]`): dry-run por padrão (busca e mostra, não salva nada);
+    mostra o gasto dia a dia recebido da Meta, o total do período, e simula
+    o "antes/depois" do total da sprint atual e do mês (comparando com o
+    que já está persistido) — só grava em `daily_spend` se `--commit` for
+    passado explicitamente. Escolhido em vez de só reaproveitar o botão da
+    UI porque permite inspecionar os dados recebidos e comparar com o
+    Gerenciador de Anúncios **antes** de decidir persistir; o botão
+    "Atualizar dados do Meta" (agora admin-only) continua sendo o mecanismo
+    de uso corrente, reaproveitando exatamente as mesmas funções
+    (`fetchDailySpend`/`syncClientMetaSpend`) — nenhuma lógica duplicada
+    entre os dois.
+
+    **Testes**: não há suíte automatizada neste projeto. Validado
+    manualmente: `normalizeMetaAdAccountId` (7 casos), classificação de
+    erro da Graph API (7 cenários com `fetch` mockado, incluindo
+    paginação e resposta inválida), e o cálculo de sprint/mês reaproveitado
+    reproduzindo o exemplo exato do pedido (sprint 06/07–12/07, sincronização
+    em 15/07 não contamina a sprint com o dia da sync — cada valor soma só
+    onde sua própria data cai) + sprint curta de 3 dias no fim do mês +
+    `spend_source = "manual"` nunca somando com o Meta. `tsc --noEmit`,
+    `npm run lint` e `npm run build` sem erros. Sem acesso a credenciais do
+    Supabase neste ambiente — os cenários que dependem do banco real (RLS
+    de fato aplicada, upsert sem duplicar, isolamento entre clientes reais)
+    não foram executados aqui.
+
+    Arquivos novos: `supabase/meta-daily-spend.sql` (migration, não
+    executada), `scripts/test-meta-sync.ts`. Alterados: `lib/meta.ts`
+    (classificação de erro + normalização), `lib/meta-sync.ts` (range
+    mês-a-data, desacoplado de sprint, resumo estruturado),
+    `app/clients/meta-actions.ts` (`requireAdmin`),
+    `app/global-actions.ts` (resumo correto no redirect),
+    `lib/supabase/database.types.ts` (`meta_ad_account_id` nullable),
+    `app/clients/client-form.tsx` (campo opcional),
+    `app/clients/actions.ts` (normalização antes de salvar),
+    `app/operation/operation-data.ts`, `app/clients/client-context-bar.tsx`,
+    `app/settings/deleted-clients/page.tsx` (ripple de tipagem
+    `string | null`), `package.json` (`test:meta`).
+
 ## Deploy
 
 Deploy final na [Vercel](https://vercel.com). Configure as mesmas variáveis

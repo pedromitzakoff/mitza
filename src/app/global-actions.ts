@@ -10,11 +10,11 @@ import { syncAllClientsMetaSpend } from "@/lib/meta-sync";
 export async function syncAllMetaAction() {
   await requireAdmin();
 
-  const results = await syncAllClientsMetaSpend();
+  const summary = await syncAllClientsMetaSpend();
 
   revalidatePath("/");
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
-  redirect(`/?synced=${results.length}`);
+  redirect(`/?synced=${summary.totalDaysSynced}`);
 }

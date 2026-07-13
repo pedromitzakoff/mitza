@@ -31,7 +31,7 @@ export function ClientContextBar({
 }: {
   clientId: string;
   clientName: string;
-  metaAdAccountId: string;
+  metaAdAccountId: string | null;
   managerNames: string[];
   sprintPeriodLabel: string | null;
   sprint: { startDate: string; endDate: string } | null;
@@ -58,7 +58,7 @@ export function ClientContextBar({
             {CLIENT_STATUS_LABEL[contractStatus]}
           </span>
           <span className="hidden shrink-0 font-mono text-[11px] text-muted-foreground lg:inline">
-            {metaAdAccountId}
+            {metaAdAccountId ?? "Sem conta Meta"}
           </span>
           <span className="shrink-0 truncate text-xs text-muted-foreground">{sprintLabel}</span>
           <span className="hidden shrink-0 truncate text-xs text-muted-foreground md:inline">{gestorLabel}</span>

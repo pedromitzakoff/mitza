@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "sync:meta": "tsx scripts/sync-meta.ts"
+    "sync:meta": "tsx scripts/sync-meta.ts",
+    "test:meta": "tsx scripts/test-meta-sync.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

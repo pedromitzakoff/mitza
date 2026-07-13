@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { normalizeCnpj } from "@/lib/cnpj";
+import { normalizeMetaAdAccountId } from "@/lib/meta";
 import { OperationalEventType } from "@/lib/operational-events";
 import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
 import type { ClientContractStatus, ClientMainObjective } from "@/lib/supabase/database.types";
@@ -74,7 +75,7 @@ function readStructuralFields(formData: FormData) {
 function readClientFields(formData: FormData) {
   return {
     name: String(formData.get("name") ?? "").trim(),
-    meta_ad_account_id: String(formData.get("meta_ad_account_id") ?? "").trim(),
+    meta_ad_account_id: normalizeMetaAdAccountId(String(formData.get("meta_ad_account_id") ?? "")),
     managerIds: formData.getAll("manager_ids").map(String),
     ...readStructuralFields(formData),
   };

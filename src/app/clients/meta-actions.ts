@@ -2,28 +2,28 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/auth";
 import { syncClientMetaSpend } from "@/lib/meta-sync";
 
+/** "Atualizar dados do Meta" (por cliente) — admin-only (seção 13 do
+ * pedido): antes disto, a única barreira era a RLS de leitura do cliente
+ * (aberta a qualquer gestor logado, por decisão da Etapa 15), mas a escrita
+ * em `daily_spend` acontece via service role (`syncClientMetaSpend`), que
+ * ignora RLS — sem este `requireAdmin()`, qualquer gestor autenticado podia
+ * disparar a sincronização. */
 export async function syncClientMetaAction(clientId: string) {
-  const supabase = await createSupabaseClient();
+  await requireAdmin();
 
-  // RLS garante que o select só retorna o cliente se o usuário for admin
-  // ou gestor atribuído a ele — a checagem de acesso é essa.
-  const { data: client } = await supabase.from("clients").select("id").eq("id", clientId).single();
-
-  if (!client) {
-    redirect(`/clients/${clientId}?error=${encodeURIComponent("Sem acesso a este cliente")}`);
-  }
+  const result = await syncClientMetaSpend(clientId);
+  revalidatePath(`/clients/${clientId}`);
 
   let query: string;
-  try {
-    const result = await syncClientMetaSpend(clientId);
-    revalidatePath(`/clients/${clientId}`);
+  if (result.status === "synced") {
     query = `synced=${result.daysSynced}`;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Erro ao sincronizar com o Meta";
-    query = `error=${encodeURIComponent(message)}`;
+  } else if (result.status === "skipped_no_account") {
+    query = `error=${encodeURIComponent("Este cliente não tem conta de anúncios da Meta configurada.")}`;
+  } else {
+    query = `error=${encodeURIComponent(result.errorMessage ?? "Erro ao sincronizar com o Meta")}`;
   }
 
   redirect(`/clients/${clientId}?${query}`);

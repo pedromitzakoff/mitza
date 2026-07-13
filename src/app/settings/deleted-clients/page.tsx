@@ -32,7 +32,7 @@ export default async function DeletedClientsPage() {
               <div className="min-w-0">
                 <p className="truncate text-black dark:text-zinc-50">{client.name}</p>
                 <p className="text-xs text-zinc-500">
-                  {client.meta_ad_account_id} · excluído em{" "}
+                  {client.meta_ad_account_id ?? "Sem conta Meta"} · excluído em{" "}
                   {new Date(client.deleted_at!).toLocaleDateString("pt-BR")}
                 </p>
               </div>

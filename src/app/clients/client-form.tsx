@@ -55,7 +55,7 @@ export function ClientForm({
   assignedIds: string[];
   error?: string;
   defaultName?: string;
-  defaultMetaAdAccountId?: string;
+  defaultMetaAdAccountId?: string | null;
   /** Campos estruturais (Etapa 27) — todos opcionais, `undefined` numa
    * criação nova. */
   defaults?: Partial<ClientRow>;
@@ -117,16 +117,19 @@ export function ClientForm({
         </label>
 
         <label className={labelClasses}>
-          Conta de anúncios (Meta) <span className="text-red-500">*</span>
+          Conta de anúncios (Meta) <span className="text-xs text-zinc-400">(opcional)</span>
           <input
             name="meta_ad_account_id"
-            required
-            placeholder="act_1234567890"
-            pattern="act_[0-9]+"
-            title="Formato: act_ seguido de números"
-            defaultValue={defaultMetaAdAccountId}
+            placeholder="act_1234567890 ou 1234567890"
+            pattern="act_[0-9]+|[0-9]+"
+            title="Formato: act_ seguido de números, ou só os números"
+            defaultValue={defaultMetaAdAccountId ?? ""}
             className={`${inputClasses} font-mono`}
           />
+          <span className="text-xs text-zinc-400">
+            Cliente sem conta configurada não é sincronizado com o Meta — o gasto real dessas sprints precisa ser
+            preenchido manualmente.
+          </span>
         </label>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

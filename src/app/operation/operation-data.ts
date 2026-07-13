@@ -36,7 +36,7 @@ export type OperationTaskItem = TaskListItem & { sprint_id: string | null; notes
 export interface OperationClientRawData {
   id: string;
   name: string;
-  metaAdAccountId: string;
+  metaAdAccountId: string | null;
   managerNames: string[];
   managerIds: string[];
   sprints: {
@@ -62,7 +62,7 @@ export interface OperationClientRawData {
 export interface OperationClientCard {
   clientId: string;
   clientName: string;
-  metaAdAccountId: string;
+  metaAdAccountId: string | null;
   managerNames: string[];
   managerIds: string[];
   sprint: SprintFinancials | null;
