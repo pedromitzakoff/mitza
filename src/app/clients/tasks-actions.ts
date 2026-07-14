@@ -9,6 +9,7 @@ import { logOperationalActivity } from "@/lib/operational-activity-log";
 import { OperationalEventType } from "@/lib/operational-events";
 import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
 import { todayDateString } from "@/lib/today";
+import { withOriginalDueDate } from "@/lib/task-creation";
 import type { TaskRecurrence, TaskType } from "@/lib/supabase/database.types";
 
 function resolveReturnTo(formData: FormData, fallback: string): string {
@@ -31,17 +32,19 @@ export async function createTaskAction(clientId: string, formData: FormData) {
 
   const { data: created, error } = await supabase
     .from("tasks")
-    .insert({
-      client_id: clientId,
-      title,
-      type,
-      assignee_id: assigneeId,
-      due_date: dueDate,
-      due_time: dueTime,
-      recurrence,
-      notes,
-      sprint_id: sprintId,
-    })
+    .insert(
+      withOriginalDueDate({
+        client_id: clientId,
+        title,
+        type,
+        assignee_id: assigneeId,
+        due_date: dueDate,
+        due_time: dueTime,
+        recurrence,
+        notes,
+        sprint_id: sprintId,
+      }),
+    )
     .select("id")
     .single();
 
@@ -257,15 +260,20 @@ export async function completeTaskAction(taskId: string, clientId: string) {
     // achar qual sprint cobre a nova data — fora do escopo por enquanto.
     // Também não gera atividade/evento: é o sistema recriando a próxima
     // ocorrência, não uma ação humana nova.
-    await supabase.from("tasks").insert({
-      client_id: task.client_id,
-      title: task.title,
-      type: task.type,
-      assignee_id: task.assignee_id,
-      due_date: nextDate,
-      recurrence: task.recurrence,
-      notes: task.notes,
-    });
+    // original_due_date desta NOVA ocorrência é a própria nextDate (é uma
+    // tarefa nova, com prazo inicial próprio — nunca herda a data original
+    // da ocorrência anterior).
+    await supabase.from("tasks").insert(
+      withOriginalDueDate({
+        client_id: task.client_id,
+        title: task.title,
+        type: task.type,
+        assignee_id: task.assignee_id,
+        due_date: nextDate,
+        recurrence: task.recurrence,
+        notes: task.notes,
+      }),
+    );
   }
 
   // Sem redirect de propósito: quem chama esta action já está na página

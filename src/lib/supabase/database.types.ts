@@ -592,7 +592,12 @@ export interface Database {
           template_id?: string | null;
           notes?: string | null;
           created_at?: string;
-          original_due_date?: string;
+          /** NOT NULL sem default no banco (ver operational-events.sql) —
+           * deliberadamente OBRIGATÓRIO aqui (nunca `?`), pra o typecheck
+           * pegar em tempo de build qualquer insert que esqueça de
+           * preencher esta coluna, em vez de só falhar em produção com um
+           * erro cru do Postgres. */
+          original_due_date: string;
           completed_at?: string | null;
           completion_count?: number;
           reassignment_count?: number;

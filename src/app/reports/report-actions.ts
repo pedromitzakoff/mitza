@@ -9,6 +9,7 @@ import { formatMonthLabel } from "@/lib/format";
 import { getOrCreateReport, buildReportViewData } from "./report-data";
 import { OperationalEventType } from "@/lib/operational-events";
 import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
+import { withOriginalDueDate } from "@/lib/task-creation";
 import type {
   KpiDirection,
   KpiUnit,
@@ -222,14 +223,16 @@ export async function sendActionItemToSprintAction(actionItemId: string, clientI
 
   const { data: createdTask, error } = await supabase
     .from("tasks")
-    .insert({
-      client_id: clientId,
-      title: item.description,
-      type: "outro",
-      assignee_id: item.responsible_id,
-      due_date: item.due_date ?? nextSprint.start_date,
-      sprint_id: nextSprint.id,
-    })
+    .insert(
+      withOriginalDueDate({
+        client_id: clientId,
+        title: item.description,
+        type: "outro" as const,
+        assignee_id: item.responsible_id,
+        due_date: item.due_date ?? nextSprint.start_date,
+        sprint_id: nextSprint.id,
+      }),
+    )
     .select("id")
     .single();
 
