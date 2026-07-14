@@ -47,6 +47,7 @@ const SITUATION_LABEL: Record<SpendStatus, string> = {
   abaixo: "Abaixo",
   sem_meta: "Sem planejamento",
   nao_iniciado: "Ainda não iniciada",
+  em_andamento: "Em andamento",
 };
 
 const SITUATION_TONE: Record<SpendStatus, StatusTone> = {
@@ -55,6 +56,7 @@ const SITUATION_TONE: Record<SpendStatus, StatusTone> = {
   abaixo: "warning",
   sem_meta: "neutral",
   nao_iniciado: "neutral",
+  em_andamento: "neutral",
 };
 
 type ManagerFilter = "all" | "me" | string;

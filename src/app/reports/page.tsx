@@ -19,6 +19,7 @@ const SITUATION_LABEL: Record<SpendStatus, string> = {
   abaixo: "Abaixo do esperado",
   sem_meta: "Sem planejamento",
   nao_iniciado: "Ainda não iniciada",
+  em_andamento: "Em andamento",
 };
 
 const SITUATION_BADGE_CLASSES: Record<SpendStatus, string> = {
@@ -27,6 +28,7 @@ const SITUATION_BADGE_CLASSES: Record<SpendStatus, string> = {
   abaixo: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   sem_meta: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
   nao_iniciado: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  em_andamento: "bg-brand/10 text-brand",
 };
 
 export default async function ReportsPage({

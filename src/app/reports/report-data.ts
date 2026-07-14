@@ -6,11 +6,10 @@ import {
   monthRangeFromParam,
   shiftMonthParam,
   sumActualSpendForMonth,
-  sumExpectedToDateForMonth,
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import { resolveMonthlyBudget } from "@/lib/monthly-budget";
+import { resolveMonthlyBudget, computeMonthlyExpectedToDateByCalendar } from "@/lib/monthly-budget";
 import {
   computeAgencyExecutionSummary,
   computeSprintBehaviorRows,
@@ -212,9 +211,10 @@ export async function buildReportViewData(
     };
   }
 
-  // Dados ao vivo — mesma fonte financeira central de sempre (Etapa 50:
-  // sumPlannedForMonth/sumActualSpendForMonth/sumExpectedToDateForMonth/
-  // classifySpendStatus), nunca uma conta paralela.
+  // Dados ao vivo — mesma fonte financeira central de sempre: orçamento
+  // vigente (`resolveMonthlyBudget`), realizado (`sumActualSpendForMonth`),
+  // esperado até hoje (`computeMonthlyExpectedToDateByCalendar`, Etapa 67) e
+  // `classifySpendStatus`, nunca uma conta paralela.
   const [{ data: sprints }, { data: dailySpend }, { data: tasks }, { data: plannedAllocations }, { data: budgetChanges }] = await Promise.all([
     // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
     // mês precisa ser encontrada mesmo com start_date fora do intervalo.
@@ -262,7 +262,13 @@ export async function buildReportViewData(
     sumPlannedForMonth(plannedAllocationRows, monthRange),
   );
   const actual = sumActualSpendForMonth(monthSprintRows, monthRange, dailySpend ?? []);
-  const expectedToDate = sumExpectedToDateForMonth(plannedAllocationRows, monthRange, today);
+  // Etapa 67: "esperado até hoje" nunca mais soma sprint_planned_allocations
+  // — é só o avanço do calendário do mês aplicado ao orçamento vigente.
+  const expectedToDate = computeMonthlyExpectedToDateByCalendar(
+    planned,
+    monthRange,
+    today.toISOString().slice(0, 10),
+  ).expectedToDate;
   const status = classifySpendStatus(actual, expectedToDate, planned);
   const execution = computeAgencyExecutionSummary(tasks ?? [], today);
   const sprintBehavior = computeSprintBehaviorRows(

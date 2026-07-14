@@ -14,6 +14,7 @@ export const PERIOD_STATUS_LABEL: Record<FinancialPeriodSummary["status"], strin
   abaixo: "Abaixo do ritmo",
   sem_meta: "Sem planejamento",
   nao_iniciado: "Ainda não iniciada",
+  em_andamento: "Em andamento",
 };
 
 const OPERATIONAL_TONE_CLASSES = {
@@ -28,9 +29,17 @@ const OPERATIONAL_TONE_CLASSES = {
  * só trocando o período (`summary`, já resolvido por `resolveSprintPeriodSummary`/
  * `resolveMonthPeriodSummary`) e o texto operacional (`operational`, já
  * decidido por `operationalSummary`). Regra "card fechado = decisão": nome,
- * período, % investido, % esperado, situação financeira, UMA informação
- * operacional e a barra com marcador — nada de lista de alertas, diferença em
- * reais, ou contagem de tarefas concluídas aqui (isso fica no card aberto).
+ * período, % investido, situação financeira, UMA informação operacional e a
+ * barra — nada de lista de alertas, diferença em reais, ou contagem de
+ * tarefas concluídas aqui (isso fica no card aberto).
+ *
+ * Etapa 67, seção 7: quando `summary.kind === "sprint"` (visão "Sprint
+ * atual"), nunca mostra "Esperado X%" nem o marcador da barra — a sprint
+ * atual não tem mais nenhum veredito de ritmo (o `summary.status` já vem
+ * como "em_andamento" de `classifySprintSpendStatus`, nunca Acima/Abaixo).
+ * A visão "Mensal Consolidado" (`summary.kind === "month"`) continua
+ * mostrando o esperado e o marcador normalmente, agora com a fórmula central
+ * de calendário (`computeMonthlyExpectedToDateByCalendar`).
  */
 export function AccountCardSummary({
   clientId,
@@ -47,8 +56,9 @@ export function AccountCardSummary({
   summary: FinancialPeriodSummary;
   operational: OperationalSummary;
 }) {
+  const isSprintKind = summary.kind === "sprint";
   const investedPct = summary.pct !== null ? Math.round(summary.pct) : null;
-  const expectedPct = summary.planned > 0 ? Math.round(computeExpectedPct(summary)) : null;
+  const expectedPct = !isSprintKind && summary.planned > 0 ? Math.round(computeExpectedPct(summary)) : null;
 
   return (
     <summary className="flex cursor-pointer list-none items-start gap-2 px-3 py-2.5">
@@ -90,7 +100,7 @@ export function AccountCardSummary({
 
         <div className="mt-1.5">
           {summary.planned > 0 ? (
-            <AgencyInvestmentBar summary={summary} />
+            <AgencyInvestmentBar summary={summary} showExpectedMarker={!isSprintKind} />
           ) : (
             <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />
           )}

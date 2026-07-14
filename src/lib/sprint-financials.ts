@@ -146,10 +146,30 @@ export function assertSingleCurrentSprint(
  * temporal com status financeiro: uma sprint que ainda não começou é sempre
  * "nao_iniciado", mesmo que o planejamento já esteja configurado — os
  * números (realizado=0, esperado=0) NUNCA são interpretados como "dentro do
- * esperado"/"bateu meta" só porque ainda não há nada pra comparar. Fonte
- * única usada tanto por `computeSprintFinancials` (cartão da sprint) quanto
- * por `computeSprintBehaviorRows` (Comportamento por Sprint do Relatório) —
- * nunca duas implementações dessa regra. */
+ * esperado"/"bateu meta" só porque ainda não há nada pra comparar.
+ *
+ * Etapa 67: a sprint ATUAL também nunca é classificada Acima/Abaixo/Dentro —
+ * vira sempre "em_andamento", incondicionalmente. Antes, a sprint atual
+ * comparava `actual` com um "esperado" proporcional aos dias já decorridos
+ * DENTRO da própria sprint (`computeSprintExpectedToDate`) — uma fórmula
+ * diferente da nova regra central de "esperado até hoje" do mês
+ * (`computeMonthlyExpectedToDateByCalendar`), que olha pro calendário do MÊS
+ * inteiro, não pros dias de uma sprint de ~7 dias. Manter as duas fórmulas
+ * coexistindo seria exatamente o "duas fórmulas divergentes" que esta etapa
+ * elimina — a sprint atual não tem mais nenhum veredito de ritmo, só um
+ * status operacional ("Em andamento"); quem quiser comparar ritmo usa os
+ * indicadores do card expandido (previsto atualizado/realizado/restante),
+ * nunca este selo.
+ *
+ * Sprint concluída continua comparando o realizado final com o planejado
+ * final (`expected === plannedTotal`, sempre 100% de uma sprint que já
+ * acabou) — `plannedTotal <= 0` (sem nenhum planejamento histórico válido)
+ * já cai em "sem_meta" dentro de `classifySpendStatus`, nunca inventa
+ * Acima/Abaixo sem uma base de comparação real.
+ *
+ * Fonte única usada tanto por `computeSprintFinancials` (cartão da sprint)
+ * quanto por `computeSprintBehaviorRows` (Comportamento por Sprint do
+ * Relatório) — nunca duas implementações dessa regra. */
 export function classifySprintSpendStatus(
   sprint: { start_date: string; end_date: string },
   actual: number,
@@ -157,17 +177,25 @@ export function classifySprintSpendStatus(
   plannedTotal: number,
   today: Date,
 ): SpendStatus {
-  if (getSprintTemporalStatus(sprint, today) === "futura") return "nao_iniciado";
+  const temporalStatus = getSprintTemporalStatus(sprint, today);
+  if (temporalStatus === "futura") return "nao_iniciado";
+  if (temporalStatus === "atual") return "em_andamento";
   return classifySpendStatus(actual, expected, plannedTotal);
 }
 
 /**
  * Gasto esperado até hoje de UMA sprint, proporcional aos dias já passados
- * dentro dela: sprint futura = R$ 0; sprint encerrada = 100% do planejado;
- * sprint em andamento = planejado × (dias decorridos / dias totais). Única
- * fonte dessa conta — reaproveitada por `computeSprintFinancials` (cartão
- * da sprint) e por `sumExpectedToDate` (agregado da agência), pra nunca
- * divergir entre página do cliente, Sprints e Visão Geral.
+ * dentro dela: sprint futura = R$ 0; sprint encerrada = 100% do planejado.
+ *
+ * Etapa 67: pra sprint ATUAL, este valor não decide mais o status
+ * (`classifySprintSpendStatus` sempre devolve "em_andamento" pra sprint em
+ * andamento, sem olhar pra este número) — usado só como um dado auxiliar de
+ * apoio onde ainda fizer sentido internamente, nunca mais como base de
+ * comparação Acima/Abaixo pra sprint atual. A regra de "esperado até hoje"
+ * de verdade (calendário do mês × orçamento vigente) vive em
+ * `computeMonthlyExpectedToDateByCalendar` (monthly-budget.ts) — as duas
+ * fórmulas medem coisas diferentes (dias da sprint vs. dias do mês) e nunca
+ * devem ser confundidas.
  */
 export function computeSprintExpectedToDate(
   sprint: { start_date: string; end_date: string; planned_spend: number },
@@ -180,15 +208,6 @@ export function computeSprintExpectedToDate(
 
   const daysPassed = today < start ? 0 : today > end ? totalDays : daysBetweenInclusive(start, today);
   return (sprint.planned_spend * daysPassed) / totalDays;
-}
-
-/** Soma o esperado até hoje de várias sprints — usado pelo resumo de
- * investimento da Visão Geral (agregado de todos os clientes filtrados). */
-export function sumExpectedToDate(
-  sprints: { start_date: string; end_date: string; planned_spend: number }[],
-  today: Date,
-): number {
-  return sprints.reduce((sum, sprint) => sum + computeSprintExpectedToDate(sprint, today), 0);
 }
 
 /**
@@ -410,27 +429,6 @@ export function sumPlannedForMonth(
 ): number {
   return plannedAllocations
     .filter((a) => a.date >= monthRange.firstDay && a.date <= monthRange.lastDay)
-    .reduce((sum, a) => sum + a.amount, 0);
-}
-
-/**
- * Esperado até hoje, pertencente a um mês — soma das alocações diárias já
- * decorridas (data ≤ hoje) dentro do mês. Mais precisa que o cálculo
- * proporcional por sprint inteira usado em `computeSprintExpectedToDate`
- * (que assume um valor diário uniforme dentro da sprint inteira — incorreto
- * quando ela atravessa dois meses com orçamentos diários diferentes): aqui
- * usa o valor real de cada dia, já gravado em `sprint_planned_allocations`.
- */
-export function sumExpectedToDateForMonth(
-  plannedAllocations: PlannedAllocationRow[],
-  monthRange: { firstDay: string; lastDay: string },
-  today: Date,
-): number {
-  const todayStr = today.toISOString().slice(0, 10);
-  const cutoff = todayStr < monthRange.lastDay ? todayStr : monthRange.lastDay;
-  if (cutoff < monthRange.firstDay) return 0;
-  return plannedAllocations
-    .filter((a) => a.date >= monthRange.firstDay && a.date <= cutoff)
     .reduce((sum, a) => sum + a.amount, 0);
 }
 

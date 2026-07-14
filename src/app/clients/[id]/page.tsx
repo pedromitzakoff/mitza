@@ -10,7 +10,6 @@ import {
   monthRangeFromParam,
   shiftMonthParam,
   sumActualSpendForMonth,
-  sumExpectedToDateForMonth,
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
@@ -19,7 +18,12 @@ import { classifySpendStatus } from "@/lib/spend-status";
 import { buildAttentionAlerts } from "@/lib/attention-alerts";
 import { buildSprintExecutionAlert, formatSprintExecutionLabel } from "@/lib/sprint-execution";
 import { businessDaysSince } from "@/lib/business-days";
-import { resolveBudgetEffectiveDate, resolveMonthlyBudget, computeMonthlyBudgetPlan } from "@/lib/monthly-budget";
+import {
+  resolveBudgetEffectiveDate,
+  resolveMonthlyBudget,
+  computeMonthlyBudgetPlan,
+  computeMonthlyExpectedToDateByCalendar,
+} from "@/lib/monthly-budget";
 import { todayDateString, todayUTC } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
 import { computeOperationalTracking, computeMonthlyOccurrenceSummary } from "@/lib/operational-tracking";
@@ -293,7 +297,15 @@ export default async function ClientPage({
     sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay }),
   );
   const monthActual = sumActualSpendForMonth(sprints ?? [], { firstDay, lastDay }, dailySpend ?? []);
-  const monthExpectedToDate = sumExpectedToDateForMonth(monthPlannedAllocationRows, { firstDay, lastDay }, today);
+  // Etapa 67: "esperado até hoje" nunca mais soma sprint_planned_allocations
+  // — é só o avanço do calendário do mês aplicado ao orçamento vigente,
+  // independente de sprints/planejamentos antigos (mesma função central
+  // usada em toda a Visão Geral/Sprints/Relatório — ver operation-data.ts).
+  const monthExpectedToDate = computeMonthlyExpectedToDateByCalendar(
+    monthPlanned,
+    { firstDay, lastDay },
+    todayStr,
+  ).expectedToDate;
   // Ritmo do mês: realizado x esperado até hoje, nunca x 100% do planejado
   // antes do mês acabar (mesma regra agora usada em toda a Visão Geral/
   // Sprints — ver operation-data.ts).
