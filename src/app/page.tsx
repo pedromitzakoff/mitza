@@ -21,7 +21,8 @@ import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { formatLastOptimizationLabel } from "@/lib/monthly-reports";
 import { computeFinancialSummary, computeManagerSummary, computeSpendRhythmCounts } from "@/lib/agency-metrics";
-import { getClientPriority, sortClientPriorities } from "@/lib/client-priority";
+import { buildClientPriorityQueue, sortCardsByPriority } from "@/lib/client-priority";
+import type { PerformanceChannelScope } from "@/lib/performance";
 import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
 import { PrioritiesDrawer, PrioritiesPanel } from "./priorities-panel";
@@ -474,31 +475,26 @@ export default async function Home({
     hasClientFilter: Boolean(clientFilter),
   });
 
-  // Prioridade de cada cliente — uma única fonte (getClientPriority),
-  // reaproveitada pelo bloco "Prioridades de hoje" e pela ordenação padrão
-  // da tabela (severidade primeiro). A tabela em si não exibe mais uma
-  // coluna própria de severidade (Etapa 49 removeu "Prioridade" por
-  // duplicar "Status" sem contexto adicional).
+  // Prioridade de cada cliente — uma única fonte (buildClientPriorityQueue,
+  // MVP "Reformular Prioridades na Visão Geral"), reaproveitada pelo bloco
+  // "Prioridades de hoje" e pela ordenação padrão da tabela. A tabela em si
+  // não exibe mais uma coluna própria de severidade (Etapa 49 removeu
+  // "Prioridade" por duplicar "Status" sem contexto adicional).
   //
-  // Etapa 3: a fila de prioridades hoje mistura sinais de ritmo financeiro
-  // (tiers 1/4 de `getClientPriority`, só coerentes pro orçamento
-  // CONSOLIDADO) com sinais que não dependem de plataforma (tarefa
-  // atrasada, sprint sem execução etc.) — reformular essa mistura é
-  // trabalho da etapa de Prioridades (mais adiante no plano), não desta. Por
-  // ora, "mostrar só o que é coerente": a fila inteira (e a ordenação por
-  // prioridade que depende dela) só existe no recorte Consolidado.
-  const cardById = new Map(cards.map((c) => [c.clientId, c]));
-  const allPriorities = platformFilter === "consolidado" ? cards.map((card) => getClientPriority(card, today)) : [];
-  const priorityQueue = sortClientPriorities(allPriorities.filter((p) => p.primaryIssue !== null));
+  // `performanceScope`: custo por resultado já tem investimento real por
+  // canal (Etapa 2/3), então continua disponível fora do Consolidado; ritmo
+  // financeiro (a outra metade da fila) continua exclusividade do
+  // Consolidado — não existe orçamento configurado por canal ainda (mesma
+  // decisão da Etapa de filtro de plataforma). `buildClientPriorityQueue`
+  // já sabe disso e nunca gera item de ritmo fora do Consolidado.
+  const performanceScope: PerformanceChannelScope = platformFilter === "consolidado" ? "consolidated" : platformFilter;
+  const priorityQueue = buildClientPriorityQueue(cards, performanceScope);
   const prioritiesTop = priorityQueue.slice(0, 6);
   const prioritiesOpen = params.prioridades === "1";
   const prioritySeverity = (params.prioridadeSeveridade ?? "todos") as AccountHealth | "todos";
 
-  const effectiveSort = platformFilter === "consolidado" ? sort : "nome";
   const sortedCards =
-    effectiveSort === "nome"
-      ? [...cards].sort((a, b) => a.clientName.localeCompare(b.clientName))
-      : sortClientPriorities(allPriorities).map((p) => cardById.get(p.clientId)!);
+    sort === "nome" ? [...cards].sort((a, b) => a.clientName.localeCompare(b.clientName)) : sortCardsByPriority(cards, performanceScope);
 
   const spendRhythm = computeSpendRhythmCounts(cards);
   const outOfRhythmCount = spendRhythm.abaixo + spendRhythm.acima;
@@ -765,40 +761,43 @@ export default async function Home({
           </div>
         </div>
 
-        {platformFilter === "consolidado" && (
-          <>
-            <div className="mt-3">
-              <PrioritiesPanel
-                priorities={prioritiesTop}
-                managerNameByClient={primaryManagerNameByClient}
-                totalCount={priorityQueue.length}
-                viewAllHref={openPrioritiesHref}
-              />
-            </div>
+        {/* MVP "Reformular Prioridades na Visão Geral": só 2 tipos de item
+            (custo por resultado acima da meta / ritmo fora do esperado) —
+            ritmo só existe no Consolidado (sem orçamento por canal), custo
+            por resultado continua disponível em qualquer plataforma (já tem
+            investimento real por canal, Etapa 2/3) — ver `performanceScope`
+            acima. Painel nunca escondido por completo; some sozinho quando
+            a fila está vazia (EmptyState do próprio componente). */}
+        <div className="mt-3">
+          <PrioritiesPanel
+            priorities={prioritiesTop}
+            managerNameByClient={primaryManagerNameByClient}
+            totalCount={priorityQueue.length}
+            viewAllHref={openPrioritiesHref}
+          />
+        </div>
 
-            {prioritiesOpen && (
-              <PrioritiesDrawer
-                priorities={priorityQueue}
-                managerNameByClient={primaryManagerNameByClient}
-                severity={prioritySeverity}
-                closeHref={closePrioritiesHref}
-                buildSeverityHref={prioritiesSeverityHref}
-              />
-            )}
-          </>
+        {prioritiesOpen && (
+          <PrioritiesDrawer
+            priorities={priorityQueue}
+            managerNameByClient={primaryManagerNameByClient}
+            severity={prioritySeverity}
+            closeHref={closePrioritiesHref}
+            buildSeverityHref={prioritiesSeverityHref}
+          />
         )}
 
         {/* Tabela única de clientes (Etapa 49) — coluna "Prioridade" removida
             por duplicar "Status" sem contexto adicional (a classificação
             detalhada de severidade continua em "Prioridades de hoje", que já
-            tinha sua própria fonte de verdade, `getClientPriority` — "Saúde
-            da operação" foi removida, ver "Indicadores da operação" acima,
-            que não usa mais accountHealth). "Esperado até hoje" usa a mesma
-            base (`monthExpectedToDate`) que já decide "Status"
-            (classifySpendStatus) — nunca um cálculo paralelo. Ordenação
-            padrão ("Ordenar por prioridade") continua reaproveitando
-            `sortClientPriorities` por baixo, mesmo sem mais exibir a
-            severidade em coluna própria. */}
+            tinha sua própria fonte de verdade — MVP "Reformular Prioridades",
+            `buildClientPriorityQueue` — "Saúde da operação" foi removida, ver
+            "Indicadores da operação" acima, que não usa mais accountHealth).
+            "Esperado até hoje" usa a mesma base (`monthExpectedToDate`) que
+            já decide "Status" (classifySpendStatus) — nunca um cálculo
+            paralelo. Ordenação padrão ("Ordenar por prioridade") continua
+            reaproveitando `sortCardsByPriority` por baixo, mesmo sem mais
+            exibir a severidade em coluna própria. */}
         <div className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
           <div className="flex items-center justify-between px-3.5 py-2.5">
             <SectionHeader
@@ -806,14 +805,9 @@ export default async function Home({
             />
             <div className="flex items-center gap-3 text-xs">
               <span className="text-overview-text-muted">{sortedCards.length} cliente{sortedCards.length !== 1 ? "s" : ""}</span>
-              {/* Etapa 3: "Ordenar por prioridade" depende de ritmo
-                  financeiro (só existe no Consolidado) — fora dele a tabela
-                  fica sempre em ordem alfabética, sem alternância. */}
-              {platformFilter === "consolidado" && (
-                <Button href={buildUrl({ sort: sort === "nome" ? "prioridade" : "nome" })} variant="ghost" size="sm">
-                  Ordenar por {sort === "nome" ? "prioridade" : "nome"}
-                </Button>
-              )}
+              <Button href={buildUrl({ sort: sort === "nome" ? "prioridade" : "nome" })} variant="ghost" size="sm">
+                Ordenar por {sort === "nome" ? "prioridade" : "nome"}
+              </Button>
             </div>
           </div>
 
