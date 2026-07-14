@@ -91,14 +91,25 @@ export default async function ClientsPage({
     .filter((s) => isDateWithinPeriod(todayStr, s.start_date, s.end_date))
     .map((s) => s.id);
 
-  const [{ data: clientActivity }, { data: sprintActivity }] = await Promise.all([
+  const [{ data: clientActivity }, { data: sprintActivity }, { data: lastReviews }] = await Promise.all([
     clientIds.length > 0
       ? supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds)
       : Promise.resolve({ data: [] }),
     currentSprintIds.length > 0
       ? supabase.from("sprint_last_operational_activity").select("sprint_id, last_activity_at").in("sprint_id", currentSprintIds)
       : Promise.resolve({ data: [] }),
+    // Etapa 74 — última otimização (account_reviews) por cliente, alimenta
+    // o alerta "Nenhuma otimização registrada recentemente" por baixo de
+    // buildOperationClientCard (accountHealth não é exibido nesta tela, mas
+    // é calculado — precisa do dado real, nunca de um valor fictício).
+    clientIds.length > 0
+      ? supabase.from("account_reviews").select("client_id, reviewed_at").in("client_id", clientIds).order("reviewed_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
   ]);
+  const lastReviewAtByClient = new Map<string, string>();
+  for (const row of lastReviews ?? []) {
+    if (!lastReviewAtByClient.has(row.client_id)) lastReviewAtByClient.set(row.client_id, row.reviewed_at);
+  }
 
   type SprintRow = {
     id: string;
@@ -172,6 +183,7 @@ export default async function ClientsPage({
       clientLastActivityAt: clientActivityById.get(client.id) ?? null,
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
       lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
+      lastReviewAt: lastReviewAtByClient.get(client.id) ?? null,
     };
   });
 

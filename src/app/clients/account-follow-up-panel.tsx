@@ -1,22 +1,28 @@
 import Link from "next/link";
 import type { OperationalTrackingRow, MonthlyOccurrenceSummary } from "@/lib/operational-tracking";
 import type { ClientHistoryRow } from "@/lib/client-operational-history";
-import type { OptimizationType } from "@/lib/supabase/database.types";
+import type { AccountReviewOutcome, OptimizationType } from "@/lib/supabase/database.types";
 import type { PerformanceSummary } from "@/lib/performance";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { MonthlyKpiSummary } from "./monthly-kpi-summary";
 import { AccountActivitySummary } from "./account-activity-summary";
 import { CollapsibleAccountHistory } from "./collapsible-account-history";
 
-export interface LastReviewInfo {
+/**
+ * Última otimização (Etapa 74) — substitui os antigos indicadores separados
+ * "Última análise"/"Última otimização": otimização é a revisão estratégica
+ * da conta em si (account_reviews), registrada mesmo quando nenhuma
+ * alteração foi necessária — nunca dois indicadores pro mesmo evento.
+ */
+export interface LastOptimizationInfo {
   reviewedAt: string;
   managerName: string;
-}
-
-export interface LastOptimizationInfo {
-  type: OptimizationType;
-  occurredAt: string;
-  managerName: string;
+  outcome: AccountReviewOutcome;
+  /** Tipos das alterações técnicas registradas (só quando outcome é
+   * OPTIMIZATION_PERFORMED) — vazio nos demais casos. */
+  optimizationTypes: OptimizationType[];
+  /** Descrição do problema (só quando outcome é ISSUE_IDENTIFIED). */
+  issueDescription: string | null;
 }
 
 /**
@@ -56,7 +62,6 @@ export function AccountFollowUpPanel({
   performanceGoal,
   performanceSummary,
   configureObjectiveHref,
-  lastReview,
   lastOptimization,
   tracking,
   monthlySummary,
@@ -76,7 +81,6 @@ export function AccountFollowUpPanel({
   performanceGoal: PerformanceGoal | null;
   performanceSummary: PerformanceSummary | null;
   configureObjectiveHref: string;
-  lastReview: LastReviewInfo | null;
   lastOptimization: LastOptimizationInfo | null;
   tracking: Record<"reuniao" | "entrega_criativo", OperationalTrackingRow>;
   monthlySummary: Record<"reuniao" | "entrega_criativo", MonthlyOccurrenceSummary>;
@@ -97,7 +101,7 @@ export function AccountFollowUpPanel({
           scroll={false}
           className="rounded-md bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-hover"
         >
-          + Registrar análise
+          + Registrar otimização
         </Link>
       </div>
 
@@ -114,7 +118,6 @@ export function AccountFollowUpPanel({
         <AccountActivitySummary
           monthLabel={monthLabel}
           isCurrentMonth={isCurrentMonth}
-          lastReview={lastReview}
           lastOptimization={lastOptimization}
           tracking={tracking}
           monthlySummary={monthlySummary}

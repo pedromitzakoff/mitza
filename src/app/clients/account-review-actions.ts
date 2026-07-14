@@ -80,11 +80,11 @@ export async function recordAccountReviewAction(clientId: string, returnTo: stri
     redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}reviewError=${encodeURIComponent(message)}`);
   }
 
-  if (!ACCOUNT_REVIEW_REASONS.includes(reason)) fail("Selecione o motivo da análise.");
+  if (!ACCOUNT_REVIEW_REASONS.includes(reason)) fail("Selecione o motivo da revisão.");
   if (reason === "OTHER" && !reasonOtherDescription) fail('Descreva o motivo quando selecionar "Outro".');
-  if (!ACCOUNT_REVIEW_OUTCOMES.includes(outcome)) fail("Selecione o resultado da análise.");
+  if (!ACCOUNT_REVIEW_OUTCOMES.includes(outcome)) fail("Selecione o resultado da revisão.");
   if (outcome === "OPTIMIZATION_PERFORMED" && optimizations.length === 0) {
-    fail("Adicione ao menos uma otimização realizada.");
+    fail("Adicione ao menos uma alteração realizada.");
   }
   if (outcome === "ISSUE_IDENTIFIED" && !issueDescription) fail("Descreva o problema identificado.");
 
@@ -111,7 +111,7 @@ export async function recordAccountReviewAction(clientId: string, returnTo: stri
     p_source: "web",
   });
 
-  if (error || !data) fail(error?.message ?? "Não foi possível registrar a análise.");
+  if (error || !data) fail(error?.message ?? "Não foi possível registrar a otimização.");
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/sprints");

@@ -10,8 +10,8 @@ import type { AttentionAlert } from "@/lib/attention-alerts";
 import { CommentThread, type CommentItem } from "./comment-thread";
 import { SprintTaskList } from "./sprint-task-list";
 import type { TaskListItem } from "./task-row";
-import { resetSprintSpendSourceAction, updateSprintActualSpendAction } from "./sprint-actions";
-import { upsertSprintPerformanceResultAction } from "./performance-actions";
+import { resetSprintSpendSourceAction } from "./sprint-actions";
+import { updateSprintPerformanceAction } from "./performance-actions";
 import { MoneyInput } from "./money-input";
 import { AccountReviewsSection, type AccountReviewSummaryItem } from "./account-reviews-section";
 import { getLatestPerformanceUpdateText, type SprintPerformanceView } from "@/lib/performance";
@@ -25,15 +25,16 @@ import { TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 export interface SprintPerformanceProps {
   view: SprintPerformanceView;
   /** Valor já lançado de cada canal selecionável, pra pré-preencher
-   * "Editar resultados" — vazio quando `view.kind` não é `has_data`/`no_data`
+   * "Atualizar performance" — vazio quando `view.kind` não é `has_data`/`no_data`
    * (nada pra editar numa sprint futura). */
   editableChannels: { channel: TrafficChannel; existingCount: number | null }[];
 }
 
 /** Linha compacta "32 leads · CPL R$ 25" / "Sem dados de performance" /
  * "Performance ainda não iniciada" / "Objetivo não configurado" — mesmo
- * texto no resumo recolhido do card e no início da seção expandida, nunca
- * duas fórmulas diferentes pro mesmo estado. */
+ * texto no resumo recolhido do card e na linha "Resultados"/"Custo por
+ * resultado" da seção expandida, nunca duas fórmulas diferentes pro mesmo
+ * estado. */
 function formatCompactPerformanceText(view: SprintPerformanceView): string {
   switch (view.kind) {
     case "not_configured":
@@ -57,123 +58,46 @@ const PERFORMANCE_STATUS_TEXT_CLASSES: Record<string, string> = {
   worse: "text-red-600 dark:text-red-400",
 };
 
-/**
- * Seção "Performance da sprint" (Etapa 71, seção 26) — Resultado / Custo por
- * resultado / Meta / Comparação / Fonte / Última atualização, nunca um
- * campo de CPL/CPA editável (sempre derivado). "Editar resultados" é
- * sempre por canal fixo (nunca um <select>, pra funcionar sem JS, mesmo
- * padrão checkbox-toggle já usado no gasto real acima) — um canal só
- * (Meta ou Google) ainda grava a dimensão de canal normalmente.
- */
-function SprintPerformanceSection({
-  performance,
-  sprintId,
-  clientId,
-  isAdmin,
-}: {
-  performance: SprintPerformanceProps;
-  sprintId: string;
-  clientId: string;
-  isAdmin: boolean;
-}) {
-  const { view, editableChannels } = performance;
-  const compactText = formatCompactPerformanceText(view);
-  const canEdit = isAdmin && (view.kind === "has_data" || view.kind === "no_data");
-  const editToggleId = `edit-performance-${sprintId}`;
-
-  return (
-    <div className="mt-3 border-t border-border pt-2">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Performance da sprint</p>
-
-      {view.kind !== "has_data" ? (
-        <p className="mt-0.5 text-sm text-muted-foreground">{compactText}</p>
-      ) : (
-        (() => {
-          const { goal, summary } = view;
-          const config = PERFORMANCE_GOALS[goal];
-          const comparisonText =
-            summary.comparison.status === "not_available"
-              ? null
-              : summary.comparison.status === "on_target"
-                ? "Dentro da meta"
-                : `${Math.round(Math.abs((summary.comparison.variation ?? 0) * 100))}% ${summary.comparison.status === "worse" ? "acima da meta" : "melhor que a meta"}`;
-          return (
-            <div className="mt-0.5 flex flex-wrap items-baseline gap-x-4 gap-y-0.5">
-              <p className="text-sm font-semibold text-foreground">{formatPerformanceResult(summary.resultCount, goal)}</p>
-              <p className="text-sm text-foreground">
-                {config.costMetricShortLabel}{" "}
-                <span className="font-semibold">
-                  {summary.costPerResult !== null ? formatCurrency(summary.costPerResult) : "—"}
-                </span>
-              </p>
-              {summary.targetCostPerResult !== null && (
-                <p className="text-[11px] text-muted-foreground">
-                  Meta {config.costMetricShortLabel} {formatCurrency(summary.targetCostPerResult)}
-                </p>
-              )}
-              {comparisonText && (
-                <p className={`text-[11px] font-medium ${PERFORMANCE_STATUS_TEXT_CLASSES[summary.comparison.status] ?? "text-muted-foreground"}`}>
-                  {comparisonText}
-                </p>
-              )}
-              {summary.costUnavailableReason === "zero_results" && (
-                <p className="text-[11px] text-muted-foreground">Nenhum resultado gerado no período.</p>
-              )}
-            </div>
-          );
-        })()
-      )}
-
-      {view.kind === "has_data" && (
-        <p className="mt-0.5 text-[11px] text-muted-foreground">
-          {getLatestPerformanceUpdateText(view.summary.latestSource, view.summary.latestUpdatedAt, formatShortDateTime)}
-        </p>
-      )}
-
-      {canEdit && editableChannels.length > 0 && (
-        <>
-          <input type="checkbox" id={editToggleId} className="peer hidden" />
-          <label
-            htmlFor={editToggleId}
-            className="mt-1 inline-block cursor-pointer text-[11px] font-medium text-brand hover:underline peer-checked:hidden"
-          >
-            Editar resultados
-          </label>
-
-          <div className="mt-1.5 hidden flex-col gap-1.5 peer-checked:flex">
-            {editableChannels.map(({ channel, existingCount }) => (
-              <form
-                key={channel}
-                action={upsertSprintPerformanceResultAction.bind(null, sprintId, clientId)}
-                className="flex flex-wrap items-center gap-1.5"
-              >
-                <input type="hidden" name="channel" value={channel} />
-                <span className="w-14 shrink-0 text-[11px] text-muted-foreground">{TRAFFIC_CHANNELS[channel].shortLabel}</span>
-                <input
-                  type="number"
-                  name="result_count"
-                  min={0}
-                  step={1}
-                  defaultValue={existingCount ?? ""}
-                  placeholder="0"
-                  className="w-20 rounded-md border border-border bg-transparent px-2 py-1 text-[11px] text-foreground outline-none focus:border-brand"
-                />
-                <button
-                  type="submit"
-                  className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                >
-                  Salvar
-                </button>
-              </form>
-            ))}
-            <label htmlFor={editToggleId} className="cursor-pointer self-start text-[11px] text-muted-foreground hover:underline">
-              Cancelar
-            </label>
-          </div>
-        </>
-      )}
-    </div>
-  );
+/** Textos prontos das 2 células "Resultados"/"Custo por resultado" da seção
+ * "Performance da sprint" — os 4 estados nunca são confundidos entre si
+ * (Etapa 74, seção 5 do pedido): sem objetivo, sprint futura, sem dado
+ * registrado, e dado registrado (que por sua vez nunca fabrica "0
+ * leads"/"CPL R$ 0" a menos que o registro exista de verdade com contagem
+ * 0 — `view.kind === "has_data"` já é essa distinção). */
+export function derivePerformanceCellTexts(view: SprintPerformanceView): {
+  resultsValue: string;
+  resultsAux: string | null;
+  costValue: string;
+  costAux: { text: string; tone: "better" | "worse" | null } | null;
+} {
+  switch (view.kind) {
+    case "not_configured":
+      return { resultsValue: "—", resultsAux: "Objetivo não configurado", costValue: "—", costAux: null };
+    case "not_started":
+      return { resultsValue: "—", resultsAux: "Performance ainda não iniciada", costValue: "—", costAux: null };
+    case "no_data":
+      return { resultsValue: "—", resultsAux: "Sem dados de performance", costValue: "—", costAux: null };
+    case "has_data": {
+      const { goal, summary } = view;
+      const config = PERFORMANCE_GOALS[goal];
+      const resultsValue = formatPerformanceResult(summary.resultCount, goal);
+      const resultsAux = summary.resultCount === 0 ? "Nenhum resultado gerado no período" : null;
+      const costValue = summary.costPerResult !== null ? `${config.costMetricShortLabel} ${formatCurrency(summary.costPerResult)}` : "—";
+      let costAux: { text: string; tone: "better" | "worse" | null } | null = null;
+      if (summary.targetCostPerResult !== null && summary.costPerResult !== null) {
+        if (summary.comparison.status === "on_target") {
+          costAux = { text: "Dentro da meta", tone: null };
+        } else if (summary.comparison.status === "worse" || summary.comparison.status === "better") {
+          const pct = Math.round(Math.abs((summary.comparison.variation ?? 0) * 100));
+          costAux = {
+            text: `${pct}% ${summary.comparison.status === "worse" ? "acima da meta" : "melhor que a meta"}`,
+            tone: summary.comparison.status,
+          };
+        }
+      }
+      return { resultsValue, resultsAux, costValue, costAux };
+    }
+  }
 }
 
 const TEMPORAL_LABEL = {
@@ -216,14 +140,168 @@ export function AlertsSummaryLine({ topAlert, remaining }: { topAlert: Attention
 }
 
 /**
+ * "Performance da sprint" (Etapa 74) — substitui os antigos blocos separados
+ * "Investimento realizado" + "Performance da sprint": investimento,
+ * resultado e custo por resultado agora vivem juntos, nas 3 colunas de uma
+ * mesma seção, com UMA ação ("Atualizar performance") que grava os dois no
+ * mesmo fluxo (`updateSprintPerformanceAction`). Nenhuma fórmula financeira
+ * ou de custo por resultado mudou — só a apresentação e a ação de edição.
+ */
+function SprintPerformanceSection({
+  sprint,
+  performance,
+  clientId,
+  isAdmin,
+  sourceTimestampText,
+  isManualSource,
+  revertSourceToggleId,
+}: {
+  sprint: SprintFinancials;
+  performance?: SprintPerformanceProps;
+  clientId: string;
+  isAdmin: boolean;
+  sourceTimestampText: string | null;
+  isManualSource: boolean;
+  revertSourceToggleId: string;
+}) {
+  const view = performance?.view ?? { kind: "not_configured" as const };
+  const cells = derivePerformanceCellTexts(view);
+  const editableChannels = performance?.editableChannels ?? [];
+  const canEditResults = isAdmin && (view.kind === "has_data" || view.kind === "no_data") && editableChannels.length > 0;
+  const editToggleId = `edit-performance-${sprint.sprintId}`;
+  const investmentSourceText = sourceTimestampText ?? (isManualSource ? "Manual" : "Meta");
+  const performanceSourceText =
+    view.kind === "has_data" ? getLatestPerformanceUpdateText(view.summary.latestSource, view.summary.latestUpdatedAt, formatShortDateTime) : null;
+
+  return (
+    <div className="rounded-lg border border-border bg-zinc-50 p-3 dark:bg-zinc-900/40">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Performance da sprint</p>
+
+      <div className="mt-1.5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Investimento realizado</p>
+          <p className="mt-0.5 text-lg font-semibold text-foreground">{formatCurrency(sprint.actualSpend)}</p>
+        </div>
+
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Resultados</p>
+          <p className="mt-0.5 text-lg font-semibold text-foreground">{cells.resultsValue}</p>
+          {cells.resultsAux && <p className="text-[11px] text-muted-foreground">{cells.resultsAux}</p>}
+          {view.kind === "not_configured" && (
+            <Link href={`/clients/${clientId}/edit`} className="text-[11px] font-medium text-brand hover:underline">
+              Configurar objetivo
+            </Link>
+          )}
+        </div>
+
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Custo por resultado</p>
+          <p className="mt-0.5 text-lg font-semibold text-foreground">{cells.costValue}</p>
+          {cells.costAux && (
+            <p
+              className={`text-[11px] font-medium ${cells.costAux.tone ? PERFORMANCE_STATUS_TEXT_CLASSES[cells.costAux.tone] : "text-muted-foreground"}`}
+            >
+              {cells.costAux.text}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {performanceSourceText ? (
+        <div className="mt-2 flex flex-col gap-0.5 text-[11px] text-muted-foreground">
+          <p>Investimento: {investmentSourceText}</p>
+          <p>Resultados: {performanceSourceText}</p>
+        </div>
+      ) : (
+        <p className="mt-2 text-[11px] text-muted-foreground">{investmentSourceText}</p>
+      )}
+
+      {isManualSource && (
+        <div className="mt-0.5">
+          <input type="checkbox" id={revertSourceToggleId} className="peer/revert hidden" />
+          <label
+            htmlFor={revertSourceToggleId}
+            className="cursor-pointer text-[11px] text-muted-foreground hover:underline peer-checked/revert:hidden"
+          >
+            Usar dado do Meta
+          </label>
+          <div className="hidden items-center gap-1.5 peer-checked/revert:flex">
+            <span className="text-[11px] text-muted-foreground">Substituir valor manual pelo do Meta?</span>
+            <form action={resetSprintSpendSourceAction.bind(null, sprint.sprintId, clientId)}>
+              <button type="submit" className="text-[11px] font-medium text-brand hover:underline">
+                Confirmar
+              </button>
+            </form>
+            <label htmlFor={revertSourceToggleId} className="cursor-pointer text-[11px] text-muted-foreground hover:underline">
+              Cancelar
+            </label>
+          </div>
+        </div>
+      )}
+
+      {isAdmin && (
+        <>
+          <input type="checkbox" id={editToggleId} className="peer hidden" />
+          <label
+            htmlFor={editToggleId}
+            className="mt-2 inline-block cursor-pointer text-[11px] font-medium text-brand hover:underline peer-checked:hidden"
+          >
+            Atualizar performance
+          </label>
+
+          <form
+            action={updateSprintPerformanceAction.bind(null, sprint.sprintId, clientId)}
+            className="mt-2 hidden flex-col gap-1.5 peer-checked:flex"
+          >
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="w-28 shrink-0 text-[11px] text-muted-foreground">Investimento</span>
+              <MoneyInput name="actual_spend" defaultValue={sprint.actualSpend} autoFocus />
+            </div>
+            {canEditResults &&
+              editableChannels.map(({ channel, existingCount }) => (
+                <div key={channel} className="flex flex-wrap items-center gap-1.5">
+                  <span className="w-28 shrink-0 text-[11px] text-muted-foreground">
+                    Resultado · {TRAFFIC_CHANNELS[channel].shortLabel}
+                  </span>
+                  <input
+                    type="number"
+                    name={`result_${channel}`}
+                    min={0}
+                    step={1}
+                    defaultValue={existingCount ?? ""}
+                    placeholder="0"
+                    className="w-20 rounded-md border border-border bg-transparent px-2 py-1 text-[11px] text-foreground outline-none focus:border-brand"
+                  />
+                </div>
+              ))}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="submit"
+                className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              >
+                Salvar
+              </button>
+              <label htmlFor={editToggleId} className="cursor-pointer text-[11px] text-muted-foreground hover:underline">
+                Cancelar
+              </label>
+            </div>
+          </form>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
  * Conteúdo investigativo de uma sprint (Etapa 44: "card aberto = investigação
- * e execução") — grid financeiro com edição de gasto manual, alertas
- * detalhados, lista de tarefas, comentários e "abrir cliente". Extraído de
- * dentro do próprio `<details>` de `SprintCard` pra poder ser reaproveitado
- * também pelo card compacto de conta da tela Sprints (Sprint atual), que
- * precisa do mesmo conteúdo de investigação mas sob um `<details>` próprio,
- * com um resumo fechado diferente (mais simples) — nunca uma segunda
- * implementação do financeiro/tarefas/comentários da sprint.
+ * e execução") — "Performance da sprint" (investimento + resultado + custo,
+ * Etapa 74) e "Execução da sprint" (tarefas + otimizações, Etapa 74),
+ * alertas detalhados, comentários e "abrir cliente". Extraído de dentro do
+ * próprio `<details>` de `SprintCard` pra poder ser reaproveitado também
+ * pelo card compacto de conta da tela Sprints (Sprint atual), que precisa
+ * do mesmo conteúdo de investigação mas sob um `<details>` próprio, com um
+ * resumo fechado diferente (mais simples) — nunca uma segunda implementação
+ * do financeiro/performance/tarefas/otimizações/comentários da sprint.
  */
 export function SprintCardBody({
   sprint,
@@ -253,9 +331,9 @@ export function SprintCardBody({
   alerts?: AttentionAlert[];
   openClientHref?: string;
   buildTaskHref?: (taskId: string) => string;
-  /** Análises da Conta desta sprint (Etapa 57) — opcional: só quem já
-   * consulta account_reviews passa isto (mesmo padrão de `alerts`/
-   * `executionLabel`, nem toda tela que usa este componente precisa). */
+  /** Otimizações desta sprint (Etapa 57/74) — opcional: só quem já consulta
+   * account_reviews passa isto (mesmo padrão de `alerts`/`executionLabel`,
+   * nem toda tela que usa este componente precisa). */
   accountReviews?: AccountReviewSummaryItem[];
   newReviewHref?: string;
   buildReviewDetailHref?: (reviewId: string) => string;
@@ -278,7 +356,6 @@ export function SprintCardBody({
     metaSyncedAt,
     formatShortDateTime,
   );
-  const editActualToggleId = `edit-actual-${sprint.sprintId}`;
   const revertSourceToggleId = `revert-source-${sprint.sprintId}`;
   const isManualSource = sprint.spendSource === "manual";
 
@@ -287,6 +364,7 @@ export function SprintCardBody({
 
   return (
     <div className="border-t border-border p-3">
+        {/* Contexto do período e do dia atual */}
         {isCurrent && (
           <div className="mb-3 inline-flex flex-col rounded-md border border-brand/30 bg-brand/5 px-3 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-brand">Hoje</span>
@@ -299,96 +377,20 @@ export function SprintCardBody({
           </p>
         )}
 
-        {/* Investimento realizado — Etapa 73: a camada de planejamento/
-            recomendação financeira POR SPRINT foi retirada da interface
-            operacional (fica só no nível mensal, na seção "Investimento do
-            mês"); a sprint agora só mostra o que de fato aconteceu. Nada foi
-            apagado por baixo — `computeOriginalSprintPlans`/
-            `computeMonthlyBudgetPlan`/`ensureClosedSprintSnapshots` continuam
-            existindo e escrevendo o histórico congelado (ver
-            `sprint-snapshot.ts`), só não alimentam mais nenhum componente de
-            tela. */}
-        <div className="rounded-lg border border-border bg-zinc-50 p-3 dark:bg-zinc-900/40">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Investimento realizado
-          </p>
-          {isAdmin ? (
-            <>
-              <input type="checkbox" id={editActualToggleId} className="peer hidden" />
-              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 peer-checked:hidden">
-                <p className="text-lg font-semibold text-foreground">{formatCurrency(sprint.actualSpend)}</p>
-                <label
-                  htmlFor={editActualToggleId}
-                  className="cursor-pointer text-[11px] font-medium text-brand hover:underline"
-                >
-                  Editar
-                </label>
-              </div>
-              <p className="text-[11px] text-muted-foreground peer-checked:hidden">
-                {sourceTimestampText ?? (isManualSource ? "Manual" : "Meta")}
-              </p>
-              {isManualSource && (
-                <div className="mt-0.5 peer-checked:hidden">
-                  <input type="checkbox" id={revertSourceToggleId} className="peer/revert hidden" />
-                  <label
-                    htmlFor={revertSourceToggleId}
-                    className="cursor-pointer text-[11px] text-muted-foreground hover:underline peer-checked/revert:hidden"
-                  >
-                    Usar dado do Meta
-                  </label>
-                  <div className="hidden items-center gap-1.5 peer-checked/revert:flex">
-                    <span className="text-[11px] text-muted-foreground">Substituir valor manual pelo do Meta?</span>
-                    <form action={resetSprintSpendSourceAction.bind(null, sprint.sprintId, clientId)}>
-                      <button type="submit" className="text-[11px] font-medium text-brand hover:underline">
-                        Confirmar
-                      </button>
-                    </form>
-                    <label
-                      htmlFor={revertSourceToggleId}
-                      className="cursor-pointer text-[11px] text-muted-foreground hover:underline"
-                    >
-                      Cancelar
-                    </label>
-                  </div>
-                </div>
-              )}
-              <form
-                action={updateSprintActualSpendAction.bind(null, sprint.sprintId, clientId)}
-                className="mt-1 hidden flex-wrap items-center gap-1.5 peer-checked:flex"
-              >
-                <MoneyInput name="actual_spend" defaultValue={sprint.actualSpend} autoFocus />
-                <button
-                  type="submit"
-                  className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                >
-                  Salvar
-                </button>
-                <label
-                  htmlFor={editActualToggleId}
-                  className="cursor-pointer text-[11px] text-muted-foreground hover:underline"
-                >
-                  Cancelar
-                </label>
-              </form>
-            </>
-          ) : (
-            <>
-              <p className="mt-0.5 text-lg font-semibold text-foreground">{formatCurrency(sprint.actualSpend)}</p>
-              <p className="text-[11px] text-muted-foreground">
-                {sourceTimestampText ?? (isManualSource ? "Manual" : "Meta")}
-              </p>
-            </>
-          )}
-        </div>
-
-        {performance && (
-          <SprintPerformanceSection
-            performance={performance}
-            sprintId={sprint.sprintId}
-            clientId={clientId}
-            isAdmin={isAdmin}
-          />
-        )}
+        {/* Performance da sprint — investimento realizado, resultados e custo
+            por resultado juntos, com uma única ação de atualização (Etapa 74).
+            Etapa 73: a camada de planejamento/recomendação financeira POR
+            SPRINT continua fora da interface operacional (fica só no nível
+            mensal, "Investimento do mês") — aqui só o que de fato aconteceu. */}
+        <SprintPerformanceSection
+          sprint={sprint}
+          performance={performance}
+          clientId={clientId}
+          isAdmin={isAdmin}
+          sourceTimestampText={sourceTimestampText}
+          isManualSource={isManualSource}
+          revertSourceToggleId={revertSourceToggleId}
+        />
 
         {topAlert && (
           <details className="group/alerts mt-3">
@@ -418,15 +420,22 @@ export function SprintCardBody({
           </details>
         )}
 
-        <SprintTaskList tasks={tasks} clientId={clientId} sprintId={sprint.sprintId} buildTaskHref={buildTaskHref} />
-
-        {accountReviews && newReviewHref && buildReviewDetailHref && (
-          <AccountReviewsSection
-            reviews={accountReviews}
-            newReviewHref={newReviewHref}
-            buildDetailHref={buildReviewDetailHref}
-          />
-        )}
+        {/* Execução da sprint — tarefas recorrentes e otimizações (revisões
+            estratégicas da conta) lado a lado, mesmo nível hierárquico
+            (Etapa 74). */}
+        <div className="mt-3 border-t border-border pt-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Execução da sprint</p>
+          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+            <SprintTaskList tasks={tasks} clientId={clientId} sprintId={sprint.sprintId} buildTaskHref={buildTaskHref} />
+            {accountReviews && newReviewHref && buildReviewDetailHref && (
+              <AccountReviewsSection
+                reviews={accountReviews}
+                newReviewHref={newReviewHref}
+                buildDetailHref={buildReviewDetailHref}
+              />
+            )}
+          </div>
+        </div>
 
         <details className="mt-3 border-t border-border pt-2 [&_summary]:cursor-pointer [&_summary]:list-none">
           <summary className="text-xs font-medium text-muted-foreground hover:text-brand">
@@ -532,10 +541,10 @@ export function SprintCard({
         isCurrent ? "border-l-4 border-l-brand border-y-border border-r-border" : "border-border"
       }`}
     >
-      {/* Linha compacta — Etapa 73: prioriza realizado + performance real,
+      {/* Linha compacta — Etapa 73/74: prioriza realizado + performance real,
           nunca mais orientação/planejamento financeiro semanal (isso vive só
           na seção mensal "Investimento do mês"). Ordem: período → status
-          temporal → investido → resultado/custo → tarefas → análises. O
+          temporal → investido → resultado/custo → tarefas → otimizações. O
           próprio badge temporal já cobre "status operacional" (Sprint atual/
           Concluída/Futura) — nunca um segundo selo Acima/Abaixo/Dentro/Sem
           planejamento aqui, essas classificações são só do nível mensal. */}
@@ -569,7 +578,7 @@ export function SprintCard({
           )}
           {accountReviews && (
             <span className="hidden sm:inline">
-              {accountReviews.length} {accountReviews.length === 1 ? "análise" : "análises"}
+              {accountReviews.length} {accountReviews.length === 1 ? "otimização" : "otimizações"}
             </span>
           )}
         </span>

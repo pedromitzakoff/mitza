@@ -1,23 +1,26 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/supabase/database.types";
-import { OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
+import type { Database, AccountReviewOutcome, OptimizationType } from "@/lib/supabase/database.types";
+import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
 
 /**
  * "Histórico de {mês}" do Acompanhamento da Conta (Etapa 62, seção 9 do
- * pedido) — unifica análises, otimizações, reuniões e entregas de criativo
- * numa única lista cronológica. Reaproveita 100% `operational_events`
- * (nenhum evento novo, nenhuma tabela nova): cada análise já emite
- * exatamente 1 `account_review_recorded`, cada otimização já emite 1
- * `account_optimization_recorded` (ver supabase/account-reviews.sql) —
- * nunca inclui os eventos "outcome-specific"
+ * pedido) — unifica otimizações, reuniões e entregas de criativo numa única
+ * lista cronológica. Reaproveita 100% `operational_events` (nenhum evento
+ * novo, nenhuma tabela nova): cada otimização (revisão estratégica da
+ * conta) já emite exatamente 1 `account_review_recorded`, mesmo quando teve
+ * uma ou mais alterações técnicas registradas (`account_optimizations`) —
+ * por isso `account_optimization_recorded` NUNCA entra aqui (Etapa 74,
+ * seção 11: uma otimização com 2 alterações não pode virar 3 linhas de
+ * histórico; o detalhe da(s) alteração(ões) já vem no metadata do próprio
+ * `account_review_recorded`, ver `buildReviewDetail` abaixo). Também nunca
+ * inclui os eventos "outcome-specific"
  * (`account_review_no_change`/`_optimization_performed`/`_issue_identified`),
- * que duplicariam a mesma análise como uma segunda linha. Meeting/entrega
+ * que duplicariam a mesma otimização como uma segunda linha. Meeting/entrega
  * só entram aqui quando já têm desfecho (completed/cancelled/late) —
  * agendamento em si não é "histórico", é o que já aparece como "próxima".
  */
 const HISTORY_EVENT_TYPES = [
   "account_review_recorded",
-  "account_optimization_recorded",
   "meeting_completed",
   "meeting_cancelled",
   "creative_delivery_completed",
@@ -33,15 +36,14 @@ export interface ClientHistoryRow {
   responsibleName: string | null;
   label: string;
   detail: string | null;
-  /** id da account_review, só quando o evento se refere a uma análise ou
-   * otimização — usado pra "Ver análise" abrir o mesmo drawer de sempre
-   * (nunca duplica a lógica de detalhe da análise). */
+  /** id da account_review, só quando o evento se refere a uma otimização —
+   * usado pra "Ver otimização" abrir o mesmo drawer de sempre (nunca
+   * duplica a lógica de detalhe). */
   reviewId: string | null;
 }
 
 const EVENT_LABEL: Record<ClientHistoryEventType, string> = {
-  account_review_recorded: "Análise",
-  account_optimization_recorded: "Otimização",
+  account_review_recorded: "Otimização",
   meeting_completed: "Reunião realizada",
   meeting_cancelled: "Reunião não realizada",
   creative_delivery_completed: "Entrega realizada",
@@ -50,13 +52,28 @@ const EVENT_LABEL: Record<ClientHistoryEventType, string> = {
 
 const HISTORY_PAGE_SIZE = 15;
 
-function buildDetail(eventType: ClientHistoryEventType, metadata: Record<string, unknown>): string | null {
-  if (eventType === "account_optimization_recorded") {
-    const type = metadata.optimization_type;
-    return typeof type === "string" && type in OPTIMIZATION_TYPE_LABEL
-      ? OPTIMIZATION_TYPE_LABEL[type as keyof typeof OPTIMIZATION_TYPE_LABEL]
-      : null;
+/** Detalhe compacto de uma otimização a partir do próprio metadata do
+ * `account_review_recorded` (outcome + tipos de alteração já gravados ali,
+ * ver record_account_review em supabase/account-reviews.sql) — nunca uma
+ * segunda consulta a account_optimizations só pra isso. */
+function buildReviewDetail(metadata: Record<string, unknown>): string | null {
+  const outcome = metadata.outcome;
+  if (typeof outcome !== "string" || !(outcome in ACCOUNT_REVIEW_OUTCOME_LABEL)) return null;
+  const outcomeLabel = ACCOUNT_REVIEW_OUTCOME_LABEL[outcome as AccountReviewOutcome];
+
+  if (outcome === "OPTIMIZATION_PERFORMED") {
+    const types = Array.isArray(metadata.optimization_types) ? metadata.optimization_types : [];
+    if (types.length === 1 && typeof types[0] === "string" && types[0] in OPTIMIZATION_TYPE_LABEL) {
+      return `${outcomeLabel} · ${OPTIMIZATION_TYPE_LABEL[types[0] as OptimizationType]}`;
+    }
+    if (types.length > 1) return `${outcomeLabel} · ${types.length} alterações`;
   }
+
+  return outcomeLabel;
+}
+
+function buildDetail(eventType: ClientHistoryEventType, metadata: Record<string, unknown>): string | null {
+  if (eventType === "account_review_recorded") return buildReviewDetail(metadata);
   return null;
 }
 
@@ -94,12 +111,7 @@ export async function fetchClientOperationalHistory(
     rows: visible.map((row) => {
       const eventType = row.event_type as ClientHistoryEventType;
       const metadata = (row.metadata ?? {}) as Record<string, unknown>;
-      const isReviewRelated = row.entity_type === "account_review" || row.entity_type === "account_optimization";
-      const reviewId = eventType === "account_review_recorded"
-        ? row.entity_id
-        : eventType === "account_optimization_recorded"
-          ? (typeof metadata.account_review_id === "string" ? metadata.account_review_id : null)
-          : null;
+      const reviewId = eventType === "account_review_recorded" ? row.entity_id : null;
 
       return {
         id: row.id,
@@ -108,7 +120,7 @@ export async function fetchClientOperationalHistory(
         responsibleName: row.actor?.name ?? null,
         label: EVENT_LABEL[eventType],
         detail: buildDetail(eventType, metadata),
-        reviewId: isReviewRelated ? reviewId : null,
+        reviewId,
       };
     }),
   };

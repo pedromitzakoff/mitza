@@ -58,7 +58,7 @@ export function ClientOperationalHistoryDrawer({
                     scroll={false}
                     className="shrink-0 text-xs font-medium text-brand hover:underline"
                   >
-                    Ver análise
+                    Ver otimização
                   </Link>
                 )}
               </li>

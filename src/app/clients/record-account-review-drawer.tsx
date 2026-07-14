@@ -72,7 +72,7 @@ export function RecordAccountReviewDrawer({
       <Link href={closeHref} scroll={false} className="fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
       <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-foreground">Registrar análise</h2>
+          <h2 className="text-lg font-semibold text-foreground">Registrar otimização</h2>
           <Link
             href={closeHref}
             scroll={false}
@@ -105,7 +105,7 @@ export function RecordAccountReviewDrawer({
           />
 
           <section>
-            <p className="text-sm font-medium text-foreground">Por que você analisou a conta?</p>
+            <p className="text-sm font-medium text-foreground">Por que você revisou a conta?</p>
             <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
               {ACCOUNT_REVIEW_REASONS.map((r) => (
                 <button
@@ -134,7 +134,7 @@ export function RecordAccountReviewDrawer({
 
           {reason !== "" && (
             <section className="border-t border-border pt-4">
-              <p className="text-sm font-medium text-foreground">Qual foi o resultado da análise?</p>
+              <p className="text-sm font-medium text-foreground">Qual foi o resultado da revisão?</p>
               <div className="mt-2 flex flex-col gap-1.5">
                 {ACCOUNT_REVIEW_OUTCOMES.map((o) => (
                   <button
@@ -173,13 +173,13 @@ export function RecordAccountReviewDrawer({
 
           {outcome === "OPTIMIZATION_PERFORMED" && (
             <section className="border-t border-border pt-4">
-              <p className="text-sm font-medium text-foreground">Quais otimizações foram realizadas?</p>
+              <p className="text-sm font-medium text-foreground">Quais alterações foram realizadas?</p>
               <div className="mt-2 flex flex-col gap-3">
                 {optimizations.map((opt, index) => (
                   <div key={index} className="rounded-md border border-border p-2.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Otimização {index + 1}
+                        Alteração {index + 1}
                       </span>
                       {optimizations.length > 1 && (
                         <button
@@ -193,7 +193,7 @@ export function RecordAccountReviewDrawer({
                     </div>
                     <div className="mt-1.5 grid grid-cols-2 gap-2">
                       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                        Tipo
+                        Área revisada
                         <select
                           value={opt.type}
                           onChange={(e) => {
@@ -256,7 +256,7 @@ export function RecordAccountReviewDrawer({
                 onClick={addOptimization}
                 className="mt-2 text-xs font-medium text-brand hover:underline"
               >
-                + Adicionar outra otimização
+                + Adicionar outra alteração
               </button>
             </section>
           )}
@@ -322,7 +322,7 @@ export function RecordAccountReviewDrawer({
               disabled={!canSave}
               className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Salvar análise
+              Salvar otimização
             </button>
             <Link
               href={closeHref}

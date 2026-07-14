@@ -135,17 +135,17 @@ export default async function EditClientPage({
         </form>
       </Section>
 
-      <Section title="Cadência de Análises da Conta">
+      <Section title="Cadência de Otimizações">
         <p className="mb-3 text-xs text-zinc-500">
-          Meta de frequência semanal e intervalo máximo tolerado sem análise — nunca uma data fixa de otimização, só
-          uma referência pra &ldquo;Análises da conta&rdquo; na página do cliente.
+          Meta de frequência semanal e intervalo máximo tolerado sem otimização — nunca uma data fixa, só uma
+          referência pra &ldquo;Otimizações&rdquo; na página do cliente.
         </p>
         <form
           action={updateAccountReviewCadenceAction.bind(null, id, returnTo)}
           className="flex flex-wrap items-end gap-3"
         >
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-500">Análises por semana</label>
+            <label className="text-xs text-zinc-500">Otimizações por semana</label>
             <input
               type="number"
               name="reviews_per_week"
@@ -155,7 +155,7 @@ export default async function EditClientPage({
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-500">Máx. dias úteis sem análise</label>
+            <label className="text-xs text-zinc-500">Máx. dias úteis sem otimização</label>
             <input
               type="number"
               name="max_business_days_without_review"

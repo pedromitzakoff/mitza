@@ -68,7 +68,7 @@ export function AccountReviewDetailDrawer({
       <Link href={closeHref} scroll={false} className="fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
       <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-foreground">Análise da conta</h2>
+          <h2 className="text-lg font-semibold text-foreground">Otimização</h2>
           <Link
             href={closeHref}
             scroll={false}
@@ -96,9 +96,9 @@ export function AccountReviewDetailDrawer({
             <dd className="font-medium text-foreground">{ACCOUNT_REVIEW_OUTCOME_LABEL[review.outcome]}</dd>
           </div>
           <div className="flex justify-between">
-            <dt className="text-muted-foreground">Tempo desde a análise anterior</dt>
+            <dt className="text-muted-foreground">Tempo desde a otimização anterior</dt>
             <dd className="font-medium text-foreground">
-              {review.secondsSincePreviousReview === null ? "Primeira análise" : formatDelay(review.secondsSincePreviousReview)}
+              {review.secondsSincePreviousReview === null ? "Primeira otimização" : formatDelay(review.secondsSincePreviousReview)}
             </dd>
           </div>
         </dl>
@@ -106,7 +106,7 @@ export function AccountReviewDetailDrawer({
         {review.optimizations.length > 0 && (
           <section className="mt-4 border-t border-border pt-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Otimizações realizadas
+              Alterações realizadas
             </h3>
             <ul className="mt-2 flex flex-col gap-2">
               {review.optimizations.map((opt) => (
@@ -175,7 +175,7 @@ export function AccountReviewDetailDrawer({
           ) : (
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
-                Transforme esta análise em uma atualização pronta para enviar ao cliente.
+                Transforme esta otimização em uma atualização pronta para enviar ao cliente.
               </p>
               <form
                 action={generateClientUpdateAction.bind(

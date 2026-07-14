@@ -215,7 +215,7 @@ export async function buildReportViewData(
   // vigente (`resolveMonthlyBudget`), realizado (`sumActualSpendForMonth`),
   // esperado até hoje (`computeMonthlyExpectedToDateByCalendar`, Etapa 67) e
   // `classifySpendStatus`, nunca uma conta paralela.
-  const [{ data: sprints }, { data: dailySpend }, { data: tasks }, { data: plannedAllocations }, { data: budgetChanges }] = await Promise.all([
+  const [{ data: sprints }, { data: dailySpend }, { data: tasks }, { data: plannedAllocations }, { data: budgetChanges }, { count: optimizationsCount }] = await Promise.all([
     // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
     // mês precisa ser encontrada mesmo com start_date fora do intervalo.
     supabase
@@ -247,6 +247,15 @@ export async function buildReportViewData(
       .select("new_amount, changed_at")
       .eq("client_id", clientId)
       .eq("month", monthRange.firstDay),
+    // Otimizações do mês (Etapa 74) — revisões estratégicas da conta
+    // (account_reviews.reviewed_at) registradas no período, mesma definição
+    // usada na Visão Geral; `head: true` porque só a contagem importa aqui.
+    supabase
+      .from("account_reviews")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", clientId)
+      .gte("reviewed_at", `${monthRange.firstDay}T00:00:00Z`)
+      .lte("reviewed_at", `${monthRange.lastDay}T23:59:59.999Z`),
   ]);
 
   const monthSprintRows = sprints ?? [];
@@ -270,7 +279,7 @@ export async function buildReportViewData(
     today.toISOString().slice(0, 10),
   ).expectedToDate;
   const status = classifySpendStatus(actual, expectedToDate, planned);
-  const execution = computeAgencyExecutionSummary(tasks ?? [], today);
+  const execution = computeAgencyExecutionSummary(tasks ?? [], today, optimizationsCount ?? 0);
   const sprintBehavior = computeSprintBehaviorRows(
     monthSprintRows,
     plannedAllocationRows,

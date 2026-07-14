@@ -27,7 +27,7 @@ const OUTCOME_TEXT_CLASSES: Record<AccountReviewOutcome, string> = {
 
 function reviewSubtitle(review: AccountReviewSummaryItem): string {
   if (review.outcome === "OPTIMIZATION_PERFORMED") {
-    return `${review.optimizationCount} ${review.optimizationCount === 1 ? "otimização" : "otimizações"}`;
+    return `${review.optimizationCount} ${review.optimizationCount === 1 ? "alteração" : "alterações"}`;
   }
   if (review.outcome === "ISSUE_IDENTIFIED") {
     return review.issueDescription ?? "";
@@ -36,10 +36,12 @@ function reviewSubtitle(review: AccountReviewSummaryItem): string {
 }
 
 /**
- * "ANÁLISES DA CONTA" (Etapa 57, seção 21) — dentro do componente
- * compartilhado de Sprint, logo depois de Tarefas. Compacta: data/hora,
- * resultado, resumo de uma linha, gestor; "+ Registrar análise" abre o
- * drawer (nunca formulário aberto permanentemente na tela).
+ * "OTIMIZAÇÕES" (Etapa 57/74) — dentro de "Execução da sprint", ao lado de
+ * Tarefas. Otimização = revisão estratégica da conta, registrada mesmo
+ * quando nenhuma alteração foi necessária (ver lib/account-reviews.ts).
+ * Compacta: data/hora, resultado, resumo de uma linha, gestor;
+ * "+ Registrar otimização" abre o drawer (nunca formulário aberto
+ * permanentemente na tela).
  */
 export function AccountReviewsSection({
   reviews,
@@ -53,7 +55,7 @@ export function AccountReviewsSection({
   return (
     <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-900">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Análises da conta</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Otimizações</h3>
         <span className="text-xs text-muted-foreground">
           {reviews.length} nesta sprint
         </span>
@@ -90,11 +92,11 @@ export function AccountReviewsSection({
           ))}
         </ul>
       ) : (
-        <p className="mt-1.5 text-sm text-muted-foreground">Nenhuma análise registrada nesta sprint.</p>
+        <p className="mt-1.5 text-sm text-muted-foreground">Nenhuma otimização registrada nesta sprint.</p>
       )}
 
       <Link href={newReviewHref} scroll={false} className="mt-1.5 inline-block text-xs font-medium text-brand hover:underline">
-        + Registrar análise
+        + Registrar otimização
       </Link>
     </div>
   );

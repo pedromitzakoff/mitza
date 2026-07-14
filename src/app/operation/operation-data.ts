@@ -89,6 +89,13 @@ export interface OperationClientRawData {
   clientLastActivityAt: string | null;
   sprintLastActivityAt: string | null;
   lastSyncedAt: string | null;
+  /** `reviewed_at` da otimização (revisão estratégica da conta,
+   * account_reviews) mais recente do cliente, de qualquer resultado —
+   * `null` se nunca houve uma. Etapa 74: substitui o sinal antigo baseado
+   * na tarefa recorrente "otimizacao" (desativada desde a Etapa 57 e nunca
+   * migrada pra este sinal, o que deixava "Última otimização"/"Otimizações
+   * realizadas" incorretos em toda a Visão Geral/Sprints/Relatório). */
+  lastReviewAt: string | null;
   /** Snapshot congelado (Etapa 70) de cada sprint do mês já encerrada — já
    * resolvido por quem chama (`ensureClosedSprintSnapshots`, que faz a
    * escrita no banco antes de montar o card, já que esta função é pura e
@@ -357,23 +364,15 @@ export function buildOperationClientCard(
     taskCounts.total++;
   }
 
-  const lookbackStart = new Date(today.getTime() - OPTIMIZATION_LOOKBACK_DAYS * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-  const recentOptimizationTasks = client.tasks.filter(
-    (t) => t.type === "otimizacao" && t.due_date >= lookbackStart && t.due_date <= todayStr,
-  );
-  const optimizationRecentlyDone =
-    recentOptimizationTasks.length === 0 ||
-    recentOptimizationTasks.some((t) => effectiveTaskStatus(t, today) === "feito");
-
-  const completedOptimizations = client.tasks.filter(
-    (t) => t.type === "otimizacao" && effectiveTaskStatus(t, today) === "feito",
-  );
-  const lastOptimizationAt =
-    completedOptimizations.length > 0
-      ? completedOptimizations.reduce((latest, t) => (t.due_date > latest ? t.due_date : latest), completedOptimizations[0].due_date)
-      : null;
+  // Etapa 74: sinal de "otimização recente" e "última otimização" vêm de
+  // account_reviews (revisão estratégica da conta), não mais da tarefa
+  // recorrente "otimizacao" (desativada desde a Etapa 57).
+  const lookbackStartIso = new Date(today.getTime() - OPTIMIZATION_LOOKBACK_DAYS * 86_400_000).toISOString();
+  const optimizationRecentlyDone = client.lastReviewAt !== null && client.lastReviewAt >= lookbackStartIso;
+  // `lastOptimizationAt` é consumido como data (`${lastOptimizationAt}T00:00:00Z`)
+  // por formatLastOptimizationLabel/sprints/page.tsx — nunca o timestamp
+  // completo, só a data civil.
+  const lastOptimizationAt = client.lastReviewAt ? client.lastReviewAt.slice(0, 10) : null;
 
   const lastActivityDate = client.clientLastActivityAt ? new Date(client.clientLastActivityAt) : null;
   const clientInactivityBusinessDays = lastActivityDate
