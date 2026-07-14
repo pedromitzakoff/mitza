@@ -3,13 +3,17 @@ import {
   computeSprintFinancials,
   currentMonthRange,
   sumActualSpendForMonth,
-  sumExpectedToDateForMonth,
   sumPlannedForMonth,
   type SprintFinancials,
   type SpendSource,
   type PlannedAllocationRow,
 } from "@/lib/sprint-financials";
-import { resolveMonthlyBudget, resolveBudgetEffectiveDate, computeMonthlyBudgetPlan } from "@/lib/monthly-budget";
+import {
+  resolveMonthlyBudget,
+  resolveBudgetEffectiveDate,
+  computeMonthlyBudgetPlan,
+  computeMonthlyExpectedToDateByCalendar,
+} from "@/lib/monthly-budget";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { effectiveTaskStatus } from "@/lib/task-status";
@@ -172,7 +176,10 @@ export function buildOperationClientCard(
     sumPlannedForMonth(client.plannedAllocations, monthRangeArg),
   );
   const monthActual = sumActualSpendForMonth(monthSprintRows, monthRangeArg, client.dailySpend);
-  const monthExpectedToDate = sumExpectedToDateForMonth(client.plannedAllocations, monthRangeArg, today);
+  // Etapa 67: "esperado até hoje" nunca mais soma sprint_planned_allocations
+  // — é só o avanço do calendário do mês aplicado ao orçamento vigente,
+  // independente de sprints/planejamentos antigos.
+  const monthExpectedToDate = computeMonthlyExpectedToDateByCalendar(monthPlanned, monthRangeArg, todayStr).expectedToDate;
   // Ritmo do mês: sempre realizado x esperado até hoje (nunca x 100% do
   // planejado antes do mês acabar — clientes no início do mês não podem
   // aparecer "abaixo do ritmo" só por ainda não terem gastado o mês

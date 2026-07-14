@@ -109,6 +109,58 @@ export function resolveMonthlyBudget(
   return latest.newAmount;
 }
 
+export interface MonthlyExpectedToDate {
+  /** 0–100. `dias_transcorridos_no_mes / dias_totais_do_mes`. Mês futuro = 0;
+   * mês encerrado = 100. */
+  expectedPct: number;
+  /** `orcamento_mensal_vigente × (expectedPct / 100)`. */
+  expectedToDate: number;
+}
+
+/**
+ * "Esperado até hoje" do MÊS (Etapa 67) — fonte central única, substitui
+ * `sumExpectedToDateForMonth`. A regra é só avanço de calendário: quantos
+ * dias do mês já passaram (hoje incluso) sobre o total de dias do mês,
+ * multiplicado pelo orçamento vigente (`resolveMonthlyBudget`) — nunca soma
+ * de `sprint_planned_allocations`, nunca `sprints.planned_spend`, nunca
+ * planejamento redistribuído pra sprints futuras. Isso é DELIBERADAMENTE
+ * independente de sprints: as sprints existem só pra agrupar dias em
+ * semanas operacionais, nunca pra decidir o ritmo esperado do mês.
+ *
+ * Por ser só uma razão de dois números (dias e orçamento), esta função
+ * reage instantaneamente a qualquer alteração de orçamento — nunca fica
+ * presa a um valor gravado no passado, ao contrário da fonte antiga (que
+ * somava linhas de planejamento diário já persistidas, sujeitas a nunca
+ * terem sido recalculadas desde a última mudança de orçamento).
+ *
+ * Independente de `computeMonthlyBudgetPlan` (saldo restante/recomendação
+ * diária): uma responde "qual o ritmo esperado até agora", a outra responde
+ * "quanto investir daqui pra frente" — nunca a mesma fórmula, nunca uma
+ * chama a outra.
+ */
+export function computeMonthlyExpectedToDateByCalendar(
+  monthlyBudget: number,
+  monthRange: { firstDay: string; lastDay: string },
+  todayStr: string,
+): MonthlyExpectedToDate {
+  const allDates = listDatesInclusive(monthRange.firstDay, monthRange.lastDay);
+  const daysInMonth = allDates.length;
+
+  let daysElapsed: number;
+  if (todayStr < monthRange.firstDay) {
+    daysElapsed = 0; // mês futuro — nada transcorrido ainda
+  } else if (todayStr > monthRange.lastDay) {
+    daysElapsed = daysInMonth; // mês encerrado — 100% transcorrido
+  } else {
+    daysElapsed = allDates.indexOf(todayStr) + 1; // hoje conta como transcorrido
+  }
+
+  const expectedPct = daysInMonth > 0 ? (daysElapsed / daysInMonth) * 100 : 0;
+  const expectedToDate = monthlyBudget * (expectedPct / 100);
+
+  return { expectedPct, expectedToDate };
+}
+
 export interface MonthlyBudgetPlanSprintInput {
   sprintId: string;
   startDate: string;

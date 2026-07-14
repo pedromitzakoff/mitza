@@ -1,11 +1,17 @@
 /** Margem de tolerância pra considerar um gasto "dentro do esperado". */
 export const SPEND_STATUS_MARGIN = 0.1; // ±10%
 
-/** "nao_iniciado" é status TEMPORAL disfarçado de financeiro — só existe
- * pra sprints que ainda não começaram (ver `classifySprintSpendStatus` em
- * sprint-financials.ts), nunca produzido por esta função (`classifySpendStatus`
- * lida só com números, sem saber se o período já começou). */
-export type SpendStatus = "dentro" | "acima" | "abaixo" | "sem_meta" | "nao_iniciado";
+/** "nao_iniciado" e "em_andamento" são status TEMPORAIS disfarçados de
+ * financeiro — só existem pra sprints (ver `classifySprintSpendStatus` em
+ * sprint-financials.ts), nunca produzidos por esta função (`classifySpendStatus`
+ * lida só com números, sem saber se o período já começou ou está em
+ * andamento). "em_andamento" (Etapa 67): a sprint atual nunca é classificada
+ * Acima/Abaixo/Dentro por dias transcorridos DENTRO da própria sprint — essa
+ * conta foi removida (era uma fórmula diferente da nova regra de "esperado
+ * até hoje" do mês, e produzia números sem sentido operacional pro gestor).
+ * A sprint atual só mostra progresso operacional ("Em andamento"), nunca um
+ * veredito de ritmo. */
+export type SpendStatus = "dentro" | "acima" | "abaixo" | "sem_meta" | "nao_iniciado" | "em_andamento";
 
 /**
  * Compara um valor gasto com um valor esperado e classifica dentro da
@@ -59,6 +65,7 @@ export const SPEND_STATUS_LABEL: Record<SpendStatus, string> = {
   abaixo: "Abaixo",
   sem_meta: "Sem planejamento",
   nao_iniciado: "Ainda não iniciada",
+  em_andamento: "Em andamento",
 };
 
 export const SPEND_STATUS_BADGE_CLASSES: Record<SpendStatus, string> = {
@@ -67,4 +74,5 @@ export const SPEND_STATUS_BADGE_CLASSES: Record<SpendStatus, string> = {
   abaixo: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   sem_meta: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
   nao_iniciado: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  em_andamento: "bg-brand/10 text-brand",
 };
