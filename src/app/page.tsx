@@ -25,8 +25,9 @@ import { getClientPriority, sortClientPriorities } from "@/lib/client-priority";
 import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
 import { PrioritiesDrawer, PrioritiesPanel } from "./priorities-panel";
+import { OperationMetric } from "./operation-metric";
+import { PrimaryInvestmentMetric, SecondaryInvestmentMetric } from "./investment-metric";
 import { Button, IconButton } from "@/components/workspace/button";
-import { Metric } from "@/components/workspace/metric";
 import { ProgressBar } from "@/components/workspace/progress-bar";
 import { PageHeader } from "@/components/workspace/page-header";
 import { SectionHeader } from "@/components/workspace/section-header";
@@ -532,131 +533,103 @@ export default async function Home({
         </div>
 
         {/* Indicadores da operação + Controle de investimento compartilham
-            uma única superfície contínua (seção 7 do pedido original: "algumas
-            áreas podem compartilhar uma mesma superfície principal"),
-            separadas por um divisor horizontal em vez de dois cards com
-            sombra. "Saúde da operação" (saudável/atenção/crítico) foi
-            substituído por 6 indicadores quantitativos e objetivos — sem
-            classificação qualitativa, sem cores decorativas, sem drill-down
-            (nenhum destes é clicável de propósito). */}
+            uma única superfície contínua (uma linha horizontal fina separa
+            as duas, nunca dois cards com sombra) — Etapa 69: refinamento
+            puramente visual (Linear/Stripe/Vercel como referência), reduz de
+            6 pra 4 indicadores operacionais (execução de tarefas e
+            atividade operacional agrupam duas métricas cada), remove as
+            divisórias verticais entre eles (a separação agora é só
+            espaçamento + tipografia) e reorganiza o Controle de Investimento
+            em 2 camadas de destaque decrescente, sem subtítulos de grupo. */}
         <div className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
-          <div className="p-3.5">
+          <div className="px-5 py-6 sm:px-6 sm:py-7">
             <SectionHeader title="Indicadores da operação" />
-            <div className="mt-2.5 flex flex-wrap gap-x-6 gap-y-2 sm:divide-x sm:divide-overview-border">
-              <div>
-                <Metric
-                  label="Clientes ativos"
-                  value={String(operationIndicators.activeClientsCount)}
-                  title="Clientes ativos no contexto selecionado."
-                />
-              </div>
-              <div className="sm:pl-6">
-                <Metric
-                  label={operationIndicators.managersLabel}
-                  value={String(operationIndicators.activeManagersCount)}
-                  title="Gestores ativos vinculados ao contexto selecionado."
-                />
-              </div>
-              <div className="sm:pl-6">
-                <Metric
-                  label="Tarefas concluídas"
-                  value={String(operationIndicators.completedTasksCount)}
-                  title="Tarefas concluídas dentro do mês selecionado."
-                />
-              </div>
-              <div className="sm:pl-6">
-                <Metric
-                  label="Taxa de conclusão"
-                  value={
-                    operationIndicators.completionRatePct !== null
-                      ? `${Math.round(operationIndicators.completionRatePct)}%`
-                      : "—"
-                  }
-                  title="Percentual das tarefas previstas no período que foram concluídas."
-                />
-              </div>
-              <div className="sm:pl-6">
-                <Metric
-                  label="Análises realizadas"
-                  value={String(operationIndicators.reviewsCount)}
-                  title="Análises de conta registradas dentro do mês selecionado."
-                />
-              </div>
-              <div className="sm:pl-6">
-                <Metric
-                  label="Otimizações registradas"
-                  value={String(operationIndicators.optimizationsCount)}
-                  title="Otimizações registradas dentro do mês selecionado."
-                />
-              </div>
+            <div className="mt-5 grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
+              <OperationMetric
+                label="Clientes ativos"
+                value={String(operationIndicators.activeClientsCount)}
+                context="Clientes em operação"
+              />
+              <OperationMetric
+                label={operationIndicators.managersLabel}
+                value={String(operationIndicators.activeManagersCount)}
+                context="Responsáveis por contas"
+              />
+              <OperationMetric
+                label="Execução de tarefas"
+                value={
+                  operationIndicators.completionRatePct !== null
+                    ? formatPercent(operationIndicators.completionRatePct)
+                    : "—"
+                }
+                context={`${operationIndicators.completedTasksCount} de ${operationIndicators.tasksTotalCount} concluídas`}
+              />
+              <OperationMetric
+                label="Atividade operacional"
+                value={`${operationIndicators.reviewsCount} análises`}
+                context={`${operationIndicators.optimizationsCount} otimizações`}
+              />
             </div>
           </div>
 
-          <div className="border-t border-overview-border p-3.5">
+          <div className="border-t border-overview-border px-5 py-6 sm:px-6 sm:py-7">
             <SectionHeader title="Controle de investimento" />
-            {/* Etapa 68, seção 4: os 6 indicadores continuam numa única linha
-                horizontal (nunca 3 cards separados, pra não esticar a altura
-                da seção), mas agrupados em 3 blocos com legenda própria —
-                Execução (quanto foi planejado/realizado), Referência do
-                calendário (onde deveríamos estar hoje) e Desvio (diferença +
-                contas fora do ritmo) — separados por um divisor vertical. */}
-            <div className="mt-2.5 flex flex-wrap gap-x-6 gap-y-3 sm:divide-x sm:divide-overview-border">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">Execução</p>
-                <div className="mt-1 flex flex-wrap gap-x-6 gap-y-2">
-                  <Metric label="Planejado" value={formatCurrency(financial.planned)} size="lg" />
-                  <Metric label="Realizado" value={formatCurrency(financial.actual)} size="lg" />
-                  <Metric label="% realizado" value={financial.pct !== null ? formatPercent(financial.pct) : "—"} />
-                </div>
-              </div>
-              <div className="sm:pl-6">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
-                  Referência do calendário
-                </p>
-                <div className="mt-1 flex flex-wrap gap-x-6 gap-y-2">
-                  <Metric
-                    label="% esperado hoje"
-                    value={formatPercent(investmentExpectedPct)}
-                    title="dia_atual / dias_do_mês — igual para qualquer cliente do recorte, nunca uma média de percentuais por cliente. Não depende de nenhum orçamento estar configurado."
-                  />
-                  <Metric label="Esperado em R$ hoje" value={formatCurrency(financial.expectedToDate)} />
-                </div>
-              </div>
-              <div className="sm:pl-6">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">Desvio</p>
-                <div className="mt-1 flex flex-wrap gap-x-6 gap-y-2">
-                  <Metric
-                    label="Diferença para o esperado"
-                    value={investmentDiffLabel}
-                    tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
-                  />
-                  <Metric
-                    label="Contas fora do ritmo"
-                    value={String(outOfRhythmCount)}
-                    href={drillDownUrl({ ritmo: "fora_do_ritmo" })}
-                    tone={outOfRhythmCount > 0 ? "warning" : "neutral"}
-                    title={`${spendRhythm.abaixo} abaixo · ${spendRhythm.acima} acima`}
-                  />
-                </div>
-              </div>
+
+            {/* Camada 1 — os números que o olhar deve encontrar primeiro. */}
+            <div className="mt-5 grid grid-cols-1 gap-x-10 gap-y-4 sm:grid-cols-3">
+              <PrimaryInvestmentMetric label="Planejado" value={formatCurrency(financial.planned)} />
+              <PrimaryInvestmentMetric label="Realizado" value={formatCurrency(financial.actual)} />
+              <PrimaryInvestmentMetric
+                label="Orçamento utilizado"
+                value={financial.pct !== null ? formatPercent(financial.pct) : "—"}
+                size="md"
+              />
             </div>
 
-            <div className="mt-3">
+            {/* Camada 2 — contexto de ritmo, deliberadamente mais discreto. */}
+            <div className="mt-7 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+              <SecondaryInvestmentMetric
+                label="Esperado hoje"
+                value={formatPercent(investmentExpectedPct)}
+                title="dia_atual / dias_do_mês — igual para qualquer cliente do recorte, nunca uma média de percentuais por cliente. Não depende de nenhum orçamento estar configurado."
+              />
+              <SecondaryInvestmentMetric label="Esperado em investimento" value={formatCurrency(financial.expectedToDate)} />
+              <SecondaryInvestmentMetric
+                label="Diferença para o esperado"
+                value={investmentDiffLabel}
+                tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
+              />
+              <SecondaryInvestmentMetric
+                label="Contas fora do ritmo"
+                value={String(outOfRhythmCount)}
+                href={drillDownUrl({ ritmo: "fora_do_ritmo" })}
+                tone={outOfRhythmCount > 0 ? "warning" : "neutral"}
+                title={`${spendRhythm.abaixo} abaixo · ${spendRhythm.acima} acima`}
+              />
+            </div>
+
+            <div className="mt-8">
               <ProgressBar
                 planned={financial.planned}
                 actual={financial.actual}
                 expectedToDate={financial.expectedToDate}
                 monthTemporalStatus={monthTemporalStatus}
               />
-              <p className="mt-1.5 text-[11px] text-overview-text-muted">
-                {financial.semMeta > 0 ? (
-                  <Button href={drillDownUrl({ meta: "sem" })} variant="ghost" size="sm" className="h-auto px-0 py-0 font-normal text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary">
-                    {financial.semMeta} cliente{financial.semMeta !== 1 ? "s" : ""} sem planejamento configurado
-                  </Button>
-                ) : (
-                  "Todos os clientes possuem planejamento configurado"
-                )}
-              </p>
+            </div>
+
+            <div className="mt-4">
+              {financial.semMeta > 0 ? (
+                <Button
+                  href={drillDownUrl({ meta: "sem" })}
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto px-0 py-0 text-[13px] font-normal text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary"
+                >
+                  {financial.semMeta} cliente{financial.semMeta !== 1 ? "s" : ""} sem planejamento configurado
+                </Button>
+              ) : (
+                <p className="text-[13px] text-overview-text-muted">Todos os clientes possuem planejamento configurado</p>
+              )}
             </div>
           </div>
         </div>

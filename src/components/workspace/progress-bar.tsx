@@ -75,14 +75,16 @@ export function ProgressBar({
           title={markerTooltip}
         />
       </div>
-      <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-overview-text-muted">
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-sm bg-brand" aria-hidden="true" />
+      {/* Legenda compacta (Etapa 69, seção 11) — só os dois pontos + rótulos
+          curtos, sem repetir texto que os números acima já deixam claro. */}
+      <p className="mt-1.5 flex items-center gap-3 text-[11px] text-overview-text-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand" aria-hidden="true" />
           Realizado
         </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-full bg-navy" aria-hidden="true" />
-          Marcador: esperado até hoje
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-navy" aria-hidden="true" />
+          Esperado hoje
         </span>
       </p>
     </div>
