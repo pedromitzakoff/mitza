@@ -857,6 +857,7 @@ export default async function ClientPage({
                 manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
                 metaSyncedAt={lastSync?.synced_at ?? null}
                 performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
+                returnTo={returnTo}
               />
             ))
           ) : (

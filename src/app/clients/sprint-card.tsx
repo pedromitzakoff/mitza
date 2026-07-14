@@ -155,6 +155,7 @@ function SprintPerformanceSection({
   sourceTimestampText,
   isManualSource,
   revertSourceToggleId,
+  returnTo,
 }: {
   sprint: SprintFinancials;
   performance?: SprintPerformanceProps;
@@ -163,6 +164,7 @@ function SprintPerformanceSection({
   sourceTimestampText: string | null;
   isManualSource: boolean;
   revertSourceToggleId: string;
+  returnTo: string;
 }) {
   const view = performance?.view ?? { kind: "not_configured" as const };
   const cells = derivePerformanceCellTexts(view);
@@ -227,7 +229,7 @@ function SprintPerformanceSection({
           </label>
           <div className="hidden items-center gap-1.5 peer-checked/revert:flex">
             <span className="text-[11px] text-muted-foreground">Substituir valor manual pelo do Meta?</span>
-            <form action={resetSprintSpendSourceAction.bind(null, sprint.sprintId, clientId)}>
+            <form action={resetSprintSpendSourceAction.bind(null, sprint.sprintId, clientId, returnTo)}>
               <button type="submit" className="text-[11px] font-medium text-brand hover:underline">
                 Confirmar
               </button>
@@ -250,7 +252,7 @@ function SprintPerformanceSection({
           </label>
 
           <form
-            action={updateSprintPerformanceAction.bind(null, sprint.sprintId, clientId)}
+            action={updateSprintPerformanceAction.bind(null, sprint.sprintId, clientId, returnTo)}
             className="mt-2 hidden flex-col gap-1.5 peer-checked:flex"
           >
             <div className="flex flex-wrap items-center gap-1.5">
@@ -320,6 +322,7 @@ export function SprintCardBody({
   manualSpendUpdatedAt,
   metaSyncedAt,
   performance,
+  returnTo,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -331,6 +334,11 @@ export function SprintCardBody({
   alerts?: AttentionAlert[];
   openClientHref?: string;
   buildTaskHref?: (taskId: string) => string;
+  /** Pra onde voltar depois de salvar investimento/performance (Etapa MVP
+   * 1.3) — a página do cliente passa a própria URL, a tela Sprints passa a
+   * URL atual dela (view/grouping/filtros preservados); nunca mais um
+   * redirect fixo pra `/clients/{id}`. */
+  returnTo: string;
   /** Otimizações desta sprint (Etapa 57/74) — opcional: só quem já consulta
    * account_reviews passa isto (mesmo padrão de `alerts`/`executionLabel`,
    * nem toda tela que usa este componente precisa). */
@@ -389,6 +397,7 @@ export function SprintCardBody({
           isAdmin={isAdmin}
           sourceTimestampText={sourceTimestampText}
           isManualSource={isManualSource}
+          returnTo={returnTo}
           revertSourceToggleId={revertSourceToggleId}
         />
 
@@ -507,6 +516,7 @@ export function SprintCard({
   manualSpendUpdatedAt,
   metaSyncedAt,
   performance,
+  returnTo,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -525,6 +535,9 @@ export function SprintCard({
   manualSpendUpdatedAt?: string | null;
   metaSyncedAt?: string | null;
   performance?: SprintPerformanceProps;
+  /** Pra onde voltar depois de salvar investimento/performance (Etapa MVP
+   * 1.3) — ver doc de `SprintCardBody`. */
+  returnTo: string;
 }) {
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
   const isCurrent = sprint.temporalStatus === "atual";
@@ -607,6 +620,7 @@ export function SprintCard({
         manualSpendUpdatedAt={manualSpendUpdatedAt}
         metaSyncedAt={metaSyncedAt}
         performance={performance}
+        returnTo={returnTo}
       />
     </details>
   );

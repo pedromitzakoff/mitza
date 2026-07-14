@@ -5,64 +5,28 @@ import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 
-/** Salva um gasto real digitado à mão e marca a sprint como spend_source =
- * "manual" — a partir daí, resolveSprintActualSpend passa a mostrar esse
- * valor em vez da soma de daily_spend, até alguém reverter (ver
- * resetSprintSpendSourceAction). A sync do Meta continua rodando e
- * gravando em daily_spend normalmente, só não aparece enquanto for manual. */
-export async function updateSprintActualSpendAction(
-  sprintId: string,
-  clientId: string,
-  formData: FormData,
-) {
-  await requireAdmin();
-
-  const actualSpend = Number(formData.get("actual_spend"));
-
-  if (!Number.isFinite(actualSpend) || actualSpend < 0) {
-    redirect(`/clients/${clientId}?error=${encodeURIComponent("Valor de gasto real inválido")}`);
-  }
-
-  const supabase = await createSupabaseClient();
-  const { error } = await supabase
-    .from("sprints")
-    .update({
-      spend_source: "manual",
-      manual_actual_spend: actualSpend,
-      manual_spend_updated_at: new Date().toISOString(),
-    })
-    .eq("id", sprintId);
-
-  if (error) {
-    redirect(`/clients/${clientId}?error=${encodeURIComponent(error.message)}`);
-  }
-
-  // O gasto manual entra na consolidação mensal (buildOperationClientCard) e
-  // no gráfico acumulado dessas 3 rotas — sem isso elas serviriam uma versão
-  // desatualizada do cache até a próxima revalidação natural.
-  revalidatePath("/");
-  revalidatePath("/clients");
-  revalidatePath("/sprints");
-  revalidatePath(`/clients/${clientId}`);
-  redirect(`/clients/${clientId}`);
-}
-
 /** Volta a sprint pra origem "meta_api" — o gasto real exibido passa a ser
  * de novo a soma de daily_spend. Não apaga o valor manual salvo (fica
- * ignorado, não deletado), então dá pra confirmar com segurança. */
-export async function resetSprintSpendSourceAction(sprintId: string, clientId: string) {
+ * ignorado, não deletado), então dá pra confirmar com segurança.
+ *
+ * `returnTo` (Etapa MVP 1.3) — quem chama decide pra onde volta depois de
+ * salvar: a página do cliente passa a própria URL, a tela Sprints passa a
+ * URL atual dela (com view/grouping/filtros preservados) — nunca mais um
+ * redirect fixo pra `/clients/{id}`, que tirava o gestor da tela Sprints
+ * ao editar uma sprint por lá. */
+export async function resetSprintSpendSourceAction(sprintId: string, clientId: string, returnTo: string) {
   await requireAdmin();
 
   const supabase = await createSupabaseClient();
   const { error } = await supabase.from("sprints").update({ spend_source: "meta_api" }).eq("id", sprintId);
 
   if (error) {
-    redirect(`/clients/${clientId}?error=${encodeURIComponent(error.message)}`);
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(error.message)}`);
   }
 
   revalidatePath("/");
   revalidatePath("/clients");
   revalidatePath("/sprints");
   revalidatePath(`/clients/${clientId}`);
-  redirect(`/clients/${clientId}`);
+  redirect(returnTo);
 }

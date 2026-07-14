@@ -7,24 +7,35 @@ import { requireAdmin } from "@/lib/auth";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import type { PerformanceGoalDb } from "@/lib/supabase/database.types";
 
+function withError(returnTo: string, message: string): string {
+  return `${returnTo}${returnTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`;
+}
+
 /**
  * "Atualizar performance" — ação única que substitui os antigos "Editar"
  * (investimento) e "Editar resultados" (por canal): um só submit grava
- * investimento realizado (`sprints.manual_actual_spend`, igual a
- * `updateSprintActualSpendAction`) e o resultado de cada canal presente no
- * formulário (`performance_records`, igual ao antigo
- * `upsertSprintPerformanceResultAction`) — nenhuma fonte de verdade nova,
- * só as duas mesmas tabelas de sempre, na mesma transação de UI. Um canal
- * cujo campo ficou em branco é ignorado (nunca zera um resultado que o
- * gestor só não quis tocar agora). CPL/CPA continuam 100% derivados —
- * nenhum campo aqui os aceita diretamente.
+ * investimento realizado (`sprints.manual_actual_spend`) e o resultado de
+ * cada canal presente no formulário (`performance_records`) — nenhuma fonte
+ * de verdade nova, só as duas mesmas tabelas de sempre, na mesma transação
+ * de UI. Um canal cujo campo ficou em branco é ignorado (nunca zera um
+ * resultado que o gestor só não quis tocar agora). CPL/CPA continuam 100%
+ * derivados — nenhum campo aqui os aceita diretamente.
+ *
+ * `returnTo` (Etapa MVP 1.3) — quem chama decide pra onde volta depois de
+ * salvar (página do cliente ou tela Sprints, preservando o contexto de
+ * onde a edição começou) — nunca mais um redirect fixo pra `/clients/{id}`.
  */
-export async function updateSprintPerformanceAction(sprintId: string, clientId: string, formData: FormData) {
+export async function updateSprintPerformanceAction(
+  sprintId: string,
+  clientId: string,
+  returnTo: string,
+  formData: FormData,
+) {
   await requireAdmin();
 
   const actualSpend = Number(formData.get("actual_spend"));
   if (!Number.isFinite(actualSpend) || actualSpend < 0) {
-    redirect(`/clients/${clientId}?error=${encodeURIComponent("Valor de investimento inválido")}`);
+    redirect(withError(returnTo, "Valor de investimento inválido"));
   }
 
   const channelEntries: { channel: TrafficChannel; resultCount: number }[] = [];
@@ -34,9 +45,7 @@ export async function updateSprintPerformanceAction(sprintId: string, clientId: 
 
     const resultCount = Number(raw);
     if (!Number.isFinite(resultCount) || resultCount < 0 || !Number.isInteger(resultCount)) {
-      redirect(
-        `/clients/${clientId}?error=${encodeURIComponent("Resultado inválido — informe um número inteiro maior ou igual a zero")}`,
-      );
+      redirect(withError(returnTo, "Resultado inválido — informe um número inteiro maior ou igual a zero"));
     }
     channelEntries.push({ channel, resultCount });
   }
@@ -52,7 +61,7 @@ export async function updateSprintPerformanceAction(sprintId: string, clientId: 
     .single();
 
   if (!sprint || sprint.client_id !== clientId) {
-    redirect(`/clients/${clientId}?error=${encodeURIComponent("Sprint não encontrada")}`);
+    redirect(withError(returnTo, "Sprint não encontrada"));
   }
 
   const nowIso = new Date().toISOString();
@@ -63,16 +72,14 @@ export async function updateSprintPerformanceAction(sprintId: string, clientId: 
     .eq("id", sprintId);
 
   if (spendError) {
-    redirect(`/clients/${clientId}?error=${encodeURIComponent(spendError.message)}`);
+    redirect(withError(returnTo, spendError.message));
   }
 
   if (channelEntries.length > 0) {
     const { data: client } = await supabase.from("clients").select("performance_goal").eq("id", clientId).single();
 
     if (!client?.performance_goal) {
-      redirect(
-        `/clients/${clientId}?error=${encodeURIComponent("Configure o objetivo de performance do cliente antes de lançar resultados")}`,
-      );
+      redirect(withError(returnTo, "Configure o objetivo de performance do cliente antes de lançar resultados"));
     }
 
     const { error: perfError } = await supabase.from("performance_records").upsert(
@@ -91,7 +98,7 @@ export async function updateSprintPerformanceAction(sprintId: string, clientId: 
     );
 
     if (perfError) {
-      redirect(`/clients/${clientId}?error=${encodeURIComponent(perfError.message)}`);
+      redirect(withError(returnTo, perfError.message));
     }
   }
 
@@ -99,5 +106,5 @@ export async function updateSprintPerformanceAction(sprintId: string, clientId: 
   revalidatePath("/clients");
   revalidatePath("/sprints");
   revalidatePath(`/clients/${clientId}`);
-  redirect(`/clients/${clientId}`);
+  redirect(returnTo);
 }
