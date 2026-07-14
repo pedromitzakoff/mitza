@@ -1350,6 +1350,7 @@ export interface Database {
           resulting_total: number;
           is_below_consolidated: boolean;
           changed_at: string;
+          reason: string | null;
         };
         Insert: {
           id?: string;
@@ -1364,6 +1365,7 @@ export interface Database {
           resulting_total: number;
           is_below_consolidated?: boolean;
           changed_at?: string;
+          reason?: string | null;
         };
         Update: {
           id?: string;
@@ -1378,6 +1380,7 @@ export interface Database {
           resulting_total?: number;
           is_below_consolidated?: boolean;
           changed_at?: string;
+          reason?: string | null;
         };
         Relationships: [
           {
@@ -1754,6 +1757,7 @@ export interface Database {
           p_new_budget: number;
           p_today: string;
           p_changed_by: string;
+          p_reason?: string | null;
         };
         Returns: {
           consolidatedAmount: number;

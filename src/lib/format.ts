@@ -170,6 +170,17 @@ export function formatShortDateTime(value: string): string {
   return `${get("day")}/${get("month")} às ${get("hour")}:${get("minute")}`;
 }
 
+/** "DD/MM" no fuso da agência, a partir de um INSTANTE real (timestamptz) —
+ * irmã de `formatShortDateTime` sem a hora, pra "Alterado em DD/MM por
+ * Fulano" (histórico de orçamento). Nunca usar pra data civil já correta
+ * (`due_date`/`month`/`effective_date` etc. seguem usando `formatShortDate`,
+ * que assume UTC e não reconverte fuso de um dia que já está certo). */
+export function formatShortDateFromInstant(value: string): string {
+  const parts = shortDateTimeFormatter.formatToParts(new Date(value));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")}`;
+}
+
 const monthYearFormatter = new Intl.DateTimeFormat("pt-BR", {
   month: "long",
   year: "numeric",

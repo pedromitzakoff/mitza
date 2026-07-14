@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatCurrency, formatDateWithYear, formatDateTime } from "@/lib/format";
+import { formatCurrency, formatDateWithYear, formatDateTime, formatShortDateFromInstant } from "@/lib/format";
 
 export interface MonthlyBudgetChangeRow {
   id: string;
@@ -12,6 +12,10 @@ export interface MonthlyBudgetChangeRow {
   futureAmountDistributed: number;
   resultingTotal: number;
   isBelowConsolidated: boolean;
+  /** Motivo opcional informado pelo gestor (Etapa MVP "Comentário no
+   * histórico de alteração de orçamento") — `null` = nenhum motivo
+   * informado nesta alteração (nunca inventado retroativamente). */
+  reason: string | null;
 }
 
 /**
@@ -78,8 +82,17 @@ export function MonthlyBudgetHistoryDrawer({
                   </p>
                 )}
                 <p className="mt-1.5 text-muted-foreground">
-                  Alterado por {change.changedByName ?? "usuário removido"}
+                  Alterado em {formatShortDateFromInstant(change.changedAt)} por {change.changedByName ?? "usuário removido"}
                 </p>
+                {/* Etapa MVP "Comentário no histórico de alteração de
+                    orçamento" — só aparece quando o gestor informou um
+                    motivo (nunca "Motivo: —" fabricado). */}
+                {change.reason && (
+                  <p className="mt-1 text-foreground">
+                    <span className="text-muted-foreground">Motivo: </span>
+                    {change.reason}
+                  </p>
+                )}
               </li>
             ))}
           </ul>

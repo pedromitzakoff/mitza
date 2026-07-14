@@ -56,6 +56,7 @@ export function MonthlyBudgetEditor({
   const [isOpen, setIsOpen] = useState(false);
   const [confirmStep, setConfirmStep] = useState(false);
   const [display, setDisplay] = useState(() => formatMoneyDisplay(currentMonthlyBudget));
+  const [reason, setReason] = useState("");
   const newBudget = parseMoneyInput(display) ?? 0;
 
   const currentPlan = useMemo(
@@ -86,6 +87,7 @@ export function MonthlyBudgetEditor({
     setIsOpen(false);
     setConfirmStep(false);
     setDisplay(formatMoneyDisplay(currentMonthlyBudget));
+    setReason("");
   };
 
   return (
@@ -198,24 +200,39 @@ export function MonthlyBudgetEditor({
               </p>
             </div>
 
-            <form
-              action={applyMonthlyBudgetChangeAction.bind(null, clientId, monthParam)}
-              className="flex items-center gap-2"
-            >
+            <form action={applyMonthlyBudgetChangeAction.bind(null, clientId, monthParam)} className="flex flex-col gap-3">
               <input type="hidden" name="new_budget" value={newBudget} />
-              <button
-                type="submit"
-                className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
-              >
-                Confirmar alteração
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmStep(false)}
-                className="text-sm text-muted-foreground hover:underline"
-              >
-                Voltar
-              </button>
+
+              <div>
+                <label htmlFor="budget-reason" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Motivo da alteração (opcional)
+                </label>
+                <textarea
+                  id="budget-reason"
+                  name="reason"
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  rows={2}
+                  placeholder="Ex.: Cliente aprovou aumento de investimento para campanha promocional."
+                  className="mt-1 w-full resize-none rounded-md border border-border px-2 py-1.5 text-sm text-foreground outline-none focus:border-zinc-500 dark:bg-zinc-900"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+                >
+                  Confirmar alteração
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmStep(false)}
+                  className="text-sm text-muted-foreground hover:underline"
+                >
+                  Voltar
+                </button>
+              </div>
             </form>
           </div>
         )}

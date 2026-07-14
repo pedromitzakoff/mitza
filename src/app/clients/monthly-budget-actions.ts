@@ -27,6 +27,13 @@ export async function applyMonthlyBudgetChangeAction(
     redirect(`/clients/${clientId}?error=${encodeURIComponent("Orçamento inválido")}`);
   }
 
+  // Motivo da alteração (Etapa MVP "Comentário no histórico de alteração de
+  // orçamento") — sempre opcional; string vazia/só espaço vira `null` no
+  // próprio banco (`nullif(trim(p_reason), '')`, apply_monthly_budget_change),
+  // nunca uma string vazia persistida como se fosse "motivo informado".
+  const reasonRaw = formData.get("reason");
+  const reason = typeof reasonRaw === "string" && reasonRaw.trim() !== "" ? reasonRaw.trim() : null;
+
   const monthRange = monthRangeFromParam(monthParam);
   const todayStr = todayDateString();
   const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate(monthRange, todayStr);
@@ -44,6 +51,7 @@ export async function applyMonthlyBudgetChangeAction(
     p_new_budget: newBudget,
     p_today: todayStr,
     p_changed_by: profile.id,
+    p_reason: reason,
   });
 
   if (error) {
