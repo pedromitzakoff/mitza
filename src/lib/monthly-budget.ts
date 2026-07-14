@@ -8,7 +8,11 @@ function toDateString(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-function listDatesInclusive(firstDay: string, lastDay: string): string[] {
+/** Todos os dias (YYYY-MM-DD) entre `firstDay` e `lastDay`, inclusive —
+ * pública desde a Etapa 64, que precisa enumerar todos os dias do mês pra
+ * calcular o investimento diário recomendado (seção 4), sem duplicar este
+ * loop de datas. */
+export function listDatesInclusive(firstDay: string, lastDay: string): string[] {
   const start = parseDateUTC(firstDay);
   const end = parseDateUTC(lastDay);
   const dates: string[] = [];
@@ -280,4 +284,64 @@ export function computeSprintAllocationBackfill(sprint: {
   const totalCents = Math.round(sprint.plannedSpend * 100);
   const perDayCents = distributeCentsEqually(totalCents, dates.length);
   return dates.map((date, index) => ({ date, amount: (perDayCents[index] ?? 0) / 100 }));
+}
+
+/** % do orçamento mensal já utilizado — `null` quando não há planejamento
+ * configurado (nunca 0%/NaN/Infinity). Única fonte desta conta: reaproveitada
+ * pelo resumo do mês (mês em andamento e mês encerrado) e por
+ * `computeMonthlyInvestmentRecommendation`, nunca recalculada direto num
+ * componente React (Etapa 64, seção 15). */
+export function computeUtilizedPct(monthPlanned: number, monthActual: number): number | null {
+  return monthPlanned > 0 ? (monthActual / monthPlanned) * 100 : null;
+}
+
+export interface MonthlyInvestmentRecommendation {
+  /** `max(orcamento_mensal_vigente - realizado_acumulado_no_mes, 0)`. */
+  remainingBudget: number;
+  /** Dias que ainda podem receber orçamento a partir da data de efeito —
+   * mesma função central usada pela redistribuição da sprint atual/futuras. */
+  eligibleDaysCount: number;
+  /** `remainingBudget / eligibleDaysCount` — 0 quando o orçamento já foi
+   * atingido/ultrapassado ou não há mais dias elegíveis. Nunca negativo. */
+  recommendedDaily: number;
+  isBudgetReached: boolean;
+  /** Quanto o realizado ultrapassou o orçamento — 0 quando não atingiu. */
+  overageAmount: number;
+  utilizedPct: number | null;
+}
+
+/**
+ * Investimento diário recomendado pro restante do mês (Etapa 64, seções
+ * 4/5/12) — resposta a "quanto investir por dia daqui pra frente pra fechar
+ * o mês dentro do orçamento planejado". Reaproveita `getEligibleRedistributionDates`
+ * com a mesma `effectiveDate` que a prévia de redistribuição de orçamento já
+ * usa (hoje, num mês em andamento; um dia antes do início, num mês futuro) —
+ * nunca uma segunda conta de "quantos dias faltam". Por construção, quando o
+ * orçamento do mês não muda hoje, a soma das alocações diárias já persistidas
+ * pros dias elegíveis é igual a `remainingBudget` dividida em partes iguais —
+ * o mesmo valor de `recommendedDaily`, nunca dois números divergentes pro
+ * mesmo dia (ver relatório desta etapa).
+ */
+export function computeMonthlyInvestmentRecommendation(
+  monthPlanned: number,
+  monthActual: number,
+  monthRange: { firstDay: string; lastDay: string },
+  effectiveDate: string,
+): MonthlyInvestmentRecommendation {
+  const remainingBudget = Math.max(monthPlanned - monthActual, 0);
+  const allDates = listDatesInclusive(monthRange.firstDay, monthRange.lastDay);
+  const { eligibleDates } = getEligibleRedistributionDates(allDates, effectiveDate);
+  const eligibleDaysCount = eligibleDates.length;
+  const isBudgetReached = monthPlanned > 0 && monthActual >= monthPlanned;
+  const overageAmount = isBudgetReached ? monthActual - monthPlanned : 0;
+  const recommendedDaily = isBudgetReached || eligibleDaysCount <= 0 ? 0 : remainingBudget / eligibleDaysCount;
+
+  return {
+    remainingBudget,
+    eligibleDaysCount,
+    recommendedDaily,
+    isBudgetReached,
+    overageAmount,
+    utilizedPct: computeUtilizedPct(monthPlanned, monthActual),
+  };
 }

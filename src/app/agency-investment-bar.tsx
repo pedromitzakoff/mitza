@@ -15,10 +15,24 @@ import { computeExpectedPct, formatDeviationCurrencyText, positionExpectedMarker
  * use, porque `summary` já vem de `resolveMonthPeriodSummary`/
  * `resolveSprintPeriodSummary`.
  */
-export function AgencyInvestmentBar({ summary }: { summary: FinancialPeriodSummary }) {
+export function AgencyInvestmentBar({
+  summary,
+  showExpectedMarker = true,
+}: {
+  summary: FinancialPeriodSummary;
+  /** Etapa 64: `false` some com o marcador de "esperado até hoje", a
+   * legenda e o texto de desvio, deixando só trilha + preenchimento — usado
+   * exclusivamente pela seção "Investimento do mês" da página do cliente,
+   * que removeu esse conceito. Relatório e tela Sprints continuam com o
+   * comportamento padrão (`true`). */
+  showExpectedMarker?: boolean;
+}) {
   const { planned, actual, expectedToDate } = summary;
 
   if (planned <= 0) {
+    if (!showExpectedMarker) {
+      return <div className="h-3 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />;
+    }
     return (
       <div>
         <div className="h-3 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />
@@ -33,6 +47,17 @@ export function AgencyInvestmentBar({ summary }: { summary: FinancialPeriodSumma
   const markerPos = positionExpectedMarker(expectedPct);
   const isOver = actualPct > 100;
   const deviationText = formatDeviationCurrencyText(summary, formatCurrency);
+
+  if (!showExpectedMarker) {
+    return (
+      <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+        <div
+          className={`h-full rounded-full transition-[width] duration-300 ease-out ${isOver ? "bg-red-500" : "bg-brand"}`}
+          style={{ width: `${fillWidth}%` }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div>
