@@ -20,6 +20,12 @@ export interface OperationIndicators {
    * um cliente específico está selecionado (mesmo número, rótulo diferente). */
   managersLabel: string;
   completedTasksCount: number;
+  /** Total de tarefas previstas no período (denominador de `completionRatePct`,
+   * já calculado internamente antes desta etapa) — exposto à parte só pra a
+   * Visão Geral poder exibir "2 de X concluídas" sem recalcular nada no
+   * componente visual (Etapa 69: nenhuma lógica financeira/operacional deve
+   * viver em componente de apresentação). */
+  tasksTotalCount: number;
   /** null quando não há tarefas previstas no período — nunca 0%. */
   completionRatePct: number | null;
   reviewsCount: number;
@@ -92,6 +98,7 @@ export function computeOperationIndicators(input: ComputeOperationIndicatorsInpu
     activeManagersCount: managerIdsInScope.size,
     managersLabel: hasClientFilter ? "Gestores vinculados" : "Gestores ativos",
     completedTasksCount,
+    tasksTotalCount: taskCountsTotal,
     completionRatePct,
     reviewsCount,
     optimizationsCount,
