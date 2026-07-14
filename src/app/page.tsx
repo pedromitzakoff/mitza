@@ -643,8 +643,14 @@ export default async function Home({
                 }
                 context={`${operationIndicators.completedTasksCount} de ${operationIndicators.tasksTotalCount} concluídas`}
               />
+              {/* MVP Etapa "Indicadores operacionais e refinamento visual":
+                  rótulo direto ("Otimizações no mês") em vez do genérico
+                  "Atividade operacional" — mesmo dado de sempre
+                  (optimizationsCount, um registro de account_reviews =
+                  uma otimização, nunca contado duas vezes), só o nome
+                  deixa de esconder o que o número mede. */}
               <OperationMetric
-                label="Atividade operacional"
+                label="Otimizações no mês"
                 value={`${operationIndicators.optimizationsCount} otimizações`}
                 context="Revisões estratégicas registradas"
               />

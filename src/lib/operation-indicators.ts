@@ -28,11 +28,13 @@ export interface OperationIndicators {
   tasksTotalCount: number;
   /** null quando não há tarefas previstas no período — nunca 0%. */
   completionRatePct: number | null;
-  /** Otimizações realizadas (Etapa 74) — total de revisões estratégicas da
-   * conta (account_reviews) registradas no período, independente do
-   * resultado (alteração realizada, sem alteração necessária, ou problema
-   * identificado). Um único número — nunca separado por resultado, pra não
-   * dar a impressão de dois eventos onde só houve um. */
+  /** Otimizações realizadas (Etapa 74; rótulo "Otimizações no mês" desde a
+   * Etapa "Indicadores operacionais e refinamento visual") — total de
+   * revisões estratégicas da conta (account_reviews) registradas no
+   * período, independente do resultado (alteração realizada, sem alteração
+   * necessária, ou problema identificado). Um único número — nunca
+   * separado por resultado, pra não dar a impressão de dois eventos onde só
+   * houve um; cada registro de account_reviews conta exatamente uma vez. */
   optimizationsCount: number;
 }
 
