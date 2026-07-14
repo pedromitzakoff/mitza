@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatCurrency, formatDateWithYear } from "@/lib/format";
 import { SPEND_STATUS_BADGE_CLASSES, SPEND_STATUS_LABEL, type SpendStatus } from "@/lib/spend-status";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
+import { resolveMonthPeriodSummary } from "@/lib/financial-period";
 import type { MonthlyBudgetSprintInput } from "@/lib/monthly-budget";
 import { MonthlyBudgetEditor } from "./monthly-budget-editor";
 
@@ -56,15 +57,12 @@ export function MonthInvestmentSummary({
   lastChange: MonthlyBudgetChangeSummary | null;
   historyHref: string;
 }) {
-  const diff = actual - expectedToDate;
-  const diffText =
-    planned > 0 && status !== "sem_meta" && status !== "nao_iniciado"
-      ? diff > 0
-        ? `${formatCurrency(diff)} acima do ritmo esperado`
-        : diff < 0
-          ? `${formatCurrency(Math.abs(diff))} abaixo do ritmo esperado`
-          : "Dentro do ritmo esperado"
-      : null;
+  // Etapa 63: nenhum cálculo de ritmo próprio aqui — o resumo do período
+  // (planejado/realizado/esperado/status) monta o mesmo formato central
+  // (`FinancialPeriodSummary`) que a barra e o texto de desvio já consomem
+  // em qualquer outra tela (Sprints, Relatório), pra nunca haver uma segunda
+  // conta de "quanto falta pro ritmo" só deste card.
+  const summary = resolveMonthPeriodSummary({ monthPlanned: planned, monthActual: actual, monthExpectedToDate: expectedToDate, monthStatus: status }, monthLabel, monthRange);
 
   return (
     <div className="rounded-lg border border-border bg-card p-3">
@@ -116,17 +114,14 @@ export function MonthInvestmentSummary({
       )}
 
       <div className="mt-1.5">
-        <AgencyInvestmentBar planned={planned} actual={actual} expectedToDate={expectedToDate} />
+        <AgencyInvestmentBar summary={summary} />
       </div>
 
-      {(diffText || (isAdmin && lastChange && lastChange.changeCountThisMonth > 1)) && (
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-          {diffText && <span>{diffText}</span>}
-          {isAdmin && lastChange && lastChange.changeCountThisMonth > 1 && (
-            <Link href={historyHref} className="ml-auto font-medium text-foreground hover:underline">
-              Ver histórico
-            </Link>
-          )}
+      {isAdmin && lastChange && lastChange.changeCountThisMonth > 1 && (
+        <div className="mt-1 flex items-center justify-end text-xs text-muted-foreground">
+          <Link href={historyHref} className="font-medium text-foreground hover:underline">
+            Ver histórico
+          </Link>
         </div>
       )}
     </div>

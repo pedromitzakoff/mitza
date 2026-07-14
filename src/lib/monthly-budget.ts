@@ -115,6 +115,26 @@ export interface MonthlyBudgetRedistributionResult {
  * exatamente pela função SQL `apply_monthly_budget_change`, que é quem de
  * fato grava a mudança (ver supabase/fix-monthly-budget-actual-spend.sql).
  */
+/** Divide todos os dias do mês entre "histórico" (nunca mais recalculado) e
+ * "elegível pra redistribuição" — Etapa 63, seção 4: função central única
+ * pra essa pergunta, nunca mais um filtro inline duplicado em cada lugar que
+ * precisa saber quais dias ainda podem receber orçamento. Elegível é
+ * qualquer dia igual ou posterior à `effectiveDate` (dias restantes da
+ * sprint atual, incluindo hoje, mais todas as sprints futuras) — nunca
+ * sprints encerradas nem dias antes da data efetiva de uma mudança de
+ * orçamento. A própria `effectiveDate` pertence ao período elegível, nunca
+ * ao histórico (ver exemplo da sprint que atravessa a effective_date: "o
+ * próprio dia 15/07 pertence ao novo período de planejamento"). */
+export function getEligibleRedistributionDates(
+  allDates: string[],
+  effectiveDate: string,
+): { historicalDates: string[]; eligibleDates: string[] } {
+  return {
+    historicalDates: allDates.filter((date) => date < effectiveDate),
+    eligibleDates: allDates.filter((date) => date >= effectiveDate),
+  };
+}
+
 export function computeMonthlyBudgetRedistribution(
   input: MonthlyBudgetRedistributionInput,
 ): MonthlyBudgetRedistributionResult {
@@ -129,8 +149,10 @@ export function computeMonthlyBudgetRedistribution(
   // com effective_date = 15/07). Por isso o corte é `date < effectiveDate`
   // (histórico) / `date >= effectiveDate` (futuro), nunca `<=`/`>`.
   const dayBeforeEffectiveDate = addDays(effectiveDate, -1);
-  const consolidatedDates = allDates.filter((date) => date < effectiveDate);
-  const futureDates = allDates.filter((date) => date >= effectiveDate);
+  const { historicalDates: consolidatedDates, eligibleDates: futureDates } = getEligibleRedistributionDates(
+    allDates,
+    effectiveDate,
+  );
 
   const sumAllocations = (dates: string[]) =>
     dates.reduce((sum, date) => sum + (currentAllocations.get(date) ?? 0), 0);

@@ -90,7 +90,7 @@ export function AccountCardSummary({
 
         <div className="mt-1.5">
           {summary.planned > 0 ? (
-            <AgencyInvestmentBar planned={summary.planned} actual={summary.actual} expectedToDate={summary.expectedToDate} />
+            <AgencyInvestmentBar summary={summary} />
           ) : (
             <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />
           )}

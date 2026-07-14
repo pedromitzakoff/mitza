@@ -1,24 +1,23 @@
 import { formatCurrency } from "@/lib/format";
+import type { FinancialPeriodSummary } from "@/lib/financial-period";
+import { computeExpectedPct, formatDeviationCurrencyText, positionExpectedMarker } from "@/lib/financial-period";
 
 /**
- * Barra do resumo "Investimento do mês" da Visão Geral — o componente mais
- * característico do dashboard (Etapa 41): trilha neutra mais espessa,
- * preenchimento azul MITZA (realizado / planejado, nunca passa de 100% de
- * largura; vermelho discreto só quando ultrapassa o planejado) com
- * transição curta ao mudar de mês/filtro, e um marcador circular — não um
- * traço fino — sobre "esperado até hoje", com tooltip nativo. Mesma
- * linguagem visual de `SprintFinancialBar`, com mais presença aqui porque é
- * a peça central da tela.
+ * Barra do resumo "Investimento do mês" (Visão Geral, página do cliente,
+ * tela Sprints, Relatório) — trilha neutra, preenchimento azul MITZA
+ * (realizado / planejado, nunca passa de 100% de largura; vermelho discreto
+ * só quando ultrapassa o planejado inteiro) e um marcador de "esperado até
+ * hoje". Etapa 63: o marcador virou uma linha vertical fina com legenda
+ * própria (antes era uma bolinha sem legenda visível, só tooltip) e os
+ * textos abaixo da barra passaram a reaproveitar as funções centrais de
+ * `lib/financial-period.ts` (nunca mais um cálculo de "ritmo" próprio deste
+ * componente) — a mesma barra, com o mesmo texto, em qualquer tela que a
+ * use, porque `summary` já vem de `resolveMonthPeriodSummary`/
+ * `resolveSprintPeriodSummary`.
  */
-export function AgencyInvestmentBar({
-  planned,
-  actual,
-  expectedToDate,
-}: {
-  planned: number;
-  actual: number;
-  expectedToDate: number;
-}) {
+export function AgencyInvestmentBar({ summary }: { summary: FinancialPeriodSummary }) {
+  const { planned, actual, expectedToDate } = summary;
+
   if (planned <= 0) {
     return (
       <div>
@@ -29,10 +28,11 @@ export function AgencyInvestmentBar({
   }
 
   const actualPct = (actual / planned) * 100;
-  const expectedPct = (expectedToDate / planned) * 100;
+  const expectedPct = computeExpectedPct(summary);
   const fillWidth = Math.min(Math.max(actualPct, 0), 100);
-  const markerPos = Math.min(Math.max(expectedPct, 2), 98);
+  const markerPos = positionExpectedMarker(expectedPct);
   const isOver = actualPct > 100;
+  const deviationText = formatDeviationCurrencyText(summary, formatCurrency);
 
   return (
     <div>
@@ -43,15 +43,21 @@ export function AgencyInvestmentBar({
             style={{ width: `${fillWidth}%` }}
           />
         </div>
+        {/* Marcador de "esperado até hoje": linha vertical fina (não mais uma
+            bolinha) — mais fácil de ler contra o preenchimento estreito de
+            uma barra de sprint curta, e sempre com legenda visível abaixo
+            (nunca só no tooltip). */}
         <div
-          className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 cursor-help rounded-full border-2 border-white bg-navy shadow-[var(--shadow-float)] transition-[left] duration-300 ease-out dark:border-zinc-950"
+          className="absolute top-0 h-3 w-0.5 -translate-x-1/2 cursor-help bg-navy shadow-[0_0_0_1px_rgba(255,255,255,0.8)] transition-[left] duration-300 ease-out dark:bg-white dark:shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
           style={{ left: `${markerPos}%` }}
           title={`Esperado até hoje\n${formatCurrency(expectedToDate)}\n${Math.round(expectedPct)}% do planejado`}
         />
       </div>
       <p className="mt-1.5 text-[11px] text-muted-foreground">
+        <span className="mr-1 inline-block h-2 w-2 rounded-sm bg-navy align-middle dark:bg-white" aria-hidden="true" />
         {Math.round(actualPct)}% realizado · {Math.round(expectedPct)}% esperado até hoje
       </p>
+      {deviationText && <p className="mt-0.5 text-[11px] text-muted-foreground">{deviationText}</p>}
     </div>
   );
 }
