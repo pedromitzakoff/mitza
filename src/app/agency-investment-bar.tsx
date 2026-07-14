@@ -32,6 +32,7 @@ export function AgencyInvestmentBar({
   summary,
   showExpectedMarker = true,
   monthTemporalStatus,
+  showLegend = true,
 }: {
   summary: FinancialPeriodSummary;
   /** Etapa 64: `false` some com o marcador de "esperado até hoje", a
@@ -47,6 +48,14 @@ export function AgencyInvestmentBar({
    * encerrado/não começou. Nunca usado quando `showExpectedMarker` é
    * `false` (sprint). */
   monthTemporalStatus?: MonthTemporalStatus;
+  /** Etapa 73, seção 20: `false` esconde a legenda de cores + o texto de
+   * desvio abaixo da barra (o rótulo sobre o marcador nunca some — continua
+   * sempre visível). Default `true` preserva o comportamento de sempre pra
+   * Visão Geral/Sprints/Relatório; só "Investimento do mês" da página do
+   * cliente passa `false`, porque essa mesma informação passou a viver,
+   * numa única apresentação (nunca duas frases pro mesmo número), dentro de
+   * "Ver detalhes do investimento". */
+  showLegend?: boolean;
 }) {
   const { planned, actual } = summary;
 
@@ -120,17 +129,21 @@ export function AgencyInvestmentBar({
       </div>
       {/* Legenda compacta (Etapa 68, seção 8) + % realizado — uma linha só,
           discreta, sem aumentar a altura da seção. */}
-      <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-sm bg-brand" aria-hidden="true" />
-          {Math.round(actualPct)}% realizado
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-0.5 bg-navy dark:bg-white" aria-hidden="true" />
-          Marcador: esperado até hoje
-        </span>
-      </p>
-      {deviationText && <p className="mt-0.5 text-[11px] text-muted-foreground">{deviationText}</p>}
+      {showLegend && (
+        <>
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-2 w-2 rounded-sm bg-brand" aria-hidden="true" />
+              {Math.round(actualPct)}% realizado
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-2 w-0.5 bg-navy dark:bg-white" aria-hidden="true" />
+              Marcador: esperado até hoje
+            </span>
+          </p>
+          {deviationText && <p className="mt-0.5 text-[11px] text-muted-foreground">{deviationText}</p>}
+        </>
+      )}
     </div>
   );
 }
