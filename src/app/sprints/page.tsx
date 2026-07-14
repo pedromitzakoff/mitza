@@ -125,7 +125,9 @@ export default async function SprintsPage({
   ] = await Promise.all([
     supabase
       .from("clients")
-      .select("id, name, meta_ad_account_id, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)")
+      .select(
+        "id, name, meta_ad_account_id, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
+      )
       .is("deleted_at", null)
       .order("name"),
     supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
@@ -166,26 +168,39 @@ export default async function SprintsPage({
   const currentSprintIds = (sprints ?? [])
     .filter((s) => isDateWithinPeriod(todayStr, s.start_date, s.end_date))
     .map((s) => s.id);
+  // Etapa 71: só as sprints que de fato pertencem ao mês SELECIONADO (não a
+  // janela união com o mês corrente) — igual à Visão Geral, pra nunca somar
+  // no consolidado mensal um resultado de uma sprint de outro mês.
+  const monthSprintIdsForPerformance = (sprints ?? [])
+    .filter((s) => s.start_date <= monthRange.lastDay && s.end_date >= monthRange.firstDay)
+    .map((s) => s.id);
 
   // Comentários de TODAS as sprints visíveis, buscados em lote uma única vez
   // (não por card) — pra o mesmo SprintCard da página do cliente também
   // mostrar comentários aqui, sem virar N+1.
-  const [{ data: clientActivity }, { data: sprintActivity }, { data: sprintComments }] = await Promise.all([
-    clientIds.length > 0
-      ? supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds)
-      : Promise.resolve({ data: [] }),
-    currentSprintIds.length > 0
-      ? supabase.from("sprint_last_operational_activity").select("sprint_id, last_activity_at").in("sprint_id", currentSprintIds)
-      : Promise.resolve({ data: [] }),
-    allSprintIds.length > 0
-      ? supabase
-          .from("comments")
-          .select("id, commentable_id, content, created_at, author:team_members!comments_author_id_fkey(name)")
-          .eq("commentable_type", "sprint")
-          .in("commentable_id", allSprintIds)
-          .order("created_at")
-      : Promise.resolve({ data: [] }),
-  ]);
+  const [{ data: clientActivity }, { data: sprintActivity }, { data: sprintComments }, { data: performanceRecords }] =
+    await Promise.all([
+      clientIds.length > 0
+        ? supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds)
+        : Promise.resolve({ data: [] }),
+      currentSprintIds.length > 0
+        ? supabase.from("sprint_last_operational_activity").select("sprint_id, last_activity_at").in("sprint_id", currentSprintIds)
+        : Promise.resolve({ data: [] }),
+      allSprintIds.length > 0
+        ? supabase
+            .from("comments")
+            .select("id, commentable_id, content, created_at, author:team_members!comments_author_id_fkey(name)")
+            .eq("commentable_type", "sprint")
+            .in("commentable_id", allSprintIds)
+            .order("created_at")
+        : Promise.resolve({ data: [] }),
+      monthSprintIdsForPerformance.length > 0
+        ? supabase
+            .from("performance_records")
+            .select("client_id, sprint_id, channel, result_type, result_count, source, source_updated_at")
+            .in("sprint_id", monthSprintIdsForPerformance)
+        : Promise.resolve({ data: [] }),
+    ]);
 
   const allCommentIds = (sprintComments ?? []).map((c) => c.id);
   const { data: reportSelections } =
@@ -255,6 +270,20 @@ export default async function SprintsPage({
     budgetChangesByClient.set(c.client_id, list);
   }
 
+  const performanceRecordsByClient = new Map<string, OperationClientRawData["performanceRecords"]>();
+  for (const r of performanceRecords ?? []) {
+    const list = performanceRecordsByClient.get(r.client_id) ?? [];
+    list!.push({
+      sprintId: r.sprint_id,
+      channel: r.channel,
+      resultType: r.result_type,
+      resultCount: r.result_count,
+      source: r.source,
+      sourceUpdatedAt: r.source_updated_at,
+    });
+    performanceRecordsByClient.set(r.client_id, list);
+  }
+
   const clientActivityById = new Map((clientActivity ?? []).map((r) => [r.client_id, r.last_activity_at]));
   const sprintActivityById = new Map((sprintActivity ?? []).map((r) => [r.sprint_id, r.last_activity_at]));
   const primaryManagerNameByClient = new Map(
@@ -309,6 +338,9 @@ export default async function SprintsPage({
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
       lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
       sprintClosedSnapshots: sprintClosedSnapshotsByClient.get(client.id) ?? new Map(),
+      performanceGoal: client.performance_goal,
+      targetCostPerResult: client.target_cost_per_result,
+      performanceRecords: performanceRecordsByClient.get(client.id) ?? [],
     };
   });
 

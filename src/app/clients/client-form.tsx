@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { Database } from "@/lib/supabase/database.types";
 import { CONTRACTED_SERVICE_OPTIONS } from "@/lib/client-fields";
 import { formatCnpj } from "@/lib/cnpj";
+import { PERFORMANCE_GOAL_OPTIONS, PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 
 type Manager = { id: string; name: string };
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
@@ -65,6 +66,16 @@ export function ClientForm({
   const assigned = new Set(assignedIds);
   const contractedServices = new Set(defaults?.contracted_services ?? []);
   const [dirty, setDirty] = useState(false);
+
+  // `defaults` só é `undefined` na criação de um cliente novo (ver
+  // src/app/clients/new/page.tsx vs. .../[id]/edit/page.tsx) — objetivo de
+  // performance é obrigatório apenas nesse caso; clientes já existentes
+  // continuam podendo ficar sem objetivo configurado (Etapa 71, seção 2).
+  const isNewClient = defaults === undefined;
+  const [performanceGoal, setPerformanceGoal] = useState<PerformanceGoal | "">(
+    (defaults?.performance_goal as PerformanceGoal | null) ?? "",
+  );
+  const costMetricLabel = performanceGoal ? PERFORMANCE_GOALS[performanceGoal].costMetricLabel : "custo por resultado";
 
   // Confirmação "simples" antes de sair (só fecha aba/recarrega — o App
   // Router navega sem descarregar a página, então isso não cobre clique em
@@ -379,6 +390,46 @@ export function ClientForm({
             className={inputClasses}
           />
         </label>
+      </FormSection>
+
+      <FormSection title="Performance" defaultOpen={isNewClient}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className={labelClasses}>
+            Objetivo principal de performance {isNewClient && <span className="text-red-500">*</span>}
+            <select
+              name="performance_goal"
+              required={isNewClient}
+              value={performanceGoal}
+              onChange={(event) => setPerformanceGoal(event.target.value as PerformanceGoal | "")}
+              className={inputClasses}
+            >
+              <option value="" disabled={isNewClient}>
+                {isNewClient ? "Selecione um objetivo" : "Não configurado"}
+              </option>
+              {PERFORMANCE_GOAL_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-zinc-400">
+              Define se os resultados desta conta são acompanhados como leads ou vendas.
+            </span>
+          </label>
+
+          <label className={labelClasses}>
+            Meta de {costMetricLabel.toLowerCase()} <span className="text-xs text-zinc-400">(opcional)</span>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              name="target_cost_per_result"
+              defaultValue={defaults?.target_cost_per_result ?? ""}
+              className={inputClasses}
+            />
+            <span className="text-xs text-zinc-400">Utilizada para comparar a eficiência atual da conta.</span>
+          </label>
+        </div>
       </FormSection>
 
       <FormSection title="Comercial">

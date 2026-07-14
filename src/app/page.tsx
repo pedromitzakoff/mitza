@@ -33,6 +33,7 @@ import { PageHeader } from "@/components/workspace/page-header";
 import { SectionHeader } from "@/components/workspace/section-header";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { StatusDot, type StatusTone } from "@/components/workspace/status-dot";
+import { formatPerformanceResult } from "@/lib/performance-goals";
 
 /**
  * Etapa 47: Inter carregada e aplicada SÓ na Visão Geral (className no
@@ -140,7 +141,7 @@ export default async function Home({
     supabase
       .from("clients")
       .select(
-        "id, name, meta_ad_account_id, status, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
+        "id, name, meta_ad_account_id, status, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
       )
       .is("deleted_at", null)
       .order("name"),
@@ -204,13 +205,25 @@ export default async function Home({
   const currentSprintIds = (sprints ?? [])
     .filter((s) => isDateWithinPeriod(todayStr, s.start_date, s.end_date))
     .map((s) => s.id);
+  // Etapa 71: registros de performance são sempre por sprint — buscar por
+  // sprint_id (não por período) evita depender de duplicar a lógica de
+  // sobreposição de datas já usada acima pras sprints em si.
+  const monthSprintIdsForPerformance = (sprints ?? [])
+    .filter((s) => s.start_date <= monthRange.lastDay && s.end_date >= monthRange.firstDay)
+    .map((s) => s.id);
 
-  const [{ data: clientActivity }, { data: sprintActivity }] = await Promise.all([
+  const [{ data: clientActivity }, { data: sprintActivity }, { data: performanceRecords }] = await Promise.all([
     clientIds.length > 0
       ? supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds)
       : Promise.resolve({ data: [] }),
     currentSprintIds.length > 0
       ? supabase.from("sprint_last_operational_activity").select("sprint_id, last_activity_at").in("sprint_id", currentSprintIds)
+      : Promise.resolve({ data: [] }),
+    monthSprintIdsForPerformance.length > 0
+      ? supabase
+          .from("performance_records")
+          .select("client_id, sprint_id, channel, result_type, result_count, source, source_updated_at")
+          .in("sprint_id", monthSprintIdsForPerformance)
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -265,6 +278,20 @@ export default async function Home({
     budgetChangesByClient.set(c.client_id, list);
   }
 
+  const performanceRecordsByClient = new Map<string, OperationClientRawData["performanceRecords"]>();
+  for (const r of performanceRecords ?? []) {
+    const list = performanceRecordsByClient.get(r.client_id) ?? [];
+    list!.push({
+      sprintId: r.sprint_id,
+      channel: r.channel,
+      resultType: r.result_type,
+      resultCount: r.result_count,
+      source: r.source,
+      sourceUpdatedAt: r.source_updated_at,
+    });
+    performanceRecordsByClient.set(r.client_id, list);
+  }
+
   const clientActivityById = new Map((clientActivity ?? []).map((r) => [r.client_id, r.last_activity_at]));
   const sprintActivityById = new Map((sprintActivity ?? []).map((r) => [r.sprint_id, r.last_activity_at]));
   const primaryManagerNameByClient = new Map(
@@ -292,6 +319,9 @@ export default async function Home({
       clientLastActivityAt: clientActivityById.get(client.id) ?? null,
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
       lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
+      performanceGoal: client.performance_goal,
+      targetCostPerResult: client.target_cost_per_result,
+      performanceRecords: performanceRecordsByClient.get(client.id) ?? [],
     };
   });
 
@@ -686,6 +716,8 @@ export default async function Home({
                     <th className="py-2 px-3.5 text-right font-semibold">Esperado até hoje</th>
                     <th className="py-2 px-3.5 font-semibold">Sprint atual</th>
                     <th className="py-2 px-3.5 font-semibold">Status</th>
+                    <th className="py-2 px-3.5 font-semibold">Resultados</th>
+                    <th className="py-2 px-3.5 text-right font-semibold">Custo por resultado</th>
                     <th className="py-2 px-3.5 font-semibold">Última otimização</th>
                     <th className="py-2 px-3.5 text-right font-semibold">Abrir cliente</th>
                   </tr>
@@ -700,6 +732,17 @@ export default async function Home({
                       card.monthPlanned > 0 ? Math.round((card.monthActual / card.monthPlanned) * 100) : null;
                     const pctEsperado =
                       card.monthPlanned > 0 ? Math.round((card.monthExpectedToDate / card.monthPlanned) * 100) : null;
+                    // Etapa 71: nunca "0 leads"/"0 vendas" fabricado — só
+                    // quando `hasAnyRecord` é true (registro real existe,
+                    // mesmo que com contagem 0 — ver PerformanceSummary).
+                    const performanceResultsText =
+                      card.performanceGoal && card.monthPerformanceSummary?.hasAnyRecord
+                        ? formatPerformanceResult(card.monthPerformanceSummary.resultCount, card.performanceGoal)
+                        : "—";
+                    const performanceCostText =
+                      card.performanceGoal && card.monthPerformanceSummary?.costPerResult !== null && card.monthPerformanceSummary?.costPerResult !== undefined
+                        ? formatCurrency(card.monthPerformanceSummary.costPerResult)
+                        : "—";
                     return (
                       <tr
                         key={card.clientId}
@@ -720,6 +763,10 @@ export default async function Home({
                         </td>
                         <td className="py-2.5 px-3.5">
                           <StatusDot tone={SITUATION_TONE[card.monthStatus]} label={SITUATION_LABEL[card.monthStatus]} />
+                        </td>
+                        <td className="py-2.5 px-3.5 text-overview-text-secondary">{performanceResultsText}</td>
+                        <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">
+                          {performanceCostText}
                         </td>
                         <td className="py-2.5 px-3.5 text-overview-text-secondary">
                           {formatLastOptimizationLabel(card.lastOptimizationAt, today)}

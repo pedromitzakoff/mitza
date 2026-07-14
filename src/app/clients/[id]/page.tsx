@@ -47,9 +47,18 @@ import { RecordAccountReviewDrawer } from "../record-account-review-drawer";
 import { AccountReviewDetailDrawer, type AccountReviewDetail } from "../account-review-detail-drawer";
 import { generateClientUpdateAction } from "../client-update-actions";
 import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
-import type { OperationTaskItem } from "@/app/operation/operation-data";
+import type { OperationTaskItem, PerformanceRecordRawRow } from "@/app/operation/operation-data";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
 import { MonthlyBudgetHistoryDrawer } from "../monthly-budget-history-drawer";
+import {
+  aggregatePerformanceResults,
+  buildEditableChannelValues,
+  buildSprintPerformanceView,
+  computePerformanceSummary,
+} from "@/lib/performance";
+import { AVAILABLE_TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
+import { PerformanceSummarySection } from "../performance-summary";
+import type { SprintPerformanceProps } from "../sprint-card";
 
 const OPTIMIZATION_LOOKBACK_DAYS = 14;
 
@@ -176,7 +185,7 @@ export default async function ClientPage({
   const { data: client } = await supabase
     .from("clients")
     .select(
-      "id, name, main_objective, main_product_or_service, operation_region, primary_audience, client_differentials, client_restrictions, important_seasonal_dates, operational_summary, important_notes",
+      "id, name, main_objective, main_product_or_service, operation_region, primary_audience, client_differentials, client_restrictions, important_seasonal_dates, operational_summary, important_notes, performance_goal, target_cost_per_result",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -263,6 +272,26 @@ export default async function ClientPage({
     .eq("client_id", id)
     .maybeSingle();
 
+  // Etapa 71: registros de performance de todas as sprints do mês
+  // selecionado — sempre por sprint (nenhum lançamento manual mensal
+  // independente, ver migration), nunca uma query por sprint.
+  const monthSprintIds = (sprints ?? []).map((s) => s.id);
+  const { data: performanceRecordRows } =
+    monthSprintIds.length > 0
+      ? await supabase
+          .from("performance_records")
+          .select("sprint_id, channel, result_type, result_count, source, source_updated_at")
+          .in("sprint_id", monthSprintIds)
+      : { data: [] };
+  const performanceRecords: PerformanceRecordRawRow[] = (performanceRecordRows ?? []).map((r) => ({
+    sprintId: r.sprint_id,
+    channel: r.channel,
+    resultType: r.result_type,
+    resultCount: r.result_count,
+    source: r.source,
+    sourceUpdatedAt: r.source_updated_at,
+  }));
+
   assertSingleCurrentSprint(sprints ?? [], today);
   const sprintFinancials = (sprints ?? []).map((sprint) => {
     const actualSpend = computeSprintEffectiveSpend(sprint, dailySpend ?? []);
@@ -335,6 +364,42 @@ export default async function ClientPage({
   // ordem cronológica crescente por data de início já usada em todo o
   // resto do sistema, aqui explícita em vez de depender da ordem da query.
   const sortedSprints = [...sprintFinancials].sort((a, b) => a.startDate.localeCompare(b.startDate));
+
+  // Etapa 71 — camada de PERFORMANCE: consome `monthActual`/`sprint.actualSpend`
+  // já calculados acima, nunca uma segunda fonte de investimento. Consolidado
+  // do mês é sempre a soma direta dos registros já escopados às sprints do
+  // mês selecionado (nenhum lançamento manual mensal independente).
+  const performanceGoal = client.performance_goal;
+  const targetCostPerResult = client.target_cost_per_result;
+  const monthPerformanceSummary = performanceGoal
+    ? computePerformanceSummary({
+        scope: "consolidated",
+        records: performanceRecords,
+        resultType: performanceGoal,
+        consolidatedActualSpend: monthActual,
+        targetCostPerResult,
+      })
+    : null;
+  const monthPerformanceChannelBreakdown = performanceGoal
+    ? AVAILABLE_TRAFFIC_CHANNELS.map((channel) => ({
+        channel,
+        resultCount: aggregatePerformanceResults(performanceRecords, performanceGoal, channel).resultCount,
+      })).filter((entry) => entry.resultCount > 0)
+    : [];
+  const sprintPerformanceBySprintId = new Map<string, SprintPerformanceProps>();
+  for (const sprint of sprintFinancials) {
+    const sprintRecords = performanceRecords.filter((r) => r.sprintId === sprint.sprintId);
+    sprintPerformanceBySprintId.set(sprint.sprintId, {
+      view: buildSprintPerformanceView({
+        performanceGoal,
+        isFuture: sprint.temporalStatus === "futura",
+        records: sprintRecords,
+        actualSpend: sprint.actualSpend,
+        targetCostPerResult,
+      }),
+      editableChannels: performanceGoal ? buildEditableChannelValues(sprintRecords, performanceGoal, AVAILABLE_TRAFFIC_CHANNELS) : [],
+    });
+  }
 
   const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate({ firstDay, lastDay }, todayStr);
   // Etapa 64: mês selecionado ainda não começou — usado só pra escolher o
@@ -737,6 +802,18 @@ export default async function ClientPage({
         />
       </div>
 
+      {/* 2b. Performance do mês — dimensão nova e SEPARADA do financeiro
+          (Etapa 71): próxima do card de Investimento, nunca fundida com ele. */}
+      <div className="mt-3">
+        <PerformanceSummarySection
+          goal={performanceGoal}
+          targetCostPerResult={targetCostPerResult}
+          summary={monthPerformanceSummary}
+          channelBreakdown={monthPerformanceChannelBreakdown}
+          editHref={`/clients/${client.id}/edit`}
+        />
+      </div>
+
       {/* 3. Prioridades — posição única e fixa (a promoção condicional pra
           antes do Acompanhamento da Conta em caso de alerta crítico, da
           Etapa 58, foi removida: a nova hierarquia pedida é sempre
@@ -800,6 +877,7 @@ export default async function ClientPage({
                 finalRecommendedAmount={closedSprintSnapshots.get(sprint.sprintId)?.finalRecommendedAmount ?? null}
                 manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
                 metaSyncedAt={lastSync?.synced_at ?? null}
+                performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
               />
             ))
           ) : (
