@@ -26,6 +26,10 @@ import {
   type OperationClientRawData,
   type OperationTaskItem,
 } from "@/app/operation/operation-data";
+import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-section";
+import { RecordAccountReviewDrawer } from "@/app/clients/record-account-review-drawer";
+import { AccountReviewDetailDrawer, type AccountReviewDetail } from "@/app/clients/account-review-detail-drawer";
+import { computeClientUpdateStatus } from "@/lib/client-updates";
 import { SprintCurrentClientGroup } from "./current-client-group";
 import { SprintMonthlyBySprintsGroup } from "./monthly-sprints-group";
 import { SprintMonthlyConsolidatedGroup } from "./monthly-consolidated-group";
@@ -74,6 +78,10 @@ export default async function SprintsPage({
     task?: string;
     taskError?: string;
     commentError?: string;
+    review?: string;
+    reviewClient?: string;
+    reviewDetail?: string;
+    reviewError?: string;
   }>;
 }) {
   const profile = await getCurrentProfile();
@@ -217,6 +225,53 @@ export default async function SprintsPage({
   const lastReviewAtByClient = new Map<string, string>();
   for (const row of lastReviews ?? []) {
     if (!lastReviewAtByClient.has(row.client_id)) lastReviewAtByClient.set(row.client_id, row.reviewed_at);
+  }
+
+  // Sprint UX 2.0 — "Otimizações" (account_reviews) direto na tela Sprints,
+  // igual à página do cliente: mesma query rica (Etapa 57), só filtrada
+  // pelas sprints já visíveis nesta tela (allSprintIds) em vez de por
+  // cliente, pra cobrir as 3 visões com uma única busca.
+  const { data: sprintReviewRows } =
+    allSprintIds.length > 0
+      ? await supabase
+          .from("account_reviews")
+          .select(
+            "id, client_id, sprint_id, reviewed_at, reason, reason_other_description, outcome, notes, issue_description, issue_category, seconds_since_previous_review, team_member:team_members!account_reviews_team_member_id_fkey(name), optimizations:account_optimizations(id, optimization_type, optimization_action, description, reason, expected_impact), issue_task:tasks!account_reviews_issue_task_id_fkey(title)",
+          )
+          .in("sprint_id", allSprintIds)
+          .order("reviewed_at", { ascending: false })
+      : { data: [] };
+
+  const reviewIds = (sprintReviewRows ?? []).map((r) => r.id);
+  const { data: reviewClientUpdateRows } =
+    reviewIds.length > 0
+      ? await supabase
+          .from("client_updates")
+          .select(
+            "id, account_review_id, content, copied_at, sent_at, sent_by_profile:team_members!client_updates_sent_by_fkey(name)",
+          )
+          .in("account_review_id", reviewIds)
+      : { data: [] };
+  const clientUpdatesByReviewId = new Map((reviewClientUpdateRows ?? []).map((row) => [row.account_review_id, row]));
+
+  const accountReviewsBySprintId = new Map<string, AccountReviewSummaryItem[]>();
+  for (const review of sprintReviewRows ?? []) {
+    const update = clientUpdatesByReviewId.get(review.id) ?? null;
+    const list = accountReviewsBySprintId.get(review.sprint_id) ?? [];
+    list.push({
+      id: review.id,
+      reviewedAt: review.reviewed_at,
+      reason: review.reason,
+      reasonOtherDescription: review.reason_other_description,
+      outcome: review.outcome,
+      managerName: review.team_member?.name ?? "Membro removido",
+      optimizationCount: review.optimizations.length,
+      issueDescription: review.issue_description,
+      updateStatus: computeClientUpdateStatus(
+        update ? { copiedAt: update.copied_at, sentAt: update.sent_at } : null,
+      ),
+    });
+    accountReviewsBySprintId.set(review.sprint_id, list);
   }
 
   const allCommentIds = (sprintComments ?? []).map((c) => c.id);
@@ -502,6 +557,54 @@ export default async function SprintsPage({
     }
   }
 
+  // Sprint UX 2.0 — "+ Registrar otimização" precisa saber PARA QUAL cliente
+  // (a tela mostra vários), por isso o parâmetro extra `reviewClient` (a
+  // página do cliente não precisa disso, o cliente já é o da própria rota).
+  // Mesma regra defensiva do filtro de cliente (seção 39 acima): cliente
+  // inválido ou fora do escopo atual é ignorado com segurança.
+  const reviewClientId =
+    params.review === "new" && params.reviewClient && cards.some((c) => c.clientId === params.reviewClient)
+      ? params.reviewClient
+      : undefined;
+
+  const openReviewDetailRow = params.reviewDetail
+    ? (sprintReviewRows ?? []).find((r) => r.id === params.reviewDetail) ?? null
+    : null;
+  const reviewDetail: AccountReviewDetail | null = openReviewDetailRow
+    ? {
+        id: openReviewDetailRow.id,
+        reviewedAt: openReviewDetailRow.reviewed_at,
+        managerName: openReviewDetailRow.team_member?.name ?? "Membro removido",
+        reason: openReviewDetailRow.reason,
+        reasonOtherDescription: openReviewDetailRow.reason_other_description,
+        outcome: openReviewDetailRow.outcome,
+        notes: openReviewDetailRow.notes,
+        issueDescription: openReviewDetailRow.issue_description,
+        issueCategory: openReviewDetailRow.issue_category,
+        issueTaskTitle: openReviewDetailRow.issue_task?.title ?? null,
+        secondsSincePreviousReview: openReviewDetailRow.seconds_since_previous_review,
+        optimizations: openReviewDetailRow.optimizations.map((opt) => ({
+          id: opt.id,
+          type: opt.optimization_type,
+          action: opt.optimization_action,
+          description: opt.description,
+          reason: opt.reason,
+          expectedImpact: opt.expected_impact,
+        })),
+        clientUpdate: (() => {
+          const update = clientUpdatesByReviewId.get(openReviewDetailRow.id);
+          return update
+            ? {
+                id: update.id,
+                content: update.content,
+                sentAt: update.sent_at,
+                sentByName: update.sent_by_profile?.name ?? null,
+              }
+            : null;
+        })(),
+      }
+    : null;
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
       <ScrollRestoreOnMount />
@@ -621,6 +724,7 @@ export default async function SprintsPage({
                 primaryManagerName={primaryManagerNameByClient.get(card.clientId) ?? null}
                 isAdmin={isAdmin}
                 comments={card.sprint ? sprintCommentsById.get(card.sprint.sprintId) ?? [] : []}
+                accountReviews={card.sprint ? accountReviewsBySprintId.get(card.sprint.sprintId) ?? [] : []}
               />
             ))
           ) : grouping === "consolidated" ? (
@@ -632,6 +736,7 @@ export default async function SprintsPage({
                 monthRange={monthRange}
                 primaryManagerName={primaryManagerNameByClient.get(card.clientId) ?? null}
                 returnTo={buildUrl({})}
+                accountReviewsBySprintId={accountReviewsBySprintId}
                 monthTemporalStatus={monthTemporalStatus}
               />
             ))
@@ -646,6 +751,7 @@ export default async function SprintsPage({
                 isAdmin={isAdmin}
                 returnTo={buildUrl({})}
                 sprintCommentsById={sprintCommentsById}
+                accountReviewsBySprintId={accountReviewsBySprintId}
                 monthTemporalStatus={monthTemporalStatus}
               />
             ))
@@ -668,6 +774,19 @@ export default async function SprintsPage({
           returnTo={buildUrl({ task: "" })}
           isAdmin={isAdmin}
         />
+      )}
+
+      {reviewClientId && (
+        <RecordAccountReviewDrawer
+          clientId={reviewClientId}
+          closeHref={buildUrl({})}
+          managers={gestores ?? []}
+          error={params.reviewError}
+        />
+      )}
+
+      {reviewDetail && openReviewDetailRow && (
+        <AccountReviewDetailDrawer review={reviewDetail} clientId={openReviewDetailRow.client_id} closeHref={buildUrl({})} />
       )}
     </div>
   );
