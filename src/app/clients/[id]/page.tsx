@@ -21,10 +21,8 @@ import { businessDaysSince } from "@/lib/business-days";
 import {
   resolveBudgetEffectiveDate,
   resolveMonthlyBudget,
-  computeMonthlyBudgetPlan,
   computeMonthlyExpectedToDateByCalendar,
 } from "@/lib/monthly-budget";
-import { computeOriginalSprintPlans } from "@/lib/sprint-recommendation";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { todayDateString, todayUTC } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
@@ -324,19 +322,14 @@ export default async function ClientPage({
     sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay }),
   );
   const monthActual = sumActualSpendForMonth(sprints ?? [], { firstDay, lastDay }, dailySpend ?? []);
-  // Etapa 70 — nova camada de recomendação por sprint: planejamento
-  // original (todos os dias do mês, distribuído entre TODAS as sprints,
-  // encerradas + atual + futuras) e congelamento (lazy, idempotente) do
-  // histórico financeiro de cada sprint que já encerrou. Nunca altera a
-  // lógica mensal acima (orçamento vigente, esperado até hoje, status) —
-  // só consome `monthPlanned`/`sprints`/`dailySpend`/`budgetChanges` já
-  // buscados, nenhuma query nova além da já existente.
-  const originalPlans = computeOriginalSprintPlans(
-    monthPlanned,
-    { firstDay, lastDay },
-    (sprints ?? []).map((s) => ({ sprintId: s.id, startDate: s.start_date, endDate: s.end_date })),
-  );
-  const closedSprintSnapshots = await ensureClosedSprintSnapshots(supabase, {
+  // Etapa 73: a camada de planejamento/recomendação POR SPRINT saiu da
+  // interface operacional (fica só no nível mensal) — `computeOriginalSprintPlans`/
+  // `monthPlan.sprintPlans` deixaram de alimentar qualquer componente aqui.
+  // `ensureClosedSprintSnapshots` continua rodando (preserva o congelamento
+  // histórico em `sprints.original_planned_amount`/`final_recommended_amount`
+  // pra uma eventual reativação futura), só o valor devolvido não é mais
+  // lido por ninguém nesta página.
+  await ensureClosedSprintSnapshots(supabase, {
     clientId: id,
     today,
     monthRange: { firstDay, lastDay },
@@ -407,24 +400,15 @@ export default async function ClientPage({
   // datas: "não é o mês corrente" + "não está encerrado" já implica futuro,
   // dado que todo mês é ou passado, ou corrente, ou futuro).
   const isFutureMonth = !isCurrentMonth && !isClosedMonth;
+  // `budgetSprints` alimenta só `MonthInvestmentSummary` agora (Etapa 73) —
+  // esta página não computa mais `computeMonthlyBudgetPlan` por conta própria
+  // pra derivar planejamento por sprint; o componente mensal já calcula seu
+  // próprio plano internamente a partir dos valores brutos recebidos.
   const budgetSprints = sprintFinancials.map((sprint) => ({
     sprintId: sprint.sprintId,
     startDate: sprint.startDate,
     endDate: sprint.endDate,
   }));
-  // Etapa 66: única fonte de "quanto ainda pode ser investido este mês" e de
-  // como isso se divide entre a sprint atual e as futuras — nunca mais lida
-  // de `sprint_planned_allocations`. `null` só quando o mês está encerrado
-  // (não existe "planejamento restante" pra um mês que já passou).
-  const monthPlan = effectiveDate
-    ? computeMonthlyBudgetPlan({
-        monthlyBudget: monthPlanned,
-        monthActual,
-        monthRange: { firstDay, lastDay },
-        effectiveDate,
-        sprints: budgetSprints,
-      })
-    : null;
   const lastBudgetChange = (budgetChanges ?? [])[0] ?? null;
   const lastChange = lastBudgetChange
     ? {
@@ -840,18 +824,12 @@ export default async function ClientPage({
           (borda azul + badge) e aberta por padrão — SprintCard já decide
           isso sozinho (`defaultOpen ?? isCurrent`) quando `defaultOpen` não
           é passado, por isso nenhuma sprint aqui recebe a prop. */}
-      <Section
-        title={`Sprints de ${monthLabel}`}
-        action={
-          <span
-            tabIndex={0}
-            className="cursor-help text-xs text-muted-foreground underline decoration-dotted focus:outline-none focus:ring-1 focus:ring-brand"
-            title="Os valores recomendados das sprints são recalculados conforme o investimento realizado, para que o orçamento mensal seja atingido ao final do mês."
-          >
-            Como funciona?
-          </span>
-        }
-      >
+      {/* Etapa 73: removido o tooltip "Como funciona?" desta seção — a
+          redistribuição financeira semanal deixou de ser apresentada
+          (nenhuma orientação de planejamento por sprint na interface, ver
+          `sprint-card.tsx`); o componente `Section` em si é compartilhado e
+          continua intacto para as demais telas. */}
+      <Section title={`Sprints de ${monthLabel}`}>
         <div className="flex flex-col gap-2">
           {sortedSprints.length > 0 ? (
             sortedSprints.map((sprint) => (
@@ -871,14 +849,6 @@ export default async function ClientPage({
                 accountReviews={accountReviewsBySprintId.get(sprint.sprintId) ?? []}
                 newReviewHref={withParam(returnTo, "review=new")}
                 buildReviewDetailHref={buildReviewDetailHref}
-                remainingPlanned={monthPlan?.sprintPlans.get(sprint.sprintId)?.remainingPlanned ?? 0}
-                eligibleDaysCount={monthPlan?.sprintPlans.get(sprint.sprintId)?.eligibleDaysCount ?? 0}
-                originalPlannedAmount={
-                  closedSprintSnapshots.get(sprint.sprintId)?.originalPlannedAmount ??
-                  originalPlans.get(sprint.sprintId)?.originalPlannedAmount ??
-                  0
-                }
-                finalRecommendedAmount={closedSprintSnapshots.get(sprint.sprintId)?.finalRecommendedAmount ?? null}
                 manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
                 metaSyncedAt={lastSync?.synced_at ?? null}
                 performance={sprintPerformanceBySprintId.get(sprint.sprintId)}

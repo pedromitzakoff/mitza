@@ -22,10 +22,20 @@ export interface MonthlyBudgetChangeSummary {
  * Etapa 66: a "orçamento mensal vigente" (`planned`) e o "planejamento
  * restante" nunca mais vêm de `sprint_planned_allocations` — sempre de
  * `computeMonthlyBudgetPlan`, a única função central que decide "quanto ainda
- * pode ser investido este mês" e como isso se divide entre a sprint atual e
- * as sprints futuras (mesmos números exibidos em cada `SprintCard` abaixo).
+ * pode ser investido este mês" (mesmos números, nenhuma fórmula nova).
  * `classifySpendStatus`/`SPEND_STATUS_*` continuam intactos e em uso em
  * Visão Geral, Sprints e Relatório — não fazem parte desta seção.
+ *
+ * Refinamento visual (Etapa 73): as informações de diagnóstico (percentual
+ * realizado/esperado detalhado, esperado em reais, diferença para o ritmo,
+ * legenda da barra, explicação do dia atual) saíram do card sempre visível
+ * e passaram pra "Ver detalhes do investimento", recolhida por padrão —
+ * mesmo padrão de disclosure (`<details>/<summary>` nativo) já usado em
+ * "Histórico" dos comentários/análises. Nenhuma fórmula mudou: os mesmos
+ * valores só passaram a ter uma única apresentação (nunca mais a mesma
+ * diferença repetida em duas frases — a barra deixou de mostrar sua própria
+ * legenda/desvio aqui via `showLegend={false}`, unificando tudo dentro dos
+ * detalhes).
  */
 export function MonthInvestmentSummary({
   planned,
@@ -77,12 +87,13 @@ export function MonthInvestmentSummary({
   const pctRealizado = planned > 0 ? (actual / planned) * 100 : null;
   const expectedPct = computeExpectedPct(summary);
   const ritmoDiff = actual - expectedToDate;
+  // Etapa 73, seção 17: uma única apresentação da diferença (linha "Diferença
+  // para o ritmo" dentro dos detalhes) — nunca mais repetida como "abaixo do
+  // investimento esperado até hoje" (era o texto da própria barra, agora
+  // suprimido via `showLegend={false}`) e como "abaixo do ritmo esperado" ao
+  // mesmo tempo.
   const ritmoDiffText =
-    ritmoDiff < 0
-      ? `${formatCurrency(Math.abs(ritmoDiff))} abaixo do ritmo esperado`
-      : ritmoDiff > 0
-        ? `${formatCurrency(ritmoDiff)} acima do ritmo esperado`
-        : "Dentro do ritmo esperado";
+    ritmoDiff < 0 ? `${formatCurrency(Math.abs(ritmoDiff))} abaixo` : ritmoDiff > 0 ? `${formatCurrency(ritmoDiff)} acima` : "Sem diferença";
   // Só existe recomendação diária quando há uma data de efeito vigente —
   // `effectiveDate` é `null` exatamente quando o mês está encerrado (seção 10:
   // mês passado nunca mostra recomendação diária).
@@ -97,6 +108,11 @@ export function MonthInvestmentSummary({
     if (diff < 0) return `${formatCurrency(Math.abs(diff))} acima do orçamento planejado`;
     return "Orçamento utilizado integralmente";
   })();
+
+  // Etapa 73: conteúdo de "Ver detalhes do investimento" — varia conforme o
+  // estado temporal do mês (mesmos dados que já existiam em cada branch,
+  // só reagrupados numa única área recolhível em vez de sempre visíveis).
+  const hasDetails = planned > 0;
 
   return (
     <div className="rounded-lg border border-border bg-card p-3">
@@ -144,17 +160,12 @@ export function MonthInvestmentSummary({
             {formatCurrency(planned)} planejados para {monthLabel}
           </p>
           <div className="mt-1.5">
-            <AgencyInvestmentBar summary={summary} monthTemporalStatus="futuro" />
+            <AgencyInvestmentBar summary={summary} monthTemporalStatus="futuro" showLegend={false} />
           </div>
           {plan && (
-            <>
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                {plan.eligibleDaysCount} dias em {monthLabel}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-brand">
-                Investimento diário planejado: {formatCurrency(plan.recommendedDaily)}/dia
-              </p>
-            </>
+            <p className="mt-1 text-sm font-semibold text-brand">
+              Investimento diário planejado: {formatCurrency(plan.recommendedDaily)}/dia
+            </p>
           )}
         </>
       ) : isClosedMonth ? (
@@ -163,12 +174,8 @@ export function MonthInvestmentSummary({
             {formatCurrency(actual)} realizados de {formatCurrency(planned)} planejados
           </p>
           <div className="mt-1.5">
-            <AgencyInvestmentBar summary={summary} monthTemporalStatus="passado" />
+            <AgencyInvestmentBar summary={summary} monthTemporalStatus="passado" showLegend={false} />
           </div>
-          {utilizedPct != null && (
-            <p className="mt-1.5 text-[11px] text-muted-foreground">{Math.round(utilizedPct)}% do orçamento utilizado</p>
-          )}
-          {closedDiffText && <p className="mt-0.5 text-[11px] text-muted-foreground">{closedDiffText}</p>}
         </>
       ) : (
         <>
@@ -176,30 +183,12 @@ export function MonthInvestmentSummary({
             {formatCurrency(actual)} realizados de {formatCurrency(planned)} planejados
           </p>
           <div className="mt-1.5">
-            <AgencyInvestmentBar summary={summary} />
+            <AgencyInvestmentBar summary={summary} showLegend={false} />
           </div>
-
-          {/* RITMO — Etapa 68, seção 9/10: onde deveríamos estar hoje, nunca
-              misturado com a AÇÃO (saldo/recomendação diária) abaixo. */}
-          <p className="mt-1.5 text-[11px] text-muted-foreground">
-            {pctRealizado !== null ? formatPercent(pctRealizado) : "—"} realizado · {formatPercent(expectedPct)} esperado hoje
-          </p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">Esperado até hoje: {formatCurrency(expectedToDate)}</p>
-          <p
-            className={`mt-0.5 text-[11px] font-medium ${
-              ritmoDiff < 0
-                ? "text-amber-600 dark:text-amber-400"
-                : ritmoDiff > 0
-                  ? "text-red-600 dark:text-red-400"
-                  : "text-muted-foreground"
-            }`}
-          >
-            {ritmoDiffText}
-          </p>
 
           {/* AÇÃO — quanto ainda precisa ser investido daqui pra frente
               (`computeMonthlyBudgetPlan`, nunca a mesma fórmula do ritmo
-              acima). */}
+              acima). Único texto sempre visível além do resumo/barra. */}
           {plan?.isBudgetReached ? (
             <>
               <p className="mt-2 text-sm font-medium text-foreground">Orçamento mensal atingido</p>
@@ -229,15 +218,102 @@ export function MonthInvestmentSummary({
               </p>
             </>
           ) : null}
-          {plan && !plan.isBudgetReached && (
-            <p
-              className="mt-0.5 text-[11px] text-muted-foreground"
-              title="O dia de hoje entra no cálculo porque o gestor ainda pode ajustar o investimento das campanhas durante o dia. Amanhã, o sistema recalcula automaticamente com os dias restantes."
-            >
-              O cálculo considera o dia de hoje como disponível para ajuste.
-            </p>
-          )}
         </>
+      )}
+
+      {hasDetails && (
+        <details className="group/details mt-2 border-t border-border pt-1.5 [&_summary::-webkit-details-marker]:hidden">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm text-[11px] font-medium text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-brand">
+            <span className="text-xs transition-transform group-open/details:rotate-90">▸</span>
+            <span className="group-open/details:hidden">Ver detalhes do investimento</span>
+            <span className="hidden group-open/details:inline">Ocultar detalhes do investimento</span>
+          </summary>
+
+          <div className="mt-2 flex flex-col gap-3">
+            {!isFutureMonth && !isClosedMonth && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Detalhes do acompanhamento
+                </p>
+                <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Realizado</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {pctRealizado !== null ? formatPercent(pctRealizado) : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Esperado hoje</p>
+                    <p className="text-sm font-medium text-foreground">{formatPercent(expectedPct)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Esperado até hoje</p>
+                    <p className="text-sm font-medium text-foreground">{formatCurrency(expectedToDate)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Diferença para o ritmo</p>
+                    <p
+                      className={`text-sm font-medium ${
+                        ritmoDiff < 0
+                          ? "text-amber-600 dark:text-amber-400"
+                          : ritmoDiff > 0
+                            ? "text-red-600 dark:text-red-400"
+                            : "text-foreground"
+                      }`}
+                    >
+                      {ritmoDiffText}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isClosedMonth && (utilizedPct != null || closedDiffText) && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Detalhes do acompanhamento
+                </p>
+                {utilizedPct != null && (
+                  <p className="mt-1 text-sm text-foreground">{Math.round(utilizedPct)}% do orçamento utilizado</p>
+                )}
+                {closedDiffText && <p className="mt-0.5 text-[11px] text-muted-foreground">{closedDiffText}</p>}
+              </div>
+            )}
+
+            {isFutureMonth && plan && (
+              <p className="text-[11px] text-muted-foreground">
+                {plan.eligibleDaysCount} dias em {monthLabel}
+              </p>
+            )}
+
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Leitura da barra
+              </p>
+              <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-sm bg-brand" aria-hidden="true" />
+                  Azul: realizado
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2 w-0.5 bg-navy dark:bg-white" aria-hidden="true" />
+                  Marcador: esperado hoje
+                </span>
+              </p>
+            </div>
+
+            {!isFutureMonth && !isClosedMonth && plan && !plan.isBudgetReached && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Regra da projeção
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  O cálculo considera o dia de hoje como disponível para ajuste.
+                </p>
+              </div>
+            )}
+          </div>
+        </details>
       )}
 
       {isAdmin && lastChange && lastChange.changeCountThisMonth > 1 && (
