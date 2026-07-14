@@ -120,6 +120,15 @@ export default async function NewTaskPage({
         </label>
 
         <label className="flex flex-col gap-1 text-sm text-zinc-700 dark:text-zinc-300">
+          Horário <span className="text-xs text-zinc-400">(opcional)</span>
+          <input
+            name="due_time"
+            type="time"
+            className="rounded-md border border-zinc-300 px-3 py-2 text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm text-zinc-700 dark:text-zinc-300">
           Recorrência
           <select
             name="recurrence"

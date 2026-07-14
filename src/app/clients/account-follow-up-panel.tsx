@@ -1,67 +1,30 @@
 import Link from "next/link";
-import { formatDateTime, formatShortDate } from "@/lib/format";
-import { formatLastOptimizationLabel } from "@/lib/monthly-reports";
-import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
-import { CLIENT_UPDATE_STATUS_LABEL, type ClientUpdateStatus } from "@/lib/client-updates";
-import type { AccountReviewCadenceStatus } from "@/lib/account-review-cadence";
-import type { OperationalTrackingRow } from "@/lib/operational-tracking";
+import { formatRelativeDateTime, formatShortDate } from "@/lib/format";
+import { OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
+import type { OperationalTrackingRow, MonthlyOccurrenceSummary } from "@/lib/operational-tracking";
+import type { ClientHistoryRow } from "@/lib/client-operational-history";
 import { completeTaskAction, markTaskNotDoneAction } from "./tasks-actions";
 import { todayDateString } from "@/lib/today";
-import type { AccountReviewOutcome, OptimizationType } from "@/lib/supabase/database.types";
+import type { OptimizationType } from "@/lib/supabase/database.types";
 
-export interface AccountReviewPreviewItem {
-  id: string;
+export interface LastReviewInfo {
   reviewedAt: string;
   managerName: string;
-  outcome: AccountReviewOutcome;
-  optimizationTypes: OptimizationType[];
-  summaryText: string | null;
-  /** Etapa 59 — indicador discreto de Atualização para o Cliente (seção 14
-   * do pedido); "none" não é mostrado. */
-  updateStatus: ClientUpdateStatus;
 }
 
-const OUTCOME_TEXT_CLASSES: Record<AccountReviewOutcome, string> = {
-  NO_CHANGE: "text-muted-foreground",
-  OPTIMIZATION_PERFORMED: "text-emerald-600 dark:text-emerald-400",
-  ISSUE_IDENTIFIED: "text-amber-600 dark:text-amber-400",
-};
+export interface LastOptimizationInfo {
+  type: OptimizationType;
+  occurredAt: string;
+  managerName: string;
+}
 
-/** Linha compacta de uma análise — reaproveitada tanto no preview das 2 mais
- * recentes (AccountFollowUpPanel) quanto no histórico completo
- * (AccountReviewsHistoryDrawer), pra não duplicar a marcação. */
-export function ReviewPreviewRow({
-  review,
-  detailHref,
-}: {
-  review: AccountReviewPreviewItem;
-  detailHref: string;
-}) {
-  return (
-    <li className="border-t border-border py-2 first:border-t-0 first:pt-0">
-      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className="tabular-nums">{formatDateTime(review.reviewedAt)}</span>
-        <span>{review.managerName}</span>
-      </div>
-      <p className={`mt-0.5 text-sm font-medium ${OUTCOME_TEXT_CLASSES[review.outcome]}`}>
-        {ACCOUNT_REVIEW_OUTCOME_LABEL[review.outcome]}
-      </p>
-      {review.optimizationTypes.length > 0 && (
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {review.optimizationTypes.map((type) => OPTIMIZATION_TYPE_LABEL[type]).join(" · ")}
-        </p>
-      )}
-      {review.summaryText && <p className="mt-0.5 truncate text-xs text-muted-foreground">{review.summaryText}</p>}
-      <div className="mt-0.5 flex items-center justify-between gap-2">
-        <Link href={detailHref} scroll={false} className="inline-block text-xs font-medium text-brand hover:underline">
-          Ver análise
-        </Link>
-        {review.updateStatus !== "none" && (
-          <span className="text-[11px] text-muted-foreground">{CLIENT_UPDATE_STATUS_LABEL[review.updateStatus]}</span>
-        )}
-      </div>
-    </li>
-  );
+/** Anexa parâmetros a uma URL que já pode ou não ter query string (usada
+ * pra montar os links do drawer de agendamento sempre em cima da URL atual
+ * da página do cliente — que já pode ter `?month=...`). */
+function appendParams(url: string, params: Record<string, string>): string {
+  const usp = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) usp.set(key, value);
+  return `${url}${url.includes("?") ? "&" : "?"}${usp.toString()}`;
 }
 
 const TRACKED_TYPE_LABEL: Record<OperationalTrackingRow["type"], string> = {
@@ -79,20 +42,18 @@ const TRACKED_TYPE_SCHEDULE_LABEL: Record<OperationalTrackingRow["type"], string
   entrega_criativo: "Agendar entrega",
 };
 
+const MONTHLY_SUMMARY_LABEL: Record<MonthlyOccurrenceSummary["type"], string> = {
+  reuniao: "Reuniões",
+  entrega_criativo: "Entregas",
+};
+
 /**
- * Célula de reunião/entrega dentro do Acompanhamento da Conta — reaproveita
- * `computeOperationalTracking` (já existia, movida pra cá de "Rotina do
- * Cliente", que deixou de existir como bloco separado). Os 5 estados do
- * pedido (sem agendamento / agendada / data chegou / realizada / não
- * realizada) mapeiam direto pro que já existe em `tasks`:
- * - "agendar"/"reagendar" = createTaskAction/updateTaskAction (já existem);
- * - "marcar como realizada" = completeTaskAction (já existe, já emite
- *   meeting_completed/creative_delivery_completed);
- * - "marcar como não realizada" = markTaskNotDoneAction (novo, mesma
- *   transação atômica, emite meeting_cancelled/creative_delivery_late).
- * Nunca sobrescreve a ocorrência anterior: "agendar próxima" é sempre uma
- * tarefa NOVA (createTaskAction), a anterior já resolvida permanece no
- * histórico de tarefas do cliente.
+ * Célula de reunião/entrega dentro do Acompanhamento da Conta — só usada
+ * quando o mês selecionado é o atual (Etapa 7 do pedido); meses anteriores
+ * usam `MonthlyOccurrenceCell` (Etapa 8), que nunca mostra "próxima" (não
+ * faz sentido pra um mês que já passou). Agendar/editar/reagendar abrem o
+ * drawer compacto (`ScheduleOccurrenceDrawer`) na própria página — nunca
+ * navegam pra edição completa do cliente.
  */
 function TrackedOccurrenceCell({
   row,
@@ -103,7 +64,7 @@ function TrackedOccurrenceCell({
   clientId: string;
   returnTo: string;
 }) {
-  const scheduleHref = `/clients/${clientId}/tasks/new?type=${row.type}&return_to=${encodeURIComponent(returnTo)}`;
+  const scheduleHref = appendParams(returnTo, { scheduleOccurrence: row.type });
 
   if (row.nextTaskId === null) {
     return (
@@ -120,7 +81,7 @@ function TrackedOccurrenceCell({
   }
 
   const isDue = row.nextIsOverdue || (row.nextDueDate !== null && row.nextDueDate <= todayDateString());
-  const editHref = `/clients/${clientId}/tasks/${row.nextTaskId}/edit?return_to=${encodeURIComponent(returnTo)}`;
+  const editHref = appendParams(returnTo, { scheduleOccurrence: row.type, scheduleTaskId: row.nextTaskId });
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -129,6 +90,7 @@ function TrackedOccurrenceCell({
       </p>
       <p className={`text-sm ${row.nextIsOverdue ? "font-medium text-red-600 dark:text-red-400" : "text-foreground"}`}>
         {row.nextDueDate ? formatShortDate(row.nextDueDate) : "—"}
+        {row.nextDueTime ? ` às ${row.nextDueTime.slice(0, 5)}` : ""}
         {row.nextIsOverdue ? " · atrasada" : " · agendada"}
       </p>
       <div className="flex flex-wrap items-center gap-2">
@@ -154,105 +116,180 @@ function TrackedOccurrenceCell({
   );
 }
 
+/** Célula de reunião/entrega quando o mês selecionado NÃO é o atual (Etapa
+ * 8) — só o resultado objetivo do período, sem nenhuma ação de agendar
+ * (agendar sempre se refere ao futuro, e um mês passado não tem "próxima"
+ * ocorrência por definição). */
+function MonthlyOccurrenceCell({ summary, monthLabel }: { summary: MonthlyOccurrenceSummary; monthLabel: string }) {
+  const parts: string[] = [];
+  if (summary.doneCount > 0) parts.push(`${summary.doneCount} realizada${summary.doneCount === 1 ? "" : "s"}`);
+  if (summary.notDoneCount > 0)
+    parts.push(`${summary.notDoneCount} não realizada${summary.notDoneCount === 1 ? "" : "s"}`);
+  if (summary.unresolvedCount > 0) parts.push(`${summary.unresolvedCount} sem desfecho`);
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {MONTHLY_SUMMARY_LABEL[summary.type]} de {monthLabel}
+      </p>
+      <p className="text-sm text-foreground">{parts.length > 0 ? parts.join(" · ") : "Nenhuma registrada"}</p>
+    </div>
+  );
+}
+
+function HistoryRow({
+  event,
+  buildReviewDetailHref,
+}: {
+  event: ClientHistoryRow;
+  buildReviewDetailHref: (id: string) => string;
+}) {
+  return (
+    <li className="flex items-start justify-between gap-2 border-t border-border py-1.5 first:border-t-0 first:pt-0">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+          <span className="tabular-nums">{formatRelativeDateTime(event.occurredAt, new Date())}</span>
+          <span className="font-medium text-foreground">{event.label}</span>
+          {event.detail && <span>{event.detail}</span>}
+        </div>
+        {event.responsibleName && (
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">{event.responsibleName}</p>
+        )}
+      </div>
+      {event.reviewId && (
+        <Link
+          href={buildReviewDetailHref(event.reviewId)}
+          scroll={false}
+          className="shrink-0 text-xs font-medium text-brand hover:underline"
+        >
+          Ver análise
+        </Link>
+      )}
+    </li>
+  );
+}
+
 /**
  * "ACOMPANHAMENTO DA CONTA" — principal bloco operacional da página do
  * cliente. Absorve reuniões e entregas de criativo (que antes viviam num
  * bloco separado, "Rotina do cliente", removido da interface — os dados,
  * tabela e lógica de `tasks`/`computeOperationalTracking` continuam
  * exatamente os mesmos, só a apresentação muda). "Cadência" e "Intervalo
- * atual" foram removidos da interface por pedido explícito (funcionalidade
- * ainda não bem definida operacionalmente) — `account_review_cadences` e
- * `computeAccountReviewCadenceStatus` continuam existindo por baixo,
- * intactos, só não são mais exibidos aqui; podem voltar futuramente sem
- * nenhuma alteração de schema.
+ * atual" foram removidos da interface por pedido explícito — continuam
+ * existindo por baixo, intactos, só não são mais exibidos aqui.
+ *
+ * Etapa 62: o bloco agora respeita o mês selecionado na página inteira
+ * (`isCurrentMonth`). No mês atual, última análise/otimização e próxima
+ * reunião/entrega são sempre o dado GLOBAL mais recente (nunca só do mês)
+ * — é assim que já funcionava. Num mês anterior, os mesmos indicadores
+ * passam a ser escopados ao mês selecionado (Etapa 8): sem "próxima" (não
+ * existe "próxima" num mês fechado), só o resultado objetivo do que
+ * aconteceu. O histórico (antes só de análises, sempre as 2 mais recentes)
+ * virou um histórico unificado (análises + otimizações + reuniões +
+ * entregas) escopado ao mês selecionado, no máximo 5 linhas, com "Ver
+ * todos de {mês}" pro resto (Etapa 9) — reaproveita `operational_events`
+ * (nenhuma tabela nova, ver `lib/client-operational-history.ts`).
  */
 export function AccountFollowUpPanel({
-  status,
-  today,
-  recentReviews,
-  hasMoreReviews,
-  newReviewHref,
-  historyHref,
-  buildReviewDetailHref,
+  monthLabel,
+  isCurrentMonth,
+  lastReview,
+  lastOptimization,
   tracking,
+  monthlySummary,
+  historyRows,
+  hasMoreHistory,
+  historyHref,
+  newReviewHref,
+  buildReviewDetailHref,
   clientId,
   returnTo,
 }: {
-  status: AccountReviewCadenceStatus;
-  today: Date;
-  recentReviews: AccountReviewPreviewItem[];
-  hasMoreReviews: boolean;
-  newReviewHref: string;
-  historyHref: string;
-  buildReviewDetailHref: (reviewId: string) => string;
+  monthLabel: string;
+  isCurrentMonth: boolean;
+  lastReview: LastReviewInfo | null;
+  lastOptimization: LastOptimizationInfo | null;
   tracking: Record<"reuniao" | "entrega_criativo", OperationalTrackingRow>;
+  monthlySummary: Record<"reuniao" | "entrega_criativo", MonthlyOccurrenceSummary>;
+  historyRows: ClientHistoryRow[];
+  hasMoreHistory: boolean;
+  historyHref: string;
+  newReviewHref: string;
+  buildReviewDetailHref: (reviewId: string) => string;
   clientId: string;
   returnTo: string;
 }) {
-  const lastReviewLabel =
-    status.lastReviewedAt === null
-      ? "Sem análise registrada"
-      : formatLastOptimizationLabel(status.lastReviewedAt.slice(0, 10), today);
+  const lastReviewLabelPrefix = isCurrentMonth ? "Última análise" : `Última análise em ${monthLabel}`;
+  const lastReviewValue = lastReview
+    ? formatRelativeDateTime(lastReview.reviewedAt, new Date())
+    : "Sem análise registrada";
 
-  const lastOptimizationLabel =
-    status.lastOptimizationType === null
-      ? "Nenhuma otimização registrada"
-      : `${OPTIMIZATION_TYPE_LABEL[status.lastOptimizationType]} · ${formatShortDate(status.lastOptimizationAt!.slice(0, 10))}`;
+  const lastOptimizationLabelPrefix = isCurrentMonth ? "Última otimização" : `Última otimização em ${monthLabel}`;
+  const lastOptimizationValue = lastOptimization
+    ? `${OPTIMIZATION_TYPE_LABEL[lastOptimization.type]} · ${formatShortDate(lastOptimization.occurredAt.slice(0, 10))}`
+    : "Nenhuma otimização registrada";
 
   return (
     <div className="rounded-lg border border-border bg-card p-3">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
         <h2 className="text-sm font-medium text-foreground">Acompanhamento da conta</h2>
-        <div className="flex items-center gap-3">
-          {hasMoreReviews && (
-            <Link href={historyHref} className="text-xs font-medium text-foreground hover:underline">
-              Ver histórico
-            </Link>
-          )}
-          <Link
-            href={newReviewHref}
-            scroll={false}
-            className="rounded-md bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-hover"
-          >
-            + Registrar análise
-          </Link>
-        </div>
+        <Link
+          href={newReviewHref}
+          scroll={false}
+          className="rounded-md bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-hover"
+        >
+          + Registrar análise
+        </Link>
       </div>
 
       <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-4">
         <div className="flex flex-col gap-0.5">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Última análise</p>
-          <p className="text-sm text-foreground">{lastReviewLabel}</p>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {lastReviewLabelPrefix}
+          </p>
+          <p className="text-sm text-foreground">{lastReviewValue}</p>
+          {lastReview && <p className="text-xs text-muted-foreground">{lastReview.managerName}</p>}
         </div>
         <div className="flex flex-col gap-0.5">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Última otimização</p>
-          <p className="text-sm text-foreground">{lastOptimizationLabel}</p>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {lastOptimizationLabelPrefix}
+          </p>
+          <p className="text-sm text-foreground">{lastOptimizationValue}</p>
+          {lastOptimization && <p className="text-xs text-muted-foreground">{lastOptimization.managerName}</p>}
         </div>
-        <TrackedOccurrenceCell row={tracking.reuniao} clientId={clientId} returnTo={returnTo} />
-        <TrackedOccurrenceCell row={tracking.entrega_criativo} clientId={clientId} returnTo={returnTo} />
+        {isCurrentMonth ? (
+          <>
+            <TrackedOccurrenceCell row={tracking.reuniao} clientId={clientId} returnTo={returnTo} />
+            <TrackedOccurrenceCell row={tracking.entrega_criativo} clientId={clientId} returnTo={returnTo} />
+          </>
+        ) : (
+          <>
+            <MonthlyOccurrenceCell summary={monthlySummary.reuniao} monthLabel={monthLabel} />
+            <MonthlyOccurrenceCell summary={monthlySummary.entrega_criativo} monthLabel={monthLabel} />
+          </>
+        )}
       </div>
 
       <div className="mt-3 border-t border-border pt-1.5">
-        {recentReviews.length > 0 ? (
-          <ul className="flex flex-col">
-            {recentReviews.map((review) => (
-              <ReviewPreviewRow key={review.id} review={review} detailHref={buildReviewDetailHref(review.id)} />
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Histórico de {monthLabel}
+          </p>
+          {hasMoreHistory && (
+            <Link href={historyHref} scroll={false} className="text-xs font-medium text-brand hover:underline">
+              Ver todos de {monthLabel}
+            </Link>
+          )}
+        </div>
+
+        {historyRows.length > 0 ? (
+          <ul className="mt-1 flex flex-col">
+            {historyRows.map((event) => (
+              <HistoryRow key={event.id} event={event} buildReviewDetailHref={buildReviewDetailHref} />
             ))}
           </ul>
         ) : (
-          <div className="flex flex-wrap items-center justify-between gap-2 py-1">
-            <p className="text-sm text-muted-foreground">
-              Nenhuma análise registrada. Registre uma análise após avaliar a conta, tomar uma decisão ou realizar uma
-              otimização.
-            </p>
-            <Link
-              href={newReviewHref}
-              scroll={false}
-              className="shrink-0 text-xs font-medium text-brand hover:underline"
-            >
-              Registrar primeira análise
-            </Link>
-          </div>
+          <p className="mt-1 text-sm text-muted-foreground">Nenhum evento registrado em {monthLabel}.</p>
         )}
       </div>
     </div>

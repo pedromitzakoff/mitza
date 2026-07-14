@@ -64,7 +64,7 @@ export function ClientContextBar({
           <span className="hidden shrink-0 truncate text-xs text-muted-foreground md:inline">{gestorLabel}</span>
           {contractStartDate && (
             <span className="hidden shrink-0 truncate text-xs text-muted-foreground lg:inline">
-              Cliente há {relationshipLabel}
+              {relationshipLabel}
             </span>
           )}
         </div>

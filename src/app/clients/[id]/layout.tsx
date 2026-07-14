@@ -29,7 +29,9 @@ export default async function ClientLayout({
 
   const { data: client } = await supabase
     .from("clients")
-    .select("id, name, meta_ad_account_id, status, contract_start_date")
+    .select(
+      "id, name, meta_ad_account_id, status, contract_start_date, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
+    )
     .eq("id", id)
     .is("deleted_at", null)
     .single();
@@ -46,14 +48,12 @@ export default async function ClientLayout({
   // por cima de sprints já existentes) — agora só acontece sob demanda via
   // /api/cron/ensure-sprints, numa operação controlada no servidor.
   const [
-    { data: managers },
     { data: sprints },
     { data: dailySpend },
     { data: tasks },
     { data: clientActivity },
     { data: plannedAllocations },
   ] = await Promise.all([
-    supabase.from("client_managers").select("user_id, team_members(id, name)").eq("client_id", id),
     // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
     // mês precisa aparecer mesmo com start_date no mês anterior.
     supabase
@@ -102,8 +102,14 @@ export default async function ClientLayout({
     id: client.id,
     name: client.name,
     metaAdAccountId: client.meta_ad_account_id,
-    managerNames: (managers ?? []).flatMap((m) => (m.team_members ? [m.team_members.name] : [])),
-    managerIds: (managers ?? []).flatMap((m) => (m.team_members ? [m.team_members.id] : [])),
+    // Etapa 62: gestor atribuído passa a ter UMA ÚNICA fonte de verdade —
+    // clients.primary_manager_id (join direto, sem query separada em
+    // client_managers). client_managers/is_client_manager() continuam
+    // existindo, intactos, só pra autorização de escrita (RLS) e pro
+    // agregado "quantos clientes esse membro atende" da tela Equipe — ver
+    // relatório desta etapa pra detalhes da inconsistência encontrada.
+    managerNames: client.primary_manager ? [client.primary_manager.name] : [],
+    managerIds: client.primary_manager ? [client.primary_manager.id] : [],
     sprints: sprints ?? [],
     dailySpend: (dailySpend ?? []).map((d) => ({ date: d.date, spend: d.spend })),
     plannedAllocations: (plannedAllocations ?? []).map((a) => ({

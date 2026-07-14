@@ -21,6 +21,9 @@ export interface OperationalTrackingRow {
   type: TrackedTaskType;
   lastDoneDate: string | null;
   nextDueDate: string | null;
+  /** Horário opcional da próxima ocorrência (só reuniões costumam usar —
+   * Etapa 62, seção 3: "18/07 às 14h"). null quando não informado. */
+  nextDueTime: string | null;
   nextIsOverdue: boolean;
   /** id da tarefa "próxima" (pendente ou atrasada) — usado pra montar os
    * links/ações (editar, marcar como realizada/não realizada). null quando
@@ -29,7 +32,7 @@ export interface OperationalTrackingRow {
 }
 
 export function computeOperationalTracking(
-  tasks: { id: string; type: TaskType; status: TaskStatus; due_date: string }[],
+  tasks: { id: string; type: TaskType; status: TaskStatus; due_date: string; due_time?: string | null }[],
   today: Date,
 ): Record<TrackedTaskType, OperationalTrackingRow> {
   const types: TrackedTaskType[] = ["reuniao", "entrega_criativo"];
@@ -41,6 +44,7 @@ export function computeOperationalTracking(
 
     let lastDoneDate: string | null = null;
     let nextDueDate: string | null = null;
+    let nextDueTime: string | null = null;
     let nextIsOverdue = false;
     let nextTaskId: string | null = null;
 
@@ -61,12 +65,60 @@ export function computeOperationalTracking(
 
       if (beatsCurrent) {
         nextDueDate = task.due_date;
+        nextDueTime = task.due_time ?? null;
         nextIsOverdue = isOverdue;
         nextTaskId = task.id;
       }
     }
 
-    result[type] = { type, lastDoneDate, nextDueDate, nextIsOverdue, nextTaskId };
+    result[type] = { type, lastDoneDate, nextDueDate, nextDueTime, nextIsOverdue, nextTaskId };
+  }
+
+  return result;
+}
+
+/** Resumo de reuniões/entregas de um tipo dentro de um mês específico —
+ * usado quando o mês selecionado NÃO é o atual (Etapa 8 do pedido): nesse
+ * caso a página não mostra "próxima" (não faz sentido pra um mês já
+ * fechado ou ainda não chegado), só o resultado objetivo do que aconteceu
+ * naquele período — quantas ocorrências foram realizadas, quantas não
+ * foram, e quantas ainda não têm um desfecho apesar da data já ter
+ * passado (não deveria acontecer num mês encerrado, mas contado à parte
+ * em vez de escondido). Reaproveita `effectiveTaskStatus`, nunca duplica a
+ * regra de terminalidade. */
+export interface MonthlyOccurrenceSummary {
+  type: TrackedTaskType;
+  doneCount: number;
+  notDoneCount: number;
+  unresolvedCount: number;
+  totalCount: number;
+}
+
+export function computeMonthlyOccurrenceSummary(
+  tasks: { type: TaskType; status: TaskStatus; due_date: string }[],
+  monthRange: { firstDay: string; lastDay: string },
+  today: Date,
+): Record<TrackedTaskType, MonthlyOccurrenceSummary> {
+  const types: TrackedTaskType[] = ["reuniao", "entrega_criativo"];
+  const result = {} as Record<TrackedTaskType, MonthlyOccurrenceSummary>;
+
+  for (const type of types) {
+    const ofTypeInMonth = tasks.filter(
+      (t) => t.type === type && t.due_date >= monthRange.firstDay && t.due_date <= monthRange.lastDay,
+    );
+
+    let doneCount = 0;
+    let notDoneCount = 0;
+    let unresolvedCount = 0;
+
+    for (const task of ofTypeInMonth) {
+      const status = effectiveTaskStatus(task, today);
+      if (status === "feito") doneCount += 1;
+      else if (status === "nao_realizado") notDoneCount += 1;
+      else unresolvedCount += 1;
+    }
+
+    result[type] = { type, doneCount, notDoneCount, unresolvedCount, totalCount: ofTypeInMonth.length };
   }
 
   return result;

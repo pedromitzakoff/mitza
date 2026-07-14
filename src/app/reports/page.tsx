@@ -52,7 +52,6 @@ export default async function ReportsPage({
 
   const [
     { data: clients },
-    { data: clientManagers },
     { data: gestores },
     { data: sprints },
     { data: dailySpend },
@@ -62,10 +61,9 @@ export default async function ReportsPage({
   ] = await Promise.all([
     supabase
       .from("clients")
-      .select("id, name, meta_ad_account_id, primary_manager:team_members!clients_primary_manager_id_fkey(name)")
+      .select("id, name, meta_ad_account_id, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)")
       .is("deleted_at", null)
       .order("name"),
-    supabase.from("client_managers").select("client_id, user_id, team_members(id, name)"),
     supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
     // Sobreposição com a janela (não "começa na janela") — sprint que
     // atravessa mês precisa ser encontrada mesmo com start_date fora dela.
@@ -85,14 +83,6 @@ export default async function ReportsPage({
       .gte("date", rangeStart)
       .lte("date", rangeEnd),
   ]);
-
-  const managersByClient = new Map<string, { id: string; name: string }[]>();
-  for (const row of clientManagers ?? []) {
-    if (!row.team_members) continue;
-    const list = managersByClient.get(row.client_id) ?? [];
-    list.push(row.team_members);
-    managersByClient.set(row.client_id, list);
-  }
 
   const sprintsByClient = new Map<string, NonNullable<typeof sprints>>();
   for (const s of sprints ?? []) {
@@ -132,8 +122,9 @@ export default async function ReportsPage({
     id: client.id,
     name: client.name,
     metaAdAccountId: client.meta_ad_account_id,
-    managerNames: (managersByClient.get(client.id) ?? []).map((m) => m.name),
-    managerIds: (managersByClient.get(client.id) ?? []).map((m) => m.id),
+    // Etapa 62: fonte única do gestor atribuído — clients.primary_manager_id.
+    managerNames: client.primary_manager ? [client.primary_manager.name] : [],
+    managerIds: client.primary_manager ? [client.primary_manager.id] : [],
     sprints: sprintsByClient.get(client.id) ?? [],
     dailySpend: dailySpendByClient.get(client.id) ?? [],
     plannedAllocations: plannedAllocationsByClient.get(client.id) ?? [],
