@@ -15,15 +15,15 @@ function Kpi({ label, value, auxiliary }: { label: string; value: string; auxili
 }
 
 /**
- * "Principais KPIs do mês" — abre o Acompanhamento da Conta (refinamento
- * visual, não altera nenhum cálculo): investimento/resultados/custo por
- * resultado sempre vêm já calculados (`monthActual`/`monthPerformanceSummary`
- * da própria página); os textos de resultado/custo vêm de
- * `deriveMonthlyKpiTexts` (lib/performance.ts), central e testável — nunca
- * recomputados aqui. Único lugar da página onde esses 3 números aparecem
- * juntos — a seção "Performance do mês" (mais abaixo) guarda só as
- * informações secundárias (meta, comparação, canais) pra nunca duplicar os
- * mesmos 3 KPIs em dois lugares consecutivos.
+ * Investimento/resultados/custo por resultado — abre a página do cliente
+ * (Etapa 75: sem o rótulo "Principais KPIs do mês" acima, o card começa
+ * direto pelas métricas). Nenhum cálculo muda: os 3 números sempre vêm já
+ * calculados (`monthActual`/`monthPerformanceSummary` da própria página); os
+ * textos de resultado/custo vêm de `deriveMonthlyKpiTexts` (lib/performance.ts),
+ * central e testável — nunca recomputados aqui. Único lugar da página onde
+ * esses 3 números aparecem juntos — a seção "Performance do mês" (mais
+ * abaixo) guarda só as informações secundárias (meta, comparação, canais)
+ * pra nunca duplicar os mesmos 3 KPIs em dois lugares consecutivos.
  */
 export function MonthlyKpiSummary({
   monthActual,
@@ -49,8 +49,7 @@ export function MonthlyKpiSummary({
 
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Principais KPIs do mês</p>
-      <div className="mt-1.5 grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-3">
         <Kpi label="Investimento total" value={formatCurrency(monthActual)} />
         <Kpi label="Resultados" value={resultsValue} auxiliary={resultsAuxiliary} />
         <Kpi label="Custo por resultado" value={costValue} />

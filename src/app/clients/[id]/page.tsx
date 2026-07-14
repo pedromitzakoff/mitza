@@ -738,9 +738,10 @@ export default async function ClientPage({
       {/* 0. Seletor de mês (Etapa 62, seção 6) — contexto temporal de toda
           a página; mesmo padrão de navegação mensal já usado em
           Relatórios/Visão Geral/Sprints (`?month=YYYY-MM` + shiftMonthParam),
-          nenhum componente novo de seletor. */}
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">Período em análise</p>
+          nenhum componente novo de seletor. Etapa 75: removido o texto
+          "Período em análise" — o próprio seletor já comunica o período,
+          sem precisar de rótulo. */}
+      <div className="mt-3 flex items-center justify-end gap-2">
         <div className="flex items-center gap-0.5 rounded-md border border-border bg-card px-1 py-1 text-sm">
           <Link
             href={prevMonthHref}
@@ -778,7 +779,6 @@ export default async function ClientPage({
           historyRows={recentHistoryRows}
           hasMoreHistory={hasMoreHistory}
           historyHref={reviewsHistoryHref}
-          newReviewHref={withParam(returnTo, "review=new")}
           buildReviewDetailHref={buildReviewDetailHref}
           clientId={client.id}
           returnTo={returnTo}
