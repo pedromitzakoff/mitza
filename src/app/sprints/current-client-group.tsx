@@ -66,6 +66,7 @@ export function SprintCurrentClientGroup({
         executionSeverity={card.sprintExecutionInfo?.severity ?? null}
         alerts={card.alerts}
         buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
+        metaSyncedAt={card.lastSyncedAt}
       />
     </details>
   );

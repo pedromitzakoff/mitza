@@ -67,6 +67,7 @@ export function SprintMonthlyBySprintsGroup({
                 defaultOpen={false}
                 openClientHref={`/clients/${card.clientId}`}
                 buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
+                metaSyncedAt={card.lastSyncedAt}
               />
             );
           })

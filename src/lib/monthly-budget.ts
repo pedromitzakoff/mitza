@@ -286,6 +286,38 @@ export function computeSprintAllocationBackfill(sprint: {
   return dates.map((date, index) => ({ date, amount: (perDayCents[index] ?? 0) / 100 }));
 }
 
+export interface SprintDailyRecommendation {
+  eligibleDaysCount: number;
+  recommendedDaily: number;
+}
+
+/**
+ * Investimento diário recomendado pro restante de UMA sprint (Etapa 65,
+ * seções 2/3/12) — mesma pergunta do resumo mensal ("quanto investir por dia
+ * daqui pra frente"), agora restrita ao período da própria sprint. Reaproveita
+ * a mesma função central de dias elegíveis (`getEligibleRedistributionDates`)
+ * usada pela redistribuição do mês inteiro, só que com `allDates` limitado
+ * aos dias da sprint: pra uma sprint atual, isso dá os dias de hoje até o
+ * fim dela; pra uma sprint futura, `todayStr` é anterior a todos os dias da
+ * sprint, então todos contam (nenhum caso especial — o mesmo truque já usado
+ * em `computeMonthlyInvestmentRecommendation` pro mês futuro). Nunca chamada
+ * pra sprint encerrada (não existe "recomendação" pra um período que já
+ * passou — quem chama decide não exibir, não esta função). `remainingPlanned`
+ * já vem calculado por quem chama (`computeSprintInvestmentAmounts`, nunca
+ * recalculado aqui).
+ */
+export function computeSprintDailyRecommendation(
+  sprint: { startDate: string; endDate: string },
+  remainingPlanned: number,
+  todayStr: string,
+): SprintDailyRecommendation {
+  const allDates = listDatesInclusive(sprint.startDate, sprint.endDate);
+  const { eligibleDates } = getEligibleRedistributionDates(allDates, todayStr);
+  const eligibleDaysCount = eligibleDates.length;
+  const recommendedDaily = eligibleDaysCount <= 0 ? 0 : Math.max(remainingPlanned, 0) / eligibleDaysCount;
+  return { eligibleDaysCount, recommendedDaily };
+}
+
 /** % do orçamento mensal já utilizado — `null` quando não há planejamento
  * configurado (nunca 0%/NaN/Infinity). Única fonte desta conta: reaproveitada
  * pelo resumo do mês (mês em andamento e mês encerrado) e por

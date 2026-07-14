@@ -223,15 +223,25 @@ export function computeSprintFinancials(
 
 /** Divide o planejado de UMA sprint (a partir das linhas diárias de
  * `sprint_planned_allocations` já filtradas por essa sprint) entre a parte
- * histórica (dias já decorridos, `date <= today`, nunca recalculada) e a
- * parte futura (dias restantes, `date > today`, a única ajustável) — Etapa
- * 63, seção 6: a sprint atual precisa mostrar essas duas fatias separadas
- * ("R$1.000 realizados de R$1.600 previstos... R$600 ainda planejados
- * para os dias restantes"), nunca só o total misturado. Sprint sem nenhuma
- * linha de alocação (nunca teve orçamento configurado) devolve as duas
- * fatias como 0 — quem exibe decide como comunicar isso (ver
- * `describeSprintInvestment` em sprint-card.tsx), esta função nunca inventa
- * um valor. */
+ * histórica (dias já encerrados, `date < today`, nunca recalculada) e a
+ * parte restante (hoje + dias futuros, `date >= today`, a única ajustável)
+ * — Etapa 63, seção 6: a sprint atual precisa mostrar essas duas fatias
+ * separadas ("R$1.000 realizados de R$1.600 previstos... R$600 ainda
+ * planejados para os dias restantes"), nunca só o total misturado.
+ *
+ * Etapa 65: o corte é `date < today` / `date >= today` (hoje entra no
+ * restante, não no histórico) — mesma convenção de `getEligibleRedistributionDates`
+ * (`date >= effectiveDate` é elegível), nunca um segundo critério de "hoje já
+ * conta como passado" só desta função. Antes o corte era `date <= today`, o
+ * que fazia a linha de alocação de hoje sumir do "previsto"/"restante" sempre
+ * que o gasto de hoje ainda não tinha sido sincronizado — o mesmo valor do
+ * dia ficava fora das duas fatias, subestimando o investimento diário
+ * recomendado (Etapa 65) por exatamente um dia inteiro.
+ *
+ * Sprint sem nenhuma linha de alocação (nunca teve orçamento configurado)
+ * devolve as duas fatias como 0 — quem exibe decide como comunicar isso (ver
+ * `describeSprintInvestment` em sprint-financials.ts), esta função nunca
+ * inventa um valor. */
 export interface SprintPlannedSplit {
   historicalPlanned: number;
   remainingPlanned: number;
@@ -247,11 +257,63 @@ export function computeSprintPlannedSplit(
   let remainingPlanned = 0;
 
   for (const row of sprintAllocations) {
-    if (row.date <= todayStr) historicalPlanned += row.amount;
+    if (row.date < todayStr) historicalPlanned += row.amount;
     else remainingPlanned += row.amount;
   }
 
   return { historicalPlanned, remainingPlanned, hasAnyAllocation: sprintAllocations.length > 0 };
+}
+
+/** Números brutos por trás do investimento de UMA sprint — fonte única de
+ * "quanto é o previsto" e "quanto ainda resta planejar", nunca recalculados
+ * separadamente pelo resumo compacto (`describeSprintInvestment`) e pelos
+ * indicadores do card expandido (Etapa 65): os dois leem exatamente os
+ * mesmos dois números. O "previsto" da sprint atual é sempre
+ * `realizado + planejamento restante` — nunca o `plannedSpend` bruto, que
+ * poderia embutir um planejamento histórico já ultrapassado pelo realizado
+ * (mesma razão de sempre: uma mudança de orçamento no meio da sprint muda o
+ * planejamento futuro sem reescrever o passado). `overageAmount` é quanto o
+ * realizado ultrapassou o previsto — 0 quando não ultrapassou. */
+export interface SprintInvestmentAmounts {
+  totalPrevisto: number;
+  remainingPlanned: number;
+  overageAmount: number;
+}
+
+export function computeSprintInvestmentAmounts(
+  sprint: { temporalStatus: SprintTemporalStatus; actualSpend: number; plannedSpend: number },
+  split: SprintPlannedSplit | undefined,
+): SprintInvestmentAmounts {
+  let totalPrevisto: number;
+  let remainingPlanned: number;
+
+  if (sprint.temporalStatus === "futura") {
+    totalPrevisto = sprint.plannedSpend;
+    remainingPlanned = sprint.plannedSpend;
+  } else if (sprint.temporalStatus === "atual") {
+    // Sem a alocação diária da própria sprint (quem chama não tem esse
+    // detalhe à mão — ex.: painel Sprints), cai pro total bruto já
+    // existente (`plannedSpend`) em vez de fingir que não sobrou nada —
+    // nunca inventa um "restante" que não pode calcular.
+    if (!split) {
+      totalPrevisto = sprint.plannedSpend;
+      remainingPlanned = Math.max(sprint.plannedSpend - sprint.actualSpend, 0);
+    } else {
+      totalPrevisto = sprint.actualSpend + split.remainingPlanned;
+      remainingPlanned = split.remainingPlanned;
+    }
+  } else {
+    // concluída — nada mais "resta", só o resultado final do que já passou.
+    const hasHistoricalPlan = split ? split.hasAnyAllocation : sprint.plannedSpend > 0;
+    totalPrevisto = hasHistoricalPlan ? split?.historicalPlanned || sprint.plannedSpend : 0;
+    remainingPlanned = 0;
+  }
+
+  return {
+    totalPrevisto,
+    remainingPlanned,
+    overageAmount: Math.max(sprint.actualSpend - totalPrevisto, 0),
+  };
 }
 
 /** Texto operacional do investimento de UMA sprint (Etapa 63, seções 11/12)
@@ -259,10 +321,11 @@ export function computeSprintPlannedSplit(
  * estados possíveis: futura, atual com dias restantes ainda planejáveis,
  * atual sem nada mais a planejar (último dia), concluída com planejamento
  * histórico, concluída sem nenhum planejamento registrado (gasto real
- * preservado, nunca escondido nem tratado como erro). O "previsto" da
- * sprint atual é sempre `realizado + planejamento restante` — nunca o
- * `plannedSpend` bruto, que poderia embutir um planejamento histórico já
- * ultrapassado pelo realizado. */
+ * preservado, nunca escondido nem tratado como erro). Etapa 65: só monta o
+ * texto do resumo compacto — os números vêm de `computeSprintInvestmentAmounts`,
+ * a mesma fonte que os indicadores do card expandido usam, pra nunca haver
+ * dois valores divergentes pra "previsto"/"restante" entre o resumo fechado
+ * e o card aberto. */
 export interface SprintInvestmentText {
   primary: string;
   secondary: string | null;
@@ -279,18 +342,15 @@ export function describeSprintInvestment(
       : { primary: `${formatCurrency(0)} investidos · sem planejamento configurado`, secondary: null };
   }
 
+  const { totalPrevisto, remainingPlanned } = computeSprintInvestmentAmounts(sprint, split);
+
   if (sprint.temporalStatus === "atual") {
-    // Sem a alocação diária da própria sprint (quem chama não tem esse
-    // detalhe à mão — ex.: painel Sprints), cai pro total bruto já
-    // existente (`plannedSpend`) em vez de fingir que não sobrou nada —
-    // nunca inventa um "restante" que não pode calcular.
     if (!split) {
-      return { primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(sprint.plannedSpend)} previstos`, secondary: null };
+      return { primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(totalPrevisto)} previstos`, secondary: null };
     }
-    const totalPrevisto = sprint.actualSpend + split.remainingPlanned;
     return {
       primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(totalPrevisto)} previstos`,
-      secondary: split.remainingPlanned > 0 ? `${formatCurrency(split.remainingPlanned)} ainda planejados para os dias restantes` : null,
+      secondary: remainingPlanned > 0 ? `${formatCurrency(remainingPlanned)} ainda planejados para os dias restantes` : null,
     };
   }
 
@@ -300,9 +360,33 @@ export function describeSprintInvestment(
     return { primary: `${formatCurrency(sprint.actualSpend)} investidos · planejamento histórico não definido`, secondary: null };
   }
   return {
-    primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(split?.historicalPlanned || sprint.plannedSpend)} planejados`,
+    primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(totalPrevisto)} planejados`,
     secondary: null,
   };
+}
+
+/** Texto da origem + momento do gasto real exibido (Etapa 65, seções 4/6) —
+ * `manualUpdatedAt`/`metaSyncedAt` em `undefined` (não `null`) significa "quem
+ * chamou não buscou esse dado" (ex.: painel Sprints, que ainda não consulta
+ * `manual_spend_updated_at` por sprint) — nesse caso devolve `null` (não
+ * exibe nada, nunca afirma "sem atualização registrada" sobre um dado que
+ * simplesmente não foi consultado). `null` de verdade (dado buscado, mas
+ * nunca aconteceu) é o único caso que gera o texto "Sem atualização/
+ * sincronização registrada". Nunca mistura a data das duas fontes. */
+export function describeSpendSourceTimestamp(
+  spendSource: SpendSource,
+  manualUpdatedAt: string | null | undefined,
+  metaSyncedAt: string | null | undefined,
+  formatShortDateTime: (value: string) => string,
+): string | null {
+  if (spendSource === "manual") {
+    if (manualUpdatedAt === undefined) return null;
+    return manualUpdatedAt
+      ? `Manual · Atualizado em ${formatShortDateTime(manualUpdatedAt)}`
+      : "Manual · Sem atualização registrada";
+  }
+  if (metaSyncedAt === undefined) return null;
+  return metaSyncedAt ? `Meta · Sincronizado em ${formatShortDateTime(metaSyncedAt)}` : "Meta · Sem sincronização registrada";
 }
 
 /** Uma linha de `sprint_planned_allocations` já buscada do banco — planejado

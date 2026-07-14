@@ -1,12 +1,18 @@
 import Link from "next/link";
 import { TriangleAlert } from "lucide-react";
 import type { SprintFinancials } from "@/lib/sprint-financials";
-import { computeSprintPlannedSplit, describeSprintInvestment } from "@/lib/sprint-financials";
-import { formatCurrency, formatWeekdayAndDayMonth } from "@/lib/format";
+import {
+  computeSprintPlannedSplit,
+  computeSprintInvestmentAmounts,
+  describeSprintInvestment,
+  describeSpendSourceTimestamp,
+} from "@/lib/sprint-financials";
+import { computeSprintDailyRecommendation } from "@/lib/monthly-budget";
+import { formatCurrency, formatShortDateTime, formatWeekdayAndDayMonth } from "@/lib/format";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { SPEND_STATUS_BADGE_CLASSES, SPEND_STATUS_LABEL } from "@/lib/spend-status";
 import { effectiveTaskStatus } from "@/lib/task-status";
-import { todayUTC } from "@/lib/today";
+import { todayDateString, todayUTC } from "@/lib/today";
 import type { AttentionAlert } from "@/lib/attention-alerts";
 import { CommentThread, type CommentItem } from "./comment-thread";
 import { SprintTaskList } from "./sprint-task-list";
@@ -26,14 +32,6 @@ const TEMPORAL_BADGE_CLASSES = {
   futura: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
   atual: "bg-brand/10 text-brand",
   concluida: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
-} as const;
-
-const DIFFERENCE_TEXT_CLASSES = {
-  dentro: "text-foreground",
-  acima: "text-red-600 dark:text-red-400",
-  abaixo: "text-amber-600 dark:text-amber-400",
-  sem_meta: "text-foreground",
-  nao_iniciado: "text-muted-foreground",
 } as const;
 
 const EXECUTION_LABEL_CLASSES: Record<"atencao" | "critico" | "neutro", string> = {
@@ -88,6 +86,8 @@ export function SprintCardBody({
   newReviewHref,
   buildReviewDetailHref,
   plannedAllocations,
+  manualSpendUpdatedAt,
+  metaSyncedAt,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -112,31 +112,35 @@ export function SprintCardBody({
    * isso (ex.: painel Sprints, que ainda não busca por sprint individual),
    * cai pro total bruto (`plannedSpend`) — nunca um segundo cálculo. */
   plannedAllocations?: { date: string; amount: number }[];
+  /** Última edição do gasto manual desta sprint (`sprints.manual_spend_updated_at`)
+   * — Etapa 65: `undefined` (nunca buscado, ex.: painel Sprints) é diferente
+   * de `null` (buscado, mas nunca editado manualmente); só a página do
+   * cliente busca essa coluna por sprint hoje. */
+  manualSpendUpdatedAt?: string | null;
+  /** Último `daily_spend.synced_at` do cliente inteiro (Etapa 65) — mesma
+   * distinção `undefined`/`null` de `manualSpendUpdatedAt` acima. */
+  metaSyncedAt?: string | null;
 }) {
   const split = plannedAllocations !== undefined ? computeSprintPlannedSplit(plannedAllocations, todayUTC()) : undefined;
-  const investment = describeSprintInvestment(sprint, split, formatCurrency);
   const isCurrent = sprint.temporalStatus === "atual";
+  const isConcluded = sprint.temporalStatus === "concluida";
   const hasHistoricalPlan = split ? split.hasAnyAllocation : sprint.plannedSpend > 0;
-
-  // "Planejamento restante" (sprint atual) nunca é o mesmo cálculo de
-  // "Saldo do planejamento" (sprint concluída): o primeiro é só o que ainda
-  // pode ser ajustado nos dias que faltam (`split.remainingPlanned`, nunca
-  // `plannedSpend - actualSpend`, que misturaria dias já decorridos); o
-  // segundo é o resultado final de um período que já fechou.
-  const saldoText = (() => {
-    if (sprint.temporalStatus === "futura") return "Período ainda não iniciado";
-    if (isCurrent) {
-      if (!split) {
-        const saldo = sprint.plannedSpend - sprint.actualSpend;
-        return saldo > 0 ? `${formatCurrency(saldo)} restantes` : saldo === 0 ? "Planejamento atingido" : `${formatCurrency(Math.abs(saldo))} acima do previsto`;
-      }
-      return split.remainingPlanned > 0 ? `${formatCurrency(split.remainingPlanned)} para os dias restantes` : "Nada mais planejado para os dias restantes";
-    }
-    // concluída
-    if (!hasHistoricalPlan) return "Sem base de comparação no período";
-    const saldo = (split?.historicalPlanned ?? sprint.plannedSpend) - sprint.actualSpend;
-    return saldo > 0 ? `${formatCurrency(saldo)} restantes` : saldo === 0 ? "Planejamento atingido" : `${formatCurrency(Math.abs(saldo))} acima do planejado`;
-  })();
+  // Etapa 65: "previsto"/"restante" nunca recalculados aqui — mesma fonte
+  // (`computeSprintInvestmentAmounts`) que `describeSprintInvestment` usa pro
+  // resumo compacto da linha fechada (`SprintCard`), pra nunca haver dois
+  // valores divergentes entre a linha fechada e o card aberto.
+  const amounts = computeSprintInvestmentAmounts(sprint, split);
+  const isRecalculated = isCurrent && !!split;
+  const dailyRecommendation = !isConcluded
+    ? computeSprintDailyRecommendation(sprint, amounts.remainingPlanned, todayDateString())
+    : null;
+  const finalResultDiff = amounts.totalPrevisto - sprint.actualSpend;
+  const sourceTimestampText = describeSpendSourceTimestamp(
+    sprint.spendSource,
+    manualSpendUpdatedAt,
+    metaSyncedAt,
+    formatShortDateTime,
+  );
   const editActualToggleId = `edit-actual-${sprint.sprintId}`;
   const revertSourceToggleId = `revert-source-${sprint.sprintId}`;
   const isManualSource = sprint.spendSource === "manual";
@@ -159,21 +163,25 @@ export function SprintCardBody({
         )}
 
         <div className="rounded-lg border border-border bg-zinc-50 p-3 dark:bg-zinc-900/40">
-          <p className="text-sm font-medium text-foreground">{investment.primary}</p>
-          {investment.secondary && <p className="text-xs text-muted-foreground">{investment.secondary}</p>}
-
-          <div className="mt-2 grid grid-cols-3 gap-3">
+          {/* Etapa 65: sem os textos introdutórios "R$X investidos de R$Y
+              previstos"/"R$X ainda planejados" — já repetiam os mesmos
+              valores dos indicadores abaixo. Esse resumo continua existindo
+              só na linha compacta da sprint fechada (`SprintCard`,
+              `investment.primary`), nunca duplicado aqui dentro. */}
+          <div
+            className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${isConcluded ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}
+          >
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {isCurrent ? "Investimento previsto" : "Investimento planejado"}
+                Investimento previsto
               </p>
-              <p className="mt-0.5 text-base font-semibold text-foreground">
-                {isCurrent && split ? formatCurrency(sprint.actualSpend + split.remainingPlanned) : formatCurrency(sprint.plannedSpend)}
-              </p>
+              <p className="mt-0.5 text-base font-semibold text-foreground">{formatCurrency(amounts.totalPrevisto)}</p>
               <p className="text-[11px] text-muted-foreground">
-                {!split?.hasAnyAllocation && sprint.temporalStatus === "concluida" && sprint.plannedSpend <= 0
+                {isConcluded && !hasHistoricalPlan
                   ? "Planejamento histórico não definido"
-                  : "Definido pelo orçamento do mês"}
+                  : isRecalculated
+                    ? "Planejamento total atualizado da sprint"
+                    : "Definido pelo orçamento do mês"}
               </p>
             </div>
 
@@ -203,6 +211,9 @@ export function SprintCardBody({
                       · {isManualSource ? "Manual" : "Meta"}
                     </span>
                   </div>
+                  {sourceTimestampText && (
+                    <p className="text-[11px] text-muted-foreground peer-checked:hidden">{sourceTimestampText}</p>
+                  )}
                   {isManualSource && (
                     <div className="mt-0.5 peer-checked:hidden">
                       <input type="checkbox" id={revertSourceToggleId} className="peer/revert hidden" />
@@ -256,22 +267,73 @@ export function SprintCardBody({
                     {formatCurrency(sprint.actualSpend)}
                   </p>
                   <p className="text-[11px] text-muted-foreground">{isManualSource ? "Manual" : "Meta"}</p>
+                  {sourceTimestampText && <p className="text-[11px] text-muted-foreground">{sourceTimestampText}</p>}
                 </>
               )}
             </div>
 
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {isCurrent ? "Planejamento restante" : "Saldo do planejamento"}
-              </p>
-              <p className={`mt-0.5 text-base font-semibold ${DIFFERENCE_TEXT_CLASSES[sprint.status]}`}>
-                {saldoText}
-              </p>
-            </div>
+            {isConcluded ? (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Resultado final
+                </p>
+                {hasHistoricalPlan ? (
+                  <p className="mt-0.5 text-base font-semibold text-foreground">
+                    {finalResultDiff > 0
+                      ? `${formatCurrency(finalResultDiff)} abaixo do previsto`
+                      : finalResultDiff < 0
+                        ? `${formatCurrency(Math.abs(finalResultDiff))} acima do previsto`
+                        : "Dentro do previsto"}
+                  </p>
+                ) : (
+                  <p className="mt-0.5 text-base font-semibold text-muted-foreground">Sprint encerrada</p>
+                )}
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Planejamento restante
+                  </p>
+                  {/* Etapa 65: nunca mais vermelho automático aqui — só o
+                      indicador de excedente abaixo da barra assume essa cor,
+                      reservada pra situação realmente crítica. */}
+                  <p className="mt-0.5 text-base font-semibold text-foreground">
+                    {formatCurrency(amounts.remainingPlanned)}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">Para os dias restantes da sprint</p>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Investimento diário recomendado
+                  </p>
+                  {dailyRecommendation && dailyRecommendation.eligibleDaysCount > 0 ? (
+                    <>
+                      <p className="mt-0.5 text-base font-semibold text-brand">
+                        {formatCurrency(dailyRecommendation.recommendedDaily)}/dia
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">Até o final da sprint</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mt-0.5 text-base font-semibold text-foreground">{formatCurrency(0)}/dia</p>
+                      <p className="text-[11px] text-muted-foreground">Sem dias restantes para ajuste</p>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
+          {amounts.overageAmount > 0 && (
+            <p className="mt-2 text-[11px] font-medium text-red-600 dark:text-red-400">
+              {formatCurrency(amounts.overageAmount)} acima do previsto
+            </p>
+          )}
+
           <div className="mt-2">
-            <SprintFinancialBar sprint={sprint} />
+            <SprintFinancialBar actualSpend={sprint.actualSpend} totalPrevisto={amounts.totalPrevisto} />
           </div>
         </div>
 
@@ -381,6 +443,8 @@ export function SprintCard({
   newReviewHref,
   buildReviewDetailHref,
   plannedAllocations,
+  manualSpendUpdatedAt,
+  metaSyncedAt,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -398,6 +462,8 @@ export function SprintCard({
   buildReviewDetailHref?: (reviewId: string) => string;
   /** Ver `SprintCardBody` — mesmo dado, mesmo comportamento opcional. */
   plannedAllocations?: { date: string; amount: number }[];
+  manualSpendUpdatedAt?: string | null;
+  metaSyncedAt?: string | null;
 }) {
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
   const isCurrent = sprint.temporalStatus === "atual";
@@ -469,6 +535,8 @@ export function SprintCard({
         newReviewHref={newReviewHref}
         buildReviewDetailHref={buildReviewDetailHref}
         plannedAllocations={plannedAllocations}
+        manualSpendUpdatedAt={manualSpendUpdatedAt}
+        metaSyncedAt={metaSyncedAt}
       />
     </details>
   );

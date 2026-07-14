@@ -135,6 +135,26 @@ export function formatDateTimeWithYear(value: string): string {
   return `${get("day")}/${get("month")}/${get("year")} às ${get("hour")}:${get("minute")}`;
 }
 
+const shortDateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: APP_TIMEZONE,
+});
+
+/** "DD/MM às HH:mm" no fuso da agência — usado pra "última atualização" de
+ * um valor (gasto manual editado, sincronização do Meta), onde o momento
+ * real importa mais que o dia civil; por isso `timeZone` explícito
+ * (`APP_TIMEZONE`), diferente das datas "civis" deste arquivo que já vêm
+ * corretas sem hora (`timeZone: "UTC"` só evita reconverter um dia que já é
+ * o certo). */
+export function formatShortDateTime(value: string): string {
+  const parts = shortDateTimeFormatter.formatToParts(new Date(value));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")} às ${get("hour")}:${get("minute")}`;
+}
+
 const monthYearFormatter = new Intl.DateTimeFormat("pt-BR", {
   month: "long",
   year: "numeric",

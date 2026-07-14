@@ -260,6 +260,11 @@ export default async function ClientPage({
     const actualSpend = computeSprintEffectiveSpend(sprint, dailySpend ?? []);
     return computeSprintFinancials(sprint, actualSpend, today, sprint.spend_source);
   });
+  // Etapa 65: última edição do gasto manual, por sprint — `SprintFinancials`
+  // não carrega esse campo (não é usado por ninguém além do card expandido),
+  // então em vez de estender o tipo pros outros consumidores dela, um mapa à
+  // parte a partir da própria linha crua já buscada acima.
+  const manualSpendUpdatedAtBySprintId = new Map((sprints ?? []).map((s) => [s.id, s.manual_spend_updated_at]));
 
   const monthPlannedAllocationRows = (plannedAllocations ?? []).map((a) => ({
     date: a.date,
@@ -734,6 +739,8 @@ export default async function ClientPage({
                 newReviewHref={withParam(returnTo, "review=new")}
                 buildReviewDetailHref={buildReviewDetailHref}
                 plannedAllocations={plannedAllocationsBySprintId.get(sprint.sprintId) ?? []}
+                manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
+                metaSyncedAt={lastSync?.synced_at ?? null}
               />
             ))
           ) : (
