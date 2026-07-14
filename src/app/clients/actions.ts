@@ -86,6 +86,29 @@ function appendSaved(url: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}saved=1`;
 }
 
+// Códigos SQLSTATE que representam uma violação diretamente ligada aos
+// campos que o próprio formulário de cliente controla (ex.: formato do
+// meta_ad_account_id) — únicos casos em que a mensagem crua do Postgres é
+// realmente útil pro gestor corrigir algo no formulário. Qualquer outro
+// código (ex.: not_null_violation vindo de uma tarefa gerada automaticamente
+// por um trigger, foreign_key_violation, etc.) é uma falha inesperada:
+// nunca mostrar a mensagem técnica bruta pro usuário final, só logar.
+const CLIENT_FORM_VALIDATION_ERROR_CODES = new Set(["23514", "23505"]); // check_violation, unique_violation
+
+/** Traduz um erro de criação de cliente pra uma mensagem segura de exibir —
+ * erros de validação do próprio formulário passam direto; qualquer falha
+ * inesperada (ex.: geração automática de sprints/tarefas quebrando por
+ * baixo) vira uma mensagem genérica, com o erro técnico completo só no log
+ * do servidor. */
+function resolveClientCreationErrorMessage(error: { code?: string; message: string } | null): string {
+  if (!error) return "Erro ao criar cliente";
+  if (error.code && CLIENT_FORM_VALIDATION_ERROR_CODES.has(error.code)) {
+    return error.message;
+  }
+  console.error("[createClientAction] falha inesperada ao criar cliente:", error);
+  return "Não foi possível criar o cliente. Tente novamente ou verifique as configurações de tarefas padrão.";
+}
+
 export async function createClientAction(formData: FormData) {
   const profile = await requireAdmin();
   const { name, meta_ad_account_id, managerIds, ...structural } = readClientFields(formData);
@@ -106,7 +129,7 @@ export async function createClientAction(formData: FormData) {
     .single();
 
   if (error || !client) {
-    redirect(`/clients/new?error=${encodeURIComponent(error?.message ?? "Erro ao criar cliente")}`);
+    redirect(`/clients/new?error=${encodeURIComponent(resolveClientCreationErrorMessage(error))}`);
   }
 
   if (managerIds.length > 0) {
