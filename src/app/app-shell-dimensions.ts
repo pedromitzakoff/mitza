@@ -13,6 +13,11 @@ export const TOP_BAR_HEIGHT_CLASS = "h-12";
  * numérico de TOP_BAR_HEIGHT_CLASS — se um mudar, o outro acompanha). */
 export const TOP_BAR_OFFSET_CLASS = "top-12";
 export const TOP_BAR_OFFSET_REM = "3rem";
+/** Mesmo valor em px (3rem a 16px de raiz) — existe só porque
+ * IntersectionObserver.rootMargin não aceita `rem`/classes Tailwind, só
+ * comprimentos absolutos. Usado por ClientIdentitySticky para saber quando
+ * o cabeçalho do cliente passou por baixo da Top Bar global. */
+export const TOP_BAR_HEIGHT_PX = 48;
 
 export const SIDEBAR_EXPANDED_WIDTH_CLASS = "md:w-60";
 export const SIDEBAR_COLLAPSED_WIDTH_CLASS = "md:w-16";
