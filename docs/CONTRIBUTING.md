@@ -9,8 +9,9 @@
 - [Capítulo 5: Implementação](#capítulo-5-implementação)
 - [Capítulo 6: Validação](#capítulo-6-validação)
 - [Capítulo 7: Antes do push](#capítulo-7-antes-do-push)
-- [Capítulo 8: Atualização da documentação](#capítulo-8-atualização-da-documentação)
-- [Capítulo 9: Princípio mais importante](#capítulo-9-princípio-mais-importante)
+- [Capítulo 8: Numeração de decisões em branches paralelas](#capítulo-8-numeração-de-decisões-em-branches-paralelas)
+- [Capítulo 9: Atualização da documentação](#capítulo-9-atualização-da-documentação)
+- [Capítulo 10: Princípio mais importante](#capítulo-10-princípio-mais-importante)
 
 ---
 
@@ -134,7 +135,26 @@ Sempre parar após a implementação. Apresentar:
 
 Aguardar aprovação do usuário.
 
-## Capítulo 8: Atualização da documentação
+## Capítulo 8: Numeração de decisões em branches paralelas
+
+Em branches de desenvolvimento, a numeração das decisões pode ser
+provisória. A numeração definitiva deve ser atribuída apenas quando a
+alteração for incorporada à branch principal.
+
+Ou seja: ao registrar uma decisão nova em `DECISIONS.md` numa branch que
+ainda não foi mesclada, trate o número seguinte como um rascunho — outra
+branch em paralelo pode registrar sua própria decisão nova com o mesmo
+número, sem que isso seja um erro de quem escreveu. O número final é
+resolvido no momento do merge para a branch principal, conferindo qual
+decisão (se houver mais de uma) já ocupa aquele número ali.
+
+Uma decisão que já foi mesclada, implementada e referenciada em código ou
+no `CHANGELOG.md` nunca deve ser renumerada — o histórico oficial do
+projeto prevalece sobre a ordem cronológica em que as ideias surgiram.
+Quem estiver mesclando por último ajusta a numeração da sua própria
+branch, não a que já está publicada.
+
+## Capítulo 9: Atualização da documentação
 
 Sempre que uma implementação modificar a arquitetura da plataforma,
 verificar se é necessário atualizar:
@@ -147,7 +167,7 @@ verificar se é necessário atualizar:
 
 Nunca deixar documentação desatualizada em relação ao código.
 
-## Capítulo 9: Princípio mais importante
+## Capítulo 10: Princípio mais importante
 
 Toda decisão deve respeitar esta regra:
 
