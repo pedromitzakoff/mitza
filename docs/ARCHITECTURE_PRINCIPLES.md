@@ -1,0 +1,207 @@
+# Princípios Arquiteturais da Plataforma Mitza
+
+## Objetivo do documento
+
+Documentar os padrões arquiteturais e as convenções técnicas já
+estabelecidos no código da Mitza, para que novas implementações — feitas
+por qualquer pessoa ou agente — sigam a mesma filosofia técnica em vez de
+reinventar uma abordagem diferente a cada etapa.
+
+## Como deve ser utilizado
+
+Consultado antes de implementar uma funcionalidade nova, para manter
+consistência com os padrões já existentes (ex.: como uma Server Action
+decide para onde redirecionar, onde vive uma regra de negócio central,
+como uma migration nova deve ser estruturada). Também serve de referência
+ao revisar código — um padrão que diverge do que está aqui deve ter uma
+justificativa clara ou motivar uma atualização deste documento.
+
+## Quem deve atualizá-lo
+
+Quem implementa uma etapa que introduz um padrão arquitetural novo ou
+consolida um já existente (dev ou agente responsável pela etapa).
+
+## Quando deve ser atualizado
+
+Sempre que um novo padrão arquitetural relevante for estabelecido, ou um
+padrão existente for alterado de forma que afete implementações futuras.
+
+---
+
+## Capítulo 1 — A Plataforma é construída em camadas
+
+A plataforma será desenvolvida em módulos independentes. Cada
+funcionalidade deve pertencer claramente a apenas um módulo.
+
+Estrutura atual:
+
+1. Operação (fase atual)
+2. Financeiro
+3. Comercial
+4. Administração
+5. Analytics
+6. Automações
+
+Não implementar funcionalidades de módulos futuros dentro do módulo
+Operação apenas para centralizar tudo.
+
+## Capítulo 2 — A Operação é o centro da Plataforma
+
+Neste momento todo desenvolvimento deve priorizar exclusivamente a
+operação.
+
+A operação é responsável por:
+
+- Clientes
+- Sprints
+- Tarefas
+- Otimizações
+- Investimentos
+- Relatórios
+- Contexto operacional
+
+Outros módulos serão construídos posteriormente.
+
+## Capítulo 3 — Responsabilidade de cada tela
+
+### Visão Geral
+
+Objetivo: responder "Onde devo agir?"
+
+Nunca executar operação. Nunca substituir Sprint.
+
+### Sprints
+
+Objetivo: executar o trabalho diário.
+
+Deve ser a principal área operacional. Toda decisão de UX deve reduzir:
+
+- cliques
+- troca de contexto
+- carga cognitiva
+
+### Cliente
+
+Objetivo: investigar profundamente uma conta.
+
+Guardar contexto. Histórico. Informações estratégicas.
+
+### Relatórios
+
+Objetivo: comunicar o trabalho realizado.
+
+Nunca executar operação.
+
+## Capítulo 4 — Uma tela não deve assumir o papel da outra
+
+Sprint não deve virar Dashboard.
+
+Dashboard não deve virar Cliente.
+
+Cliente não deve virar Sprint.
+
+Cada tela possui uma única responsabilidade principal.
+
+## Capítulo 5 — Fonte única da verdade
+
+Toda informação importante deve possuir apenas uma fonte oficial.
+
+Nunca criar duas representações diferentes do mesmo dado.
+
+Nunca sincronizar manualmente dados duplicados.
+
+Sempre reutilizar a estrutura existente quando possível.
+
+## Capítulo 6 — Uma ação gera todos os efeitos necessários
+
+Sempre que possível:
+
+> uma única ação
+>
+> ↓
+>
+> gera automaticamente:
+>
+> - histórico
+> - indicadores
+> - contexto
+> - eventos
+> - atualizações derivadas
+
+O gestor nunca deve registrar duas vezes a mesma informação.
+
+## Capítulo 7 — Desktop primeiro
+
+A plataforma é otimizada inicialmente para Desktop. Desktop é a principal
+estação operacional.
+
+Mobile será otimizado posteriormente. Mobile deve priorizar:
+
+- consultas
+- acompanhamento
+- pequenas ações
+- atualizações rápidas
+
+## Capítulo 8 — Performance
+
+Performance não deve ser otimizada prematuramente.
+
+Primeiro:
+
+- regras de negócio
+- arquitetura
+- estabilidade
+
+Depois será executada uma fase exclusiva de performance. Ela incluirá:
+
+- auditoria
+- queries
+- índices
+- cache
+- optimistic updates
+- re-renderização
+- UX Desktop
+- UX Mobile
+
+## Capítulo 9 — Reduzir carga cognitiva
+
+Toda implementação deve responder:
+
+- Ela reduz carga mental?
+- Ela reduz cliques?
+- Ela reduz troca de contexto?
+- Ela reduz necessidade de memória?
+
+Caso contrário, reavaliar a implementação.
+
+## Capítulo 10 — Não copiar o ClickUp
+
+A plataforma não deve copiar interfaces. Nem arquitetura. Nem fluxo.
+
+Apenas princípios de produtividade quando fizer sentido.
+
+O objetivo é resolver problemas específicos da operação de tráfego.
+
+## Capítulo 11 — Escalabilidade
+
+Toda implementação deve funcionar para:
+
+- 30 clientes.
+- 100 clientes.
+- 500 clientes.
+
+Sem alterar arquitetura.
+
+## Capítulo 12 — Checklist obrigatório para novas features
+
+Antes de qualquer implementação responder:
+
+1. A qual módulo pertence?
+2. Reduz carga cognitiva?
+3. Reduz cliques?
+4. Reduz troca de contexto?
+5. Mantém fonte única da verdade?
+6. Respeita responsabilidade das telas?
+7. É compatível com o Manifesto?
+
+Caso alguma resposta seja negativa, justificar antes de implementar.

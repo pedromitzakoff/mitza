@@ -15,6 +15,27 @@ automático da sync, refinamentos de UX, etc.
 - Supabase (Postgres + Auth)
 - Deploy: Vercel
 
+## Documentação
+
+Além deste README (setup e estrutura técnica do código), o projeto mantém
+uma documentação permanente de arquitetura e filosofia de produto em
+`/docs`, pra que qualquer implementação futura siga a mesma linha:
+
+- `docs/PLATFORM_MANIFESTO.md` — visão, missão e filosofia de produto da
+  Mitza (o "porquê" por trás do sistema).
+- `docs/ARCHITECTURE_PRINCIPLES.md` — padrões arquiteturais e convenções
+  técnicas já estabelecidos no código (o "como" construir de forma
+  consistente).
+- `docs/DECISIONS.md` — registro de decisões arquiteturais e de produto
+  relevantes, com contexto e justificativa.
+- `docs/ROADMAP.md` — o que já foi entregue, o que está em andamento e o
+  que está planejado.
+- `docs/CHANGELOG.md` — histórico cronológico das mudanças relevantes do
+  sistema.
+
+Cada arquivo explica, no próprio topo, seu objetivo, como deve ser usado,
+quem deve atualizá-lo e quando.
+
 ## Setup
 
 1. Instale as dependências:
