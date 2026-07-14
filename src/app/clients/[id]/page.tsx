@@ -13,11 +13,8 @@ import {
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
-import { computeTaskCounts } from "@/lib/client-metrics";
 import { classifySpendStatus } from "@/lib/spend-status";
-import { buildAttentionAlerts } from "@/lib/attention-alerts";
 import { buildSprintExecutionAlert, formatSprintExecutionLabel } from "@/lib/sprint-execution";
-import { businessDaysSince } from "@/lib/business-days";
 import {
   resolveBudgetEffectiveDate,
   resolveMonthlyBudget,
@@ -25,11 +22,13 @@ import {
 } from "@/lib/monthly-budget";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatMonthLabel } from "@/lib/format";
+import { formatMonthLabel, formatRelationshipDuration } from "@/lib/format";
 import { computeOperationalTracking, computeMonthlyOccurrenceSummary } from "@/lib/operational-tracking";
 import { fetchClientOperationalHistory } from "@/lib/client-operational-history";
 import { computeClientUpdateStatus } from "@/lib/client-updates";
-import { AttentionPanel } from "../attention-panel";
+import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
+import { syncClientMetaAction } from "../meta-actions";
+import { ClientIdentitySticky } from "../client-identity-sticky";
 import { MonthInvestmentSummary } from "../month-investment-summary";
 import { SprintCard } from "../sprint-card";
 import { TaskList } from "../task-list";
@@ -57,8 +56,6 @@ import {
 import { AVAILABLE_TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
 import { PerformanceSummarySection } from "../performance-summary";
 import type { SprintPerformanceProps } from "../sprint-card";
-
-const OPTIMIZATION_LOOKBACK_DAYS = 14;
 
 function groupAccountReviewsBySprintId(
   reviews: (AccountReviewSummaryItem & { sprintId: string })[],
@@ -183,7 +180,7 @@ export default async function ClientPage({
   const { data: client } = await supabase
     .from("clients")
     .select(
-      "id, name, main_objective, main_product_or_service, operation_region, primary_audience, client_differentials, client_restrictions, important_seasonal_dates, operational_summary, important_notes, performance_goal, target_cost_per_result",
+      "id, name, meta_ad_account_id, status, contract_start_date, primary_manager:team_members!clients_primary_manager_id_fkey(name), main_objective, main_product_or_service, operation_region, primary_audience, client_differentials, client_restrictions, important_seasonal_dates, operational_summary, important_notes, performance_goal, target_cost_per_result",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -263,12 +260,6 @@ export default async function ClientPage({
       .eq("month", firstDay)
       .order("changed_at", { ascending: false }),
   ]);
-
-  const { data: clientActivity } = await supabase
-    .from("client_last_operational_activity")
-    .select("last_activity_at")
-    .eq("client_id", id)
-    .maybeSingle();
 
   // Etapa 71: registros de performance de todas as sprints do mês
   // selecionado — sempre por sprint (nenhum lançamento manual mensal
@@ -427,13 +418,6 @@ export default async function ClientPage({
         .maybeSingle()
     : { data: null };
 
-  const clientLastActivityDate = clientActivity?.last_activity_at
-    ? new Date(clientActivity.last_activity_at)
-    : null;
-  const clientInactivityBusinessDays = clientLastActivityDate
-    ? businessDaysSince(clientLastActivityDate, today)
-    : null;
-
   const { data: tasks } = await supabase
     .from("tasks")
     .select(
@@ -547,11 +531,6 @@ export default async function ClientPage({
   // "Reuniões/entregas de {mês}" (Etapa 8) já nasce escopado ao mês.
   const monthlyOccurrenceSummary = computeMonthlyOccurrenceSummary(tasks ?? [], { firstDay, lastDay }, today);
 
-  const tasksThisMonth = (tasks ?? []).filter(
-    (task) => task.due_date >= firstDay && task.due_date <= lastDay,
-  );
-  const taskCounts = computeTaskCounts(tasksThisMonth, today);
-
   // Etapa 62, seção 9 — histórico unificado do mês (análises + otimizações
   // + reuniões/entregas com desfecho), reaproveitando 100% operational_events
   // (ver lib/client-operational-history.ts). O card mostra só as 5 mais
@@ -565,33 +544,12 @@ export default async function ClientPage({
       : Promise.resolve({ rows: [], hasMore: false }),
   ]);
 
-  // Etapa 57: o sinal de "otimização recente" agora vem de account_reviews
-  // (Análise da Conta), não mais de tasks.type === 'otimizacao' — o template
-  // que gerava essa tarefa foi desativado (seção 2 do pedido).
-  const optimizationLookbackStart = new Date(today.getTime() - OPTIMIZATION_LOOKBACK_DAYS * 86_400_000).toISOString();
-  const optimizationRecentlyDone = accountReviews.some((review) => review.reviewed_at >= optimizationLookbackStart);
-
-  const currentSprintTasks = currentSprint ? tasksBySprintId.get(currentSprint.sprintId) ?? [] : [];
-
-  const baseAlerts = buildAttentionAlerts({
-    monthStatus,
-    overdueTasksCount: taskCounts.overdue,
-    optimizationRecentlyDone,
-    lastSyncedAt: lastSync?.synced_at ?? null,
-    currentSprintPlannedSpend: currentSprint?.plannedSpend ?? null,
-    currentSprintTaskCount: currentSprintTasks.length,
-    currentSprintUnassignedCount: currentSprintTasks.filter((task) => !task.assignee).length,
-    clientInactivityBusinessDays,
-    now: today,
-  });
-
   const sprintLastActivityDate = sprintActivity?.last_activity_at
     ? new Date(sprintActivity.last_activity_at)
     : null;
   const sprintExecutionAlert = currentSprint
     ? buildSprintExecutionAlert(currentSprint, sprintLastActivityDate, today)
     : null;
-  const alerts = sprintExecutionAlert ? [...baseAlerts, sprintExecutionAlert] : baseAlerts;
   const sprintExecutionLabel = currentSprint
     ? formatSprintExecutionLabel(sprintLastActivityDate, currentSprint.startDate, today)
     : null;
@@ -668,9 +626,77 @@ export default async function ClientPage({
     ? formatSprintPeriodLabel(openTaskSprint.startDate, openTaskSprint.endDate)
     : null;
 
+  // Identificação do cliente (Etapa 74) — substitui o antigo ClientContextBar
+  // (subheader sticky compartilhado por toda /clients/[id]/**, removido).
+  // Status já aparece como badge ao lado do nome, por isso não se repete
+  // na linha secundária abaixo.
+  const reportHref = `/reports/${client.id}?month=${monthParam}`;
+  const gestorLabel = client.primary_manager ? `Gestor: ${client.primary_manager.name}` : "Sem gestor atribuído";
+  const relationshipLabel = formatRelationshipDuration(client.contract_start_date, today);
+  const identitySecondaryLine = [
+    gestorLabel,
+    client.meta_ad_account_id ? `Conta Meta: ${client.meta_ad_account_id}` : null,
+    relationshipLabel,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-5">
       <ScrollRestoreOnMount />
+
+      {/* 1. Identificação do cliente — substitui o antigo ClientContextBar
+          (subheader sticky compartilhado por toda /clients/[id]/**).
+          Hierarquia inspirada no Relatório: nome em destaque + badge de
+          status na mesma linha, contexto secundário (gestor/conta Meta/
+          tempo de relacionamento) abaixo, ações agrupadas à direita.
+          Nenhuma "Semana atual" aqui — já aparece no seletor de período,
+          logo abaixo. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">{client.name}</h1>
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}
+            >
+              {CLIENT_STATUS_LABEL[client.status]}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">{identitySecondaryLine}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={reportHref}
+            className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          >
+            Ver relatório
+          </Link>
+          {isAdmin && (
+            <Link
+              href={`/clients/${client.id}/edit`}
+              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Editar
+            </Link>
+          )}
+          <form action={syncClientMetaAction.bind(null, client.id)}>
+            <button
+              type="submit"
+              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Atualizar Meta
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {/* Identificação mínima durante a rolagem — só nome + status, some
+          sozinha ao voltar pro topo (ver client-identity-sticky.tsx). */}
+      <ClientIdentitySticky
+        clientName={client.name}
+        statusLabel={CLIENT_STATUS_LABEL[client.status]}
+        statusBadgeClass={CLIENT_STATUS_BADGE_CLASSES[client.status]}
+      />
 
       {banners.length > 0 && (
         <div className="flex flex-col gap-2">
@@ -738,11 +764,10 @@ export default async function ClientPage({
         </div>
       </div>
 
-      {/* 1. Acompanhamento da conta — primeiro bloco principal da página:
-          ao abrir um cliente, a primeira pergunta operacional é "essa conta
-          está sendo acompanhada corretamente e o que foi feito recentemente?"
-          (reordenação de hierarquia — antes vinha depois de Investimento e
-          Prioridades). */}
+      {/* 3. Acompanhamento da conta — primeiro bloco principal depois do
+          período: ao abrir um cliente, a primeira pergunta operacional é
+          "essa conta está sendo acompanhada corretamente e o que foi feito
+          recentemente?" */}
       <div className="mt-3">
         <AccountFollowUpPanel
           monthLabel={monthLabel}
@@ -765,7 +790,7 @@ export default async function ClientPage({
         />
       </div>
 
-      {/* 2. Investimento do mês — resumo financeiro central + edição/histórico
+      {/* 4. Investimento do mês — resumo financeiro central + edição/histórico
           de orçamento, tudo num único bloco (Etapa 58: antes eram 2 cards
           separados repetindo o mesmo valor planejado). Nenhuma regra de
           cálculo, integração Meta ou fallback manual foi alterada — só a
@@ -790,8 +815,8 @@ export default async function ClientPage({
         />
       </div>
 
-      {/* 2b. Performance do mês — só o SECUNDÁRIO (meta/comparação/canal);
-          o resultado principal e o custo por resultado já apareceram em
+      {/* Performance do mês — só o SECUNDÁRIO (meta/comparação/canal); o
+          resultado principal e o custo por resultado já apareceram em
           "Principais KPIs do mês", dentro do Acompanhamento da Conta (Etapa
           72) — nunca duplicados aqui. Retorna `null` quando não há nada
           secundário a mostrar. */}
@@ -802,22 +827,7 @@ export default async function ClientPage({
         channelBreakdown={monthPerformanceChannelBreakdown}
       />
 
-      {/* 3. Prioridades — posição única e fixa (a promoção condicional pra
-          antes do Acompanhamento da Conta em caso de alerta crítico, da
-          Etapa 58, foi removida: a nova hierarquia pedida é sempre
-          Acompanhamento → Investimento → Prioridades, independente de
-          severidade). Motor de prioridades, critérios e cálculos
-          inalterados — só a posição. Sem nenhum alerta, AttentionPanel
-          retorna null e nada é renderizado. */}
-      {alerts.length > 0 && (
-        <div className="mt-3">
-          <AttentionPanel alerts={alerts} />
-        </div>
-      )}
-
-      {/* 4. Restante da página — mesma ordem relativa de sempre. */}
-
-      {/* Sprints do mês — uma única sequência cronológica (start_date ASC),
+      {/* 5. Sprints — uma única sequência cronológica (start_date ASC),
           sem separar "sprint atual" de "histórico": misturar concluídas e
           futuras sob "Histórico do mês" dava a impressão de que a atual
           acontecia antes das demais. A sprint atual continua destacada
