@@ -25,14 +25,21 @@ const OPERATIONAL_TONE_CLASSES = {
 } as const;
 
 /**
- * Resumo fechado único de uma conta na tela Sprints (Etapa 44) — reaproveitado
- * pelas três visões (Sprint atual, Mensal Consolidado, Mensal Por sprints),
- * só trocando o período (`summary`, já resolvido por `resolveSprintPeriodSummary`/
+ * Resumo fechado único de uma conta na tela Sprints — reaproveitado pelas
+ * três visões (Sprint atual, Mensal Consolidado, Mensal Por sprints), só
+ * trocando o período (`summary`, já resolvido por `resolveSprintPeriodSummary`/
  * `resolveMonthPeriodSummary`) e o texto operacional (`operational`, já
  * decidido por `operationalSummary`). Regra "card fechado = decisão": nome,
  * período, % investido, situação financeira, UMA informação operacional e a
- * barra — nada de lista de alertas, diferença em reais, ou contagem de
- * tarefas concluídas aqui (isso fica no card aberto).
+ * barra — nunca lista de alertas nem diferença em reais aqui (isso fica no
+ * card aberto).
+ *
+ * Sprint UX 2.0 (Decisão 009, docs/DECISIONS.md): a regra acima foi ajustada
+ * pra incluir tarefas pendentes/concluídas e contagem de otimizações do
+ * período — o gestor precisa dessas duas contagens pra decidir onde agir sem
+ * precisar expandir até a sprint. `tasksTotal`/`optimizationCount` são
+ * opcionais só por retrocompatibilidade de tipo; todo chamador real desta
+ * etapa em diante sempre os informa.
  *
  * Etapa 67, seção 7: quando `summary.kind === "sprint"` (visão "Sprint
  * atual"), nunca mostra "Esperado X%" nem o marcador da barra — a sprint
@@ -50,6 +57,9 @@ export function AccountCardSummary({
   summary,
   operational,
   monthTemporalStatus,
+  tasksDone,
+  tasksTotal,
+  optimizationCount,
 }: {
   clientId: string;
   clientName: string;
@@ -61,6 +71,12 @@ export function AccountCardSummary({
    * (Mensal Consolidado): troca o texto do marcador quando o mês navegado
    * não é o corrente. `undefined` = mês corrente. */
   monthTemporalStatus?: MonthTemporalStatus;
+  /** Tarefas do período em foco (sprint atual ou mês, conforme a visão) —
+   * `tasksTotal` 0 mostra "Sem tarefas no período" em vez de "0/0 tarefas". */
+  tasksDone?: number;
+  tasksTotal?: number;
+  /** Otimizações registradas (account_reviews) no período em foco. */
+  optimizationCount?: number;
 }) {
   const isSprintKind = summary.kind === "sprint";
   const investedPct = summary.pct !== null ? Math.round(summary.pct) : null;
@@ -103,6 +119,23 @@ export function AccountCardSummary({
           )}
           <span className={OPERATIONAL_TONE_CLASSES[operational.tone]}>{operational.text}</span>
         </div>
+
+        {(tasksTotal !== undefined || optimizationCount !== undefined) && (
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+            {tasksTotal !== undefined && (
+              <span className="tabular-nums">
+                {tasksTotal === 0 ? "Sem tarefas no período" : `${tasksDone ?? 0}/${tasksTotal} tarefas`}
+              </span>
+            )}
+            {optimizationCount !== undefined && (
+              <span className="tabular-nums">
+                {optimizationCount === 0
+                  ? "Sem otimizações no período"
+                  : `${optimizationCount} otimizaç${optimizationCount === 1 ? "ão" : "ões"}`}
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="mt-1.5">
           {summary.planned > 0 ? (

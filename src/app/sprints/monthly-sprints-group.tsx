@@ -1,7 +1,9 @@
 import { buildSprintPerformanceProps, type OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
 import type { CommentItem } from "@/app/clients/comment-thread";
+import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-section";
 import { resolveMonthPeriodSummary } from "@/lib/financial-period";
 import { operationalSummary } from "@/lib/account-priority";
+import { effectiveTaskStatus } from "@/lib/task-status";
 import type { MonthTemporalStatus } from "@/lib/monthly-budget";
 import { SprintCard } from "@/app/clients/sprint-card";
 import { AccountCardSummary } from "./account-card-summary";
@@ -27,6 +29,7 @@ export function SprintMonthlyBySprintsGroup({
   isAdmin,
   returnTo,
   sprintCommentsById,
+  accountReviewsBySprintId,
   monthTemporalStatus,
 }: {
   card: OperationClientCardData;
@@ -36,10 +39,20 @@ export function SprintMonthlyBySprintsGroup({
   isAdmin: boolean;
   returnTo: string;
   sprintCommentsById: Map<string, CommentItem[]>;
+  /** Otimizações (account_reviews) de todas as sprints do mês, por sprint —
+   * Sprint UX 2.0. Opcional só por retrocompatibilidade de tipo. */
+  accountReviewsBySprintId?: Map<string, AccountReviewSummaryItem[]>;
   monthTemporalStatus?: MonthTemporalStatus;
 }) {
   const summary = resolveMonthPeriodSummary(card, monthLabel, monthRange);
   const operational = operationalSummary(card, "month");
+  const tasksDone = card.monthTasks.filter((t) => effectiveTaskStatus(t) === "feito").length;
+  const optimizationCount = card.monthSprints.reduce(
+    (sum, sprint) => sum + (accountReviewsBySprintId?.get(sprint.sprintId)?.length ?? 0),
+    0,
+  );
+  const newReviewHref = `${returnTo}&review=new&reviewClient=${card.clientId}`;
+  const buildReviewDetailHref = (reviewId: string) => `${returnTo}&reviewDetail=${reviewId}`;
 
   return (
     <details className="group rounded-lg border border-border bg-card [&_summary::-webkit-details-marker]:hidden">
@@ -51,6 +64,9 @@ export function SprintMonthlyBySprintsGroup({
         summary={summary}
         operational={operational}
         monthTemporalStatus={monthTemporalStatus}
+        tasksDone={tasksDone}
+        tasksTotal={card.monthTasks.length}
+        optimizationCount={optimizationCount}
       />
 
       <div className="flex flex-col gap-2 border-t border-border p-3">
@@ -74,6 +90,9 @@ export function SprintMonthlyBySprintsGroup({
                 metaSyncedAt={card.lastSyncedAt}
                 performance={buildSprintPerformanceProps(card, sprint.sprintId)}
                 returnTo={returnTo}
+                accountReviews={accountReviewsBySprintId?.get(sprint.sprintId) ?? []}
+                newReviewHref={newReviewHref}
+                buildReviewDetailHref={buildReviewDetailHref}
               />
             );
           })

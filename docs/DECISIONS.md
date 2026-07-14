@@ -43,6 +43,7 @@ capítulo final ("Como adicionar novas decisões").
 - [Decisão 006: Arquitetura em módulos](#decisão-006-arquitetura-em-módulos)
 - [Decisão 007: Fonte única da verdade](#decisão-007-fonte-única-da-verdade)
 - [Decisão 008: A plataforma é um Sistema Operacional do Gestor](#decisão-008-a-plataforma-é-um-sistema-operacional-do-gestor)
+- [Decisão 009: Card fechado do cliente também mostra tarefas e otimizações](#decisão-009-card-fechado-do-cliente-também-mostra-tarefas-e-otimizações)
 
 ## Capítulo 1 — Formato de uma Decisão
 
@@ -324,6 +325,57 @@ Toda decisão futura deverá respeitar esse conceito.
 ### Impactos
 
 Não detalhado no registro original.
+
+## Decisão 009: Card fechado do cliente também mostra tarefas e otimizações
+
+**Data:** 2026-07-14
+**Status:** Ativa. Substitui parcialmente a regra de densidade descrita na
+Decisão 001/registro original da tela Sprints (ver Contexto).
+
+### Contexto
+
+A tela Sprints já seguia a regra "card fechado = decisão, card aberto =
+investigação": o card fechado do cliente mostrava só nome, período, %
+investido, situação financeira, uma informação operacional e a barra —
+nunca contagem de tarefas ou de otimizações, que só apareciam um nível
+abaixo, ao expandir até a sprint.
+
+### Problema
+
+Na etapa "Sprint UX 2.0", o pedido original pede que o card fechado do
+cliente já mostre tarefas pendentes/concluídas e a quantidade de
+otimizações do período, pra reduzir a necessidade de expandir até a sprint
+só pra saber isso. Isso contraria a regra de densidade documentada no
+código (`account-card-summary.tsx`, Etapa 44).
+
+### Alternativas consideradas
+
+1. Manter como estava (contagem só no card da sprint, um nível abaixo).
+2. Mostrar a contagem só na visão "Sprint atual" (meio-termo).
+3. Adicionar a contagem ao card fechado do cliente em todas as visões.
+
+### Decisão tomada
+
+Adotada a alternativa 3, escolhida pelo responsável de produto: o card
+fechado do cliente passa a mostrar `tarefas concluídas/total` e a
+quantidade de otimizações do período, junto com o que já existia (nome,
+período, % investido, situação financeira, informação operacional, barra).
+Estados vazios usam texto compacto ("Sem tarefas no período", "Sem
+otimizações no período") em vez de "0/0".
+
+### Justificativa
+
+O gestor precisa dessas duas contagens pra decidir rapidamente onde agir,
+sem precisar expandir cliente por cliente só pra ver se há pendência —
+reduz cliques e carga cognitiva, alinhado ao princípio "a Plataforma
+trabalha para o gestor".
+
+### Impactos
+
+Afeta `src/app/sprints/account-card-summary.tsx` e os três agrupamentos que
+o consomem (`current-client-group.tsx`, `monthly-consolidated-group.tsx`,
+`monthly-sprints-group.tsx`). Nenhuma regra financeira ou de prioridade foi
+alterada — só a apresentação do card fechado.
 
 ## Como adicionar novas decisões
 

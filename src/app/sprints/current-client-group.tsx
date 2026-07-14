@@ -1,8 +1,10 @@
 import { buildSprintPerformanceProps, type OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
 import type { CommentItem } from "@/app/clients/comment-thread";
 import { SprintCardBody } from "@/app/clients/sprint-card";
+import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-section";
 import { resolveSprintPeriodSummary } from "@/lib/financial-period";
 import { operationalSummary } from "@/lib/account-priority";
+import { effectiveTaskStatus } from "@/lib/task-status";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { AccountCardSummary } from "./account-card-summary";
 
@@ -23,12 +25,16 @@ export function SprintCurrentClientGroup({
   primaryManagerName,
   isAdmin,
   comments,
+  accountReviews,
 }: {
   card: OperationClientCardData;
   returnTo: string;
   primaryManagerName: string | null;
   isAdmin: boolean;
   comments: CommentItem[];
+  /** Otimizações (account_reviews) da sprint atual deste cliente — Sprint UX
+   * 2.0. Vazio por padrão pra quem ainda não busca a query nova. */
+  accountReviews?: AccountReviewSummaryItem[];
 }) {
   if (!card.sprint) {
     return (
@@ -44,6 +50,8 @@ export function SprintCurrentClientGroup({
     formatSprintPeriodLabel(card.sprint.startDate, card.sprint.endDate),
   );
   const operational = operationalSummary(card, "sprint");
+  const reviews = accountReviews ?? [];
+  const tasksDone = card.sprintTasks.filter((t) => effectiveTaskStatus(t) === "feito").length;
 
   return (
     <details className="group rounded-lg border border-border bg-card [&_summary::-webkit-details-marker]:hidden">
@@ -54,6 +62,9 @@ export function SprintCurrentClientGroup({
         periodLabel={summary.label}
         summary={summary}
         operational={operational}
+        tasksDone={tasksDone}
+        tasksTotal={card.sprintTasks.length}
+        optimizationCount={reviews.length}
       />
 
       <SprintCardBody
@@ -69,6 +80,9 @@ export function SprintCurrentClientGroup({
         metaSyncedAt={card.lastSyncedAt}
         performance={buildSprintPerformanceProps(card, card.sprint.sprintId)}
         returnTo={returnTo}
+        accountReviews={reviews}
+        newReviewHref={`${returnTo}&review=new&reviewClient=${card.clientId}`}
+        buildReviewDetailHref={(reviewId) => `${returnTo}&reviewDetail=${reviewId}`}
       />
     </details>
   );
