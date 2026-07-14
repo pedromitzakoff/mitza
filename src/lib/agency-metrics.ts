@@ -30,8 +30,8 @@ export interface SpendRhythmCounts {
 }
 
 /** Distribuição por ritmo de investimento do mês — reaproveita `monthStatus`
- * (já classificado por classifySpendStatus, mesma margem ±10% de sempre)
- * sem inventar threshold novo. "sem_meta" entra só no total. */
+ * (já classificado por classifySpendStatus, SPEND_STATUS_MARGIN central,
+ * ±20%) sem inventar threshold novo. "sem_meta" entra só no total. */
 export function computeSpendRhythmCounts(cards: OperationClientCard[]): SpendRhythmCounts {
   return {
     total: cards.length,

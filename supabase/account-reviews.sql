@@ -6,6 +6,14 @@
 -- account_reviews/account_optimizations são a fonte de verdade do que foi
 -- analisado/otimizado — operational_events continua sendo só a camada
 -- histórica append-only, nunca a fonte de estado (mesma regra da Etapa 56).
+--
+-- IMPORTANTE (config nova/fresh install): a função record_account_review
+-- definida aqui embaixo tem um bug corrigido depois, em
+-- supabase/fix-tasks-original-due-date.sql — SEM rodar esse arquivo depois
+-- deste, "Registrar otimização" com problema identificado + criar tarefa
+-- falha com "null value in column original_due_date of relation tasks
+-- violates not-null constraint". Rode fix-tasks-original-due-date.sql logo
+-- depois deste arquivo.
 
 -- ---------------------------------------------------------------------------
 -- Desativa a geração futura do template global "Otimização" (seção 2):

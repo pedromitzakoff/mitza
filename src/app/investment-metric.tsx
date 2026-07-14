@@ -1,9 +1,13 @@
 import Link from "next/link";
 import type { StatusTone } from "@/components/workspace/status-dot";
 
+/** MVP Etapa "Indicadores operacionais e refinamento visual": tamanho
+ * reduzido em ~15-20% (36→30px, 28→23px) — mesma hierarquia de sempre
+ * (lg > md > OperationMetric > SecondaryInvestmentMetric), só menos
+ * dominante visualmente. */
 const PRIMARY_VALUE_SIZE: Record<"lg" | "md", string> = {
-  lg: "text-[36px]",
-  md: "text-[28px]",
+  lg: "text-[30px]",
+  md: "text-[23px]",
 };
 
 const TONE_TEXT_CLASSES: Record<StatusTone, string> = {

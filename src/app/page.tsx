@@ -19,21 +19,22 @@ import {
 import type { AccountHealth } from "@/lib/attention-alerts";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import { formatLastOptimizationLabel } from "@/lib/monthly-reports";
 import { computeFinancialSummary, computeManagerSummary, computeSpendRhythmCounts } from "@/lib/agency-metrics";
-import { getClientPriority, sortClientPriorities } from "@/lib/client-priority";
+import { buildClientPriorityQueue, sortCardsByPriority } from "@/lib/client-priority";
+import type { PerformanceChannelScope } from "@/lib/performance";
 import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
 import { PrioritiesDrawer, PrioritiesPanel } from "./priorities-panel";
 import { OperationMetric } from "./operation-metric";
 import { PrimaryInvestmentMetric, SecondaryInvestmentMetric } from "./investment-metric";
+import { ClientObjectiveTable, ClientObjectiveTablesEmptyState, PLATFORM_LABEL } from "./client-objective-table";
 import { Button, IconButton } from "@/components/workspace/button";
 import { ProgressBar } from "@/components/workspace/progress-bar";
 import { PageHeader } from "@/components/workspace/page-header";
 import { SectionHeader } from "@/components/workspace/section-header";
-import { EmptyState } from "@/components/workspace/empty-state";
-import { StatusDot, type StatusTone } from "@/components/workspace/status-dot";
-import { formatPerformanceResult } from "@/lib/performance-goals";
+import type { StatusTone } from "@/components/workspace/status-dot";
+import type { TrafficChannelDb } from "@/lib/supabase/database.types";
+import type { SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 
 /**
  * Etapa 47: Inter carregada e aplicada SÓ na Visão Geral (className no
@@ -42,26 +43,6 @@ import { formatPerformanceResult } from "@/lib/performance-goals";
  */
 const inter = Inter({ subsets: ["latin"], variable: "--font-overview" });
 
-/** Rótulos da "situação" financeira do mês — mesma classificação de sempre
- * (card.monthStatus, ±10% central). */
-const SITUATION_LABEL: Record<SpendStatus, string> = {
-  dentro: "Dentro",
-  acima: "Acima",
-  abaixo: "Abaixo",
-  sem_meta: "Sem planejamento",
-  nao_iniciado: "Ainda não iniciada",
-  em_andamento: "Em andamento",
-};
-
-const SITUATION_TONE: Record<SpendStatus, StatusTone> = {
-  dentro: "success",
-  acima: "danger",
-  abaixo: "warning",
-  sem_meta: "neutral",
-  nao_iniciado: "neutral",
-  em_andamento: "neutral",
-};
-
 type ManagerFilter = "all" | "me" | string;
 /** "fora_do_ritmo" é só um atalho de drill-down (abaixo + acima combinados)
  * pro indicador "Contas fora do ritmo" — não aparece como opção no popover
@@ -69,6 +50,11 @@ type ManagerFilter = "all" | "me" | string;
  * mesmo padrão já usado por `sprintBucket`/`sync`/`meta`. */
 type RitmoFilter = "todos" | SpendStatus | "fora_do_ritmo";
 type TasksFilter = "todas" | "atrasadas" | "sem_atrasadas";
+/** Filtro de plataforma (Etapa 3 — MVP plataformas): "consolidado" é o
+ * estado inicial e o único em que ritmo financeiro/planejado/prioridades
+ * fazem sentido (não existe orçamento configurado por canal ainda — só
+ * investimento REALIZADO, resultados e CPL/CPA têm uma fonte por canal). */
+type PlatformFilter = "consolidado" | "meta" | "google";
 
 export default async function Home({
   searchParams,
@@ -87,6 +73,7 @@ export default async function Home({
     sort?: string;
     prioridades?: string;
     prioridadeSeveridade?: string;
+    platform?: string;
   }>;
 }) {
   const profile = await getCurrentProfile();
@@ -113,6 +100,7 @@ export default async function Home({
   const ritmoFilter = (params.ritmo ?? "todos") as RitmoFilter;
   const tasksFilter = (params.tasks ?? "todas") as TasksFilter;
   const sprintBucketFilter = params.sprintBucket as SprintFilterBucket | undefined;
+  const platformFilter = (params.platform ?? "consolidado") as PlatformFilter;
   const syncFilter = params.sync;
   const metaFilter = params.meta;
   const sort = params.sort ?? "prioridade";
@@ -136,6 +124,7 @@ export default async function Home({
     { data: teamMembersForIndicators },
     { data: completedTasksForIndicators },
     { data: reviewsForIndicators },
+    { data: channelSpendOverrides },
   ] = await Promise.all([
     supabase
       .from("clients")
@@ -157,7 +146,7 @@ export default async function Home({
       .gte("end_date", rangeStart),
     supabase
       .from("daily_spend")
-      .select("client_id, date, spend, synced_at")
+      .select("client_id, date, channel, spend, synced_at")
       .gte("date", rangeStart)
       .lte("date", rangeEnd),
     supabase
@@ -193,6 +182,10 @@ export default async function Home({
       .select("client_id")
       .gte("reviewed_at", indicatorsMonthStart)
       .lte("reviewed_at", indicatorsMonthEnd),
+    // Etapa 3 (MVP plataformas): override manual de gasto real por
+    // sprint+canal — mesmo padrão de `sprints` acima (sem filtro de data,
+    // volume pequeno e escopado por sprint, não por dia).
+    supabase.from("sprint_channel_spend").select("client_id, sprint_id, channel, spend_source, manual_actual_spend"),
   ]);
 
   // Etapa 74 — "Última otimização": sempre o dado GLOBAL mais recente por
@@ -256,16 +249,33 @@ export default async function Home({
   }
 
   const dailySpendByClient = new Map<string, { date: string; spend: number }[]>();
+  const dailySpendChannelByClient = new Map<string, { date: string; channel: TrafficChannelDb; spend: number }[]>();
   const lastSyncedByClient = new Map<string, string>();
   for (const d of dailySpend ?? []) {
     const list = dailySpendByClient.get(d.client_id) ?? [];
     list.push({ date: d.date, spend: d.spend });
     dailySpendByClient.set(d.client_id, list);
 
+    const channelList = dailySpendChannelByClient.get(d.client_id) ?? [];
+    channelList.push({ date: d.date, channel: d.channel, spend: d.spend });
+    dailySpendChannelByClient.set(d.client_id, channelList);
+
     const current = lastSyncedByClient.get(d.client_id);
     if (!current || d.synced_at > current) {
       lastSyncedByClient.set(d.client_id, d.synced_at);
     }
+  }
+
+  const channelOverridesByClient = new Map<string, SprintChannelSpendOverrideRow[]>();
+  for (const o of channelSpendOverrides ?? []) {
+    const list = channelOverridesByClient.get(o.client_id) ?? [];
+    list.push({
+      sprintId: o.sprint_id,
+      channel: o.channel,
+      spend_source: o.spend_source,
+      manual_actual_spend: o.manual_actual_spend,
+    });
+    channelOverridesByClient.set(o.client_id, list);
   }
 
   const tasksByClient = new Map<string, OperationClientRawData["tasks"]>();
@@ -334,6 +344,8 @@ export default async function Home({
       performanceGoal: client.performance_goal,
       targetCostPerResult: client.target_cost_per_result,
       performanceRecords: performanceRecordsByClient.get(client.id) ?? [],
+      dailySpendChannel: dailySpendChannelByClient.get(client.id) ?? [],
+      channelSpendOverrides: channelOverridesByClient.get(client.id) ?? [],
     };
   });
 
@@ -358,10 +370,23 @@ export default async function Home({
   if (activityFilter !== "todos") {
     filteredBase = filteredBase.filter((card) => card.activityStatus === activityFilter);
   }
-  if (ritmoFilter === "fora_do_ritmo") {
-    filteredBase = filteredBase.filter((card) => card.monthStatus === "abaixo" || card.monthStatus === "acima");
-  } else if (ritmoFilter !== "todos") {
-    filteredBase = filteredBase.filter((card) => card.monthStatus === ritmoFilter);
+  // Etapa 3: ritmo financeiro só existe pro orçamento CONSOLIDADO (não há
+  // orçamento configurado por canal) — o filtro de ritmo é ignorado fora do
+  // recorte Consolidado, nunca aplicado contra um "esperado" que não existe
+  // pra Meta/Google isoladamente.
+  if (platformFilter === "consolidado") {
+    if (ritmoFilter === "fora_do_ritmo") {
+      filteredBase = filteredBase.filter((card) => card.monthStatus === "abaixo" || card.monthStatus === "acima");
+    } else if (ritmoFilter !== "todos") {
+      filteredBase = filteredBase.filter((card) => card.monthStatus === ritmoFilter);
+    }
+  }
+  // Etapa 3: filtro de plataforma — um cliente sem a plataforma configurada
+  // nunca aparece no recorte específico dela (nunca uma linha com tudo
+  // "—"). Consolidado nunca filtra por esta regra (todo cliente participa
+  // do consolidado, mesmo sem nenhuma plataforma com dado ainda).
+  if (platformFilter !== "consolidado") {
+    filteredBase = filteredBase.filter((card) => card.clientUsesChannel[platformFilter] === true);
   }
   if (tasksFilter === "atrasadas") {
     filteredBase = filteredBase.filter((card) => card.taskCounts.overdue > 0);
@@ -421,26 +446,35 @@ export default async function Home({
     hasClientFilter: Boolean(clientFilter),
   });
 
-  // Prioridade de cada cliente — uma única fonte (getClientPriority),
-  // reaproveitada pelo bloco "Prioridades de hoje" e pela ordenação padrão
-  // da tabela (severidade primeiro). A tabela em si não exibe mais uma
-  // coluna própria de severidade (Etapa 49 removeu "Prioridade" por
-  // duplicar "Status" sem contexto adicional).
-  const cardById = new Map(cards.map((c) => [c.clientId, c]));
-  const allPriorities = cards.map((card) => getClientPriority(card, today));
-  const priorityQueue = sortClientPriorities(allPriorities.filter((p) => p.primaryIssue !== null));
+  // Prioridade de cada cliente — uma única fonte (buildClientPriorityQueue,
+  // MVP "Reformular Prioridades na Visão Geral"), reaproveitada pelo bloco
+  // "Prioridades de hoje" e pela ordenação padrão da tabela. A tabela em si
+  // não exibe mais uma coluna própria de severidade (Etapa 49 removeu
+  // "Prioridade" por duplicar "Status" sem contexto adicional).
+  //
+  // `performanceScope`: custo por resultado já tem investimento real por
+  // canal (Etapa 2/3), então continua disponível fora do Consolidado; ritmo
+  // financeiro (a outra metade da fila) continua exclusividade do
+  // Consolidado — não existe orçamento configurado por canal ainda (mesma
+  // decisão da Etapa de filtro de plataforma). `buildClientPriorityQueue`
+  // já sabe disso e nunca gera item de ritmo fora do Consolidado.
+  const performanceScope: PerformanceChannelScope = platformFilter === "consolidado" ? "consolidated" : platformFilter;
+  const priorityQueue = buildClientPriorityQueue(cards, performanceScope);
   const prioritiesTop = priorityQueue.slice(0, 6);
   const prioritiesOpen = params.prioridades === "1";
   const prioritySeverity = (params.prioridadeSeveridade ?? "todos") as AccountHealth | "todos";
 
   const sortedCards =
-    sort === "nome"
-      ? [...cards].sort((a, b) => a.clientName.localeCompare(b.clientName))
-      : sortClientPriorities(allPriorities).map((p) => cardById.get(p.clientId)!);
+    sort === "nome" ? [...cards].sort((a, b) => a.clientName.localeCompare(b.clientName)) : sortCardsByPriority(cards, performanceScope);
 
   const spendRhythm = computeSpendRhythmCounts(cards);
   const outOfRhythmCount = spendRhythm.abaixo + spendRhythm.acima;
   const financial = computeFinancialSummary(cards);
+  // Etapa 3: realizado do canal selecionado, somado sobre os clientes já
+  // filtrados (que, fora de Consolidado, já são só os que usam essa
+  // plataforma — ver filtro acima). `null` quando Consolidado (não usado).
+  const channelActualTotal =
+    platformFilter !== "consolidado" ? cards.reduce((sum, c) => sum + (c.monthActualByChannel[platformFilter] ?? 0), 0) : null;
 
   const managersForSummary = isAdmin ? gestores ?? [] : [{ id: profile.id, name: profile.name }];
   const managerSummary = computeManagerSummary(managersForSummary, filteredBase, todayStr);
@@ -483,6 +517,7 @@ export default async function Home({
     if (syncFilter) next.set("sync", syncFilter);
     if (metaFilter) next.set("meta", metaFilter);
     if (sort !== "prioridade") next.set("sort", sort);
+    if (platformFilter !== "consolidado") next.set("platform", platformFilter);
 
     for (const [key, value] of Object.entries(overrides)) {
       if (value === "") next.delete(key);
@@ -493,14 +528,16 @@ export default async function Home({
   };
 
   // Drill-down "de uma casa só": zera os filtros de recorte (mantendo só
-  // mês e gestor) e aplica exatamente o filtro clicado — usado pelos
-  // indicadores de "Controle de investimento" (os "Indicadores da operação"
-  // não têm drill-down de propósito, ver comentário acima do bloco).
+  // mês, gestor e plataforma) e aplica exatamente o filtro clicado — usado
+  // pelos indicadores de "Controle de investimento" (os "Indicadores da
+  // operação" não têm drill-down de propósito, ver comentário acima do
+  // bloco).
   const drillDownUrl = (overrides: Record<string, string>) => {
     const next = new URLSearchParams();
     if (params.month) next.set("month", params.month);
     next.set("manager", managerFilter);
     if (clientFilter) next.set("client", clientFilter);
+    if (platformFilter !== "consolidado") next.set("platform", platformFilter);
     for (const [key, value] of Object.entries(overrides)) {
       next.set(key, value);
     }
@@ -563,6 +600,7 @@ export default async function Home({
             activity={activityFilter}
             ritmo={ritmoFilter === "fora_do_ritmo" ? "todos" : ritmoFilter}
             tasks={tasksFilter}
+            platform={platformFilter}
             preserved={{
               month: params.month,
               sprintBucket: sprintBucketFilter,
@@ -605,8 +643,14 @@ export default async function Home({
                 }
                 context={`${operationIndicators.completedTasksCount} de ${operationIndicators.tasksTotalCount} concluídas`}
               />
+              {/* MVP Etapa "Indicadores operacionais e refinamento visual":
+                  rótulo direto ("Otimizações no mês") em vez do genérico
+                  "Atividade operacional" — mesmo dado de sempre
+                  (optimizationsCount, um registro de account_reviews =
+                  uma otimização, nunca contado duas vezes), só o nome
+                  deixa de esconder o que o número mede. */}
               <OperationMetric
-                label="Atividade operacional"
+                label="Otimizações no mês"
                 value={`${operationIndicators.optimizationsCount} otimizações`}
                 context="Revisões estratégicas registradas"
               />
@@ -614,67 +658,93 @@ export default async function Home({
           </div>
 
           <div className="border-t border-overview-border px-5 py-6 sm:px-6 sm:py-7">
-            <SectionHeader title="Controle de investimento" />
+            <SectionHeader
+              title={platformFilter === "consolidado" ? "Controle de investimento" : `Investimento · ${PLATFORM_LABEL[platformFilter]}`}
+            />
 
-            {/* Camada 1 — os números que o olhar deve encontrar primeiro. */}
-            <div className="mt-5 grid grid-cols-1 gap-x-10 gap-y-4 sm:grid-cols-3">
-              <PrimaryInvestmentMetric label="Planejado" value={formatCurrency(financial.planned)} />
-              <PrimaryInvestmentMetric label="Realizado" value={formatCurrency(financial.actual)} />
-              <PrimaryInvestmentMetric
-                label="Orçamento utilizado"
-                value={financial.pct !== null ? formatPercent(financial.pct) : "—"}
-                size="md"
-              />
-            </div>
+            {platformFilter === "consolidado" ? (
+              <>
+                {/* Camada 1 — os números que o olhar deve encontrar primeiro. */}
+                <div className="mt-5 grid grid-cols-1 gap-x-10 gap-y-4 sm:grid-cols-3">
+                  <PrimaryInvestmentMetric label="Planejado" value={formatCurrency(financial.planned)} />
+                  <PrimaryInvestmentMetric label="Realizado" value={formatCurrency(financial.actual)} />
+                  <PrimaryInvestmentMetric
+                    label="Orçamento utilizado"
+                    value={financial.pct !== null ? formatPercent(financial.pct) : "—"}
+                    size="md"
+                  />
+                </div>
 
-            {/* Camada 2 — contexto de ritmo, deliberadamente mais discreto. */}
-            <div className="mt-7 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
-              <SecondaryInvestmentMetric
-                label="Esperado hoje"
-                value={formatPercent(investmentExpectedPct)}
-                title="dia_atual / dias_do_mês — igual para qualquer cliente do recorte, nunca uma média de percentuais por cliente. Não depende de nenhum orçamento estar configurado."
-              />
-              <SecondaryInvestmentMetric label="Esperado em investimento" value={formatCurrency(financial.expectedToDate)} />
-              <SecondaryInvestmentMetric
-                label="Diferença para o esperado"
-                value={investmentDiffLabel}
-                tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
-              />
-              <SecondaryInvestmentMetric
-                label="Contas fora do ritmo"
-                value={String(outOfRhythmCount)}
-                href={drillDownUrl({ ritmo: "fora_do_ritmo" })}
-                tone={outOfRhythmCount > 0 ? "warning" : "neutral"}
-                title={`${spendRhythm.abaixo} abaixo · ${spendRhythm.acima} acima`}
-              />
-            </div>
+                {/* Camada 2 — contexto de ritmo, deliberadamente mais discreto. */}
+                <div className="mt-7 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <SecondaryInvestmentMetric
+                    label="Esperado hoje"
+                    value={formatPercent(investmentExpectedPct)}
+                    title="dia_atual / dias_do_mês — igual para qualquer cliente do recorte, nunca uma média de percentuais por cliente. Não depende de nenhum orçamento estar configurado."
+                  />
+                  <SecondaryInvestmentMetric label="Esperado em investimento" value={formatCurrency(financial.expectedToDate)} />
+                  <SecondaryInvestmentMetric
+                    label="Diferença para o esperado"
+                    value={investmentDiffLabel}
+                    tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
+                  />
+                  <SecondaryInvestmentMetric
+                    label="Contas fora do ritmo"
+                    value={String(outOfRhythmCount)}
+                    href={drillDownUrl({ ritmo: "fora_do_ritmo" })}
+                    tone={outOfRhythmCount > 0 ? "warning" : "neutral"}
+                    title={`${spendRhythm.abaixo} abaixo · ${spendRhythm.acima} acima`}
+                  />
+                </div>
 
-            <div className="mt-8">
-              <ProgressBar
-                planned={financial.planned}
-                actual={financial.actual}
-                expectedToDate={financial.expectedToDate}
-                monthTemporalStatus={monthTemporalStatus}
-              />
-            </div>
+                <div className="mt-8">
+                  <ProgressBar
+                    planned={financial.planned}
+                    actual={financial.actual}
+                    expectedToDate={financial.expectedToDate}
+                    monthTemporalStatus={monthTemporalStatus}
+                  />
+                </div>
 
-            <div className="mt-4">
-              {financial.semMeta > 0 ? (
-                <Button
-                  href={drillDownUrl({ meta: "sem" })}
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto px-0 py-0 text-[13px] font-normal text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary"
-                >
-                  {financial.semMeta} cliente{financial.semMeta !== 1 ? "s" : ""} sem planejamento configurado
-                </Button>
-              ) : (
-                <p className="text-[13px] text-overview-text-muted">Todos os clientes possuem planejamento configurado</p>
-              )}
-            </div>
+                <div className="mt-4">
+                  {financial.semMeta > 0 ? (
+                    <Button
+                      href={drillDownUrl({ meta: "sem" })}
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto px-0 py-0 text-[13px] font-normal text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary"
+                    >
+                      {financial.semMeta} cliente{financial.semMeta !== 1 ? "s" : ""} sem planejamento configurado
+                    </Button>
+                  ) : (
+                    <p className="text-[13px] text-overview-text-muted">Todos os clientes possuem planejamento configurado</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Etapa 3: fora do Consolidado só existe investimento
+                    REALIZADO por plataforma — planejado/esperado/ritmo
+                    dependem de um orçamento que ainda não é configurado por
+                    canal (ver decisão registrada no relatório da etapa). */}
+                <div className="mt-5 grid grid-cols-1 gap-x-10 gap-y-4 sm:grid-cols-3">
+                  <PrimaryInvestmentMetric label={`Realizado · ${PLATFORM_LABEL[platformFilter]}`} value={formatCurrency(channelActualTotal ?? 0)} />
+                </div>
+                <p className="mt-4 text-[13px] text-overview-text-muted">
+                  Planejado e ritmo financeiro disponíveis só no recorte Consolidado — ainda não há orçamento configurado por plataforma.
+                </p>
+              </>
+            )}
           </div>
         </div>
 
+        {/* MVP "Reformular Prioridades na Visão Geral": só 2 tipos de item
+            (custo por resultado acima da meta / ritmo fora do esperado) —
+            ritmo só existe no Consolidado (sem orçamento por canal), custo
+            por resultado continua disponível em qualquer plataforma (já tem
+            investimento real por canal, Etapa 2/3) — ver `performanceScope`
+            acima. Painel nunca escondido por completo; some sozinho quando
+            a fila está vazia (EmptyState do próprio componente). */}
         <div className="mt-3">
           <PrioritiesPanel
             priorities={prioritiesTop}
@@ -694,111 +764,49 @@ export default async function Home({
           />
         )}
 
-        {/* Tabela única de clientes (Etapa 49) — coluna "Prioridade" removida
-            por duplicar "Status" sem contexto adicional (a classificação
-            detalhada de severidade continua em "Prioridades de hoje", que já
-            tinha sua própria fonte de verdade, `getClientPriority` — "Saúde
-            da operação" foi removida, ver "Indicadores da operação" acima,
-            que não usa mais accountHealth). "Esperado até hoje" usa a mesma
-            base (`monthExpectedToDate`) que já decide "Status"
-            (classifySpendStatus) — nunca um cálculo paralelo. Ordenação
-            padrão ("Ordenar por prioridade") continua reaproveitando
-            `sortClientPriorities` por baixo, mesmo sem mais exibir a
-            severidade em coluna própria. */}
-        <div className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
-          <div className="flex items-center justify-between px-3.5 py-2.5">
-            <SectionHeader title={`Clientes · ${monthLabel}`} />
-            <div className="flex items-center gap-3 text-xs">
-              <span className="text-overview-text-muted">{sortedCards.length} cliente{sortedCards.length !== 1 ? "s" : ""}</span>
-              <Button href={buildUrl({ sort: sort === "nome" ? "prioridade" : "nome" })} variant="ghost" size="sm">
-                Ordenar por {sort === "nome" ? "prioridade" : "nome"}
-              </Button>
-            </div>
-          </div>
-
-          {sortedCards.length > 0 ? (
-            <div className="overflow-x-auto border-t border-overview-border">
-              <table className="w-full min-w-[960px] text-sm">
-                <thead>
-                  <tr className="border-b border-overview-border bg-overview-surface-subtle text-left text-[12px] font-semibold text-overview-text-secondary">
-                    <th className="py-2 px-3.5 font-semibold">Cliente</th>
-                    <th className="py-2 px-3.5 font-semibold">Gestor</th>
-                    <th className="py-2 px-3.5 text-right font-semibold">Investimento</th>
-                    <th className="py-2 px-3.5 text-right font-semibold">Esperado até hoje</th>
-                    <th className="py-2 px-3.5 font-semibold">Sprint atual</th>
-                    <th className="py-2 px-3.5 font-semibold">Status</th>
-                    <th className="py-2 px-3.5 font-semibold">Resultados</th>
-                    <th className="py-2 px-3.5 text-right font-semibold">Custo por resultado</th>
-                    <th className="py-2 px-3.5 font-semibold">Última otimização</th>
-                    <th className="py-2 px-3.5 text-right font-semibold">Abrir cliente</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedCards.map((card) => {
-                    // Mesma regra usada pra classificar o status
-                    // (classifySpendStatus, ±10% sobre `monthExpectedToDate`)
-                    // — "Esperado até hoje" é só esse valor expresso como %
-                    // do planejado, nunca um cálculo paralelo.
-                    const pctRealizado =
-                      card.monthPlanned > 0 ? Math.round((card.monthActual / card.monthPlanned) * 100) : null;
-                    const pctEsperado =
-                      card.monthPlanned > 0 ? Math.round((card.monthExpectedToDate / card.monthPlanned) * 100) : null;
-                    // Etapa 71: nunca "0 leads"/"0 vendas" fabricado — só
-                    // quando `hasAnyRecord` é true (registro real existe,
-                    // mesmo que com contagem 0 — ver PerformanceSummary).
-                    const performanceResultsText =
-                      card.performanceGoal && card.monthPerformanceSummary?.hasAnyRecord
-                        ? formatPerformanceResult(card.monthPerformanceSummary.resultCount, card.performanceGoal)
-                        : "—";
-                    const performanceCostText =
-                      card.performanceGoal && card.monthPerformanceSummary?.costPerResult !== null && card.monthPerformanceSummary?.costPerResult !== undefined
-                        ? formatCurrency(card.monthPerformanceSummary.costPerResult)
-                        : "—";
-                    return (
-                      <tr
-                        key={card.clientId}
-                        className="border-b border-overview-border/70 transition-colors duration-150 last:border-0 hover:bg-overview-surface-hover"
-                      >
-                        <td className="py-2.5 px-3.5 font-semibold text-overview-text-primary">{card.clientName}</td>
-                        <td className="py-2.5 px-3.5 text-overview-text-secondary">
-                          {primaryManagerNameByClient.get(card.clientId) ?? "Sem gestor"}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">
-                          {pctRealizado !== null ? `${pctRealizado}%` : "—"}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">
-                          {pctEsperado !== null ? `${pctEsperado}%` : "—"}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-overview-text-secondary">
-                          {card.sprintPeriodLabel ?? "—"}
-                        </td>
-                        <td className="py-2.5 px-3.5">
-                          <StatusDot tone={SITUATION_TONE[card.monthStatus]} label={SITUATION_LABEL[card.monthStatus]} />
-                        </td>
-                        <td className="py-2.5 px-3.5 text-overview-text-secondary">{performanceResultsText}</td>
-                        <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">
-                          {performanceCostText}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-overview-text-secondary">
-                          {formatLastOptimizationLabel(card.lastOptimizationAt, today)}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-right">
-                          <Button href={`/clients/${card.clientId}`} variant="ghost" size="sm">
-                            Abrir cliente
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="border-t border-overview-border">
-              <EmptyState title="Nenhum cliente encontrado com esses filtros." description="Ajuste os filtros acima ou limpe-os para ver todos os clientes monitorados." />
-            </div>
-          )}
+        {/* MVP "Reformular a tabela de clientes": a tabela única (Etapa 49)
+            vira 2 tabelas por objetivo da conta — "Clientes de leads" e
+            "Clientes de vendas", mesmo componente parametrizado
+            (`ClientObjectiveTable`), cada uma só aparece se tiver cliente.
+            Um 3º grupo (sem objetivo configurado) preserva clientes legados
+            sem `performance_goal` — nenhum cliente do recorte pode sumir da
+            tela. A ordenação ("Ordenar por prioridade"/nome) é uma única
+            control acima das 3 tabelas — ordena `sortedCards` inteiro antes
+            de dividir por objetivo, nunca uma ordem própria por tabela. */}
+        <div className="mt-3 flex items-center justify-between px-0.5">
+          <span className="text-xs text-overview-text-muted">
+            {sortedCards.length} cliente{sortedCards.length !== 1 ? "s" : ""} no recorte
+            {platformFilter !== "consolidado" ? ` · ${PLATFORM_LABEL[platformFilter]}` : ""}
+          </span>
+          <Button href={buildUrl({ sort: sort === "nome" ? "prioridade" : "nome" })} variant="ghost" size="sm">
+            Ordenar por {sort === "nome" ? "prioridade" : "nome"}
+          </Button>
         </div>
+
+        {sortedCards.length > 0 ? (
+          <>
+            <ClientObjectiveTable
+              cards={sortedCards.filter((c) => c.performanceGoal === "leads")}
+              objective="leads"
+              platformFilter={platformFilter}
+              primaryManagerNameByClient={primaryManagerNameByClient}
+            />
+            <ClientObjectiveTable
+              cards={sortedCards.filter((c) => c.performanceGoal === "sales")}
+              objective="sales"
+              platformFilter={platformFilter}
+              primaryManagerNameByClient={primaryManagerNameByClient}
+            />
+            <ClientObjectiveTable
+              cards={sortedCards.filter((c) => !c.performanceGoal)}
+              objective={null}
+              platformFilter={platformFilter}
+              primaryManagerNameByClient={primaryManagerNameByClient}
+            />
+          </>
+        ) : (
+          <ClientObjectiveTablesEmptyState />
+        )}
 
         {/* Análises secundárias — fora do primeiro viewport de propósito */}
         <details className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface [&_summary]:cursor-pointer [&_summary]:list-none">

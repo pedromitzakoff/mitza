@@ -2,6 +2,15 @@
 -- e passam a ser uma configuração global (admin, em /settings), aplicada a
 -- "todos os clientes" ou a uma lista de clientes selecionados.
 -- Rode depois de supabase/task-templates.sql.
+--
+-- IMPORTANTE (config nova/fresh install): a função
+-- generate_sprint_tasks_from_templates redefinida aqui embaixo tem um bug
+-- corrigido bem depois, em supabase/fix-tasks-original-due-date.sql — sem
+-- rodar esse arquivo por último (depois de account-reviews.sql), criar
+-- cliente novo falha com "null value in column original_due_date of
+-- relation tasks violates not-null constraint" (o trigger que gera as
+-- sprints/tarefas iniciais roda dentro da mesma transação do insert em
+-- clients).
 
 -- ---------------------------------------------------------------------------
 -- sprint_task_templates: configuração global. weekday segue ISO (1=seg..7=dom).

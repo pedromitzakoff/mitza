@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { AccountHealth } from "@/lib/attention-alerts";
-import type { ClientPriority } from "@/lib/client-priority";
+import type { ClientPriorityItem } from "@/lib/client-priority";
 import { Button } from "@/components/workspace/button";
 import { SectionHeader } from "@/components/workspace/section-header";
 import { EmptyState } from "@/components/workspace/empty-state";
@@ -18,19 +18,13 @@ const SEVERITY_TONE: Record<AccountHealth, StatusTone> = {
   saudavel: "success",
 };
 
-function ageLabel(days: number | null): string {
-  if (days === null) return "—";
-  return `${days} dia${days !== 1 ? "s" : ""} úteis`;
-}
-
 function PriorityRow({
   priority,
   managerName,
 }: {
-  priority: ClientPriority;
+  priority: ClientPriorityItem;
   managerName: string | null;
 }) {
-  const issue = priority.primaryIssue!;
   return (
     <li className="flex min-h-[52px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3.5 py-2 transition-colors duration-150 hover:bg-overview-surface-hover">
       <div className="min-w-0 flex-1">
@@ -39,33 +33,26 @@ function PriorityRow({
             {priority.clientName}
           </Link>
           <StatusDot tone={SEVERITY_TONE[priority.severity]} label={SEVERITY_LABEL[priority.severity]} emphasize />
-          {priority.secondaryCount > 0 && (
-            <span
-              className="shrink-0 text-[11px] text-overview-text-muted"
-              title={priority.secondaryIssues.map((i) => i.title).join(" · ")}
-            >
-              +{priority.secondaryCount} outro{priority.secondaryCount !== 1 ? "s" : ""}
-            </span>
-          )}
         </div>
         <p className="mt-0.5 truncate text-xs text-overview-text-secondary">
-          {issue.title}
-          <span className="text-overview-text-muted"> · {ageLabel(priority.issueAgeBusinessDays)}</span>
+          {priority.title}
+          <span className="text-overview-text-muted"> · {priority.description}</span>
           {managerName ? <span className="text-overview-text-muted"> · {managerName}</span> : null}
         </p>
       </div>
-      <Button href={issue.actionHref} variant="secondary" size="sm">
-        {issue.actionLabel}
+      <Button href={priority.actionHref} variant="secondary" size="sm">
+        {priority.actionLabel}
       </Button>
     </li>
   );
 }
 
 /**
- * "Prioridades de hoje" — visual reformulado na Etapa 47 pra se aproximar
- * de uma lista/tabela operacional densa (linhas de ~52px) em vez de um
- * card de alertas; lógica idêntica à Etapa 46 (uma linha por cliente, já
- * ordenada por `sortClientPriorities`).
+ * "Prioridades de hoje" — MVP "Reformular Prioridades na Visão Geral": lista
+ * plana de itens acionáveis (custo acima da meta / ritmo fora do esperado),
+ * um cliente pode aparecer mais de uma vez (uma linha por problema, nunca
+ * "escondendo" um atrás do outro). Já ordenada por `sortClientPriorityItems`
+ * (severidade → desvio → nome).
  */
 export function PrioritiesPanel({
   priorities,
@@ -73,7 +60,7 @@ export function PrioritiesPanel({
   totalCount,
   viewAllHref,
 }: {
-  priorities: ClientPriority[];
+  priorities: ClientPriorityItem[];
   managerNameByClient: Map<string, string | null>;
   totalCount: number;
   viewAllHref: string;
@@ -92,14 +79,18 @@ export function PrioritiesPanel({
       {priorities.length > 0 ? (
         <ul className="divide-y divide-overview-border border-t border-overview-border">
           {priorities.map((priority) => (
-            <PriorityRow key={priority.clientId} priority={priority} managerName={managerNameByClient.get(priority.clientId) ?? null} />
+            <PriorityRow
+              key={`${priority.clientId}-${priority.kind}`}
+              priority={priority}
+              managerName={managerNameByClient.get(priority.clientId) ?? null}
+            />
           ))}
         </ul>
       ) : (
         <div className="border-t border-overview-border">
           <EmptyState
-            title="Nenhuma prioridade crítica hoje."
-            description="Todas as contas monitoradas estão dentro das condições operacionais esperadas."
+            title="Nenhuma prioridade hoje."
+            description="Nenhuma conta com custo por resultado acima da meta ou ritmo financeiro fora do esperado."
           />
         </div>
       )}
@@ -122,7 +113,7 @@ export function PrioritiesDrawer({
   closeHref,
   buildSeverityHref,
 }: {
-  priorities: ClientPriority[];
+  priorities: ClientPriorityItem[];
   managerNameByClient: Map<string, string | null>;
   severity: AccountHealth | "todos";
   closeHref: string;
@@ -152,7 +143,11 @@ export function PrioritiesDrawer({
         {filtered.length > 0 ? (
           <ul className="mt-3 divide-y divide-overview-border">
             {filtered.map((priority) => (
-              <PriorityRow key={priority.clientId} priority={priority} managerName={managerNameByClient.get(priority.clientId) ?? null} />
+              <PriorityRow
+                key={`${priority.clientId}-${priority.kind}`}
+                priority={priority}
+                managerName={managerNameByClient.get(priority.clientId) ?? null}
+              />
             ))}
           </ul>
         ) : (

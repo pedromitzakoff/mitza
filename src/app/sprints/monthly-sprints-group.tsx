@@ -73,6 +73,7 @@ export function SprintMonthlyBySprintsGroup({
                 buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
                 metaSyncedAt={card.lastSyncedAt}
                 performance={buildSprintPerformanceProps(card, sprint.sprintId)}
+                returnTo={returnTo}
               />
             );
           })

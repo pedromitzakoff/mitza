@@ -43,6 +43,11 @@ import {
 } from "@/lib/performance";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+import {
+  inferClientChannels,
+  sumChannelEffectiveSpend,
+  type SprintChannelSpendOverrideRow,
+} from "@/lib/channel-spend";
 import type { SprintPerformanceProps } from "@/app/clients/sprint-card";
 
 const OPTIMIZATION_LOOKBACK_DAYS = 14;
@@ -114,6 +119,15 @@ export interface OperationClientRawData {
    * cliente). Vazio (padrão) = ninguém buscou ainda, equivalente a "sem
    * dados" pra quem não passar esta prop. */
   performanceRecords?: PerformanceRecordRawRow[];
+  /** `daily_spend` já com a dimensão de canal (Etapa 2/3), pra quem precisa
+   * do gasto real de UMA plataforma (filtro de plataforma na Visão Geral).
+   * Vazio (padrão) = ninguém buscou ainda — mesmo efeito de não ter dado
+   * pra nenhum canal (nunca quebra quem não passa esta prop, ex.: Sprints/
+   * Relatório, que continuam só com `dailySpend` consolidado). */
+  dailySpendChannel?: { date: string; channel: TrafficChannel; spend: number }[];
+  /** Override manual de gasto real por sprint+canal (`sprint_channel_spend`,
+   * Etapa 2) — mesmo padrão batch das demais listas acima. */
+  channelSpendOverrides?: SprintChannelSpendOverrideRow[];
 }
 
 export interface OperationClientCard {
@@ -205,6 +219,24 @@ export interface OperationClientCard {
   /** Valores já lançados por canal de cada sprint, por sprintId — pré-
    * preenche "Editar resultados" sem recalcular na tela. */
   sprintPerformanceEditableChannels: Record<string, { channel: TrafficChannel; existingCount: number | null }[]>;
+  /** Realizado do mês de CADA canal disponível (Etapa 3 — filtro de
+   * plataforma na Visão Geral), calculado da mesma fonte de verdade que
+   * `monthActual` (Etapa 2 — `lib/channel-spend.ts`), nunca uma segunda
+   * conta paralela. Ausente = cliente sem nenhum dado desse canal (nunca
+   * `0` fabricado — ver `clientUsesChannel`). */
+  monthActualByChannel: Partial<Record<TrafficChannel, number>>;
+  /** Este cliente usa esta plataforma? (Etapa 3) Meta: `meta_ad_account_id`
+   * configurado OU já tem algum dado de canal Meta; Google (sem campo de
+   * "conta configurada" ainda): só dado real (investimento ou performance)
+   * — nunca uma lista fixa de plataformas. Decide se o cliente aparece no
+   * recorte "Meta"/"Google" da Visão Geral (nunca aparece com tudo zerado). */
+  clientUsesChannel: Partial<Record<TrafficChannel, boolean>>;
+  /** Resumo de performance (Etapa 71) de CADA canal, calculado com o
+   * investimento REAL daquele canal (`monthActualByChannel`) — nunca o
+   * investimento consolidado dividido pelos resultados de um canal só.
+   * `null` = objetivo de performance não configurado (mesmo motivo de
+   * `monthPerformanceSummary` ser `null`). */
+  monthPerformanceSummaryByChannel: Partial<Record<TrafficChannel, PerformanceSummary | null>>;
 }
 
 /** Monta a prop pronta pra `SprintCard`/`SprintCardBody` a partir de um
@@ -311,6 +343,33 @@ export function buildOperationClientCard(
     monthSprintTasks[row.id] = client.tasks.filter((t) => t.sprint_id === row.id);
   }
 
+  // Etapa 3 (MVP plataformas) — realizado do mês POR CANAL, mesma fonte
+  // central de Etapa 2 (`lib/channel-spend.ts`), nunca uma soma paralela.
+  // `clientUsesChannel` decide se o cliente aparece no recorte "Meta"/
+  // "Google" da Visão Geral: Meta já tinha um sinal de "conta configurada"
+  // (`metaAdAccountId`, existente bem antes desta etapa); Google ainda não
+  // tem um campo equivalente, então o sinal é só dado real (investimento OU
+  // performance already lançada) — nunca uma lista fixa de plataformas.
+  const dailySpendChannel = client.dailySpendChannel ?? [];
+  const channelOverrides = client.channelSpendOverrides ?? [];
+  const monthSprintRowsForChannel = monthSprintRows.map((row) => ({
+    sprintId: row.id,
+    start_date: row.start_date,
+    end_date: row.end_date,
+  }));
+  const channelsWithSpendData = inferClientChannels(dailySpendChannel, channelOverrides);
+  const monthActualByChannel: Partial<Record<TrafficChannel, number>> = {};
+  const clientUsesChannel: Partial<Record<TrafficChannel, boolean>> = {};
+  for (const channel of AVAILABLE_TRAFFIC_CHANNELS) {
+    const hasPerformanceData = (client.performanceRecords ?? []).some((r) => r.channel === channel);
+    const hasSpendData = channelsWithSpendData.includes(channel);
+    const isConfigured = channel === "meta" ? Boolean(client.metaAdAccountId) || hasSpendData : hasSpendData;
+    if (isConfigured || hasPerformanceData) {
+      clientUsesChannel[channel] = true;
+      monthActualByChannel[channel] = sumChannelEffectiveSpend(monthSprintRowsForChannel, channel, dailySpendChannel, channelOverrides);
+    }
+  }
+
   // Etapa 71 — camada de PERFORMANCE: consome `monthActual`/`sprint.actualSpend`
   // já calculados acima (nunca uma segunda fonte de investimento). Registros
   // já vêm todos escopados às sprints do mês (query do chamador), então o
@@ -328,6 +387,23 @@ export function buildOperationClientCard(
         targetCostPerResult,
       })
     : null;
+  // Etapa 3: mesma função central, escopo por canal — o investimento vem de
+  // `monthActualByChannel` (real, Etapa 2), nunca do consolidado dividido
+  // pelos resultados de um canal só (ver `resolveActualSpendForScope`).
+  const monthPerformanceSummaryByChannel: Partial<Record<TrafficChannel, PerformanceSummary | null>> = {};
+  if (performanceGoal) {
+    for (const channel of AVAILABLE_TRAFFIC_CHANNELS) {
+      if (!clientUsesChannel[channel]) continue;
+      monthPerformanceSummaryByChannel[channel] = computePerformanceSummary({
+        scope: channel,
+        records: performanceRecords,
+        resultType: performanceGoal,
+        consolidatedActualSpend: monthActual,
+        targetCostPerResult,
+        channelActualSpend: monthActualByChannel,
+      });
+    }
+  }
   const monthPerformanceChannelBreakdown: { channel: TrafficChannel; resultCount: number }[] = performanceGoal
     ? AVAILABLE_TRAFFIC_CHANNELS.map((channel) => ({
         channel,
@@ -463,5 +539,8 @@ export function buildOperationClientCard(
     monthPerformanceChannelBreakdown,
     sprintPerformanceViews,
     sprintPerformanceEditableChannels,
+    monthActualByChannel,
+    clientUsesChannel,
+    monthPerformanceSummaryByChannel,
   };
 }

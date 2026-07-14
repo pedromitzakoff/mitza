@@ -68,6 +68,7 @@ export function SprintCurrentClientGroup({
         buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
         metaSyncedAt={card.lastSyncedAt}
         performance={buildSprintPerformanceProps(card, card.sprint.sprintId)}
+        returnTo={returnTo}
       />
     </details>
   );

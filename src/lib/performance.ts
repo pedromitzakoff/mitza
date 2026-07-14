@@ -159,6 +159,49 @@ export function compareCostToTarget(costPerResult: number | null, targetCostPerR
   };
 }
 
+/**
+ * MVP "Regras centrais de saúde da conta" — limiar de ENTRADA em prioridade
+ * por custo por resultado: só custo 30%+ acima da meta vira alerta
+ * acionável ("CPA 38% acima da meta"). Deliberadamente uma constante
+ * PRÓPRIA, distinta de `PERFORMANCE_STATUS_MARGIN` (±10%, "dentro da
+ * meta"/`getPerformanceStatus` — usada pra classificar/exibir eficiência em
+ * qualquer tela): os dois domínios respondem perguntas diferentes ("esse
+ * custo está bom?" vs. "isso precisa virar uma ação hoje?") e nunca devem
+ * compartilhar o mesmo número, mesmo que hoje pareçam relacionados.
+ */
+export const COST_PRIORITY_DEVIATION_THRESHOLD = 0.3; // 30%
+
+/**
+ * Esta conta deve entrar na fila de prioridades por custo por resultado?
+ * `false` sempre que não há como calcular com confiança: sem meta
+ * configurada, sem custo disponível pro escopo, ou (quando
+ * `minReliableResultCount` for passado) amostra insuficiente — nunca
+ * classifica "acima da meta" sem uma base de comparação real.
+ *
+ * `minReliableResultCount` é um HOOK, não uma regra: auditoria desta etapa
+ * confirmou que o sistema ainda não tem nenhum critério de "amostra mínima
+ * pra um CPL/CPA confiável" em lugar nenhum (nada equivalente a
+ * `SPEND_STATUS_MARGIN` pra tamanho de amostra) — por isso esta função
+ * nunca inventa um número fixo (tipo "mínimo de 5 leads") por conta própria.
+ * O parâmetro existe pra centralizar ONDE esse critério entraria no dia em
+ * que a agência decidir um valor real (viraria, por exemplo, uma
+ * configuração por cliente ou por objetivo) — até lá, omitir o parâmetro
+ * (padrão `undefined`) preserva o comportamento atual: qualquer
+ * `resultCount > 0` já é considerado suficiente (mesma régua de
+ * `hasAnyRecord`/`resultCount === 0` já usada por `computeCostPerResult`).
+ */
+export function isCostAboveTargetPriority(
+  costPerResult: number | null,
+  targetCostPerResult: number | null,
+  resultCount: number,
+  minReliableResultCount?: number,
+): boolean {
+  if (minReliableResultCount !== undefined && resultCount < minReliableResultCount) return false;
+  const variation = computeVariationFromTarget(costPerResult, targetCostPerResult);
+  if (variation === null) return false;
+  return variation > COST_PRIORITY_DEVIATION_THRESHOLD;
+}
+
 /** Texto pronto da comparação ("25% acima da meta" / "16,7% melhor que a
  * meta" / "Dentro da meta" / null quando não há meta ou custo disponível)
  * — Etapa 71, seção 17, mesmos exemplos do pedido original. */
@@ -174,17 +217,25 @@ export function formatPerformanceComparisonText(
 }
 
 /** Escopo de investimento pra um cálculo de custo por resultado — Etapa 71,
- * seção 15: as funções já nascem preparadas pra `channelScope`, mesmo que
- * hoje só `consolidated` tenha investimento confiável (seção 14: o sistema
- * ainda não separa gasto real por canal). Nunca dividir o investimento
- * consolidado pelos resultados de um único canal — por isso
- * `resolveActualSpendForScope` devolve `null` pra qualquer escopo que não
- * seja `consolidated`, até existir uma fonte real de investimento por
- * canal. */
+ * seção 15: as funções já nasceram preparadas pra `channelScope`. Desde a
+ * Etapa 2/3 (MVP plataformas) já existe uma fonte real de investimento por
+ * canal (`lib/channel-spend.ts`, alimentada por `daily_spend.channel` +
+ * `sprint_channel_spend`) — `channelActualSpend` é esse valor já resolvido
+ * por quem chama. Nunca dividir o investimento consolidado pelos resultados
+ * de um único canal: por isso, mesmo agora, um escopo não-consolidado sem
+ * entrada correspondente em `channelActualSpend` (cliente sem essa
+ * plataforma configurada/sem dado) continua devolvendo `null`, nunca um
+ * fallback pro valor consolidado. */
 export type PerformanceChannelScope = "consolidated" | TrafficChannel;
 
-export function resolveActualSpendForScope(scope: PerformanceChannelScope, consolidatedActualSpend: number): number | null {
-  return scope === "consolidated" ? consolidatedActualSpend : null;
+export function resolveActualSpendForScope(
+  scope: PerformanceChannelScope,
+  consolidatedActualSpend: number,
+  channelActualSpend?: Partial<Record<TrafficChannel, number>>,
+): number | null {
+  if (scope === "consolidated") return consolidatedActualSpend;
+  const value = channelActualSpend?.[scope];
+  return value !== undefined ? value : null;
 }
 
 /** Resumo completo de performance de UM escopo (mês ou sprint, consolidado
@@ -212,11 +263,15 @@ export function computePerformanceSummary(input: {
   resultType: PerformanceGoal;
   consolidatedActualSpend: number;
   targetCostPerResult: number | null;
+  /** Investimento já resolvido por canal (Etapa 2/3) — só relevante quando
+   * `scope` não é `consolidated`; ausente/sem entrada = `null` (nunca usa o
+   * consolidado como fallback). */
+  channelActualSpend?: Partial<Record<TrafficChannel, number>>;
 }): PerformanceSummary {
-  const { scope, records, resultType, consolidatedActualSpend, targetCostPerResult } = input;
+  const { scope, records, resultType, consolidatedActualSpend, targetCostPerResult, channelActualSpend } = input;
   const channel = scope === "consolidated" ? undefined : scope;
   const aggregated = aggregatePerformanceResults(records, resultType, channel);
-  const actualSpend = resolveActualSpendForScope(scope, consolidatedActualSpend);
+  const actualSpend = resolveActualSpendForScope(scope, consolidatedActualSpend, channelActualSpend);
   const costPerResult = computeCostPerResult(actualSpend, aggregated.resultCount, aggregated.hasAnyRecord);
   const costUnavailableReason = getCostPerResultUnavailableReason(actualSpend, aggregated.resultCount, aggregated.hasAnyRecord);
   const comparison = compareCostToTarget(costPerResult, targetCostPerResult);

@@ -254,7 +254,7 @@ export default async function ClientPage({
     supabase
       .from("monthly_budget_changes")
       .select(
-        "id, effective_date, changed_at, previous_amount, new_amount, consolidated_amount, future_amount_distributed, resulting_total, is_below_consolidated, changed_by_profile:team_members!monthly_budget_changes_changed_by_fkey(name)",
+        "id, effective_date, changed_at, previous_amount, new_amount, consolidated_amount, future_amount_distributed, resulting_total, is_below_consolidated, reason, changed_by_profile:team_members!monthly_budget_changes_changed_by_fkey(name)",
       )
       .eq("client_id", id)
       .eq("month", firstDay)
@@ -857,6 +857,7 @@ export default async function ClientPage({
                 manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
                 metaSyncedAt={lastSync?.synced_at ?? null}
                 performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
+                returnTo={returnTo}
               />
             ))
           ) : (
@@ -927,6 +928,7 @@ export default async function ClientPage({
             futureAmountDistributed: change.future_amount_distributed,
             resultingTotal: change.resulting_total,
             isBelowConsolidated: change.is_below_consolidated,
+            reason: change.reason,
           }))}
           closeHref={historyDrawerCloseHref}
         />
