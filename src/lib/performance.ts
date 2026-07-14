@@ -1,4 +1,4 @@
-import type { PerformanceGoal } from "./performance-goals";
+import { PERFORMANCE_GOALS, formatPerformanceResult, type PerformanceGoal } from "./performance-goals";
 import type { TrafficChannel } from "./traffic-channels";
 
 /**
@@ -311,4 +311,38 @@ export function buildEditableChannelValues(
     const match = records.find((r) => r.channel === channel && r.resultType === resultType);
     return { channel, existingCount: match ? match.resultCount : null };
   });
+}
+
+/** Os 3 textos prontos de "Principais KPIs do mês" (Etapa 72) — central pra
+ * nunca duplicar esta lógica entre o card do Acompanhamento da Conta e
+ * qualquer outro lugar que precise do mesmo resumo compacto. Nunca formata
+ * o investimento (esse número já vem pronto de `formatCurrencyValue`
+ * direto no componente — aqui só resultado/custo, que dependem do
+ * objetivo/registro). */
+export interface MonthlyKpiTexts {
+  resultsValue: string;
+  resultsAuxiliary: string | null;
+  costValue: string;
+}
+
+export function deriveMonthlyKpiTexts(
+  performanceGoal: PerformanceGoal | null,
+  summary: PerformanceSummary | null,
+  formatCurrencyValue: (value: number) => string,
+): MonthlyKpiTexts {
+  if (!performanceGoal || !summary) {
+    return { resultsValue: "—", resultsAuxiliary: "Objetivo não configurado", costValue: "—" };
+  }
+  if (!summary.hasAnyRecord) {
+    return { resultsValue: "—", resultsAuxiliary: "Sem dados registrados", costValue: "—" };
+  }
+
+  const resultsValue = formatPerformanceResult(summary.resultCount, performanceGoal);
+  const resultsAuxiliary = summary.resultCount === 0 ? "Nenhum resultado gerado no período" : null;
+  const costValue =
+    summary.costPerResult !== null
+      ? `${PERFORMANCE_GOALS[performanceGoal].costMetricShortLabel} ${formatCurrencyValue(summary.costPerResult)}`
+      : "—";
+
+  return { resultsValue, resultsAuxiliary, costValue };
 }

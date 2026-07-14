@@ -763,6 +763,10 @@ export default async function ClientPage({
         <AccountFollowUpPanel
           monthLabel={monthLabel}
           isCurrentMonth={isCurrentMonth}
+          monthActual={monthActual}
+          performanceGoal={performanceGoal}
+          performanceSummary={monthPerformanceSummary}
+          configureObjectiveHref={`/clients/${client.id}/edit`}
           lastReview={lastReview}
           lastOptimization={lastOptimization}
           tracking={operationalTracking}
@@ -802,17 +806,17 @@ export default async function ClientPage({
         />
       </div>
 
-      {/* 2b. Performance do mês — dimensão nova e SEPARADA do financeiro
-          (Etapa 71): próxima do card de Investimento, nunca fundida com ele. */}
-      <div className="mt-3">
-        <PerformanceSummarySection
-          goal={performanceGoal}
-          targetCostPerResult={targetCostPerResult}
-          summary={monthPerformanceSummary}
-          channelBreakdown={monthPerformanceChannelBreakdown}
-          editHref={`/clients/${client.id}/edit`}
-        />
-      </div>
+      {/* 2b. Performance do mês — só o SECUNDÁRIO (meta/comparação/canal);
+          o resultado principal e o custo por resultado já apareceram em
+          "Principais KPIs do mês", dentro do Acompanhamento da Conta (Etapa
+          72) — nunca duplicados aqui. Retorna `null` quando não há nada
+          secundário a mostrar. */}
+      <PerformanceSummarySection
+        goal={performanceGoal}
+        targetCostPerResult={targetCostPerResult}
+        summary={monthPerformanceSummary}
+        channelBreakdown={monthPerformanceChannelBreakdown}
+      />
 
       {/* 3. Prioridades — posição única e fixa (a promoção condicional pra
           antes do Acompanhamento da Conta em caso de alerta crítico, da
