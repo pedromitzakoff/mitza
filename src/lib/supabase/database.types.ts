@@ -12,6 +12,10 @@ export type CommentableType = "sprint" | "task";
  * aquele é sobre execução da semana. */
 export type ClientContractStatus = "ativo" | "pausado" | "encerrado";
 export type ClientMainObjective = "leads" | "vendas" | "reservas" | "reconhecimento" | "trafego" | "outro";
+/** Objetivo estruturado de performance (Etapa 71) — distinto de `ClientMainObjective`. */
+export type PerformanceGoalDb = "leads" | "sales";
+export type TrafficChannelDb = "meta" | "google" | "tiktok" | "linkedin" | "other";
+export type PerformanceSourceDb = "manual" | "meta" | "google";
 
 /** ISO: 1 = segunda ... 7 = domingo. */
 export type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -270,6 +274,8 @@ export interface Database {
           client_differentials: string | null;
           client_restrictions: string | null;
           important_seasonal_dates: string | null;
+          performance_goal: PerformanceGoalDb | null;
+          target_cost_per_result: number | null;
         };
         Insert: {
           id?: string;
@@ -312,6 +318,8 @@ export interface Database {
           client_differentials?: string | null;
           client_restrictions?: string | null;
           important_seasonal_dates?: string | null;
+          performance_goal?: PerformanceGoalDb | null;
+          target_cost_per_result?: number | null;
         };
         Update: {
           id?: string;
@@ -354,6 +362,8 @@ export interface Database {
           client_differentials?: string | null;
           client_restrictions?: string | null;
           important_seasonal_dates?: string | null;
+          performance_goal?: PerformanceGoalDb | null;
+          target_cost_per_result?: number | null;
         };
         Relationships: [
           {
@@ -447,6 +457,69 @@ export interface Database {
             columns: ["client_id"];
             isOneToOne: false;
             referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      performance_records: {
+        Row: {
+          id: string;
+          client_id: string;
+          sprint_id: string | null;
+          channel: TrafficChannelDb;
+          result_type: PerformanceGoalDb;
+          result_count: number;
+          period_start: string;
+          period_end: string;
+          source: PerformanceSourceDb;
+          source_updated_at: string;
+          created_at: string;
+          updated_at: string;
+          created_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          sprint_id?: string | null;
+          channel: TrafficChannelDb;
+          result_type: PerformanceGoalDb;
+          result_count?: number;
+          period_start: string;
+          period_end: string;
+          source?: PerformanceSourceDb;
+          source_updated_at?: string;
+          created_at?: string;
+          updated_at?: string;
+          created_by?: string | null;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          sprint_id?: string | null;
+          channel?: TrafficChannelDb;
+          result_type?: PerformanceGoalDb;
+          result_count?: number;
+          period_start?: string;
+          period_end?: string;
+          source?: PerformanceSourceDb;
+          source_updated_at?: string;
+          created_at?: string;
+          updated_at?: string;
+          created_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "performance_records_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "performance_records_sprint_id_fkey";
+            columns: ["sprint_id"];
+            isOneToOne: false;
+            referencedRelation: "sprints";
             referencedColumns: ["id"];
           },
         ];

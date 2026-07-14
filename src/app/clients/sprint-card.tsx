@@ -16,9 +16,171 @@ import { CommentThread, type CommentItem } from "./comment-thread";
 import { SprintTaskList } from "./sprint-task-list";
 import type { TaskListItem } from "./task-row";
 import { resetSprintSpendSourceAction, updateSprintActualSpendAction } from "./sprint-actions";
+import { upsertSprintPerformanceResultAction } from "./performance-actions";
 import { MoneyInput } from "./money-input";
 import { SprintFinancialBar } from "./sprint-financial-bar";
 import { AccountReviewsSection, type AccountReviewSummaryItem } from "./account-reviews-section";
+import { getLatestPerformanceUpdateText, type SprintPerformanceView } from "@/lib/performance";
+import { formatPerformanceResult, PERFORMANCE_GOALS } from "@/lib/performance-goals";
+import { TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+
+/** Dados de performance de UMA sprint (Etapa 71) — sempre opcional: quem
+ * ainda não busca `performance_records` (nenhuma tela hoje) simplesmente
+ * não passa a prop e nada de performance aparece, igual ao padrão já
+ * existente de `accountReviews`/`alerts`. */
+export interface SprintPerformanceProps {
+  view: SprintPerformanceView;
+  /** Valor já lançado de cada canal selecionável, pra pré-preencher
+   * "Editar resultados" — vazio quando `view.kind` não é `has_data`/`no_data`
+   * (nada pra editar numa sprint futura). */
+  editableChannels: { channel: TrafficChannel; existingCount: number | null }[];
+}
+
+/** Linha compacta "32 leads · CPL R$ 25" / "Sem dados de performance" /
+ * "Performance ainda não iniciada" / "Objetivo não configurado" — mesmo
+ * texto no resumo recolhido do card e no início da seção expandida, nunca
+ * duas fórmulas diferentes pro mesmo estado. */
+function formatCompactPerformanceText(view: SprintPerformanceView): string {
+  switch (view.kind) {
+    case "not_configured":
+      return "Objetivo não configurado";
+    case "not_started":
+      return "Performance ainda não iniciada";
+    case "no_data":
+      return "Sem dados de performance";
+    case "has_data": {
+      const { goal, summary } = view;
+      const resultText = formatPerformanceResult(summary.resultCount, goal);
+      if (summary.costPerResult === null) return resultText;
+      const config = PERFORMANCE_GOALS[goal];
+      return `${resultText} · ${config.costMetricShortLabel} ${formatCurrency(summary.costPerResult)}`;
+    }
+  }
+}
+
+const PERFORMANCE_STATUS_TEXT_CLASSES: Record<string, string> = {
+  better: "text-green-600 dark:text-green-400",
+  worse: "text-red-600 dark:text-red-400",
+};
+
+/**
+ * Seção "Performance da sprint" (Etapa 71, seção 26) — Resultado / Custo por
+ * resultado / Meta / Comparação / Fonte / Última atualização, nunca um
+ * campo de CPL/CPA editável (sempre derivado). "Editar resultados" é
+ * sempre por canal fixo (nunca um <select>, pra funcionar sem JS, mesmo
+ * padrão checkbox-toggle já usado no gasto real acima) — um canal só
+ * (Meta ou Google) ainda grava a dimensão de canal normalmente.
+ */
+function SprintPerformanceSection({
+  performance,
+  sprintId,
+  clientId,
+  isAdmin,
+}: {
+  performance: SprintPerformanceProps;
+  sprintId: string;
+  clientId: string;
+  isAdmin: boolean;
+}) {
+  const { view, editableChannels } = performance;
+  const compactText = formatCompactPerformanceText(view);
+  const canEdit = isAdmin && (view.kind === "has_data" || view.kind === "no_data");
+  const editToggleId = `edit-performance-${sprintId}`;
+
+  return (
+    <div className="mt-3 border-t border-border pt-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Performance da sprint</p>
+
+      {view.kind !== "has_data" ? (
+        <p className="mt-0.5 text-sm text-muted-foreground">{compactText}</p>
+      ) : (
+        (() => {
+          const { goal, summary } = view;
+          const config = PERFORMANCE_GOALS[goal];
+          const comparisonText =
+            summary.comparison.status === "not_available"
+              ? null
+              : summary.comparison.status === "on_target"
+                ? "Dentro da meta"
+                : `${Math.round(Math.abs((summary.comparison.variation ?? 0) * 100))}% ${summary.comparison.status === "worse" ? "acima da meta" : "melhor que a meta"}`;
+          return (
+            <div className="mt-0.5 flex flex-wrap items-baseline gap-x-4 gap-y-0.5">
+              <p className="text-sm font-semibold text-foreground">{formatPerformanceResult(summary.resultCount, goal)}</p>
+              <p className="text-sm text-foreground">
+                {config.costMetricShortLabel}{" "}
+                <span className="font-semibold">
+                  {summary.costPerResult !== null ? formatCurrency(summary.costPerResult) : "—"}
+                </span>
+              </p>
+              {summary.targetCostPerResult !== null && (
+                <p className="text-[11px] text-muted-foreground">
+                  Meta {config.costMetricShortLabel} {formatCurrency(summary.targetCostPerResult)}
+                </p>
+              )}
+              {comparisonText && (
+                <p className={`text-[11px] font-medium ${PERFORMANCE_STATUS_TEXT_CLASSES[summary.comparison.status] ?? "text-muted-foreground"}`}>
+                  {comparisonText}
+                </p>
+              )}
+              {summary.costUnavailableReason === "zero_results" && (
+                <p className="text-[11px] text-muted-foreground">Nenhum resultado gerado no período.</p>
+              )}
+            </div>
+          );
+        })()
+      )}
+
+      {view.kind === "has_data" && (
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          {getLatestPerformanceUpdateText(view.summary.latestSource, view.summary.latestUpdatedAt, formatShortDateTime)}
+        </p>
+      )}
+
+      {canEdit && editableChannels.length > 0 && (
+        <>
+          <input type="checkbox" id={editToggleId} className="peer hidden" />
+          <label
+            htmlFor={editToggleId}
+            className="mt-1 inline-block cursor-pointer text-[11px] font-medium text-brand hover:underline peer-checked:hidden"
+          >
+            Editar resultados
+          </label>
+
+          <div className="mt-1.5 hidden flex-col gap-1.5 peer-checked:flex">
+            {editableChannels.map(({ channel, existingCount }) => (
+              <form
+                key={channel}
+                action={upsertSprintPerformanceResultAction.bind(null, sprintId, clientId)}
+                className="flex flex-wrap items-center gap-1.5"
+              >
+                <input type="hidden" name="channel" value={channel} />
+                <span className="w-14 shrink-0 text-[11px] text-muted-foreground">{TRAFFIC_CHANNELS[channel].shortLabel}</span>
+                <input
+                  type="number"
+                  name="result_count"
+                  min={0}
+                  step={1}
+                  defaultValue={existingCount ?? ""}
+                  placeholder="0"
+                  className="w-20 rounded-md border border-border bg-transparent px-2 py-1 text-[11px] text-foreground outline-none focus:border-brand"
+                />
+                <button
+                  type="submit"
+                  className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                >
+                  Salvar
+                </button>
+              </form>
+            ))}
+            <label htmlFor={editToggleId} className="cursor-pointer self-start text-[11px] text-muted-foreground hover:underline">
+              Cancelar
+            </label>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 const TEMPORAL_LABEL = {
   futura: "Futura",
@@ -89,6 +251,7 @@ export function SprintCardBody({
   finalRecommendedAmount,
   manualSpendUpdatedAt,
   metaSyncedAt,
+  performance,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -138,6 +301,9 @@ export function SprintCardBody({
   /** Último `daily_spend.synced_at` do cliente inteiro — mesma distinção
    * `undefined`/`null` de `manualSpendUpdatedAt` acima. */
   metaSyncedAt?: string | null;
+  /** Dados de performance desta sprint (Etapa 71) — opcional, mesmo padrão
+   * de `accountReviews`/`alerts`. */
+  performance?: SprintPerformanceProps;
 }) {
   const isCurrent = sprint.temporalStatus === "atual";
   const isConcluded = sprint.temporalStatus === "concluida";
@@ -363,6 +529,15 @@ export function SprintCardBody({
           </div>
         </div>
 
+        {performance && (
+          <SprintPerformanceSection
+            performance={performance}
+            sprintId={sprint.sprintId}
+            clientId={clientId}
+            isAdmin={isAdmin}
+          />
+        )}
+
         {topAlert && (
           <details className="group/alerts mt-3">
             <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
@@ -474,6 +649,7 @@ export function SprintCard({
   finalRecommendedAmount,
   manualSpendUpdatedAt,
   metaSyncedAt,
+  performance,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -496,6 +672,7 @@ export function SprintCard({
   finalRecommendedAmount: number | null;
   manualSpendUpdatedAt?: string | null;
   metaSyncedAt?: string | null;
+  performance?: SprintPerformanceProps;
 }) {
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
   const isCurrent = sprint.temporalStatus === "atual";
@@ -549,6 +726,9 @@ export function SprintCard({
               {accountReviews.length} {accountReviews.length === 1 ? "análise" : "análises"}
             </span>
           )}
+          {performance && performance.view.kind !== "not_configured" && (
+            <span className="hidden tabular-nums lg:inline">{formatCompactPerformanceText(performance.view)}</span>
+          )}
           <span
             className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[sprint.status]}`}
           >
@@ -583,6 +763,7 @@ export function SprintCard({
         finalRecommendedAmount={finalRecommendedAmount}
         manualSpendUpdatedAt={manualSpendUpdatedAt}
         metaSyncedAt={metaSyncedAt}
+        performance={performance}
       />
     </details>
   );

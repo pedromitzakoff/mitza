@@ -7,7 +7,7 @@ import { requireAdmin } from "@/lib/auth";
 import { normalizeCnpj } from "@/lib/cnpj";
 import { OperationalEventType } from "@/lib/operational-events";
 import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
-import type { ClientContractStatus, ClientMainObjective } from "@/lib/supabase/database.types";
+import type { ClientContractStatus, ClientMainObjective, PerformanceGoalDb } from "@/lib/supabase/database.types";
 
 function optionalText(formData: FormData, name: string): string | null {
   const value = String(formData.get(name) ?? "").trim();
@@ -68,6 +68,8 @@ function readStructuralFields(formData: FormData) {
     client_differentials: optionalText(formData, "client_differentials"),
     client_restrictions: optionalText(formData, "client_restrictions"),
     important_seasonal_dates: optionalText(formData, "important_seasonal_dates"),
+    performance_goal: optionalText(formData, "performance_goal") as PerformanceGoalDb | null,
+    target_cost_per_result: optionalNumber(formData, "target_cost_per_result"),
   };
 }
 
@@ -87,6 +89,14 @@ function appendSaved(url: string): string {
 export async function createClientAction(formData: FormData) {
   const profile = await requireAdmin();
   const { name, meta_ad_account_id, managerIds, ...structural } = readClientFields(formData);
+
+  // Objetivo de performance é obrigatório só na CRIAÇÃO (Etapa 71, seção 2)
+  // — clientes já existentes continuam podendo ficar sem objetivo
+  // configurado, então esta validação nunca entra em updateClientAction.
+  if (!structural.performance_goal) {
+    redirect(`/clients/new?error=${encodeURIComponent("Selecione o objetivo principal de performance")}`);
+  }
+
   const supabase = await createSupabaseClient();
 
   const { data: client, error } = await supabase

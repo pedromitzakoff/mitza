@@ -32,10 +32,30 @@ import {
   type OperationalActivityStatus,
 } from "@/lib/operational-activity";
 import type { TaskListItem } from "@/app/clients/task-row";
+import {
+  aggregatePerformanceResults,
+  buildEditableChannelValues,
+  buildSprintPerformanceView,
+  computePerformanceSummary,
+  type PerformanceRecordRow,
+  type PerformanceSummary,
+  type SprintPerformanceView,
+} from "@/lib/performance";
+import type { PerformanceGoal } from "@/lib/performance-goals";
+import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+import type { SprintPerformanceProps } from "@/app/clients/sprint-card";
 
 const OPTIMIZATION_LOOKBACK_DAYS = 14;
 
 export type SprintFilterBucket = "atrasadas" | "sem_execucao" | "em_dia" | "sem_sprint";
+
+/** Linha crua de `performance_records`, com o `sprintId` que
+ * `PerformanceRecordRow` (lib/performance.ts) não carrega — necessário aqui
+ * só pra filtrar os registros de CADA sprint antes de agregar; o resto dos
+ * campos é repassado como está pras funções centrais puras. */
+export interface PerformanceRecordRawRow extends PerformanceRecordRow {
+  sprintId: string | null;
+}
 
 export type OperationTaskItem = TaskListItem & { sprint_id: string | null; notes: string | null };
 
@@ -77,6 +97,16 @@ export interface OperationClientRawData {
    * recomendação histórica registrada" até a próxima leitura que já tenha
    * feito o congelamento (ex.: visitar a página do cliente). */
   sprintClosedSnapshots?: Map<string, SprintClosedSnapshot>;
+  /** Objetivo de performance do cliente (Etapa 71) — `null` = ainda não
+   * configurado (nunca inventado). Dimensão nova, complementar ao
+   * financeiro; nunca lida por nenhum cálculo acima. */
+  performanceGoal?: PerformanceGoal | null;
+  targetCostPerResult?: number | null;
+  /** Registros de `performance_records` já buscados pra TODAS as sprints do
+   * mês (mesmo padrão batch de `dailySpend`/`tasks` — nunca uma query por
+   * cliente). Vazio (padrão) = ninguém buscou ainda, equivalente a "sem
+   * dados" pra quem não passar esta prop. */
+  performanceRecords?: PerformanceRecordRawRow[];
 }
 
 export interface OperationClientCard {
@@ -151,6 +181,34 @@ export interface OperationClientCard {
    * mostra em "Última execução da sprint" — null se não há sprint atual.
    * Só faz sentido pra sprint atual (quem renderiza decide isso). */
   sprintExecutionLabel: string | null;
+  /** Dimensão de PERFORMANCE (Etapa 71) — sempre derivada de
+   * `performanceRecords` + `monthActual`/`sprint.actualSpend` já calculados
+   * acima; nunca uma segunda fonte de investimento. */
+  performanceGoal: PerformanceGoal | null;
+  targetCostPerResult: number | null;
+  /** Resumo consolidado do mês inteiro — `null` só quando `performanceGoal`
+   * também é `null` (sem objetivo configurado, nada a resumir). */
+  monthPerformanceSummary: PerformanceSummary | null;
+  /** Resultado por canal do mês, só os que têm pelo menos 1 registro —
+   * quem renderiza decide mostrar (e só mostra se houver mais de 1). */
+  monthPerformanceChannelBreakdown: { channel: TrafficChannel; resultCount: number }[];
+  /** Estado de performance de cada sprint do mês, por sprintId — mesmo
+   * padrão de `monthSprintOriginalPlans`/`monthSprintFinalRecommendations`. */
+  sprintPerformanceViews: Record<string, SprintPerformanceView>;
+  /** Valores já lançados por canal de cada sprint, por sprintId — pré-
+   * preenche "Editar resultados" sem recalcular na tela. */
+  sprintPerformanceEditableChannels: Record<string, { channel: TrafficChannel; existingCount: number | null }[]>;
+}
+
+/** Monta a prop pronta pra `SprintCard`/`SprintCardBody` a partir de um
+ * `OperationClientCard` já construído — único lugar que sabe como juntar
+ * `sprintPerformanceViews`/`sprintPerformanceEditableChannels` num único
+ * objeto `SprintPerformanceProps`, pra nenhuma tela duplicar essa junção. */
+export function buildSprintPerformanceProps(card: OperationClientCard, sprintId: string): SprintPerformanceProps {
+  return {
+    view: card.sprintPerformanceViews[sprintId] ?? { kind: "not_configured" },
+    editableChannels: card.sprintPerformanceEditableChannels[sprintId] ?? [],
+  };
 }
 
 /** Monta o card operacional de um cliente a partir dos dados já buscados
@@ -244,6 +302,47 @@ export function buildOperationClientCard(
   const monthSprintTasks: Record<string, OperationTaskItem[]> = {};
   for (const row of monthSprintRows) {
     monthSprintTasks[row.id] = client.tasks.filter((t) => t.sprint_id === row.id);
+  }
+
+  // Etapa 71 — camada de PERFORMANCE: consome `monthActual`/`sprint.actualSpend`
+  // já calculados acima (nunca uma segunda fonte de investimento). Registros
+  // já vêm todos escopados às sprints do mês (query do chamador), então o
+  // consolidado mensal é sempre a soma direta deles — nunca um lançamento
+  // manual mensal independente (evita contagem dupla, ver migration).
+  const performanceGoal = client.performanceGoal ?? null;
+  const targetCostPerResult = client.targetCostPerResult ?? null;
+  const performanceRecords = client.performanceRecords ?? [];
+  const monthPerformanceSummary: PerformanceSummary | null = performanceGoal
+    ? computePerformanceSummary({
+        scope: "consolidated",
+        records: performanceRecords,
+        resultType: performanceGoal,
+        consolidatedActualSpend: monthActual,
+        targetCostPerResult,
+      })
+    : null;
+  const monthPerformanceChannelBreakdown: { channel: TrafficChannel; resultCount: number }[] = performanceGoal
+    ? AVAILABLE_TRAFFIC_CHANNELS.map((channel) => ({
+        channel,
+        resultCount: aggregatePerformanceResults(performanceRecords, performanceGoal, channel).resultCount,
+      })).filter((entry) => entry.resultCount > 0)
+    : [];
+  const sprintPerformanceViews: Record<string, SprintPerformanceView> = {};
+  const sprintPerformanceEditableChannels: Record<string, { channel: TrafficChannel; existingCount: number | null }[]> = {};
+  for (const row of monthSprintRows) {
+    const sprintRecords = performanceRecords.filter((r) => r.sprintId === row.id);
+    const sprintFinancial = monthSprints.find((s) => s.sprintId === row.id);
+    const sprintActualSpend = sprintFinancial?.actualSpend ?? 0;
+    sprintPerformanceViews[row.id] = buildSprintPerformanceView({
+      performanceGoal,
+      isFuture: sprintFinancial?.temporalStatus === "futura",
+      records: sprintRecords,
+      actualSpend: sprintActualSpend,
+      targetCostPerResult,
+    });
+    sprintPerformanceEditableChannels[row.id] = performanceGoal
+      ? buildEditableChannelValues(sprintRecords, performanceGoal, AVAILABLE_TRAFFIC_CHANNELS)
+      : [];
   }
 
   const taskCounts = { total: 0, done: 0, pending: 0, overdue: 0 };
@@ -359,5 +458,11 @@ export function buildOperationClientCard(
     monthSprintTasks,
     sprintExecutionLabel,
     monthTasks,
+    performanceGoal,
+    targetCostPerResult,
+    monthPerformanceSummary,
+    monthPerformanceChannelBreakdown,
+    sprintPerformanceViews,
+    sprintPerformanceEditableChannels,
   };
 }

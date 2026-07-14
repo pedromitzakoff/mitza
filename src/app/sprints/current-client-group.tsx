@@ -1,4 +1,4 @@
-import type { OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
+import { buildSprintPerformanceProps, type OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
 import type { CommentItem } from "@/app/clients/comment-thread";
 import { SprintCardBody } from "@/app/clients/sprint-card";
 import { resolveSprintPeriodSummary } from "@/lib/financial-period";
@@ -71,6 +71,7 @@ export function SprintCurrentClientGroup({
         originalPlannedAmount={card.monthSprintOriginalPlans[card.sprint.sprintId] ?? 0}
         finalRecommendedAmount={card.monthSprintFinalRecommendations[card.sprint.sprintId] ?? null}
         metaSyncedAt={card.lastSyncedAt}
+        performance={buildSprintPerformanceProps(card, card.sprint.sprintId)}
       />
     </details>
   );
