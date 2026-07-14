@@ -19,7 +19,6 @@ import {
 import type { AccountHealth } from "@/lib/attention-alerts";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import { formatLastOptimizationLabel } from "@/lib/monthly-reports";
 import { computeFinancialSummary, computeManagerSummary, computeSpendRhythmCounts } from "@/lib/agency-metrics";
 import { buildClientPriorityQueue, sortCardsByPriority } from "@/lib/client-priority";
 import type { PerformanceChannelScope } from "@/lib/performance";
@@ -28,13 +27,12 @@ import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
 import { PrioritiesDrawer, PrioritiesPanel } from "./priorities-panel";
 import { OperationMetric } from "./operation-metric";
 import { PrimaryInvestmentMetric, SecondaryInvestmentMetric } from "./investment-metric";
+import { ClientObjectiveTable, ClientObjectiveTablesEmptyState, PLATFORM_LABEL } from "./client-objective-table";
 import { Button, IconButton } from "@/components/workspace/button";
 import { ProgressBar } from "@/components/workspace/progress-bar";
 import { PageHeader } from "@/components/workspace/page-header";
 import { SectionHeader } from "@/components/workspace/section-header";
-import { EmptyState } from "@/components/workspace/empty-state";
-import { StatusDot, type StatusTone } from "@/components/workspace/status-dot";
-import { formatPerformanceResult } from "@/lib/performance-goals";
+import type { StatusTone } from "@/components/workspace/status-dot";
 import type { TrafficChannelDb } from "@/lib/supabase/database.types";
 import type { SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 
@@ -44,33 +42,6 @@ import type { SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
  * essa fonte. O `body` global continua com o font-family de sempre.
  */
 const inter = Inter({ subsets: ["latin"], variable: "--font-overview" });
-
-/** Rótulos da "situação" financeira do mês — mesma classificação de sempre
- * (card.monthStatus, SPEND_STATUS_MARGIN central, ±20%). */
-const SITUATION_LABEL: Record<SpendStatus, string> = {
-  dentro: "Dentro",
-  acima: "Acima",
-  abaixo: "Abaixo",
-  sem_meta: "Sem planejamento",
-  nao_iniciado: "Ainda não iniciada",
-  em_andamento: "Em andamento",
-};
-
-/** Rótulo de exibição do filtro de plataforma (Etapa 3). */
-const PLATFORM_LABEL: Record<"consolidado" | "meta" | "google", string> = {
-  consolidado: "Consolidado",
-  meta: "Meta",
-  google: "Google",
-};
-
-const SITUATION_TONE: Record<SpendStatus, StatusTone> = {
-  dentro: "success",
-  acima: "danger",
-  abaixo: "warning",
-  sem_meta: "neutral",
-  nao_iniciado: "neutral",
-  em_andamento: "neutral",
-};
 
 type ManagerFilter = "all" | "me" | string;
 /** "fora_do_ritmo" é só um atalho de drill-down (abaixo + acima combinados)
@@ -787,134 +758,49 @@ export default async function Home({
           />
         )}
 
-        {/* Tabela única de clientes (Etapa 49) — coluna "Prioridade" removida
-            por duplicar "Status" sem contexto adicional (a classificação
-            detalhada de severidade continua em "Prioridades de hoje", que já
-            tinha sua própria fonte de verdade — MVP "Reformular Prioridades",
-            `buildClientPriorityQueue` — "Saúde da operação" foi removida, ver
-            "Indicadores da operação" acima, que não usa mais accountHealth).
-            "Esperado até hoje" usa a mesma base (`monthExpectedToDate`) que
-            já decide "Status" (classifySpendStatus) — nunca um cálculo
-            paralelo. Ordenação padrão ("Ordenar por prioridade") continua
-            reaproveitando `sortCardsByPriority` por baixo, mesmo sem mais
-            exibir a severidade em coluna própria. */}
-        <div className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
-          <div className="flex items-center justify-between px-3.5 py-2.5">
-            <SectionHeader
-              title={`Clientes · ${monthLabel}${platformFilter !== "consolidado" ? ` · ${PLATFORM_LABEL[platformFilter]}` : ""}`}
-            />
-            <div className="flex items-center gap-3 text-xs">
-              <span className="text-overview-text-muted">{sortedCards.length} cliente{sortedCards.length !== 1 ? "s" : ""}</span>
-              <Button href={buildUrl({ sort: sort === "nome" ? "prioridade" : "nome" })} variant="ghost" size="sm">
-                Ordenar por {sort === "nome" ? "prioridade" : "nome"}
-              </Button>
-            </div>
-          </div>
-
-          {sortedCards.length > 0 ? (
-            <div className="overflow-x-auto border-t border-overview-border">
-              <table className="w-full min-w-[960px] text-sm">
-                <thead>
-                  <tr className="border-b border-overview-border bg-overview-surface-subtle text-left text-[12px] font-semibold text-overview-text-secondary">
-                    <th className="py-2 px-3.5 font-semibold">Cliente</th>
-                    <th className="py-2 px-3.5 font-semibold">Gestor</th>
-                    <th className="py-2 px-3.5 text-right font-semibold">Investimento</th>
-                    <th className="py-2 px-3.5 text-right font-semibold">Esperado até hoje</th>
-                    <th className="py-2 px-3.5 font-semibold">Sprint atual</th>
-                    <th className="py-2 px-3.5 font-semibold">Status</th>
-                    <th className="py-2 px-3.5 font-semibold">Resultados</th>
-                    <th className="py-2 px-3.5 text-right font-semibold">Custo por resultado</th>
-                    <th className="py-2 px-3.5 font-semibold">Última otimização</th>
-                    <th className="py-2 px-3.5 text-right font-semibold">Abrir cliente</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedCards.map((card) => {
-                    const isConsolidado = platformFilter === "consolidado";
-                    // Mesma regra usada pra classificar o status
-                    // (classifySpendStatus, ±20% sobre `monthExpectedToDate`)
-                    // — "Esperado até hoje" é só esse valor expresso como %
-                    // do planejado, nunca um cálculo paralelo. Etapa 3: só
-                    // existe no Consolidado (sem orçamento por canal).
-                    const pctRealizado =
-                      card.monthPlanned > 0 ? Math.round((card.monthActual / card.monthPlanned) * 100) : null;
-                    const pctEsperado =
-                      card.monthPlanned > 0 ? Math.round((card.monthExpectedToDate / card.monthPlanned) * 100) : null;
-                    // Etapa 3: fora do Consolidado, "Investimento" mostra o
-                    // realizado REAL daquela plataforma (moeda), não mais o
-                    // % do orçamento (que não existe por canal).
-                    const investmentCellText = isConsolidado
-                      ? pctRealizado !== null
-                        ? `${pctRealizado}%`
-                        : "—"
-                      : formatCurrency(card.monthActualByChannel[platformFilter] ?? 0);
-                    // Etapa 71/3: nunca "0 leads"/"0 vendas" fabricado — só
-                    // quando `hasAnyRecord` é true (registro real existe,
-                    // mesmo que com contagem 0 — ver PerformanceSummary).
-                    // Fora do Consolidado, o resumo vem do investimento REAL
-                    // daquele canal (`monthPerformanceSummaryByChannel`),
-                    // nunca do consolidado dividido pelos resultados de um
-                    // canal só.
-                    const performanceSummary = isConsolidado
-                      ? card.monthPerformanceSummary
-                      : (card.monthPerformanceSummaryByChannel[platformFilter] ?? null);
-                    const performanceResultsText =
-                      card.performanceGoal && performanceSummary?.hasAnyRecord
-                        ? formatPerformanceResult(performanceSummary.resultCount, card.performanceGoal)
-                        : "—";
-                    const performanceCostText =
-                      card.performanceGoal && performanceSummary?.costPerResult !== null && performanceSummary?.costPerResult !== undefined
-                        ? formatCurrency(performanceSummary.costPerResult)
-                        : "—";
-                    return (
-                      <tr
-                        key={card.clientId}
-                        className="border-b border-overview-border/70 transition-colors duration-150 last:border-0 hover:bg-overview-surface-hover"
-                      >
-                        <td className="py-2.5 px-3.5 font-semibold text-overview-text-primary">{card.clientName}</td>
-                        <td className="py-2.5 px-3.5 text-overview-text-secondary">
-                          {primaryManagerNameByClient.get(card.clientId) ?? "Sem gestor"}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">
-                          {investmentCellText}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">
-                          {isConsolidado ? (pctEsperado !== null ? `${pctEsperado}%` : "—") : "—"}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-overview-text-secondary">
-                          {card.sprintPeriodLabel ?? "—"}
-                        </td>
-                        <td className="py-2.5 px-3.5">
-                          {isConsolidado ? (
-                            <StatusDot tone={SITUATION_TONE[card.monthStatus]} label={SITUATION_LABEL[card.monthStatus]} />
-                          ) : (
-                            <span className="text-overview-text-muted">—</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-overview-text-secondary">{performanceResultsText}</td>
-                        <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">
-                          {performanceCostText}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-overview-text-secondary">
-                          {formatLastOptimizationLabel(card.lastOptimizationAt, today)}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-right">
-                          <Button href={`/clients/${card.clientId}`} variant="ghost" size="sm">
-                            Abrir cliente
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="border-t border-overview-border">
-              <EmptyState title="Nenhum cliente encontrado com esses filtros." description="Ajuste os filtros acima ou limpe-os para ver todos os clientes monitorados." />
-            </div>
-          )}
+        {/* MVP "Reformular a tabela de clientes": a tabela única (Etapa 49)
+            vira 2 tabelas por objetivo da conta — "Clientes de leads" e
+            "Clientes de vendas", mesmo componente parametrizado
+            (`ClientObjectiveTable`), cada uma só aparece se tiver cliente.
+            Um 3º grupo (sem objetivo configurado) preserva clientes legados
+            sem `performance_goal` — nenhum cliente do recorte pode sumir da
+            tela. A ordenação ("Ordenar por prioridade"/nome) é uma única
+            control acima das 3 tabelas — ordena `sortedCards` inteiro antes
+            de dividir por objetivo, nunca uma ordem própria por tabela. */}
+        <div className="mt-3 flex items-center justify-between px-0.5">
+          <span className="text-xs text-overview-text-muted">
+            {sortedCards.length} cliente{sortedCards.length !== 1 ? "s" : ""} no recorte
+            {platformFilter !== "consolidado" ? ` · ${PLATFORM_LABEL[platformFilter]}` : ""}
+          </span>
+          <Button href={buildUrl({ sort: sort === "nome" ? "prioridade" : "nome" })} variant="ghost" size="sm">
+            Ordenar por {sort === "nome" ? "prioridade" : "nome"}
+          </Button>
         </div>
+
+        {sortedCards.length > 0 ? (
+          <>
+            <ClientObjectiveTable
+              cards={sortedCards.filter((c) => c.performanceGoal === "leads")}
+              objective="leads"
+              platformFilter={platformFilter}
+              primaryManagerNameByClient={primaryManagerNameByClient}
+            />
+            <ClientObjectiveTable
+              cards={sortedCards.filter((c) => c.performanceGoal === "sales")}
+              objective="sales"
+              platformFilter={platformFilter}
+              primaryManagerNameByClient={primaryManagerNameByClient}
+            />
+            <ClientObjectiveTable
+              cards={sortedCards.filter((c) => !c.performanceGoal)}
+              objective={null}
+              platformFilter={platformFilter}
+              primaryManagerNameByClient={primaryManagerNameByClient}
+            />
+          </>
+        ) : (
+          <ClientObjectiveTablesEmptyState />
+        )}
 
         {/* Análises secundárias — fora do primeiro viewport de propósito */}
         <details className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface [&_summary]:cursor-pointer [&_summary]:list-none">
