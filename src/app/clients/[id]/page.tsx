@@ -294,6 +294,11 @@ export default async function ClientPage({
   const sortedSprints = [...sprintFinancials].sort((a, b) => a.startDate.localeCompare(b.startDate));
 
   const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate({ firstDay, lastDay }, todayStr);
+  // Etapa 64: mês selecionado ainda não começou — usado só pra escolher o
+  // texto da seção "Investimento do mês" (nunca uma segunda comparação de
+  // datas: "não é o mês corrente" + "não está encerrado" já implica futuro,
+  // dado que todo mês é ou passado, ou corrente, ou futuro).
+  const isFutureMonth = !isCurrentMonth && !isClosedMonth;
   const budgetSprints = sprintFinancials.map((sprint) => ({
     sprintId: sprint.sprintId,
     startDate: sprint.startDate,
@@ -680,6 +685,7 @@ export default async function ClientPage({
           effectiveDate={effectiveDate}
           isAdmin={isAdmin}
           isClosedMonth={isClosedMonth}
+          isFutureMonth={isFutureMonth}
           lastChange={lastChange}
           historyHref={historyDrawerHref}
         />
