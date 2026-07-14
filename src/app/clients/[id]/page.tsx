@@ -19,7 +19,7 @@ import { classifySpendStatus } from "@/lib/spend-status";
 import { buildAttentionAlerts } from "@/lib/attention-alerts";
 import { buildSprintExecutionAlert, formatSprintExecutionLabel } from "@/lib/sprint-execution";
 import { businessDaysSince } from "@/lib/business-days";
-import { resolveBudgetEffectiveDate } from "@/lib/monthly-budget";
+import { resolveBudgetEffectiveDate, resolveMonthlyBudget, computeMonthlyBudgetPlan } from "@/lib/monthly-budget";
 import { todayDateString, todayUTC } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
 import { computeOperationalTracking, computeMonthlyOccurrenceSummary } from "@/lib/operational-tracking";
@@ -281,11 +281,17 @@ export default async function ClientPage({
     list.push({ date: row.date, amount: row.amount });
     plannedAllocationsBySprintId.set(row.sprintId, list);
   }
-  // Soma direta das alocações diárias no intervalo do mês — desde a
-  // correção da Etapa 50, nenhuma sprint atravessa mais a fronteira do mês,
-  // então toda sprint pertence a exatamente um mês; ainda assim a soma por
-  // interseção de data é a fonte única (mesma usada na Visão Geral/Sprints).
-  const monthPlanned = sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay });
+  // Etapa 66: orçamento mensal VIGENTE — sempre o valor mais recente
+  // configurado (`monthly_budget_changes.new_amount`), nunca a soma dos
+  // planejamentos diários persistidos (que diverge do vigente assim que o
+  // planejado histórico não bate com o realizado histórico — a regra, não a
+  // exceção). `sumPlannedForMonth` só entra como fallback pra cliente que
+  // nunca passou pelo editor de orçamento (sem nenhuma linha em
+  // monthly_budget_changes ainda).
+  const monthPlanned = resolveMonthlyBudget(
+    (budgetChanges ?? []).map((c) => ({ newAmount: c.new_amount, changedAt: c.changed_at })),
+    sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay }),
+  );
   const monthActual = sumActualSpendForMonth(sprints ?? [], { firstDay, lastDay }, dailySpend ?? []);
   const monthExpectedToDate = sumExpectedToDateForMonth(monthPlannedAllocationRows, { firstDay, lastDay }, today);
   // Ritmo do mês: realizado x esperado até hoje, nunca x 100% do planejado
@@ -308,15 +314,20 @@ export default async function ClientPage({
     sprintId: sprint.sprintId,
     startDate: sprint.startDate,
     endDate: sprint.endDate,
-    spendSource: sprint.spendSource,
-    // actualSpend já É o manual_actual_spend quando spendSource === "manual"
-    // (resolveSprintActualSpend) — nunca precisa buscar esse campo de novo.
-    manualActualSpend: sprint.spendSource === "manual" ? sprint.actualSpend : null,
   }));
-  const currentAllocations = (plannedAllocations ?? []).map((row) => ({
-    date: row.date,
-    amount: row.planned_amount,
-  }));
+  // Etapa 66: única fonte de "quanto ainda pode ser investido este mês" e de
+  // como isso se divide entre a sprint atual e as futuras — nunca mais lida
+  // de `sprint_planned_allocations`. `null` só quando o mês está encerrado
+  // (não existe "planejamento restante" pra um mês que já passou).
+  const monthPlan = effectiveDate
+    ? computeMonthlyBudgetPlan({
+        monthlyBudget: monthPlanned,
+        monthActual,
+        monthRange: { firstDay, lastDay },
+        effectiveDate,
+        sprints: budgetSprints,
+      })
+    : null;
   const lastBudgetChange = (budgetChanges ?? [])[0] ?? null;
   const lastChange = lastBudgetChange
     ? {
@@ -684,8 +695,6 @@ export default async function ClientPage({
           monthParam={monthParam}
           monthLabel={monthLabel}
           sprints={budgetSprints}
-          currentAllocations={currentAllocations}
-          dailySpend={dailySpend ?? []}
           monthRange={{ firstDay, lastDay }}
           effectiveDate={effectiveDate}
           isAdmin={isAdmin}
@@ -738,6 +747,8 @@ export default async function ClientPage({
                 accountReviews={accountReviewsBySprintId.get(sprint.sprintId) ?? []}
                 newReviewHref={withParam(returnTo, "review=new")}
                 buildReviewDetailHref={buildReviewDetailHref}
+                remainingPlanned={monthPlan?.sprintPlans.get(sprint.sprintId)?.remainingPlanned ?? 0}
+                eligibleDaysCount={monthPlan?.sprintPlans.get(sprint.sprintId)?.eligibleDaysCount ?? 0}
                 plannedAllocations={plannedAllocationsBySprintId.get(sprint.sprintId) ?? []}
                 manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
                 metaSyncedAt={lastSync?.synced_at ?? null}

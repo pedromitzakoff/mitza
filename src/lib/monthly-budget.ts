@@ -1,5 +1,3 @@
-import { sumActualSpendForMonth, type SpendSource } from "./sprint-financials";
-
 function parseDateUTC(value: string): Date {
   return new Date(`${value}T00:00:00Z`);
 }
@@ -8,10 +6,7 @@ function toDateString(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** Todos os dias (YYYY-MM-DD) entre `firstDay` e `lastDay`, inclusive —
- * pública desde a Etapa 64, que precisa enumerar todos os dias do mês pra
- * calcular o investimento diário recomendado (seção 4), sem duplicar este
- * loop de datas. */
+/** Todos os dias (YYYY-MM-DD) entre `firstDay` e `lastDay`, inclusive. */
 export function listDatesInclusive(firstDay: string, lastDay: string): string[] {
   const start = parseDateUTC(firstDay);
   const end = parseDateUTC(lastDay);
@@ -23,8 +18,7 @@ export function listDatesInclusive(firstDay: string, lastDay: string): string[] 
 }
 
 /** Distribui um total (em centavos) igualmente entre `count` posições,
- * jogando a sobra do arredondamento na última — mesma convenção usada em
- * spend-chart-data.ts pro gasto manual, aqui reaplicada pro planejado. */
+ * jogando a sobra do arredondamento na última posição. */
 function distributeCentsEqually(totalCents: number, count: number): number[] {
   if (count <= 0) return [];
   const baseCents = Math.floor(totalCents / count);
@@ -34,101 +28,13 @@ function distributeCentsEqually(totalCents: number, count: number): number[] {
   );
 }
 
-export interface MonthlyBudgetSprintInput {
-  sprintId: string;
-  startDate: string;
-  endDate: string;
-  /** Necessários pra calcular o gasto REAL (não planejado) já realizado
-   * antes da effective_date — ver `computeMonthlyBudgetRedistribution`. */
-  spendSource: SpendSource;
-  manualActualSpend: number | null;
-}
-
-export type MonthlyBudgetScenario = "aumento" | "reducao_normal" | "reducao_abaixo_consolidado";
-
-export interface MonthlyBudgetRedistributionInput {
-  /** Todas as sprints do cliente que caem no mês em questão, ordenadas por start_date. */
-  sprints: MonthlyBudgetSprintInput[];
-  /** Alocação diária PLANEJADA vigente (R$) pra cada dia do mês — vem do
-   * backfill ou de uma alteração anterior. Usada só pra copiar o histórico de
-   * planejamento inalterado e para as prévias por sprint; nunca mais usada
-   * pra decidir quanto já foi "gasto" (ver `actualSpendBeforeEffectiveDate`). */
-  currentAllocations: Map<string, number>;
-  /** Gasto real diário (Meta) do cliente no mês — junto com
-   * `manualActualSpend` de cada sprint, é a única fonte usada pra saber
-   * quanto já foi de fato gasto antes da effective_date. */
-  dailySpend: { date: string; spend: number }[];
-  monthRange: { firstDay: string; lastDay: string };
-  /** Data de referência (hoje, no fuso da agência) usada como corte consolidado/futuro.
-   * Para meses futuros (sem período consolidado), passar uma data anterior ao início do mês. */
-  effectiveDate: string;
-  newBudget: number;
-}
-
-export interface MonthlyBudgetSprintPreview {
-  sprintId: string;
-  startDate: string;
-  endDate: string;
-  previousPlannedSpend: number;
-  newPlannedSpend: number;
-}
-
-export interface MonthlyBudgetRedistributionResult {
-  effectiveDate: string;
-  previousMonthlyTotal: number;
-  /** Gasto REAL (não planejado) do cliente entre o início do mês e a
-   * effective_date, inclusive — nunca soma Meta + manual: cada sprint usa
-   * exclusivamente sua própria `spend_source`. É o valor subtraído do novo
-   * orçamento pra decidir o que ainda pode ser distribuído no futuro (ver
-   * seção "Regra central do orçamento" do pedido que motivou esta correção). */
-  actualSpendBeforeEffectiveDate: number;
-  previousFutureAmount: number;
-  futureBudgetAvailable: number;
-  resultingTotal: number;
-  isBelowConsolidated: boolean;
-  scenario: MonthlyBudgetScenario;
-  /** Alocação diária (R$) resultante pra todo o mês — dias <= effectiveDate ficam
-   * idênticos aos de currentAllocations (histórico de planejamento nunca é
-   * reescrito); só dias futuros mudam. */
-  allocationsByDate: Map<string, number>;
-  sprintPreviews: MonthlyBudgetSprintPreview[];
-}
-
-/**
- * Calcula a redistribuição do orçamento mensal entre as sprints do mês.
- *
- * Correção central (o motivo desta função ter sido revisada): o saldo
- * distribuível pro futuro é `newBudget - actualSpendBeforeEffectiveDate` —
- * o gasto REAL já ocorrido antes da effective_date, nunca a soma do que
- * tinha sido PLANEJADO pra esses mesmos dias. Usar o planejado ali era o bug:
- * numa primeira configuração de orçamento no meio do mês, ou numa mudança de
- * orçamento, o planejado dos dias passados podia ser zero (ou qualquer outro
- * valor sem relação com a realidade) enquanto o cliente já tinha gasto de
- * verdade — o resultado era ou distribuir o orçamento inteiro de novo sobre
- * o futuro (inflando o total do mês) ou usar uma base arbitrária.
- *
- * O planejamento histórico (dias <= effectiveDate) em si nunca é reescrito —
- * `allocationsByDate` copia os valores de `currentAllocations` sem alteração
- * pra esses dias; só o saldo pro futuro passa a ser calculado com base no
- * gasto real. Se o novo orçamento for menor que o já gasto, o futuro vira
- * zero e o total do mês fica acima do novo orçamento (excedente histórico)
- * — não é bloqueado, só sinalizado (`isBelowConsolidated`).
- *
- * Função pura: não lê nem escreve no banco, só decide os números — mesma
- * função usada pela prévia da UI (`MonthlyBudgetEditor`) e espelhada
- * exatamente pela função SQL `apply_monthly_budget_change`, que é quem de
- * fato grava a mudança (ver supabase/fix-monthly-budget-actual-spend.sql).
- */
-/** Divide todos os dias do mês entre "histórico" (nunca mais recalculado) e
- * "elegível pra redistribuição" — Etapa 63, seção 4: função central única
- * pra essa pergunta, nunca mais um filtro inline duplicado em cada lugar que
- * precisa saber quais dias ainda podem receber orçamento. Elegível é
- * qualquer dia igual ou posterior à `effectiveDate` (dias restantes da
- * sprint atual, incluindo hoje, mais todas as sprints futuras) — nunca
- * sprints encerradas nem dias antes da data efetiva de uma mudança de
- * orçamento. A própria `effectiveDate` pertence ao período elegível, nunca
- * ao histórico (ver exemplo da sprint que atravessa a effective_date: "o
- * próprio dia 15/07 pertence ao novo período de planejamento"). */
+/** Divide todos os dias do mês entre "histórico" (já encerrado, nunca
+ * recalculado) e "elegível pra redistribuição" — função central única pra
+ * essa pergunta, nunca um filtro inline duplicado em cada lugar que precisa
+ * saber quais dias ainda podem receber orçamento. Elegível é qualquer dia
+ * igual ou posterior à `effectiveDate` (hoje, num mês em andamento — dias
+ * restantes da sprint atual, incluindo hoje, mais todas as sprints futuras).
+ * A própria `effectiveDate` pertence ao período elegível, nunca ao histórico. */
 export function getEligibleRedistributionDates(
   allDates: string[],
   effectiveDate: string,
@@ -139,121 +45,16 @@ export function getEligibleRedistributionDates(
   };
 }
 
-export function computeMonthlyBudgetRedistribution(
-  input: MonthlyBudgetRedistributionInput,
-): MonthlyBudgetRedistributionResult {
-  const { sprints, currentAllocations, dailySpend, monthRange, effectiveDate, newBudget } = input;
-  const allDates = listDatesInclusive(monthRange.firstDay, monthRange.lastDay);
-
-  // A própria effective_date pertence ao NOVO período de planejamento, nunca
-  // ao histórico — "gasto real ANTES da data efetiva" é estritamente
-  // anterior a ela (seção "Regra central do orçamento", item 2, e o exemplo
-  // da sprint que atravessa a effective_date: "13/07 e 14/07 pertencem ao
-  // período histórico [...] 15/07 até 19/07 pertencem ao novo planejamento",
-  // com effective_date = 15/07). Por isso o corte é `date < effectiveDate`
-  // (histórico) / `date >= effectiveDate` (futuro), nunca `<=`/`>`.
-  const dayBeforeEffectiveDate = addDays(effectiveDate, -1);
-  const { historicalDates: consolidatedDates, eligibleDates: futureDates } = getEligibleRedistributionDates(
-    allDates,
-    effectiveDate,
-  );
-
-  const sumAllocations = (dates: string[]) =>
-    dates.reduce((sum, date) => sum + (currentAllocations.get(date) ?? 0), 0);
-
-  const previousMonthlyTotal = sumAllocations(allDates);
-  const previousFutureAmount = sumAllocations(futureDates);
-
-  // Gasto real (não planejado) de cada sprint, mas só a fatia estritamente
-  // ANTERIOR à effective_date — reaproveita exatamente
-  // `sumActualSpendForMonth` (a mesma função que já calcula "realizado do
-  // mês" em toda a Visão Geral/Sprints/página do cliente), só truncando o
-  // intervalo no dia anterior à effective_date em vez do último dia do mês.
-  // Pra sprint manual, o valor (`manual_actual_spend`) é único por sprint,
-  // sem granularidade diária — conta inteiro se a sprint já começou até esse
-  // corte (mesma regra de `sumActualSpendForMonth`), nunca fatiado por dia.
-  const sprintsForActualSpend = sprints.map((sprint) => ({
-    start_date: sprint.startDate,
-    end_date: sprint.endDate,
-    spend_source: sprint.spendSource,
-    manual_actual_spend: sprint.manualActualSpend,
-  }));
-  const actualSpendBeforeEffectiveDate = sumActualSpendForMonth(
-    sprintsForActualSpend,
-    { firstDay: monthRange.firstDay, lastDay: dayBeforeEffectiveDate },
-    dailySpend,
-  );
-
-  const futureBudgetAvailableRaw = newBudget - actualSpendBeforeEffectiveDate;
-  const isBelowConsolidated = futureBudgetAvailableRaw < 0;
-  const futureBudgetAvailable = isBelowConsolidated ? 0 : futureBudgetAvailableRaw;
-
-  const allocationsByDate = new Map<string, number>();
-  for (const date of consolidatedDates) {
-    allocationsByDate.set(date, currentAllocations.get(date) ?? 0);
-  }
-
-  const futureCents = Math.round(futureBudgetAvailable * 100);
-  const perDayCents = distributeCentsEqually(futureCents, futureDates.length);
-  futureDates.forEach((date, index) => {
-    allocationsByDate.set(date, (perDayCents[index] ?? 0) / 100);
-  });
-
-  // Total planejado do mês após a mudança: a fatia histórica de PLANEJAMENTO
-  // nunca é reescrita (permanece igual a `previousMonthlyTotal -
-  // previousFutureAmount`, o que já estava alocado antes desta edição pros
-  // dias <= effectiveDate) + o novo saldo distribuído pro futuro. Nunca usa
-  // `actualSpendBeforeEffectiveDate` aqui — são conceitos diferentes
-  // (planejado histórico vs. gasto real histórico), só o segundo decide o
-  // saldo distribuível, o primeiro decide o total exibido.
-  const historicalPlannedAmount = previousMonthlyTotal - previousFutureAmount;
-  const resultingTotal = historicalPlannedAmount + futureBudgetAvailable;
-
-  const scenario: MonthlyBudgetScenario = isBelowConsolidated
-    ? "reducao_abaixo_consolidado"
-    : newBudget >= previousMonthlyTotal
-      ? "aumento"
-      : "reducao_normal";
-
-  const sprintPreviews: MonthlyBudgetSprintPreview[] = sprints.map((sprint) => {
-    const sprintDates = allDates.filter((date) => date >= sprint.startDate && date <= sprint.endDate);
-    return {
-      sprintId: sprint.sprintId,
-      startDate: sprint.startDate,
-      endDate: sprint.endDate,
-      previousPlannedSpend: sumAllocations(sprintDates),
-      newPlannedSpend: sprintDates.reduce((sum, date) => sum + (allocationsByDate.get(date) ?? 0), 0),
-    };
-  });
-
-  return {
-    effectiveDate,
-    previousMonthlyTotal,
-    actualSpendBeforeEffectiveDate,
-    previousFutureAmount,
-    futureBudgetAvailable,
-    resultingTotal,
-    isBelowConsolidated,
-    scenario,
-    allocationsByDate,
-    sprintPreviews,
-  };
-}
-
-function addDays(dateStr: string, days: number): string {
-  const date = parseDateUTC(dateStr);
-  date.setUTCDate(date.getUTCDate() + days);
-  return toDateString(date);
-}
-
 export const CLOSED_MONTH_MESSAGE = "Mês encerrado. O orçamento histórico não pode ser alterado por este fluxo.";
 
 /**
- * Data de efeito (corte consolidado/futuro) pra uma alteração de orçamento:
+ * Data de efeito (corte histórico/elegível) pra uma alteração de orçamento:
  * hoje, no fuso da agência, quando o mês editado é o corrente; um dia antes
- * do primeiro dia do mês quando é um mês futuro (assim o consolidado já sai
- * zero, sem precisar de caso especial na redistribuição); mês já encerrado
- * (último dia < hoje) não tem data de efeito — bloqueado por este fluxo.
+ * do primeiro dia do mês quando é um mês futuro (assim todos os dias do mês
+ * futuro saem elegíveis, sem precisar de caso especial na redistribuição);
+ * mês já encerrado (último dia < hoje) não tem data de efeito — bloqueado
+ * por este fluxo (não existe "quanto ainda pode ser investido" num mês que
+ * já acabou).
  */
 export function resolveBudgetEffectiveDate(
   monthRange: { firstDay: string; lastDay: string },
@@ -268,112 +69,151 @@ export function resolveBudgetEffectiveDate(
   return { effectiveDate: todayStr, isClosedMonth: false };
 }
 
+function addDays(dateStr: string, days: number): string {
+  const date = parseDateUTC(dateStr);
+  date.setUTCDate(date.getUTCDate() + days);
+  return toDateString(date);
+}
+
+/** % do orçamento mensal já utilizado — `null` quando não há orçamento
+ * configurado (nunca 0%/NaN/Infinity). */
+export function computeUtilizedPct(monthlyBudget: number, monthActual: number): number | null {
+  return monthlyBudget > 0 ? (monthActual / monthlyBudget) * 100 : null;
+}
+
 /**
- * Gera a alocação diária de backfill pra uma sprint existente que ainda não
- * tem `sprint_planned_allocations`: distribui o `planned_spend` atual dela
- * igualmente entre os dias do período, em centavos exatos (sobra no último
- * dia) — reconstrução técnica, nunca cria histórico de alteração e nunca
- * muda o total da sprint.
+ * Orçamento mensal VIGENTE — Etapa 66: fonte única, nunca mais a soma dos
+ * planejamentos diários persistidos (`sprint_planned_allocations`). Essa
+ * soma parecia razoável mas divergia do orçamento de verdade sempre que o
+ * planejado histórico (dias já encerrados) não batia exatamente com o
+ * realizado histórico real — o que é a regra, não a exceção, já que
+ * "planejado" e "realizado" são conceitos diferentes por definição. O
+ * orçamento vigente é sempre o valor mais recente configurado pelo cliente
+ * (`monthly_budget_changes.new_amount`, o registro mais recente pra este
+ * mês) — nunca reconstruído subtraindo/somando planejamentos antigos.
+ *
+ * `fallbackPlannedSum` só é usado quando NENHUMA alteração de orçamento foi
+ * registrada ainda pra este mês (cliente que nunca passou pelo editor de
+ * orçamento) — nesse caso não existe nenhum drift possível ainda (nada foi
+ * redistribuído independentemente do realizado), então a soma do que já
+ * está persistido é, por definição, o único valor conhecido.
  */
-export function computeSprintAllocationBackfill(sprint: {
+export function resolveMonthlyBudget(
+  budgetChanges: { newAmount: number; changedAt: string }[],
+  fallbackPlannedSum: number,
+): number {
+  if (budgetChanges.length === 0) return fallbackPlannedSum;
+  const latest = budgetChanges.reduce((latest, change) =>
+    change.changedAt > latest.changedAt ? change : latest,
+  );
+  return latest.newAmount;
+}
+
+export interface MonthlyBudgetPlanSprintInput {
+  sprintId: string;
   startDate: string;
   endDate: string;
-  plannedSpend: number;
-}): { date: string; amount: number }[] {
-  const dates = listDatesInclusive(sprint.startDate, sprint.endDate);
-  const totalCents = Math.round(sprint.plannedSpend * 100);
-  const perDayCents = distributeCentsEqually(totalCents, dates.length);
-  return dates.map((date, index) => ({ date, amount: (perDayCents[index] ?? 0) / 100 }));
 }
 
-export interface SprintDailyRecommendation {
+export interface MonthlyBudgetPlanSprintResult {
+  sprintId: string;
+  /** Dias desta sprint, dentro do mês, que ainda são elegíveis (hoje +
+   * futuro) — 0 pra sprint encerrada. */
   eligibleDaysCount: number;
-  recommendedDaily: number;
+  /** `valor_diario_recomendado × dias_elegiveis_desta_sprint` — sempre 0 pra
+   * sprint encerrada. A soma de `remainingPlanned` de todas as sprints
+   * elegíveis é EXATAMENTE `remainingBudget` (garantido por construção: os
+   * dois vêm da mesma partição em centavos do mesmo total, nunca de duas
+   * contas independentes que possam divergir por arredondamento). */
+  remainingPlanned: number;
 }
 
-/**
- * Investimento diário recomendado pro restante de UMA sprint (Etapa 65,
- * seções 2/3/12) — mesma pergunta do resumo mensal ("quanto investir por dia
- * daqui pra frente"), agora restrita ao período da própria sprint. Reaproveita
- * a mesma função central de dias elegíveis (`getEligibleRedistributionDates`)
- * usada pela redistribuição do mês inteiro, só que com `allDates` limitado
- * aos dias da sprint: pra uma sprint atual, isso dá os dias de hoje até o
- * fim dela; pra uma sprint futura, `todayStr` é anterior a todos os dias da
- * sprint, então todos contam (nenhum caso especial — o mesmo truque já usado
- * em `computeMonthlyInvestmentRecommendation` pro mês futuro). Nunca chamada
- * pra sprint encerrada (não existe "recomendação" pra um período que já
- * passou — quem chama decide não exibir, não esta função). `remainingPlanned`
- * já vem calculado por quem chama (`computeSprintInvestmentAmounts`, nunca
- * recalculado aqui).
- */
-export function computeSprintDailyRecommendation(
-  sprint: { startDate: string; endDate: string },
-  remainingPlanned: number,
-  todayStr: string,
-): SprintDailyRecommendation {
-  const allDates = listDatesInclusive(sprint.startDate, sprint.endDate);
-  const { eligibleDates } = getEligibleRedistributionDates(allDates, todayStr);
-  const eligibleDaysCount = eligibleDates.length;
-  const recommendedDaily = eligibleDaysCount <= 0 ? 0 : Math.max(remainingPlanned, 0) / eligibleDaysCount;
-  return { eligibleDaysCount, recommendedDaily };
-}
-
-/** % do orçamento mensal já utilizado — `null` quando não há planejamento
- * configurado (nunca 0%/NaN/Infinity). Única fonte desta conta: reaproveitada
- * pelo resumo do mês (mês em andamento e mês encerrado) e por
- * `computeMonthlyInvestmentRecommendation`, nunca recalculada direto num
- * componente React (Etapa 64, seção 15). */
-export function computeUtilizedPct(monthPlanned: number, monthActual: number): number | null {
-  return monthPlanned > 0 ? (monthActual / monthPlanned) * 100 : null;
-}
-
-export interface MonthlyInvestmentRecommendation {
-  /** `max(orcamento_mensal_vigente - realizado_acumulado_no_mes, 0)`. */
+export interface MonthlyBudgetPlan {
+  monthlyBudget: number;
+  monthActual: number;
+  /** `max(orcamento_mensal_vigente - realizado_acumulado, 0)`. */
   remainingBudget: number;
-  /** Dias que ainda podem receber orçamento a partir da data de efeito —
-   * mesma função central usada pela redistribuição da sprint atual/futuras. */
+  /** Dias elegíveis restantes do mês inteiro (hoje + futuro, nunca dias já
+   * encerrados nem dias de fora do mês). */
   eligibleDaysCount: number;
   /** `remainingBudget / eligibleDaysCount` — 0 quando o orçamento já foi
    * atingido/ultrapassado ou não há mais dias elegíveis. Nunca negativo. */
   recommendedDaily: number;
   isBudgetReached: boolean;
-  /** Quanto o realizado ultrapassou o orçamento — 0 quando não atingiu. */
+  /** Quanto o realizado ultrapassou o orçamento — 0 quando não ultrapassou. */
   overageAmount: number;
   utilizedPct: number | null;
+  /** Planejamento restante de cada sprint (chave = sprintId) — mesma
+   * partição em centavos que gera `remainingBudget`, nunca uma segunda
+   * divisão independente por sprint. */
+  sprintPlans: Map<string, MonthlyBudgetPlanSprintResult>;
 }
 
 /**
- * Investimento diário recomendado pro restante do mês (Etapa 64, seções
- * 4/5/12) — resposta a "quanto investir por dia daqui pra frente pra fechar
- * o mês dentro do orçamento planejado". Reaproveita `getEligibleRedistributionDates`
- * com a mesma `effectiveDate` que a prévia de redistribuição de orçamento já
- * usa (hoje, num mês em andamento; um dia antes do início, num mês futuro) —
- * nunca uma segunda conta de "quantos dias faltam". Por construção, quando o
- * orçamento do mês não muda hoje, a soma das alocações diárias já persistidas
- * pros dias elegíveis é igual a `remainingBudget` dividida em partes iguais —
- * o mesmo valor de `recommendedDaily`, nunca dois números divergentes pro
- * mesmo dia (ver relatório desta etapa).
+ * Função central única do planejamento financeiro mensal (Etapa 66) — a
+ * fonte de verdade pra "quanto ainda pode ser investido este mês" e "como
+ * isso se divide entre a sprint atual e as sprints futuras". Nunca lê
+ * `sprint_planned_allocations`/`sprints.planned_spend`: os únicos insumos
+ * são o orçamento vigente (`monthlyBudget`, já resolvido por
+ * `resolveMonthlyBudget`), o realizado acumulado real (`monthActual`, soma
+ * de gasto de verdade), a data de referência (`effectiveDate`) e a
+ * estrutura das sprints do mês (só `sprintId`/`startDate`/`endDate` —
+ * nenhum valor financeiro delas entra aqui). Determinística e idempotente:
+ * chamar duas vezes com os mesmos argumentos produz exatamente o mesmo
+ * resultado, nunca acumula em cima de uma redistribuição anterior.
+ *
+ * A distribuição entre sprints reaproveita a MESMA partição em centavos que
+ * decide `recommendedDaily` (`distributeCentsEqually` sobre os dias
+ * elegíveis do mês inteiro, na ordem do calendário) — cada dia elegível é
+ * atribuído à sprint que o contém, e a sobra de arredondamento cai sempre no
+ * último dia elegível do mês (dentro de qualquer sprint que o contenha,
+ * normalmente a última). Por construção, `sum(sprintPlans.remainingPlanned)
+ * === remainingBudget` sempre — nunca duas contas que possam divergir.
  */
-export function computeMonthlyInvestmentRecommendation(
-  monthPlanned: number,
-  monthActual: number,
-  monthRange: { firstDay: string; lastDay: string },
-  effectiveDate: string,
-): MonthlyInvestmentRecommendation {
-  const remainingBudget = Math.max(monthPlanned - monthActual, 0);
+export function computeMonthlyBudgetPlan(input: {
+  monthlyBudget: number;
+  monthActual: number;
+  monthRange: { firstDay: string; lastDay: string };
+  effectiveDate: string;
+  sprints: MonthlyBudgetPlanSprintInput[];
+}): MonthlyBudgetPlan {
+  const { monthlyBudget, monthActual, monthRange, effectiveDate, sprints } = input;
+
+  const remainingBudget = Math.max(monthlyBudget - monthActual, 0);
+  const isBudgetReached = monthlyBudget > 0 && monthActual >= monthlyBudget;
+  const overageAmount = isBudgetReached ? monthActual - monthlyBudget : 0;
+
   const allDates = listDatesInclusive(monthRange.firstDay, monthRange.lastDay);
   const { eligibleDates } = getEligibleRedistributionDates(allDates, effectiveDate);
   const eligibleDaysCount = eligibleDates.length;
-  const isBudgetReached = monthPlanned > 0 && monthActual >= monthPlanned;
-  const overageAmount = isBudgetReached ? monthActual - monthPlanned : 0;
-  const recommendedDaily = isBudgetReached || eligibleDaysCount <= 0 ? 0 : remainingBudget / eligibleDaysCount;
+  const recommendedDaily = eligibleDaysCount > 0 ? remainingBudget / eligibleDaysCount : 0;
+
+  const remainingCents = Math.round(remainingBudget * 100);
+  const perDayCents = distributeCentsEqually(remainingCents, eligibleDaysCount);
+
+  const sprintPlans = new Map<string, MonthlyBudgetPlanSprintResult>();
+  for (const sprint of sprints) {
+    sprintPlans.set(sprint.sprintId, { sprintId: sprint.sprintId, eligibleDaysCount: 0, remainingPlanned: 0 });
+  }
+
+  eligibleDates.forEach((date, index) => {
+    const sprint = sprints.find((s) => date >= s.startDate && date <= s.endDate);
+    if (!sprint) return;
+    const entry = sprintPlans.get(sprint.sprintId);
+    if (!entry) return;
+    entry.eligibleDaysCount += 1;
+    entry.remainingPlanned += (perDayCents[index] ?? 0) / 100;
+  });
 
   return {
+    monthlyBudget,
+    monthActual,
     remainingBudget,
     eligibleDaysCount,
     recommendedDaily,
     isBudgetReached,
     overageAmount,
-    utilizedPct: computeUtilizedPct(monthPlanned, monthActual),
+    utilizedPct: computeUtilizedPct(monthlyBudget, monthActual),
+    sprintPlans,
   };
 }

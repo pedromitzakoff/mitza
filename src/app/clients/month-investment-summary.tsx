@@ -3,7 +3,7 @@ import { formatCurrency, formatDateWithYear } from "@/lib/format";
 import type { SpendStatus } from "@/lib/spend-status";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
 import { resolveMonthPeriodSummary } from "@/lib/financial-period";
-import { computeMonthlyInvestmentRecommendation, computeUtilizedPct, type MonthlyBudgetSprintInput } from "@/lib/monthly-budget";
+import { computeMonthlyBudgetPlan, computeUtilizedPct, type MonthlyBudgetPlanSprintInput } from "@/lib/monthly-budget";
 import { MonthlyBudgetEditor } from "./monthly-budget-editor";
 
 export interface MonthlyBudgetChangeSummary {
@@ -19,15 +19,13 @@ export interface MonthlyBudgetChangeSummary {
  * financeiro e o card separado "Orçamento de [mês]"/edição — removendo o
  * valor planejado duplicado entre eles).
  *
- * Etapa 64: parou de responder "onde o investimento deveria estar hoje"
- * (removidos o marcador/linha da barra, o selo Acima/Abaixo/Dentro e o texto
- * de desvio — só nesta seção; `classifySpendStatus`/`SPEND_STATUS_*`
- * continuam intactos e em uso em Visão Geral, Sprints e Relatório). A
- * pergunta que a seção responde agora é operacional: quanto investir por dia
- * daqui pra frente pra fechar o mês no orçamento planejado — sempre via
- * `computeMonthlyInvestmentRecommendation` (nunca uma conta própria deste
- * componente), a mesma função central que também sustenta a redistribuição
- * da sprint atual/futuras.
+ * Etapa 66: a "orçamento mensal vigente" (`planned`) e o "planejamento
+ * restante" nunca mais vêm de `sprint_planned_allocations` — sempre de
+ * `computeMonthlyBudgetPlan`, a única função central que decide "quanto ainda
+ * pode ser investido este mês" e como isso se divide entre a sprint atual e
+ * as sprints futuras (mesmos números exibidos em cada `SprintCard` abaixo).
+ * `classifySpendStatus`/`SPEND_STATUS_*` continuam intactos e em uso em
+ * Visão Geral, Sprints e Relatório — não fazem parte desta seção.
  */
 export function MonthInvestmentSummary({
   planned,
@@ -38,8 +36,6 @@ export function MonthInvestmentSummary({
   monthParam,
   monthLabel,
   sprints,
-  currentAllocations,
-  dailySpend,
   monthRange,
   effectiveDate,
   isAdmin,
@@ -48,6 +44,8 @@ export function MonthInvestmentSummary({
   lastChange,
   historyHref,
 }: {
+  /** Orçamento mensal VIGENTE (Etapa 66) — sempre `resolveMonthlyBudget`,
+   * nunca a soma dos planejamentos diários persistidos. */
   planned: number;
   actual: number;
   expectedToDate: number;
@@ -55,9 +53,7 @@ export function MonthInvestmentSummary({
   clientId: string;
   monthParam: string;
   monthLabel: string;
-  sprints: MonthlyBudgetSprintInput[];
-  currentAllocations: { date: string; amount: number }[];
-  dailySpend: { date: string; spend: number }[];
+  sprints: MonthlyBudgetPlanSprintInput[];
   monthRange: { firstDay: string; lastDay: string };
   effectiveDate: string | null;
   isAdmin: boolean;
@@ -78,8 +74,8 @@ export function MonthInvestmentSummary({
   // Só existe recomendação diária quando há uma data de efeito vigente —
   // `effectiveDate` é `null` exatamente quando o mês está encerrado (seção 10:
   // mês passado nunca mostra recomendação diária).
-  const recommendation = effectiveDate
-    ? computeMonthlyInvestmentRecommendation(planned, actual, monthRange, effectiveDate)
+  const plan = effectiveDate
+    ? computeMonthlyBudgetPlan({ monthlyBudget: planned, monthActual: actual, monthRange, effectiveDate, sprints })
     : null;
 
   const closedDiffText = (() => {
@@ -118,10 +114,10 @@ export function MonthInvestmentSummary({
                   monthParam={monthParam}
                   monthLabel={monthLabel}
                   sprints={sprints}
-                  currentAllocations={currentAllocations}
-                  dailySpend={dailySpend}
                   monthRange={monthRange}
                   effectiveDate={effectiveDate}
+                  currentMonthlyBudget={planned}
+                  monthActual={actual}
                 />
               )
             ))}
@@ -135,13 +131,13 @@ export function MonthInvestmentSummary({
           <p className="mt-1 text-sm text-foreground">
             {formatCurrency(planned)} planejados para {monthLabel}
           </p>
-          {recommendation && (
+          {plan && (
             <>
               <p className="mt-1.5 text-[11px] text-muted-foreground">
-                {recommendation.eligibleDaysCount} dias em {monthLabel}
+                {plan.eligibleDaysCount} dias em {monthLabel}
               </p>
               <p className="mt-1 text-sm font-semibold text-brand">
-                Investimento diário planejado: {formatCurrency(recommendation.recommendedDaily)}/dia
+                Investimento diário planejado: {formatCurrency(plan.recommendedDaily)}/dia
               </p>
             </>
           )}
@@ -170,32 +166,32 @@ export function MonthInvestmentSummary({
           {utilizedPct != null && (
             <p className="mt-1.5 text-[11px] text-muted-foreground">{Math.round(utilizedPct)}% do orçamento mensal utilizado</p>
           )}
-          {recommendation?.isBudgetReached ? (
+          {plan?.isBudgetReached ? (
             <>
               <p className="mt-1 text-sm font-medium text-foreground">Orçamento mensal atingido</p>
-              {recommendation.overageAmount > 0 && (
+              {plan.overageAmount > 0 && (
                 <p className="mt-0.5 text-[11px] text-red-600 dark:text-red-400">
-                  {formatCurrency(recommendation.overageAmount)} acima do orçamento planejado
+                  {formatCurrency(plan.overageAmount)} acima do orçamento planejado
                 </p>
               )}
               <p className="mt-1 text-sm font-semibold text-brand">Investimento diário recomendado: {formatCurrency(0)}/dia</p>
             </>
-          ) : recommendation && recommendation.eligibleDaysCount === 1 ? (
+          ) : plan && plan.eligibleDaysCount === 1 ? (
             <>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Restam {formatCurrency(recommendation.remainingBudget)} para 1 dia até o fim do mês
+                Restam {formatCurrency(plan.remainingBudget)} para 1 dia até o fim do mês
               </p>
               <p className="mt-1 text-sm font-semibold text-brand">
-                Investimento recomendado hoje: {formatCurrency(recommendation.remainingBudget)}
+                Investimento recomendado hoje: {formatCurrency(plan.remainingBudget)}
               </p>
             </>
-          ) : recommendation ? (
+          ) : plan ? (
             <>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Restam {formatCurrency(recommendation.remainingBudget)} para {recommendation.eligibleDaysCount} dias até o fim do mês
+                Restam {formatCurrency(plan.remainingBudget)} para {plan.eligibleDaysCount} dias até o fim do mês
               </p>
               <p className="mt-1 text-sm font-semibold text-brand">
-                Investimento diário recomendado: {formatCurrency(recommendation.recommendedDaily)}/dia
+                Investimento diário recomendado: {formatCurrency(plan.recommendedDaily)}/dia
               </p>
             </>
           ) : null}

@@ -3,75 +3,72 @@
 import { useMemo, useState } from "react";
 import { formatCurrency } from "@/lib/format";
 import { formatMoneyDisplay, parseMoneyInput } from "@/lib/money-format";
-import {
-  computeMonthlyBudgetRedistribution,
-  type MonthlyBudgetScenario,
-  type MonthlyBudgetSprintInput,
-} from "@/lib/monthly-budget";
+import { computeMonthlyBudgetPlan, type MonthlyBudgetPlanSprintInput } from "@/lib/monthly-budget";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { applyMonthlyBudgetChangeAction } from "./monthly-budget-actions";
 
-const SCENARIO_CONFIRM_COPY: Record<MonthlyBudgetScenario, string> = {
+type BudgetScenario = "aumento" | "reducao_normal" | "reducao_abaixo_realizado";
+
+const SCENARIO_CONFIRM_COPY: Record<BudgetScenario, string> = {
   aumento:
-    "O orçamento vai aumentar. O planejamento já consolidado até hoje não muda — só os dias futuros do mês recebem o novo saldo, distribuído igualmente entre eles.",
+    "O orçamento vai aumentar. O que já foi investido não muda — só o saldo restante do mês é recalculado e redistribuído entre a sprint atual e as sprints futuras.",
   reducao_normal:
-    "O orçamento vai diminuir. O planejamento já consolidado até hoje não muda — só os dias futuros do mês são recalculados com o novo saldo, distribuído igualmente entre eles.",
-  reducao_abaixo_consolidado:
-    "EXCEDENTE HISTÓRICO: o novo orçamento é menor do que o que já foi consolidado até hoje. Nenhum dia futuro vai receber planejamento até o próximo ajuste, e o total do mês vai ficar acima do novo valor informado. Não é um erro nem é bloqueado — é só o reflexo do que já foi investido.",
+    "O orçamento vai diminuir. O que já foi investido não muda — só o saldo restante do mês é recalculado e redistribuído entre a sprint atual e as sprints futuras.",
+  reducao_abaixo_realizado:
+    "EXCEDENTE: o novo orçamento é menor do que o que já foi investido este mês. Não sobra saldo pra distribuir — nenhuma sprint atual ou futura recebe planejamento até o próximo ajuste, e o total investido vai ficar acima do novo valor informado. Não é um erro nem é bloqueado — é só o reflexo do que já foi gasto.",
 };
 
-const SCENARIO_LABEL: Record<MonthlyBudgetScenario, string> = {
+const SCENARIO_LABEL: Record<BudgetScenario, string> = {
   aumento: "Aumento de orçamento",
   reducao_normal: "Redução de orçamento",
-  reducao_abaixo_consolidado: "Redução abaixo do consolidado",
+  reducao_abaixo_realizado: "Redução abaixo do já investido",
 };
 
+/**
+ * Editor de orçamento mensal (Etapa 66) — a prévia usa exatamente
+ * `computeMonthlyBudgetPlan`, a mesma função central que decide o
+ * "planejamento restante" exibido em "Investimento do mês" e em cada
+ * `SprintCard`, nunca uma segunda conta própria deste componente (o motivo
+ * de existir `computeMonthlyBudgetRedistribution` antes desta etapa). O
+ * "orçamento atual" (`currentMonthlyBudget`) e o "já investido"
+ * (`monthActual`) vêm prontos de quem chama — nunca recalculados aqui a
+ * partir de `sprint_planned_allocations`/`daily_spend`.
+ */
 export function MonthlyBudgetEditor({
   clientId,
   monthParam,
   monthLabel,
   sprints,
-  currentAllocations,
-  dailySpend,
   monthRange,
   effectiveDate,
+  currentMonthlyBudget,
+  monthActual,
 }: {
   clientId: string;
   monthParam: string;
   monthLabel: string;
-  sprints: MonthlyBudgetSprintInput[];
-  currentAllocations: { date: string; amount: number }[];
-  dailySpend: { date: string; spend: number }[];
+  sprints: MonthlyBudgetPlanSprintInput[];
   monthRange: { firstDay: string; lastDay: string };
   effectiveDate: string;
+  currentMonthlyBudget: number;
+  monthActual: number;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [confirmStep, setConfirmStep] = useState(false);
-  const previousTotal = useMemo(
-    () => currentAllocations.reduce((sum, row) => sum + row.amount, 0),
-    [currentAllocations],
-  );
-  const [display, setDisplay] = useState(() => formatMoneyDisplay(previousTotal));
+  const [display, setDisplay] = useState(() => formatMoneyDisplay(currentMonthlyBudget));
   const newBudget = parseMoneyInput(display) ?? 0;
 
-  const allocationsMap = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const row of currentAllocations) map.set(row.date, row.amount);
-    return map;
-  }, [currentAllocations]);
-
-  const preview = useMemo(
-    () =>
-      computeMonthlyBudgetRedistribution({
-        sprints,
-        currentAllocations: allocationsMap,
-        dailySpend,
-        monthRange,
-        effectiveDate,
-        newBudget,
-      }),
-    [sprints, allocationsMap, dailySpend, monthRange, effectiveDate, newBudget],
+  const currentPlan = useMemo(
+    () => computeMonthlyBudgetPlan({ monthlyBudget: currentMonthlyBudget, monthActual, monthRange, effectiveDate, sprints }),
+    [currentMonthlyBudget, monthActual, monthRange, effectiveDate, sprints],
   );
+  const newPlan = useMemo(
+    () => computeMonthlyBudgetPlan({ monthlyBudget: newBudget, monthActual, monthRange, effectiveDate, sprints }),
+    [newBudget, monthActual, monthRange, effectiveDate, sprints],
+  );
+
+  const scenario: BudgetScenario =
+    monthActual > newBudget ? "reducao_abaixo_realizado" : newBudget >= currentMonthlyBudget ? "aumento" : "reducao_normal";
 
   if (!isOpen) {
     return (
@@ -88,7 +85,7 @@ export function MonthlyBudgetEditor({
   const close = () => {
     setIsOpen(false);
     setConfirmStep(false);
-    setDisplay(formatMoneyDisplay(previousTotal));
+    setDisplay(formatMoneyDisplay(currentMonthlyBudget));
   };
 
   return (
@@ -125,7 +122,7 @@ export function MonthlyBudgetEditor({
                 />
               </div>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Orçamento atual: {formatCurrency(previousTotal)}
+                Orçamento atual: {formatCurrency(currentMonthlyBudget)}
               </p>
             </div>
 
@@ -133,41 +130,41 @@ export function MonthlyBudgetEditor({
               <p className="font-semibold text-foreground">Prévia do impacto</p>
               <dl className="mt-1.5 flex flex-col gap-1">
                 <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Já investido antes desta alteração</dt>
-                  <dd className="tabular-nums text-foreground">
-                    {formatCurrency(preview.actualSpendBeforeEffectiveDate)}
-                  </dd>
+                  <dt className="text-muted-foreground">Já investido este mês</dt>
+                  <dd className="tabular-nums text-foreground">{formatCurrency(monthActual)}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Saldo futuro atual</dt>
-                  <dd className="tabular-nums text-foreground">{formatCurrency(preview.previousFutureAmount)}</dd>
+                  <dt className="text-muted-foreground">Saldo restante atual</dt>
+                  <dd className="tabular-nums text-foreground">{formatCurrency(currentPlan.remainingBudget)}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Saldo futuro novo</dt>
-                  <dd className="tabular-nums text-foreground">{formatCurrency(preview.futureBudgetAvailable)}</dd>
+                  <dt className="text-muted-foreground">Saldo restante novo</dt>
+                  <dd className="tabular-nums text-foreground">{formatCurrency(newPlan.remainingBudget)}</dd>
                 </div>
                 <div className="flex justify-between border-t border-border pt-1">
-                  <dt className="font-medium text-foreground">Total do mês resultante</dt>
-                  <dd className="tabular-nums font-medium text-foreground">{formatCurrency(preview.resultingTotal)}</dd>
+                  <dt className="font-medium text-foreground">Orçamento do mês</dt>
+                  <dd className="tabular-nums font-medium text-foreground">{formatCurrency(newBudget)}</dd>
                 </div>
               </dl>
 
-              {preview.isBelowConsolidated && (
+              {newPlan.isBudgetReached && (
                 <p className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                  Excedente histórico: o que já foi investido é maior que o novo orçamento. Nenhum dia futuro
-                  recebe planejamento até o próximo ajuste.
+                  {newPlan.overageAmount > 0
+                    ? `Excedente: o que já foi investido é ${formatCurrency(newPlan.overageAmount)} maior que o novo orçamento. Nenhuma sprint recebe planejamento até o próximo ajuste.`
+                    : "Orçamento exatamente atingido pelo que já foi investido. Nenhuma sprint recebe planejamento até o próximo ajuste."}
                 </p>
               )}
 
               <p className="mt-2 font-medium text-foreground">Sprints afetadas</p>
               <ul className="mt-1 flex flex-col gap-0.5">
-                {preview.sprintPreviews.map((sprint) => (
+                {sprints.map((sprint) => (
                   <li key={sprint.sprintId} className="flex justify-between tabular-nums">
                     <span className="text-muted-foreground">
                       {formatSprintPeriodLabel(sprint.startDate, sprint.endDate)}
                     </span>
                     <span className="text-foreground">
-                      {formatCurrency(sprint.previousPlannedSpend)} → {formatCurrency(sprint.newPlannedSpend)}
+                      {formatCurrency(currentPlan.sprintPlans.get(sprint.sprintId)?.remainingPlanned ?? 0)} →{" "}
+                      {formatCurrency(newPlan.sprintPlans.get(sprint.sprintId)?.remainingPlanned ?? 0)}
                     </span>
                   </li>
                 ))}
@@ -194,10 +191,10 @@ export function MonthlyBudgetEditor({
         ) : (
           <div className="mt-4 flex flex-col gap-4">
             <div className="rounded-md border border-border bg-zinc-50 p-3 text-xs dark:bg-zinc-900/40">
-              <p className="font-semibold text-foreground">{SCENARIO_LABEL[preview.scenario]}</p>
-              <p className="mt-1 text-foreground">{SCENARIO_CONFIRM_COPY[preview.scenario]}</p>
+              <p className="font-semibold text-foreground">{SCENARIO_LABEL[scenario]}</p>
+              <p className="mt-1 text-foreground">{SCENARIO_CONFIRM_COPY[scenario]}</p>
               <p className="mt-2 tabular-nums text-foreground">
-                {formatCurrency(previousTotal)} → {formatCurrency(newBudget)}
+                {formatCurrency(currentMonthlyBudget)} → {formatCurrency(newBudget)}
               </p>
             </div>
 

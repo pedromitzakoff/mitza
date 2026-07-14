@@ -127,6 +127,7 @@ export default async function Home({
     { data: dailySpend },
     { data: tasks },
     { data: plannedAllocations },
+    { data: budgetChanges },
     { data: teamMembersForIndicators },
     { data: completedTasksForIndicators },
     { data: reviewsForIndicators },
@@ -165,6 +166,13 @@ export default async function Home({
       .select("client_id, sprint_id, date, planned_amount")
       .gte("date", rangeStart)
       .lte("date", rangeEnd),
+    // Orçamento vigente (Etapa 66) — só do mês SELECIONADO (`monthRange`),
+    // não da janela união com o mês corrente: `buildOperationClientCard` só
+    // usa `monthRange` pra montar o card, nunca `rangeStart`/`rangeEnd`.
+    supabase
+      .from("monthly_budget_changes")
+      .select("client_id, new_amount, changed_at")
+      .eq("month", monthRange.firstDay),
     // Consulta própria (independente de `gestores`, que serve o dropdown de
     // filtro e não pode ter seu comportamento alterado): precisa do papel de
     // cada membro pra nunca contar admin como gestor no indicador "Gestores
@@ -246,6 +254,13 @@ export default async function Home({
     plannedAllocationsByClient.set(a.client_id, list);
   }
 
+  const budgetChangesByClient = new Map<string, OperationClientRawData["monthlyBudgetChanges"]>();
+  for (const c of budgetChanges ?? []) {
+    const list = budgetChangesByClient.get(c.client_id) ?? [];
+    list.push({ newAmount: c.new_amount, changedAt: c.changed_at });
+    budgetChangesByClient.set(c.client_id, list);
+  }
+
   const clientActivityById = new Map((clientActivity ?? []).map((r) => [r.client_id, r.last_activity_at]));
   const sprintActivityById = new Map((sprintActivity ?? []).map((r) => [r.sprint_id, r.last_activity_at]));
   const primaryManagerNameByClient = new Map(
@@ -268,6 +283,7 @@ export default async function Home({
       sprints: clientSprints,
       dailySpend: dailySpendByClient.get(client.id) ?? [],
       plannedAllocations: plannedAllocationsByClient.get(client.id) ?? [],
+      monthlyBudgetChanges: budgetChangesByClient.get(client.id) ?? [],
       tasks: tasksByClient.get(client.id) ?? [],
       clientLastActivityAt: clientActivityById.get(client.id) ?? null,
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,

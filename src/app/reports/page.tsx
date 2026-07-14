@@ -58,6 +58,7 @@ export default async function ReportsPage({
     { data: tasks },
     { data: reports },
     { data: plannedAllocations },
+    { data: budgetChanges },
   ] = await Promise.all([
     supabase
       .from("clients")
@@ -82,6 +83,12 @@ export default async function ReportsPage({
       .select("client_id, sprint_id, date, planned_amount")
       .gte("date", rangeStart)
       .lte("date", rangeEnd),
+    // Orçamento vigente (Etapa 66) — só do mês SELECIONADO (`monthRange`),
+    // não da janela união com o mês corrente.
+    supabase
+      .from("monthly_budget_changes")
+      .select("client_id, new_amount, changed_at")
+      .eq("month", monthRange.firstDay),
   ]);
 
   const sprintsByClient = new Map<string, NonNullable<typeof sprints>>();
@@ -115,6 +122,13 @@ export default async function ReportsPage({
     plannedAllocationsByClient.set(a.client_id, list);
   }
 
+  const budgetChangesByClient = new Map<string, OperationClientRawData["monthlyBudgetChanges"]>();
+  for (const c of budgetChanges ?? []) {
+    const list = budgetChangesByClient.get(c.client_id) ?? [];
+    list.push({ newAmount: c.new_amount, changedAt: c.changed_at });
+    budgetChangesByClient.set(c.client_id, list);
+  }
+
   const reportStatusByClient = new Map<string, MonthlyReportStatus>((reports ?? []).map((r) => [r.client_id, r.status]));
   const primaryManagerNameByClient = new Map((clients ?? []).map((c) => [c.id, c.primary_manager?.name ?? null]));
 
@@ -128,6 +142,7 @@ export default async function ReportsPage({
     sprints: sprintsByClient.get(client.id) ?? [],
     dailySpend: dailySpendByClient.get(client.id) ?? [],
     plannedAllocations: plannedAllocationsByClient.get(client.id) ?? [],
+    monthlyBudgetChanges: budgetChangesByClient.get(client.id) ?? [],
     tasks: tasksByClient.get(client.id) ?? [],
     clientLastActivityAt: null,
     sprintLastActivityAt: null,
