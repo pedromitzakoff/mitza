@@ -81,7 +81,7 @@ export function operationalSummary(
   }
 
   if (card.alerts.some((a) => a.kind === "otimizacao")) {
-    return { text: "Sem análise recente", tone: "warning" };
+    return { text: "Sem otimização recente", tone: "warning" };
   }
 
   return { text: "Em dia", tone: "neutral" };

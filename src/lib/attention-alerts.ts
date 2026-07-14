@@ -33,10 +33,8 @@ const SYNC_STALE_AFTER_HOURS = 48;
 export interface AttentionAlertsInput {
   monthStatus: SpendStatus;
   overdueTasksCount: number;
-  /** Houve alguma Análise da Conta registrada recentemente? (Etapa 57 —
-   * antes verificava conclusão de tarefa de otimização; account_reviews
-   * substituiu esse sinal, o campo/kind mantêm o nome por compatibilidade
-   * com o restante do app que já filtra por `kind === "otimizacao"`). */
+  /** Houve alguma otimização (revisão estratégica da conta, account_reviews)
+   * registrada recentemente? */
   optimizationRecentlyDone: boolean;
   lastSyncedAt: string | null;
   /** Planejado da sprint atual, ou null se não há sprint em andamento. */
@@ -79,7 +77,7 @@ export function buildAttentionAlerts(input: AttentionAlertsInput): AttentionAler
     alerts.push({
       severity: "atencao",
       kind: "otimizacao",
-      message: "Nenhuma análise da conta registrada recentemente.",
+      message: "Nenhuma otimização registrada recentemente.",
     });
   }
 

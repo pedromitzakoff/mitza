@@ -136,7 +136,6 @@ export default async function Home({
     { data: teamMembersForIndicators },
     { data: completedTasksForIndicators },
     { data: reviewsForIndicators },
-    { data: optimizationsForIndicators },
   ] = await Promise.all([
     supabase
       .from("clients")
@@ -194,12 +193,24 @@ export default async function Home({
       .select("client_id")
       .gte("reviewed_at", indicatorsMonthStart)
       .lte("reviewed_at", indicatorsMonthEnd),
-    supabase
-      .from("account_optimizations")
-      .select("client_id")
-      .gte("created_at", indicatorsMonthStart)
-      .lte("created_at", indicatorsMonthEnd),
   ]);
+
+  // Etapa 74 — "Última otimização": sempre o dado GLOBAL mais recente por
+  // cliente (independe do mês selecionado), por isso uma busca própria sem
+  // filtro de data — mesma fonte usada no Acompanhamento da Conta.
+  const clientIdsForLastReview = (clients ?? []).map((c) => c.id);
+  const { data: lastReviews } =
+    clientIdsForLastReview.length > 0
+      ? await supabase
+          .from("account_reviews")
+          .select("client_id, reviewed_at")
+          .in("client_id", clientIdsForLastReview)
+          .order("reviewed_at", { ascending: false })
+      : { data: [] };
+  const lastReviewAtByClient = new Map<string, string>();
+  for (const row of lastReviews ?? []) {
+    if (!lastReviewAtByClient.has(row.client_id)) lastReviewAtByClient.set(row.client_id, row.reviewed_at);
+  }
 
   const clientIds = (clients ?? []).map((c) => c.id);
   const currentSprintIds = (sprints ?? [])
@@ -319,6 +330,7 @@ export default async function Home({
       clientLastActivityAt: clientActivityById.get(client.id) ?? null,
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
       lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
+      lastReviewAt: lastReviewAtByClient.get(client.id) ?? null,
       performanceGoal: client.performance_goal,
       targetCostPerResult: client.target_cost_per_result,
       performanceRecords: performanceRecordsByClient.get(client.id) ?? [],
@@ -406,7 +418,6 @@ export default async function Home({
     teamMembers: (teamMembersForIndicators ?? []).map((m) => ({ id: m.id, systemRole: m.system_role, status: m.status })),
     completedTaskClientIds: (completedTasksForIndicators ?? []).map((t) => t.client_id),
     reviewClientIds: (reviewsForIndicators ?? []).map((r) => r.client_id),
-    optimizationClientIds: (optimizationsForIndicators ?? []).map((o) => o.client_id),
     hasClientFilter: Boolean(clientFilter),
   });
 
@@ -596,8 +607,8 @@ export default async function Home({
               />
               <OperationMetric
                 label="Atividade operacional"
-                value={`${operationIndicators.reviewsCount} análises`}
-                context={`${operationIndicators.optimizationsCount} otimizações`}
+                value={`${operationIndicators.optimizationsCount} otimizações`}
+                context="Revisões estratégicas registradas"
               />
             </div>
           </div>

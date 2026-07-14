@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { formatRelativeDateTime, formatShortDate } from "@/lib/format";
-import { OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
+import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
 import type { OperationalTrackingRow, MonthlyOccurrenceSummary } from "@/lib/operational-tracking";
 import { completeTaskAction, markTaskNotDoneAction } from "./tasks-actions";
 import { todayDateString } from "@/lib/today";
-import type { LastReviewInfo, LastOptimizationInfo } from "./account-follow-up-panel";
+import type { LastOptimizationInfo } from "./account-follow-up-panel";
 
 /** Anexa parâmetros a uma URL que já pode ou não ter query string (usada
  * pra montar os links do drawer de agendamento sempre em cima da URL atual
@@ -125,16 +125,30 @@ function MonthlyOccurrenceCell({ summary, monthLabel }: { summary: MonthlyOccurr
   );
 }
 
+/** Detalhe da última otimização, conforme o resultado da revisão (Etapa 74):
+ * alteração realizada mostra a área revisada (ou a quantidade, se mais de
+ * uma); problema identificado mostra a descrição; sem alteração necessária
+ * não precisa de detalhe extra (o próprio rótulo já diz tudo). */
+function lastOptimizationDetail(info: LastOptimizationInfo): string | null {
+  if (info.outcome === "OPTIMIZATION_PERFORMED") {
+    if (info.optimizationTypes.length === 1) return OPTIMIZATION_TYPE_LABEL[info.optimizationTypes[0]];
+    if (info.optimizationTypes.length > 1) return `${info.optimizationTypes.length} alterações`;
+    return null;
+  }
+  if (info.outcome === "ISSUE_IDENTIFIED") return info.issueDescription;
+  return null;
+}
+
 /**
- * "Resumo operacional da conta" — última análise/otimização + próxima
- * reunião/entrega (ou o resumo mensal, num mês passado). Extraído do
- * Acompanhamento da Conta (refinamento visual) sem nenhuma mudança de
- * lógica: mesmos dados, mesmo agrupamento por `isCurrentMonth`.
+ * "Resumo operacional da conta" — última otimização (revisão estratégica da
+ * conta, independentemente do resultado) + próxima reunião/entrega (ou o
+ * resumo mensal, num mês passado). Etapa 74: substitui os antigos "Última
+ * análise"/"Última otimização" por um único indicador — nunca dois cartões
+ * pro mesmo evento.
  */
 export function AccountActivitySummary({
   monthLabel,
   isCurrentMonth,
-  lastReview,
   lastOptimization,
   tracking,
   monthlySummary,
@@ -143,35 +157,31 @@ export function AccountActivitySummary({
 }: {
   monthLabel: string;
   isCurrentMonth: boolean;
-  lastReview: LastReviewInfo | null;
   lastOptimization: LastOptimizationInfo | null;
   tracking: Record<"reuniao" | "entrega_criativo", OperationalTrackingRow>;
   monthlySummary: Record<"reuniao" | "entrega_criativo", MonthlyOccurrenceSummary>;
   clientId: string;
   returnTo: string;
 }) {
-  const lastReviewLabelPrefix = isCurrentMonth ? "Última análise" : `Última análise em ${monthLabel}`;
-  const lastReviewValue = lastReview
-    ? formatRelativeDateTime(lastReview.reviewedAt, new Date())
-    : "Sem análise registrada";
-
   const lastOptimizationLabelPrefix = isCurrentMonth ? "Última otimização" : `Última otimização em ${monthLabel}`;
-  const lastOptimizationValue = lastOptimization
-    ? `${OPTIMIZATION_TYPE_LABEL[lastOptimization.type]} · ${formatShortDate(lastOptimization.occurredAt.slice(0, 10))}`
-    : "Nenhuma otimização registrada";
+  const lastOptimizationDateValue = lastOptimization
+    ? formatRelativeDateTime(lastOptimization.reviewedAt, new Date())
+    : "Sem otimização registrada";
+  const detail = lastOptimization ? lastOptimizationDetail(lastOptimization) : null;
 
   return (
-    <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-4">
-      <div className="flex flex-col gap-0.5">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{lastReviewLabelPrefix}</p>
-        <p className="text-sm text-foreground">{lastReviewValue}</p>
-        {lastReview && <p className="text-xs text-muted-foreground">{lastReview.managerName}</p>}
-      </div>
+    <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-3">
       <div className="flex flex-col gap-0.5">
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           {lastOptimizationLabelPrefix}
         </p>
-        <p className="text-sm text-foreground">{lastOptimizationValue}</p>
+        <p className="text-sm text-foreground">{lastOptimizationDateValue}</p>
+        {lastOptimization && (
+          <p className="text-xs text-muted-foreground">
+            {ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}
+            {detail ? ` · ${detail}` : ""}
+          </p>
+        )}
         {lastOptimization && <p className="text-xs text-muted-foreground">{lastOptimization.managerName}</p>}
       </div>
       {isCurrentMonth ? (

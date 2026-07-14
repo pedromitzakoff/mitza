@@ -149,6 +149,10 @@ export default async function ReportsPage({
     clientLastActivityAt: null,
     sprintLastActivityAt: null,
     lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
+    // Esta tela já aceita clientLastActivityAt/sprintLastActivityAt
+    // aproximados (sempre null) pra accountHealth — mesmo padrão aqui,
+    // nenhuma query nova só pra isso.
+    lastReviewAt: null,
   }));
 
   const allCards = rawClients.map((client) => buildOperationClientCard(client, today, monthRange));

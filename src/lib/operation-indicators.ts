@@ -28,7 +28,11 @@ export interface OperationIndicators {
   tasksTotalCount: number;
   /** null quando não há tarefas previstas no período — nunca 0%. */
   completionRatePct: number | null;
-  reviewsCount: number;
+  /** Otimizações realizadas (Etapa 74) — total de revisões estratégicas da
+   * conta (account_reviews) registradas no período, independente do
+   * resultado (alteração realizada, sem alteração necessária, ou problema
+   * identificado). Um único número — nunca separado por resultado, pra não
+   * dar a impressão de dois eventos onde só houve um. */
   optimizationsCount: number;
 }
 
@@ -43,20 +47,17 @@ export interface ComputeOperationIndicatorsInput {
   /** client_id de cada tarefa concluída (completed_at) dentro do mês
    * selecionado — já filtrado por data pelo chamador. */
   completedTaskClientIds: string[];
-  /** client_id de cada Análise da Conta (account_reviews.reviewed_at) dentro
+  /** client_id de cada Otimização (account_reviews.reviewed_at — a revisão
+   * estratégica da conta em si, qualquer que tenha sido o resultado) dentro
    * do mês selecionado — já filtrado por data pelo chamador. */
   reviewClientIds: string[];
-  /** client_id de cada Otimização (account_optimizations.created_at) dentro
-   * do mês selecionado — já filtrado por data pelo chamador. */
-  optimizationClientIds: string[];
   /** Há um cliente específico selecionado no filtro? Só muda o rótulo do
    * indicador de gestores, nunca o número. */
   hasClientFilter: boolean;
 }
 
 export function computeOperationIndicators(input: ComputeOperationIndicatorsInput): OperationIndicators {
-  const { cards, clientStatusById, teamMembers, completedTaskClientIds, reviewClientIds, optimizationClientIds, hasClientFilter } =
-    input;
+  const { cards, clientStatusById, teamMembers, completedTaskClientIds, reviewClientIds, hasClientFilter } = input;
 
   const clientIdsInScope = new Set(cards.map((c) => c.clientId));
 
@@ -90,8 +91,7 @@ export function computeOperationIndicators(input: ComputeOperationIndicatorsInpu
   const taskCountsDone = cards.reduce((sum, c) => sum + c.taskCounts.done, 0);
   const completionRatePct = taskCountsTotal > 0 ? (taskCountsDone / taskCountsTotal) * 100 : null;
 
-  const reviewsCount = reviewClientIds.filter((id) => clientIdsInScope.has(id)).length;
-  const optimizationsCount = optimizationClientIds.filter((id) => clientIdsInScope.has(id)).length;
+  const optimizationsCount = reviewClientIds.filter((id) => clientIdsInScope.has(id)).length;
 
   return {
     activeClientsCount,
@@ -100,7 +100,6 @@ export function computeOperationIndicators(input: ComputeOperationIndicatorsInpu
     completedTasksCount,
     tasksTotalCount: taskCountsTotal,
     completionRatePct,
-    reviewsCount,
     optimizationsCount,
   };
 }

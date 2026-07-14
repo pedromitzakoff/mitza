@@ -117,14 +117,20 @@ export interface AgencyExecutionSummary {
 
 /** Bloco 3 ("Execução da agência") — resumo operacional do mês, nunca a
  * lista completa de tarefas (isso fica atrás de "Ver execução completa").
- * Cada contagem reaproveita `tasks.type`/`recurrence`/`effectiveTaskStatus`
- * já existentes — nenhum dado novo, só uma leitura agregada. */
+ * Reuniões/entregas/tarefas reaproveitam `tasks.type`/`recurrence`/
+ * `effectiveTaskStatus` já existentes — nenhum dado novo, só uma leitura
+ * agregada. `optimizationsCount` (Etapa 74) já vem pronto de quem chama —
+ * é a contagem de otimizações (account_reviews.reviewed_at, a revisão
+ * estratégica da conta) do mês, nunca mais derivado da tarefa recorrente
+ * "otimizacao" (desativada desde a Etapa 57 e nunca migrada pra este
+ * resumo, o que o deixava sempre zerado). */
 export function computeAgencyExecutionSummary(
   monthTasks: { type: TaskType; status: TaskStatus; due_date: string; recurrence: TaskRecurrence }[],
   today: Date,
+  optimizationsCount: number,
 ): AgencyExecutionSummary {
   const summary: AgencyExecutionSummary = {
-    optimizationsDone: 0,
+    optimizationsDone: optimizationsCount,
     meetingsDone: 0,
     creativeDeliveriesDone: 0,
     operationalTasksDone: 0,
@@ -137,7 +143,6 @@ export function computeAgencyExecutionSummary(
 
     if (status === "feito") {
       summary.operationalTasksDone++;
-      if (task.type === "otimizacao") summary.optimizationsDone++;
       if (task.type === "reuniao") summary.meetingsDone++;
       if (task.type === "entrega_criativo") summary.creativeDeliveriesDone++;
     } else if (status === "atrasado") {

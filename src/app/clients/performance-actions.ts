@@ -8,34 +8,37 @@ import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-c
 import type { PerformanceGoalDb } from "@/lib/supabase/database.types";
 
 /**
- * Lança/atualiza (upsert) o resultado de UM canal de UMA sprint — a
- * estratégia de entrada manual é sempre por sprint (Etapa 71, seção 22);
- * consolidado mensal é sempre soma das sprints do mês, nunca lançamento
- * independente, pra nunca contar em dobro. Mesma autorização de
- * `updateSprintActualSpendAction` (admin) — "quem edita gasto real edita
- * resultados" (Etapa 71, seção 20), nenhuma permissão nova é criada.
- *
- * `result_type` vem do `performance_goal` ATUAL do cliente no momento do
- * lançamento — nunca um campo editável separado, e o valor gravado fica
- * imutável dali em diante (histórico nunca é reescrito se o objetivo do
- * cliente mudar depois).
+ * "Atualizar performance" — ação única que substitui os antigos "Editar"
+ * (investimento) e "Editar resultados" (por canal): um só submit grava
+ * investimento realizado (`sprints.manual_actual_spend`, igual a
+ * `updateSprintActualSpendAction`) e o resultado de cada canal presente no
+ * formulário (`performance_records`, igual ao antigo
+ * `upsertSprintPerformanceResultAction`) — nenhuma fonte de verdade nova,
+ * só as duas mesmas tabelas de sempre, na mesma transação de UI. Um canal
+ * cujo campo ficou em branco é ignorado (nunca zera um resultado que o
+ * gestor só não quis tocar agora). CPL/CPA continuam 100% derivados —
+ * nenhum campo aqui os aceita diretamente.
  */
-export async function upsertSprintPerformanceResultAction(
-  sprintId: string,
-  clientId: string,
-  formData: FormData,
-) {
+export async function updateSprintPerformanceAction(sprintId: string, clientId: string, formData: FormData) {
   await requireAdmin();
 
-  const channel = String(formData.get("channel") ?? "");
-  if (!AVAILABLE_TRAFFIC_CHANNELS.includes(channel as TrafficChannel)) {
-    redirect(`/clients/${clientId}?error=${encodeURIComponent("Canal inválido")}`);
+  const actualSpend = Number(formData.get("actual_spend"));
+  if (!Number.isFinite(actualSpend) || actualSpend < 0) {
+    redirect(`/clients/${clientId}?error=${encodeURIComponent("Valor de investimento inválido")}`);
   }
 
-  const resultCountRaw = String(formData.get("result_count") ?? "").trim();
-  const resultCount = Number(resultCountRaw);
-  if (!Number.isFinite(resultCount) || resultCount < 0 || !Number.isInteger(resultCount)) {
-    redirect(`/clients/${clientId}?error=${encodeURIComponent("Resultado inválido — informe um número inteiro maior ou igual a zero")}`);
+  const channelEntries: { channel: TrafficChannel; resultCount: number }[] = [];
+  for (const channel of AVAILABLE_TRAFFIC_CHANNELS) {
+    const raw = String(formData.get(`result_${channel}`) ?? "").trim();
+    if (!raw) continue; // em branco = não alterar este canal agora
+
+    const resultCount = Number(raw);
+    if (!Number.isFinite(resultCount) || resultCount < 0 || !Number.isInteger(resultCount)) {
+      redirect(
+        `/clients/${clientId}?error=${encodeURIComponent("Resultado inválido — informe um número inteiro maior ou igual a zero")}`,
+      );
+    }
+    channelEntries.push({ channel, resultCount });
   }
 
   const supabase = await createSupabaseClient();
@@ -52,35 +55,44 @@ export async function upsertSprintPerformanceResultAction(
     redirect(`/clients/${clientId}?error=${encodeURIComponent("Sprint não encontrada")}`);
   }
 
-  const { data: client } = await supabase
-    .from("clients")
-    .select("performance_goal")
-    .eq("id", clientId)
-    .single();
+  const nowIso = new Date().toISOString();
 
-  if (!client?.performance_goal) {
-    redirect(
-      `/clients/${clientId}?error=${encodeURIComponent("Configure o objetivo de performance do cliente antes de lançar resultados")}`,
-    );
+  const { error: spendError } = await supabase
+    .from("sprints")
+    .update({ spend_source: "manual", manual_actual_spend: actualSpend, manual_spend_updated_at: nowIso })
+    .eq("id", sprintId);
+
+  if (spendError) {
+    redirect(`/clients/${clientId}?error=${encodeURIComponent(spendError.message)}`);
   }
 
-  const { error } = await supabase.from("performance_records").upsert(
-    {
-      client_id: clientId,
-      sprint_id: sprintId,
-      channel: channel as TrafficChannel,
-      result_type: client!.performance_goal as PerformanceGoalDb,
-      result_count: resultCount,
-      period_start: sprint!.start_date,
-      period_end: sprint!.end_date,
-      source: "manual",
-      source_updated_at: new Date().toISOString(),
-    },
-    { onConflict: "client_id,sprint_id,channel,result_type" },
-  );
+  if (channelEntries.length > 0) {
+    const { data: client } = await supabase.from("clients").select("performance_goal").eq("id", clientId).single();
 
-  if (error) {
-    redirect(`/clients/${clientId}?error=${encodeURIComponent(error.message)}`);
+    if (!client?.performance_goal) {
+      redirect(
+        `/clients/${clientId}?error=${encodeURIComponent("Configure o objetivo de performance do cliente antes de lançar resultados")}`,
+      );
+    }
+
+    const { error: perfError } = await supabase.from("performance_records").upsert(
+      channelEntries.map(({ channel, resultCount }) => ({
+        client_id: clientId,
+        sprint_id: sprintId,
+        channel,
+        result_type: client!.performance_goal as PerformanceGoalDb,
+        result_count: resultCount,
+        period_start: sprint!.start_date,
+        period_end: sprint!.end_date,
+        source: "manual",
+        source_updated_at: nowIso,
+      })),
+      { onConflict: "client_id,sprint_id,channel,result_type" },
+    );
+
+    if (perfError) {
+      redirect(`/clients/${clientId}?error=${encodeURIComponent(perfError.message)}`);
+    }
   }
 
   revalidatePath("/");

@@ -134,8 +134,8 @@ export function getClientPriority(card: OperationClientCard, today: Date): Clien
     candidates.push({
       tier: 5,
       issue: {
-        title: "Análise da conta vencida",
-        description: "Nenhuma análise da conta registrada recentemente",
+        title: "Otimização vencida",
+        description: "Nenhuma otimização registrada recentemente",
         actionLabel: "Abrir sprint",
         actionHref: sprintHref,
       },

@@ -202,6 +202,23 @@ export default async function SprintsPage({
         : Promise.resolve({ data: [] }),
     ]);
 
+  // Etapa 74 — "Última otimização"/filtro "optimization": sempre o dado
+  // GLOBAL mais recente por cliente (independe do mês selecionado), por
+  // isso uma busca própria sem filtro de data — mesma fonte usada na Visão
+  // Geral e no Acompanhamento da Conta (account_reviews.reviewed_at).
+  const { data: lastReviews } =
+    clientIds.length > 0
+      ? await supabase
+          .from("account_reviews")
+          .select("client_id, reviewed_at")
+          .in("client_id", clientIds)
+          .order("reviewed_at", { ascending: false })
+      : { data: [] };
+  const lastReviewAtByClient = new Map<string, string>();
+  for (const row of lastReviews ?? []) {
+    if (!lastReviewAtByClient.has(row.client_id)) lastReviewAtByClient.set(row.client_id, row.reviewed_at);
+  }
+
   const allCommentIds = (sprintComments ?? []).map((c) => c.id);
   const { data: reportSelections } =
     allCommentIds.length > 0
@@ -337,6 +354,7 @@ export default async function SprintsPage({
       clientLastActivityAt: clientActivityById.get(client.id) ?? null,
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
       lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
+      lastReviewAt: lastReviewAtByClient.get(client.id) ?? null,
       sprintClosedSnapshots: sprintClosedSnapshotsByClient.get(client.id) ?? new Map(),
       performanceGoal: client.performance_goal,
       targetCostPerResult: client.target_cost_per_result,

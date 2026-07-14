@@ -33,7 +33,7 @@ import { MonthInvestmentSummary } from "../month-investment-summary";
 import { SprintCard } from "../sprint-card";
 import { TaskList } from "../task-list";
 import { Section } from "../section";
-import { AccountFollowUpPanel, type LastReviewInfo, type LastOptimizationInfo } from "../account-follow-up-panel";
+import { AccountFollowUpPanel, type LastOptimizationInfo } from "../account-follow-up-panel";
 import { ClientOperationalHistoryDrawer } from "../client-operational-history-drawer";
 import { ScheduleOccurrenceDrawer } from "../schedule-occurrence-drawer";
 import { EssentialInfoPanel } from "../essential-info-panel";
@@ -477,29 +477,25 @@ export default async function ClientPage({
   });
   const accountReviewsBySprintId = groupAccountReviewsBySprintId(accountReviewSummaries);
 
-  // Etapa 62, seção 3/7/8 — "Última análise"/"Última otimização": no mês
-  // atual é sempre o dado GLOBAL mais recente (accountReviews já vem
-  // ordenado desc, então é só o primeiro item); num mês anterior, é o mais
-  // recente DENTRO do mês selecionado. "Última otimização" é a otimização
-  // da análise mais recente (nessa mesma lista) que de fato tem alguma —
-  // nunca uma consulta paralela a account_optimizations (a única fonte é a
-  // mesma lista de análises, com optimizations já aninhadas).
+  // Etapa 74 — "Última otimização": no mês atual é sempre o dado GLOBAL mais
+  // recente (accountReviews já vem ordenado desc, então é só o primeiro
+  // item); num mês anterior, é o mais recente DENTRO do mês selecionado.
+  // Um único indicador pra qualquer resultado da revisão (alteração
+  // realizada, sem alteração necessária, ou problema identificado) — nunca
+  // dois indicadores separados pro mesmo evento.
   const reviewsInMonth = accountReviews.filter(
     (r) => r.reviewed_at >= `${firstDay}T00:00:00Z` && r.reviewed_at <= `${lastDay}T23:59:59.999Z`,
   );
   const reviewsForLastLookup = isCurrentMonth ? accountReviews : reviewsInMonth;
 
-  const lastReviewSource = reviewsForLastLookup[0] ?? null;
-  const lastReview: LastReviewInfo | null = lastReviewSource
-    ? { reviewedAt: lastReviewSource.reviewed_at, managerName: lastReviewSource.team_member?.name ?? "Membro removido" }
-    : null;
-
-  const lastOptimizationSource = reviewsForLastLookup.find((r) => r.optimizations.length > 0) ?? null;
+  const lastOptimizationSource = reviewsForLastLookup[0] ?? null;
   const lastOptimization: LastOptimizationInfo | null = lastOptimizationSource
     ? {
-        type: lastOptimizationSource.optimizations[0].optimization_type,
-        occurredAt: lastOptimizationSource.reviewed_at,
+        reviewedAt: lastOptimizationSource.reviewed_at,
         managerName: lastOptimizationSource.team_member?.name ?? "Membro removido",
+        outcome: lastOptimizationSource.outcome,
+        optimizationTypes: lastOptimizationSource.optimizations.map((o) => o.optimization_type),
+        issueDescription: lastOptimizationSource.issue_description,
       }
     : null;
 
@@ -719,7 +715,7 @@ export default async function ClientPage({
           opcional, nunca gera a atualização automaticamente. */}
       {reviewSaved && !clientUpdatesByReviewId.has(reviewSaved) && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
-          <span className="text-foreground">Análise registrada com sucesso.</span>
+          <span className="text-foreground">Otimização registrada com sucesso.</span>
           <div className="flex items-center gap-2">
             <form action={generateClientUpdateAction.bind(null, reviewSaved, withParam(returnTo, `reviewDetail=${reviewSaved}`))}>
               <button
@@ -776,7 +772,6 @@ export default async function ClientPage({
           performanceGoal={performanceGoal}
           performanceSummary={monthPerformanceSummary}
           configureObjectiveHref={`/clients/${client.id}/edit`}
-          lastReview={lastReview}
           lastOptimization={lastOptimization}
           tracking={operationalTracking}
           monthlySummary={monthlyOccurrenceSummary}
