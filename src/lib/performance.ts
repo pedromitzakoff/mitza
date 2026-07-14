@@ -159,6 +159,49 @@ export function compareCostToTarget(costPerResult: number | null, targetCostPerR
   };
 }
 
+/**
+ * MVP "Regras centrais de saúde da conta" — limiar de ENTRADA em prioridade
+ * por custo por resultado: só custo 30%+ acima da meta vira alerta
+ * acionável ("CPA 38% acima da meta"). Deliberadamente uma constante
+ * PRÓPRIA, distinta de `PERFORMANCE_STATUS_MARGIN` (±10%, "dentro da
+ * meta"/`getPerformanceStatus` — usada pra classificar/exibir eficiência em
+ * qualquer tela): os dois domínios respondem perguntas diferentes ("esse
+ * custo está bom?" vs. "isso precisa virar uma ação hoje?") e nunca devem
+ * compartilhar o mesmo número, mesmo que hoje pareçam relacionados.
+ */
+export const COST_PRIORITY_DEVIATION_THRESHOLD = 0.3; // 30%
+
+/**
+ * Esta conta deve entrar na fila de prioridades por custo por resultado?
+ * `false` sempre que não há como calcular com confiança: sem meta
+ * configurada, sem custo disponível pro escopo, ou (quando
+ * `minReliableResultCount` for passado) amostra insuficiente — nunca
+ * classifica "acima da meta" sem uma base de comparação real.
+ *
+ * `minReliableResultCount` é um HOOK, não uma regra: auditoria desta etapa
+ * confirmou que o sistema ainda não tem nenhum critério de "amostra mínima
+ * pra um CPL/CPA confiável" em lugar nenhum (nada equivalente a
+ * `SPEND_STATUS_MARGIN` pra tamanho de amostra) — por isso esta função
+ * nunca inventa um número fixo (tipo "mínimo de 5 leads") por conta própria.
+ * O parâmetro existe pra centralizar ONDE esse critério entraria no dia em
+ * que a agência decidir um valor real (viraria, por exemplo, uma
+ * configuração por cliente ou por objetivo) — até lá, omitir o parâmetro
+ * (padrão `undefined`) preserva o comportamento atual: qualquer
+ * `resultCount > 0` já é considerado suficiente (mesma régua de
+ * `hasAnyRecord`/`resultCount === 0` já usada por `computeCostPerResult`).
+ */
+export function isCostAboveTargetPriority(
+  costPerResult: number | null,
+  targetCostPerResult: number | null,
+  resultCount: number,
+  minReliableResultCount?: number,
+): boolean {
+  if (minReliableResultCount !== undefined && resultCount < minReliableResultCount) return false;
+  const variation = computeVariationFromTarget(costPerResult, targetCostPerResult);
+  if (variation === null) return false;
+  return variation > COST_PRIORITY_DEVIATION_THRESHOLD;
+}
+
 /** Texto pronto da comparação ("25% acima da meta" / "16,7% melhor que a
  * meta" / "Dentro da meta" / null quando não há meta ou custo disponível)
  * — Etapa 71, seção 17, mesmos exemplos do pedido original. */

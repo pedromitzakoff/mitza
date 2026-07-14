@@ -1,5 +1,24 @@
-/** Margem de tolerância pra considerar um gasto "dentro do esperado". */
-export const SPEND_STATUS_MARGIN = 0.1; // ±10%
+/** Margem de tolerância pra considerar um gasto "dentro do esperado" — MVP
+ * Etapa "Regras centrais de saúde da conta": ±20% (antes ±10%), sobre o
+ * `relativeDeviation` abaixo. Única constante de ritmo financeiro do
+ * sistema — mudar aqui reclassifica toda tela que consome
+ * `classifySpendStatus`/`classifySprintSpendStatus`, nunca uma segunda
+ * margem duplicada em algum componente. */
+export const SPEND_STATUS_MARGIN = 0.2; // ±20%
+
+/**
+ * Desvio relativo do realizado em relação ao esperado —
+ * `(actual - expected) / expected`. Positivo = acima do esperado; negativo =
+ * abaixo. `null` quando `expected <= 0` (não dá pra calcular uma razão
+ * contra uma base zero/negativa — quem chama decide o que isso significa no
+ * seu contexto, ver `classifySpendStatus`). Central e reaproveitado por
+ * qualquer lugar que precise do NÚMERO do desvio (não só a classificação
+ * dentro/acima/abaixo) — ex.: o texto de prioridade "27% abaixo do ritmo".
+ */
+export function computeRelativeDeviation(actual: number, expected: number): number | null {
+  if (expected <= 0) return null;
+  return (actual - expected) / expected;
+}
 
 /** "nao_iniciado" e "em_andamento" são status TEMPORAIS disfarçados de
  * financeiro — só existem pra sprints (ver `classifySprintSpendStatus` em
@@ -33,7 +52,8 @@ export function classifySpendStatus(
     return "sem_meta";
   }
 
-  if (expected <= 0) {
+  const relativeDeviation = computeRelativeDeviation(actual, expected);
+  if (relativeDeviation === null) {
     // `expected <= 0` com `plannedTotal > 0` NUNCA significa "período ainda
     // não começou" pra quem já filtra isso antes de chamar esta função
     // (`classifySprintSpendStatus` devolve "nao_iniciado" mais cedo pra
@@ -49,9 +69,8 @@ export function classifySpendStatus(
     return "sem_meta";
   }
 
-  const ratio = actual / expected;
-  if (ratio > 1 + SPEND_STATUS_MARGIN) return "acima";
-  if (ratio < 1 - SPEND_STATUS_MARGIN) return "abaixo";
+  if (relativeDeviation > SPEND_STATUS_MARGIN) return "acima";
+  if (relativeDeviation < -SPEND_STATUS_MARGIN) return "abaixo";
   return "dentro";
 }
 

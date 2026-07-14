@@ -94,7 +94,8 @@ export function operationalSummary(
  *
  *   0 · conta crítica (`accountHealth === "critico"`, já computado em
  *       `computeAccountHealth` a partir dos alertas)
- *   1 · investimento fora do ritmo esperado (acima ou abaixo, ±10%)
+ *   1 · investimento fora do ritmo esperado (acima ou abaixo, ±20% —
+ *       ver SPEND_STATUS_MARGIN)
  *   2 · tarefas atrasadas no período em foco
  *   3 · ausência de otimização recente
  *   4 · ausência de atividade operacional recente

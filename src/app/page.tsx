@@ -45,7 +45,7 @@ import type { SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 const inter = Inter({ subsets: ["latin"], variable: "--font-overview" });
 
 /** Rótulos da "situação" financeira do mês — mesma classificação de sempre
- * (card.monthStatus, ±10% central). */
+ * (card.monthStatus, SPEND_STATUS_MARGIN central, ±20%). */
 const SITUATION_LABEL: Record<SpendStatus, string> = {
   dentro: "Dentro",
   acima: "Acima",
@@ -838,7 +838,7 @@ export default async function Home({
                   {sortedCards.map((card) => {
                     const isConsolidado = platformFilter === "consolidado";
                     // Mesma regra usada pra classificar o status
-                    // (classifySpendStatus, ±10% sobre `monthExpectedToDate`)
+                    // (classifySpendStatus, ±20% sobre `monthExpectedToDate`)
                     // — "Esperado até hoje" é só esse valor expresso como %
                     // do planejado, nunca um cálculo paralelo. Etapa 3: só
                     // existe no Consolidado (sem orçamento por canal).
