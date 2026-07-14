@@ -205,3 +205,60 @@ Antes de qualquer implementação responder:
 7. É compatível com o Manifesto?
 
 Caso alguma resposta seja negativa, justificar antes de implementar.
+
+## Capítulo 13 — Navegação
+
+A navegação da plataforma deve privilegiar continuidade.
+
+Sempre que possível:
+
+- expandir ao invés de abrir páginas;
+- editar ao invés de navegar;
+- permanecer no mesmo contexto;
+- preservar scroll;
+- preservar filtros;
+- preservar expansões;
+- preservar mês selecionado.
+
+A troca de tela deve ser exceção.
+
+## Capítulo 14 — Estrutura Hierárquica
+
+A plataforma deve comunicar claramente a hierarquia da operação.
+
+> Cliente
+>
+> ↓
+>
+> Sprint
+>
+> ↓
+>
+> Contexto
+>
+> ↓
+>
+> Ações
+>
+> ↓
+>
+> Histórico
+
+Essa relação deve ser percebida visualmente.
+
+A navegação deve privilegiar árvores hierárquicas ao invés de múltiplos
+cards independentes.
+
+## Capítulo 15 — Densidade Visual
+
+Sempre buscar alta densidade operacional. Isso significa mostrar mais
+contexto utilizando menos espaço. Não significa poluir a interface.
+
+Reduzir:
+
+- espaços vazios;
+- margens excessivas;
+- textos redundantes;
+- divisórias desnecessárias;
+- componentes repetidos;
+- cabeçalhos duplicados.
