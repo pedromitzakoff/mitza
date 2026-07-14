@@ -3,6 +3,7 @@ import { SPEND_STATUS_BADGE_CLASSES } from "@/lib/spend-status";
 import type { FinancialPeriodSummary } from "@/lib/financial-period";
 import { computeExpectedPct } from "@/lib/financial-period";
 import type { OperationalSummary } from "@/lib/account-priority";
+import type { MonthTemporalStatus } from "@/lib/monthly-budget";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
 
 /** Rótulo compacto da situação financeira — mesma classificação central
@@ -48,6 +49,7 @@ export function AccountCardSummary({
   periodLabel,
   summary,
   operational,
+  monthTemporalStatus,
 }: {
   clientId: string;
   clientName: string;
@@ -55,6 +57,10 @@ export function AccountCardSummary({
   periodLabel: string;
   summary: FinancialPeriodSummary;
   operational: OperationalSummary;
+  /** Etapa 68, seção 16 — só relevante pra `summary.kind === "month"`
+   * (Mensal Consolidado): troca o texto do marcador quando o mês navegado
+   * não é o corrente. `undefined` = mês corrente. */
+  monthTemporalStatus?: MonthTemporalStatus;
 }) {
   const isSprintKind = summary.kind === "sprint";
   const investedPct = summary.pct !== null ? Math.round(summary.pct) : null;
@@ -100,7 +106,11 @@ export function AccountCardSummary({
 
         <div className="mt-1.5">
           {summary.planned > 0 ? (
-            <AgencyInvestmentBar summary={summary} showExpectedMarker={!isSprintKind} />
+            <AgencyInvestmentBar
+              summary={summary}
+              showExpectedMarker={!isSprintKind}
+              monthTemporalStatus={isSprintKind ? undefined : monthTemporalStatus}
+            />
           ) : (
             <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />
           )}

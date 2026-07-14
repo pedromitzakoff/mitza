@@ -9,6 +9,21 @@ export function formatCurrency(value: number): string {
   return currencyFormatter.format(value);
 }
 
+const percentFormatter = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** Percentual com 2 casas decimais (ex.: "45,16%") — Etapa 68: o "% esperado
+ * hoje" e o "% realizado" precisam de precisão decimal (o avanço de
+ * calendário quase nunca cai num número redondo — dia 15 de 31 é 48,39%,
+ * não 48%), diferente de outros percentuais do sistema que continuam
+ * arredondados pro inteiro mais próximo (`Math.round`). `value` já em escala
+ * 0–100 (não uma fração 0–1). */
+export function formatPercent(value: number): string {
+  return `${percentFormatter.format(value)}%`;
+}
+
 const dayMonthFormatter = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",

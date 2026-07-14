@@ -10,6 +10,7 @@ import {
   shiftMonthParam,
 } from "@/lib/sprint-financials";
 import { formatFullDate, formatMonthLabel } from "@/lib/format";
+import { getMonthTemporalStatus } from "@/lib/monthly-budget";
 import {
   sortAccountsByPriority,
   financialStatusForPeriod,
@@ -370,6 +371,7 @@ export default async function SprintsPage({
   };
 
   const monthLabel = formatMonthLabel(monthRange.firstDay);
+  const monthTemporalStatus = getMonthTemporalStatus(monthRange, todayStr);
 
   const openTaskId = params.task ?? null;
   let openTask: {
@@ -542,6 +544,7 @@ export default async function SprintsPage({
                 monthRange={monthRange}
                 primaryManagerName={primaryManagerNameByClient.get(card.clientId) ?? null}
                 returnTo={buildUrl({})}
+                monthTemporalStatus={monthTemporalStatus}
               />
             ))
           ) : (
@@ -555,6 +558,7 @@ export default async function SprintsPage({
                 isAdmin={isAdmin}
                 returnTo={buildUrl({})}
                 sprintCommentsById={sprintCommentsById}
+                monthTemporalStatus={monthTemporalStatus}
               />
             ))
           )

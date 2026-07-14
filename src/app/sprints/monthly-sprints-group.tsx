@@ -2,6 +2,7 @@ import type { OperationClientCard as OperationClientCardData } from "@/app/opera
 import type { CommentItem } from "@/app/clients/comment-thread";
 import { resolveMonthPeriodSummary } from "@/lib/financial-period";
 import { operationalSummary } from "@/lib/account-priority";
+import type { MonthTemporalStatus } from "@/lib/monthly-budget";
 import { SprintCard } from "@/app/clients/sprint-card";
 import { AccountCardSummary } from "./account-card-summary";
 
@@ -26,6 +27,7 @@ export function SprintMonthlyBySprintsGroup({
   isAdmin,
   returnTo,
   sprintCommentsById,
+  monthTemporalStatus,
 }: {
   card: OperationClientCardData;
   monthLabel: string;
@@ -34,6 +36,7 @@ export function SprintMonthlyBySprintsGroup({
   isAdmin: boolean;
   returnTo: string;
   sprintCommentsById: Map<string, CommentItem[]>;
+  monthTemporalStatus?: MonthTemporalStatus;
 }) {
   const summary = resolveMonthPeriodSummary(card, monthLabel, monthRange);
   const operational = operationalSummary(card, "month");
@@ -47,6 +50,7 @@ export function SprintMonthlyBySprintsGroup({
         periodLabel={monthLabel}
         summary={summary}
         operational={operational}
+        monthTemporalStatus={monthTemporalStatus}
       />
 
       <div className="flex flex-col gap-2 border-t border-border p-3">

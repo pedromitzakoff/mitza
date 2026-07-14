@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatCurrency } from "@/lib/format";
 import type { OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
 import { resolveMonthPeriodSummary, computeRitmoDiff } from "@/lib/financial-period";
+import type { MonthTemporalStatus } from "@/lib/monthly-budget";
 import { operationalSummary } from "@/lib/account-priority";
 import { orderTasks } from "@/app/clients/task-list";
 import { TaskRow } from "@/app/clients/task-row";
@@ -26,12 +27,14 @@ export function SprintMonthlyConsolidatedGroup({
   monthRange,
   primaryManagerName,
   returnTo,
+  monthTemporalStatus,
 }: {
   card: OperationClientCardData;
   monthLabel: string;
   monthRange: { firstDay: string; lastDay: string };
   primaryManagerName: string | null;
   returnTo: string;
+  monthTemporalStatus?: MonthTemporalStatus;
 }) {
   const summary = resolveMonthPeriodSummary(card, monthLabel, monthRange);
   const diff = computeRitmoDiff(summary);
@@ -47,6 +50,7 @@ export function SprintMonthlyConsolidatedGroup({
         periodLabel={monthLabel}
         summary={summary}
         operational={operational}
+        monthTemporalStatus={monthTemporalStatus}
       />
 
       <div className="border-t border-border p-3">

@@ -7,6 +7,7 @@ import { formatCurrency, formatMonthLabel, formatShortDate } from "@/lib/format"
 import { shiftMonthParam, monthRangeFromParam } from "@/lib/sprint-financials";
 import { classifySpendStatus } from "@/lib/spend-status";
 import { resolveMonthPeriodSummary } from "@/lib/financial-period";
+import { getMonthTemporalStatus } from "@/lib/monthly-budget";
 import {
   MONTHLY_REPORT_STATUS_BADGE_CLASSES,
   MONTHLY_REPORT_STATUS_LABEL,
@@ -115,6 +116,7 @@ export default async function ClientReportPage({
   const isReadOnly = data.status === "finalizado";
   const financialStatus = classifySpendStatus(data.financial.actual, data.financial.expectedToDate, data.financial.planned);
   const pct = data.financial.planned > 0 ? Math.round((data.financial.actual / data.financial.planned) * 100) : null;
+  const monthTemporalStatus = getMonthTemporalStatus(monthRange, today.toISOString().slice(0, 10));
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-6">
@@ -219,6 +221,7 @@ export default async function ClientReportPage({
                   data.monthLabel,
                   monthRange,
                 )}
+                monthTemporalStatus={monthTemporalStatus}
               />
             </div>
           )}
