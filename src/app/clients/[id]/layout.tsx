@@ -53,6 +53,7 @@ export default async function ClientLayout({
     { data: tasks },
     { data: clientActivity },
     { data: plannedAllocations },
+    { data: budgetChanges },
   ] = await Promise.all([
     // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
     // mês precisa aparecer mesmo com start_date no mês anterior.
@@ -81,6 +82,11 @@ export default async function ClientLayout({
       .eq("client_id", id)
       .gte("date", firstDay)
       .lte("date", lastDay),
+    supabase
+      .from("monthly_budget_changes")
+      .select("new_amount, changed_at")
+      .eq("client_id", id)
+      .eq("month", firstDay),
   ]);
 
   const currentSprint = findSprintForDate(sprints ?? [], todayStr);
@@ -117,6 +123,7 @@ export default async function ClientLayout({
       sprintId: a.sprint_id,
       amount: a.planned_amount,
     })),
+    monthlyBudgetChanges: (budgetChanges ?? []).map((c) => ({ newAmount: c.new_amount, changedAt: c.changed_at })),
     tasks: tasks ?? [],
     clientLastActivityAt: clientActivity?.last_activity_at ?? null,
     sprintLastActivityAt: sprintActivity?.last_activity_at ?? null,

@@ -267,13 +267,22 @@ export function computeSprintPlannedSplit(
 /** Números brutos por trás do investimento de UMA sprint — fonte única de
  * "quanto é o previsto" e "quanto ainda resta planejar", nunca recalculados
  * separadamente pelo resumo compacto (`describeSprintInvestment`) e pelos
- * indicadores do card expandido (Etapa 65): os dois leem exatamente os
- * mesmos dois números. O "previsto" da sprint atual é sempre
- * `realizado + planejamento restante` — nunca o `plannedSpend` bruto, que
- * poderia embutir um planejamento histórico já ultrapassado pelo realizado
- * (mesma razão de sempre: uma mudança de orçamento no meio da sprint muda o
- * planejamento futuro sem reescrever o passado). `overageAmount` é quanto o
- * realizado ultrapassou o previsto — 0 quando não ultrapassou. */
+ * indicadores do card expandido. O "previsto" da sprint atual/futura é
+ * sempre `realizado + planejamento restante` (Etapa 66, seção 7) — nunca o
+ * `plannedSpend` bruto (coluna persistida, que fica desatualizada assim que
+ * o realizado muda sem uma nova redistribuição).
+ *
+ * Etapa 66: `remainingPlanned` já vem PRONTO de
+ * `computeMonthlyBudgetPlan().sprintPlans` (a única função que decide
+ * "quanto ainda pode ser investido" — nunca recalculado aqui a partir de
+ * `sprint_planned_allocations`). Só a sprint CONCLUÍDA usa `historicalSplit`
+ * (as linhas de planejamento diário já persistidas) — pra ela,
+ * `remainingPlanned` é sempre 0 (nada mais resta de um período encerrado); o
+ * "previsto" exibido é o planejamento HISTÓRICO (se existir), preservado só
+ * pra comparação, nunca usado no cálculo do saldo atual. Quando quem chama
+ * não busca as alocações diárias (`historicalSplit` undefined — ex.: painel
+ * Sprints, que ainda não busca por sprint individual), cai pro total bruto
+ * já existente (`sprint.plannedSpend`), mesmo comportamento de sempre. */
 export interface SprintInvestmentAmounts {
   totalPrevisto: number;
   remainingPlanned: number;
@@ -282,85 +291,72 @@ export interface SprintInvestmentAmounts {
 
 export function computeSprintInvestmentAmounts(
   sprint: { temporalStatus: SprintTemporalStatus; actualSpend: number; plannedSpend: number },
-  split: SprintPlannedSplit | undefined,
+  remainingPlanned: number,
+  historicalSplit: SprintPlannedSplit | undefined,
 ): SprintInvestmentAmounts {
-  let totalPrevisto: number;
-  let remainingPlanned: number;
-
-  if (sprint.temporalStatus === "futura") {
-    totalPrevisto = sprint.plannedSpend;
-    remainingPlanned = sprint.plannedSpend;
-  } else if (sprint.temporalStatus === "atual") {
-    // Sem a alocação diária da própria sprint (quem chama não tem esse
-    // detalhe à mão — ex.: painel Sprints), cai pro total bruto já
-    // existente (`plannedSpend`) em vez de fingir que não sobrou nada —
-    // nunca inventa um "restante" que não pode calcular.
-    if (!split) {
-      totalPrevisto = sprint.plannedSpend;
-      remainingPlanned = Math.max(sprint.plannedSpend - sprint.actualSpend, 0);
-    } else {
-      totalPrevisto = sprint.actualSpend + split.remainingPlanned;
-      remainingPlanned = split.remainingPlanned;
-    }
-  } else {
-    // concluída — nada mais "resta", só o resultado final do que já passou.
-    const hasHistoricalPlan = split ? split.hasAnyAllocation : sprint.plannedSpend > 0;
-    totalPrevisto = hasHistoricalPlan ? split?.historicalPlanned || sprint.plannedSpend : 0;
-    remainingPlanned = 0;
+  if (sprint.temporalStatus === "concluida") {
+    const hasHistoricalPlan = historicalSplit ? historicalSplit.hasAnyAllocation : sprint.plannedSpend > 0;
+    const totalPrevisto = hasHistoricalPlan
+      ? (historicalSplit ? historicalSplit.historicalPlanned : sprint.plannedSpend)
+      : 0;
+    return { totalPrevisto, remainingPlanned: 0, overageAmount: Math.max(sprint.actualSpend - totalPrevisto, 0) };
   }
 
+  const safeRemaining = Math.max(remainingPlanned, 0);
   return {
-    totalPrevisto,
-    remainingPlanned,
-    overageAmount: Math.max(sprint.actualSpend - totalPrevisto, 0),
+    totalPrevisto: sprint.actualSpend + safeRemaining,
+    remainingPlanned: safeRemaining,
+    // Nunca ultrapassa pra atual/futura: o previsto É `realizado + restante`
+    // (nunca um alvo fixo que o realizado possa superar) — o único jeito do
+    // realizado "ultrapassar" é o orçamento do MÊS já ter sido atingido, o
+    // que já zera `remainingPlanned` (ver `computeMonthlyBudgetPlan`), e aí
+    // `totalPrevisto === actualSpend` (nunca menor).
+    overageAmount: 0,
   };
 }
 
-/** Texto operacional do investimento de UMA sprint (Etapa 63, seções 11/12)
- * — nunca mais o "R$ X / R$ Y" ambíguo do resumo compacto. Cobre os 5
- * estados possíveis: futura, atual com dias restantes ainda planejáveis,
- * atual sem nada mais a planejar (último dia), concluída com planejamento
- * histórico, concluída sem nenhum planejamento registrado (gasto real
- * preservado, nunca escondido nem tratado como erro). Etapa 65: só monta o
- * texto do resumo compacto — os números vêm de `computeSprintInvestmentAmounts`,
- * a mesma fonte que os indicadores do card expandido usam, pra nunca haver
- * dois valores divergentes pra "previsto"/"restante" entre o resumo fechado
- * e o card aberto. */
+/** Texto operacional do investimento de UMA sprint — nunca mais o
+ * "R$ X / R$ Y" ambíguo do resumo compacto. Cobre os 4 estados possíveis:
+ * futura, atual com dias restantes ainda planejáveis, atual sem nada mais a
+ * planejar (último dia), concluída com/sem planejamento histórico registrado
+ * (gasto real preservado, nunca escondido nem tratado como erro). Recebe
+ * `amounts` já pronto (`computeSprintInvestmentAmounts`) — a mesma fonte que
+ * os indicadores do card expandido usam, pra nunca haver dois valores
+ * divergentes pra "previsto"/"restante" entre o resumo fechado e o card
+ * aberto (Etapa 66, seção 11). */
 export interface SprintInvestmentText {
   primary: string;
   secondary: string | null;
 }
 
 export function describeSprintInvestment(
-  sprint: { temporalStatus: SprintTemporalStatus; actualSpend: number; plannedSpend: number },
-  split: SprintPlannedSplit | undefined,
+  sprint: { temporalStatus: SprintTemporalStatus; actualSpend: number },
+  amounts: SprintInvestmentAmounts,
   formatCurrency: (value: number) => string,
 ): SprintInvestmentText {
   if (sprint.temporalStatus === "futura") {
-    return sprint.plannedSpend > 0
-      ? { primary: `${formatCurrency(0)} investidos de ${formatCurrency(sprint.plannedSpend)} planejados`, secondary: null }
+    return amounts.totalPrevisto > 0
+      ? { primary: `${formatCurrency(0)} investidos de ${formatCurrency(amounts.totalPrevisto)} planejados`, secondary: null }
       : { primary: `${formatCurrency(0)} investidos · sem planejamento configurado`, secondary: null };
   }
 
-  const { totalPrevisto, remainingPlanned } = computeSprintInvestmentAmounts(sprint, split);
-
   if (sprint.temporalStatus === "atual") {
-    if (!split) {
-      return { primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(totalPrevisto)} previstos`, secondary: null };
-    }
     return {
-      primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(totalPrevisto)} previstos`,
-      secondary: remainingPlanned > 0 ? `${formatCurrency(remainingPlanned)} ainda planejados para os dias restantes` : null,
+      primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(amounts.totalPrevisto)} previstos`,
+      secondary:
+        amounts.remainingPlanned > 0 ? `${formatCurrency(amounts.remainingPlanned)} ainda planejados para os dias restantes` : null,
     };
   }
 
-  // concluída
-  const hasHistoricalPlan = split ? split.hasAnyAllocation : sprint.plannedSpend > 0;
-  if (!hasHistoricalPlan) {
-    return { primary: `${formatCurrency(sprint.actualSpend)} investidos · planejamento histórico não definido`, secondary: null };
+  // concluída — Etapa 66, seção 8: nunca "de R$0 planejados" quando não
+  // existia planejamento histórico registrado (`amounts.totalPrevisto === 0`
+  // só acontece nesse caso, já que `computeSprintInvestmentAmounts` devolve
+  // 0 exclusivamente quando `historicalSplit` não tem nenhuma alocação).
+  if (amounts.totalPrevisto <= 0) {
+    return { primary: `${formatCurrency(sprint.actualSpend)} investidos · sem planejamento histórico registrado`, secondary: null };
   }
   return {
-    primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(totalPrevisto)} planejados`,
+    primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(amounts.totalPrevisto)} planejados`,
     secondary: null,
   };
 }

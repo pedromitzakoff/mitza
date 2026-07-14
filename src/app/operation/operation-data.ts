@@ -9,6 +9,7 @@ import {
   type SpendSource,
   type PlannedAllocationRow,
 } from "@/lib/sprint-financials";
+import { resolveMonthlyBudget, resolveBudgetEffectiveDate, computeMonthlyBudgetPlan } from "@/lib/monthly-budget";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { effectiveTaskStatus } from "@/lib/task-status";
@@ -50,9 +51,15 @@ export interface OperationClientRawData {
   dailySpend: { date: string; spend: number }[];
   /** Planejado diário (`sprint_planned_allocations`), já buscado pelo
    * chamador pro intervalo de datas que ele precisa (mês selecionado, ou
-   * união de meses). Fonte de verdade do planejado por mês — nunca mais
-   * derivado de `sprint.planned_spend` filtrando sprint por mês (Etapa 50). */
+   * união de meses). Etapa 66: só serve de fallback pra `resolveMonthlyBudget`
+   * (cliente que nunca configurou orçamento pelo editor) — nunca mais a
+   * fonte principal do planejado do mês. */
   plannedAllocations: PlannedAllocationRow[];
+  /** Histórico de alterações de orçamento (`monthly_budget_changes`) do mês
+   * selecionado — Etapa 66: única fonte do orçamento mensal VIGENTE
+   * (`resolveMonthlyBudget`), nunca mais a soma dos planejamentos diários
+   * persistidos. */
+  monthlyBudgetChanges: { newAmount: number; changedAt: string }[];
   tasks: OperationTaskItem[];
   clientLastActivityAt: string | null;
   sprintLastActivityAt: string | null;
@@ -102,6 +109,11 @@ export interface OperationClientCard {
    * Sprints. Reaproveita computeSprintFinancials pra cada uma, nunca
    * duplica a conta de planejado/realizado/esperado. */
   monthSprints: SprintFinancials[];
+  /** Planejamento restante de cada sprint do mês, por sprintId (Etapa 66) —
+   * sempre `computeMonthlyBudgetPlan().sprintPlans`, a mesma função central
+   * usada na página do cliente; `null` quando o mês está encerrado (não
+   * existe "planejamento restante" pra um mês que já passou). */
+  monthSprintPlans: Record<string, { remainingPlanned: number; eligibleDaysCount: number }> | null;
   /** Tarefas de cada sprint do mês, por sprintId — pra montar o mesmo
    * SprintCard da página do cliente pra qualquer sprint do mês (não só a
    * atual), sem duplicar o filtro de tarefas por sprint. */
@@ -153,7 +165,12 @@ export function buildOperationClientCard(
     .filter((s) => s.start_date <= lastDay && s.end_date >= firstDay)
     .sort((a, b) => a.start_date.localeCompare(b.start_date));
   const monthRangeArg = { firstDay, lastDay };
-  const monthPlanned = sumPlannedForMonth(client.plannedAllocations, monthRangeArg);
+  // Etapa 66: orçamento mensal VIGENTE — nunca mais a soma dos planejamentos
+  // diários persistidos (ver `resolveMonthlyBudget`).
+  const monthPlanned = resolveMonthlyBudget(
+    client.monthlyBudgetChanges,
+    sumPlannedForMonth(client.plannedAllocations, monthRangeArg),
+  );
   const monthActual = sumActualSpendForMonth(monthSprintRows, monthRangeArg, client.dailySpend);
   const monthExpectedToDate = sumExpectedToDateForMonth(client.plannedAllocations, monthRangeArg, today);
   // Ritmo do mês: sempre realizado x esperado até hoje (nunca x 100% do
@@ -165,6 +182,20 @@ export function buildOperationClientCard(
     const actualSpend = computeSprintEffectiveSpend(row, client.dailySpend);
     return computeSprintFinancials(row, actualSpend, today, row.spend_source);
   });
+  // Etapa 66: mesmo planejamento restante por sprint mostrado na página do
+  // cliente — `null` quando o mês está encerrado (sem "restante" possível).
+  const { effectiveDate: monthEffectiveDate } = resolveBudgetEffectiveDate(monthRangeArg, todayStr);
+  const monthSprintPlans: Record<string, { remainingPlanned: number; eligibleDaysCount: number }> | null = monthEffectiveDate
+    ? Object.fromEntries(
+        computeMonthlyBudgetPlan({
+          monthlyBudget: monthPlanned,
+          monthActual,
+          monthRange: monthRangeArg,
+          effectiveDate: monthEffectiveDate,
+          sprints: monthSprintRows.map((row) => ({ sprintId: row.id, startDate: row.start_date, endDate: row.end_date })),
+        }).sprintPlans,
+      )
+    : null;
   const monthSprintTasks: Record<string, OperationTaskItem[]> = {};
   for (const row of monthSprintRows) {
     monthSprintTasks[row.id] = client.tasks.filter((t) => t.sprint_id === row.id);
@@ -277,6 +308,7 @@ export function buildOperationClientCard(
     overdueTasks,
     sprintExecutionInfo,
     monthSprints,
+    monthSprintPlans,
     monthSprintTasks,
     sprintExecutionLabel,
     monthTasks,

@@ -66,6 +66,8 @@ export function SprintCurrentClientGroup({
         executionSeverity={card.sprintExecutionInfo?.severity ?? null}
         alerts={card.alerts}
         buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
+        remainingPlanned={card.monthSprintPlans?.[card.sprint.sprintId]?.remainingPlanned ?? 0}
+        eligibleDaysCount={card.monthSprintPlans?.[card.sprint.sprintId]?.eligibleDaysCount ?? 0}
         metaSyncedAt={card.lastSyncedAt}
       />
     </details>

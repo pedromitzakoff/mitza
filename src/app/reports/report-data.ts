@@ -10,6 +10,7 @@ import {
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
+import { resolveMonthlyBudget } from "@/lib/monthly-budget";
 import {
   computeAgencyExecutionSummary,
   computeSprintBehaviorRows,
@@ -214,7 +215,7 @@ export async function buildReportViewData(
   // Dados ao vivo — mesma fonte financeira central de sempre (Etapa 50:
   // sumPlannedForMonth/sumActualSpendForMonth/sumExpectedToDateForMonth/
   // classifySpendStatus), nunca uma conta paralela.
-  const [{ data: sprints }, { data: dailySpend }, { data: tasks }, { data: plannedAllocations }] = await Promise.all([
+  const [{ data: sprints }, { data: dailySpend }, { data: tasks }, { data: plannedAllocations }, { data: budgetChanges }] = await Promise.all([
     // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
     // mês precisa ser encontrada mesmo com start_date fora do intervalo.
     supabase
@@ -241,6 +242,11 @@ export async function buildReportViewData(
       .eq("client_id", clientId)
       .gte("date", monthRange.firstDay)
       .lte("date", monthRange.lastDay),
+    supabase
+      .from("monthly_budget_changes")
+      .select("new_amount, changed_at")
+      .eq("client_id", clientId)
+      .eq("month", monthRange.firstDay),
   ]);
 
   const monthSprintRows = sprints ?? [];
@@ -249,7 +255,12 @@ export async function buildReportViewData(
     sprintId: a.sprint_id,
     amount: a.planned_amount,
   }));
-  const planned = sumPlannedForMonth(plannedAllocationRows, monthRange);
+  // Etapa 66: orçamento mensal VIGENTE — nunca mais a soma dos planejamentos
+  // diários persistidos (ver `resolveMonthlyBudget`).
+  const planned = resolveMonthlyBudget(
+    (budgetChanges ?? []).map((c) => ({ newAmount: c.new_amount, changedAt: c.changed_at })),
+    sumPlannedForMonth(plannedAllocationRows, monthRange),
+  );
   const actual = sumActualSpendForMonth(monthSprintRows, monthRange, dailySpend ?? []);
   const expectedToDate = sumExpectedToDateForMonth(plannedAllocationRows, monthRange, today);
   const status = classifySpendStatus(actual, expectedToDate, planned);

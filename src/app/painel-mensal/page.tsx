@@ -9,6 +9,7 @@ import {
   SPEND_STATUS_MARGIN,
 } from "@/lib/spend-status";
 import { formatCurrency } from "@/lib/format";
+import { resolveMonthlyBudget } from "@/lib/monthly-budget";
 
 export default async function PainelMensalPage() {
   await requireAdmin();
@@ -16,11 +17,10 @@ export default async function PainelMensalPage() {
   const supabase = await createSupabaseClient();
   const { firstDay, lastDay } = currentMonthRange();
 
-  const [{ data: clients }, { data: plannedAllocations }, { data: dailySpend }] = await Promise.all([
+  const [{ data: clients }, { data: plannedAllocations }, { data: dailySpend }, { data: budgetChanges }] = await Promise.all([
     supabase.from("clients").select("id, name").is("deleted_at", null).order("name"),
     // Soma direta das alocações diárias no intervalo do mês (Etapa 50) —
-    // não mais `sprint.planned_spend` filtrando sprint por start_date, que
-    // atribuía 100% de uma sprint que atravessa mês ao mês em que começou.
+    // usada só como fallback do orçamento vigente (ver resolveMonthlyBudget).
     supabase
       .from("sprint_planned_allocations")
       .select("client_id, date, planned_amount")
@@ -31,6 +31,12 @@ export default async function PainelMensalPage() {
       .select("client_id, spend")
       .gte("date", firstDay)
       .lte("date", lastDay),
+    // Etapa 66: orçamento mensal VIGENTE — nunca mais a soma das alocações
+    // diárias persistidas (ver resolveMonthlyBudget).
+    supabase
+      .from("monthly_budget_changes")
+      .select("client_id, new_amount, changed_at")
+      .eq("month", firstDay),
   ]);
 
   const allocationsByClient = new Map<string, PlannedAllocationRow[]>();
@@ -39,9 +45,20 @@ export default async function PainelMensalPage() {
     list.push({ date: row.date, sprintId: "", amount: row.planned_amount });
     allocationsByClient.set(row.client_id, list);
   }
+  const budgetChangesByClient = new Map<string, { newAmount: number; changedAt: string }[]>();
+  for (const row of budgetChanges ?? []) {
+    const list = budgetChangesByClient.get(row.client_id) ?? [];
+    list.push({ newAmount: row.new_amount, changedAt: row.changed_at });
+    budgetChangesByClient.set(row.client_id, list);
+  }
+
   const plannedByClient = new Map<string, number>();
-  for (const [clientId, rows] of allocationsByClient) {
-    plannedByClient.set(clientId, sumPlannedForMonth(rows, { firstDay, lastDay }));
+  for (const client of clients ?? []) {
+    const rows = allocationsByClient.get(client.id) ?? [];
+    plannedByClient.set(
+      client.id,
+      resolveMonthlyBudget(budgetChangesByClient.get(client.id) ?? [], sumPlannedForMonth(rows, { firstDay, lastDay })),
+    );
   }
 
   const actualByClient = new Map<string, number>();
