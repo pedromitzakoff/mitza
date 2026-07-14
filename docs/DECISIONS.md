@@ -5,15 +5,19 @@
 Registrar decisões arquiteturais e de produto relevantes e não-óbvias,
 junto com o contexto que motivou cada uma, as alternativas consideradas e
 a justificativa da escolha — para que o "porquê" de uma decisão nunca se
-perca com o tempo nem precise ser redescoberto.
+perca com o tempo nem precise ser redescoberto. Este documento não é um
+changelog (não registra bugs corrigidos) nem um roadmap (não registra
+planejamento futuro) — ele registra apenas decisões que alteram ou
+definem a filosofia, a arquitetura ou o funcionamento do produto.
 
 ## Como deve ser utilizado
 
 Consultado antes de questionar ou revisitar uma decisão já tomada — a
 resposta pra "por que isso foi feito assim?" deve estar aqui. Cada entrada
-nova segue o mesmo formato (ver capítulo 1), sempre adicionada ao final da
-seção correspondente, nunca reescrevendo uma entrada antiga (decisões
-superadas ganham uma entrada nova que referencia a anterior).
+nova segue o template padrão (ver capítulo 1), sempre adicionada ao final
+da lista, nunca reescrevendo uma entrada antiga (decisões superadas ganham
+uma entrada nova com status "Substituída", que referencia a anterior, em
+vez de editar o registro original).
 
 ## Quem deve atualizá-lo
 
@@ -24,17 +28,310 @@ prioridade de produto.
 ## Quando deve ser atualizado
 
 Sempre que uma decisão arquitetural ou de produto relevante e não-óbvia
-for tomada — não é necessário registrar decisões triviais ou já cobertas
-por `ARCHITECTURE_PRINCIPLES.md`.
+for tomada — mudanças pequenas de código não devem entrar aqui. Ver
+capítulo final ("Como adicionar novas decisões").
 
 ---
 
-## Estrutura de capítulos
+## Índice
 
-### 1. Formato de uma Decisão
+- [Decisão 001: Sprint é a principal área operacional](#decisão-001-sprint-é-a-principal-área-operacional)
+- [Decisão 002: Cada tela possui uma única responsabilidade](#decisão-002-cada-tela-possui-uma-única-responsabilidade)
+- [Decisão 003: A plataforma trabalha para o gestor](#decisão-003-a-plataforma-trabalha-para-o-gestor)
+- [Decisão 004: A plataforma não substitui ferramentas especializadas](#decisão-004-a-plataforma-não-substitui-ferramentas-especializadas)
+- [Decisão 005: Operação antes de Performance](#decisão-005-operação-antes-de-performance)
+- [Decisão 006: Arquitetura em módulos](#decisão-006-arquitetura-em-módulos)
+- [Decisão 007: Fonte única da verdade](#decisão-007-fonte-única-da-verdade)
+- [Decisão 008: A plataforma é um Sistema Operacional do Gestor](#decisão-008-a-plataforma-é-um-sistema-operacional-do-gestor)
 
-### 2. Decisões — Arquitetura
+## Capítulo 1 — Formato de uma Decisão
 
-### 3. Decisões — Produto
+Toda decisão registrada neste documento segue o template abaixo. Copie o
+bloco ao adicionar uma nova entrada.
 
-### 4. Decisões — Dados e Banco
+```markdown
+## Decisão XXX: <Título>
+
+**Data:** <AAAA-MM-DD>
+**Status:** Ativa | Substituída | Removida
+
+### Contexto
+
+### Problema
+
+### Alternativas consideradas
+
+### Decisão tomada
+
+### Justificativa
+
+### Impactos
+```
+
+> As 8 decisões abaixo são anteriores à criação deste documento e foram
+> registradas retroativamente nesta etapa de documentação (14/07/2026).
+> Por isso, os campos **Data**, **Problema**, **Alternativas consideradas**
+> e **Impactos** aparecem marcados como "Não detalhado no registro
+> original" sempre que a decisão original não especificou essa informação
+> — nenhum conteúdo foi inventado para preenchê-los. Decisões futuras
+> devem preencher todos os campos do template no momento em que a decisão
+> for tomada.
+
+## Decisão 001: Sprint é a principal área operacional
+
+**Data:** Não detalhado no registro original (anterior à criação deste documento).
+**Status:** Ativa.
+
+### Contexto
+
+Foi decidido que a plataforma não terá a página do cliente como principal
+local de execução. A Sprint passa a ser a área onde o gestor trabalha
+diariamente.
+
+### Problema
+
+Não detalhado no registro original.
+
+### Alternativas consideradas
+
+Não detalhado no registro original.
+
+### Decisão tomada
+
+Sprint é a principal área operacional da plataforma.
+
+### Justificativa
+
+Reduzir troca de contexto. Reduzir quantidade de cliques. Permitir
+executar praticamente toda a rotina sem mudar de tela.
+
+### Impactos
+
+Não detalhado no registro original.
+
+## Decisão 002: Cada tela possui uma única responsabilidade
+
+**Data:** Não detalhado no registro original (anterior à criação deste documento).
+**Status:** Ativa.
+
+### Contexto
+
+Não detalhado no registro original.
+
+### Problema
+
+Não detalhado no registro original.
+
+### Alternativas consideradas
+
+Não detalhado no registro original.
+
+### Decisão tomada
+
+Visão Geral decide. Sprint executa. Cliente investiga. Relatório
+comunica.
+
+### Justificativa
+
+Evitar que as telas assumam papéis diferentes e acabem se tornando um
+Frankenstein.
+
+### Impactos
+
+Não detalhado no registro original.
+
+## Decisão 003: A plataforma trabalha para o gestor
+
+**Data:** Não detalhado no registro original (anterior à criação deste documento).
+**Status:** Ativa.
+
+### Contexto
+
+Não detalhado no registro original.
+
+### Problema
+
+Não detalhado no registro original.
+
+### Alternativas consideradas
+
+Não detalhado no registro original.
+
+### Decisão tomada
+
+Toda funcionalidade deve reduzir carga cognitiva. O gestor nunca deve
+trabalhar para alimentar o sistema. A plataforma é quem deve trabalhar
+para ele.
+
+### Justificativa
+
+Essa é a principal filosofia de UX da plataforma.
+
+### Impactos
+
+Não detalhado no registro original.
+
+## Decisão 004: A plataforma não substitui ferramentas especializadas
+
+**Data:** Não detalhado no registro original (anterior à criação deste documento).
+**Status:** Ativa.
+
+### Contexto
+
+Não detalhado no registro original.
+
+### Problema
+
+Não detalhado no registro original.
+
+### Alternativas consideradas
+
+Não detalhado no registro original.
+
+### Decisão tomada
+
+Meta Ads continua sendo utilizado para anúncios. WhatsApp continua sendo
+utilizado para comunicação. Google Drive continua sendo utilizado para
+arquivos. A plataforma conecta contexto entre essas ferramentas.
+
+### Justificativa
+
+Evitar criar um ERP genérico.
+
+### Impactos
+
+Não detalhado no registro original.
+
+## Decisão 005: Operação antes de Performance
+
+**Data:** Não detalhado no registro original (anterior à criação deste documento).
+**Status:** Ativa.
+
+### Contexto
+
+Não detalhado no registro original.
+
+### Problema
+
+Não detalhado no registro original.
+
+### Alternativas consideradas
+
+Não detalhado no registro original.
+
+### Decisão tomada
+
+Primeiro finalizar regras de negócio. Depois estabilizar. Depois otimizar
+performance.
+
+### Justificativa
+
+Evitar otimizações prematuras.
+
+### Impactos
+
+Não detalhado no registro original.
+
+## Decisão 006: Arquitetura em módulos
+
+**Data:** Não detalhado no registro original (anterior à criação deste documento).
+**Status:** Ativa.
+
+### Contexto
+
+Não detalhado no registro original.
+
+### Problema
+
+Não detalhado no registro original.
+
+### Alternativas consideradas
+
+Não detalhado no registro original.
+
+### Decisão tomada
+
+A plataforma será construída em módulos independentes: Operação,
+Financeiro, Comercial, Administração, Analytics, Automações. Cada
+funcionalidade deve pertencer claramente ao seu módulo.
+
+### Justificativa
+
+Não detalhado no registro original.
+
+### Impactos
+
+Não detalhado no registro original.
+
+## Decisão 007: Fonte única da verdade
+
+**Data:** Não detalhado no registro original (anterior à criação deste documento).
+**Status:** Ativa.
+
+### Contexto
+
+Não detalhado no registro original.
+
+### Problema
+
+Não detalhado no registro original.
+
+### Alternativas consideradas
+
+Não detalhado no registro original.
+
+### Decisão tomada
+
+Nenhuma informação importante poderá possuir duas representações
+diferentes. Toda alteração deve refletir automaticamente em todas as
+áreas da plataforma.
+
+### Justificativa
+
+Não detalhado no registro original.
+
+### Impactos
+
+Não detalhado no registro original.
+
+## Decisão 008: A plataforma é um Sistema Operacional do Gestor
+
+**Data:** Não detalhado no registro original (anterior à criação deste documento).
+**Status:** Ativa.
+
+### Contexto
+
+Não detalhado no registro original.
+
+### Problema
+
+Não detalhado no registro original.
+
+### Alternativas consideradas
+
+Não detalhado no registro original.
+
+### Decisão tomada
+
+O objetivo não é construir um novo ClickUp. Nem um ERP. Nem um Dashboard.
+A plataforma existe para funcionar como um segundo cérebro operacional do
+gestor de tráfego.
+
+### Justificativa
+
+Toda decisão futura deverá respeitar esse conceito.
+
+### Impactos
+
+Não detalhado no registro original.
+
+## Como adicionar novas decisões
+
+Sempre que uma alteração modificar a arquitetura da plataforma ou sua
+filosofia, ela deverá ser registrada neste documento **antes** da
+implementação, usando o template do Capítulo 1. Mudanças pequenas de
+código não devem entrar aqui.
+
+Uma decisão superada nunca é editada ou apagada — ela ganha uma entrada
+nova, com seu próprio número sequencial, que referencia a decisão anterior
+e atualiza o `Status` da decisão antiga para "Substituída".
