@@ -1,15 +1,19 @@
 import type { SprintFinancials } from "@/lib/sprint-financials";
 import { formatCurrency } from "@/lib/format";
+import { resolveSprintPeriodSummary, computeExpectedPct, formatRitmoDiffText, positionExpectedMarker } from "@/lib/financial-period";
 
 /**
  * Barra fina de progresso financeiro da sprint — preenchimento azul MITZA
  * (gasto real / planejado, nunca passa de 100% de largura; vermelho
  * discreto só quando o gasto ultrapassa o planejado) com um marcador
- * vertical escuro sobre o "gasto esperado até hoje" (dias corridos da
- * sprint, mesma conta já centralizada em computeSprintFinancials — não
- * inventa uma tolerância nova). Componente único compartilhado por Sprints
- * (current-client-group.tsx) e pela página do cliente (sprint-card.tsx) — nunca
- * duas barras diferentes mostrando a mesma coisa.
+ * vertical escuro sobre o "gasto esperado até hoje". Etapa 63: parou de
+ * recalcular %/ritmo por conta própria — monta o mesmo `FinancialPeriodSummary`
+ * central (`resolveSprintPeriodSummary`) e reaproveita as mesmas funções que
+ * `AgencyInvestmentBar` usa, pra nunca haver duas contas de "ritmo"
+ * divergentes entre a barra da sprint e a barra do mês. Componente único
+ * compartilhado por Sprints (current-client-group.tsx) e pela página do
+ * cliente (sprint-card.tsx) — nunca duas barras diferentes mostrando a
+ * mesma coisa.
  */
 export function SprintFinancialBar({ sprint }: { sprint: SprintFinancials }) {
   const { plannedSpend, actualSpend, expectedToDate, status } = sprint;
@@ -23,27 +27,18 @@ export function SprintFinancialBar({ sprint }: { sprint: SprintFinancials }) {
     );
   }
 
-  const actualPct = (actualSpend / plannedSpend) * 100;
-  const expectedPct = (expectedToDate / plannedSpend) * 100;
+  const summary = resolveSprintPeriodSummary(sprint, "");
+  const actualPct = summary.pct ?? 0;
+  const expectedPct = computeExpectedPct(summary);
   const fillWidth = Math.min(Math.max(actualPct, 0), 100);
-  const markerPos = Math.min(Math.max(expectedPct, 1), 99);
+  const markerPos = positionExpectedMarker(expectedPct);
   const isOver = actualPct > 100;
-  const ppDiff = Math.round(Math.abs(actualPct - expectedPct));
   // Sprint que ainda não começou: nunca "Dentro do ritmo esperado" (0
   // gasto vs 0 esperado não é sucesso, é só ausência de dados ainda) — o
   // marcador de esperado some (não faz sentido marcar 0% como referência)
   // e a legenda vira neutra.
   const notStarted = status === "nao_iniciado";
-
-  const ritmoText = notStarted
-    ? "Período ainda não iniciado"
-    : status === "acima"
-      ? `${ppDiff} p.p. acima do ritmo`
-      : status === "abaixo"
-        ? `${ppDiff} p.p. abaixo do ritmo`
-        : status === "dentro"
-          ? "Dentro do ritmo esperado"
-          : null;
+  const ritmoText = notStarted ? "Período ainda não iniciado" : formatRitmoDiffText(summary);
 
   return (
     <div>

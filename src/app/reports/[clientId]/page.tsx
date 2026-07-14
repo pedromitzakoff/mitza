@@ -6,6 +6,7 @@ import { todayUTC } from "@/lib/today";
 import { formatCurrency, formatMonthLabel, formatShortDate } from "@/lib/format";
 import { shiftMonthParam, monthRangeFromParam } from "@/lib/sprint-financials";
 import { classifySpendStatus } from "@/lib/spend-status";
+import { resolveMonthPeriodSummary } from "@/lib/financial-period";
 import {
   MONTHLY_REPORT_STATUS_BADGE_CLASSES,
   MONTHLY_REPORT_STATUS_LABEL,
@@ -206,7 +207,18 @@ export default async function ClientReportPage({
 
           {data.financial.planned > 0 && (
             <div className="mt-3">
-              <AgencyInvestmentBar planned={data.financial.planned} actual={data.financial.actual} expectedToDate={data.financial.expectedToDate} />
+              <AgencyInvestmentBar
+                summary={resolveMonthPeriodSummary(
+                  {
+                    monthPlanned: data.financial.planned,
+                    monthActual: data.financial.actual,
+                    monthExpectedToDate: data.financial.expectedToDate,
+                    monthStatus: data.financial.status,
+                  },
+                  data.monthLabel,
+                  monthRange,
+                )}
+              />
             </div>
           )}
 

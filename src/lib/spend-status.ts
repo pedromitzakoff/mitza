@@ -28,8 +28,19 @@ export function classifySpendStatus(
   }
 
   if (expected <= 0) {
-    // Planejado configurado, mas o período ainda não começou.
-    return actual > 0 ? "acima" : "dentro";
+    // `expected <= 0` com `plannedTotal > 0` NUNCA significa "período ainda
+    // não começou" pra quem já filtra isso antes de chamar esta função
+    // (`classifySprintSpendStatus` devolve "nao_iniciado" mais cedo pra
+    // sprint futura, sem nunca chegar aqui) — na prática, o único jeito de
+    // cair aqui com `actual > 0` é o período JÁ ter começado mas não haver
+    // planejamento diário histórico suficiente pros dias já decorridos
+    // (ex.: orçamento configurado pela primeira vez no meio do mês — ver
+    // supabase/fix-monthly-budget-actual-spend.sql). Achado real desta
+    // etapa: essa lacuna estava virando "acima" automaticamente, mesmo sem
+    // nenhuma base de comparação — corrigido pra "sem_meta" ("sem uma base
+    // de planejamento pra avaliar o ritmo até aqui"), nunca inventando um
+    // valor retroativo nem alarmando "acima" sem contexto.
+    return "sem_meta";
   }
 
   const ratio = actual / expected;

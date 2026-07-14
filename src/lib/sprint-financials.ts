@@ -221,6 +221,90 @@ export function computeSprintFinancials(
   };
 }
 
+/** Divide o planejado de UMA sprint (a partir das linhas diárias de
+ * `sprint_planned_allocations` já filtradas por essa sprint) entre a parte
+ * histórica (dias já decorridos, `date <= today`, nunca recalculada) e a
+ * parte futura (dias restantes, `date > today`, a única ajustável) — Etapa
+ * 63, seção 6: a sprint atual precisa mostrar essas duas fatias separadas
+ * ("R$1.000 realizados de R$1.600 previstos... R$600 ainda planejados
+ * para os dias restantes"), nunca só o total misturado. Sprint sem nenhuma
+ * linha de alocação (nunca teve orçamento configurado) devolve as duas
+ * fatias como 0 — quem exibe decide como comunicar isso (ver
+ * `describeSprintInvestment` em sprint-card.tsx), esta função nunca inventa
+ * um valor. */
+export interface SprintPlannedSplit {
+  historicalPlanned: number;
+  remainingPlanned: number;
+  hasAnyAllocation: boolean;
+}
+
+export function computeSprintPlannedSplit(
+  sprintAllocations: { date: string; amount: number }[],
+  today: Date,
+): SprintPlannedSplit {
+  const todayStr = today.toISOString().slice(0, 10);
+  let historicalPlanned = 0;
+  let remainingPlanned = 0;
+
+  for (const row of sprintAllocations) {
+    if (row.date <= todayStr) historicalPlanned += row.amount;
+    else remainingPlanned += row.amount;
+  }
+
+  return { historicalPlanned, remainingPlanned, hasAnyAllocation: sprintAllocations.length > 0 };
+}
+
+/** Texto operacional do investimento de UMA sprint (Etapa 63, seções 11/12)
+ * — nunca mais o "R$ X / R$ Y" ambíguo do resumo compacto. Cobre os 5
+ * estados possíveis: futura, atual com dias restantes ainda planejáveis,
+ * atual sem nada mais a planejar (último dia), concluída com planejamento
+ * histórico, concluída sem nenhum planejamento registrado (gasto real
+ * preservado, nunca escondido nem tratado como erro). O "previsto" da
+ * sprint atual é sempre `realizado + planejamento restante` — nunca o
+ * `plannedSpend` bruto, que poderia embutir um planejamento histórico já
+ * ultrapassado pelo realizado. */
+export interface SprintInvestmentText {
+  primary: string;
+  secondary: string | null;
+}
+
+export function describeSprintInvestment(
+  sprint: { temporalStatus: SprintTemporalStatus; actualSpend: number; plannedSpend: number },
+  split: SprintPlannedSplit | undefined,
+  formatCurrency: (value: number) => string,
+): SprintInvestmentText {
+  if (sprint.temporalStatus === "futura") {
+    return sprint.plannedSpend > 0
+      ? { primary: `${formatCurrency(0)} investidos de ${formatCurrency(sprint.plannedSpend)} planejados`, secondary: null }
+      : { primary: `${formatCurrency(0)} investidos · sem planejamento configurado`, secondary: null };
+  }
+
+  if (sprint.temporalStatus === "atual") {
+    // Sem a alocação diária da própria sprint (quem chama não tem esse
+    // detalhe à mão — ex.: painel Sprints), cai pro total bruto já
+    // existente (`plannedSpend`) em vez de fingir que não sobrou nada —
+    // nunca inventa um "restante" que não pode calcular.
+    if (!split) {
+      return { primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(sprint.plannedSpend)} previstos`, secondary: null };
+    }
+    const totalPrevisto = sprint.actualSpend + split.remainingPlanned;
+    return {
+      primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(totalPrevisto)} previstos`,
+      secondary: split.remainingPlanned > 0 ? `${formatCurrency(split.remainingPlanned)} ainda planejados para os dias restantes` : null,
+    };
+  }
+
+  // concluída
+  const hasHistoricalPlan = split ? split.hasAnyAllocation : sprint.plannedSpend > 0;
+  if (!hasHistoricalPlan) {
+    return { primary: `${formatCurrency(sprint.actualSpend)} investidos · planejamento histórico não definido`, secondary: null };
+  }
+  return {
+    primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(split?.historicalPlanned || sprint.plannedSpend)} planejados`,
+    secondary: null,
+  };
+}
+
 /** Uma linha de `sprint_planned_allocations` já buscada do banco — planejado
  * de um dia específico de uma sprint específica. */
 export interface PlannedAllocationRow {

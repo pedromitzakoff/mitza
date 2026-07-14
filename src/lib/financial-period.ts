@@ -85,10 +85,50 @@ export function computeExpectedPct(summary: FinancialPeriodSummary): number {
  * por quem já usa `SprintFinancialBar`/`AgencyInvestmentBar` como legenda
  * textual equivalente pros resumos que não têm uma barra com tooltip. */
 export function formatRitmoDiffText(summary: FinancialPeriodSummary): string | null {
-  const expectedPct = computeExpectedPct(summary);
-  const diffPct = Math.round(Math.abs((summary.pct ?? 0) - expectedPct));
+  const diffPct = computeDeviationPoints(summary);
   if (summary.status === "acima") return `${diffPct} p.p. acima do ritmo`;
   if (summary.status === "abaixo") return `${diffPct} p.p. abaixo do ritmo`;
   if (summary.status === "dentro") return "Dentro do ritmo esperado";
   return null;
+}
+
+/** Desvio em pontos percentuais entre realizado e esperado até hoje — a
+ * mesma conta que já estava embutida em `formatRitmoDiffText`, extraída
+ * como função própria porque a barra de investimento (Etapa 63) precisa
+ * dela isoladamente, sem o texto pronto em torno. */
+export function computeDeviationPoints(summary: FinancialPeriodSummary): number {
+  const expectedPct = computeExpectedPct(summary);
+  return Math.round(Math.abs((summary.pct ?? 0) - expectedPct));
+}
+
+/** Desvio em reais entre realizado e esperado até hoje — mesmo valor que já
+ * existia como `computeRitmoDiff`, só com o nome que a Etapa 63 pediu
+ * explicitamente ("calcular desvio em reais"); mantido como alias pra não
+ * duplicar a conta nem quebrar quem já chama `computeRitmoDiff`. */
+export function computeDeviationCurrency(summary: FinancialPeriodSummary): number {
+  return computeRitmoDiff(summary);
+}
+
+/** Texto do desvio em reais ("R$X abaixo/acima do investimento esperado até
+ * hoje" ou "Investimento dentro do ritmo esperado") — Etapa 63, seção 9:
+ * linha separada da barra, sempre usando a mesma fonte (`status` já vem de
+ * `classifySpendStatus`, nunca recalculado aqui). `null` quando não há
+ * planejado ou o período ainda não começou (mesmas condições de sempre). */
+export function formatDeviationCurrencyText(
+  summary: FinancialPeriodSummary,
+  formatCurrency: (value: number) => string,
+): string | null {
+  if (summary.planned <= 0 || summary.status === "sem_meta" || summary.status === "nao_iniciado") return null;
+  const diff = computeDeviationCurrency(summary);
+  if (summary.status === "acima") return `${formatCurrency(diff)} acima do investimento esperado até hoje`;
+  if (summary.status === "abaixo") return `${formatCurrency(Math.abs(diff))} abaixo do investimento esperado até hoje`;
+  return "Investimento dentro do ritmo esperado";
+}
+
+/** Posição (clamp 2–98%) do marcador de "esperado até hoje" na barra —
+ * extraída de dentro de `AgencyInvestmentBar` pra ser testável isoladamente
+ * e reaproveitada por qualquer outra barra de investimento futura, nunca
+ * duas contas de clamp diferentes. */
+export function positionExpectedMarker(expectedPct: number): number {
+  return Math.min(Math.max(expectedPct, 2), 98);
 }

@@ -266,6 +266,16 @@ export default async function ClientPage({
     sprintId: a.sprint_id,
     amount: a.planned_amount,
   }));
+  // Etapa 63, seção 6: cada SprintCard precisa só das próprias linhas
+  // diárias (pra separar a fatia histórica da futura da sprint atual) —
+  // agrupado uma vez aqui, nenhuma consulta nova (mesmas linhas já buscadas
+  // pro mês inteiro).
+  const plannedAllocationsBySprintId = new Map<string, { date: string; amount: number }[]>();
+  for (const row of monthPlannedAllocationRows) {
+    const list = plannedAllocationsBySprintId.get(row.sprintId) ?? [];
+    list.push({ date: row.date, amount: row.amount });
+    plannedAllocationsBySprintId.set(row.sprintId, list);
+  }
   // Soma direta das alocações diárias no intervalo do mês — desde a
   // correção da Etapa 50, nenhuma sprint atravessa mais a fronteira do mês,
   // então toda sprint pertence a exatamente um mês; ainda assim a soma por
@@ -717,6 +727,7 @@ export default async function ClientPage({
                 accountReviews={accountReviewsBySprintId.get(sprint.sprintId) ?? []}
                 newReviewHref={withParam(returnTo, "review=new")}
                 buildReviewDetailHref={buildReviewDetailHref}
+                plannedAllocations={plannedAllocationsBySprintId.get(sprint.sprintId) ?? []}
               />
             ))
           ) : (
