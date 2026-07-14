@@ -8,9 +8,12 @@ import {
   isDateWithinPeriod,
   monthRangeFromParam,
   shiftMonthParam,
+  sumPlannedForMonth,
 } from "@/lib/sprint-financials";
 import { formatFullDate, formatMonthLabel } from "@/lib/format";
-import { getMonthTemporalStatus } from "@/lib/monthly-budget";
+import { getMonthTemporalStatus, resolveMonthlyBudget } from "@/lib/monthly-budget";
+import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
+import type { SprintClosedSnapshot } from "@/lib/sprint-recommendation";
 import {
   sortAccountsByPriority,
   financialStatusForPeriod,
@@ -130,7 +133,9 @@ export default async function SprintsPage({
     // atravessa mês precisa ser encontrada mesmo com start_date fora dela.
     supabase
       .from("sprints")
-      .select("id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
+      .select(
+        "id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, original_planned_amount, final_recommended_amount, final_actual_amount, snapshot_frozen_at",
+      )
       .lte("start_date", rangeEnd)
       .gte("end_date", rangeStart),
     supabase
@@ -204,6 +209,10 @@ export default async function SprintsPage({
     planned_spend: number;
     spend_source: "manual" | "meta_api";
     manual_actual_spend: number | null;
+    original_planned_amount: number | null;
+    final_recommended_amount: number | null;
+    final_actual_amount: number | null;
+    snapshot_frozen_at: string | null;
   };
   const sprintsByClient = new Map<string, SprintRow[]>();
   for (const s of sprints ?? []) {
@@ -252,6 +261,34 @@ export default async function SprintsPage({
     (clients ?? []).map((c) => [c.id, c.primary_manager?.name ?? null]),
   );
 
+  // Etapa 70 — congela (lazy, idempotente) o histórico financeiro de cada
+  // sprint do mês selecionado que já encerrou e ainda não tem snapshot;
+  // roda em paralelo por cliente, nunca bloqueia o resto da página se uma
+  // escrita falhar (`ensureClosedSprintSnapshots` já é silenciosa nesse
+  // caso). Nunca altera a lógica mensal — só consome dados já buscados.
+  const sprintClosedSnapshotsByClient = new Map<string, Map<string, SprintClosedSnapshot>>();
+  await Promise.all(
+    (clients ?? []).map(async (client) => {
+      const clientBudgetChanges = budgetChangesByClient.get(client.id) ?? [];
+      const clientPlannedAllocations = plannedAllocationsByClient.get(client.id) ?? [];
+      const currentMonthlyBudget = resolveMonthlyBudget(
+        clientBudgetChanges,
+        sumPlannedForMonth(clientPlannedAllocations, monthRange),
+      );
+      const snapshots = await ensureClosedSprintSnapshots(supabase, {
+        clientId: client.id,
+        today,
+        monthRange,
+        sprints: sprintsByClient.get(client.id) ?? [],
+        dailySpend: dailySpendByClient.get(client.id) ?? [],
+        budgetChanges: clientBudgetChanges,
+        plannedAllocations: clientPlannedAllocations,
+        currentMonthlyBudget,
+      });
+      sprintClosedSnapshotsByClient.set(client.id, snapshots);
+    }),
+  );
+
   const rawClients: OperationClientRawData[] = (clients ?? []).map((client) => {
     const clientSprints = sprintsByClient.get(client.id) ?? [];
     const currentSprint = findSprintForDate(clientSprints, todayStr);
@@ -271,6 +308,7 @@ export default async function SprintsPage({
       clientLastActivityAt: clientActivityById.get(client.id) ?? null,
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
       lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
+      sprintClosedSnapshots: sprintClosedSnapshotsByClient.get(client.id) ?? new Map(),
     };
   });
 

@@ -18,8 +18,12 @@ export function listDatesInclusive(firstDay: string, lastDay: string): string[] 
 }
 
 /** Distribui um total (em centavos) igualmente entre `count` posições,
- * jogando a sobra do arredondamento na última posição. */
-function distributeCentsEqually(totalCents: number, count: number): number[] {
+ * jogando a sobra do arredondamento na última posição. Exportada (Etapa 70)
+ * pra ser reaproveitada por `computeOriginalSprintPlans`
+ * (`sprint-recommendation.ts`) — mesma regra de arredondamento em qualquer
+ * lugar que precise repartir um total em centavos exatos, nunca uma segunda
+ * implementação. */
+export function distributeCentsEqually(totalCents: number, count: number): number[] {
   if (count <= 0) return [];
   const baseCents = Math.floor(totalCents / count);
   const remainderCents = totalCents - baseCents * count;

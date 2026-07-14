@@ -24,6 +24,8 @@ import {
   computeMonthlyBudgetPlan,
   computeMonthlyExpectedToDateByCalendar,
 } from "@/lib/monthly-budget";
+import { computeOriginalSprintPlans } from "@/lib/sprint-recommendation";
+import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { todayDateString, todayUTC } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
 import { computeOperationalTracking, computeMonthlyOccurrenceSummary } from "@/lib/operational-tracking";
@@ -219,7 +221,9 @@ export default async function ClientPage({
     // mesmo com start_date no mês anterior.
     supabase
       .from("sprints")
-      .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, manual_spend_updated_at")
+      .select(
+        "id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, manual_spend_updated_at, original_planned_amount, final_recommended_amount, final_actual_amount, snapshot_frozen_at",
+      )
       .eq("client_id", id)
       .lte("start_date", lastDay)
       .gte("end_date", firstDay)
@@ -270,21 +274,15 @@ export default async function ClientPage({
   // parte a partir da própria linha crua já buscada acima.
   const manualSpendUpdatedAtBySprintId = new Map((sprints ?? []).map((s) => [s.id, s.manual_spend_updated_at]));
 
+  // Etapa 70: `sprint_planned_allocations` deixou de alimentar o card da
+  // sprint (o "planejamento histórico" virou o "planejamento original"
+  // congelado, `sprint-recommendation.ts`) — continua existindo só como
+  // fallback de `resolveMonthlyBudget`, abaixo.
   const monthPlannedAllocationRows = (plannedAllocations ?? []).map((a) => ({
     date: a.date,
     sprintId: a.sprint_id,
     amount: a.planned_amount,
   }));
-  // Etapa 63, seção 6: cada SprintCard precisa só das próprias linhas
-  // diárias (pra separar a fatia histórica da futura da sprint atual) —
-  // agrupado uma vez aqui, nenhuma consulta nova (mesmas linhas já buscadas
-  // pro mês inteiro).
-  const plannedAllocationsBySprintId = new Map<string, { date: string; amount: number }[]>();
-  for (const row of monthPlannedAllocationRows) {
-    const list = plannedAllocationsBySprintId.get(row.sprintId) ?? [];
-    list.push({ date: row.date, amount: row.amount });
-    plannedAllocationsBySprintId.set(row.sprintId, list);
-  }
   // Etapa 66: orçamento mensal VIGENTE — sempre o valor mais recente
   // configurado (`monthly_budget_changes.new_amount`), nunca a soma dos
   // planejamentos diários persistidos (que diverge do vigente assim que o
@@ -297,6 +295,28 @@ export default async function ClientPage({
     sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay }),
   );
   const monthActual = sumActualSpendForMonth(sprints ?? [], { firstDay, lastDay }, dailySpend ?? []);
+  // Etapa 70 — nova camada de recomendação por sprint: planejamento
+  // original (todos os dias do mês, distribuído entre TODAS as sprints,
+  // encerradas + atual + futuras) e congelamento (lazy, idempotente) do
+  // histórico financeiro de cada sprint que já encerrou. Nunca altera a
+  // lógica mensal acima (orçamento vigente, esperado até hoje, status) —
+  // só consome `monthPlanned`/`sprints`/`dailySpend`/`budgetChanges` já
+  // buscados, nenhuma query nova além da já existente.
+  const originalPlans = computeOriginalSprintPlans(
+    monthPlanned,
+    { firstDay, lastDay },
+    (sprints ?? []).map((s) => ({ sprintId: s.id, startDate: s.start_date, endDate: s.end_date })),
+  );
+  const closedSprintSnapshots = await ensureClosedSprintSnapshots(supabase, {
+    clientId: id,
+    today,
+    monthRange: { firstDay, lastDay },
+    sprints: sprints ?? [],
+    dailySpend: dailySpend ?? [],
+    budgetChanges: (budgetChanges ?? []).map((c) => ({ newAmount: c.new_amount, changedAt: c.changed_at })),
+    plannedAllocations: monthPlannedAllocationRows,
+    currentMonthlyBudget: monthPlanned,
+  });
   // Etapa 67: "esperado até hoje" nunca mais soma sprint_planned_allocations
   // — é só o avanço do calendário do mês aplicado ao orçamento vigente,
   // independente de sprints/planejamentos antigos (mesma função central
@@ -739,7 +759,18 @@ export default async function ClientPage({
           (borda azul + badge) e aberta por padrão — SprintCard já decide
           isso sozinho (`defaultOpen ?? isCurrent`) quando `defaultOpen` não
           é passado, por isso nenhuma sprint aqui recebe a prop. */}
-      <Section title={`Sprints de ${monthLabel}`}>
+      <Section
+        title={`Sprints de ${monthLabel}`}
+        action={
+          <span
+            tabIndex={0}
+            className="cursor-help text-xs text-muted-foreground underline decoration-dotted focus:outline-none focus:ring-1 focus:ring-brand"
+            title="Os valores recomendados das sprints são recalculados conforme o investimento realizado, para que o orçamento mensal seja atingido ao final do mês."
+          >
+            Como funciona?
+          </span>
+        }
+      >
         <div className="flex flex-col gap-2">
           {sortedSprints.length > 0 ? (
             sortedSprints.map((sprint) => (
@@ -761,7 +792,12 @@ export default async function ClientPage({
                 buildReviewDetailHref={buildReviewDetailHref}
                 remainingPlanned={monthPlan?.sprintPlans.get(sprint.sprintId)?.remainingPlanned ?? 0}
                 eligibleDaysCount={monthPlan?.sprintPlans.get(sprint.sprintId)?.eligibleDaysCount ?? 0}
-                plannedAllocations={plannedAllocationsBySprintId.get(sprint.sprintId) ?? []}
+                originalPlannedAmount={
+                  closedSprintSnapshots.get(sprint.sprintId)?.originalPlannedAmount ??
+                  originalPlans.get(sprint.sprintId)?.originalPlannedAmount ??
+                  0
+                }
+                finalRecommendedAmount={closedSprintSnapshots.get(sprint.sprintId)?.finalRecommendedAmount ?? null}
                 manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
                 metaSyncedAt={lastSync?.synced_at ?? null}
               />
