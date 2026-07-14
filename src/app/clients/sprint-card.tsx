@@ -2,9 +2,8 @@ import Link from "next/link";
 import { TriangleAlert } from "lucide-react";
 import type { SprintFinancials } from "@/lib/sprint-financials";
 import {
-  computeSprintPlannedSplit,
-  computeSprintInvestmentAmounts,
-  describeSprintInvestment,
+  computeSprintRecommendationAmounts,
+  describeSprintRecommendation,
   describeSpendSourceTimestamp,
 } from "@/lib/sprint-financials";
 import { formatCurrency, formatShortDateTime, formatWeekdayAndDayMonth } from "@/lib/format";
@@ -86,7 +85,8 @@ export function SprintCardBody({
   buildReviewDetailHref,
   remainingPlanned,
   eligibleDaysCount,
-  plannedAllocations,
+  originalPlannedAmount,
+  finalRecommendedAmount,
   manualSpendUpdatedAt,
   metaSyncedAt,
 }: {
@@ -106,22 +106,30 @@ export function SprintCardBody({
   accountReviews?: AccountReviewSummaryItem[];
   newReviewHref?: string;
   buildReviewDetailHref?: (reviewId: string) => string;
-  /** Planejamento restante desta sprint (Etapa 66) — vem SEMPRE de
+  /** Recomendação restante desta sprint (Etapa 66/70) — vem SEMPRE de
    * `computeMonthlyBudgetPlan().sprintPlans`, a única função que decide
    * "quanto ainda pode ser investido"; nunca recalculado aqui a partir de
-   * `sprint_planned_allocations`. Sempre 0 pra sprint encerrada. */
+   * `sprint_planned_allocations`. Sempre 0 pra sprint encerrada (ela não usa
+   * este valor — ver `finalRecommendedAmount`, abaixo). */
   remainingPlanned: number;
   /** Dias elegíveis restantes desta sprint (mesma partição central) — usado
    * só pro "investimento diário recomendado" desta sprint. Sempre 0 pra
    * sprint encerrada. */
   eligibleDaysCount: number;
-  /** Alocações diárias (`sprint_planned_allocations`) já persistidas desta
-   * sprint — usadas SÓ pra reconstruir o planejamento HISTÓRICO de uma
-   * sprint encerrada (Etapa 66, seção 8: "se existia planejamento histórico
-   * válido, ele pode continuar sendo exibido pra comparação"). Nunca usadas
-   * pra calcular o restante de uma sprint atual/futura — esse valor é
-   * sempre `remainingPlanned`, acima. */
-  plannedAllocations?: { date: string; amount: number }[];
+  /** Planejamento original desta sprint (Etapa 70) — orçamento mensal
+   * distribuído proporcionalmente por todos os dias do mês
+   * (`computeOriginalSprintPlans`). Pra sprint atual/futura, recalculado ao
+   * vivo com o orçamento vigente de agora; pra sprint concluída, congelado
+   * no momento do encerramento (`SprintClosedSnapshot.originalPlannedAmount`,
+   * nunca mais reconstruído a partir de `sprint_planned_allocations`). */
+  originalPlannedAmount: number;
+  /** Recomendação final congelada (Etapa 70) — só existe (não-null) pra
+   * sprint CONCLUÍDA que já foi observada como encerrada com algum
+   * orçamento mensal configurado enquanto ainda estava aberta; `null` pra
+   * sprint atual/futura (não se aplica) e também pra sprint concluída sem
+   * nenhuma recomendação histórica real (nunca inventada retroativamente —
+   * ver `computeSprintClosedSnapshot`). */
+  finalRecommendedAmount: number | null;
   /** Última edição do gasto manual desta sprint (`sprints.manual_spend_updated_at`)
    * — `undefined` (nunca buscado, ex.: painel Sprints) é diferente de `null`
    * (buscado, mas nunca editado manualmente); só a página do cliente busca
@@ -133,18 +141,15 @@ export function SprintCardBody({
 }) {
   const isCurrent = sprint.temporalStatus === "atual";
   const isConcluded = sprint.temporalStatus === "concluida";
-  // Histórico só interessa pra sprint encerrada (Etapa 66) — pra atual/futura
-  // o "previsto"/"restante" vem sempre de `remainingPlanned` (central),
-  // nunca das linhas persistidas.
-  const historicalSplit = isConcluded && plannedAllocations !== undefined
-    ? computeSprintPlannedSplit(plannedAllocations, todayUTC())
-    : undefined;
-  const amounts = computeSprintInvestmentAmounts(sprint, remainingPlanned, historicalSplit);
-  // `totalPrevisto` só é 0 pra sprint encerrada sem nenhum planejamento
-  // histórico (ver `computeSprintInvestmentAmounts`) — nunca um segundo
-  // cálculo de "existe histórico?" aqui.
-  const hasHistoricalPlan = isConcluded && amounts.totalPrevisto > 0;
-  const finalResultDiff = amounts.totalPrevisto - sprint.actualSpend;
+  const amounts = computeSprintRecommendationAmounts(sprint, remainingPlanned);
+  const hasOriginalPlan = originalPlannedAmount > 0;
+  // Resultado final: compara o realizado com a recomendação final congelada
+  // quando ela existe (o alvo que o gestor de fato deveria ter seguido);
+  // sem recomendação histórica, cai pro planejamento original congelado —
+  // nunca a recomendação dinâmica atual (Etapa 70, seção 17: "não mostrar
+  // percentual baseado na recomendação dinâmica atual").
+  const finalTarget = finalRecommendedAmount ?? (hasOriginalPlan ? originalPlannedAmount : null);
+  const finalResultDiff = finalTarget !== null ? finalTarget - sprint.actualSpend : null;
   const sourceTimestampText = describeSpendSourceTimestamp(
     sprint.spendSource,
     manualSpendUpdatedAt,
@@ -173,31 +178,24 @@ export function SprintCardBody({
         )}
 
         <div className="rounded-lg border border-border bg-zinc-50 p-3 dark:bg-zinc-900/40">
-          {/* Etapa 65: sem os textos introdutórios "R$X investidos de R$Y
-              previstos"/"R$X ainda planejados" — já repetiam os mesmos
-              valores dos indicadores abaixo. Esse resumo continua existindo
-              só na linha compacta da sprint fechada (`SprintCard`,
-              `investment.primary`), nunca duplicado aqui dentro. */}
+          {/* Planejamento original — informação de CONTEXTO (Etapa 70, seção
+              21): nunca compete visualmente com a recomendação atual/final,
+              por isso fica numa linha própria, pequena e discreta, acima do
+              grid principal — nunca um card do mesmo tamanho dos outros. */}
+          <p className="text-[11px] text-muted-foreground">
+            Planejado originalmente:{" "}
+            <span className="font-medium text-foreground">
+              {hasOriginalPlan ? formatCurrency(originalPlannedAmount) : "sem registro"}
+            </span>
+            {!isConcluded && <span className="ml-1">· Referência inicial da sprint.</span>}
+          </p>
+
           <div
-            className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${isConcluded ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}
+            className={`mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 ${isConcluded ? "lg:grid-cols-2" : "lg:grid-cols-4"}`}
           >
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Investimento previsto
-              </p>
-              <p className="mt-0.5 text-base font-semibold text-foreground">{formatCurrency(amounts.totalPrevisto)}</p>
-              <p className="text-[11px] text-muted-foreground">
-                {isConcluded
-                  ? hasHistoricalPlan
-                    ? "Planejamento histórico registrado"
-                    : "Sem planejamento histórico registrado"
-                  : "Planejamento total atualizado da sprint"}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Gasto real
+                Investido
               </p>
               {isAdmin ? (
                 <>
@@ -285,33 +283,44 @@ export function SprintCardBody({
             {isConcluded ? (
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Resultado final
+                  Recomendação final
                 </p>
-                {hasHistoricalPlan ? (
+                {finalRecommendedAmount !== null ? (
                   <p className="mt-0.5 text-base font-semibold text-foreground">
-                    {finalResultDiff > 0
-                      ? `${formatCurrency(finalResultDiff)} abaixo do previsto`
-                      : finalResultDiff < 0
-                        ? `${formatCurrency(Math.abs(finalResultDiff))} acima do previsto`
-                        : "Dentro do previsto"}
+                    {formatCurrency(finalRecommendedAmount)}
                   </p>
                 ) : (
-                  <p className="mt-0.5 text-base font-semibold text-muted-foreground">Sprint encerrada</p>
+                  <p className="mt-0.5 text-base font-semibold text-muted-foreground">
+                    Sem recomendação histórica registrada
+                  </p>
                 )}
               </div>
             ) : (
               <>
                 <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-brand">
+                    Recomendado para esta sprint
+                  </p>
+                  {/* Destaque maior (Etapa 70, seção 18/21) — este é o
+                      principal número operacional, o que o gestor deve
+                      seguir pra fechar o mês no orçamento. */}
+                  <p className="mt-0.5 text-lg font-semibold text-brand">
+                    {formatCurrency(amounts.totalRecommended)}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">Meta atual ajustada para fechar o orçamento mensal</p>
+                </div>
+
+                <div>
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Planejamento restante
+                    Restam recomendados
                   </p>
                   {/* Etapa 65: nunca mais vermelho automático aqui — só o
                       indicador de excedente abaixo da barra assume essa cor,
                       reservada pra situação realmente crítica. */}
                   <p className="mt-0.5 text-base font-semibold text-foreground">
-                    {formatCurrency(amounts.remainingPlanned)}
+                    {formatCurrency(amounts.remainingRecommended)}
                   </p>
-                  <p className="text-[11px] text-muted-foreground">Para os dias restantes da sprint</p>
+                  <p className="text-[11px] text-muted-foreground">Quanto ainda deve ser investido nesta sprint</p>
                 </div>
 
                 <div>
@@ -320,10 +329,10 @@ export function SprintCardBody({
                   </p>
                   {eligibleDaysCount > 0 ? (
                     <>
-                      <p className="mt-0.5 text-base font-semibold text-brand">
+                      <p className="mt-0.5 text-base font-semibold text-foreground">
                         {formatCurrency(remainingPlanned / eligibleDaysCount)}/dia
                       </p>
-                      <p className="text-[11px] text-muted-foreground">Até o final da sprint</p>
+                      <p className="text-[11px] text-muted-foreground">{eligibleDaysCount} dias, incluindo hoje</p>
                     </>
                   ) : (
                     <>
@@ -336,14 +345,21 @@ export function SprintCardBody({
             )}
           </div>
 
-          {amounts.overageAmount > 0 && (
-            <p className="mt-2 text-[11px] font-medium text-red-600 dark:text-red-400">
-              {formatCurrency(amounts.overageAmount)} acima do previsto
+          {isConcluded && finalResultDiff !== null && (
+            <p className="mt-2 text-[11px] font-medium text-foreground">
+              {finalResultDiff > 0
+                ? `${formatCurrency(finalResultDiff)} abaixo do previsto`
+                : finalResultDiff < 0
+                  ? `${formatCurrency(Math.abs(finalResultDiff))} acima do previsto`
+                  : "Dentro do previsto"}
             </p>
           )}
 
           <div className="mt-2">
-            <SprintFinancialBar actualSpend={sprint.actualSpend} totalPrevisto={amounts.totalPrevisto} />
+            <SprintFinancialBar
+              actualSpend={sprint.actualSpend}
+              totalPrevisto={isConcluded ? (finalTarget ?? 0) : amounts.totalRecommended}
+            />
           </div>
         </div>
 
@@ -454,7 +470,8 @@ export function SprintCard({
   buildReviewDetailHref,
   remainingPlanned,
   eligibleDaysCount,
-  plannedAllocations,
+  originalPlannedAmount,
+  finalRecommendedAmount,
   manualSpendUpdatedAt,
   metaSyncedAt,
 }: {
@@ -475,7 +492,8 @@ export function SprintCard({
   /** Ver `SprintCardBody` — mesmo dado, mesmo comportamento. */
   remainingPlanned: number;
   eligibleDaysCount: number;
-  plannedAllocations?: { date: string; amount: number }[];
+  originalPlannedAmount: number;
+  finalRecommendedAmount: number | null;
   manualSpendUpdatedAt?: string | null;
   metaSyncedAt?: string | null;
 }) {
@@ -483,11 +501,14 @@ export function SprintCard({
   const isCurrent = sprint.temporalStatus === "atual";
   const isOpen = defaultOpen ?? isCurrent;
   const isConcluded = sprint.temporalStatus === "concluida";
-  const historicalSplit = isConcluded && plannedAllocations !== undefined
-    ? computeSprintPlannedSplit(plannedAllocations, todayUTC())
-    : undefined;
-  const amounts = computeSprintInvestmentAmounts(sprint, remainingPlanned, historicalSplit);
-  const investment = describeSprintInvestment(sprint, amounts, formatCurrency);
+  const amounts = computeSprintRecommendationAmounts(sprint, remainingPlanned);
+  const investment = describeSprintRecommendation(sprint, amounts, originalPlannedAmount, formatCurrency);
+  // Etapa 70, seção 17: sprint concluída nunca mostra percentual baseado na
+  // recomendação DINÂMICA atual (`amounts.totalRecommended` já vira só
+  // `actualSpend` pra ela, já que `remainingPlanned` é sempre 0) — o
+  // percentual compacto compara com a recomendação final/planejamento
+  // original congelados, mesma referência usada em "Resultado final".
+  const compactTarget = isConcluded ? finalRecommendedAmount ?? originalPlannedAmount : amounts.totalRecommended;
 
   const topAlert = alerts?.[0];
   const remainingAlerts = (alerts?.length ?? 0) - 1;
@@ -515,9 +536,9 @@ export function SprintCard({
 
         <span className="ml-auto flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span className="tabular-nums">{investment.primary}</span>
-          {amounts.totalPrevisto > 0 && (
+          {compactTarget > 0 && (
             <span className="hidden tabular-nums sm:inline">
-              {Math.round((sprint.actualSpend / amounts.totalPrevisto) * 100)}%
+              {Math.round((sprint.actualSpend / compactTarget) * 100)}%
             </span>
           )}
           <span className="hidden sm:inline">
@@ -558,7 +579,8 @@ export function SprintCard({
         buildReviewDetailHref={buildReviewDetailHref}
         remainingPlanned={remainingPlanned}
         eligibleDaysCount={eligibleDaysCount}
-        plannedAllocations={plannedAllocations}
+        originalPlannedAmount={originalPlannedAmount}
+        finalRecommendedAmount={finalRecommendedAmount}
         manualSpendUpdatedAt={manualSpendUpdatedAt}
         metaSyncedAt={metaSyncedAt}
       />

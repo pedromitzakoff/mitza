@@ -73,6 +73,8 @@ export function SprintMonthlyBySprintsGroup({
                 buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
                 remainingPlanned={card.monthSprintPlans?.[sprint.sprintId]?.remainingPlanned ?? 0}
                 eligibleDaysCount={card.monthSprintPlans?.[sprint.sprintId]?.eligibleDaysCount ?? 0}
+                originalPlannedAmount={card.monthSprintOriginalPlans[sprint.sprintId] ?? 0}
+                finalRecommendedAmount={card.monthSprintFinalRecommendations[sprint.sprintId] ?? null}
                 metaSyncedAt={card.lastSyncedAt}
               />
             );

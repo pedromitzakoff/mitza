@@ -240,142 +240,96 @@ export function computeSprintFinancials(
   };
 }
 
-/** Divide o planejado de UMA sprint (a partir das linhas diárias de
- * `sprint_planned_allocations` já filtradas por essa sprint) entre a parte
- * histórica (dias já encerrados, `date < today`, nunca recalculada) e a
- * parte restante (hoje + dias futuros, `date >= today`, a única ajustável)
- * — Etapa 63, seção 6: a sprint atual precisa mostrar essas duas fatias
- * separadas ("R$1.000 realizados de R$1.600 previstos... R$600 ainda
- * planejados para os dias restantes"), nunca só o total misturado.
+/** Números brutos por trás da RECOMENDAÇÃO de UMA sprint atual/futura —
+ * fonte única de "quanto é a recomendação atual total" e "quanto ainda
+ * resta recomendado", nunca recalculados separadamente pelo resumo
+ * compacto e pelos indicadores do card expandido. A recomendação atual
+ * total é sempre `realizado + recomendação restante` (Etapa 66, seção 7,
+ * renomeado na Etapa 70 — a fórmula não mudou, só o nome: antes "previsto",
+ * agora "recomendado", porque este É o número que fecha o orçamento mensal
+ * vigente, não uma estimativa solta) — nunca o `plannedSpend` bruto (coluna
+ * persistida, que fica desatualizada assim que o realizado muda sem uma
+ * nova redistribuição).
  *
- * Etapa 65: o corte é `date < today` / `date >= today` (hoje entra no
- * restante, não no histórico) — mesma convenção de `getEligibleRedistributionDates`
- * (`date >= effectiveDate` é elegível), nunca um segundo critério de "hoje já
- * conta como passado" só desta função. Antes o corte era `date <= today`, o
- * que fazia a linha de alocação de hoje sumir do "previsto"/"restante" sempre
- * que o gasto de hoje ainda não tinha sido sincronizado — o mesmo valor do
- * dia ficava fora das duas fatias, subestimando o investimento diário
- * recomendado (Etapa 65) por exatamente um dia inteiro.
+ * `remainingPlanned` já vem PRONTO de `computeMonthlyBudgetPlan().sprintPlans`
+ * (a única função que decide "quanto ainda pode ser investido" — nunca
+ * recalculado aqui a partir de `sprint_planned_allocations`).
  *
- * Sprint sem nenhuma linha de alocação (nunca teve orçamento configurado)
- * devolve as duas fatias como 0 — quem exibe decide como comunicar isso (ver
- * `describeSprintInvestment` em sprint-financials.ts), esta função nunca
- * inventa um valor. */
-export interface SprintPlannedSplit {
-  historicalPlanned: number;
-  remainingPlanned: number;
-  hasAnyAllocation: boolean;
+ * Etapa 70: esta função só serve sprint ATUAL/FUTURA — sprint CONCLUÍDA usa
+ * o snapshot congelado (`SprintClosedSnapshot`, `sprint-recommendation.ts`),
+ * nunca mais `sprint_planned_allocations`/`computeSprintPlannedSplit`
+ * (removida: o "planejamento histórico" que ela reconstruía virou o
+ * "planejamento original" congelado, uma fonte mais confiável porque não
+ * depende de quantas vezes o orçamento foi redistribuído no meio do
+ * caminho). */
+export interface SprintRecommendationAmounts {
+  totalRecommended: number;
+  remainingRecommended: number;
 }
 
-export function computeSprintPlannedSplit(
-  sprintAllocations: { date: string; amount: number }[],
-  today: Date,
-): SprintPlannedSplit {
-  const todayStr = today.toISOString().slice(0, 10);
-  let historicalPlanned = 0;
-  let remainingPlanned = 0;
-
-  for (const row of sprintAllocations) {
-    if (row.date < todayStr) historicalPlanned += row.amount;
-    else remainingPlanned += row.amount;
-  }
-
-  return { historicalPlanned, remainingPlanned, hasAnyAllocation: sprintAllocations.length > 0 };
-}
-
-/** Números brutos por trás do investimento de UMA sprint — fonte única de
- * "quanto é o previsto" e "quanto ainda resta planejar", nunca recalculados
- * separadamente pelo resumo compacto (`describeSprintInvestment`) e pelos
- * indicadores do card expandido. O "previsto" da sprint atual/futura é
- * sempre `realizado + planejamento restante` (Etapa 66, seção 7) — nunca o
- * `plannedSpend` bruto (coluna persistida, que fica desatualizada assim que
- * o realizado muda sem uma nova redistribuição).
- *
- * Etapa 66: `remainingPlanned` já vem PRONTO de
- * `computeMonthlyBudgetPlan().sprintPlans` (a única função que decide
- * "quanto ainda pode ser investido" — nunca recalculado aqui a partir de
- * `sprint_planned_allocations`). Só a sprint CONCLUÍDA usa `historicalSplit`
- * (as linhas de planejamento diário já persistidas) — pra ela,
- * `remainingPlanned` é sempre 0 (nada mais resta de um período encerrado); o
- * "previsto" exibido é o planejamento HISTÓRICO (se existir), preservado só
- * pra comparação, nunca usado no cálculo do saldo atual. Quando quem chama
- * não busca as alocações diárias (`historicalSplit` undefined — ex.: painel
- * Sprints, que ainda não busca por sprint individual), cai pro total bruto
- * já existente (`sprint.plannedSpend`), mesmo comportamento de sempre. */
-export interface SprintInvestmentAmounts {
-  totalPrevisto: number;
-  remainingPlanned: number;
-  overageAmount: number;
-}
-
-export function computeSprintInvestmentAmounts(
-  sprint: { temporalStatus: SprintTemporalStatus; actualSpend: number; plannedSpend: number },
+export function computeSprintRecommendationAmounts(
+  sprint: { actualSpend: number },
   remainingPlanned: number,
-  historicalSplit: SprintPlannedSplit | undefined,
-): SprintInvestmentAmounts {
-  if (sprint.temporalStatus === "concluida") {
-    const hasHistoricalPlan = historicalSplit ? historicalSplit.hasAnyAllocation : sprint.plannedSpend > 0;
-    const totalPrevisto = hasHistoricalPlan
-      ? (historicalSplit ? historicalSplit.historicalPlanned : sprint.plannedSpend)
-      : 0;
-    return { totalPrevisto, remainingPlanned: 0, overageAmount: Math.max(sprint.actualSpend - totalPrevisto, 0) };
-  }
-
+): SprintRecommendationAmounts {
   const safeRemaining = Math.max(remainingPlanned, 0);
   return {
-    totalPrevisto: sprint.actualSpend + safeRemaining,
-    remainingPlanned: safeRemaining,
-    // Nunca ultrapassa pra atual/futura: o previsto É `realizado + restante`
-    // (nunca um alvo fixo que o realizado possa superar) — o único jeito do
-    // realizado "ultrapassar" é o orçamento do MÊS já ter sido atingido, o
-    // que já zera `remainingPlanned` (ver `computeMonthlyBudgetPlan`), e aí
-    // `totalPrevisto === actualSpend` (nunca menor).
-    overageAmount: 0,
+    totalRecommended: sprint.actualSpend + safeRemaining,
+    remainingRecommended: safeRemaining,
+    // Nunca ultrapassa pra atual/futura: a recomendação total É `realizado +
+    // restante` (nunca um alvo fixo que o realizado possa superar) — o único
+    // jeito do realizado "ultrapassar" é o orçamento do MÊS já ter sido
+    // atingido, o que já zera `remainingPlanned` (ver `computeMonthlyBudgetPlan`),
+    // e aí `totalRecommended === actualSpend` (nunca menor).
   };
 }
 
-/** Texto operacional do investimento de UMA sprint — nunca mais o
- * "R$ X / R$ Y" ambíguo do resumo compacto. Cobre os 4 estados possíveis:
- * futura, atual com dias restantes ainda planejáveis, atual sem nada mais a
- * planejar (último dia), concluída com/sem planejamento histórico registrado
- * (gasto real preservado, nunca escondido nem tratado como erro). Recebe
- * `amounts` já pronto (`computeSprintInvestmentAmounts`) — a mesma fonte que
- * os indicadores do card expandido usam, pra nunca haver dois valores
- * divergentes pra "previsto"/"restante" entre o resumo fechado e o card
- * aberto (Etapa 66, seção 11). */
+/** Texto operacional da RECOMENDAÇÃO de UMA sprint — nunca mais o "R$ X de
+ * R$ Y previstos" ambíguo do resumo compacto (Etapa 70: renomeado de
+ * `describeSprintInvestment` — "previsto" virou "recomendado" em toda a
+ * interface, porque este é o número que o gestor deve seguir pra fechar o
+ * mês no orçamento, não uma estimativa solta). Cobre os 3 estados:
+ *
+ * - futura: nunca "R$0 investidos de R$X planejados" (ainda não existe
+ *   realizado, e o valor é uma recomendação dinâmica, não um planejamento
+ *   fixo) — mostra só "R$X recomendados para esta sprint".
+ * - atual: "R$X investidos · R$Y recomendados para esta sprint" — os dois
+ *   números lado a lado, nunca "de" (que sugeria um teto, não uma meta).
+ * - concluída: usa o snapshot congelado (`originalPlannedAmount`), nunca
+ *   mais a recomendação dinâmica atual — "R$X investidos · R$Y planejados
+ *   originalmente", ou "sem planejamento histórico registrado" quando nem
+ *   isso existe (`originalPlannedAmount <= 0`, só quando a sprint nunca
+ *   chegou a ser congelada por falta de qualquer orçamento configurado). */
 export interface SprintInvestmentText {
   primary: string;
   secondary: string | null;
 }
 
-export function describeSprintInvestment(
+export function describeSprintRecommendation(
   sprint: { temporalStatus: SprintTemporalStatus; actualSpend: number },
-  amounts: SprintInvestmentAmounts,
+  amounts: SprintRecommendationAmounts,
+  originalPlannedAmount: number,
   formatCurrency: (value: number) => string,
 ): SprintInvestmentText {
   if (sprint.temporalStatus === "futura") {
-    return amounts.totalPrevisto > 0
-      ? { primary: `${formatCurrency(0)} investidos de ${formatCurrency(amounts.totalPrevisto)} planejados`, secondary: null }
-      : { primary: `${formatCurrency(0)} investidos · sem planejamento configurado`, secondary: null };
+    return { primary: `${formatCurrency(amounts.totalRecommended)} recomendados para esta sprint`, secondary: null };
   }
 
   if (sprint.temporalStatus === "atual") {
     return {
-      primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(amounts.totalPrevisto)} previstos`,
+      primary: `${formatCurrency(sprint.actualSpend)} investidos · ${formatCurrency(amounts.totalRecommended)} recomendados para esta sprint`,
       secondary:
-        amounts.remainingPlanned > 0 ? `${formatCurrency(amounts.remainingPlanned)} ainda planejados para os dias restantes` : null,
+        amounts.remainingRecommended > 0 ? `${formatCurrency(amounts.remainingRecommended)} ainda recomendados para os dias restantes` : null,
     };
   }
 
-  // concluída — Etapa 66, seção 8: nunca "de R$0 planejados" quando não
-  // existia planejamento histórico registrado (`amounts.totalPrevisto === 0`
-  // só acontece nesse caso, já que `computeSprintInvestmentAmounts` devolve
-  // 0 exclusivamente quando `historicalSplit` não tem nenhuma alocação).
-  if (amounts.totalPrevisto <= 0) {
+  // concluída — nunca "de R$0 planejados" quando não existia planejamento
+  // original congelado (`originalPlannedAmount <= 0` só acontece quando a
+  // sprint nunca foi congelada por falta de qualquer orçamento).
+  if (originalPlannedAmount <= 0) {
     return { primary: `${formatCurrency(sprint.actualSpend)} investidos · sem planejamento histórico registrado`, secondary: null };
   }
   return {
-    primary: `${formatCurrency(sprint.actualSpend)} investidos de ${formatCurrency(amounts.totalPrevisto)} planejados`,
+    primary: `${formatCurrency(sprint.actualSpend)} investidos · ${formatCurrency(originalPlannedAmount)} planejados originalmente`,
     secondary: null,
   };
 }

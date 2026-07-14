@@ -406,6 +406,10 @@ export interface Database {
           manual_actual_spend: number | null;
           manual_spend_updated_at: string | null;
           created_at: string;
+          original_planned_amount: number | null;
+          final_recommended_amount: number | null;
+          final_actual_amount: number | null;
+          snapshot_frozen_at: string | null;
         };
         Insert: {
           id?: string;
@@ -417,6 +421,10 @@ export interface Database {
           manual_actual_spend?: number | null;
           manual_spend_updated_at?: string | null;
           created_at?: string;
+          original_planned_amount?: number | null;
+          final_recommended_amount?: number | null;
+          final_actual_amount?: number | null;
+          snapshot_frozen_at?: string | null;
         };
         Update: {
           id?: string;
@@ -428,6 +436,10 @@ export interface Database {
           manual_actual_spend?: number | null;
           manual_spend_updated_at?: string | null;
           created_at?: string;
+          original_planned_amount?: number | null;
+          final_recommended_amount?: number | null;
+          final_actual_amount?: number | null;
+          snapshot_frozen_at?: string | null;
         };
         Relationships: [
           {

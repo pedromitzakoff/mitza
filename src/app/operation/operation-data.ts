@@ -14,6 +14,7 @@ import {
   computeMonthlyBudgetPlan,
   computeMonthlyExpectedToDateByCalendar,
 } from "@/lib/monthly-budget";
+import { computeOriginalSprintPlans, type SprintClosedSnapshot } from "@/lib/sprint-recommendation";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { effectiveTaskStatus } from "@/lib/task-status";
@@ -68,6 +69,14 @@ export interface OperationClientRawData {
   clientLastActivityAt: string | null;
   sprintLastActivityAt: string | null;
   lastSyncedAt: string | null;
+  /** Snapshot congelado (Etapa 70) de cada sprint do mês já encerrada — já
+   * resolvido por quem chama (`ensureClosedSprintSnapshots`, que faz a
+   * escrita no banco antes de montar o card, já que esta função é pura e
+   * nunca escreve nada). Mapa vazio (padrão) = nenhuma sprint foi congelada
+   * ainda por esta chamada — sprints concluídas caem no fallback "sem
+   * recomendação histórica registrada" até a próxima leitura que já tenha
+   * feito o congelamento (ex.: visitar a página do cliente). */
+  sprintClosedSnapshots?: Map<string, SprintClosedSnapshot>;
 }
 
 export interface OperationClientCard {
@@ -118,6 +127,17 @@ export interface OperationClientCard {
    * usada na página do cliente; `null` quando o mês está encerrado (não
    * existe "planejamento restante" pra um mês que já passou). */
   monthSprintPlans: Record<string, { remainingPlanned: number; eligibleDaysCount: number }> | null;
+  /** Planejamento original de cada sprint do mês, por sprintId (Etapa 70) —
+   * congelado (`sprintClosedSnapshots`) pra sprint concluída, recalculado ao
+   * vivo (`computeOriginalSprintPlans` sobre o orçamento vigente) pra
+   * atual/futura. Sempre disponível, nunca `null` (0 só quando não há
+   * nenhuma base de orçamento). */
+  monthSprintOriginalPlans: Record<string, number>;
+  /** Recomendação final congelada de cada sprint CONCLUÍDA do mês, por
+   * sprintId (Etapa 70) — `null` pra sprint atual/futura (não se aplica) e
+   * também pra sprint concluída sem nenhuma recomendação histórica real
+   * (nunca inventada retroativamente). */
+  monthSprintFinalRecommendations: Record<string, number | null>;
   /** Tarefas de cada sprint do mês, por sprintId — pra montar o mesmo
    * SprintCard da página do cliente pra qualquer sprint do mês (não só a
    * atual), sem duplicar o filtro de tarefas por sprint. */
@@ -203,6 +223,24 @@ export function buildOperationClientCard(
         }).sprintPlans,
       )
     : null;
+  // Etapa 70 — planejamento original: congelado (`sprintClosedSnapshots`,
+  // já resolvido por quem chama antes de invocar esta função pura) pra
+  // sprint concluída; recalculado ao vivo pra atual/futura — nunca a mesma
+  // fórmula pras duas (ver `computeOriginalSprintPlans`).
+  const closedSnapshots = client.sprintClosedSnapshots ?? new Map<string, SprintClosedSnapshot>();
+  const liveOriginalPlans = computeOriginalSprintPlans(
+    monthPlanned,
+    monthRangeArg,
+    monthSprintRows.map((row) => ({ sprintId: row.id, startDate: row.start_date, endDate: row.end_date })),
+  );
+  const monthSprintOriginalPlans: Record<string, number> = {};
+  const monthSprintFinalRecommendations: Record<string, number | null> = {};
+  for (const row of monthSprintRows) {
+    const snapshot = closedSnapshots.get(row.id);
+    monthSprintOriginalPlans[row.id] =
+      snapshot?.originalPlannedAmount ?? liveOriginalPlans.get(row.id)?.originalPlannedAmount ?? 0;
+    monthSprintFinalRecommendations[row.id] = snapshot?.finalRecommendedAmount ?? null;
+  }
   const monthSprintTasks: Record<string, OperationTaskItem[]> = {};
   for (const row of monthSprintRows) {
     monthSprintTasks[row.id] = client.tasks.filter((t) => t.sprint_id === row.id);
@@ -316,6 +354,8 @@ export function buildOperationClientCard(
     sprintExecutionInfo,
     monthSprints,
     monthSprintPlans,
+    monthSprintOriginalPlans,
+    monthSprintFinalRecommendations,
     monthSprintTasks,
     sprintExecutionLabel,
     monthTasks,
