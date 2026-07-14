@@ -122,7 +122,6 @@ export default async function Home({
 
   const [
     { data: clients },
-    { data: clientManagers },
     { data: gestores },
     { data: sprints },
     { data: dailySpend },
@@ -136,11 +135,10 @@ export default async function Home({
     supabase
       .from("clients")
       .select(
-        "id, name, meta_ad_account_id, status, primary_manager:team_members!clients_primary_manager_id_fkey(name)",
+        "id, name, meta_ad_account_id, status, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
       )
       .is("deleted_at", null)
       .order("name"),
-    supabase.from("client_managers").select("client_id, user_id, team_members(id, name)"),
     supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
     // Sobreposição com a janela (não "começa na janela") — uma sprint que
     // atravessa mês (ex.: 27/jul-02/ago) precisa ser encontrada mesmo com
@@ -204,14 +202,6 @@ export default async function Home({
       : Promise.resolve({ data: [] }),
   ]);
 
-  const managersByClient = new Map<string, { id: string; name: string }[]>();
-  for (const row of clientManagers ?? []) {
-    if (!row.team_members) continue;
-    const list = managersByClient.get(row.client_id) ?? [];
-    list.push(row.team_members);
-    managersByClient.set(row.client_id, list);
-  }
-
   type SprintRow = {
     id: string;
     client_id: string;
@@ -270,8 +260,11 @@ export default async function Home({
       id: client.id,
       name: client.name,
       metaAdAccountId: client.meta_ad_account_id,
-      managerNames: (managersByClient.get(client.id) ?? []).map((m) => m.name),
-      managerIds: (managersByClient.get(client.id) ?? []).map((m) => m.id),
+      // Etapa 62: fonte única do gestor atribuído (clients.primary_manager_id),
+      // nunca mais client_managers (que ficou reservado só pra autorização de
+      // escrita — ver relatório desta etapa).
+      managerNames: client.primary_manager ? [client.primary_manager.name] : [],
+      managerIds: client.primary_manager ? [client.primary_manager.id] : [],
       sprints: clientSprints,
       dailySpend: dailySpendByClient.get(client.id) ?? [],
       plannedAllocations: plannedAllocationsByClient.get(client.id) ?? [],

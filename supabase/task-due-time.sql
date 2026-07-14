@@ -1,0 +1,12 @@
+-- Etapa 62 (evolução da página do cliente) — horário opcional pra reuniões.
+--
+-- NÃO EXECUTAR sem aprovação.
+--
+-- Menor alteração possível: uma única coluna nullable em `tasks`, sem
+-- afetar nenhuma linha existente (todas continuam com due_time = null,
+-- exatamente como hoje). Só reuniões usam de fato horário na interface
+-- (entregas de criativo continuam só com data), mas a coluna fica
+-- disponível pra qualquer tipo de tarefa — não há necessidade de uma
+-- coluna exclusiva de `reuniao`, que exigiria lógica condicional a mais
+-- no schema pra nenhum ganho real.
+alter table tasks add column if not exists due_time time;

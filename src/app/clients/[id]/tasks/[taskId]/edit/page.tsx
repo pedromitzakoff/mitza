@@ -25,7 +25,7 @@ export default async function EditTaskPage({
   const [{ data: task }, { data: managers }] = await Promise.all([
     supabase
       .from("tasks")
-      .select("id, client_id, title, type, assignee_id, due_date, recurrence, notes")
+      .select("id, client_id, title, type, assignee_id, due_date, due_time, recurrence, notes")
       .eq("id", taskId)
       .eq("client_id", id)
       .single(),
@@ -108,6 +108,16 @@ export default async function EditTaskPage({
             type="date"
             required
             defaultValue={task.due_date}
+            className="rounded-md border border-zinc-300 px-3 py-2 text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm text-zinc-700 dark:text-zinc-300">
+          Horário <span className="text-xs text-zinc-400">(opcional)</span>
+          <input
+            name="due_time"
+            type="time"
+            defaultValue={task.due_time ?? ""}
             className="rounded-md border border-zinc-300 px-3 py-2 text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           />
         </label>

@@ -97,6 +97,26 @@ export function formatDateTime(value: string): string {
   return dateTimeFormatter.format(new Date(value));
 }
 
+const timeOnlyFormatter = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+/** "Hoje, 14:03" / "Ontem, 09:10" / "12/07, 09:10" — reaproveita a mesma
+ * regra de dia relativo de `formatLastOptimizationLabel` (monthly-reports.ts),
+ * só que com o horário junto (Etapa 62, seção 3 do pedido: "Última análise"
+ * precisa mostrar hora quando relevante, não só o dia). */
+export function formatRelativeDateTime(value: string, today: Date): string {
+  const date = new Date(value);
+  const diffDays = Math.floor(
+    (Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) -
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())) /
+      86_400_000,
+  );
+  const time = timeOnlyFormatter.format(date);
+  if (diffDays <= 0) return `Hoje, ${time}`;
+  if (diffDays === 1) return `Ontem, ${time}`;
+  if (diffDays < 7) return `Há ${diffDays} dias, ${time}`;
+  return `${formatDateTime(value)}`;
+}
+
 const dateTimeWithYearFormatter = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",

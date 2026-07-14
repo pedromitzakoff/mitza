@@ -23,6 +23,7 @@ export async function createTaskAction(clientId: string, formData: FormData) {
   const type = String(formData.get("type") ?? "outro") as TaskType;
   const assigneeId = String(formData.get("assignee_id") ?? "") || null;
   const dueDate = String(formData.get("due_date") ?? "");
+  const dueTime = String(formData.get("due_time") ?? "").trim() || null;
   const recurrence = String(formData.get("recurrence") ?? "nenhuma") as TaskRecurrence;
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const sprintId = String(formData.get("sprint_id") ?? "") || null;
@@ -36,6 +37,7 @@ export async function createTaskAction(clientId: string, formData: FormData) {
       type,
       assignee_id: assigneeId,
       due_date: dueDate,
+      due_time: dueTime,
       recurrence,
       notes,
       sprint_id: sprintId,
@@ -104,6 +106,7 @@ export async function updateTaskAction(taskId: string, clientId: string, formDat
   const type = String(formData.get("type") ?? "outro") as TaskType;
   const assigneeId = String(formData.get("assignee_id") ?? "") || null;
   const dueDate = String(formData.get("due_date") ?? "");
+  const dueTime = String(formData.get("due_time") ?? "").trim() || null;
   const recurrence = String(formData.get("recurrence") ?? "nenhuma") as TaskRecurrence;
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const returnTo = resolveReturnTo(formData, `/clients/${clientId}`);
@@ -130,6 +133,7 @@ export async function updateTaskAction(taskId: string, clientId: string, formDat
       type,
       assignee_id: assigneeId,
       due_date: dueDate,
+      due_time: dueTime,
       recurrence,
       notes,
       reassignment_count: (previous?.reassignment_count ?? 0) + (isReassignment && !isFirstAssignment ? 1 : 0),

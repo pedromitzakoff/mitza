@@ -479,6 +479,7 @@ export interface Database {
           type: TaskType;
           assignee_id: string | null;
           due_date: string;
+          due_time: string | null;
           status: TaskStatus;
           recurrence: TaskRecurrence;
           sprint_id: string | null;
@@ -499,6 +500,7 @@ export interface Database {
           type: TaskType;
           assignee_id?: string | null;
           due_date: string;
+          due_time?: string | null;
           status?: TaskStatus;
           recurrence?: TaskRecurrence;
           sprint_id?: string | null;
@@ -519,6 +521,7 @@ export interface Database {
           type?: TaskType;
           assignee_id?: string | null;
           due_date?: string;
+          due_time?: string | null;
           status?: TaskStatus;
           recurrence?: TaskRecurrence;
           sprint_id?: string | null;

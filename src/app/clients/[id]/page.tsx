@@ -7,6 +7,8 @@ import {
   computeSprintEffectiveSpend,
   computeSprintFinancials,
   currentMonthRange,
+  monthRangeFromParam,
+  shiftMonthParam,
   sumActualSpendForMonth,
   sumExpectedToDateForMonth,
   sumPlannedForMonth,
@@ -20,16 +22,17 @@ import { businessDaysSince } from "@/lib/business-days";
 import { resolveBudgetEffectiveDate } from "@/lib/monthly-budget";
 import { todayDateString, todayUTC } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
-import { computeOperationalTracking } from "@/lib/operational-tracking";
-import { computeAccountReviewCadenceStatus } from "@/lib/account-review-cadence";
+import { computeOperationalTracking, computeMonthlyOccurrenceSummary } from "@/lib/operational-tracking";
+import { fetchClientOperationalHistory } from "@/lib/client-operational-history";
 import { computeClientUpdateStatus } from "@/lib/client-updates";
 import { AttentionPanel } from "../attention-panel";
 import { MonthInvestmentSummary } from "../month-investment-summary";
 import { SprintCard } from "../sprint-card";
 import { TaskList } from "../task-list";
 import { Section } from "../section";
-import { AccountFollowUpPanel, type AccountReviewPreviewItem } from "../account-follow-up-panel";
-import { AccountReviewsHistoryDrawer } from "../account-reviews-history-drawer";
+import { AccountFollowUpPanel, type LastReviewInfo, type LastOptimizationInfo } from "../account-follow-up-panel";
+import { ClientOperationalHistoryDrawer } from "../client-operational-history-drawer";
+import { ScheduleOccurrenceDrawer } from "../schedule-occurrence-drawer";
 import { EssentialInfoPanel } from "../essential-info-panel";
 import type { CommentItem } from "../comment-thread";
 import type { TaskListItem } from "../task-row";
@@ -83,6 +86,14 @@ function groupByCommentableId(comments: CommentItem[]): Map<string, CommentItem[
   return map;
 }
 
+/** Anexa `?param` (ou `&param` se a URL já tiver query string) — necessário
+ * a partir da Etapa 62 porque `returnTo` agora pode já carregar `?month=...`
+ * (contexto temporal da página inteira), então nenhum href pode mais
+ * simplesmente concatenar "?" sem checar. */
+function withParam(url: string, param: string): string {
+  return `${url}${url.includes("?") ? "&" : "?"}${param}`;
+}
+
 function groupBySprintId(
   tasks: (TaskListItem & { sprint_id: string | null })[],
 ): { bySprintId: Map<string, TaskListItem[]>; unlinked: TaskListItem[] } {
@@ -122,6 +133,10 @@ export default async function ClientPage({
     reviewsHistory?: string;
     reviewSaved?: string;
     clientUpdateError?: string;
+    month?: string;
+    scheduleOccurrence?: string;
+    scheduleTaskId?: string;
+    historyPage?: string;
   }>;
 }) {
   const { id } = await params;
@@ -140,6 +155,10 @@ export default async function ClientPage({
     reviewsHistory,
     reviewSaved,
     clientUpdateError,
+    month: monthQueryParam,
+    scheduleOccurrence,
+    scheduleTaskId,
+    historyPage: historyPageParam,
   } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
@@ -164,11 +183,23 @@ export default async function ClientPage({
   // sprint atual virar errada bem à noite no Brasil (21h–23h59), quando o
   // relógio UTC real já tinha virado o dia seguinte mas em São Paulo ainda
   // era o dia anterior.
-  const { firstDay, lastDay } = currentMonthRange();
   const today = todayUTC();
   const todayStr = todayDateString();
+  // Etapa 62 — contexto temporal global da página: `?month=YYYY-MM` decide
+  // o período de TUDO que é temporal (sprints, investimento, tarefas do
+  // período, análises/otimizações/reuniões/entregas do Acompanhamento da
+  // Conta) — reaproveita exatamente os mesmos helpers já usados por
+  // Relatórios/Visão Geral/Sprints (`monthRangeFromParam`/`shiftMonthParam`),
+  // nenhum parsing de mês novo. Informações cadastrais do cliente (nome,
+  // status contratual, tempo de relacionamento, dados estruturais no fim da
+  // página) continuam fora do filtro — não fazem sentido "por mês".
+  const { firstDay, lastDay } = monthRangeFromParam(monthQueryParam, today);
+  const isCurrentMonth = firstDay === currentMonthRange(today).firstDay;
   const monthParam = firstDay.slice(0, 7);
   const monthLabel = formatMonthLabel(firstDay);
+  const monthQuery = monthQueryParam ? `?month=${monthQueryParam}` : "";
+  const prevMonthHref = `/clients/${id}?month=${shiftMonthParam({ firstDay }, -1)}`;
+  const nextMonthHref = `/clients/${id}?month=${shiftMonthParam({ firstDay }, 1)}`;
 
   // Etapa 50 (correção): a geração de sprints não roda mais durante o
   // carregamento da página — só via /api/cron/ensure-sprints.
@@ -294,43 +325,28 @@ export default async function ClientPage({
   const { data: tasks } = await supabase
     .from("tasks")
     .select(
-      "id, title, type, due_date, status, sprint_id, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
+      "id, title, type, due_date, due_time, status, sprint_id, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
     )
     .eq("client_id", id)
     .order("due_date");
 
-  // Etapa 57 — Análises da Conta: janela de 60 dias é suficiente pra
-  // cadência semanal/dias úteis; "análise anterior" completa já vem
-  // calculada e gravada em cada linha (seconds_since_previous_review),
-  // nunca recalculada aqui.
-  const reviewWindowStart = new Date(today.getTime() - 60 * 86_400_000).toISOString().slice(0, 10);
-  const [
-    { data: accountReviewRows },
-    { data: lastOptimizationRow },
-    { data: cadenceConfig },
-    { data: managers },
-    { data: clientUpdateRows },
-  ] = await Promise.all([
+  // Etapa 62: a janela fixa de 60 dias (Etapa 57) foi substituída por uma
+  // busca sem filtro de data (as últimas 200 análises do cliente — teto
+  // generoso, nunca deveria ser atingido na prática) porque agora o mesmo
+  // conjunto precisa responder a DUAS perguntas diferentes: "qual a última
+  // análise/otimização de verdade" (mês atual — pode estar em qualquer mês
+  // passado) e "quais análises/otimizações aconteceram DENTRO do mês
+  // selecionado" (mês anterior, Etapa 8) — uma janela fixa de 60 dias
+  // quebraria a segunda pergunta pra qualquer mês mais antigo que isso.
+  const [{ data: accountReviewRows }, { data: managers }, { data: clientUpdateRows }] = await Promise.all([
     supabase
       .from("account_reviews")
       .select(
         "id, sprint_id, reviewed_at, reason, reason_other_description, outcome, notes, issue_description, issue_category, seconds_since_previous_review, team_member:team_members!account_reviews_team_member_id_fkey(name), optimizations:account_optimizations(id, optimization_type, optimization_action, description, reason, expected_impact), issue_task:tasks!account_reviews_issue_task_id_fkey(title)",
       )
       .eq("client_id", id)
-      .gte("reviewed_at", `${reviewWindowStart}T00:00:00Z`)
-      .order("reviewed_at", { ascending: false }),
-    supabase
-      .from("account_optimizations")
-      .select("optimization_type, created_at")
-      .eq("client_id", id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("account_review_cadences")
-      .select("reviews_per_week, max_business_days_without_review, is_active")
-      .eq("client_id", id)
-      .maybeSingle(),
+      .order("reviewed_at", { ascending: false })
+      .limit(200),
     supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
     // Etapa 59 — Atualização para o Cliente: uma linha por análise (no
     // máximo), buscada junto com o resto da página; nenhuma query separada
@@ -365,46 +381,31 @@ export default async function ClientPage({
   });
   const accountReviewsBySprintId = groupAccountReviewsBySprintId(accountReviewSummaries);
 
-  const accountReviewCadenceStatus = computeAccountReviewCadenceStatus(
-    accountReviews.map((r) => r.reviewed_at),
-    cadenceConfig
-      ? {
-          reviewsPerWeek: cadenceConfig.reviews_per_week,
-          maxBusinessDaysWithoutReview: cadenceConfig.max_business_days_without_review,
-          isActive: cadenceConfig.is_active,
-        }
-      : null,
-    today,
-    lastOptimizationRow ? { type: lastOptimizationRow.optimization_type, occurredAt: lastOptimizationRow.created_at } : null,
+  // Etapa 62, seção 3/7/8 — "Última análise"/"Última otimização": no mês
+  // atual é sempre o dado GLOBAL mais recente (accountReviews já vem
+  // ordenado desc, então é só o primeiro item); num mês anterior, é o mais
+  // recente DENTRO do mês selecionado. "Última otimização" é a otimização
+  // da análise mais recente (nessa mesma lista) que de fato tem alguma —
+  // nunca uma consulta paralela a account_optimizations (a única fonte é a
+  // mesma lista de análises, com optimizations já aninhadas).
+  const reviewsInMonth = accountReviews.filter(
+    (r) => r.reviewed_at >= `${firstDay}T00:00:00Z` && r.reviewed_at <= `${lastDay}T23:59:59.999Z`,
   );
+  const reviewsForLastLookup = isCurrentMonth ? accountReviews : reviewsInMonth;
 
-  // Etapa 58: preview de análises recentes no bloco "Acompanhamento da conta"
-  // — reaproveita a mesma janela de 60 dias já buscada acima (accountReviews),
-  // nenhuma query nova só pra mostrar as 2 mais recentes com detalhe de
-  // otimização.
-  const accountReviewPreviewItems: AccountReviewPreviewItem[] = accountReviews.map((review) => {
-    const optimizationTypes = Array.from(new Set(review.optimizations.map((opt) => opt.optimization_type)));
-    const summaryText =
-      review.outcome === "OPTIMIZATION_PERFORMED"
-        ? (review.optimizations[0]?.description ?? null)
-        : review.outcome === "ISSUE_IDENTIFIED"
-          ? review.issue_description
-          : review.notes;
-    const update = clientUpdatesByReviewId.get(review.id) ?? null;
-    return {
-      id: review.id,
-      reviewedAt: review.reviewed_at,
-      managerName: review.team_member?.name ?? "Membro removido",
-      outcome: review.outcome,
-      optimizationTypes,
-      summaryText,
-      updateStatus: computeClientUpdateStatus(
-        update ? { copiedAt: update.copied_at, sentAt: update.sent_at } : null,
-      ),
-    };
-  });
-  const recentAccountReviews = accountReviewPreviewItems.slice(0, 2);
-  const hasMoreAccountReviews = accountReviewPreviewItems.length > 2;
+  const lastReviewSource = reviewsForLastLookup[0] ?? null;
+  const lastReview: LastReviewInfo | null = lastReviewSource
+    ? { reviewedAt: lastReviewSource.reviewed_at, managerName: lastReviewSource.team_member?.name ?? "Membro removido" }
+    : null;
+
+  const lastOptimizationSource = reviewsForLastLookup.find((r) => r.optimizations.length > 0) ?? null;
+  const lastOptimization: LastOptimizationInfo | null = lastOptimizationSource
+    ? {
+        type: lastOptimizationSource.optimizations[0].optimization_type,
+        occurredAt: lastOptimizationSource.reviewed_at,
+        managerName: lastOptimizationSource.team_member?.name ?? "Membro removido",
+      }
+    : null;
 
   const [sprintComments, taskComments] = await Promise.all([
     fetchCommentsByType(
@@ -421,13 +422,36 @@ export default async function ClientPage({
 
   const sprintCommentsById = groupByCommentableId(sprintComments);
   const taskCommentsById = groupByCommentableId(taskComments);
-  const { bySprintId: tasksBySprintId, unlinked: unlinkedTasks } = groupBySprintId(tasks ?? []);
+  const { bySprintId: tasksBySprintId, unlinked: unlinkedTasksAllTime } = groupBySprintId(tasks ?? []);
+  // Etapa 62, seção 6: "tarefas do período" respeitam o mês selecionado —
+  // as vinculadas a uma sprint já ficam implicitamente restritas (cada
+  // sprint só aparece se pertencer ao mês selecionado); só a lista solta
+  // (sem sprint) precisava do filtro explícito aqui.
+  const unlinkedTasks = unlinkedTasksAllTime.filter((task) => task.due_date >= firstDay && task.due_date <= lastDay);
+  // "Próxima reunião/entrega" (Etapa 7) precisa olhar TODAS as tarefas do
+  // cliente, não só as do mês selecionado — a próxima ocorrência pode estar
+  // num mês futuro diferente do que está sendo visualizado.
   const operationalTracking = computeOperationalTracking(tasks ?? [], today);
+  // "Reuniões/entregas de {mês}" (Etapa 8) já nasce escopado ao mês.
+  const monthlyOccurrenceSummary = computeMonthlyOccurrenceSummary(tasks ?? [], { firstDay, lastDay }, today);
 
   const tasksThisMonth = (tasks ?? []).filter(
     (task) => task.due_date >= firstDay && task.due_date <= lastDay,
   );
   const taskCounts = computeTaskCounts(tasksThisMonth, today);
+
+  // Etapa 62, seção 9 — histórico unificado do mês (análises + otimizações
+  // + reuniões/entregas com desfecho), reaproveitando 100% operational_events
+  // (ver lib/client-operational-history.ts). O card mostra só as 5 mais
+  // recentes; "Ver todos de {mês}" abre a mesma consulta paginada (15 por
+  // página, mesmo padrão de `fetchTeamMemberTimeline`).
+  const historyPage = Math.max(0, Number(historyPageParam) || 0);
+  const [{ rows: recentHistoryRows, hasMore: hasMoreHistory }, fullHistory] = await Promise.all([
+    fetchClientOperationalHistory(supabase, id, { firstDay, lastDay }, 0, 5),
+    reviewsHistory
+      ? fetchClientOperationalHistory(supabase, id, { firstDay, lastDay }, historyPage)
+      : Promise.resolve({ rows: [], hasMore: false }),
+  ]);
 
   // Etapa 57: o sinal de "otimização recente" agora vem de account_reviews
   // (Análise da Conta), não mais de tasks.type === 'otimizacao' — o template
@@ -471,7 +495,7 @@ export default async function ClientPage({
     budgetSaved && { tone: "green", text: "Orçamento do mês atualizado." },
   ].filter((banner): banner is { tone: "red" | "green"; text: string } => Boolean(banner));
 
-  const returnTo = `/clients/${client.id}`;
+  const returnTo = `/clients/${client.id}${monthQuery}`;
   const openReviewDetail = openReviewDetailId ? accountReviews.find((r) => r.id === openReviewDetailId) ?? null : null;
   const reviewDetail: AccountReviewDetail | null = openReviewDetail
     ? {
@@ -507,10 +531,11 @@ export default async function ClientPage({
         })(),
       }
     : null;
-  const historyDrawerHref = `${returnTo}?historicoOrcamento=1`;
+  const historyDrawerHref = withParam(returnTo, "historicoOrcamento=1");
   const historyDrawerCloseHref = returnTo;
-  const reviewsHistoryHref = `${returnTo}?reviewsHistory=1`;
-  const buildReviewDetailHref = (reviewId: string) => `${returnTo}?reviewDetail=${reviewId}`;
+  const reviewsHistoryHref = withParam(returnTo, "reviewsHistory=1");
+  const buildHistoryPageHref = (page: number) => withParam(withParam(returnTo, "reviewsHistory=1"), `historyPage=${page}`);
+  const buildReviewDetailHref = (reviewId: string) => withParam(returnTo, `reviewDetail=${reviewId}`);
   const openTaskRow = openTaskId ? (tasks ?? []).find((t) => t.id === openTaskId) ?? null : null;
   const openTask: OperationTaskItem | null = openTaskRow
     ? {
@@ -558,7 +583,7 @@ export default async function ClientPage({
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
           <span className="text-foreground">Análise registrada com sucesso.</span>
           <div className="flex items-center gap-2">
-            <form action={generateClientUpdateAction.bind(null, reviewSaved, `${returnTo}?reviewDetail=${reviewSaved}`)}>
+            <form action={generateClientUpdateAction.bind(null, reviewSaved, withParam(returnTo, `reviewDetail=${reviewSaved}`))}>
               <button
                 type="submit"
                 className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
@@ -576,24 +601,49 @@ export default async function ClientPage({
         </div>
       )}
 
+      {/* 0. Seletor de mês (Etapa 62, seção 6) — contexto temporal de toda
+          a página; mesmo padrão de navegação mensal já usado em
+          Relatórios/Visão Geral/Sprints (`?month=YYYY-MM` + shiftMonthParam),
+          nenhum componente novo de seletor. */}
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">Período em análise</p>
+        <div className="flex items-center gap-0.5 rounded-md border border-border bg-card px-1 py-1 text-sm">
+          <Link
+            href={prevMonthHref}
+            className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            aria-label="Mês anterior"
+          >
+            &lsaquo;
+          </Link>
+          <span className="px-1.5 text-sm font-medium text-foreground">{monthLabel}</span>
+          <Link
+            href={nextMonthHref}
+            className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            aria-label="Próximo mês"
+          >
+            &rsaquo;
+          </Link>
+        </div>
+      </div>
+
       {/* 1. Acompanhamento da conta — primeiro bloco principal da página:
           ao abrir um cliente, a primeira pergunta operacional é "essa conta
           está sendo acompanhada corretamente e o que foi feito recentemente?"
           (reordenação de hierarquia — antes vinha depois de Investimento e
-          Prioridades). Resumo de cadência + CTA de registrar análise +
-          preview das 2 análises mais recentes, tudo num único bloco
-          compacto — nenhuma regra de negócio, cálculo ou funcionalidade
-          alterada aqui, só a posição. */}
+          Prioridades). */}
       <div className="mt-3">
         <AccountFollowUpPanel
-          status={accountReviewCadenceStatus}
-          today={today}
-          recentReviews={recentAccountReviews}
-          hasMoreReviews={hasMoreAccountReviews}
-          newReviewHref={`${returnTo}?review=new`}
-          historyHref={reviewsHistoryHref}
-          buildReviewDetailHref={buildReviewDetailHref}
+          monthLabel={monthLabel}
+          isCurrentMonth={isCurrentMonth}
+          lastReview={lastReview}
+          lastOptimization={lastOptimization}
           tracking={operationalTracking}
+          monthlySummary={monthlyOccurrenceSummary}
+          historyRows={recentHistoryRows}
+          hasMoreHistory={hasMoreHistory}
+          historyHref={reviewsHistoryHref}
+          newReviewHref={withParam(returnTo, "review=new")}
+          buildReviewDetailHref={buildReviewDetailHref}
           clientId={client.id}
           returnTo={returnTo}
         />
@@ -665,7 +715,7 @@ export default async function ClientPage({
                     : null
                 }
                 accountReviews={accountReviewsBySprintId.get(sprint.sprintId) ?? []}
-                newReviewHref={`${returnTo}?review=new`}
+                newReviewHref={withParam(returnTo, "review=new")}
                 buildReviewDetailHref={buildReviewDetailHref}
               />
             ))
@@ -743,10 +793,33 @@ export default async function ClientPage({
       )}
 
       {reviewsHistory && (
-        <AccountReviewsHistoryDrawer
-          reviews={accountReviewPreviewItems}
+        <ClientOperationalHistoryDrawer
+          monthLabel={monthLabel}
+          rows={fullHistory.rows}
+          hasMore={fullHistory.hasMore}
+          page={historyPage}
+          buildPageHref={buildHistoryPageHref}
           buildReviewDetailHref={buildReviewDetailHref}
           closeHref={returnTo}
+        />
+      )}
+
+      {/* Etapas 4/5 — agendar/editar/reagendar reunião ou entrega sem sair
+          da página do cliente (drawer compacto sobre a própria URL). */}
+      {(scheduleOccurrence === "reuniao" || scheduleOccurrence === "entrega_criativo") && (
+        <ScheduleOccurrenceDrawer
+          occurrenceType={scheduleOccurrence}
+          clientId={client.id}
+          returnTo={returnTo}
+          closeHref={returnTo}
+          editingTask={
+            scheduleTaskId
+              ? (() => {
+                  const task = (tasks ?? []).find((t) => t.id === scheduleTaskId);
+                  return task ? { id: task.id, dueDate: task.due_date, dueTime: task.due_time, notes: task.notes } : null;
+                })()
+              : null
+          }
         />
       )}
 
