@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { formatCurrency, formatDateWithYear } from "@/lib/format";
+import { formatCurrency, formatDateWithYear, formatPercent } from "@/lib/format";
 import type { SpendStatus } from "@/lib/spend-status";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
-import { resolveMonthPeriodSummary } from "@/lib/financial-period";
+import { computeExpectedPct, resolveMonthPeriodSummary } from "@/lib/financial-period";
 import { computeMonthlyBudgetPlan, computeUtilizedPct, type MonthlyBudgetPlanSprintInput } from "@/lib/monthly-budget";
 import { MonthlyBudgetEditor } from "./monthly-budget-editor";
 
@@ -71,6 +71,18 @@ export function MonthInvestmentSummary({
   // expectedToDate) é lido por esta seção.
   const summary = resolveMonthPeriodSummary({ monthPlanned: planned, monthActual: actual, monthExpectedToDate: expectedToDate, monthStatus: status }, monthLabel, monthRange);
   const utilizedPct = computeUtilizedPct(planned, actual);
+  // RITMO (Etapa 68, seções 9/10) — "onde deveríamos estar hoje", sempre a
+  // mesma fórmula central de calendário (`monthExpectedToDate`, já recebida
+  // pronta via prop `expectedToDate`), nunca planejamento de sprint/histórico.
+  const pctRealizado = planned > 0 ? (actual / planned) * 100 : null;
+  const expectedPct = computeExpectedPct(summary);
+  const ritmoDiff = actual - expectedToDate;
+  const ritmoDiffText =
+    ritmoDiff < 0
+      ? `${formatCurrency(Math.abs(ritmoDiff))} abaixo do ritmo esperado`
+      : ritmoDiff > 0
+        ? `${formatCurrency(ritmoDiff)} acima do ritmo esperado`
+        : "Dentro do ritmo esperado";
   // Só existe recomendação diária quando há uma data de efeito vigente —
   // `effectiveDate` é `null` exatamente quando o mês está encerrado (seção 10:
   // mês passado nunca mostra recomendação diária).
@@ -131,6 +143,9 @@ export function MonthInvestmentSummary({
           <p className="mt-1 text-sm text-foreground">
             {formatCurrency(planned)} planejados para {monthLabel}
           </p>
+          <div className="mt-1.5">
+            <AgencyInvestmentBar summary={summary} monthTemporalStatus="futuro" />
+          </div>
           {plan && (
             <>
               <p className="mt-1.5 text-[11px] text-muted-foreground">
@@ -148,7 +163,7 @@ export function MonthInvestmentSummary({
             {formatCurrency(actual)} realizados de {formatCurrency(planned)} planejados
           </p>
           <div className="mt-1.5">
-            <AgencyInvestmentBar summary={summary} showExpectedMarker={false} />
+            <AgencyInvestmentBar summary={summary} monthTemporalStatus="passado" />
           </div>
           {utilizedPct != null && (
             <p className="mt-1.5 text-[11px] text-muted-foreground">{Math.round(utilizedPct)}% do orçamento utilizado</p>
@@ -161,14 +176,33 @@ export function MonthInvestmentSummary({
             {formatCurrency(actual)} realizados de {formatCurrency(planned)} planejados
           </p>
           <div className="mt-1.5">
-            <AgencyInvestmentBar summary={summary} showExpectedMarker={false} />
+            <AgencyInvestmentBar summary={summary} />
           </div>
-          {utilizedPct != null && (
-            <p className="mt-1.5 text-[11px] text-muted-foreground">{Math.round(utilizedPct)}% do orçamento mensal utilizado</p>
-          )}
+
+          {/* RITMO — Etapa 68, seção 9/10: onde deveríamos estar hoje, nunca
+              misturado com a AÇÃO (saldo/recomendação diária) abaixo. */}
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            {pctRealizado !== null ? formatPercent(pctRealizado) : "—"} realizado · {formatPercent(expectedPct)} esperado hoje
+          </p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">Esperado até hoje: {formatCurrency(expectedToDate)}</p>
+          <p
+            className={`mt-0.5 text-[11px] font-medium ${
+              ritmoDiff < 0
+                ? "text-amber-600 dark:text-amber-400"
+                : ritmoDiff > 0
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-muted-foreground"
+            }`}
+          >
+            {ritmoDiffText}
+          </p>
+
+          {/* AÇÃO — quanto ainda precisa ser investido daqui pra frente
+              (`computeMonthlyBudgetPlan`, nunca a mesma fórmula do ritmo
+              acima). */}
           {plan?.isBudgetReached ? (
             <>
-              <p className="mt-1 text-sm font-medium text-foreground">Orçamento mensal atingido</p>
+              <p className="mt-2 text-sm font-medium text-foreground">Orçamento mensal atingido</p>
               {plan.overageAmount > 0 && (
                 <p className="mt-0.5 text-[11px] text-red-600 dark:text-red-400">
                   {formatCurrency(plan.overageAmount)} acima do orçamento planejado
@@ -178,8 +212,8 @@ export function MonthInvestmentSummary({
             </>
           ) : plan && plan.eligibleDaysCount === 1 ? (
             <>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Restam {formatCurrency(plan.remainingBudget)} para 1 dia até o fim do mês
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Restam {formatCurrency(plan.remainingBudget)} para 1 dia, incluindo hoje
               </p>
               <p className="mt-1 text-sm font-semibold text-brand">
                 Investimento recomendado hoje: {formatCurrency(plan.remainingBudget)}
@@ -187,14 +221,22 @@ export function MonthInvestmentSummary({
             </>
           ) : plan ? (
             <>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Restam {formatCurrency(plan.remainingBudget)} para {plan.eligibleDaysCount} dias até o fim do mês
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Restam {formatCurrency(plan.remainingBudget)} para {plan.eligibleDaysCount} dias, incluindo hoje
               </p>
               <p className="mt-1 text-sm font-semibold text-brand">
                 Investimento diário recomendado: {formatCurrency(plan.recommendedDaily)}/dia
               </p>
             </>
           ) : null}
+          {plan && !plan.isBudgetReached && (
+            <p
+              className="mt-0.5 text-[11px] text-muted-foreground"
+              title="O dia de hoje entra no cálculo porque o gestor ainda pode ajustar o investimento das campanhas durante o dia. Amanhã, o sistema recalcula automaticamente com os dias restantes."
+            >
+              O cálculo considera o dia de hoje como disponível para ajuste.
+            </p>
+          )}
         </>
       )}
 

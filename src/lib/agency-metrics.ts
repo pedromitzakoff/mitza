@@ -57,12 +57,23 @@ export interface FinancialSummary {
  * uma média de percentuais por cliente) — assim clientes sem meta
  * (planejado = 0) não distorcem o percentual agregado, só reduzem o
  * denominador corretamente.
+ *
+ * Etapa 68, seção 14: cliente sem orçamento mensal vigente (`!hasMonthGoal`)
+ * nunca entra nestas somas — nem no planejado (já contribuiria 0), nem no
+ * REALIZADO consolidado, nem no esperado, nem no % realizado. Sem esse
+ * filtro, um cliente sem meta configurada mas com gasto real já sincronizado
+ * (a conta de anúncios continua rodando mesmo sem orçamento definido no
+ * sistema) infla o "Realizado" consolidado sem nenhuma base de comparação —
+ * exatamente o cenário que a seção 14 pede pra excluir. `semMeta` continua
+ * contando esses clientes à parte, nunca escondidos, só fora da agregação de
+ * ritmo.
  */
 export function computeFinancialSummary(cards: OperationClientCard[]): FinancialSummary {
-  const planned = cards.reduce((sum, c) => sum + c.monthPlanned, 0);
-  const actual = cards.reduce((sum, c) => sum + c.monthActual, 0);
+  const withGoal = cards.filter((c) => c.hasMonthGoal);
+  const planned = withGoal.reduce((sum, c) => sum + c.monthPlanned, 0);
+  const actual = withGoal.reduce((sum, c) => sum + c.monthActual, 0);
   const pct = planned > 0 ? (actual / planned) * 100 : null;
-  const expectedToDate = cards.reduce((sum, c) => sum + c.monthExpectedToDate, 0);
+  const expectedToDate = withGoal.reduce((sum, c) => sum + c.monthExpectedToDate, 0);
   const semMeta = cards.filter((c) => !c.hasMonthGoal).length;
   return { planned, actual, pct, expectedToDate, semMeta };
 }

@@ -138,11 +138,20 @@ export interface MonthlyExpectedToDate {
  * "quanto investir daqui pra frente" — nunca a mesma fórmula, nunca uma
  * chama a outra.
  */
-export function computeMonthlyExpectedToDateByCalendar(
-  monthlyBudget: number,
+/**
+ * Só o percentual do avanço de calendário (`dias_transcorridos / dias_do_mes
+ * × 100`), sem multiplicar por nenhum orçamento — Etapa 68, seção 3: o "%
+ * esperado hoje" consolidado da Visão Geral é o MESMO pra qualquer cliente
+ * do recorte (todos no mesmo mês selecionado), então nunca precisa de um
+ * orçamento específico pra ser calculado; extraído como função própria pra
+ * quem só precisa do percentual não ter que inventar um orçamento fictício
+ * só pra descartar o valor em reais. `computeMonthlyExpectedToDateByCalendar`
+ * (abaixo) é só esta função + uma multiplicação.
+ */
+export function computeMonthlyExpectedPct(
   monthRange: { firstDay: string; lastDay: string },
   todayStr: string,
-): MonthlyExpectedToDate {
+): number {
   const allDates = listDatesInclusive(monthRange.firstDay, monthRange.lastDay);
   const daysInMonth = allDates.length;
 
@@ -155,10 +164,55 @@ export function computeMonthlyExpectedToDateByCalendar(
     daysElapsed = allDates.indexOf(todayStr) + 1; // hoje conta como transcorrido
   }
 
-  const expectedPct = daysInMonth > 0 ? (daysElapsed / daysInMonth) * 100 : 0;
+  return daysInMonth > 0 ? (daysElapsed / daysInMonth) * 100 : 0;
+}
+
+export function computeMonthlyExpectedToDateByCalendar(
+  monthlyBudget: number,
+  monthRange: { firstDay: string; lastDay: string },
+  todayStr: string,
+): MonthlyExpectedToDate {
+  const expectedPct = computeMonthlyExpectedPct(monthRange, todayStr);
   const expectedToDate = monthlyBudget * (expectedPct / 100);
 
   return { expectedPct, expectedToDate };
+}
+
+/** Status temporal de um MÊS inteiro (nunca confundir com `SprintTemporalStatus`,
+ * que é por sprint) — "passado" (já encerrado, `lastDay < hoje`), "atual"
+ * (hoje cai dentro do mês) ou "futuro" (`firstDay > hoje`). Fonte única pra
+ * decidir os textos "Período encerrado · 100% esperado" / "Período ainda não
+ * iniciado · 0% esperado" (Etapa 68, seção 16) em qualquer tela que navegue
+ * entre meses (Visão Geral, página do cliente, Sprints > Mensal, Relatório) —
+ * nunca uma segunda comparação de datas duplicada em cada componente. */
+export type MonthTemporalStatus = "passado" | "atual" | "futuro";
+
+export function getMonthTemporalStatus(
+  monthRange: { firstDay: string; lastDay: string },
+  todayStr: string,
+): MonthTemporalStatus {
+  if (todayStr > monthRange.lastDay) return "passado";
+  if (todayStr < monthRange.firstDay) return "futuro";
+  return "atual";
+}
+
+/**
+ * Dias do mês ainda elegíveis pra ajuste/investimento — HOJE incluso, nunca
+ * só "a partir de amanhã" (Etapa 68, seção 1: "o dia atual entra no cálculo
+ * da projeção futura"). Fonte central única pra essa contagem — reaproveitada
+ * por `computeMonthlyBudgetPlan` (saldo restante/recomendação diária, mês e
+ * sprint) e por qualquer texto que precise dizer "restam N dias, incluindo
+ * hoje" (nenhum componente decide isso por conta própria). `effectiveDate`
+ * já vem de `resolveBudgetEffectiveDate` — `null` (mês encerrado) sempre
+ * devolve 0, já que não existe "dias restantes" pra um mês que já acabou.
+ */
+export function getRemainingEligibleDaysIncludingToday(
+  monthRange: { firstDay: string; lastDay: string },
+  effectiveDate: string | null,
+): number {
+  if (!effectiveDate) return 0;
+  const allDates = listDatesInclusive(monthRange.firstDay, monthRange.lastDay);
+  return getEligibleRedistributionDates(allDates, effectiveDate).eligibleDates.length;
 }
 
 export interface MonthlyBudgetPlanSprintInput {
@@ -237,6 +291,9 @@ export function computeMonthlyBudgetPlan(input: {
 
   const allDates = listDatesInclusive(monthRange.firstDay, monthRange.lastDay);
   const { eligibleDates } = getEligibleRedistributionDates(allDates, effectiveDate);
+  // Mesma contagem de `getRemainingEligibleDaysIncludingToday` (hoje incluso)
+  // — derivada da mesma lista `eligibleDates` usada logo abaixo pra partição
+  // por sprint, nunca uma segunda fórmula que possa divergir.
   const eligibleDaysCount = eligibleDates.length;
   const recommendedDaily = eligibleDaysCount > 0 ? remainingBudget / eligibleDaysCount : 0;
 

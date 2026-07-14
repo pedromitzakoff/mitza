@@ -1,5 +1,6 @@
 import type { SprintFinancials } from "./sprint-financials";
 import type { SpendStatus } from "./spend-status";
+import type { MonthTemporalStatus } from "./monthly-budget";
 
 export type FinancialPeriodKind = "sprint" | "month";
 
@@ -128,7 +129,69 @@ export function formatDeviationCurrencyText(
 /** Posição (clamp 2–98%) do marcador de "esperado até hoje" na barra —
  * extraída de dentro de `AgencyInvestmentBar` pra ser testável isoladamente
  * e reaproveitada por qualquer outra barra de investimento futura, nunca
- * duas contas de clamp diferentes. */
+ * duas contas de clamp diferentes. Etapa 68, seção 7: este clamp é SÓ uma
+ * proteção visual de pixel (evita a linha do marcador colar exatamente na
+ * borda arredondada da barra, o que a deixaria cortada pela metade) — o
+ * percentual de verdade (o que aparece no rótulo/tooltip) nunca passa por
+ * aqui, vem sempre direto de `computeExpectedPct`/`MonthlyExpectedToDate`,
+ * sem depender deste clamp pra "corrigir" nada.
+ */
 export function positionExpectedMarker(expectedPct: number): number {
   return Math.min(Math.max(expectedPct, 2), 98);
+}
+
+/**
+ * Rótulo curto e autoexplicativo do marcador de "esperado até hoje" (Etapa
+ * 68, seção 6: "não deixar apenas uma bolinha isolada") — fica visível na
+ * interface sem precisar de hover. Pra mês corrente: "Esperado hoje · X%".
+ * Pra mês já encerrado ou ainda não iniciado, o percentual (100%/0%) por si
+ * só não comunica o motivo, então o texto muda pra deixar claro que é o
+ * PERÍODO que está encerrado/não começou, não um dado incompleto ou um erro
+ * de cálculo (Etapa 68, seção 16). `monthTemporalStatus` omitido (undefined)
+ * = mês corrente, o caso mais comum (sprint não usa este rótulo — nunca
+ * reintroduz o marcador, ver seção 12). */
+export function formatExpectedMarkerLabel(
+  expectedPct: number,
+  formatPercentValue: (value: number) => string,
+  monthTemporalStatus?: MonthTemporalStatus,
+): string {
+  if (monthTemporalStatus === "passado") return `Período encerrado · ${formatPercentValue(expectedPct)} esperado`;
+  if (monthTemporalStatus === "futuro") return `Período ainda não iniciado · ${formatPercentValue(expectedPct)} esperado`;
+  return `Esperado hoje · ${formatPercentValue(expectedPct)}`;
+}
+
+/** Texto do tooltip completo do marcador (Etapa 68, seção 6) — 3 linhas: o
+ * que é, o percentual do mês, o valor em reais, mais uma linha de contexto
+ * fixa explicando a origem do cálculo (nunca as sprints/planejamento
+ * histórico). Usa `\n` (mesma convenção do `title` nativo já usado por
+ * `AgencyInvestmentBar`/`ProgressBar` — sem tooltip customizado). */
+export function formatExpectedMarkerTooltip(
+  summary: FinancialPeriodSummary,
+  formatCurrencyValue: (value: number) => string,
+  formatPercentValue: (value: number) => string,
+): string {
+  const expectedPct = computeExpectedPct(summary);
+  return [
+    "Esperado até hoje",
+    `${formatPercentValue(expectedPct)} do mês`,
+    formatCurrencyValue(summary.expectedToDate),
+    "Referência calculada pelo avanço proporcional do mês.",
+  ].join("\n");
+}
+
+/** Texto curto do desvio pro ritmo esperado ("R$X abaixo"/"R$X acima"),
+ * sem repetir "do investimento esperado até hoje" — usado onde o rótulo ao
+ * redor (ex.: "Diferença para o esperado" na Visão Geral) já deixa claro do
+ * que se trata, pra não duplicar a explicação. Nunca depende só do sinal
+ * matemático (Etapa 68, seção 3: "evite depender apenas do sinal negativo/
+ * positivo") — sempre a palavra "abaixo"/"acima" por extenso. */
+export function formatDeviationShortLabel(
+  summary: FinancialPeriodSummary,
+  formatCurrencyValue: (value: number) => string,
+): string {
+  if (summary.planned <= 0 || summary.status === "sem_meta" || summary.status === "nao_iniciado") return "—";
+  const diff = computeDeviationCurrency(summary);
+  if (diff < 0) return `${formatCurrencyValue(Math.abs(diff))} abaixo`;
+  if (diff > 0) return `${formatCurrencyValue(diff)} acima`;
+  return "Dentro do esperado";
 }

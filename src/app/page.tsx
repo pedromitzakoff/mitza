@@ -9,7 +9,8 @@ import {
   monthRangeFromParam,
   shiftMonthParam,
 } from "@/lib/sprint-financials";
-import { formatCurrency, formatMonthLabel } from "@/lib/format";
+import { formatCurrency, formatMonthLabel, formatPercent } from "@/lib/format";
+import { computeMonthlyExpectedPct, getMonthTemporalStatus } from "@/lib/monthly-budget";
 import {
   buildOperationClientCard,
   type OperationClientRawData,
@@ -407,6 +408,21 @@ export default async function Home({
     financial.planned > 0 ? classifySpendStatus(financial.actual, financial.expectedToDate, financial.planned) : "sem_meta";
   const investmentDiffTone: StatusTone =
     investmentRitmoStatus === "acima" ? "danger" : investmentRitmoStatus === "abaixo" ? "warning" : "neutral";
+  // Etapa 68, seção 3: "% esperado hoje" é o mesmo avanço de calendário do
+  // mês SELECIONADO pra qualquer cliente do recorte (nunca uma média dos
+  // percentuais esperados por cliente, nunca derivado das sprints) — por
+  // isso não soma nada por cliente, só aplica `computeMonthlyExpectedToDateByCalendar`
+  // uma vez sobre o mês em exibição.
+  const investmentExpectedPct = computeMonthlyExpectedPct(monthRange, todayStr);
+  const investmentDiffLabel =
+    financial.planned > 0
+      ? investmentDiff < 0
+        ? `${formatCurrency(Math.abs(investmentDiff))} abaixo`
+        : investmentDiff > 0
+          ? `${formatCurrency(investmentDiff)} acima`
+          : "Dentro do esperado"
+      : "—";
+  const monthTemporalStatus = getMonthTemporalStatus(monthRange, todayStr);
 
   // Preserva TODOS os filtros ativos — usado na navegação de mês e na
   // ordenação da tabela, que não devem resetar o resto do contexto. Não
@@ -578,27 +594,60 @@ export default async function Home({
 
           <div className="border-t border-overview-border p-3.5">
             <SectionHeader title="Controle de investimento" />
-            <div className="mt-2.5 flex flex-wrap gap-x-6 gap-y-2">
-              <Metric label="Planejado" value={formatCurrency(financial.planned)} size="lg" />
-              <Metric label="Realizado" value={formatCurrency(financial.actual)} size="lg" />
-              <Metric label="% realizado" value={financial.pct !== null ? `${Math.round(financial.pct)}%` : "—"} />
-              <Metric label="Esperado até hoje" value={formatCurrency(financial.expectedToDate)} />
-              <Metric
-                label="Diferença p/ ritmo esperado"
-                value={financial.planned > 0 ? formatCurrency(investmentDiff) : "—"}
-                tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
-              />
-              <Metric
-                label="Contas fora do ritmo"
-                value={String(outOfRhythmCount)}
-                href={drillDownUrl({ ritmo: "fora_do_ritmo" })}
-                tone={outOfRhythmCount > 0 ? "warning" : "neutral"}
-                title={`${spendRhythm.abaixo} abaixo · ${spendRhythm.acima} acima`}
-              />
+            {/* Etapa 68, seção 4: os 6 indicadores continuam numa única linha
+                horizontal (nunca 3 cards separados, pra não esticar a altura
+                da seção), mas agrupados em 3 blocos com legenda própria —
+                Execução (quanto foi planejado/realizado), Referência do
+                calendário (onde deveríamos estar hoje) e Desvio (diferença +
+                contas fora do ritmo) — separados por um divisor vertical. */}
+            <div className="mt-2.5 flex flex-wrap gap-x-6 gap-y-3 sm:divide-x sm:divide-overview-border">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">Execução</p>
+                <div className="mt-1 flex flex-wrap gap-x-6 gap-y-2">
+                  <Metric label="Planejado" value={formatCurrency(financial.planned)} size="lg" />
+                  <Metric label="Realizado" value={formatCurrency(financial.actual)} size="lg" />
+                  <Metric label="% realizado" value={financial.pct !== null ? formatPercent(financial.pct) : "—"} />
+                </div>
+              </div>
+              <div className="sm:pl-6">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
+                  Referência do calendário
+                </p>
+                <div className="mt-1 flex flex-wrap gap-x-6 gap-y-2">
+                  <Metric
+                    label="% esperado hoje"
+                    value={formatPercent(investmentExpectedPct)}
+                    title="dia_atual / dias_do_mês — igual para qualquer cliente do recorte, nunca uma média de percentuais por cliente. Não depende de nenhum orçamento estar configurado."
+                  />
+                  <Metric label="Esperado em R$ hoje" value={formatCurrency(financial.expectedToDate)} />
+                </div>
+              </div>
+              <div className="sm:pl-6">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">Desvio</p>
+                <div className="mt-1 flex flex-wrap gap-x-6 gap-y-2">
+                  <Metric
+                    label="Diferença para o esperado"
+                    value={investmentDiffLabel}
+                    tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
+                  />
+                  <Metric
+                    label="Contas fora do ritmo"
+                    value={String(outOfRhythmCount)}
+                    href={drillDownUrl({ ritmo: "fora_do_ritmo" })}
+                    tone={outOfRhythmCount > 0 ? "warning" : "neutral"}
+                    title={`${spendRhythm.abaixo} abaixo · ${spendRhythm.acima} acima`}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="mt-3">
-              <ProgressBar planned={financial.planned} actual={financial.actual} expectedToDate={financial.expectedToDate} />
+              <ProgressBar
+                planned={financial.planned}
+                actual={financial.actual}
+                expectedToDate={financial.expectedToDate}
+                monthTemporalStatus={monthTemporalStatus}
+              />
               <p className="mt-1.5 text-[11px] text-overview-text-muted">
                 {financial.semMeta > 0 ? (
                   <Button href={drillDownUrl({ meta: "sem" })} variant="ghost" size="sm" className="h-auto px-0 py-0 font-normal text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary">
