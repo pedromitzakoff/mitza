@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { OperationalTrackingRow, MonthlyOccurrenceSummary } from "@/lib/operational-tracking";
 import type { ClientHistoryRow } from "@/lib/client-operational-history";
 import type { AccountReviewOutcome, OptimizationType } from "@/lib/supabase/database.types";
@@ -46,12 +45,15 @@ export interface LastOptimizationInfo {
  * todos de {mês}" pro resto (Etapa 9) — reaproveita `operational_events`
  * (nenhuma tabela nova, ver `lib/client-operational-history.ts`).
  *
- * Refinamento visual (Etapa 72): 3 níveis de hierarquia dentro do mesmo
- * card — "Principais KPIs do mês" (investimento/resultados/custo por
- * resultado, sempre visível), "Resumo operacional" (análise/otimização/
- * reunião/entrega, sempre visível) e o histórico do mês, agora recolhido
- * por padrão. Nenhum cálculo financeiro ou de performance mudou — os 3 KPIs
- * só consomem `monthActual`/`monthPerformanceSummary` já calculados pela
+ * Refinamento visual (Etapa 75): sem título/subtítulo — o card começa
+ * direto pelas métricas (investimento/resultados/custo por resultado),
+ * seguidas do resumo operacional (otimização/reunião/entrega) e do
+ * histórico do mês, recolhido por padrão. A ação "+ Registrar otimização"
+ * que ficava aqui em cima foi removida por ser redundante com a mesma ação
+ * já existente em "Otimizações", dentro de cada sprint — nenhuma
+ * funcionalidade foi perdida, só o atalho duplicado no topo da página.
+ * Nenhum cálculo financeiro ou de performance mudou — os 3 KPIs só
+ * consomem `monthActual`/`monthPerformanceSummary` já calculados pela
  * página; nunca recomputados aqui (`MonthlyKpiSummary` é puramente
  * apresentacional).
  */
@@ -68,7 +70,6 @@ export function AccountFollowUpPanel({
   historyRows,
   hasMoreHistory,
   historyHref,
-  newReviewHref,
   buildReviewDetailHref,
   clientId,
   returnTo,
@@ -87,32 +88,18 @@ export function AccountFollowUpPanel({
   historyRows: ClientHistoryRow[];
   hasMoreHistory: boolean;
   historyHref: string;
-  newReviewHref: string;
   buildReviewDetailHref: (reviewId: string) => string;
   clientId: string;
   returnTo: string;
 }) {
   return (
     <div className="rounded-lg border border-border bg-card p-3">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-        <h2 className="text-sm font-medium text-foreground">Acompanhamento da conta</h2>
-        <Link
-          href={newReviewHref}
-          scroll={false}
-          className="rounded-md bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-hover"
-        >
-          + Registrar otimização
-        </Link>
-      </div>
-
-      <div className="mt-2.5">
-        <MonthlyKpiSummary
-          monthActual={monthActual}
-          performanceGoal={performanceGoal}
-          performanceSummary={performanceSummary}
-          configureObjectiveHref={configureObjectiveHref}
-        />
-      </div>
+      <MonthlyKpiSummary
+        monthActual={monthActual}
+        performanceGoal={performanceGoal}
+        performanceSummary={performanceSummary}
+        configureObjectiveHref={configureObjectiveHref}
+      />
 
       <div className="mt-3 border-t border-border pt-2.5">
         <AccountActivitySummary
