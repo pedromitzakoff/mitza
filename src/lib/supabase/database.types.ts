@@ -529,6 +529,7 @@ export interface Database {
           id: string;
           client_id: string;
           date: string;
+          channel: TrafficChannelDb;
           spend: number;
           synced_at: string;
         };
@@ -536,6 +537,7 @@ export interface Database {
           id?: string;
           client_id: string;
           date: string;
+          channel?: TrafficChannelDb;
           spend?: number;
           synced_at?: string;
         };
@@ -543,6 +545,7 @@ export interface Database {
           id?: string;
           client_id?: string;
           date?: string;
+          channel?: TrafficChannelDb;
           spend?: number;
           synced_at?: string;
         };
@@ -552,6 +555,54 @@ export interface Database {
             columns: ["client_id"];
             isOneToOne: false;
             referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      sprint_channel_spend: {
+        Row: {
+          id: string;
+          client_id: string;
+          sprint_id: string;
+          channel: TrafficChannelDb;
+          spend_source: "manual" | "meta_api";
+          manual_actual_spend: number | null;
+          updated_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          sprint_id: string;
+          channel: TrafficChannelDb;
+          spend_source?: "manual" | "meta_api";
+          manual_actual_spend?: number | null;
+          updated_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          sprint_id?: string;
+          channel?: TrafficChannelDb;
+          spend_source?: "manual" | "meta_api";
+          manual_actual_spend?: number | null;
+          updated_at?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "sprint_channel_spend_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "sprint_channel_spend_sprint_id_fkey";
+            columns: ["sprint_id"];
+            isOneToOne: false;
+            referencedRelation: "sprints";
             referencedColumns: ["id"];
           },
         ];

@@ -53,10 +53,11 @@ export async function syncClientMetaSpend(clientId: string): Promise<SyncResult>
       dailySpend.map((d) => ({
         client_id: clientId,
         date: d.date,
+        channel: "meta",
         spend: d.spend,
         synced_at: new Date().toISOString(),
       })),
-      { onConflict: "client_id,date" },
+      { onConflict: "client_id,date,channel" },
     );
 
     if (upsertError) {
