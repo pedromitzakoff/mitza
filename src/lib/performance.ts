@@ -174,17 +174,25 @@ export function formatPerformanceComparisonText(
 }
 
 /** Escopo de investimento pra um cálculo de custo por resultado — Etapa 71,
- * seção 15: as funções já nascem preparadas pra `channelScope`, mesmo que
- * hoje só `consolidated` tenha investimento confiável (seção 14: o sistema
- * ainda não separa gasto real por canal). Nunca dividir o investimento
- * consolidado pelos resultados de um único canal — por isso
- * `resolveActualSpendForScope` devolve `null` pra qualquer escopo que não
- * seja `consolidated`, até existir uma fonte real de investimento por
- * canal. */
+ * seção 15: as funções já nasceram preparadas pra `channelScope`. Desde a
+ * Etapa 2/3 (MVP plataformas) já existe uma fonte real de investimento por
+ * canal (`lib/channel-spend.ts`, alimentada por `daily_spend.channel` +
+ * `sprint_channel_spend`) — `channelActualSpend` é esse valor já resolvido
+ * por quem chama. Nunca dividir o investimento consolidado pelos resultados
+ * de um único canal: por isso, mesmo agora, um escopo não-consolidado sem
+ * entrada correspondente em `channelActualSpend` (cliente sem essa
+ * plataforma configurada/sem dado) continua devolvendo `null`, nunca um
+ * fallback pro valor consolidado. */
 export type PerformanceChannelScope = "consolidated" | TrafficChannel;
 
-export function resolveActualSpendForScope(scope: PerformanceChannelScope, consolidatedActualSpend: number): number | null {
-  return scope === "consolidated" ? consolidatedActualSpend : null;
+export function resolveActualSpendForScope(
+  scope: PerformanceChannelScope,
+  consolidatedActualSpend: number,
+  channelActualSpend?: Partial<Record<TrafficChannel, number>>,
+): number | null {
+  if (scope === "consolidated") return consolidatedActualSpend;
+  const value = channelActualSpend?.[scope];
+  return value !== undefined ? value : null;
 }
 
 /** Resumo completo de performance de UM escopo (mês ou sprint, consolidado
@@ -212,11 +220,15 @@ export function computePerformanceSummary(input: {
   resultType: PerformanceGoal;
   consolidatedActualSpend: number;
   targetCostPerResult: number | null;
+  /** Investimento já resolvido por canal (Etapa 2/3) — só relevante quando
+   * `scope` não é `consolidated`; ausente/sem entrada = `null` (nunca usa o
+   * consolidado como fallback). */
+  channelActualSpend?: Partial<Record<TrafficChannel, number>>;
 }): PerformanceSummary {
-  const { scope, records, resultType, consolidatedActualSpend, targetCostPerResult } = input;
+  const { scope, records, resultType, consolidatedActualSpend, targetCostPerResult, channelActualSpend } = input;
   const channel = scope === "consolidated" ? undefined : scope;
   const aggregated = aggregatePerformanceResults(records, resultType, channel);
-  const actualSpend = resolveActualSpendForScope(scope, consolidatedActualSpend);
+  const actualSpend = resolveActualSpendForScope(scope, consolidatedActualSpend, channelActualSpend);
   const costPerResult = computeCostPerResult(actualSpend, aggregated.resultCount, aggregated.hasAnyRecord);
   const costUnavailableReason = getCostPerResultUnavailableReason(actualSpend, aggregated.resultCount, aggregated.hasAnyRecord);
   const comparison = compareCostToTarget(costPerResult, targetCostPerResult);

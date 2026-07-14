@@ -33,6 +33,7 @@ export function AgencyFilters({
   activity,
   ritmo,
   tasks,
+  platform,
   preserved,
 }: {
   defaultManager: "all" | "me";
@@ -44,6 +45,12 @@ export function AgencyFilters({
   activity: string;
   ritmo: string;
   tasks: string;
+  /** Filtro de plataforma (Etapa 3 — MVP plataformas): "consolidado" é o
+   * padrão. Ritmo financeiro só existe pra "consolidado" (não há orçamento
+   * configurado por canal), então o select de ritmo some quando a
+   * plataforma não é "consolidado" — nunca um filtro que não tem efeito
+   * nenhum. */
+  platform: "consolidado" | "meta" | "google";
   preserved: { month?: string; sprintBucket?: string; sync?: string; meta?: string; sort?: string };
 }) {
   const router = useRouter();
@@ -58,6 +65,7 @@ export function AgencyFilters({
     if (activity !== "todos") next.set("activity", activity);
     if (ritmo !== "todos") next.set("ritmo", ritmo);
     if (tasks !== "todas") next.set("tasks", tasks);
+    if (platform !== "consolidado") next.set("platform", platform);
     if (preserved.sprintBucket) next.set("sprintBucket", preserved.sprintBucket);
     if (preserved.sync) next.set("sync", preserved.sync);
     if (preserved.meta) next.set("meta", preserved.meta);
@@ -71,6 +79,12 @@ export function AgencyFilters({
     return `/?${next.toString()}`;
   }
 
+  // Trocar de plataforma nunca deve manter um filtro de ritmo que passou a
+  // não fazer sentido — ao sair de "consolidado" o ritmo é sempre limpo.
+  function handlePlatformChange(value: string) {
+    router.push(buildUrl({ platform: value === "consolidado" ? "" : value, ritmo: value === "consolidado" ? ritmo : "" }));
+  }
+
   const secondaryCount = [health !== "todos", activity !== "todos", ritmo !== "todos", tasks !== "todas"].filter(
     Boolean,
   ).length;
@@ -80,7 +94,8 @@ export function AgencyFilters({
     Boolean(selectedClientId) ||
     Boolean(preserved.sprintBucket) ||
     Boolean(preserved.sync) ||
-    Boolean(preserved.meta);
+    Boolean(preserved.meta) ||
+    platform !== "consolidado";
 
   function clearFilters() {
     const next = new URLSearchParams();
@@ -102,6 +117,15 @@ export function AgencyFilters({
               {g.name}
             </option>
           ))}
+        </Select>
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-overview-text-muted">Plataforma</span>
+        <Select value={platform} onChange={(e) => handlePlatformChange(e.target.value)} aria-label="Plataforma">
+          <option value="consolidado">Consolidado</option>
+          <option value="meta">Meta</option>
+          <option value="google">Google</option>
         </Select>
       </div>
 
@@ -146,13 +170,23 @@ export function AgencyFilters({
                   <option value="inativo">Inativos</option>
                 </Select>
 
-                <Select value={ritmo} onChange={(e) => router.push(buildUrl({ ritmo: e.target.value }))} className="w-full">
-                  <option value="todos">Ritmo de investimento: todos</option>
-                  <option value="abaixo">Abaixo</option>
-                  <option value="dentro">No ritmo</option>
-                  <option value="acima">Acima</option>
-                  <option value="sem_meta">Meta não configurada</option>
-                </Select>
+                {/* Ritmo financeiro só existe pro orçamento CONSOLIDADO
+                    (Etapa 3 — não há orçamento configurado por canal) —
+                    escondido fora desse recorte pra nunca oferecer um
+                    filtro sem efeito nenhum. */}
+                {platform === "consolidado" ? (
+                  <Select value={ritmo} onChange={(e) => router.push(buildUrl({ ritmo: e.target.value }))} className="w-full">
+                    <option value="todos">Ritmo de investimento: todos</option>
+                    <option value="abaixo">Abaixo</option>
+                    <option value="dentro">No ritmo</option>
+                    <option value="acima">Acima</option>
+                    <option value="sem_meta">Meta não configurada</option>
+                  </Select>
+                ) : (
+                  <p className="text-[11px] text-overview-text-muted">
+                    Ritmo de investimento disponível só no recorte Consolidado.
+                  </p>
+                )}
 
                 <Select value={tasks} onChange={(e) => router.push(buildUrl({ tasks: e.target.value }))} className="w-full">
                   <option value="todas">Tarefas: todas</option>

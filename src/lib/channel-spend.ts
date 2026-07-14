@@ -2,15 +2,10 @@ import type { SpendSource } from "@/lib/sprint-financials";
 import type { TrafficChannel } from "@/lib/traffic-channels";
 
 /**
- * MVP Etapa 2 — fonte de verdade de INVESTIMENTO por plataforma. Espelha
+ * MVP Etapa 2/3 — fonte de verdade de INVESTIMENTO por plataforma. Espelha
  * exatamente as regras de `sprint-financials.ts` (`resolveSprintActualSpend`
  * / `computeSprintEffectiveSpend` / `sumEffectiveSpend`), só que resolvendo
  * o gasto real de UM canal por vez em vez do valor consolidado da sprint.
- *
- * Nada aqui é consumido por nenhuma tela ainda — isso é trabalho da etapa
- * do filtro de plataforma na Visão Geral. Este arquivo só estabelece as
- * funções centrais pra nunca duplicar a lógica de filtro/soma por canal em
- * cada consumidor (mesma razão de existir de `sprint-financials.ts`).
  *
  * Regra que nunca pode ser violada por quem consumir isto: o consolidado é
  * sempre a SOMA coerente dos canais (nunca um valor independente), e o
@@ -18,7 +13,14 @@ import type { TrafficChannel } from "@/lib/traffic-channels";
  * canal — ver `resolveActualSpendForScope` em `lib/performance.ts`.
  */
 
-export interface SprintChannelSpendOverride {
+/** Override manual de UM canal — carrega `sprintId` porque, ao contrário de
+ * `sprints.manual_actual_spend` (uma coluna por sprint), o override por
+ * canal vive numa tabela própria (`sprint_channel_spend`) com várias linhas
+ * possíveis por sprint (uma por canal); quem monta a lista pro cliente
+ * inteiro passa todas de uma vez (mesmo padrão batch de `dailySpend`/
+ * `tasks`), e as funções abaixo filtram por sprint+canal internamente. */
+export interface SprintChannelSpendOverrideRow {
+  sprintId: string;
   channel: TrafficChannel;
   spend_source: SpendSource;
   manual_actual_spend: number | null;
@@ -28,7 +30,7 @@ export interface SprintChannelSpendOverride {
  * canal — `override` é `undefined` quando o canal nunca teve um override
  * salvo em `sprint_channel_spend` (equivale a "sempre meta_api" pra esse
  * canal). */
-export function resolveSprintChannelActualSpend(override: SprintChannelSpendOverride | undefined, metaSpendSum: number): number {
+export function resolveSprintChannelActualSpend(override: SprintChannelSpendOverrideRow | undefined, metaSpendSum: number): number {
   if (override && override.spend_source === "manual" && override.manual_actual_spend !== null) {
     return override.manual_actual_spend;
   }
@@ -39,15 +41,15 @@ export function resolveSprintChannelActualSpend(override: SprintChannelSpendOver
  * resolve manual x meta_api pra esse canal — a versão "por canal" de
  * `computeSprintEffectiveSpend`. */
 export function computeSprintChannelEffectiveSpend(
-  sprint: { start_date: string; end_date: string },
+  sprint: { sprintId: string; start_date: string; end_date: string },
   channel: TrafficChannel,
   dailySpend: { date: string; channel: TrafficChannel; spend: number }[],
-  overrides: SprintChannelSpendOverride[],
+  overrides: SprintChannelSpendOverrideRow[],
 ): number {
   const metaSpendSum = dailySpend
     .filter((d) => d.channel === channel && d.date >= sprint.start_date && d.date <= sprint.end_date)
     .reduce((sum, d) => sum + d.spend, 0);
-  const override = overrides.find((o) => o.channel === channel);
+  const override = overrides.find((o) => o.sprintId === sprint.sprintId && o.channel === channel);
   return resolveSprintChannelActualSpend(override, metaSpendSum);
 }
 
@@ -55,10 +57,10 @@ export function computeSprintChannelEffectiveSpend(
  * canal" de `sumEffectiveSpend`, usada pra consolidar o realizado do mês de
  * uma única plataforma. */
 export function sumChannelEffectiveSpend(
-  sprints: { start_date: string; end_date: string }[],
+  sprints: { sprintId: string; start_date: string; end_date: string }[],
   channel: TrafficChannel,
   dailySpend: { date: string; channel: TrafficChannel; spend: number }[],
-  overrides: SprintChannelSpendOverride[],
+  overrides: SprintChannelSpendOverrideRow[],
 ): number {
   return sprints.reduce((sum, sprint) => sum + computeSprintChannelEffectiveSpend(sprint, channel, dailySpend, overrides), 0);
 }
@@ -71,10 +73,10 @@ export function sumChannelEffectiveSpend(
  * cliente"), nunca uma lista fixa de todos os canais possíveis.
  */
 export function sumConsolidatedChannelEffectiveSpend(
-  sprints: { start_date: string; end_date: string }[],
+  sprints: { sprintId: string; start_date: string; end_date: string }[],
   channels: TrafficChannel[],
   dailySpend: { date: string; channel: TrafficChannel; spend: number }[],
-  overrides: SprintChannelSpendOverride[],
+  overrides: SprintChannelSpendOverrideRow[],
 ): number {
   return channels.reduce((sum, channel) => sum + sumChannelEffectiveSpend(sprints, channel, dailySpend, overrides), 0);
 }
