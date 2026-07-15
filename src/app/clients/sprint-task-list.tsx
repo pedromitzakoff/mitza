@@ -45,13 +45,17 @@ export function SprintTaskList({
   const canCreateInline = managers !== undefined && returnTo !== undefined;
 
   return (
-    <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-900">
+    <div>
       <SectionHeader
         action={
           <span className="flex shrink-0 flex-wrap items-center gap-2.5">
+            {/* Etapa "Sprint Workspace Polish 1.1" (Parte 5): "X de Y
+                concluídas" virou "X/Y concluídas" — mesma leitura, menos
+                espaço, mesmo padrão de contagem já usado no resumo fechado
+                (`AccountCardSummary`, "X/Y tarefas"). */}
             {tasks.length > 0 && (
-              <span className="text-[11px] text-muted-foreground">
-                {tasksDone} de {tasks.length} concluída{tasks.length !== 1 ? "s" : ""}
+              <span className="text-[11px] tabular-nums text-muted-foreground">
+                {tasksDone}/{tasks.length} concluída{tasks.length !== 1 ? "s" : ""}
               </span>
             )}
             {canCreateInline ? (
@@ -66,7 +70,7 @@ export function SprintTaskList({
             ) : (
               <Link
                 href={`/clients/${clientId}/tasks/new?sprintId=${sprintId}`}
-                className="text-xs font-medium text-brand hover:underline"
+                className="mitza-pressable rounded text-xs font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               >
                 + Tarefa
               </Link>

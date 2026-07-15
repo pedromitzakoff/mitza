@@ -34,11 +34,16 @@ export function EmptyState({
  * diferentes quando uma tinha itens e a outra não. Esta variante mantém a
  * mesma moldura (borda + raio) e uma altura mínima próxima da de uma linha
  * real da lista — nunca 3-4 placeholders vazios, sempre uma linha só.
+ *
+ * Etapa "Sprint Workspace Polish 1.1" (Parte 3): padding e altura mínima
+ * ajustados pra bater exatamente com uma linha real de `TaskRow`/otimização
+ * (`px-2 py-1`, `min-h-[28px]`) — antes eram valores diferentes, então o
+ * estado vazio tinha um ritmo ligeiramente distinto do estado cheio.
  */
 export function EmptyStateRow({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div
-      className={`flex min-h-[38px] items-center rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground ${className ?? ""}`}
+      className={`flex min-h-[28px] items-center rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground ${className ?? ""}`}
     >
       {children}
     </div>

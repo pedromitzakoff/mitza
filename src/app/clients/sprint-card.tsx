@@ -202,8 +202,13 @@ function SprintPerformanceSection({
   // mesma forma — Parte 9). "Objetivo" virou rótulo + badge (Parte 7,
   // clicável só pra admin). "Atualizar performance" virou um botão de
   // verdade no fim da linha (Parte 6), não mais um link azul solto.
+  //
+  // Etapa "Sprint Workspace Polish 1.1" (Parte 2): "R$ X investido" virou
+  // "Investido: R$ X" — mesmo padrão rótulo:valor de Resultados/CPA/CPL,
+  // nunca mais um campo com forma diferente dos outros na mesma toolbar.
+  // Padding/gaps reduzidos (Parte 2/4) sem perder legibilidade.
   return (
-    <div className="rounded-lg border border-border bg-zinc-50 px-3 py-2 dark:bg-zinc-900/40">
+    <div className="rounded-lg border border-border bg-zinc-50 px-2.5 py-1.5 dark:bg-zinc-900/40">
       {/* Os dois checkboxes-hack (revert de fonte manual / editar performance)
           precisam ser IRMÃOS diretos dos blocos que eles revelam
           (`peer-checked:`/`peer-checked/revert:` dependem do seletor de
@@ -214,7 +219,7 @@ function SprintPerformanceSection({
       {isManualSource && <input type="checkbox" id={revertSourceToggleId} className="peer/revert hidden" />}
       {isAdmin && <input type="checkbox" id={editToggleId} className="peer hidden" />}
 
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
         <span
           title={sourceTooltip}
           className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
@@ -222,8 +227,8 @@ function SprintPerformanceSection({
           Performance
         </span>
 
+        <span className="text-muted-foreground">Investido:</span>
         <span className="font-semibold text-foreground">{formatCurrency(sprint.actualSpend)}</span>
-        <span className="text-muted-foreground">investido</span>
 
         <span className="text-border" aria-hidden="true">
           ·
@@ -285,7 +290,10 @@ function SprintPerformanceSection({
         <div className="mt-1.5 hidden items-center gap-1.5 text-xs peer-checked/revert:flex">
           <span className="text-muted-foreground">Substituir valor manual pelo do Meta?</span>
           <form action={resetSprintSpendSourceAction.bind(null, sprint.sprintId, clientId, returnTo)}>
-            <SubmitButton className="font-medium text-brand hover:underline" pendingChildren="Confirmando...">
+            <SubmitButton
+              className="rounded font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              pendingChildren="Confirmando..."
+            >
               Confirmar
             </SubmitButton>
           </form>
@@ -323,7 +331,7 @@ function SprintPerformanceSection({
             ))}
           <div className="flex items-center gap-1.5">
             <SubmitButton
-              className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               pendingChildren="Salvando..."
             >
               Salvar
@@ -421,7 +429,7 @@ export function SprintCardBody({
   const isManualSource = sprint.spendSource === "manual";
 
   return (
-    <div className="border-t border-border p-2.5">
+    <div className="border-t border-border p-2">
         {/* Etapa "Sprint Workspace Polish 1.0" (Parte 1): "Hoje, DD/MM" saiu
             daqui — o gestor já sabe o dia atual, e essa data já aparece em
             outros contextos da plataforma (ex.: cabeçalho da Visão Geral).
@@ -430,7 +438,7 @@ export function SprintCardBody({
             sprint —, condicionada à própria existência do dado (nunca uma
             linha vazia quando não há `executionLabel`). */}
         {executionLabel && (
-          <p className={`mb-2 text-xs ${EXECUTION_LABEL_CLASSES[executionSeverity ?? "neutro"]}`}>
+          <p className={`mb-1.5 text-xs ${EXECUTION_LABEL_CLASSES[executionSeverity ?? "neutro"]}`}>
             Última execução: {executionLabel}
           </p>
         )}
@@ -453,10 +461,16 @@ export function SprintCardBody({
 
         {/* Execução da sprint — tarefas recorrentes e otimizações (revisões
             estratégicas da conta) lado a lado, mesmo nível hierárquico
-            (Etapa 74). */}
-        <div className="mt-2 border-t border-border pt-2">
+            (Etapa 74). Etapa "Sprint Workspace Polish 1.1" (Parte 4): as
+            duas colunas (`SprintTaskList`/`AccountReviewsSection`) pararam
+            de desenhar sua própria divisória superior — era uma segunda
+            borda logo abaixo desta, redundante. A separação entre as duas
+            no mobile empilhado agora é só espaço (`gap-y-3`), sem borda
+            extra — os próprios cabeçalhos "Tarefas"/"Otimizações" já
+            distinguem as seções. */}
+        <div className="mt-1.5 border-t border-border pt-1.5">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Execução da sprint</p>
-          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+          <div className="mt-1.5 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
             <SprintTaskList
               tasks={tasks}
               clientId={clientId}
@@ -476,8 +490,16 @@ export function SprintCardBody({
           </div>
         </div>
 
-        <details className="mt-2 border-t border-border pt-2 [&_summary]:cursor-pointer [&_summary]:list-none">
-          <summary className="text-xs font-medium text-muted-foreground hover:text-brand">
+        {/* Etapa "Sprint Workspace Polish 1.1" (Parte 1): "Ver detalhes da
+            sprint" virou um botão secundário de verdade — mesma altura,
+            borda, hover e focus-visible de "Atualizar performance" — em vez
+            de um texto sublinhado que parecia um link solto. Ação
+            inalterada: continua só um `<details>` nativo revelando os
+            comentários, agora com o chevron padrão de accordion já usado no
+            resto da plataforma. */}
+        <details className="group mt-1.5 border-t border-border pt-1.5 [&_summary::-webkit-details-marker]:hidden">
+          <summary className="mitza-pressable inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+            <span className="mitza-chevron text-xs text-muted-foreground group-open:rotate-90">▸</span>
             Ver detalhes da sprint {comments.length > 0 ? `(${comments.length} comentário${comments.length !== 1 ? "s" : ""})` : ""}
           </summary>
           <div className="mt-2">
@@ -491,8 +513,11 @@ export function SprintCardBody({
         </details>
 
         {openClientHref && (
-          <div className="mt-2 border-t border-border pt-2 text-xs">
-            <Link href={openClientHref} className="text-muted-foreground hover:underline">
+          <div className="mt-1.5 border-t border-border pt-1.5 text-xs">
+            <Link
+              href={openClientHref}
+              className="mitza-pressable inline-block rounded text-muted-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            >
               Abrir cliente
             </Link>
           </div>

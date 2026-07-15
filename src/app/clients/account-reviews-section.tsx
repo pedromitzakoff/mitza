@@ -61,12 +61,16 @@ export function AccountReviewsSection({
   buildDetailHref: (reviewId: string) => string;
 }) {
   return (
-    <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-900">
+    <div>
       <SectionHeader
         action={
           <span className="flex shrink-0 flex-wrap items-center gap-2.5">
             {reviews.length > 0 && <span className="text-[11px] text-muted-foreground">{reviews.length} nesta sprint</span>}
-            <Link href={newReviewHref} scroll={false} className="text-xs font-medium text-brand hover:underline">
+            <Link
+              href={newReviewHref}
+              scroll={false}
+              className="mitza-pressable rounded text-xs font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            >
               + Registrar otimização
             </Link>
           </span>
@@ -80,7 +84,7 @@ export function AccountReviewsSection({
           {reviews.map((review) => (
             <li
               key={review.id}
-              className="border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+              className="flex min-h-[28px] items-center border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
             >
               <Link href={buildDetailHref(review.id)} scroll={false} className="flex items-center gap-2.5">
                 <span className="w-24 shrink-0 text-xs tabular-nums text-muted-foreground">

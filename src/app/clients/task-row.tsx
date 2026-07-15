@@ -96,7 +96,7 @@ function TaskRowMenu({
                 saveFocusForReturn(event.currentTarget);
                 closeMenu();
               }}
-              className="mitza-pressable block rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              className="mitza-pressable block rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
             >
               Ver detalhes
             </Link>
@@ -109,14 +109,14 @@ function TaskRowMenu({
                     type="button"
                     disabled={isPending}
                     onClick={handleDelete}
-                    className="mitza-pressable rounded px-1 text-[11px] font-medium text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400"
+                    className="mitza-pressable rounded px-1 text-[11px] font-medium text-red-600 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400"
                   >
                     {isPending ? "Excluindo..." : "Sim"}
                   </button>
                   <button
                     type="button"
                     onClick={() => setConfirming(false)}
-                    className="mitza-pressable rounded px-1 text-[11px] text-muted-foreground hover:underline"
+                    className="mitza-pressable rounded px-1 text-[11px] text-muted-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                   >
                     Não
                   </button>
@@ -126,7 +126,7 @@ function TaskRowMenu({
                   type="button"
                   role="menuitem"
                   onClick={() => setConfirming(true)}
-                  className="mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+                  className="mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:text-red-400 dark:hover:bg-red-950"
                 >
                   Excluir tarefa
                 </button>
@@ -255,7 +255,7 @@ export function TaskRow({
   }
 
   return (
-    <li className="border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
+    <li className="flex min-h-[28px] items-center border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
       <div className={`flex items-center gap-2.5 transition-opacity duration-150 ${rowOpacityClass}`}>
         {isDone ? (
           <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none text-green-700 dark:bg-green-950 dark:text-green-300">

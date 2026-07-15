@@ -81,7 +81,7 @@ export function ClientPerformanceGoalEditor({
                 aria-selected={option.value === currentGoal}
                 disabled={isPending}
                 onClick={() => handleSelect(option.value)}
-                className={`mitza-pressable block w-full rounded-md px-2 py-1 text-left text-xs hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900 ${
+                className={`mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900 ${
                   option.value === currentGoal ? "font-medium text-brand" : "text-foreground"
                 }`}
               >
