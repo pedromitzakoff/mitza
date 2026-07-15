@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { formatCurrency } from "@/lib/format";
 import { formatMoneyDisplay, parseMoneyInput } from "@/lib/money-format";
 import { computeMonthlyBudgetPlan, type MonthlyBudgetPlanSprintInput } from "@/lib/monthly-budget";
@@ -55,6 +55,8 @@ export function MonthlyBudgetEditor({
   monthActual: number;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const wasOpenRef = useRef(false);
   const [confirmStep, setConfirmStep] = useState(false);
   const [display, setDisplay] = useState(() => formatMoneyDisplay(currentMonthlyBudget));
   const [reason, setReason] = useState("");
@@ -75,12 +77,23 @@ export function MonthlyBudgetEditor({
   const scenario: BudgetScenario =
     monthActual > newBudget ? "reducao_abaixo_realizado" : newBudget >= currentMonthlyBudget ? "aumento" : "reducao_normal";
 
+  // Interaction Delight 1.0 — Focus Continuity: devolve o foco pro botão que
+  // abriu o editor quando ele fecha (nunca no primeiro render, só na
+  // transição true → false).
+  useEffect(() => {
+    if (wasOpenRef.current && !isOpen) {
+      triggerRef.current?.focus();
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen]);
+
   if (!isOpen) {
     return (
       <button
         type="button"
+        ref={triggerRef}
         onClick={() => setIsOpen(true)}
-        className="text-xs font-medium text-brand hover:underline"
+        className="mitza-pressable text-xs font-medium text-brand hover:underline"
       >
         Editar orçamento
       </button>
@@ -110,14 +123,14 @@ export function MonthlyBudgetEditor({
 
   return (
     <>
-      <div className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30" onClick={close} aria-hidden />
+      <div className="mitza-backdrop-in fixed inset-0 z-40 cursor-pointer bg-black/30" onClick={close} aria-hidden />
       <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-lg font-semibold text-foreground">Orçamento de {monthLabel}</h2>
           <button
             type="button"
             onClick={close}
-            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="mitza-pressable shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
           >
             Fechar
           </button>
@@ -138,7 +151,7 @@ export function MonthlyBudgetEditor({
                   onChange={(event) => setDisplay(event.target.value)}
                   onBlur={() => setDisplay(formatMoneyDisplay(newBudget))}
                   autoFocus
-                  className="w-full rounded-md border border-border px-2 py-1.5 text-sm text-foreground outline-none focus:border-zinc-500 dark:bg-zinc-900"
+                  className="w-full rounded-md border border-border px-2 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-zinc-500 dark:bg-zinc-900"
                 />
               </div>
               <p className="mt-1 text-[11px] text-muted-foreground">
@@ -195,14 +208,14 @@ export function MonthlyBudgetEditor({
               <button
                 type="button"
                 onClick={() => setConfirmStep(true)}
-                className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+                className="mitza-pressable rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
               >
                 Continuar
               </button>
               <button
                 type="button"
                 onClick={close}
-                className="text-sm text-muted-foreground hover:underline"
+                className="mitza-pressable text-sm text-muted-foreground hover:underline"
               >
                 Cancelar
               </button>
@@ -230,7 +243,7 @@ export function MonthlyBudgetEditor({
                   onChange={(event) => setReason(event.target.value)}
                   rows={2}
                   placeholder="Ex.: Cliente aprovou aumento de investimento para campanha promocional."
-                  className="mt-1 w-full resize-none rounded-md border border-border px-2 py-1.5 text-sm text-foreground outline-none focus:border-zinc-500 dark:bg-zinc-900"
+                  className="mt-1 w-full resize-none rounded-md border border-border px-2 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-zinc-500 dark:bg-zinc-900"
                 />
               </div>
 
@@ -245,7 +258,7 @@ export function MonthlyBudgetEditor({
                   type="button"
                   onClick={handleApply}
                   disabled={isApplying}
-                  className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mitza-pressable rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isApplying ? "Confirmando..." : "Confirmar alteração"}
                 </button>
@@ -253,7 +266,7 @@ export function MonthlyBudgetEditor({
                   type="button"
                   onClick={() => setConfirmStep(false)}
                   disabled={isApplying}
-                  className="text-sm text-muted-foreground hover:underline"
+                  className="mitza-pressable text-sm text-muted-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Voltar
                 </button>

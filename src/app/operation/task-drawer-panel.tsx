@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { effectiveTaskStatus } from "@/lib/task-status";
+import { restoreFocusForReturn } from "@/lib/focus-restore";
 import { TASK_STATUS_BADGE_CLASSES, TASK_STATUS_LABEL, TASK_TYPE_LABEL } from "@/app/clients/task-labels";
 import { formatDueDate } from "@/app/clients/task-row";
 import { completeTaskAction, deleteTaskAction } from "@/app/clients/tasks-actions";
@@ -70,6 +71,7 @@ export function TaskDrawerPanel({
     function finishClose() {
       if (done) return;
       done = true;
+      restoreFocusForReturn();
       router.push(closeHref, { scroll: false });
     }
     node.addEventListener("animationend", finishClose);
@@ -115,7 +117,8 @@ export function TaskDrawerPanel({
             href={closeHref}
             scroll={false}
             onClick={requestClose}
-            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            autoFocus
+            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900"
           >
             Fechar
           </Link>
@@ -184,7 +187,7 @@ export function TaskDrawerPanel({
             <Link
               href={`/clients/${clientId}/tasks/${task.id}/edit?return_to=${encodeURIComponent(returnTo)}`}
               onClick={() => saveScrollForReturn(returnTo)}
-              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900"
             >
               Editar tarefa
             </Link>
@@ -222,7 +225,7 @@ export function TaskDrawerPanel({
               name="content"
               placeholder="Comentar..."
               required
-              className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none"
+              className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none transition-colors focus:border-zinc-500"
             />
             <SubmitButton className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900">
               Enviar

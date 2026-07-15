@@ -28,11 +28,11 @@ export function ClientOperationalHistoryDrawer({
 }) {
   return (
     <>
-      <div className="mitza-backdrop-in fixed inset-0 z-30 bg-black/30" />
+      <Link href={closeHref} scroll={false} aria-label="Fechar" className="mitza-backdrop-in fixed inset-0 z-30 bg-black/30" />
       <div className="mitza-panel-in fixed inset-y-0 right-0 z-30 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-foreground">Histórico de {monthLabel}</h2>
-          <Link href={closeHref} scroll={false} className="text-sm text-muted-foreground hover:text-foreground">
+          <Link href={closeHref} scroll={false} autoFocus className="text-sm text-muted-foreground transition-colors hover:text-foreground">
             Fechar
           </Link>
         </div>

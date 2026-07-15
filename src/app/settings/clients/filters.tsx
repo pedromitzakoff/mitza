@@ -45,7 +45,7 @@ export function SettingsClientsFilters({ search, status }: { search: string; sta
         value={searchText}
         onChange={(event) => setSearchText(event.target.value)}
         placeholder="Buscar por nome, CNPJ ou e-mail..."
-        className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none"
+        className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none transition-colors focus:border-zinc-500"
       />
       <select
         value={status}

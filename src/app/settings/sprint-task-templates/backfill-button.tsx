@@ -17,7 +17,7 @@ export function BackfillButton() {
         return { message: "Geração aplicada às sprints existentes." };
       }}
       pendingLabel="Aplicando..."
-      className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black transition-opacity hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+      className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
     >
       Aplicar às sprints já existentes
     </ToastActionButton>

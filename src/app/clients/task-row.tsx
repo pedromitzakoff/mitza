@@ -5,6 +5,7 @@ import Link from "next/link";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
 import { formatCompactTaskDate } from "@/lib/format";
+import { saveFocusForReturn } from "@/lib/focus-restore";
 import type { TaskStatus, TaskType, TeamMemberStatus } from "@/lib/supabase/database.types";
 import { completeTaskAction } from "./tasks-actions";
 
@@ -148,7 +149,12 @@ export function TaskRow({
 
         <span className={`w-20 shrink-0 text-xs tabular-nums ${dateClasses}`}>{dueDate}</span>
 
-        <Link href={detailsHref} scroll={false} className="min-w-0 flex-1 truncate">
+        <Link
+          href={detailsHref}
+          scroll={false}
+          onClick={(event) => saveFocusForReturn(event.currentTarget)}
+          className="min-w-0 flex-1 truncate"
+        >
           <span className="text-sm font-medium text-foreground">{task.title}</span>
         </Link>
 
@@ -178,9 +184,10 @@ export function TaskRow({
         <Link
           href={detailsHref}
           scroll={false}
+          onClick={(event) => saveFocusForReturn(event.currentTarget)}
           aria-label="Abrir detalhes da tarefa"
           title="Abrir detalhes"
-          className="shrink-0 rounded px-1 text-sm text-muted-foreground hover:text-brand"
+          className="shrink-0 rounded px-1 text-sm text-muted-foreground transition-colors hover:text-brand"
         >
           •••
         </Link>

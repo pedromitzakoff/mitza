@@ -268,9 +268,14 @@ body {
 /* Botões com feedback de "pressionado" — só transform (nunca desloca
  * layout), nunca ativo quando `disabled` (a pseudo-classe já cobre isso
  * sozinha). `prefers-reduced-motion` zera a duração como qualquer outra
- * transição (regra global abaixo). */
+ * transição (regra global abaixo). Também cobre color/border-color (Etapa
+ * Interaction Delight 1.0): é a mesma classe que padroniza a transição de
+ * hover de qualquer botão real, não só o "afundar" — evita ter que somar
+ * `transition-colors` de um lado e o pressed state de outro em cima do
+ * mesmo elemento. */
 .mitza-pressable {
   transition: transform var(--motion-instant) var(--ease-exit), background-color var(--motion-fast) var(--ease-enter),
+    color var(--motion-fast) var(--ease-enter), border-color var(--motion-fast) var(--ease-enter),
     opacity var(--motion-fast) var(--ease-enter);
 }
 

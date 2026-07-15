@@ -51,12 +51,12 @@ export function ScheduleOccurrenceDrawer({
 
   return (
     <>
-      <div className="mitza-backdrop-in fixed inset-0 z-30 bg-black/30" />
+      <Link href={closeHref} scroll={false} aria-label="Fechar" className="mitza-backdrop-in fixed inset-0 z-30 bg-black/30" />
       <div className="fixed inset-0 z-30 flex items-start justify-center px-4 py-16 sm:items-center">
         <div className="mitza-modal-in w-full max-w-sm rounded-lg border border-border bg-card p-4 shadow-lg">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-            <Link href={closeHref} scroll={false} className="text-sm text-muted-foreground hover:text-foreground">
+            <Link href={closeHref} scroll={false} className="text-sm text-muted-foreground transition-colors hover:text-foreground">
               Fechar
             </Link>
           </div>
@@ -77,8 +77,9 @@ export function ScheduleOccurrenceDrawer({
                 name="due_date"
                 type="date"
                 required
+                autoFocus
                 defaultValue={editingTask?.dueDate}
-                className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground outline-none focus:border-zinc-500"
+                className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-zinc-500"
               />
             </label>
 
@@ -89,7 +90,7 @@ export function ScheduleOccurrenceDrawer({
                   name="due_time"
                   type="time"
                   defaultValue={editingTask?.dueTime ?? ""}
-                  className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground outline-none focus:border-zinc-500"
+                  className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-zinc-500"
                 />
               </label>
             )}
@@ -108,13 +109,13 @@ export function ScheduleOccurrenceDrawer({
               <Link
                 href={closeHref}
                 scroll={false}
-                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                className="mitza-pressable rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
               >
                 Cancelar
               </Link>
               <button
                 type="submit"
-                className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
+                className="mitza-pressable rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
               >
                 Confirmar
               </button>

@@ -188,7 +188,7 @@ function NavLink({
     <Link
       href={item.href}
       title={item.label}
-      className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] ${collapsed ? "md:justify-center" : ""} ${
+      className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center" : ""} ${
         active ? "bg-brand/15 font-semibold text-brand" : "font-medium text-zinc-200 hover:bg-white/10"
       }`}
     >
@@ -227,7 +227,7 @@ function SidebarContent({
           <Link
             href="/clients/new"
             title="Novo cliente"
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md bg-brand px-2.5 py-1 text-sm font-medium text-white hover:bg-brand-hover ${collapsed ? "md:px-0" : ""}`}
+            className={`mitza-pressable flex flex-1 items-center justify-center gap-1.5 rounded-md bg-brand px-2.5 py-1 text-sm font-medium text-white hover:bg-brand-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:px-0" : ""}`}
           >
             <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
             <ItemLabel collapsed={collapsed}>Novo cliente</ItemLabel>
@@ -238,7 +238,7 @@ function SidebarContent({
           onClick={toggleCollapsed}
           aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
-          className="hidden shrink-0 rounded-md p-1.5 text-zinc-400 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-white/10 hover:text-zinc-100 md:block"
+          className="hidden shrink-0 rounded-md p-1.5 text-zinc-400 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-white/10 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:block"
         >
           {collapsed ? (
             <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
@@ -279,7 +279,7 @@ function SidebarContent({
                 <button
                   type="submit"
                   title="Atualizar Meta (todos)"
-                  className="shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                  className="mitza-pressable shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                 >
                   <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
                 </button>
@@ -312,7 +312,7 @@ function SidebarContent({
           <button
             type="submit"
             title="Sair"
-            className={`flex w-full items-center justify-center gap-1.5 rounded-md border border-white/15 px-3 py-1 text-xs font-medium text-zinc-200 hover:bg-white/10 ${collapsed ? "md:px-0" : ""}`}
+            className={`mitza-pressable flex w-full items-center justify-center gap-1.5 rounded-md border border-white/15 px-3 py-1 text-xs font-medium text-zinc-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:px-0" : ""}`}
           >
             <LogOut className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <ItemLabel collapsed={collapsed}>Sair</ItemLabel>
@@ -363,7 +363,7 @@ export function Sidebar({
           type="button"
           onClick={onOpen}
           aria-label="Abrir menu"
-          className="fixed left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-black text-zinc-100 shadow-[var(--shadow-float)] md:hidden"
+          className="mitza-pressable fixed left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-black text-zinc-100 shadow-[var(--shadow-float)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:hidden"
         >
           <Menu className="h-4 w-4" aria-hidden="true" />
         </button>

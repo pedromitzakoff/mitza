@@ -414,3 +414,10 @@ Ela deve reduzir o trabalho necessário para entregar cada página.
 ## Capítulo 23 — A interface deve parecer leve
 
 Nenhuma interação comum deve transmitir peso, rigidez ou atraso.
+
+## Capítulo 24 — A plataforma deve transmitir leveza
+
+O usuário deve sentir que cada interação responde imediatamente.
+
+Mesmo pequenas interações devem comunicar continuidade, precisão e
+confiança.

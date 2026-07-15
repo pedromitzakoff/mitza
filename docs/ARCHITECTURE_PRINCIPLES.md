@@ -334,3 +334,8 @@ gargalo e comparar o estado antes e depois.
 
 Toda animação deve conectar dois estados da interface e nunca existir
 apenas como decoração.
+
+## Capítulo 23 — Componentes semelhantes devem se comportar da mesma maneira
+
+Velocidade, easing, duração, foco, hover e feedback devem ser consistentes
+em toda a plataforma.

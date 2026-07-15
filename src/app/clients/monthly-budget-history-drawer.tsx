@@ -44,7 +44,8 @@ export function MonthlyBudgetHistoryDrawer({
           <Link
             href={closeHref}
             scroll={false}
-            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            autoFocus
+            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900"
           >
             Fechar
           </Link>
