@@ -779,6 +779,7 @@ export default async function SprintsPage({
                 returnTo={buildUrl({})}
                 accountReviewsBySprintId={accountReviewsBySprintId}
                 monthTemporalStatus={monthTemporalStatus}
+                isAdmin={isAdmin}
               />
             ))
           ) : (

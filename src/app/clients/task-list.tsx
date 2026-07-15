@@ -21,7 +21,7 @@ export function TaskList({ tasks, clientId }: { tasks: TaskListItem[]; clientId:
   }
 
   return (
-    <ul className="overflow-hidden rounded-lg border border-border">
+    <ul className="rounded-lg border border-border [&>li:first-child]:rounded-t-lg [&>li:last-child]:rounded-b-lg">
       {ordered.map((task) => (
         <TaskRow
           key={task.id}

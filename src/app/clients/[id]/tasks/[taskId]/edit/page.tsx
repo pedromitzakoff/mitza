@@ -158,7 +158,7 @@ export default async function EditTaskPage({
       {isAdmin && (
         <div className="mt-4">
           <DeleteTaskButton
-            action={deleteTaskAction.bind(null, task.id, id)}
+            action={(formData) => deleteTaskAction(task.id, id, formData)}
             taskTitle={task.title}
             returnTo={returnTo}
           />

@@ -25,3 +25,22 @@ export function EmptyState({
 }) {
   return <p className={`${SIZE_CLASSES[size]} text-muted-foreground ${className ?? ""}`}>{children}</p>;
 }
+
+/**
+ * Etapa "Sprint Workspace Polish 1.0" (Parte 4) — estado vazio em formato de
+ * LINHA, para colunas que normalmente são listas em `<ul>` com borda/raio
+ * (Tarefas, Otimizações): antes, uma área vazia virava só um `<p>` sem
+ * moldura, encolhendo e deixando as duas colunas com pesos visuais bem
+ * diferentes quando uma tinha itens e a outra não. Esta variante mantém a
+ * mesma moldura (borda + raio) e uma altura mínima próxima da de uma linha
+ * real da lista — nunca 3-4 placeholders vazios, sempre uma linha só.
+ */
+export function EmptyStateRow({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      className={`flex min-h-[38px] items-center rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground ${className ?? ""}`}
+    >
+      {children}
+    </div>
+  );
+}

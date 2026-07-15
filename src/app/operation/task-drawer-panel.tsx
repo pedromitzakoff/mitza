@@ -194,7 +194,7 @@ export function TaskDrawerPanel({
           )}
           {isAdmin && (
             <DeleteTaskButton
-              action={deleteTaskAction.bind(null, task.id, clientId)}
+              action={(formData) => deleteTaskAction(task.id, clientId, formData)}
               taskTitle={task.title}
               returnTo={returnTo}
               className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"

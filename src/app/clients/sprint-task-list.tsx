@@ -1,11 +1,18 @@
 import Link from "next/link";
-import { EmptyState } from "@/components/ui/empty-state";
+import { EmptyStateRow } from "@/components/ui/empty-state";
+import { SectionHeader } from "@/components/ui/section-header";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
 import { orderTasks } from "./task-list";
 import { TaskRow, type TaskListItem } from "./task-row";
 import { InlineCreateTaskForm, type InlineTaskManagerOption } from "./inline-task-form";
 
+/**
+ * Etapa "Sprint Workspace Polish 1.0" (Parte 3): mesmo cabeçalho
+ * (`SectionHeader`) e mesmo estado vazio em linha (`EmptyStateRow`) que
+ * `AccountReviewsSection` — as duas colunas de "Execução da sprint" agora
+ * compartilham a mesma linguagem visual, só o conteúdo interno muda.
+ */
 export function SprintTaskList({
   tasks,
   clientId,
@@ -13,6 +20,7 @@ export function SprintTaskList({
   buildTaskHref,
   managers,
   returnTo,
+  isAdmin,
 }: {
   tasks: TaskListItem[];
   clientId: string;
@@ -27,6 +35,9 @@ export function SprintTaskList({
    * página do cliente não passa isto, então continua com o link de sempre. */
   managers?: InlineTaskManagerOption[];
   returnTo?: string;
+  /** Etapa "Sprint Workspace Polish 1.0" — habilita "Excluir tarefa" no menu
+   * "•••" de cada linha (ver `TaskRow`). */
+  isAdmin?: boolean;
 }) {
   const ordered = orderTasks(tasks);
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
@@ -35,35 +46,36 @@ export function SprintTaskList({
 
   return (
     <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-900">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-          Tarefas da sprint
-        </p>
-        <div className="flex flex-wrap shrink-0 items-center gap-2.5">
-          {tasks.length > 0 && (
-            <p className="text-[11px] text-muted-foreground">
-              {tasksDone} de {tasks.length} concluída{tasks.length !== 1 ? "s" : ""}
-            </p>
-          )}
-          {canCreateInline ? (
-            <InlineCreateTaskForm
-              clientId={clientId}
-              sprintId={sprintId}
-              managers={managers}
-              returnTo={returnTo}
-              toggleId={`new-task-${sprintId}`}
-              defaultDueDate={todayDateString()}
-            />
-          ) : (
-            <Link
-              href={`/clients/${clientId}/tasks/new?sprintId=${sprintId}`}
-              className="text-xs text-zinc-500 hover:underline"
-            >
-              + Tarefa
-            </Link>
-          )}
-        </div>
-      </div>
+      <SectionHeader
+        action={
+          <span className="flex shrink-0 flex-wrap items-center gap-2.5">
+            {tasks.length > 0 && (
+              <span className="text-[11px] text-muted-foreground">
+                {tasksDone} de {tasks.length} concluída{tasks.length !== 1 ? "s" : ""}
+              </span>
+            )}
+            {canCreateInline ? (
+              <InlineCreateTaskForm
+                clientId={clientId}
+                sprintId={sprintId}
+                managers={managers}
+                returnTo={returnTo}
+                toggleId={`new-task-${sprintId}`}
+                defaultDueDate={todayDateString()}
+              />
+            ) : (
+              <Link
+                href={`/clients/${clientId}/tasks/new?sprintId=${sprintId}`}
+                className="text-xs font-medium text-brand hover:underline"
+              >
+                + Tarefa
+              </Link>
+            )}
+          </span>
+        }
+      >
+        Tarefas
+      </SectionHeader>
 
       {tasks.length > 0 && (
         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
@@ -75,18 +87,19 @@ export function SprintTaskList({
       )}
 
       {ordered.length > 0 ? (
-        <ul className="mt-2 overflow-hidden rounded-lg border border-border">
+        <ul className="mt-2 rounded-lg border border-border [&>li:first-child]:rounded-t-lg [&>li:last-child]:rounded-b-lg">
           {ordered.map((task) => (
             <TaskRow
               key={task.id}
               task={task}
               clientId={clientId}
               detailsHref={buildTaskHref ? buildTaskHref(task.id) : `/clients/${clientId}?task=${task.id}`}
+              isAdmin={isAdmin}
             />
           ))}
         </ul>
       ) : (
-        <EmptyState size="xs" className="mt-2">Nenhuma tarefa vinculada a esta sprint ainda.</EmptyState>
+        <EmptyStateRow className="mt-2">Nenhuma tarefa vinculada a esta sprint.</EmptyStateRow>
       )}
     </div>
   );

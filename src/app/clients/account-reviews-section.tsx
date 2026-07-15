@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { EmptyState } from "@/components/ui/empty-state";
+import { EmptyStateRow } from "@/components/ui/empty-state";
 import { SectionHeader } from "@/components/ui/section-header";
 import { formatDateTime } from "@/lib/format";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL } from "@/lib/account-reviews";
@@ -41,9 +41,15 @@ function reviewSubtitle(review: AccountReviewSummaryItem): string {
  * "OTIMIZAÇÕES" (Etapa 57/74) — dentro de "Execução da sprint", ao lado de
  * Tarefas. Otimização = revisão estratégica da conta, registrada mesmo
  * quando nenhuma alteração foi necessária (ver lib/account-reviews.ts).
- * Compacta: data/hora, resultado, resumo de uma linha, gestor;
- * "+ Registrar otimização" abre o drawer (nunca formulário aberto
- * permanentemente na tela).
+ *
+ * Etapa "Sprint Workspace Polish 1.0" (Parte 3): cada otimização virou uma
+ * LINHA estruturada — mesma anatomia de `TaskRow` (moldura em lista com
+ * borda/raio, `<li>` com hover, colunas fixas: data/hora, resumo, gestor,
+ * indicador de abrir) — em vez do antigo bloco de texto empilhado em 2-3
+ * linhas. Nenhum dado novo: mesmas informações de sempre, só reorganizadas
+ * numa linha só. "+ Registrar otimização" subiu pro cabeçalho (Parte 5 —
+ * mesmo lugar que "+ Tarefa" ocupa em `SprintTaskList`), pra não duplicar
+ * essa ação também dentro do estado vazio.
  */
 export function AccountReviewsSection({
   reviews,
@@ -58,8 +64,11 @@ export function AccountReviewsSection({
     <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-900">
       <SectionHeader
         action={
-          <span className="text-xs text-muted-foreground">
-            {reviews.length} nesta sprint
+          <span className="flex shrink-0 flex-wrap items-center gap-2.5">
+            {reviews.length > 0 && <span className="text-[11px] text-muted-foreground">{reviews.length} nesta sprint</span>}
+            <Link href={newReviewHref} scroll={false} className="text-xs font-medium text-brand hover:underline">
+              + Registrar otimização
+            </Link>
           </span>
         }
       >
@@ -67,42 +76,46 @@ export function AccountReviewsSection({
       </SectionHeader>
 
       {reviews.length > 0 ? (
-        <ul className="mt-1.5 flex flex-col gap-1">
+        <ul className="mt-2 rounded-lg border border-border [&>li:first-child]:rounded-t-lg [&>li:last-child]:rounded-b-lg">
           {reviews.map((review) => (
-            <li key={review.id}>
-              <Link
-                href={buildDetailHref(review.id)}
-                scroll={false}
-                className="flex flex-col gap-0.5 rounded-md px-1.5 py-1 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
-              >
-                <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="tabular-nums text-muted-foreground">{formatDateTime(review.reviewedAt)}</span>
-                  <span className="text-muted-foreground">{review.managerName}</span>
-                </div>
-                <div className="flex items-baseline gap-1.5 text-sm">
+            <li
+              key={review.id}
+              className="border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+            >
+              <Link href={buildDetailHref(review.id)} scroll={false} className="flex items-center gap-2.5">
+                <span className="w-24 shrink-0 text-xs tabular-nums text-muted-foreground">
+                  {formatDateTime(review.reviewedAt)}
+                </span>
+
+                <span className="min-w-0 flex-1 truncate text-sm">
                   <span className={`font-medium ${OUTCOME_TEXT_CLASSES[review.outcome]}`}>
                     {ACCOUNT_REVIEW_OUTCOME_LABEL[review.outcome]}
                   </span>
                   {reviewSubtitle(review) && (
-                    <span className="truncate text-xs text-muted-foreground">· {reviewSubtitle(review)}</span>
+                    <span className="truncate text-xs text-muted-foreground"> · {reviewSubtitle(review)}</span>
                   )}
-                </div>
+                </span>
+
+                <span className="hidden w-28 shrink-0 truncate text-xs text-muted-foreground md:block">
+                  {review.managerName}
+                </span>
+
                 {review.updateStatus !== "none" && (
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:block">
                     {CLIENT_UPDATE_STATUS_LABEL[review.updateStatus]}
                   </span>
                 )}
+
+                <span className="shrink-0 text-sm text-muted-foreground" aria-hidden="true">
+                  ›
+                </span>
               </Link>
             </li>
           ))}
         </ul>
       ) : (
-        <EmptyState className="mt-1.5">Nenhuma otimização registrada nesta sprint.</EmptyState>
+        <EmptyStateRow className="mt-2">Nenhuma otimização registrada nesta sprint.</EmptyStateRow>
       )}
-
-      <Link href={newReviewHref} scroll={false} className="mt-1.5 inline-block text-xs font-medium text-brand hover:underline">
-        + Registrar otimização
-      </Link>
     </div>
   );
 }

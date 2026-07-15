@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { EmptyState } from "@/components/ui/empty-state";
+import { EmptyStateRow } from "@/components/ui/empty-state";
 import { formatCurrency } from "@/lib/format";
 import type { OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
 import { resolveMonthPeriodSummary, computeRitmoDiff } from "@/lib/financial-period";
@@ -32,6 +32,7 @@ export function SprintMonthlyConsolidatedGroup({
   returnTo,
   accountReviewsBySprintId,
   monthTemporalStatus,
+  isAdmin,
 }: {
   card: OperationClientCardData;
   monthLabel: string;
@@ -42,6 +43,9 @@ export function SprintMonthlyConsolidatedGroup({
    * Sprint UX 2.0. Opcional só por retrocompatibilidade de tipo. */
   accountReviewsBySprintId?: Map<string, AccountReviewSummaryItem[]>;
   monthTemporalStatus?: MonthTemporalStatus;
+  /** Etapa "Sprint Workspace Polish 1.0" — habilita "Excluir tarefa" no menu
+   * "•••" de cada linha (ver `TaskRow`). */
+  isAdmin?: boolean;
 }) {
   const summary = resolveMonthPeriodSummary(card, monthLabel, monthRange);
   const diff = computeRitmoDiff(summary);
@@ -78,18 +82,19 @@ export function SprintMonthlyConsolidatedGroup({
           Tarefas do mês
         </p>
         {orderedTasks.length > 0 ? (
-          <ul className="overflow-hidden rounded-lg border border-border">
+          <ul className="rounded-lg border border-border [&>li:first-child]:rounded-t-lg [&>li:last-child]:rounded-b-lg">
             {orderedTasks.map((task) => (
               <TaskRow
                 key={task.id}
                 task={task}
                 clientId={card.clientId}
                 detailsHref={`${returnTo}&task=${task.id}`}
+                isAdmin={isAdmin}
               />
             ))}
           </ul>
         ) : (
-          <EmptyState size="xs">Nenhuma tarefa neste mês.</EmptyState>
+          <EmptyStateRow>Nenhuma tarefa neste mês.</EmptyStateRow>
         )}
 
         <div className="mt-2 border-t border-border pt-2 text-xs">

@@ -1,13 +1,144 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useState, useTransition } from "react";
 import Link from "next/link";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
 import { formatCompactTaskDate } from "@/lib/format";
 import { saveFocusForReturn } from "@/lib/focus-restore";
+import { useToast } from "@/app/toast-provider";
 import type { TaskStatus, TaskType, TeamMemberStatus } from "@/lib/supabase/database.types";
-import { completeTaskAction } from "./tasks-actions";
+import { completeTaskAction, deleteTaskAction } from "./tasks-actions";
+
+const DELETE_CONFIRM_TIMEOUT_MS = 5000;
+
+/**
+ * Menu "•••" da tarefa (Etapa "Sprint Workspace Polish 1.0") — antes era um
+ * link direto pro drawer; agora é um popover com "Ver detalhes" (mesmo link
+ * de sempre) e, só pra admin, "Excluir tarefa". Exclusão rápida sem abrir o
+ * drawer: reutiliza a mesma `deleteTaskAction` de sempre (chamada sem
+ * `formData`, então ela nunca redireciona — só revalida os dados no lugar,
+ * preservando scroll/Sprint aberta/cliente expandido/filtros). Confirmação
+ * inline (nunca `window.confirm`): clicar em "Excluir tarefa" troca o item
+ * por "Confirmar exclusão? Sim/Não", que desaparece sozinho depois de alguns
+ * segundos ou ao clicar fora — igual ao padrão já usado pra reverter a fonte
+ * manual do investimento em `sprint-card.tsx`.
+ */
+function TaskRowMenu({
+  taskId,
+  clientId,
+  detailsHref,
+  isAdmin,
+}: {
+  taskId: string;
+  clientId: string;
+  detailsHref: string;
+  isAdmin: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    if (!confirming) return;
+    const timer = setTimeout(() => setConfirming(false), DELETE_CONFIRM_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [confirming]);
+
+  function closeMenu() {
+    setOpen(false);
+    setConfirming(false);
+    setError(null);
+  }
+
+  function handleDelete() {
+    setError(null);
+    startTransition(async () => {
+      const result = await deleteTaskAction(taskId, clientId);
+      if (result?.error) {
+        setError(result.error);
+        setConfirming(false);
+        return;
+      }
+      showToast("Tarefa excluída.");
+      closeMenu();
+    });
+  }
+
+  return (
+    <span className="relative inline-block shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Mais ações da tarefa"
+        className="mitza-pressable rounded px-1 text-sm text-muted-foreground transition-colors hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+      >
+        •••
+      </button>
+
+      {open && (
+        <>
+          <button type="button" aria-label="Fechar menu" onClick={closeMenu} className="fixed inset-0 z-40" />
+          <div
+            role="menu"
+            className="mitza-menu-in absolute right-0 z-50 mt-1 w-44 rounded-lg border border-border bg-card p-1 shadow-[var(--shadow-float)]"
+            style={{ top: "100%" }}
+          >
+            <Link
+              href={detailsHref}
+              scroll={false}
+              role="menuitem"
+              onClick={(event) => {
+                saveFocusForReturn(event.currentTarget);
+                closeMenu();
+              }}
+              className="mitza-pressable block rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Ver detalhes
+            </Link>
+
+            {isAdmin &&
+              (confirming ? (
+                <div className="mt-0.5 flex items-center gap-1.5 px-2 py-1">
+                  <span className="text-[11px] text-muted-foreground">Confirmar exclusão?</span>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={handleDelete}
+                    className="mitza-pressable rounded px-1 text-[11px] font-medium text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400"
+                  >
+                    {isPending ? "Excluindo..." : "Sim"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(false)}
+                    className="mitza-pressable rounded px-1 text-[11px] text-muted-foreground hover:underline"
+                  >
+                    Não
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => setConfirming(true)}
+                  className="mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+                >
+                  Excluir tarefa
+                </button>
+              ))}
+
+            {error && <p className="px-2 py-1 text-[11px] text-red-600 dark:text-red-400">{error}</p>}
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
 
 /** `redirect()` de dentro de um Server Action lança um erro especial com
  * `digest` começando em "NEXT_REDIRECT" — precisa deixar esse erro
@@ -75,6 +206,7 @@ export function TaskRow({
   clientId,
   detailsHref,
   hideAssigneeIfName,
+  isAdmin,
 }: {
   task: TaskListItem;
   clientId: string;
@@ -84,6 +216,12 @@ export function TaskRow({
    * tela Sprints, pra não repetir a mesma informação em toda linha). Tarefa
    * sem responsável ou com um responsável diferente continua aparecendo. */
   hideAssigneeIfName?: string;
+  /** Habilita "Excluir tarefa" no menu "•••" (Etapa "Sprint Workspace Polish
+   * 1.0") — mesma regra de permissão de sempre (`requireAdmin()` na própria
+   * action). Omitir mantém o "•••" como só "Ver detalhes", igual ao
+   * comportamento anterior — usado pelas telas que ainda não passam esta
+   * prop. */
+  isAdmin?: boolean;
 }) {
   const effectiveStatus = effectiveTaskStatus(task);
   const [isDone, setOptimisticDone] = useOptimistic(effectiveStatus === "feito");
@@ -181,16 +319,7 @@ export function TaskRow({
           )}
         </span>
 
-        <Link
-          href={detailsHref}
-          scroll={false}
-          onClick={(event) => saveFocusForReturn(event.currentTarget)}
-          aria-label="Abrir detalhes da tarefa"
-          title="Abrir detalhes"
-          className="shrink-0 rounded px-1 text-sm text-muted-foreground transition-colors hover:text-brand"
-        >
-          •••
-        </Link>
+        <TaskRowMenu taskId={task.id} clientId={clientId} detailsHref={detailsHref} isAdmin={isAdmin ?? false} />
       </div>
       {completeError && <p className="mt-0.5 pl-[26px] text-[11px] text-red-600 dark:text-red-400">{completeError}</p>}
     </li>

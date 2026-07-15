@@ -13,6 +13,13 @@ import { PERFORMANCE_GOALS, PERFORMANCE_GOAL_OPTIONS, type PerformanceGoal } fro
  * mais estrutura que isso. Sem redirect: a Server Action só revalida as
  * telas que mostram o objetivo; o popover fecha e o toast único da
  * plataforma confirma o sucesso, sem perder scroll nem o que está expandido.
+ *
+ * Etapa "Sprint Workspace Polish 1.0" (Parte 7): o gatilho virou uma badge
+ * discreta (pílula com borda, sem cor chamativa) em vez de texto sublinhado
+ * — fica mais fácil de identificar como o valor atual do objetivo, e o
+ * hover/focus já deixam claro que é clicável. O rótulo "Objetivo:" saiu
+ * daqui de dentro: quem chama (`SprintPerformanceSection`) já mostra esse
+ * rótulo fora, uma vez só — nunca "Objetivo: Objetivo: Vendas".
  */
 export function ClientPerformanceGoalEditor({
   clientId,
@@ -47,9 +54,10 @@ export function ClientPerformanceGoalEditor({
         disabled={isPending}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="mitza-pressable rounded text-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
+        aria-label={`Objetivo: ${currentGoal ? PERFORMANCE_GOALS[currentGoal].label : "não configurado"} — clique para alterar`}
+        className="mitza-pressable rounded-full border border-border bg-card px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:border-brand hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
       >
-        Objetivo: {currentGoal ? PERFORMANCE_GOALS[currentGoal].label : "não configurado"}
+        {currentGoal ? PERFORMANCE_GOALS[currentGoal].label : "Não configurado"}
       </button>
 
       {open && (

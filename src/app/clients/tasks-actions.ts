@@ -339,10 +339,27 @@ export async function markTaskNotDoneAction(taskId: string, clientId: string) {
  * operational_events.entity_id não é uma foreign key (é só uuid, igual às
  * outras entidades polimórficas desta tabela).
  */
-export async function deleteTaskAction(taskId: string, clientId: string, formData: FormData) {
+/**
+ * Etapa "Sprint Workspace Polish 1.0": mesma exclusão de sempre, agora
+ * chamável de dois jeitos — via `<form>` (drawer, com `formData` trazendo
+ * `return_to`: comportamento 100% preservado, redireciona ao terminar,
+ * fechando o drawer) ou diretamente (exclusão rápida na própria linha da
+ * tarefa, sem `formData`: nunca redireciona, devolve `{ error? }` pra quem
+ * chamou decidir o feedback — preserva scroll, Sprint aberta, cliente
+ * expandido e filtros, exatamente como o pedido exige). Nenhuma segunda
+ * lógica de exclusão: é a mesma query, o mesmo evento de auditoria, o mesmo
+ * `requireAdmin()` — só o desfecho (redirecionar vs. retornar) muda
+ * conforme quem chama.
+ */
+export async function deleteTaskAction(taskId: string, clientId: string, formData: FormData): Promise<void>;
+export async function deleteTaskAction(taskId: string, clientId: string): Promise<{ error?: string }>;
+export async function deleteTaskAction(
+  taskId: string,
+  clientId: string,
+  formData?: FormData,
+): Promise<{ error?: string } | void> {
   const profile = await requireAdmin();
   const supabase = await createSupabaseClient();
-  const returnTo = resolveReturnTo(formData, `/clients/${clientId}`);
 
   const { data: task } = await supabase
     .from("tasks")
@@ -353,6 +370,7 @@ export async function deleteTaskAction(taskId: string, clientId: string, formDat
   const { error } = await supabase.from("tasks").delete().eq("id", taskId);
 
   if (error) {
+    if (!formData) return { error: "Não foi possível excluir a tarefa." };
     redirect(`/clients/${clientId}?taskError=${encodeURIComponent("Não foi possível excluir a tarefa.")}`);
   }
 
@@ -376,5 +394,7 @@ export async function deleteTaskAction(taskId: string, clientId: string, formDat
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
-  redirect(returnTo);
+
+  if (!formData) return {};
+  redirect(resolveReturnTo(formData, `/clients/${clientId}`));
 }

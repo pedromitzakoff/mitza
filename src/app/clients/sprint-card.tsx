@@ -1,10 +1,9 @@
 import Link from "next/link";
 import type { SprintFinancials } from "@/lib/sprint-financials";
 import { describeSpendSourceTimestamp } from "@/lib/sprint-financials";
-import { formatCurrency, formatShortDate, formatShortDateTime } from "@/lib/format";
+import { formatCurrency, formatShortDateTime } from "@/lib/format";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { effectiveTaskStatus } from "@/lib/task-status";
-import { todayDateString } from "@/lib/today";
 import { CommentThread, type CommentItem } from "./comment-thread";
 import { SprintTaskList } from "./sprint-task-list";
 import type { TaskListItem } from "./task-row";
@@ -96,10 +95,14 @@ export function derivePerformanceCellTexts(view: SprintPerformanceView): {
       return { resultsValue: "Sem dados", resultsAux: null, costValue: "Sem dados", costAux: null };
     case "has_data": {
       const { goal, summary } = view;
-      const config = PERFORMANCE_GOALS[goal];
       const resultsValue = formatPerformanceResult(summary.resultCount, goal);
       const resultsAux = summary.resultCount === 0 ? "Nenhum resultado gerado no período" : null;
-      const costValue = summary.costPerResult !== null ? `${config.costMetricShortLabel} ${formatCurrency(summary.costPerResult)}` : "—";
+      // Etapa "Sprint Workspace Polish 1.0" (Parte 8): o valor não carrega
+      // mais o prefixo CPA/CPL embutido — o rótulo agora é sempre exibido
+      // separado (ver `SprintPerformanceSection`), pra nunca duplicar
+      // "CPA: CPA R$ 45,00" e pra continuar rotulado mesmo quando `config`
+      // não está disponível (estados sem objetivo/sem dado).
+      const costValue = summary.costPerResult !== null ? formatCurrency(summary.costPerResult) : "—";
       let costAux: { text: string; tone: "better" | "worse" | null } | null = null;
       if (summary.targetCostPerResult !== null && summary.costPerResult !== null) {
         if (summary.comparison.status === "on_target") {
@@ -166,6 +169,11 @@ function SprintPerformanceSection({
   const cells = derivePerformanceCellTexts(view);
   const editableChannels = performance?.editableChannels ?? [];
   const performanceGoal = performance?.performanceGoal ?? null;
+  // Etapa "Sprint Workspace Polish 1.0" (Parte 8): rótulo da coluna de custo
+  // é sempre CPA/CPL quando o objetivo já está configurado — mesmo antes de
+  // existir qualquer dado lançado (`not_started`/`no_data`) — e cai pro
+  // rótulo genérico só quando não há objetivo pra saber qual dos dois é.
+  const costLabel = performanceGoal ? PERFORMANCE_GOALS[performanceGoal].costMetricShortLabel : "Custo por resultado";
   const canEditResults = isAdmin && (view.kind === "has_data" || view.kind === "no_data") && editableChannels.length > 0;
   const editToggleId = `edit-performance-${sprint.sprintId}`;
   const investmentSourceText = sourceTimestampText ?? (isManualSource ? "Manual" : "Meta");
@@ -185,8 +193,15 @@ function SprintPerformanceSection({
   // uma linha horizontal só (era 3 colunas empilhadas + linha de fonte +
   // toggle "Atualizar performance" em linhas separadas). "·" como separador
   // discreto entre métricas, igual ao já usado em outras linhas compactas da
-  // plataforma (ex.: resumo de alertas). Objetivo (Parte 3) entra na mesma
-  // linha, editável inline quando admin.
+  // plataforma (ex.: resumo de alertas).
+  //
+  // Etapa "Sprint Workspace Polish 1.0" (Partes 6-9) — toolbar operacional:
+  // "Resultados"/"CPA"/"CPL" ganharam rótulo explícito sempre visível (nunca
+  // mais "Sem dados · Sem dados" sem dizer qual é qual — Parte 8), inclusive
+  // no estado sem objetivo configurado (a linha nunca "encolhe", sempre a
+  // mesma forma — Parte 9). "Objetivo" virou rótulo + badge (Parte 7,
+  // clicável só pra admin). "Atualizar performance" virou um botão de
+  // verdade no fim da linha (Parte 6), não mais um link azul solto.
   return (
     <div className="rounded-lg border border-border bg-zinc-50 px-3 py-2 dark:bg-zinc-900/40">
       {/* Os dois checkboxes-hack (revert de fonte manual / editar performance)
@@ -210,36 +225,35 @@ function SprintPerformanceSection({
         <span className="font-semibold text-foreground">{formatCurrency(sprint.actualSpend)}</span>
         <span className="text-muted-foreground">investido</span>
 
-        {view.kind !== "not_configured" && (
-          <>
-            <span className="text-border" aria-hidden="true">
-              ·
-            </span>
-            <span className="font-semibold text-foreground">{cells.resultsValue}</span>
-            {cells.resultsAux && <span className="text-muted-foreground">({cells.resultsAux})</span>}
+        <span className="text-border" aria-hidden="true">
+          ·
+        </span>
+        <span className="text-muted-foreground">Resultados:</span>
+        <span className="font-semibold text-foreground">{cells.resultsValue}</span>
+        {cells.resultsAux && <span className="text-muted-foreground">({cells.resultsAux})</span>}
 
-            <span className="text-border" aria-hidden="true">
-              ·
-            </span>
-            <span className="font-semibold text-foreground">{cells.costValue}</span>
-            {cells.costAux && (
-              <span
-                className={`font-medium ${cells.costAux.tone ? PERFORMANCE_STATUS_TEXT_CLASSES[cells.costAux.tone] : "text-muted-foreground"}`}
-              >
-                ({cells.costAux.text})
-              </span>
-            )}
-          </>
+        <span className="text-border" aria-hidden="true">
+          ·
+        </span>
+        <span className="text-muted-foreground">{costLabel}:</span>
+        <span className="font-semibold text-foreground">{cells.costValue}</span>
+        {cells.costAux && (
+          <span
+            className={`font-medium ${cells.costAux.tone ? PERFORMANCE_STATUS_TEXT_CLASSES[cells.costAux.tone] : "text-muted-foreground"}`}
+          >
+            ({cells.costAux.text})
+          </span>
         )}
 
         <span className="text-border" aria-hidden="true">
           ·
         </span>
+        <span className="text-muted-foreground">Objetivo:</span>
         {isAdmin ? (
           <ClientPerformanceGoalEditor clientId={clientId} currentGoal={performanceGoal} />
         ) : (
-          <span className="text-muted-foreground">
-            Objetivo: {performanceGoal ? PERFORMANCE_GOALS[performanceGoal].label : "não configurado"}
+          <span className="rounded-full border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground">
+            {performanceGoal ? PERFORMANCE_GOALS[performanceGoal].label : "Não configurado"}
           </span>
         )}
 
@@ -258,17 +272,12 @@ function SprintPerformanceSection({
         )}
 
         {isAdmin && (
-          <>
-            <span className="text-border" aria-hidden="true">
-              ·
-            </span>
-            <label
-              htmlFor={editToggleId}
-              className="cursor-pointer font-medium text-brand hover:underline peer-checked:hidden"
-            >
-              Atualizar performance
-            </label>
-          </>
+          <label
+            htmlFor={editToggleId}
+            className="mitza-pressable ml-auto shrink-0 cursor-pointer rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand peer-checked:hidden"
+          >
+            Atualizar performance
+          </label>
         )}
       </div>
 
@@ -402,7 +411,6 @@ export function SprintCardBody({
    * página do cliente não passa, então continua com o link de sempre. */
   taskManagers?: { id: string; name: string }[];
 }) {
-  const isCurrent = sprint.temporalStatus === "atual";
   const sourceTimestampText = describeSpendSourceTimestamp(
     sprint.spendSource,
     manualSpendUpdatedAt,
@@ -414,20 +422,16 @@ export function SprintCardBody({
 
   return (
     <div className="border-t border-border p-2.5">
-        {/* Contexto do período e do dia atual — Refinamento de Densidade
-            (Parte 2): era uma caixa própria (borda + fundo) só pra "Hoje" +
-            uma segunda linha separada pra última execução; agora as duas
-            informações cabem numa linha só, sem caixa, sem repetir a data
-            (o período da sprint já aparece no resumo fechado). */}
-        {isCurrent && (
-          <p className="mb-2 text-xs">
-            <span className="font-medium text-brand">Hoje, {formatShortDate(todayDateString())}</span>
-            {executionLabel && (
-              <span className={EXECUTION_LABEL_CLASSES[executionSeverity ?? "neutro"]}>
-                {" "}
-                · Última execução: {executionLabel}
-              </span>
-            )}
+        {/* Etapa "Sprint Workspace Polish 1.0" (Parte 1): "Hoje, DD/MM" saiu
+            daqui — o gestor já sabe o dia atual, e essa data já aparece em
+            outros contextos da plataforma (ex.: cabeçalho da Visão Geral).
+            Repeti-la dentro de cada Sprint era ruído puro. Sobra só a
+            informação operacional de fato — a única que muda de sprint pra
+            sprint —, condicionada à própria existência do dado (nunca uma
+            linha vazia quando não há `executionLabel`). */}
+        {executionLabel && (
+          <p className={`mb-2 text-xs ${EXECUTION_LABEL_CLASSES[executionSeverity ?? "neutro"]}`}>
+            Última execução: {executionLabel}
           </p>
         )}
 
@@ -460,6 +464,7 @@ export function SprintCardBody({
               buildTaskHref={buildTaskHref}
               managers={taskManagers}
               returnTo={taskManagers ? returnTo : undefined}
+              isAdmin={isAdmin}
             />
             {accountReviews && newReviewHref && buildReviewDetailHref && (
               <AccountReviewsSection
