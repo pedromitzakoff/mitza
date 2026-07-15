@@ -59,6 +59,11 @@ const OPERATIONAL_TONE_CLASSES = {
  * cabe numa coluna estreita sem virar "diferença em reais" (não é um delta,
  * são os dois valores brutos, a mesma informação que já existia em % só que
  * também em R$).
+ *
+ * Etapa "Sprint Workspace Density 1.0": padding do cabeçalho reduzido
+ * (`px-2.5 py-1.5` → `px-2 py-1`) — mesma área de clique (o `<summary>`
+ * continua ocupando a linha inteira), só menos espaço morto ao redor do
+ * conteúdo.
  */
 export function AccountCardSummary({
   clientId,
@@ -99,7 +104,7 @@ export function AccountCardSummary({
   );
 
   return (
-    <summary className="flex cursor-pointer list-none items-start gap-2 px-2.5 py-1.5">
+    <summary className="flex cursor-pointer list-none items-start gap-2 px-2 py-1">
       <span className="mitza-chevron mt-0.5 shrink-0 text-xs text-muted-foreground group-open:rotate-90">
         ▸
       </span>

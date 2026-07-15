@@ -82,7 +82,7 @@ export function SprintTaskList({
       </SectionHeader>
 
       {tasks.length > 0 && (
-        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+        <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
           <div
             className="h-full rounded-full bg-brand"
             style={{ width: `${Math.min(Math.max(progressPct, 0), 100)}%` }}
@@ -91,7 +91,7 @@ export function SprintTaskList({
       )}
 
       {ordered.length > 0 ? (
-        <ul className="mt-2 rounded-lg border border-border [&>li:first-child]:rounded-t-lg [&>li:last-child]:rounded-b-lg">
+        <ul className="mt-1.5 rounded-lg border border-border [&>li:first-child]:rounded-t-lg [&>li:last-child]:rounded-b-lg">
           {ordered.map((task) => (
             <TaskRow
               key={task.id}
@@ -103,7 +103,7 @@ export function SprintTaskList({
           ))}
         </ul>
       ) : (
-        <EmptyStateRow className="mt-2">Nenhuma tarefa vinculada a esta sprint.</EmptyStateRow>
+        <EmptyStateRow className="mt-1.5">Nenhuma tarefa vinculada a esta sprint.</EmptyStateRow>
       )}
     </div>
   );

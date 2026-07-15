@@ -207,8 +207,12 @@ function SprintPerformanceSection({
   // "Investido: R$ X" — mesmo padrão rótulo:valor de Resultados/CPA/CPL,
   // nunca mais um campo com forma diferente dos outros na mesma toolbar.
   // Padding/gaps reduzidos (Parte 2/4) sem perder legibilidade.
+  //
+  // Etapa "Sprint Workspace Density 1.0": padding reduzido mais uma vez
+  // (`px-2.5 py-1.5` → `px-2 py-1`) — nenhuma informação a menos, só menos
+  // espaço morto ao redor do texto. Tipografia e área de clique intactas.
   return (
-    <div className="rounded-lg border border-border bg-zinc-50 px-2.5 py-1.5 dark:bg-zinc-900/40">
+    <div className="rounded-lg border border-border bg-zinc-50 px-2 py-1 dark:bg-zinc-900/40">
       {/* Os dois checkboxes-hack (revert de fonte manual / editar performance)
           precisam ser IRMÃOS diretos dos blocos que eles revelam
           (`peer-checked:`/`peer-checked/revert:` dependem do seletor de
@@ -287,7 +291,7 @@ function SprintPerformanceSection({
       </div>
 
       {isManualSource && (
-        <div className="mt-1.5 hidden items-center gap-1.5 text-xs peer-checked/revert:flex">
+        <div className="mt-1 hidden items-center gap-1.5 text-xs peer-checked/revert:flex">
           <span className="text-muted-foreground">Substituir valor manual pelo do Meta?</span>
           <form action={resetSprintSpendSourceAction.bind(null, sprint.sprintId, clientId, returnTo)}>
             <SubmitButton
@@ -306,7 +310,7 @@ function SprintPerformanceSection({
       {isAdmin && (
         <form
           action={updateSprintPerformanceAction.bind(null, sprint.sprintId, clientId, returnTo)}
-          className="mt-2 hidden flex-col gap-1.5 peer-checked:flex"
+          className="mt-1.5 hidden flex-col gap-1.5 peer-checked:flex"
         >
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="w-28 shrink-0 text-[11px] text-muted-foreground">Investimento</span>
@@ -429,7 +433,7 @@ export function SprintCardBody({
   const isManualSource = sprint.spendSource === "manual";
 
   return (
-    <div className="border-t border-border p-2">
+    <div className="border-t border-border p-1.5">
         {/* Etapa "Sprint Workspace Polish 1.0" (Parte 1): "Hoje, DD/MM" saiu
             daqui — o gestor já sabe o dia atual, e essa data já aparece em
             outros contextos da plataforma (ex.: cabeçalho da Visão Geral).
@@ -438,7 +442,7 @@ export function SprintCardBody({
             sprint —, condicionada à própria existência do dado (nunca uma
             linha vazia quando não há `executionLabel`). */}
         {executionLabel && (
-          <p className={`mb-1.5 text-xs ${EXECUTION_LABEL_CLASSES[executionSeverity ?? "neutro"]}`}>
+          <p className={`mb-1 text-xs ${EXECUTION_LABEL_CLASSES[executionSeverity ?? "neutro"]}`}>
             Última execução: {executionLabel}
           </p>
         )}
@@ -465,12 +469,12 @@ export function SprintCardBody({
             duas colunas (`SprintTaskList`/`AccountReviewsSection`) pararam
             de desenhar sua própria divisória superior — era uma segunda
             borda logo abaixo desta, redundante. A separação entre as duas
-            no mobile empilhado agora é só espaço (`gap-y-3`), sem borda
-            extra — os próprios cabeçalhos "Tarefas"/"Otimizações" já
-            distinguem as seções. */}
-        <div className="mt-1.5 border-t border-border pt-1.5">
+            no mobile empilhado agora é só espaço (`gap-y-2`, reduzido de
+            `gap-y-3` na Etapa "Density 1.0"), sem borda extra — os próprios
+            cabeçalhos "Tarefas"/"Otimizações" já distinguem as seções. */}
+        <div className="mt-1 border-t border-border pt-1">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Execução da sprint</p>
-          <div className="mt-1.5 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+          <div className="mt-1 grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
             <SprintTaskList
               tasks={tasks}
               clientId={clientId}
@@ -497,12 +501,12 @@ export function SprintCardBody({
             inalterada: continua só um `<details>` nativo revelando os
             comentários, agora com o chevron padrão de accordion já usado no
             resto da plataforma. */}
-        <details className="group mt-1.5 border-t border-border pt-1.5 [&_summary::-webkit-details-marker]:hidden">
+        <details className="group mt-1 border-t border-border pt-1 [&_summary::-webkit-details-marker]:hidden">
           <summary className="mitza-pressable inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
             <span className="mitza-chevron text-xs text-muted-foreground group-open:rotate-90">▸</span>
             Ver detalhes da sprint {comments.length > 0 ? `(${comments.length} comentário${comments.length !== 1 ? "s" : ""})` : ""}
           </summary>
-          <div className="mt-2">
+          <div className="mt-1.5">
             <CommentThread
               comments={comments}
               commentableType="sprint"
@@ -513,7 +517,7 @@ export function SprintCardBody({
         </details>
 
         {openClientHref && (
-          <div className="mt-1.5 border-t border-border pt-1.5 text-xs">
+          <div className="mt-1 border-t border-border pt-1 text-xs">
             <Link
               href={openClientHref}
               className="mitza-pressable inline-block rounded text-muted-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
@@ -644,7 +648,7 @@ export function SprintCard({
           exatamente sob as mesmas colunas de cima. A página do cliente
           nunca passa `flat`, então mantém a linha corrida de sempre. */}
       {flat ? (
-        <summary className="flex cursor-pointer list-none items-start gap-2 px-2 py-1.5">
+        <summary className="flex cursor-pointer list-none items-start gap-2 px-2 py-1">
           <span className="mitza-chevron mt-0.5 shrink-0 text-xs text-muted-foreground group-open:rotate-90">
             ▸
           </span>
@@ -718,7 +722,7 @@ export function SprintCard({
           </div>
         </summary>
       ) : (
-        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5">
           <span className="mitza-chevron shrink-0 text-xs text-muted-foreground group-open:rotate-90">
             ▸
           </span>

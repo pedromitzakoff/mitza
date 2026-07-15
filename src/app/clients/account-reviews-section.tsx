@@ -80,7 +80,7 @@ export function AccountReviewsSection({
       </SectionHeader>
 
       {reviews.length > 0 ? (
-        <ul className="mt-2 rounded-lg border border-border [&>li:first-child]:rounded-t-lg [&>li:last-child]:rounded-b-lg">
+        <ul className="mt-1.5 rounded-lg border border-border [&>li:first-child]:rounded-t-lg [&>li:last-child]:rounded-b-lg">
           {reviews.map((review) => (
             <li
               key={review.id}
@@ -118,7 +118,7 @@ export function AccountReviewsSection({
           ))}
         </ul>
       ) : (
-        <EmptyStateRow className="mt-2">Nenhuma otimização registrada nesta sprint.</EmptyStateRow>
+        <EmptyStateRow className="mt-1.5">Nenhuma otimização registrada nesta sprint.</EmptyStateRow>
       )}
     </div>
   );
