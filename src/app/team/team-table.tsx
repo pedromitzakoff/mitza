@@ -110,7 +110,7 @@ export function TeamTable({ rows, isAdmin }: { rows: TeamTableRow[]; isAdmin: bo
                     <div className="mitza-menu-in absolute right-0 z-10 mt-1 flex w-44 flex-col gap-0.5 rounded-md border border-border bg-card p-1 shadow-lg">
                       {member.invitation_status === "convite_pendente" && (
                         <ToastActionButton
-                          action={() => resendInviteAction(member.id)}
+                          action={resendInviteAction.bind(null, member.id)}
                           pendingLabel="Reenviando..."
                           className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
                         >

@@ -198,7 +198,7 @@ export function EditTeamMemberDrawer({
         <div className="mt-3 flex flex-wrap gap-2">
           {member.invitation_status === "sem_acesso" && (
             <ToastActionButton
-              action={() => inviteTeamMemberAction(member.id)}
+              action={inviteTeamMemberAction.bind(null, member.id)}
               pendingLabel="Convidando..."
               className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
             >
@@ -207,7 +207,7 @@ export function EditTeamMemberDrawer({
           )}
           {member.invitation_status === "convite_pendente" && (
             <ToastActionButton
-              action={() => resendInviteAction(member.id)}
+              action={resendInviteAction.bind(null, member.id)}
               pendingLabel="Reenviando..."
               className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
             >
@@ -216,7 +216,7 @@ export function EditTeamMemberDrawer({
           )}
           {member.invitation_status === "acesso_ativo" && (
             <ToastActionButton
-              action={() => revokeAccessAction(member.id)}
+              action={revokeAccessAction.bind(null, member.id)}
               pendingLabel="Revogando..."
               className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
             >
