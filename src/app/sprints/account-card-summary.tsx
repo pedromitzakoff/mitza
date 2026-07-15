@@ -118,7 +118,7 @@ export function AccountCardSummary({
           <Link href={`/clients/${clientId}`} className="text-sm font-semibold text-foreground hover:underline">
             {clientName}
           </Link>
-          {managerName && <span className="text-muted-foreground">{managerName}</span>}
+          {managerName && <span className="text-muted-foreground">· {managerName}</span>}
           <span className="text-muted-foreground">{periodLabel}</span>
           {investedPct !== null ? (
             <>
@@ -157,13 +157,23 @@ export function AccountCardSummary({
         <div className={`px-0 ${ROW_GRID_CLASSES}`}>
           <span aria-hidden="true" />
           <div className="min-w-0">
-            <Link
-              href={`/clients/${clientId}`}
-              className="block truncate text-sm font-semibold text-foreground hover:underline"
+            {/* Etapa "Sprint Workspace MVP Finalization 2.0" (Parte 1):
+                cliente e gestor na mesma linha — antes eram 2 linhas
+                empilhadas (nome + gestor embaixo), agora "Cliente · Gestor"
+                truncando junto como uma frase só (nunca dois truncamentos
+                independentes brigando por espaço). O peso visual
+                permanece diferente (nome em negrito, gestor discreto) só
+                que lado a lado. `title` cobre o texto completo quando
+                truncar. */}
+            <p
+              className="truncate text-sm"
+              title={managerName ? `${clientName} · ${managerName}` : clientName}
             >
-              {clientName}
-            </Link>
-            {managerName && <p className="truncate text-[11px] text-muted-foreground">{managerName}</p>}
+              <Link href={`/clients/${clientId}`} className="font-semibold text-foreground hover:underline">
+                {clientName}
+              </Link>
+              {managerName && <span className="text-[11px] font-normal text-muted-foreground"> · {managerName}</span>}
+            </p>
           </div>
 
           <span className="truncate text-xs text-muted-foreground">{periodLabel}</span>

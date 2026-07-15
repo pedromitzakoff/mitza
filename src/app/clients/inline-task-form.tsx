@@ -1,6 +1,7 @@
 import { TASK_TYPE_LABEL } from "@/app/clients/task-labels";
 import { createTaskAction, updateTaskAction } from "@/app/clients/tasks-actions";
 import { SubmitButton } from "@/app/submit-button";
+import { SECONDARY_ACTION_BUTTON_CLASSES } from "@/components/ui/section-header";
 import type { TaskType } from "@/lib/supabase/database.types";
 
 export interface InlineTaskManagerOption {
@@ -95,10 +96,7 @@ export function InlineCreateTaskForm({
   return (
     <>
       <input type="checkbox" id={toggleId} className="peer hidden" />
-      <label
-        htmlFor={toggleId}
-        className="cursor-pointer text-xs text-muted-foreground hover:underline peer-checked:hidden"
-      >
+      <label htmlFor={toggleId} className={`${SECONDARY_ACTION_BUTTON_CLASSES} peer-checked:hidden`}>
         + Tarefa
       </label>
 

@@ -4,6 +4,8 @@ import { describeSpendSourceTimestamp } from "@/lib/sprint-financials";
 import { formatCurrency, formatShortDateTime } from "@/lib/format";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { effectiveTaskStatus } from "@/lib/task-status";
+import { todayDateString } from "@/lib/today";
+import { computeNextAction } from "@/lib/next-action";
 import { CommentThread, type CommentItem } from "./comment-thread";
 import { SprintTaskList } from "./sprint-task-list";
 import type { TaskListItem } from "./task-row";
@@ -154,6 +156,7 @@ function SprintPerformanceSection({
   sourceTimestampText,
   isManualSource,
   revertSourceToggleId,
+  editToggleId,
   returnTo,
 }: {
   sprint: SprintFinancials;
@@ -163,6 +166,14 @@ function SprintPerformanceSection({
   sourceTimestampText: string | null;
   isManualSource: boolean;
   revertSourceToggleId: string;
+  /** Etapa "Sprint Workspace MVP Finalization 2.0" (Parte 10): subiu pra
+   * `SprintCardBody` (mesmo padrão de `revertSourceToggleId`, computado ali
+   * e passado como prop) porque a linha "Próxima ação" precisa referenciar
+   * este MESMO id a partir de um `<label htmlFor>` fora desta seção — um
+   * `<label>` aciona o checkbox por id independente de posição no DOM,
+   * então não precisa ser irmão dele (diferente do `peer-checked:` usado
+   * aqui dentro, que sim exige irmandade direta). */
+  editToggleId: string;
   returnTo: string;
 }) {
   const view = performance?.view ?? { kind: "not_configured" as const };
@@ -175,7 +186,6 @@ function SprintPerformanceSection({
   // rótulo genérico só quando não há objetivo pra saber qual dos dois é.
   const costLabel = performanceGoal ? PERFORMANCE_GOALS[performanceGoal].costMetricShortLabel : "Custo por resultado";
   const canEditResults = isAdmin && (view.kind === "has_data" || view.kind === "no_data") && editableChannels.length > 0;
-  const editToggleId = `edit-performance-${sprint.sprintId}`;
   const investmentSourceText = sourceTimestampText ?? (isManualSource ? "Manual" : "Meta");
   const performanceSourceText =
     view.kind === "has_data" ? getLatestPerformanceUpdateText(view.summary.latestSource, view.summary.latestUpdatedAt, formatShortDateTime) : null;
@@ -430,7 +440,27 @@ export function SprintCardBody({
     formatShortDateTime,
   );
   const revertSourceToggleId = `revert-source-${sprint.sprintId}`;
+  const editToggleId = `edit-performance-${sprint.sprintId}`;
   const isManualSource = sprint.spendSource === "manual";
+
+  // Etapa "Sprint Workspace MVP Finalization 2.0" (Parte 10): "Próxima
+  // ação" só na sprint atual — é o ponto onde o gestor de fato começa o dia
+  // (fluxo "cliente → contexto atual → próxima ação → execução" do pedido).
+  // Sprints futuras/concluídas não entram: mostrar a mesma recomendação em
+  // toda sprint visível na tela (ex.: "Mensal por Sprints" lista várias)
+  // duplicaria a mesma ação repetida em cada uma, o que a Parte 2 e a regra
+  // "não duplicar uma ação já evidente" da própria Parte 10 proíbem.
+  const isCurrent = sprint.temporalStatus === "atual";
+  const nextAction = isCurrent
+    ? computeNextAction({
+        tasks,
+        today: todayDateString(),
+        performanceViewKind: performance?.view.kind ?? null,
+        performanceGoal: performance?.performanceGoal ?? null,
+        optimizationCount: accountReviews ? accountReviews.length : null,
+        canConfigureObjective: isAdmin,
+      })
+    : null;
 
   return (
     <div className="border-t border-border p-1.5">
@@ -444,6 +474,48 @@ export function SprintCardBody({
         {executionLabel && (
           <p className={`mb-1 text-xs ${EXECUTION_LABEL_CLASSES[executionSeverity ?? "neutro"]}`}>
             Última execução: {executionLabel}
+          </p>
+        )}
+
+        {/* Etapa "Sprint Workspace MVP Finalization 2.0" (Parte 10): "Próxima
+            ação" — uma única recomendação executável, nunca um alerta (sem
+            vermelho, sem "crítico"/"atenção", nunca uma lista). Cada destino
+            reaproveita uma ação JÁ existente na própria Sprint: tarefa leva
+            direto à tarefa, "Atualizar performance" abre o MESMO formulário
+            de sempre (via o mesmo `editToggleId` que o botão da toolbar usa),
+            "Configurar objetivo" reaproveita o próprio `ClientPerformanceGoalEditor`
+            (2ª instância montada, mesmo componente/Server Action — nunca uma
+            segunda implementação), e "Registrar otimização" reaproveita
+            `newReviewHref`. Nenhum dado novo, nenhuma tarefa criada
+            automaticamente. */}
+        {nextAction && (
+          <p className="mb-1 text-xs">
+            <span className="font-medium text-muted-foreground">Próxima ação: </span>
+            {nextAction.taskId ? (
+              <Link
+                href={buildTaskHref ? buildTaskHref(nextAction.taskId) : `/clients/${clientId}?task=${nextAction.taskId}`}
+                scroll={false}
+                className="font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              >
+                {nextAction.text}
+              </Link>
+            ) : nextAction.kind === "update_performance" && isAdmin ? (
+              <label htmlFor={editToggleId} className="cursor-pointer font-medium text-brand hover:underline">
+                {nextAction.text}
+              </label>
+            ) : nextAction.kind === "configure_objective" ? (
+              <ClientPerformanceGoalEditor clientId={clientId} currentGoal={performance?.performanceGoal ?? null} />
+            ) : nextAction.kind === "register_optimization" && newReviewHref ? (
+              <Link
+                href={newReviewHref}
+                scroll={false}
+                className="font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              >
+                {nextAction.text}
+              </Link>
+            ) : (
+              <span className="text-muted-foreground">{nextAction.text}</span>
+            )}
           </p>
         )}
 
@@ -461,20 +533,26 @@ export function SprintCardBody({
           isManualSource={isManualSource}
           returnTo={returnTo}
           revertSourceToggleId={revertSourceToggleId}
+          editToggleId={editToggleId}
         />
 
-        {/* Execução da sprint — tarefas recorrentes e otimizações (revisões
-            estratégicas da conta) lado a lado, mesmo nível hierárquico
-            (Etapa 74). Etapa "Sprint Workspace Polish 1.1" (Parte 4): as
-            duas colunas (`SprintTaskList`/`AccountReviewsSection`) pararam
-            de desenhar sua própria divisória superior — era uma segunda
-            borda logo abaixo desta, redundante. A separação entre as duas
-            no mobile empilhado agora é só espaço (`gap-y-2`, reduzido de
-            `gap-y-3` na Etapa "Density 1.0"), sem borda extra — os próprios
-            cabeçalhos "Tarefas"/"Otimizações" já distinguem as seções. */}
+        {/* Tarefas + Otimizações (revisões estratégicas da conta) lado a
+            lado, mesmo nível hierárquico (Etapa 74). Etapa "Sprint
+            Workspace Polish 1.1" (Parte 4): as duas colunas
+            (`SprintTaskList`/`AccountReviewsSection`) pararam de desenhar
+            sua própria divisória superior — era uma segunda borda logo
+            abaixo desta, redundante. A separação entre as duas no mobile
+            empilhado agora é só espaço (`gap-y-2`), sem borda extra — os
+            próprios cabeçalhos "Tarefas"/"Otimizações" já distinguem as
+            seções.
+            Etapa "Sprint Workspace MVP Finalization 2.0" (Parte 3): o
+            título "EXECUÇÃO DA SPRINT" saiu daqui — o contexto já está
+            claro (o usuário está dentro de uma Sprint expandida), repetir
+            isso como rótulo era ruído. A divisória (borda + margem)
+            continua, ela sozinha já separa visualmente esta área da
+            Performance acima. */}
         <div className="mt-1 border-t border-border pt-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Execução da sprint</p>
-          <div className="mt-1 grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
             <SprintTaskList
               tasks={tasks}
               clientId={clientId}
@@ -494,17 +572,22 @@ export function SprintCardBody({
           </div>
         </div>
 
-        {/* Etapa "Sprint Workspace Polish 1.1" (Parte 1): "Ver detalhes da
-            sprint" virou um botão secundário de verdade — mesma altura,
-            borda, hover e focus-visible de "Atualizar performance" — em vez
-            de um texto sublinhado que parecia um link solto. Ação
-            inalterada: continua só um `<details>` nativo revelando os
-            comentários, agora com o chevron padrão de accordion já usado no
-            resto da plataforma. */}
+        {/* Etapa "Sprint Workspace Polish 1.1" (Parte 1): botão secundário de
+            verdade — mesma altura, borda, hover e focus-visible de
+            "Atualizar performance" — em vez de um texto sublinhado que
+            parecia um link solto. Ação inalterada: continua só um
+            `<details>` nativo revelando os comentários, agora com o
+            chevron padrão de accordion já usado no resto da plataforma.
+            Etapa "Sprint Workspace MVP Finalization 2.0" (Parte 6):
+            "Ver detalhes da sprint" renomeado pra "Comentários" — auditado
+            e confirmado que esta ação nunca revelou nada além da lista de
+            comentários (`CommentThread`), então o nome genérico só
+            escondia o que de fato tinha ali. Contador reaproveita
+            `comments.length`, já calculado — nenhuma contagem nova. */}
         <details className="group mt-1 border-t border-border pt-1 [&_summary::-webkit-details-marker]:hidden">
           <summary className="mitza-pressable inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
             <span className="mitza-chevron text-xs text-muted-foreground group-open:rotate-90">▸</span>
-            Ver detalhes da sprint {comments.length > 0 ? `(${comments.length} comentário${comments.length !== 1 ? "s" : ""})` : ""}
+            Comentários{comments.length > 0 ? ` · ${comments.length}` : ""}
           </summary>
           <div className="mt-1.5">
             <CommentThread

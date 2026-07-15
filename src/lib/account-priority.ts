@@ -52,10 +52,10 @@ export interface OperationalSummary {
  * fechado = decisão, card aberto = investigação") — nunca a lista inteira de
  * alertas, sempre o problema de maior prioridade. Não inventa nenhum sinal
  * novo: só decide, em ordem, qual dado já existente aparece primeiro —
- * tarefas atrasadas do período > inatividade (`activityStatus`) > otimização
- * atrasada (alerta já existente, `kind: "otimizacao"`) > "Em dia". A situação
- * financeira (acima/abaixo do ritmo) tem seu próprio espaço no card fechado
- * — por isso não entra aqui de novo.
+ * tarefas atrasadas do período > inatividade (`activityStatus`, só no
+ * período "month") > "Em dia". A situação financeira (acima/abaixo do
+ * ritmo) tem seu próprio espaço no card fechado — por isso não entra aqui
+ * de novo.
  *
  * Etapa "Simplificação da Área Operacional da Sprint" (Parte 2): removido o
  * tier "Sem execução" (period="sprint", `sprintFilterBucket === "sem_execucao"`)
@@ -63,9 +63,33 @@ export interface OperationalSummary {
  * própria Sprint já mostra em detalhe ao abrir ("Hoje, DD/MM · Última
  * execução: Há N dias úteis", em `SprintCardBody`). Das duas, a mensagem da
  * Sprint transmite melhor o estado (diz HÁ QUANTO TEMPO, não só "não teve"),
- * então ela é a que sobrevive como fonte única — este resumo cai pro próximo
- * sinal da cadeia (inatividade/otimização/"Em dia") quando não há tarefa
- * atrasada. Nenhum cálculo de `sprintExecutionInfo` foi alterado.
+ * então ela é a que sobrevive como fonte única.
+ *
+ * Etapa "Sprint Workspace MVP Finalization 2.0" (Partes 2/11) — duas
+ * duplicidades a mais removidas daqui:
+ *
+ * 1. "Sem otimização recente" saiu de vez. O alerta de origem
+ *    (`kind: "otimizacao"`) é `!optimizationRecentlyDone`, calculado sobre
+ *    `client.lastReviewAt` — na prática, sempre que ele dispara, a contagem
+ *    de otimizações do período em foco (`optimizationCount`, já exibida
+ *    como coluna própria no card fechado) também é zero: não existe caso em
+ *    que o período tenha uma otimização registrada e ainda assim aterrisse
+ *    aqui. Mostrar os dois ao mesmo tempo ("0 otimizações" na coluna +
+ *    "Sem otimização recente" nesta linha) é literalmente repetir o mesmo
+ *    fato duas vezes — a coluna já basta.
+ * 2. "Sem atividade recente"/"Atenção por inatividade" (`activityStatus`)
+ *    agora só aparece no período "month" (Mensal). Na visão "sprint"
+ *    (Sprint Atual), o corpo aberto sempre mostra "Última execução: há N
+ *    dias úteis" pra sprint atual — com mais detalhe (a duração exata) do
+ *    que o rótulo genérico daria aqui, e as duas linhas ficam visíveis ao
+ *    mesmo tempo (o `<summary>` fechado nunca some quando o `<details>`
+ *    abre). No período "month" não existe essa segunda linha (Mensal
+ *    Consolidado nem chega a montar `SprintCardBody`), então o sinal de
+ *    inatividade continua sendo a única fonte ali.
+ *
+ * Nenhum cálculo de `activityStatus`/`sprintExecutionInfo`/alertas foi
+ * alterado — só a decisão de QUAL texto aparece neste resumo, conforme o
+ * período em foco.
  */
 export function operationalSummary(
   card: OperationClientCard,
@@ -78,15 +102,13 @@ export function operationalSummary(
     return { text: `${overdue} tarefa${plural} atrasada${plural}`, tone: "critical" };
   }
 
-  if (card.activityStatus === "inativo") {
-    return { text: "Sem atividade recente", tone: "critical" };
-  }
-  if (card.activityStatus === "atencao") {
-    return { text: "Atenção por inatividade", tone: "warning" };
-  }
-
-  if (card.alerts.some((a) => a.kind === "otimizacao")) {
-    return { text: "Sem otimização recente", tone: "warning" };
+  if (period === "month") {
+    if (card.activityStatus === "inativo") {
+      return { text: "Sem atividade recente", tone: "critical" };
+    }
+    if (card.activityStatus === "atencao") {
+      return { text: "Atenção por inatividade", tone: "warning" };
+    }
   }
 
   return { text: "Em dia", tone: "neutral" };

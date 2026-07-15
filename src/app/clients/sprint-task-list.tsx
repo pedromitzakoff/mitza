@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { EmptyStateRow } from "@/components/ui/empty-state";
-import { SectionHeader } from "@/components/ui/section-header";
+import { SectionHeader, SECONDARY_ACTION_BUTTON_CLASSES } from "@/components/ui/section-header";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
 import { orderTasks } from "./task-list";
@@ -68,10 +68,7 @@ export function SprintTaskList({
                 defaultDueDate={todayDateString()}
               />
             ) : (
-              <Link
-                href={`/clients/${clientId}/tasks/new?sprintId=${sprintId}`}
-                className="mitza-pressable rounded text-xs font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-              >
+              <Link href={`/clients/${clientId}/tasks/new?sprintId=${sprintId}`} className={SECONDARY_ACTION_BUTTON_CLASSES}>
                 + Tarefa
               </Link>
             )}

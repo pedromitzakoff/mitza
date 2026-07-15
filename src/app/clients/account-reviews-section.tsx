@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { EmptyStateRow } from "@/components/ui/empty-state";
-import { SectionHeader } from "@/components/ui/section-header";
+import { SectionHeader, SECONDARY_ACTION_BUTTON_CLASSES } from "@/components/ui/section-header";
 import { formatDateTime } from "@/lib/format";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL } from "@/lib/account-reviews";
 import { CLIENT_UPDATE_STATUS_LABEL, type ClientUpdateStatus } from "@/lib/client-updates";
@@ -50,6 +50,12 @@ function reviewSubtitle(review: AccountReviewSummaryItem): string {
  * numa linha só. "+ Registrar otimização" subiu pro cabeçalho (Parte 5 —
  * mesmo lugar que "+ Tarefa" ocupa em `SprintTaskList`), pra não duplicar
  * essa ação também dentro do estado vazio.
+ *
+ * Etapa "Sprint Workspace MVP Finalization 2.0" (Partes 4/5): "+ Registrar
+ * otimização" virou o mesmo botão secundário compacto de "+ Tarefa"
+ * (`SECONDARY_ACTION_BUTTON_CLASSES`, `section-header.tsx`) — as duas ações
+ * são da mesma camada operacional e agora têm exatamente a mesma altura,
+ * borda, hover, pressed e foco; a única diferença é o texto e o destino.
  */
 export function AccountReviewsSection({
   reviews,
@@ -66,11 +72,7 @@ export function AccountReviewsSection({
         action={
           <span className="flex shrink-0 flex-wrap items-center gap-2.5">
             {reviews.length > 0 && <span className="text-[11px] text-muted-foreground">{reviews.length} nesta sprint</span>}
-            <Link
-              href={newReviewHref}
-              scroll={false}
-              className="mitza-pressable rounded text-xs font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-            >
+            <Link href={newReviewHref} scroll={false} className={SECONDARY_ACTION_BUTTON_CLASSES}>
               + Registrar otimização
             </Link>
           </span>
