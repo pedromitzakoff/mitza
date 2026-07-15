@@ -67,7 +67,6 @@ export async function createGlobalTemplateAction(formData: FormData) {
   await replaceTemplateClients(supabase, data.id, appliesToAll, clientIds);
 
   revalidatePath(BASE_PATH);
-  redirect(BASE_PATH);
 }
 
 export async function updateGlobalTemplateAction(templateId: string, formData: FormData) {
@@ -94,7 +93,6 @@ export async function updateGlobalTemplateAction(templateId: string, formData: F
   await replaceTemplateClients(supabase, templateId, appliesToAll, clientIds);
 
   revalidatePath(BASE_PATH);
-  redirect(BASE_PATH);
 }
 
 export async function toggleGlobalTemplateActiveAction(templateId: string, isActive: boolean) {
@@ -104,7 +102,6 @@ export async function toggleGlobalTemplateActiveAction(templateId: string, isAct
   await supabase.from("sprint_task_templates").update({ is_active: isActive }).eq("id", templateId);
 
   revalidatePath(BASE_PATH);
-  redirect(BASE_PATH);
 }
 
 export async function deleteGlobalTemplateAction(templateId: string) {
@@ -127,19 +124,25 @@ export async function deleteGlobalTemplateAction(templateId: string) {
   await supabase.from("sprint_task_templates").delete().eq("id", templateId);
 
   revalidatePath(BASE_PATH);
-  redirect(BASE_PATH);
 }
 
-export async function runBackfillAction() {
+/**
+ * Platform Continuity System 1.0: retorna o resultado em vez de redirecionar
+ * — "aplicado às sprints existentes" não deixa nenhum rastro visível na
+ * tela (nenhuma linha muda), então o botão que chama isto (client
+ * component) mostra um toast de confirmação em vez de um parâmetro
+ * `?backfilled=1` na URL.
+ */
+export async function runBackfillAction(): Promise<{ error?: string }> {
   await requireAdmin();
   const supabase = await createSupabaseClient();
 
   const { error } = await supabase.rpc("backfill_sprint_tasks_from_templates");
 
   if (error) {
-    redirect(`${BASE_PATH}?templateError=${encodeURIComponent(error.message)}`);
+    return { error: error.message };
   }
 
   revalidatePath(BASE_PATH);
-  redirect(`${BASE_PATH}?backfilled=1`);
+  return {};
 }

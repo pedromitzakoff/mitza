@@ -297,3 +297,30 @@ O objetivo da interface não é animar.
 Toda transição deve comunicar continuidade entre estados.
 
 Nunca apenas mover elementos.
+
+## Capítulo 19 — Navegação é exceção
+
+Redirecionar, recarregar e trocar de rota são o último recurso, não o
+primeiro.
+
+Um redirecionamento só é justificável quando o destino é genuinamente
+outra tela — nunca quando serve apenas para confirmar que uma ação deu
+certo no lugar onde ela já estava sendo feita.
+
+Antes de qualquer `redirect()`, a pergunta é: essa navegação é necessária
+para a integridade da aplicação, ou é apenas o caminho mais simples de
+implementar?
+
+## Capítulo 20 — Atualização local acima de navegação
+
+Antes de implementar qualquer ação que envolva navegação, a pergunta
+obrigatória é:
+
+> O usuário realmente precisa navegar?
+> O resultado pode ser refletido localmente?
+> Ele perde contexto se navegar?
+> Existe uma forma de confirmar a ação sem trocar de página?
+
+A atualização local deve ser sempre a primeira opção.
+
+A navegação deve ser sempre a última.

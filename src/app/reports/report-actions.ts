@@ -61,9 +61,11 @@ export async function updateReportFieldsAction(clientId: string, monthStart: str
   const returnTo = reportsUrl(clientId, monthStart);
   if (error) redirect(`${returnTo}&error=${encodeURIComponent(error.message)}`);
 
+  // Platform Continuity System 1.0: sem redirect no sucesso — quem chama já
+  // está na própria página de Relatórios, `revalidatePath` já atualiza os
+  // campos no lugar.
   revalidatePath(`/reports/${clientId}`);
   revalidatePath("/reports");
-  redirect(returnTo);
 }
 
 export async function updateKpiValueAction(
@@ -92,7 +94,6 @@ export async function updateKpiValueAction(
   if (error) redirect(`${returnTo}&error=${encodeURIComponent(error.message)}`);
 
   revalidatePath(`/reports/${clientId}`);
-  redirect(returnTo);
 }
 
 export async function addTimelineEventAction(clientId: string, monthStart: string, formData: FormData) {
@@ -123,15 +124,13 @@ export async function addTimelineEventAction(clientId: string, monthStart: strin
   if (error) redirect(`${returnTo}&error=${encodeURIComponent(error.message)}`);
 
   revalidatePath(`/reports/${clientId}`);
-  redirect(returnTo);
 }
 
-export async function deleteTimelineEventAction(eventId: string, clientId: string, monthStart: string) {
+export async function deleteTimelineEventAction(eventId: string, clientId: string) {
   const supabase = await createSupabaseClient();
   await supabase.from("report_timeline_events").delete().eq("id", eventId);
 
   revalidatePath(`/reports/${clientId}`);
-  redirect(reportsUrl(clientId, monthStart));
 }
 
 export async function addActionItemAction(clientId: string, monthStart: string, formData: FormData) {
@@ -161,7 +160,6 @@ export async function addActionItemAction(clientId: string, monthStart: string, 
   if (error) redirect(`${returnTo}&error=${encodeURIComponent(error.message)}`);
 
   revalidatePath(`/reports/${clientId}`);
-  redirect(returnTo);
 }
 
 export async function updateActionItemStatusAction(
@@ -176,7 +174,6 @@ export async function updateActionItemStatusAction(
   await supabase.from("report_action_items").update({ status }).eq("id", actionItemId);
 
   revalidatePath(`/reports/${clientId}`);
-  redirect(reportsUrl(clientId, monthStart));
 }
 
 /** "Enviar para próxima sprint" — cria uma tarefa de verdade na primeira
@@ -194,7 +191,7 @@ export async function sendActionItemToSprintAction(actionItemId: string, clientI
     .single();
 
   if (!item) redirect(`${returnTo}&error=${encodeURIComponent("Ação não encontrada")}`);
-  if (item.sent_to_task_id) redirect(returnTo);
+  if (item.sent_to_task_id) return;
 
   const nextMonthDate = new Date(`${monthStart}T00:00:00Z`);
   nextMonthDate.setUTCMonth(nextMonthDate.getUTCMonth() + 1);
@@ -244,7 +241,6 @@ export async function sendActionItemToSprintAction(actionItemId: string, clientI
 
   revalidatePath(`/reports/${clientId}`);
   revalidatePath("/sprints");
-  redirect(returnTo);
 }
 
 /** "Adicionar ao relatório mensal" — marca (ou desmarca) um comentário de
@@ -311,7 +307,7 @@ export async function updateReportStatusAction(clientId: string, monthStart: str
 
   // "Finalizado" só entra por finalizeReportAction (precisa do snapshot e é
   // restrito a admin) — esta rota nunca grava esse status.
-  if (status === "finalizado") redirect(reportsUrl(clientId, monthStart));
+  if (status === "finalizado") return;
 
   await supabase.from("monthly_reports").update({ status, updated_at: new Date().toISOString() }).eq("id", reportId);
 
@@ -331,7 +327,6 @@ export async function updateReportStatusAction(clientId: string, monthStart: str
 
   revalidatePath(`/reports/${clientId}`);
   revalidatePath("/reports");
-  redirect(reportsUrl(clientId, monthStart));
 }
 
 /** Finaliza o relatório (só admin, seção 12) — congela um snapshot com tudo
@@ -381,7 +376,6 @@ export async function finalizeReportAction(clientId: string, monthStart: string)
 
   revalidatePath(`/reports/${clientId}`);
   revalidatePath("/reports");
-  redirect(returnTo);
 }
 
 /** Reabre um relatório finalizado por engano (só admin) — volta pra "pronto
@@ -414,7 +408,6 @@ export async function reopenReportAction(clientId: string, monthStart: string) {
 
   revalidatePath(`/reports/${clientId}`);
   revalidatePath("/reports");
-  redirect(reportsUrl(clientId, monthStart));
 }
 
 // ---------------------------------------------------------------------------
@@ -451,9 +444,11 @@ export async function addClientKpiAction(clientId: string, formData: FormData) {
 
   if (error) redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
 
+  // Platform Continuity System 1.0: sem redirect — o formulário de KPIs já
+  // vive na própria página de edição do cliente; `revalidatePath` mostra o
+  // KPI novo na lista sem recarregar a página.
   revalidatePath(`/clients/${clientId}/edit`);
   revalidatePath(`/reports/${clientId}`);
-  redirect(returnTo);
 }
 
 export async function deleteClientKpiAction(kpiId: string, clientId: string) {
@@ -464,5 +459,4 @@ export async function deleteClientKpiAction(kpiId: string, clientId: string) {
 
   revalidatePath(`/clients/${clientId}/edit`);
   revalidatePath(`/reports/${clientId}`);
-  redirect(`/clients/${clientId}/edit`);
 }

@@ -135,7 +135,6 @@ export default async function ClientPage({
     taskError?: string;
     commentError?: string;
     task?: string;
-    budgetSaved?: string;
     historicoOrcamento?: string;
     review?: string;
     reviewDetail?: string;
@@ -157,7 +156,6 @@ export default async function ClientPage({
     taskError,
     commentError,
     task: openTaskId,
-    budgetSaved,
     historicoOrcamento,
     review: openReview,
     reviewDetail: openReviewDetailId,
@@ -558,7 +556,6 @@ export default async function ClientPage({
     clientUpdateError && { tone: "red", text: clientUpdateError },
     synced && { tone: "green", text: `${synced} dia(s) de spend sincronizado(s) com o Meta.` },
     saved && { tone: "green", text: "Dados do cliente atualizados." },
-    budgetSaved && { tone: "green", text: "Orçamento do mês atualizado." },
   ].filter((banner): banner is { tone: "red" | "green"; text: string } => Boolean(banner));
 
   const returnTo = `/clients/${client.id}${monthQuery}`;

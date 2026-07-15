@@ -11,6 +11,7 @@ import {
   buildOperationClientCard,
   type OperationClientRawData,
 } from "@/app/operation/operation-data";
+import { ClientsFilters } from "./clients-filters";
 
 /**
  * Listagem simples de clientes — nome, status contratual, tempo de
@@ -225,51 +226,7 @@ export default async function ClientsPage({
         )}
       </div>
 
-      <form method="get" className="mt-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-card p-2">
-        <input
-          name="search"
-          defaultValue={search}
-          placeholder="Buscar cliente..."
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none"
-        />
-
-        <select
-          name="manager"
-          defaultValue={managerFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-        >
-          <option value="all">Gestor: todos</option>
-          {(gestores ?? []).map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          name="status"
-          defaultValue={statusFilter}
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
-        >
-          <option value="todos">Status: todos</option>
-          <option value="ativo">Ativo</option>
-          <option value="pausado">Pausado</option>
-          <option value="encerrado">Encerrado</option>
-        </select>
-
-        <button
-          type="submit"
-          className="rounded-md bg-brand px-3 py-1 text-sm font-medium text-white hover:bg-brand-hover"
-        >
-          Filtrar
-        </button>
-
-        {(search || managerFilter !== "all" || statusFilter !== "todos") && (
-          <Link href="/clients" className="text-xs text-brand hover:underline">
-            Limpar filtros
-          </Link>
-        )}
-      </form>
+      <ClientsFilters search={search} managerFilter={managerFilter} statusFilter={statusFilter} gestores={gestores ?? []} />
 
       <p className="mt-3 text-xs text-muted-foreground">
         {cards.length} cliente{cards.length !== 1 ? "s" : ""}

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { getCurrentProfile } from "@/lib/auth";
 import { AppShell } from "./app-shell";
+import { ToastProvider } from "./toast-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,7 +33,7 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        {profile ? <AppShell profile={profile}>{children}</AppShell> : children}
+        <ToastProvider>{profile ? <AppShell profile={profile}>{children}</AppShell> : children}</ToastProvider>
       </body>
     </html>
   );

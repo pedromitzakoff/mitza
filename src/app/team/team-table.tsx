@@ -10,6 +10,7 @@ import type { TeamInvitationStatus, TeamMemberStatus, TeamSystemRole } from "@/l
 import { deactivateTeamMemberAction, deleteTeamMemberAction, reactivateTeamMemberAction, resendInviteAction } from "./actions";
 import { DeleteTeamMemberButton } from "./delete-team-member-button";
 import { SubmitButton } from "@/app/submit-button";
+import { ToastActionButton } from "@/app/toast-action-button";
 
 export interface TeamTableRow {
   id: string;
@@ -108,14 +109,13 @@ export function TeamTable({ rows, isAdmin }: { rows: TeamTableRow[]; isAdmin: bo
                     </summary>
                     <div className="mitza-menu-in absolute right-0 z-10 mt-1 flex w-44 flex-col gap-0.5 rounded-md border border-border bg-card p-1 shadow-lg">
                       {member.invitation_status === "convite_pendente" && (
-                        <form action={resendInviteAction.bind(null, member.id, undefined)}>
-                          <SubmitButton
-                            pendingChildren="Reenviando..."
-                            className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                          >
-                            Reenviar convite
-                          </SubmitButton>
-                        </form>
+                        <ToastActionButton
+                          action={() => resendInviteAction(member.id)}
+                          pendingLabel="Reenviando..."
+                          className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                        >
+                          Reenviar convite
+                        </ToastActionButton>
                       )}
                       {member.status === "ativo" ? (
                         <form action={deactivateTeamMemberAction.bind(null, member.id, undefined)}>

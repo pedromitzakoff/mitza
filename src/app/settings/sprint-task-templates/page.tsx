@@ -1,16 +1,15 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { SprintTaskTemplatesList, type GlobalTemplateItem } from "../sprint-task-templates-list";
-import { runBackfillAction } from "../sprint-task-templates-actions";
-import { SubmitButton } from "@/app/submit-button";
+import { BackfillButton } from "./backfill-button";
 
 export default async function SprintTaskTemplatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ templateError?: string; backfilled?: string }>;
+  searchParams: Promise<{ templateError?: string }>;
 }) {
   await requireAdmin();
-  const { templateError, backfilled } = await searchParams;
+  const { templateError } = await searchParams;
 
   const supabase = await createSupabaseClient();
 
@@ -47,14 +46,7 @@ export default async function SprintTaskTemplatesPage({
         <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
           Tarefas padrão de sprint
         </h1>
-        <form action={runBackfillAction}>
-          <SubmitButton
-            pendingChildren="Aplicando..."
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
-          >
-            Aplicar às sprints já existentes
-          </SubmitButton>
-        </form>
+        <BackfillButton />
       </div>
 
       <p className="mt-2 text-sm text-zinc-500">
@@ -66,12 +58,6 @@ export default async function SprintTaskTemplatesPage({
       {templateError && (
         <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           {templateError}
-        </p>
-      )}
-
-      {backfilled && (
-        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">
-          Geração aplicada às sprints existentes.
         </p>
       )}
 

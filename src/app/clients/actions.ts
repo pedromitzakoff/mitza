@@ -271,9 +271,11 @@ export async function restoreClientAction(clientId: string) {
 
   await supabase.from("clients").update({ deleted_at: null }).eq("id", clientId);
 
+  // Platform Continuity System 1.0: sem redirect — `restoreClientAction` já
+  // é chamada da própria lista de excluídos; `revalidatePath` sozinho tira
+  // o cliente restaurado da lista sem recarregar a página.
   revalidatePath("/");
   revalidatePath("/clients");
   revalidatePath("/settings/clients");
   revalidatePath("/settings/deleted-clients");
-  redirect("/settings/deleted-clients");
 }

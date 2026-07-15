@@ -382,3 +382,25 @@ O gestor nunca deve duvidar se sua ação foi recebida.
 Toda interação deve produzir uma resposta perceptível.
 
 Mesmo quando o processamento ainda estiver acontecendo.
+
+## Capítulo 20 — O contexto é sagrado
+
+Salvar nunca deve significar navegar.
+
+Salvar deve significar continuar trabalhando.
+
+Scroll, foco, filtros aplicados, drawer aberto, sprint expandida, cliente
+selecionado: nada disso pode ser perdido só porque uma ação foi executada
+com sucesso.
+
+Se uma implementação exige escolher entre "mais simples de fazer" e
+"preserva o contexto do gestor", a plataforma escolhe preservar o
+contexto.
+
+## Capítulo 21 — O gestor nunca deve duvidar que sua ação foi executada
+
+Toda ação relevante deve produzir uma confirmação perceptível.
+
+Essa confirmação deve acontecer sem interromper o fluxo de trabalho.
+
+Sem bloquear a interface. Sem alterar o contexto.

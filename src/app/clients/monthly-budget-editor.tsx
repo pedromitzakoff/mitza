@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { formatCurrency } from "@/lib/format";
 import { formatMoneyDisplay, parseMoneyInput } from "@/lib/money-format";
 import { computeMonthlyBudgetPlan, type MonthlyBudgetPlanSprintInput } from "@/lib/monthly-budget";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { applyMonthlyBudgetChangeAction } from "./monthly-budget-actions";
+import { useToast } from "@/app/toast-provider";
 
 type BudgetScenario = "aumento" | "reducao_normal" | "reducao_abaixo_realizado";
 
@@ -57,6 +58,9 @@ export function MonthlyBudgetEditor({
   const [confirmStep, setConfirmStep] = useState(false);
   const [display, setDisplay] = useState(() => formatMoneyDisplay(currentMonthlyBudget));
   const [reason, setReason] = useState("");
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [isApplying, startApplyTransition] = useTransition();
+  const { showToast } = useToast();
   const newBudget = parseMoneyInput(display) ?? 0;
 
   const currentPlan = useMemo(
@@ -88,7 +92,21 @@ export function MonthlyBudgetEditor({
     setConfirmStep(false);
     setDisplay(formatMoneyDisplay(currentMonthlyBudget));
     setReason("");
+    setApplyError(null);
   };
+
+  function handleApply() {
+    setApplyError(null);
+    startApplyTransition(async () => {
+      const result = await applyMonthlyBudgetChangeAction(clientId, monthParam, newBudget, reason.trim() || null);
+      if (result.error) {
+        setApplyError(result.error);
+        return;
+      }
+      showToast("Orçamento do mês atualizado.");
+      close();
+    });
+  }
 
   return (
     <>
@@ -200,9 +218,7 @@ export function MonthlyBudgetEditor({
               </p>
             </div>
 
-            <form action={applyMonthlyBudgetChangeAction.bind(null, clientId, monthParam)} className="flex flex-col gap-3">
-              <input type="hidden" name="new_budget" value={newBudget} />
-
+            <div className="flex flex-col gap-3">
               <div>
                 <label htmlFor="budget-reason" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Motivo da alteração (opcional)
@@ -218,22 +234,31 @@ export function MonthlyBudgetEditor({
                 />
               </div>
 
+              {applyError && (
+                <p className="rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-700 dark:bg-red-950 dark:text-red-300">
+                  {applyError}
+                </p>
+              )}
+
               <div className="flex items-center gap-2">
                 <button
-                  type="submit"
-                  className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+                  type="button"
+                  onClick={handleApply}
+                  disabled={isApplying}
+                  className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Confirmar alteração
+                  {isApplying ? "Confirmando..." : "Confirmar alteração"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmStep(false)}
+                  disabled={isApplying}
                   className="text-sm text-muted-foreground hover:underline"
                 >
                   Voltar
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         )}
       </div>

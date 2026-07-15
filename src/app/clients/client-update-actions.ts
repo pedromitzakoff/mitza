@@ -43,7 +43,11 @@ export async function generateClientUpdateAction(reviewId: string, closeHref: st
     .maybeSingle();
 
   if (existing) {
-    redirect(closeHref);
+    // Platform Continuity System 1.0: sem redirect — o drawer que chamou
+    // esta action já troca sozinho pro editor de texto assim que
+    // `review.clientUpdate` deixa de ser nulo (revalidatePath abaixo cuida
+    // disso), sem precisar fechar e reabrir.
+    return;
   }
 
   const { data: review, error: reviewError } = await supabase
@@ -96,8 +100,10 @@ export async function generateClientUpdateAction(reviewId: string, closeHref: st
     metadata: { account_review_id: reviewId, generation_method: "template" },
   });
 
+  // Platform Continuity System 1.0: sem redirect — o drawer permanece
+  // aberto e passa a mostrar o texto recém-gerado (ClientUpdateEditor) no
+  // lugar do botão "Gerar atualização", assim que os dados revalidarem.
   revalidatePath(`/clients/${review.client_id}`);
-  redirect(closeHref);
 }
 
 /**

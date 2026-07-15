@@ -421,7 +421,7 @@ export default async function ClientReportPage({
                     <p className="mt-1 text-foreground">{event.description}</p>
                   </div>
                   {!isReadOnly && (
-                    <form action={deleteTimelineEventAction.bind(null, event.id, clientId, data.monthStart)}>
+                    <form action={deleteTimelineEventAction.bind(null, event.id, clientId)}>
                       <SubmitButton className="shrink-0 text-xs text-muted-foreground hover:text-red-600 dark:hover:text-red-400" pendingChildren="Removendo...">
                         Remover
                       </SubmitButton>

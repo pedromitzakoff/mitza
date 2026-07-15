@@ -24,9 +24,12 @@ export async function resetSprintSpendSourceAction(sprintId: string, clientId: s
     redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(error.message)}`);
   }
 
+  // Platform Continuity System 1.0: sem redirect no sucesso — `returnTo`
+  // já era a própria página, então o redirect só existia pra "voltar" pra
+  // onde o gestor já estava, fechando o formulário e perdendo scroll/
+  // contexto à toa. `revalidatePath` sozinho já atualiza os dados no lugar.
   revalidatePath("/");
   revalidatePath("/clients");
   revalidatePath("/sprints");
   revalidatePath(`/clients/${clientId}`);
-  redirect(returnTo);
 }

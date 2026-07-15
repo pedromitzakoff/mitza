@@ -1,7 +1,6 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { restoreClientAction } from "@/app/clients/actions";
-import { SubmitButton } from "@/app/submit-button";
+import { RestoreClientButton } from "./restore-client-button";
 
 export default async function DeletedClientsPage() {
   await requireAdmin();
@@ -37,14 +36,7 @@ export default async function DeletedClientsPage() {
                   {new Date(client.deleted_at!).toLocaleDateString("pt-BR")}
                 </p>
               </div>
-              <form action={restoreClientAction.bind(null, client.id)}>
-                <SubmitButton
-                  pendingChildren="Restaurando..."
-                  className="shrink-0 rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
-                >
-                  Restaurar
-                </SubmitButton>
-              </form>
+              <RestoreClientButton clientId={client.id} clientName={client.name} />
             </li>
           ))
         ) : (

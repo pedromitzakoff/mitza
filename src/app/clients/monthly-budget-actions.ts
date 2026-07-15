@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
@@ -14,32 +13,30 @@ import { resolveBudgetEffectiveDate, CLOSED_MONTH_MESSAGE } from "@/lib/monthly-
  * calculada e gravada aqui em vários passos separados. Só admin chama isto
  * (requireAdmin + RLS admin-only nas tabelas envolvidas garantem os dois
  * lados: aplicação e banco).
+ *
+ * Platform Continuity System 1.0: `MonthlyBudgetEditor` (único chamador) já
+ * é client component com estado próprio (`isOpen`/`newBudget`/`reason`) —
+ * chamada direta em vez de `<form action>` + `redirect`, pra poder fechar o
+ * editor e mostrar o toast de confirmação sem navegar.
  */
 export async function applyMonthlyBudgetChangeAction(
   clientId: string,
   monthParam: string,
-  formData: FormData,
-) {
+  newBudget: number,
+  reason: string | null,
+): Promise<{ error?: string }> {
   const profile = await requireAdmin();
 
-  const newBudget = Number(formData.get("new_budget"));
   if (!Number.isFinite(newBudget) || newBudget < 0) {
-    redirect(`/clients/${clientId}?error=${encodeURIComponent("Orçamento inválido")}`);
+    return { error: "Orçamento inválido" };
   }
-
-  // Motivo da alteração (Etapa MVP "Comentário no histórico de alteração de
-  // orçamento") — sempre opcional; string vazia/só espaço vira `null` no
-  // próprio banco (`nullif(trim(p_reason), '')`, apply_monthly_budget_change),
-  // nunca uma string vazia persistida como se fosse "motivo informado".
-  const reasonRaw = formData.get("reason");
-  const reason = typeof reasonRaw === "string" && reasonRaw.trim() !== "" ? reasonRaw.trim() : null;
 
   const monthRange = monthRangeFromParam(monthParam);
   const todayStr = todayDateString();
   const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate(monthRange, todayStr);
 
   if (isClosedMonth || !effectiveDate) {
-    redirect(`/clients/${clientId}?error=${encodeURIComponent(CLOSED_MONTH_MESSAGE)}`);
+    return { error: CLOSED_MONTH_MESSAGE };
   }
 
   const supabase = await createSupabaseClient();
@@ -55,7 +52,7 @@ export async function applyMonthlyBudgetChangeAction(
   });
 
   if (error) {
-    redirect(`/clients/${clientId}?error=${encodeURIComponent(error.message)}`);
+    return { error: error.message };
   }
 
   // O orçamento mensal alimenta a distribuição das sprints (planned_spend),
@@ -66,5 +63,5 @@ export async function applyMonthlyBudgetChangeAction(
   revalidatePath("/clients");
   revalidatePath("/sprints");
   revalidatePath(`/clients/${clientId}`);
-  redirect(`/clients/${clientId}?budgetSaved=1`);
+  return {};
 }

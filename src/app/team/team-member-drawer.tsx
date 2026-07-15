@@ -18,6 +18,7 @@ import {
 import { DeactivateMemberButton } from "./deactivate-member-button";
 import { OperationalActivityPanel } from "./operational-activity-panel";
 import { SubmitButton } from "@/app/submit-button";
+import { ToastActionButton } from "@/app/toast-action-button";
 import type { ActivityPeriodKey, TeamMemberActivitySummary, TeamMemberTimelineRow } from "@/lib/team-member-activity";
 
 const inputClasses =
@@ -196,34 +197,31 @@ export function EditTeamMemberDrawer({
 
         <div className="mt-3 flex flex-wrap gap-2">
           {member.invitation_status === "sem_acesso" && (
-            <form action={inviteTeamMemberAction.bind(null, member.id, member.id)}>
-              <SubmitButton
-                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                pendingChildren="Convidando..."
-              >
-                Convidar para o sistema
-              </SubmitButton>
-            </form>
+            <ToastActionButton
+              action={() => inviteTeamMemberAction(member.id)}
+              pendingLabel="Convidando..."
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Convidar para o sistema
+            </ToastActionButton>
           )}
           {member.invitation_status === "convite_pendente" && (
-            <form action={resendInviteAction.bind(null, member.id, member.id)}>
-              <SubmitButton
-                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                pendingChildren="Reenviando..."
-              >
-                Reenviar convite
-              </SubmitButton>
-            </form>
+            <ToastActionButton
+              action={() => resendInviteAction(member.id)}
+              pendingLabel="Reenviando..."
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Reenviar convite
+            </ToastActionButton>
           )}
           {member.invitation_status === "acesso_ativo" && (
-            <form action={revokeAccessAction.bind(null, member.id, member.id)}>
-              <SubmitButton
-                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
-                pendingChildren="Revogando..."
-              >
-                Revogar acesso
-              </SubmitButton>
-            </form>
+            <ToastActionButton
+              action={() => revokeAccessAction(member.id)}
+              pendingLabel="Revogando..."
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+            >
+              Revogar acesso
+            </ToastActionButton>
           )}
         </div>
       </section>

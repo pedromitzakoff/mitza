@@ -185,7 +185,7 @@ export default async function EditClientPage({
           comentários ficam preservados. Dá pra restaurar depois em Configurações &gt; Clientes
           excluídos.
         </p>
-        <DeleteClientButton action={deleteClientAction.bind(null, id)} clientName={client.name} />
+        <DeleteClientButton action={deleteClientAction.bind(null, id)} />
       </Section>
     </div>
   );

@@ -96,7 +96,8 @@ export async function createTeamMemberAction(formData: FormData) {
   revalidateTeam();
 
   if (grantAccessNow) {
-    await inviteTeamMemberCore(member.id);
+    const inviteResult = await inviteTeamMemberCore(member.id);
+    if (inviteResult.error) failure(inviteResult.error);
     return;
   }
 
@@ -130,8 +131,10 @@ export async function updateTeamMemberAction(memberId: string, formData: FormDat
     metadata: { name, job_title: jobTitle, system_role: systemRole },
   });
 
+  // Platform Continuity System 1.0: sem redirect — o drawer já estava
+  // aberto neste mesmo membro antes do submit; sem navegar, a URL nunca
+  // muda, então ele continua aberto sozinho, sem precisar de `editId`.
   revalidateTeam();
-  success("Membro atualizado.", memberId);
 }
 
 /**
@@ -163,7 +166,6 @@ export async function deactivateTeamMemberAction(memberId: string, editId?: stri
   });
 
   revalidateTeam();
-  success("Membro desativado. Clientes, tarefas e histórico foram preservados.", editId);
 }
 
 export async function reactivateTeamMemberAction(memberId: string, editId?: string) {
@@ -186,17 +188,21 @@ export async function reactivateTeamMemberAction(memberId: string, editId?: stri
   });
 
   revalidateTeam();
-  success("Membro reativado.", editId);
 }
 
 /**
  * Núcleo do convite — reaproveitado tanto por `inviteTeamMemberAction`
  * quanto por `createTeamMemberAction` quando "Conceder acesso agora?" está
- * marcado. Nunca lança: qualquer falha vira um redirect com mensagem curta,
- * o membro em si permanece criado (nunca é apagado por causa de uma falha
- * no envio do convite — seção 27 do pedido).
+ * marcado. O membro em si permanece criado mesmo que o convite falhe
+ * (nunca é apagado por causa de uma falha no envio — seção 27 do pedido).
+ *
+ * Platform Continuity System 1.0: "Convite enviado" não deixa nenhum
+ * rastro óbvio na tela (o badge de status muda, mas é fácil não notar) —
+ * por isso não usa mais `redirect()`/`?saved=`: devolve `{ error }` ou
+ * `{ message }` pro botão (client component) mostrar erro inline ou
+ * disparar o toast de confirmação.
  */
-async function inviteTeamMemberCore(memberId: string, editId?: string): Promise<never> {
+async function inviteTeamMemberCore(memberId: string): Promise<{ error?: string; message?: string }> {
   const profile = await requireAdmin();
   const supabase = await createSupabaseClient();
 
@@ -207,10 +213,10 @@ async function inviteTeamMemberCore(memberId: string, editId?: string): Promise<
     .eq("organization_id", profile.organizationId)
     .maybeSingle();
 
-  if (!member) failure("Membro não encontrado.", editId);
-  if (member.status !== "ativo") failure("Reative o membro antes de convidar.", editId);
-  if (!isValidEmail(member.email)) failure("Este membro não tem um e-mail válido cadastrado.", editId);
-  if (member.auth_user_id) failure("Este membro já tem acesso ao sistema.", editId);
+  if (!member) return { error: "Membro não encontrado." };
+  if (member.status !== "ativo") return { error: "Reative o membro antes de convidar." };
+  if (!isValidEmail(member.email)) return { error: "Este membro não tem um e-mail válido cadastrado." };
+  if (member.auth_user_id) return { error: "Este membro já tem acesso ao sistema." };
 
   const admin = createAdminClient();
 
@@ -224,12 +230,12 @@ async function inviteTeamMemberCore(memberId: string, editId?: string): Promise<
   if (!authUserId) {
     const message = invite.error?.message?.toLowerCase() ?? "";
     const isDuplicate = message.includes("already") || message.includes("registered") || message.includes("exists");
-    if (!isDuplicate) failure("Não foi possível enviar o convite.", editId);
+    if (!isDuplicate) return { error: "Não foi possível enviar o convite." };
 
     // E-mail já existe no Supabase Auth: localiza o usuário no servidor
     // (nunca no navegador) em vez de criar uma conta duplicada.
     const found = await findAuthUserByEmail(admin, member.email);
-    if (!found) failure("Não foi possível localizar o usuário existente para este e-mail.", editId);
+    if (!found) return { error: "Não foi possível localizar o usuário existente para este e-mail." };
     authUserId = found;
     alreadyExisted = true;
   }
@@ -244,7 +250,7 @@ async function inviteTeamMemberCore(memberId: string, editId?: string): Promise<
     .neq("id", member.id)
     .maybeSingle();
 
-  if (linkedElsewhere) failure("Este e-mail já está vinculado a outro membro da equipe.", editId);
+  if (linkedElsewhere) return { error: "Este e-mail já está vinculado a outro membro da equipe." };
 
   const { error: updateError } = await supabase
     .from("team_members")
@@ -256,7 +262,7 @@ async function inviteTeamMemberCore(memberId: string, editId?: string): Promise<
     })
     .eq("id", member.id);
 
-  if (updateError) failure("Convite enviado, mas houve um erro ao registrar o status. Tente novamente.", editId);
+  if (updateError) return { error: "Convite enviado, mas houve um erro ao registrar o status. Tente novamente." };
 
   const actor = actorFromProfile(profile);
   await recordOperationalEvent(supabase, actor, {
@@ -278,10 +284,9 @@ async function inviteTeamMemberCore(memberId: string, editId?: string): Promise<
   }
 
   revalidateTeam();
-  success(
-    alreadyExisted ? `${member.name} foi vinculado ao usuário existente.` : `Convite enviado para ${member.name}.`,
-    editId,
-  );
+  return {
+    message: alreadyExisted ? `${member.name} foi vinculado ao usuário existente.` : `Convite enviado para ${member.name}.`,
+  };
 }
 
 /** Busca paginada por e-mail (case-insensitive) na Auth — usada só quando
@@ -307,11 +312,11 @@ async function findAuthUserByEmail(
   return null;
 }
 
-export async function inviteTeamMemberAction(memberId: string, editId?: string) {
-  await inviteTeamMemberCore(memberId, editId);
+export async function inviteTeamMemberAction(memberId: string): Promise<{ error?: string; message?: string }> {
+  return inviteTeamMemberCore(memberId);
 }
 
-export async function resendInviteAction(memberId: string, editId?: string) {
+export async function resendInviteAction(memberId: string): Promise<{ error?: string; message?: string }> {
   const profile = await requireAdmin();
   const supabase = await createSupabaseClient();
 
@@ -322,23 +327,23 @@ export async function resendInviteAction(memberId: string, editId?: string) {
     .eq("organization_id", profile.organizationId)
     .maybeSingle();
 
-  if (!member) failure("Membro não encontrado.", editId);
-  if (member.invitation_status !== "convite_pendente") failure("Este membro não tem convite pendente.", editId);
+  if (!member) return { error: "Membro não encontrado." };
+  if (member.invitation_status !== "convite_pendente") return { error: "Este membro não tem convite pendente." };
 
   const admin = createAdminClient();
   // inviteUserByEmail reenvia o e-mail de convite quando o usuário já existe
   // mas ainda não confirmou a conta (mesmo comportamento do Supabase Auth
   // pra um convite ainda não aceito).
   const { error } = await admin.auth.admin.inviteUserByEmail(member.email, { data: { name: member.name } });
-  if (error) failure("Não foi possível reenviar o convite.", editId);
+  if (error) return { error: "Não foi possível reenviar o convite." };
 
   await supabase.from("team_members").update({ invited_at: new Date().toISOString() }).eq("id", member.id);
 
   revalidateTeam();
-  success(`Convite reenviado para ${member.name}.`, editId);
+  return { message: `Convite reenviado para ${member.name}.` };
 }
 
-export async function revokeAccessAction(memberId: string, editId?: string) {
+export async function revokeAccessAction(memberId: string): Promise<{ error?: string; message?: string }> {
   const profile = await requireAdmin();
   const supabase = await createSupabaseClient();
 
@@ -349,7 +354,7 @@ export async function revokeAccessAction(memberId: string, editId?: string) {
     .eq("organization_id", profile.organizationId)
     .maybeSingle();
 
-  if (!member) failure("Membro não encontrado.", editId);
+  if (!member) return { error: "Membro não encontrado." };
 
   if (member.auth_user_id) {
     const admin = createAdminClient();
@@ -365,7 +370,7 @@ export async function revokeAccessAction(memberId: string, editId?: string) {
     .update({ invitation_status: "sem_acesso" })
     .eq("id", memberId);
 
-  if (error) failure("Não foi possível revogar o acesso.", editId);
+  if (error) return { error: "Não foi possível revogar o acesso." };
 
   await recordOperationalEvent(supabase, actorFromProfile(profile), {
     eventType: OperationalEventType.TEAM_MEMBER_ACCESS_REVOKED,
@@ -375,7 +380,7 @@ export async function revokeAccessAction(memberId: string, editId?: string) {
   });
 
   revalidateTeam();
-  success("Acesso revogado.");
+  return { message: "Acesso revogado." };
 }
 
 /**

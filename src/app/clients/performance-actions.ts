@@ -102,9 +102,10 @@ export async function updateSprintPerformanceAction(
     }
   }
 
+  // Platform Continuity System 1.0: sem redirect no sucesso — ver
+  // justificativa em `resetSprintSpendSourceAction` (mesmo padrão).
   revalidatePath("/");
   revalidatePath("/clients");
   revalidatePath("/sprints");
   revalidatePath(`/clients/${clientId}`);
-  redirect(returnTo);
 }
