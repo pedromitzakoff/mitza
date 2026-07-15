@@ -9,6 +9,7 @@ import {
 import type { TeamInvitationStatus, TeamMemberStatus, TeamSystemRole } from "@/lib/supabase/database.types";
 import { deactivateTeamMemberAction, deleteTeamMemberAction, reactivateTeamMemberAction, resendInviteAction } from "./actions";
 import { DeleteTeamMemberButton } from "./delete-team-member-button";
+import { SubmitButton } from "@/app/submit-button";
 
 export interface TeamTableRow {
   id: string;
@@ -97,43 +98,43 @@ export function TeamTable({ rows, isAdmin }: { rows: TeamTableRow[]; isAdmin: bo
                   <Link
                     href={`/team?edit=${member.id}`}
                     scroll={false}
-                    className="text-xs font-medium text-brand hover:underline"
+                    className="rounded text-xs font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                   >
                     Editar
                   </Link>
                   <details className="relative">
-                    <summary className="cursor-pointer list-none rounded-md px-1.5 py-0.5 text-muted-foreground hover:bg-zinc-100 [&::-webkit-details-marker]:hidden dark:hover:bg-zinc-900">
+                    <summary className="cursor-pointer list-none rounded-md px-1.5 py-0.5 text-muted-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand [&::-webkit-details-marker]:hidden dark:hover:bg-zinc-900">
                       •••
                     </summary>
-                    <div className="absolute right-0 z-10 mt-1 flex w-44 flex-col gap-0.5 rounded-md border border-border bg-card p-1 shadow-lg">
+                    <div className="mitza-menu-in absolute right-0 z-10 mt-1 flex w-44 flex-col gap-0.5 rounded-md border border-border bg-card p-1 shadow-lg">
                       {member.invitation_status === "convite_pendente" && (
-                        <form action={resendInviteAction.bind(null, member.id)}>
-                          <button
-                            type="submit"
+                        <form action={resendInviteAction.bind(null, member.id, undefined)}>
+                          <SubmitButton
+                            pendingChildren="Reenviando..."
                             className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
                           >
                             Reenviar convite
-                          </button>
+                          </SubmitButton>
                         </form>
                       )}
                       {member.status === "ativo" ? (
-                        <form action={deactivateTeamMemberAction.bind(null, member.id)}>
-                          <button
-                            type="submit"
+                        <form action={deactivateTeamMemberAction.bind(null, member.id, undefined)}>
+                          <SubmitButton
+                            pendingChildren="Desativando..."
                             className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
                           >
                             Desativar
-                          </button>
+                          </SubmitButton>
                         </form>
                       ) : (
                         <>
-                          <form action={reactivateTeamMemberAction.bind(null, member.id)}>
-                            <button
-                              type="submit"
+                          <form action={reactivateTeamMemberAction.bind(null, member.id, undefined)}>
+                            <SubmitButton
+                              pendingChildren="Reativando..."
                               className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
                             >
                               Reativar
-                            </button>
+                            </SubmitButton>
                           </form>
                           <DeleteTeamMemberButton
                             action={deleteTeamMemberAction.bind(null, member.id)}

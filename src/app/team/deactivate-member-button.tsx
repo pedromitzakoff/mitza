@@ -1,38 +1,24 @@
 "use client";
 
+import { SubmitButton } from "@/app/submit-button";
+
 /**
- * Confirmação com o impacto ANTES de desativar (seção 17 do pedido) — mesmo
- * padrão de `DeleteClientButton` (window.confirm bloqueando o submit).
+ * Desativar é seguro e reversível — existe "Reativar membro" logo ao lado,
+ * assim que o drawer reabre (a Server Action devolve pro mesmo drawer, no
+ * novo estado). Por isso não bloqueia mais com `window.confirm()` antes de
+ * agir (Interaction Design System 1.0 — "executar imediatamente, oferecer
+ * desfazer" em vez de "perguntar primeiro" sempre que a ação puder ser
+ * desfeita com segurança).
  */
-export function DeactivateMemberButton({
-  action,
-  memberName,
-  assignedClientsCount,
-  pendingTasksCount,
-}: {
-  action: () => void;
-  memberName: string;
-  assignedClientsCount: number;
-  pendingTasksCount: number;
-}) {
+export function DeactivateMemberButton({ action }: { action: () => void }) {
   return (
-    <form
-      action={action}
-      onSubmit={(event) => {
-        const impact =
-          assignedClientsCount === 0 && pendingTasksCount === 0
-            ? "Nenhum cliente ou tarefa pendente está atribuído a este membro no momento."
-            : `${assignedClientsCount} cliente(s) atribuído(s) e ${pendingTasksCount} tarefa(s) pendente(s) continuarão vinculados a este membro no histórico, mas ele deixa de aparecer nas novas atribuições.`;
-        const confirmed = window.confirm(`Desativar "${memberName}"?\n\n${impact}`);
-        if (!confirmed) event.preventDefault();
-      }}
-    >
-      <button
-        type="submit"
+    <form action={action}>
+      <SubmitButton
         className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+        pendingChildren="Desativando..."
       >
         Desativar membro
-      </button>
+      </SubmitButton>
     </form>
   );
 }

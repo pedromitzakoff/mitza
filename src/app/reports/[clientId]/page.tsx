@@ -20,6 +20,7 @@ import {
 } from "@/lib/monthly-reports";
 import { SPEND_STATUS_BADGE_CLASSES } from "@/lib/spend-status";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
+import { SubmitButton } from "@/app/submit-button";
 import { buildReportViewData } from "../report-data";
 import {
   addActionItemAction,
@@ -250,9 +251,9 @@ export default async function ClientReportPage({
                   placeholder="O que aconteceu com a conta neste mês?"
                   className="w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground outline-none focus:border-zinc-500"
                 />
-                <button type="submit" className="self-end rounded-md bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand-hover">
+                <SubmitButton className="self-end rounded-md bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand-hover" pendingChildren="Salvando...">
                   Salvar
-                </button>
+                </SubmitButton>
               </form>
             )}
           </div>
@@ -301,9 +302,9 @@ export default async function ClientReportPage({
                                 defaultValue={kpi.result ?? ""}
                                 className="w-24 rounded-md border border-border bg-transparent px-1.5 py-0.5 text-sm text-foreground outline-none focus:border-zinc-500"
                               />
-                              <button type="submit" className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900">
+                              <SubmitButton className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900" pendingChildren="Salvando...">
                                 Salvar
-                              </button>
+                              </SubmitButton>
                             </form>
                           )}
                         </td>
@@ -421,9 +422,9 @@ export default async function ClientReportPage({
                   </div>
                   {!isReadOnly && (
                     <form action={deleteTimelineEventAction.bind(null, event.id, clientId, data.monthStart)}>
-                      <button type="submit" className="shrink-0 text-xs text-muted-foreground hover:text-red-600 dark:hover:text-red-400">
+                      <SubmitButton className="shrink-0 text-xs text-muted-foreground hover:text-red-600 dark:hover:text-red-400" pendingChildren="Removendo...">
                         Remover
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                 </li>
@@ -464,9 +465,9 @@ export default async function ClientReportPage({
                 <label className="text-[11px] text-muted-foreground">Descrição</label>
                 <input name="description" required placeholder="O que aconteceu?" className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground" />
               </div>
-              <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover">
+              <SubmitButton className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover" pendingChildren="Adicionando...">
                 Adicionar
-              </button>
+              </SubmitButton>
             </form>
           )}
         </SectionCard>
@@ -544,9 +545,9 @@ export default async function ClientReportPage({
                   className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:border-zinc-500"
                 />
               </div>
-              <button type="submit" className="self-end rounded-md bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand-hover">
+              <SubmitButton className="self-end rounded-md bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand-hover" pendingChildren="Salvando...">
                 Salvar
-              </button>
+              </SubmitButton>
             </form>
           )}
         </SectionCard>
@@ -575,9 +576,9 @@ export default async function ClientReportPage({
                             </option>
                           ))}
                         </select>
-                        <button type="submit" className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900">
+                        <SubmitButton className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900" pendingChildren="Salvando...">
                           Salvar
-                        </button>
+                        </SubmitButton>
                       </form>
                     )}
                     {isReadOnly && (
@@ -591,9 +592,9 @@ export default async function ClientReportPage({
                     {item.dependency && <span>Depende de: {REPORT_ACTION_ITEM_DEPENDENCY_LABEL[item.dependency]}</span>}
                     {!isReadOnly && !item.sentToTaskId && (
                       <form action={sendActionItemToSprintAction.bind(null, item.id, clientId, data.monthStart)}>
-                        <button type="submit" className="font-medium text-brand hover:underline">
+                        <SubmitButton className="font-medium text-brand hover:underline" pendingChildren="Enviando...">
                           Enviar para próxima sprint
-                        </button>
+                        </SubmitButton>
                       </form>
                     )}
                     {item.sentToTaskId && <span className="text-brand">Enviado para a próxima sprint</span>}
@@ -641,9 +642,9 @@ export default async function ClientReportPage({
                   ))}
                 </select>
               </div>
-              <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover">
+              <SubmitButton className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover" pendingChildren="Adicionando...">
                 Adicionar
-              </button>
+              </SubmitButton>
             </form>
           )}
         </SectionCard>
@@ -708,9 +709,9 @@ export default async function ClientReportPage({
                   className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:border-zinc-500"
                 />
               </div>
-              <button type="submit" className="self-end rounded-md bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand-hover">
+              <SubmitButton className="self-end rounded-md bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand-hover" pendingChildren="Salvando...">
                 Salvar
-              </button>
+              </SubmitButton>
             </form>
           )}
         </SectionCard>
@@ -729,25 +730,25 @@ export default async function ClientReportPage({
                   <option value="em_andamento">Em andamento</option>
                   <option value="pronto_revisao">Pronto para revisão</option>
                 </select>
-                <button type="submit" className="rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900">
+                <SubmitButton className="rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900" pendingChildren="Salvando...">
                   Salvar
-                </button>
+                </SubmitButton>
               </form>
             )}
 
             {isAdmin && data.status === "pronto_revisao" && (
               <form action={finalizeReportAction.bind(null, clientId, data.monthStart)}>
-                <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover">
+                <SubmitButton className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover" pendingChildren="Finalizando...">
                   Finalizar relatório
-                </button>
+                </SubmitButton>
               </form>
             )}
 
             {isAdmin && data.status === "finalizado" && (
               <form action={reopenReportAction.bind(null, clientId, data.monthStart)}>
-                <button type="submit" className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900">
+                <SubmitButton className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900" pendingChildren="Reabrindo...">
                   Reabrir relatório
-                </button>
+                </SubmitButton>
               </form>
             )}
           </div>

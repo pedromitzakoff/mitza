@@ -1,5 +1,7 @@
 "use client";
 
+import { SubmitButton } from "@/app/submit-button";
+
 export function DeleteTeamMemberButton({
   action,
   memberName,
@@ -19,12 +21,12 @@ export function DeleteTeamMemberButton({
         }
       }}
     >
-      <button
-        type="submit"
+      <SubmitButton
+        pendingChildren="Excluindo..."
         className="w-full rounded px-2 py-1 text-left text-xs text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950"
       >
         Excluir definitivamente
-      </button>
+      </SubmitButton>
     </form>
   );
 }

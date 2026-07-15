@@ -287,3 +287,13 @@ obrigatória é:
 > Isso ajuda o gestor a trabalhar ou apenas ocupa espaço?
 
 Se a resposta for "apenas ocupa espaço", o elemento não deve existir.
+
+## Capítulo 18 — Continuidade acima de transição
+
+O objetivo da interface não é animar.
+
+É preservar contexto.
+
+Toda transição deve comunicar continuidade entre estados.
+
+Nunca apenas mover elementos.

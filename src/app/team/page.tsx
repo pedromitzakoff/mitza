@@ -111,7 +111,7 @@ export default async function TeamPage({
           <Link
             href="/team?new=1"
             scroll={false}
-            className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+            className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
           >
             + Novo membro
           </Link>

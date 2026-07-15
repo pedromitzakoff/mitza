@@ -374,3 +374,11 @@ se está", a plataforma escolhe agir onde já se está.
 Isso vale para toda funcionalidade futura: antes de desenhar uma tela nova
 ou um fluxo novo, a pergunta é se ele favorece a ação imediata do gestor ou
 se apenas adiciona mais um lugar para ele visitar.
+
+## Capítulo 19 — A plataforma responde imediatamente
+
+O gestor nunca deve duvidar se sua ação foi recebida.
+
+Toda interação deve produzir uma resposta perceptível.
+
+Mesmo quando o processamento ainda estiver acontecendo.

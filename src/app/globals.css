@@ -167,6 +167,25 @@ body {
   animation: mitza-panel-in 180ms ease-out;
 }
 
+/* Interaction Design System 1.0 — menus/popovers pequenos e ancorados (ex.:
+ * "•••" de uma linha de tabela) não deslizam de uma borda da tela como um
+ * drawer; devem parecer nascer do próprio botão que os abriu. */
+@keyframes mitza-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.mitza-menu-in {
+  animation: mitza-menu-in 120ms ease-out;
+  transform-origin: top right;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

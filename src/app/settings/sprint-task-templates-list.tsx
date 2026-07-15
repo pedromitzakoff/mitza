@@ -10,6 +10,7 @@ import {
   toggleGlobalTemplateActiveAction,
   updateGlobalTemplateAction,
 } from "./sprint-task-templates-actions";
+import { SubmitButton } from "@/app/submit-button";
 
 export interface GlobalTemplateItem {
   id: string;
@@ -172,12 +173,12 @@ export function SprintTaskTemplatesList({
             className="flex flex-1 flex-wrap items-start gap-2"
           >
             <TemplateFields template={template} managers={managers} clients={clients} />
-            <button
-              type="submit"
-              className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+            <SubmitButton
+              pendingChildren="Salvando..."
+              className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-black hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
             >
               Salvar
-            </button>
+            </SubmitButton>
           </form>
 
           <div className="flex shrink-0 flex-col gap-2">
@@ -188,22 +189,22 @@ export function SprintTaskTemplatesList({
                 !template.is_active,
               )}
             >
-              <button
-                type="submit"
-                className="w-full rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+              <SubmitButton
+                pendingChildren={template.is_active ? "Desativando..." : "Ativando..."}
+                className="w-full rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-black hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
               >
                 {template.is_active ? "Desativar" : "Ativar"}
-              </button>
+              </SubmitButton>
             </form>
 
             {!template.hasGeneratedTasks && (
               <form action={deleteGlobalTemplateAction.bind(null, template.id)}>
-                <button
-                  type="submit"
+                <SubmitButton
+                  pendingChildren="Excluindo..."
                   className="w-full rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
                 >
                   Excluir
-                </button>
+                </SubmitButton>
               </form>
             )}
           </div>
@@ -215,12 +216,12 @@ export function SprintTaskTemplatesList({
         className="flex flex-wrap items-start gap-2 rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700"
       >
         <TemplateFields managers={managers} clients={clients} />
-        <button
-          type="submit"
-          className="rounded-md bg-brand px-2 py-1 text-xs font-medium text-white hover:bg-brand-hover"
+        <SubmitButton
+          pendingChildren="Adicionando..."
+          className="rounded-md bg-brand px-2 py-1 text-xs font-medium text-white hover:bg-brand-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
           + Adicionar
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );

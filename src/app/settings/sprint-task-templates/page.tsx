@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { SprintTaskTemplatesList, type GlobalTemplateItem } from "../sprint-task-templates-list";
 import { runBackfillAction } from "../sprint-task-templates-actions";
+import { SubmitButton } from "@/app/submit-button";
 
 export default async function SprintTaskTemplatesPage({
   searchParams,
@@ -47,12 +48,12 @@ export default async function SprintTaskTemplatesPage({
           Tarefas padrão de sprint
         </h1>
         <form action={runBackfillAction}>
-          <button
-            type="submit"
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+          <SubmitButton
+            pendingChildren="Aplicando..."
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
           >
             Aplicar às sprints já existentes
-          </button>
+          </SubmitButton>
         </form>
       </div>
 
