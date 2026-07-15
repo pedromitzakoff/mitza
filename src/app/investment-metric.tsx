@@ -1,13 +1,15 @@
 import Link from "next/link";
 import type { StatusTone } from "@/components/workspace/status-dot";
 
-/** MVP Etapa "Indicadores operacionais e refinamento visual": tamanho
- * reduzido em ~15-20% (36→30px, 28→23px) — mesma hierarquia de sempre
- * (lg > md > OperationMetric > SecondaryInvestmentMetric), só menos
- * dominante visualmente. */
+/** Etapa "Refinamento de Densidade..." (Parte 5): Planejado/Realizado
+ * dominavam demais a tela (30px, bem acima de tudo ao redor). Reduzido pra
+ * 24px/20px — ainda maior que SecondaryInvestmentMetric (19px), preservando
+ * a hierarquia (lg > md > OperationMetric > SecondaryInvestmentMetric), mas
+ * com um salto bem menor entre os níveis, pra ficar tudo comparável num
+ * único olhar. */
 const PRIMARY_VALUE_SIZE: Record<"lg" | "md", string> = {
-  lg: "text-[30px]",
-  md: "text-[23px]",
+  lg: "text-[24px]",
+  md: "text-[20px]",
 };
 
 const TONE_TEXT_CLASSES: Record<StatusTone, string> = {

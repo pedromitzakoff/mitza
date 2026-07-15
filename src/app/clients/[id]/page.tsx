@@ -381,6 +381,7 @@ export default async function ClientPage({
         targetCostPerResult,
       }),
       editableChannels: performanceGoal ? buildEditableChannelValues(sprintRecords, performanceGoal, AVAILABLE_TRAFFIC_CHANNELS) : [],
+      performanceGoal,
     });
   }
 

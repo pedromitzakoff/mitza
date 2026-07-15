@@ -6,6 +6,8 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import type { PerformanceGoalDb } from "@/lib/supabase/database.types";
+import type { PerformanceGoal } from "@/lib/performance-goals";
+import { toUserFacingError } from "@/lib/user-facing-error";
 
 function withError(returnTo: string, message: string): string {
   return `${returnTo}${returnTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`;
@@ -108,4 +110,45 @@ export async function updateSprintPerformanceAction(
   revalidatePath("/clients");
   revalidatePath("/sprints");
   revalidatePath(`/clients/${clientId}`);
+}
+
+/**
+ * Etapa "Refinamento de Densidade, Hierarquia e Contexto Operacional" (Parte
+ * 3) — edição inline do objetivo de performance direto na Sprint, sem
+ * navegar até `/clients/{id}/edit`. Mesma coluna (`clients.performance_goal`)
+ * já usada pelo formulário de edição do cliente — nenhum campo novo, nenhuma
+ * segunda fonte de verdade. Mesma permissão de sempre (só admin, igual ao
+ * resto de `client-form.tsx`/`updateClientAction`) — esta etapa não amplia
+ * quem pode editar, só onde a edição pode ser feita. Sem redirect no
+ * sucesso/erro (Platform Continuity System 1.0): quem chama decide o
+ * feedback (toast) e a UI local decide se fecha o popover.
+ */
+export async function updateClientPerformanceGoalAction(
+  clientId: string,
+  goal: PerformanceGoal,
+): Promise<{ error?: string }> {
+  await requireAdmin();
+
+  const supabase = await createSupabaseClient();
+  const { error } = await supabase
+    .from("clients")
+    .update({ performance_goal: goal as PerformanceGoalDb })
+    .eq("id", clientId);
+
+  if (error) {
+    return { error: toUserFacingError(error, "Não foi possível atualizar o objetivo de performance.") };
+  }
+
+  // Visão Geral, Sprints, Relatórios e a página do próprio cliente precisam
+  // refletir o novo objetivo (Parte 3 do pedido) — Relatórios não exibe o
+  // objetivo diretamente hoje, mas é revalidado por segurança/futuro mesmo
+  // assim, já que consome dados do mesmo cliente.
+  revalidatePath("/");
+  revalidatePath("/clients");
+  revalidatePath("/sprints");
+  revalidatePath("/reports");
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath(`/reports/${clientId}`);
+
+  return {};
 }

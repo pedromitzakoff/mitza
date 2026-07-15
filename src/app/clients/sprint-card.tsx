@@ -2,10 +2,10 @@ import Link from "next/link";
 import { TriangleAlert } from "lucide-react";
 import type { SprintFinancials } from "@/lib/sprint-financials";
 import { describeSpendSourceTimestamp } from "@/lib/sprint-financials";
-import { formatCurrency, formatShortDateTime, formatWeekdayAndDayMonth } from "@/lib/format";
+import { formatCurrency, formatShortDate, formatShortDateTime } from "@/lib/format";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { effectiveTaskStatus } from "@/lib/task-status";
-import { todayUTC } from "@/lib/today";
+import { todayDateString } from "@/lib/today";
 import type { AttentionAlert } from "@/lib/attention-alerts";
 import { CommentThread, type CommentItem } from "./comment-thread";
 import { SprintTaskList } from "./sprint-task-list";
@@ -15,7 +15,8 @@ import { updateSprintPerformanceAction } from "./performance-actions";
 import { MoneyInput } from "./money-input";
 import { AccountReviewsSection, type AccountReviewSummaryItem } from "./account-reviews-section";
 import { getLatestPerformanceUpdateText, type SprintPerformanceView } from "@/lib/performance";
-import { formatPerformanceResult, PERFORMANCE_GOALS } from "@/lib/performance-goals";
+import { formatPerformanceResult, PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
+import { ClientPerformanceGoalEditor } from "./client-performance-goal-editor";
 import { TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { ROW_GRID_CLASSES } from "@/app/sprints/row-grid";
 import { SubmitButton } from "@/app/submit-button";
@@ -30,6 +31,12 @@ export interface SprintPerformanceProps {
    * "Atualizar performance" — vazio quando `view.kind` não é `has_data`/`no_data`
    * (nada pra editar numa sprint futura). */
   editableChannels: { channel: TrafficChannel; existingCount: number | null }[];
+  /** Objetivo de performance do CLIENTE (não da sprint) — separado de `view`
+   * porque `view.kind === "not_started"` (sprint futura) não carrega o goal
+   * mesmo quando ele já está configurado (ver `buildSprintPerformanceView`).
+   * O editor inline de objetivo (Refinamento de Densidade, Parte 3) precisa
+   * saber o valor atual em QUALQUER estado da sprint, não só quando há dado. */
+  performanceGoal: PerformanceGoal | null;
 }
 
 /** Linha compacta "32 leads · CPL R$ 25" / "Sem dados de performance" /
@@ -74,11 +81,21 @@ export function derivePerformanceCellTexts(view: SprintPerformanceView): {
 } {
   switch (view.kind) {
     case "not_configured":
-      return { resultsValue: "—", resultsAux: "Objetivo não configurado", costValue: "—", costAux: null };
+      // Refinamento de Densidade (Parte 8): "Não configurado" — falta
+      // configuração, não é "sem dado suficiente pra calcular" (isso seria
+      // "—"). O aux "Objetivo não configurado" saiu daqui porque agora o
+      // próprio editor inline de objetivo já comunica isso na mesma linha —
+      // repetir os dois seria duplicar a mesma informação (ver sprint-card).
+      return { resultsValue: "Não configurado", resultsAux: null, costValue: "Não configurado", costAux: null };
     case "not_started":
       return { resultsValue: "—", resultsAux: "Performance ainda não iniciada", costValue: "—", costAux: null };
     case "no_data":
-      return { resultsValue: "—", resultsAux: "Sem dados de performance", costValue: "—", costAux: null };
+      // Parte 8: "Sem dados" — objetivo configurado e sprint já começou, mas
+      // nenhum registro foi lançado ainda (a fonte existe, só não há dado no
+      // período). Isso é diferente de "—" (não dá pra calcular): aqui dá,
+      // simplesmente não há nada lançado — por isso o valor já diz isso, sem
+      // precisar de um aux repetindo a mesma informação.
+      return { resultsValue: "Sem dados", resultsAux: null, costValue: "Sem dados", costAux: null };
     case "has_data": {
       const { goal, summary } = view;
       const config = PERFORMANCE_GOALS[goal];
@@ -171,6 +188,7 @@ function SprintPerformanceSection({
   const view = performance?.view ?? { kind: "not_configured" as const };
   const cells = derivePerformanceCellTexts(view);
   const editableChannels = performance?.editableChannels ?? [];
+  const performanceGoal = performance?.performanceGoal ?? null;
   const canEditResults = isAdmin && (view.kind === "has_data" || view.kind === "no_data") && editableChannels.length > 0;
   const editToggleId = `edit-performance-${sprint.sprintId}`;
   const investmentSourceText = sourceTimestampText ?? (isManualSource ? "Manual" : "Meta");
@@ -186,113 +204,149 @@ function SprintPerformanceSection({
     ? `Investimento: ${investmentSourceText}\nResultados: ${performanceSourceText}`
     : investmentSourceText;
 
+  // Refinamento de Densidade, Hierarquia e Contexto Operacional — Parte 1:
+  // uma linha horizontal só (era 3 colunas empilhadas + linha de fonte +
+  // toggle "Atualizar performance" em linhas separadas). "·" como separador
+  // discreto entre métricas, igual ao já usado em outras linhas compactas da
+  // plataforma (ex.: resumo de alertas). Objetivo (Parte 3) entra na mesma
+  // linha, editável inline quando admin.
   return (
-    <div className="rounded-lg border border-border bg-zinc-50 p-2.5 dark:bg-zinc-900/40">
-      <p title={sourceTooltip} className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Performance da sprint
-      </p>
+    <div className="rounded-lg border border-border bg-zinc-50 px-3 py-2 dark:bg-zinc-900/40">
+      {/* Os dois checkboxes-hack (revert de fonte manual / editar performance)
+          precisam ser IRMÃOS diretos dos blocos que eles revelam
+          (`peer-checked:`/`peer-checked/revert:` dependem do seletor de
+          irmão geral do CSS — não funciona atravessando um nível de
+          aninhamento). Por isso ficam aqui fora, antes da linha compacta;
+          os <label> que os acionam continuam dentro da linha, referenciando
+          por `htmlFor` (isso não exige irmandade). */}
+      {isManualSource && <input type="checkbox" id={revertSourceToggleId} className="peer/revert hidden" />}
+      {isAdmin && <input type="checkbox" id={editToggleId} className="peer hidden" />}
 
-      <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div>
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Investimento realizado</p>
-          <p className="text-base font-semibold text-foreground">{formatCurrency(sprint.actualSpend)}</p>
-        </div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+        <span
+          title={sourceTooltip}
+          className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+        >
+          Performance
+        </span>
 
-        <div>
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Resultados</p>
-          <p className="text-base font-semibold text-foreground">{cells.resultsValue}</p>
-          {cells.resultsAux && <p className="text-[11px] text-muted-foreground">{cells.resultsAux}</p>}
-          {view.kind === "not_configured" && (
-            <Link href={`/clients/${clientId}/edit`} className="text-[11px] font-medium text-brand hover:underline">
-              Configurar objetivo
-            </Link>
-          )}
-        </div>
+        <span className="font-semibold text-foreground">{formatCurrency(sprint.actualSpend)}</span>
+        <span className="text-muted-foreground">investido</span>
 
-        <div>
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Custo por resultado</p>
-          <p className="text-base font-semibold text-foreground">{cells.costValue}</p>
-          {cells.costAux && (
-            <p
-              className={`text-[11px] font-medium ${cells.costAux.tone ? PERFORMANCE_STATUS_TEXT_CLASSES[cells.costAux.tone] : "text-muted-foreground"}`}
+        {view.kind !== "not_configured" && (
+          <>
+            <span className="text-border" aria-hidden="true">
+              ·
+            </span>
+            <span className="font-semibold text-foreground">{cells.resultsValue}</span>
+            {cells.resultsAux && <span className="text-muted-foreground">({cells.resultsAux})</span>}
+
+            <span className="text-border" aria-hidden="true">
+              ·
+            </span>
+            <span className="font-semibold text-foreground">{cells.costValue}</span>
+            {cells.costAux && (
+              <span
+                className={`font-medium ${cells.costAux.tone ? PERFORMANCE_STATUS_TEXT_CLASSES[cells.costAux.tone] : "text-muted-foreground"}`}
+              >
+                ({cells.costAux.text})
+              </span>
+            )}
+          </>
+        )}
+
+        <span className="text-border" aria-hidden="true">
+          ·
+        </span>
+        {isAdmin ? (
+          <ClientPerformanceGoalEditor clientId={clientId} currentGoal={performanceGoal} />
+        ) : (
+          <span className="text-muted-foreground">
+            Objetivo: {performanceGoal ? PERFORMANCE_GOALS[performanceGoal].label : "não configurado"}
+          </span>
+        )}
+
+        {isManualSource && (
+          <>
+            <span className="text-border" aria-hidden="true">
+              ·
+            </span>
+            <label
+              htmlFor={revertSourceToggleId}
+              className="cursor-pointer text-muted-foreground hover:underline peer-checked/revert:hidden"
             >
-              {cells.costAux.text}
-            </p>
-          )}
-        </div>
+              Usar dado do Meta
+            </label>
+          </>
+        )}
+
+        {isAdmin && (
+          <>
+            <span className="text-border" aria-hidden="true">
+              ·
+            </span>
+            <label
+              htmlFor={editToggleId}
+              className="cursor-pointer font-medium text-brand hover:underline peer-checked:hidden"
+            >
+              Atualizar performance
+            </label>
+          </>
+        )}
       </div>
 
       {isManualSource && (
-        <div className="mt-1">
-          <input type="checkbox" id={revertSourceToggleId} className="peer/revert hidden" />
-          <label
-            htmlFor={revertSourceToggleId}
-            className="cursor-pointer text-[11px] text-muted-foreground hover:underline peer-checked/revert:hidden"
-          >
-            Usar dado do Meta
+        <div className="mt-1.5 hidden items-center gap-1.5 text-xs peer-checked/revert:flex">
+          <span className="text-muted-foreground">Substituir valor manual pelo do Meta?</span>
+          <form action={resetSprintSpendSourceAction.bind(null, sprint.sprintId, clientId, returnTo)}>
+            <SubmitButton className="font-medium text-brand hover:underline" pendingChildren="Confirmando...">
+              Confirmar
+            </SubmitButton>
+          </form>
+          <label htmlFor={revertSourceToggleId} className="cursor-pointer text-muted-foreground hover:underline">
+            Cancelar
           </label>
-          <div className="hidden items-center gap-1.5 peer-checked/revert:flex">
-            <span className="text-[11px] text-muted-foreground">Substituir valor manual pelo do Meta?</span>
-            <form action={resetSprintSpendSourceAction.bind(null, sprint.sprintId, clientId, returnTo)}>
-              <SubmitButton className="text-[11px] font-medium text-brand hover:underline" pendingChildren="Confirmando...">
-                Confirmar
-              </SubmitButton>
-            </form>
-            <label htmlFor={revertSourceToggleId} className="cursor-pointer text-[11px] text-muted-foreground hover:underline">
-              Cancelar
-            </label>
-          </div>
         </div>
       )}
 
       {isAdmin && (
-        <>
-          <input type="checkbox" id={editToggleId} className="peer hidden" />
-          <label
-            htmlFor={editToggleId}
-            className="mt-1.5 inline-block cursor-pointer text-[11px] font-medium text-brand hover:underline peer-checked:hidden"
-          >
-            Atualizar performance
-          </label>
-
-          <form
-            action={updateSprintPerformanceAction.bind(null, sprint.sprintId, clientId, returnTo)}
-            className="mt-2 hidden flex-col gap-1.5 peer-checked:flex"
-          >
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="w-28 shrink-0 text-[11px] text-muted-foreground">Investimento</span>
-              <MoneyInput name="actual_spend" defaultValue={sprint.actualSpend} autoFocus />
-            </div>
-            {canEditResults &&
-              editableChannels.map(({ channel, existingCount }) => (
-                <div key={channel} className="flex flex-wrap items-center gap-1.5">
-                  <span className="w-28 shrink-0 text-[11px] text-muted-foreground">
-                    Resultado · {TRAFFIC_CHANNELS[channel].shortLabel}
-                  </span>
-                  <input
-                    type="number"
-                    name={`result_${channel}`}
-                    min={0}
-                    step={1}
-                    defaultValue={existingCount ?? ""}
-                    placeholder="0"
-                    className="w-20 rounded-md border border-border bg-transparent px-2 py-1 text-[11px] text-foreground outline-none focus:border-brand"
-                  />
-                </div>
-              ))}
-            <div className="flex items-center gap-1.5">
-              <SubmitButton
-                className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                pendingChildren="Salvando..."
-              >
-                Salvar
-              </SubmitButton>
-              <label htmlFor={editToggleId} className="cursor-pointer text-[11px] text-muted-foreground hover:underline">
-                Cancelar
-              </label>
-            </div>
-          </form>
-        </>
+        <form
+          action={updateSprintPerformanceAction.bind(null, sprint.sprintId, clientId, returnTo)}
+          className="mt-2 hidden flex-col gap-1.5 peer-checked:flex"
+        >
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="w-28 shrink-0 text-[11px] text-muted-foreground">Investimento</span>
+            <MoneyInput name="actual_spend" defaultValue={sprint.actualSpend} autoFocus />
+          </div>
+          {canEditResults &&
+            editableChannels.map(({ channel, existingCount }) => (
+              <div key={channel} className="flex flex-wrap items-center gap-1.5">
+                <span className="w-28 shrink-0 text-[11px] text-muted-foreground">
+                  Resultado · {TRAFFIC_CHANNELS[channel].shortLabel}
+                </span>
+                <input
+                  type="number"
+                  name={`result_${channel}`}
+                  min={0}
+                  step={1}
+                  defaultValue={existingCount ?? ""}
+                  placeholder="0"
+                  className="w-20 rounded-md border border-border bg-transparent px-2 py-1 text-[11px] text-foreground outline-none focus:border-brand"
+                />
+              </div>
+            ))}
+          <div className="flex items-center gap-1.5">
+            <SubmitButton
+              className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              pendingChildren="Salvando..."
+            >
+              Salvar
+            </SubmitButton>
+            <label htmlFor={editToggleId} className="cursor-pointer text-[11px] text-muted-foreground hover:underline">
+              Cancelar
+            </label>
+          </div>
+        </form>
       )}
     </div>
   );
@@ -381,16 +435,20 @@ export function SprintCardBody({
 
   return (
     <div className="border-t border-border p-2.5">
-        {/* Contexto do período e do dia atual */}
+        {/* Contexto do período e do dia atual — Refinamento de Densidade
+            (Parte 2): era uma caixa própria (borda + fundo) só pra "Hoje" +
+            uma segunda linha separada pra última execução; agora as duas
+            informações cabem numa linha só, sem caixa, sem repetir a data
+            (o período da sprint já aparece no resumo fechado). */}
         {isCurrent && (
-          <div className="mb-2 inline-flex flex-col rounded-md border border-brand/30 bg-brand/5 px-3 py-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-brand">Hoje</span>
-            <span className="text-sm font-medium text-brand">{formatWeekdayAndDayMonth(todayUTC())}</span>
-          </div>
-        )}
-        {isCurrent && executionLabel && (
-          <p className={`mb-2 text-xs ${EXECUTION_LABEL_CLASSES[executionSeverity ?? "neutro"]}`}>
-            Última execução da sprint: {executionLabel}
+          <p className="mb-2 text-xs">
+            <span className="font-medium text-brand">Hoje, {formatShortDate(todayDateString())}</span>
+            {executionLabel && (
+              <span className={EXECUTION_LABEL_CLASSES[executionSeverity ?? "neutro"]}>
+                {" "}
+                · Última execução: {executionLabel}
+              </span>
+            )}
           </p>
         )}
 

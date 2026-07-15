@@ -247,6 +247,7 @@ export function buildSprintPerformanceProps(card: OperationClientCard, sprintId:
   return {
     view: card.sprintPerformanceViews[sprintId] ?? { kind: "not_configured" },
     editableChannels: card.sprintPerformanceEditableChannels[sprintId] ?? [],
+    performanceGoal: card.performanceGoal,
   };
 }
 

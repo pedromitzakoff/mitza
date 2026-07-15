@@ -581,7 +581,7 @@ export default async function Home({
 
   return (
     <div className={`min-h-[calc(100dvh_-_3rem)] bg-overview-bg ${inter.variable}`} style={{ fontFamily: "var(--font-overview)" }}>
-      <div className="mx-auto max-w-7xl px-6 py-4">
+      <div className="mx-auto max-w-7xl px-6 py-3">
         <PageHeader
           title="Visão Geral"
           actions={
@@ -612,7 +612,7 @@ export default async function Home({
           }
         />
 
-        <div className="mt-2.5">
+        <div className="mt-2">
           <AgencyFilters
             defaultManager={isAdmin ? "all" : "me"}
             gestores={gestores ?? []}
@@ -634,19 +634,142 @@ export default async function Home({
           />
         </div>
 
-        {/* Indicadores da operação + Controle de investimento compartilham
-            uma única superfície contínua (uma linha horizontal fina separa
-            as duas, nunca dois cards com sombra) — Etapa 69: refinamento
-            puramente visual (Linear/Stripe/Vercel como referência), reduz de
-            6 pra 4 indicadores operacionais (execução de tarefas e
-            atividade operacional agrupam duas métricas cada), remove as
-            divisórias verticais entre eles (a separação agora é só
-            espaçamento + tipografia) e reorganiza o Controle de Investimento
-            em 2 camadas de destaque decrescente, sem subtítulos de grupo. */}
-        <div className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
-          <div className="px-5 py-4 sm:px-6 sm:py-5">
+        {/* Refinamento de Densidade, Hierarquia e Contexto Operacional
+            (Parte 4) — nova ordem: Resultados (o que estamos gerando) →
+            Investimento (quanto e como) → Operação (como está a execução).
+            Nenhum cálculo mudou, só a hierarquia visual — as 3 seções
+            continuam compartilhando a mesma superfície contínua (Etapa 69),
+            só a ordem das divisórias mudou pra acompanhar. */}
+        <div className="mt-2.5 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
+          {/* Etapa "Executive Dashboard 1.0" — complementa os indicadores
+              operacionais/financeiros abaixo com uma dimensão de RESULTADO
+              (leads/vendas/CPL/CPA), derivada de `performance_records` já
+              buscado (nenhuma consulta nova). Cliente sem objetivo de
+              performance configurado, ou sem nenhum registro lançado no mês,
+              nunca contribui um "0" fabricado — some da soma, e o card some
+              "—" quando ninguém no recorte tem dado. Receita/ROAS não
+              aparecem aqui: nenhuma tabela da plataforma guarda valor
+              monetário de resultado hoje, só contagem (ver relatório da
+              etapa) — mostrar essas duas como "Não configurado" seria dar a
+              entender que a métrica existe e está vazia, quando na verdade
+              a plataforma ainda não tem de onde tirar esse número. */}
+          <div className="px-5 py-3.5 sm:px-6 sm:py-4">
+            <SectionHeader title="Resultados da agência" />
+            <div className="mt-3 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+              <OperationMetric
+                label="Leads gerados"
+                value={agencyResults.leads.clientsWithData > 0 ? String(agencyResults.leads.count) : "—"}
+                context={
+                  agencyResults.leads.clientsWithData > 0
+                    ? `${agencyResults.leads.clientsWithData} cliente${agencyResults.leads.clientsWithData !== 1 ? "s" : ""} com dado no mês`
+                    : "Nenhum cliente com objetivo de leads configurado"
+                }
+              />
+              <OperationMetric
+                label={PERFORMANCE_GOALS.leads.costMetricLabel}
+                value={agencyResults.leads.costPerResult !== null ? formatCurrency(agencyResults.leads.costPerResult) : "—"}
+                context="Investimento somado ÷ leads somados"
+              />
+              <OperationMetric
+                label="Vendas geradas"
+                value={agencyResults.sales.clientsWithData > 0 ? String(agencyResults.sales.count) : "—"}
+                context={
+                  agencyResults.sales.clientsWithData > 0
+                    ? `${agencyResults.sales.clientsWithData} cliente${agencyResults.sales.clientsWithData !== 1 ? "s" : ""} com dado no mês`
+                    : "Nenhum cliente com objetivo de vendas configurado"
+                }
+              />
+              <OperationMetric
+                label={PERFORMANCE_GOALS.sales.costMetricLabel}
+                value={agencyResults.sales.costPerResult !== null ? formatCurrency(agencyResults.sales.costPerResult) : "—"}
+                context="Investimento somado ÷ vendas somadas"
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-overview-border px-5 py-3.5 sm:px-6 sm:py-4">
+            <SectionHeader
+              title={platformFilter === "consolidado" ? "Controle de investimento" : `Investimento · ${PLATFORM_LABEL[platformFilter]}`}
+            />
+
+            {platformFilter === "consolidado" ? (
+              <>
+                {/* Camada 1 — os números que o olhar deve encontrar primeiro. */}
+                <div className="mt-3 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-3">
+                  <PrimaryInvestmentMetric label="Planejado" value={formatCurrency(financial.planned)} />
+                  <PrimaryInvestmentMetric label="Realizado" value={formatCurrency(financial.actual)} />
+                  <PrimaryInvestmentMetric
+                    label="Orçamento utilizado"
+                    value={financial.pct !== null ? formatPercent(financial.pct) : "—"}
+                    size="md"
+                  />
+                </div>
+
+                {/* Camada 2 — contexto de ritmo, deliberadamente mais discreto. */}
+                <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <SecondaryInvestmentMetric
+                    label="Esperado hoje"
+                    value={formatPercent(investmentExpectedPct)}
+                    title="dia_atual / dias_do_mês — igual para qualquer cliente do recorte, nunca uma média de percentuais por cliente. Não depende de nenhum orçamento estar configurado."
+                  />
+                  <SecondaryInvestmentMetric label="Esperado em investimento" value={formatCurrency(financial.expectedToDate)} />
+                  <SecondaryInvestmentMetric
+                    label="Diferença para o esperado"
+                    value={investmentDiffLabel}
+                    tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
+                  />
+                  <SecondaryInvestmentMetric
+                    label="Contas fora do ritmo"
+                    value={String(outOfRhythmCount)}
+                    href={drillDownUrl({ ritmo: "fora_do_ritmo" })}
+                    tone={outOfRhythmCount > 0 ? "warning" : "neutral"}
+                    title={`${spendRhythm.abaixo} abaixo · ${spendRhythm.acima} acima`}
+                  />
+                </div>
+
+                <div className="mt-4">
+                  <ProgressBar
+                    planned={financial.planned}
+                    actual={financial.actual}
+                    expectedToDate={financial.expectedToDate}
+                    monthTemporalStatus={monthTemporalStatus}
+                  />
+                </div>
+
+                <div className="mt-2.5">
+                  {financial.semMeta > 0 ? (
+                    <Button
+                      href={drillDownUrl({ meta: "sem" })}
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto px-0 py-0 text-[13px] font-normal text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary"
+                    >
+                      {financial.semMeta} cliente{financial.semMeta !== 1 ? "s" : ""} sem planejamento configurado
+                    </Button>
+                  ) : (
+                    <p className="text-[13px] text-overview-text-muted">Todos os clientes possuem planejamento configurado</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Etapa 3: fora do Consolidado só existe investimento
+                    REALIZADO por plataforma — planejado/esperado/ritmo
+                    dependem de um orçamento que ainda não é configurado por
+                    canal (ver decisão registrada no relatório da etapa). */}
+                <div className="mt-3 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-3">
+                  <PrimaryInvestmentMetric label={`Realizado · ${PLATFORM_LABEL[platformFilter]}`} value={formatCurrency(channelActualTotal ?? 0)} />
+                </div>
+                <p className="mt-2.5 text-[13px] text-overview-text-muted">
+                  Planejado e ritmo financeiro disponíveis só no recorte Consolidado — ainda não há orçamento configurado por plataforma.
+                </p>
+              </>
+            )}
+          </div>
+
+          <div className="border-t border-overview-border px-5 py-3.5 sm:px-6 sm:py-4">
             <SectionHeader title="Indicadores da operação" />
-            <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-3 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
               <OperationMetric
                 label="Clientes ativos"
                 value={String(operationIndicators.activeClientsCount)}
@@ -676,132 +799,6 @@ export default async function Home({
                 label="Otimizações no mês"
                 value={`${operationIndicators.optimizationsCount} otimizações`}
                 context="Revisões estratégicas registradas"
-              />
-            </div>
-          </div>
-
-          <div className="border-t border-overview-border px-5 py-4 sm:px-6 sm:py-5">
-            <SectionHeader
-              title={platformFilter === "consolidado" ? "Controle de investimento" : `Investimento · ${PLATFORM_LABEL[platformFilter]}`}
-            />
-
-            {platformFilter === "consolidado" ? (
-              <>
-                {/* Camada 1 — os números que o olhar deve encontrar primeiro. */}
-                <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-3">
-                  <PrimaryInvestmentMetric label="Planejado" value={formatCurrency(financial.planned)} />
-                  <PrimaryInvestmentMetric label="Realizado" value={formatCurrency(financial.actual)} />
-                  <PrimaryInvestmentMetric
-                    label="Orçamento utilizado"
-                    value={financial.pct !== null ? formatPercent(financial.pct) : "—"}
-                    size="md"
-                  />
-                </div>
-
-                {/* Camada 2 — contexto de ritmo, deliberadamente mais discreto. */}
-                <div className="mt-5 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <SecondaryInvestmentMetric
-                    label="Esperado hoje"
-                    value={formatPercent(investmentExpectedPct)}
-                    title="dia_atual / dias_do_mês — igual para qualquer cliente do recorte, nunca uma média de percentuais por cliente. Não depende de nenhum orçamento estar configurado."
-                  />
-                  <SecondaryInvestmentMetric label="Esperado em investimento" value={formatCurrency(financial.expectedToDate)} />
-                  <SecondaryInvestmentMetric
-                    label="Diferença para o esperado"
-                    value={investmentDiffLabel}
-                    tone={financial.planned > 0 ? investmentDiffTone : "neutral"}
-                  />
-                  <SecondaryInvestmentMetric
-                    label="Contas fora do ritmo"
-                    value={String(outOfRhythmCount)}
-                    href={drillDownUrl({ ritmo: "fora_do_ritmo" })}
-                    tone={outOfRhythmCount > 0 ? "warning" : "neutral"}
-                    title={`${spendRhythm.abaixo} abaixo · ${spendRhythm.acima} acima`}
-                  />
-                </div>
-
-                <div className="mt-5">
-                  <ProgressBar
-                    planned={financial.planned}
-                    actual={financial.actual}
-                    expectedToDate={financial.expectedToDate}
-                    monthTemporalStatus={monthTemporalStatus}
-                  />
-                </div>
-
-                <div className="mt-3">
-                  {financial.semMeta > 0 ? (
-                    <Button
-                      href={drillDownUrl({ meta: "sem" })}
-                      variant="ghost"
-                      size="sm"
-                      className="h-auto px-0 py-0 text-[13px] font-normal text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary"
-                    >
-                      {financial.semMeta} cliente{financial.semMeta !== 1 ? "s" : ""} sem planejamento configurado
-                    </Button>
-                  ) : (
-                    <p className="text-[13px] text-overview-text-muted">Todos os clientes possuem planejamento configurado</p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                {/* Etapa 3: fora do Consolidado só existe investimento
-                    REALIZADO por plataforma — planejado/esperado/ritmo
-                    dependem de um orçamento que ainda não é configurado por
-                    canal (ver decisão registrada no relatório da etapa). */}
-                <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-3">
-                  <PrimaryInvestmentMetric label={`Realizado · ${PLATFORM_LABEL[platformFilter]}`} value={formatCurrency(channelActualTotal ?? 0)} />
-                </div>
-                <p className="mt-3 text-[13px] text-overview-text-muted">
-                  Planejado e ritmo financeiro disponíveis só no recorte Consolidado — ainda não há orçamento configurado por plataforma.
-                </p>
-              </>
-            )}
-          </div>
-
-          {/* Etapa "Executive Dashboard 1.0" — complementa os indicadores
-              operacionais/financeiros acima com uma dimensão de RESULTADO
-              (leads/vendas/CPL/CPA), derivada de `performance_records` já
-              buscado (nenhuma consulta nova). Cliente sem objetivo de
-              performance configurado, ou sem nenhum registro lançado no mês,
-              nunca contribui um "0" fabricado — some da soma, e o card some
-              "—" quando ninguém no recorte tem dado. Receita/ROAS não
-              aparecem aqui: nenhuma tabela da plataforma guarda valor
-              monetário de resultado hoje, só contagem (ver relatório da
-              etapa) — mostrar essas duas como "Não configurado" seria dar a
-              entender que a métrica existe e está vazia, quando na verdade
-              a plataforma ainda não tem de onde tirar esse número. */}
-          <div className="border-t border-overview-border px-5 py-4 sm:px-6 sm:py-5">
-            <SectionHeader title="Resultados da agência" />
-            <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
-              <OperationMetric
-                label="Leads gerados"
-                value={agencyResults.leads.clientsWithData > 0 ? String(agencyResults.leads.count) : "—"}
-                context={
-                  agencyResults.leads.clientsWithData > 0
-                    ? `${agencyResults.leads.clientsWithData} cliente${agencyResults.leads.clientsWithData !== 1 ? "s" : ""} com dado no mês`
-                    : "Nenhum cliente com objetivo de leads configurado"
-                }
-              />
-              <OperationMetric
-                label={PERFORMANCE_GOALS.leads.costMetricLabel}
-                value={agencyResults.leads.costPerResult !== null ? formatCurrency(agencyResults.leads.costPerResult) : "—"}
-                context="Investimento somado ÷ leads somados"
-              />
-              <OperationMetric
-                label="Vendas geradas"
-                value={agencyResults.sales.clientsWithData > 0 ? String(agencyResults.sales.count) : "—"}
-                context={
-                  agencyResults.sales.clientsWithData > 0
-                    ? `${agencyResults.sales.clientsWithData} cliente${agencyResults.sales.clientsWithData !== 1 ? "s" : ""} com dado no mês`
-                    : "Nenhum cliente com objetivo de vendas configurado"
-                }
-              />
-              <OperationMetric
-                label={PERFORMANCE_GOALS.sales.costMetricLabel}
-                value={agencyResults.sales.costPerResult !== null ? formatCurrency(agencyResults.sales.costPerResult) : "—"}
-                context="Investimento somado ÷ vendas somadas"
               />
             </div>
           </div>
