@@ -30,6 +30,16 @@ efeito observável não precisam de entrada.
 
 ### 1. Não lançado
 
+- **Sprints — árvore operacional mais densa e tarefas editáveis sem sair da
+  tela.** O card fechado de cada cliente virou uma única linha compacta
+  (antes eram quatro linhas empilhadas). Na visão "Mensal > Por sprints",
+  as sprints de um cliente aparecem indentadas como filhas dele, com
+  divisórias discretas em vez de um card por sprint — mais clientes e mais
+  sprints cabem na tela ao mesmo tempo. Criar e editar uma tarefa agora
+  pode ser feito direto na tela Sprints, num formulário compacto que abre
+  no lugar, sem navegar para uma página separada (excluir e concluir
+  tarefa já funcionavam assim). Nenhuma regra financeira, de prioridade ou
+  a página do cliente foram alteradas.
 - **Sprints — tarefas e otimizações no card fechado do cliente, e
   otimizações direto na tela Sprints.** O card fechado de cada cliente na
   tela Sprints agora mostra também quantas tarefas estão pendentes/

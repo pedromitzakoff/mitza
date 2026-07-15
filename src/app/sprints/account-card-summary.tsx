@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { SPEND_STATUS_BADGE_CLASSES } from "@/lib/spend-status";
 import type { FinancialPeriodSummary } from "@/lib/financial-period";
-import { computeExpectedPct } from "@/lib/financial-period";
 import type { OperationalSummary } from "@/lib/account-priority";
 import type { MonthTemporalStatus } from "@/lib/monthly-budget";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
@@ -30,24 +29,21 @@ const OPERATIONAL_TONE_CLASSES = {
  * trocando o período (`summary`, já resolvido por `resolveSprintPeriodSummary`/
  * `resolveMonthPeriodSummary`) e o texto operacional (`operational`, já
  * decidido por `operationalSummary`). Regra "card fechado = decisão": nome,
- * período, % investido, situação financeira, UMA informação operacional e a
- * barra — nunca lista de alertas nem diferença em reais aqui (isso fica no
- * card aberto).
+ * período, % investido, situação financeira, UMA informação operacional,
+ * tarefas e otimizações do período (Decisão 009) — nunca lista de alertas
+ * nem diferença em reais aqui (isso fica no card aberto).
  *
- * Sprint UX 2.0 (Decisão 009, docs/DECISIONS.md): a regra acima foi ajustada
- * pra incluir tarefas pendentes/concluídas e contagem de otimizações do
- * período — o gestor precisa dessas duas contagens pra decidir onde agir sem
- * precisar expandir até a sprint. `tasksTotal`/`optimizationCount` são
- * opcionais só por retrocompatibilidade de tipo; todo chamador real desta
- * etapa em diante sempre os informa.
- *
- * Etapa 67, seção 7: quando `summary.kind === "sprint"` (visão "Sprint
- * atual"), nunca mostra "Esperado X%" nem o marcador da barra — a sprint
- * atual não tem mais nenhum veredito de ritmo (o `summary.status` já vem
- * como "em_andamento" de `classifySprintSpendStatus`, nunca Acima/Abaixo).
- * A visão "Mensal Consolidado" (`summary.kind === "month"`) continua
- * mostrando o esperado e o marcador normalmente, agora com a fórmula central
- * de calendário (`computeMonthlyExpectedToDateByCalendar`).
+ * Sprint UX 2.0 Fase 2 (Decisão 011: "Sprint é uma árvore operacional" — a
+ * mesma lógica de densidade vale pro cliente): o card fechado do cliente
+ * virou uma ÚNICA linha (antes eram 4 linhas empilhadas — nome/período,
+ * %/status, tarefas/otimizações, barra). O marcador de "esperado até hoje" e
+ * a legenda de cores da barra somem do card fechado (viram um sliver de 1
+ * linha, `showExpectedMarker=false showLegend=false` — nenhuma conta muda,
+ * só a apresentação): essa informação continua disponível no card aberto
+ * (`Diferença pro ritmo esperado`/`MonthInvestmentSummary`). O texto
+ * operacional só aparece quando não é neutro ("Em dia" some — já é o que o
+ * badge de status comunica; só atenção/crítico aparecem, pra não repetir
+ * informação em toda linha saudável).
  */
 export function AccountCardSummary({
   clientId,
@@ -56,7 +52,6 @@ export function AccountCardSummary({
   periodLabel,
   summary,
   operational,
-  monthTemporalStatus,
   tasksDone,
   tasksTotal,
   optimizationCount,
@@ -67,9 +62,9 @@ export function AccountCardSummary({
   periodLabel: string;
   summary: FinancialPeriodSummary;
   operational: OperationalSummary;
-  /** Etapa 68, seção 16 — só relevante pra `summary.kind === "month"`
-   * (Mensal Consolidado): troca o texto do marcador quando o mês navegado
-   * não é o corrente. `undefined` = mês corrente. */
+  /** Etapa 68, seção 16 — mantido por compatibilidade de chamada; não é
+   * mais repassado à barra (Fase 2 sempre usa a versão sem marcador no card
+   * fechado), mas os chamadores continuam podendo passar sem erro. */
   monthTemporalStatus?: MonthTemporalStatus;
   /** Tarefas do período em foco (sprint atual ou mês, conforme a visão) —
    * `tasksTotal` 0 mostra "Sem tarefas no período" em vez de "0/0 tarefas". */
@@ -78,74 +73,60 @@ export function AccountCardSummary({
   /** Otimizações registradas (account_reviews) no período em foco. */
   optimizationCount?: number;
 }) {
-  const isSprintKind = summary.kind === "sprint";
   const investedPct = summary.pct !== null ? Math.round(summary.pct) : null;
-  const expectedPct = !isSprintKind && summary.planned > 0 ? Math.round(computeExpectedPct(summary)) : null;
 
   return (
-    <summary className="flex cursor-pointer list-none items-start gap-2 px-3 py-2.5">
-      <span className="mt-0.5 shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90">
-        ▸
-      </span>
+    <summary className="flex cursor-pointer list-none items-center gap-2 px-2.5 py-1.5">
+      <span className="shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90">▸</span>
 
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-          <Link href={`/clients/${clientId}`} className="font-semibold text-foreground hover:underline">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs">
+          <Link
+            href={`/clients/${clientId}`}
+            className="text-sm font-semibold text-foreground hover:underline"
+          >
             {clientName}
           </Link>
-          <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-            {managerName && <span>{managerName}</span>}
-            <span>{periodLabel}</span>
-          </span>
-        </div>
+          {managerName && <span className="text-muted-foreground">{managerName}</span>}
+          <span className="text-muted-foreground">{periodLabel}</span>
 
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
           {investedPct !== null ? (
             <>
               <span className="tabular-nums text-muted-foreground">{investedPct}% investido</span>
-              {expectedPct !== null && (
-                <span className="tabular-nums text-muted-foreground">Esperado {expectedPct}%</span>
-              )}
               <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[summary.status]}`}
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${SPEND_STATUS_BADGE_CLASSES[summary.status]}`}
               >
                 {PERIOD_STATUS_LABEL[summary.status]}
               </span>
             </>
           ) : (
-            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+            <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
               Sem planejamento
             </span>
           )}
-          <span className={OPERATIONAL_TONE_CLASSES[operational.tone]}>{operational.text}</span>
+
+          {tasksTotal !== undefined && (
+            <span className="tabular-nums text-muted-foreground">
+              {tasksTotal === 0 ? "Sem tarefas no período" : `${tasksDone ?? 0}/${tasksTotal} tarefas`}
+            </span>
+          )}
+          {optimizationCount !== undefined && (
+            <span className="tabular-nums text-muted-foreground">
+              {optimizationCount === 0
+                ? "Sem otimizações no período"
+                : `${optimizationCount} otimizaç${optimizationCount === 1 ? "ão" : "ões"}`}
+            </span>
+          )}
+          {operational.tone !== "neutral" && (
+            <span className={OPERATIONAL_TONE_CLASSES[operational.tone]}>{operational.text}</span>
+          )}
         </div>
 
-        {(tasksTotal !== undefined || optimizationCount !== undefined) && (
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-            {tasksTotal !== undefined && (
-              <span className="tabular-nums">
-                {tasksTotal === 0 ? "Sem tarefas no período" : `${tasksDone ?? 0}/${tasksTotal} tarefas`}
-              </span>
-            )}
-            {optimizationCount !== undefined && (
-              <span className="tabular-nums">
-                {optimizationCount === 0
-                  ? "Sem otimizações no período"
-                  : `${optimizationCount} otimizaç${optimizationCount === 1 ? "ão" : "ões"}`}
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="mt-1.5">
+        <div className="mt-1">
           {summary.planned > 0 ? (
-            <AgencyInvestmentBar
-              summary={summary}
-              showExpectedMarker={!isSprintKind}
-              monthTemporalStatus={isSprintKind ? undefined : monthTemporalStatus}
-            />
+            <AgencyInvestmentBar summary={summary} showExpectedMarker={false} showLegend={false} />
           ) : (
-            <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />
+            <div className="h-1 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />
           )}
         </div>
       </div>

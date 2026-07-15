@@ -7,6 +7,7 @@ import { formatDueDate } from "@/app/clients/task-row";
 import { completeTaskAction, deleteTaskAction } from "@/app/clients/tasks-actions";
 import { createCommentAction } from "@/app/clients/comments-actions";
 import { DeleteTaskButton } from "@/app/clients/delete-task-button";
+import { InlineEditTaskForm, type InlineTaskManagerOption } from "@/app/clients/inline-task-form";
 import { saveScrollForReturn } from "@/lib/scroll-restore";
 import type { CommentItem } from "@/app/clients/comment-thread";
 import type { OperationTaskItem } from "./operation-data";
@@ -27,6 +28,7 @@ export function TaskDrawerPanel({
   closeHref,
   returnTo,
   isAdmin,
+  managers,
 }: {
   task: OperationTaskItem;
   clientId: string;
@@ -36,6 +38,11 @@ export function TaskDrawerPanel({
   closeHref: string;
   returnTo: string;
   isAdmin: boolean;
+  /** Sprint UX 2.0 Fase 2 — só a tela Sprints passa isto: troca "Editar
+   * tarefa" (link pra `/tasks/{id}/edit`) por um formulário inline
+   * (`InlineEditTaskForm`), sem navegar pra fora da tela. A página do
+   * cliente não passa, então continua com o link de sempre — igual antes. */
+  managers?: InlineTaskManagerOption[];
 }) {
   const status = effectiveTaskStatus(task);
 
@@ -101,13 +108,38 @@ export function TaskDrawerPanel({
               </button>
             </form>
           )}
-          <Link
-            href={`/clients/${clientId}/tasks/${task.id}/edit?return_to=${encodeURIComponent(returnTo)}`}
-            onClick={() => saveScrollForReturn(returnTo)}
-            className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-          >
-            Editar tarefa
-          </Link>
+          {managers ? (
+            <InlineEditTaskForm
+              taskId={task.id}
+              clientId={clientId}
+              managers={managers}
+              returnTo={returnTo}
+              toggleId={`edit-task-${task.id}`}
+              fullEditHref={`/clients/${clientId}/tasks/${task.id}/edit?return_to=${encodeURIComponent(returnTo)}`}
+              defaultTitle={task.title}
+              defaultType={task.type}
+              // Limitação conhecida: `OperationTaskItem.assignee` só carrega
+              // nome/status (nunca o id — o modelo de dados compartilhado
+              // com Visão Geral/Relatórios nunca precisou disso até agora),
+              // então o valor pré-selecionado é resolvido por nome dentro da
+              // lista de gestores ativos. Em nomes duplicados (raro numa
+              // agência pequena) o pré-preenchimento pode escolher o gestor
+              // errado — trocar manualmente no select ainda funciona
+              // corretamente, só o valor DEFAULT que pode ficar impreciso.
+              defaultAssigneeId={
+                task.assignee ? (managers.find((m) => m.name === task.assignee?.name)?.id ?? null) : null
+              }
+              defaultDueDate={task.due_date}
+            />
+          ) : (
+            <Link
+              href={`/clients/${clientId}/tasks/${task.id}/edit?return_to=${encodeURIComponent(returnTo)}`}
+              onClick={() => saveScrollForReturn(returnTo)}
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Editar tarefa
+            </Link>
+          )}
           {isAdmin && (
             <DeleteTaskButton
               action={deleteTaskAction.bind(null, task.id, clientId)}

@@ -31,6 +31,7 @@ export function SprintMonthlyBySprintsGroup({
   sprintCommentsById,
   accountReviewsBySprintId,
   monthTemporalStatus,
+  managers,
 }: {
   card: OperationClientCardData;
   monthLabel: string;
@@ -43,6 +44,8 @@ export function SprintMonthlyBySprintsGroup({
    * Sprint UX 2.0. Opcional só por retrocompatibilidade de tipo. */
   accountReviewsBySprintId?: Map<string, AccountReviewSummaryItem[]>;
   monthTemporalStatus?: MonthTemporalStatus;
+  /** Sprint UX 2.0 Fase 2 — habilita "+ Tarefa" inline (ver `SprintCardBody`). */
+  managers?: { id: string; name: string }[];
 }) {
   const summary = resolveMonthPeriodSummary(card, monthLabel, monthRange);
   const operational = operationalSummary(card, "month");
@@ -69,35 +72,43 @@ export function SprintMonthlyBySprintsGroup({
         optimizationCount={optimizationCount}
       />
 
-      <div className="flex flex-col gap-2 border-t border-border p-3">
+      {/* Sprint UX 2.0 Fase 2 (Decisão 011): sprints como filhos visuais do
+          cliente — indentação + divisória à esquerda (border-l), nunca mais
+          uma pilha de cards independentes (gap-2 entre cards soltos). Cada
+          SprintCard entra em modo `flat` (sem moldura própria). */}
+      <div className="border-t border-border pl-3">
         {card.monthSprints.length > 0 ? (
-          card.monthSprints.map((sprint) => {
-            const isCurrent = sprint.temporalStatus === "atual";
-            return (
-              <SprintCard
-                key={sprint.sprintId}
-                sprint={sprint}
-                comments={sprintCommentsById.get(sprint.sprintId) ?? []}
-                clientId={card.clientId}
-                isAdmin={isAdmin}
-                tasks={card.monthSprintTasks[sprint.sprintId] ?? []}
-                executionLabel={isCurrent ? card.sprintExecutionLabel : null}
-                executionSeverity={isCurrent ? (card.sprintExecutionInfo?.severity ?? null) : null}
-                alerts={isCurrent ? card.alerts : undefined}
-                defaultOpen={false}
-                openClientHref={`/clients/${card.clientId}`}
-                buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
-                metaSyncedAt={card.lastSyncedAt}
-                performance={buildSprintPerformanceProps(card, sprint.sprintId)}
-                returnTo={returnTo}
-                accountReviews={accountReviewsBySprintId?.get(sprint.sprintId) ?? []}
-                newReviewHref={newReviewHref}
-                buildReviewDetailHref={buildReviewDetailHref}
-              />
-            );
-          })
+          <div className="border-l border-border/60 pl-2">
+            {card.monthSprints.map((sprint) => {
+              const isCurrent = sprint.temporalStatus === "atual";
+              return (
+                <SprintCard
+                  key={sprint.sprintId}
+                  sprint={sprint}
+                  comments={sprintCommentsById.get(sprint.sprintId) ?? []}
+                  clientId={card.clientId}
+                  isAdmin={isAdmin}
+                  tasks={card.monthSprintTasks[sprint.sprintId] ?? []}
+                  executionLabel={isCurrent ? card.sprintExecutionLabel : null}
+                  executionSeverity={isCurrent ? (card.sprintExecutionInfo?.severity ?? null) : null}
+                  alerts={isCurrent ? card.alerts : undefined}
+                  defaultOpen={false}
+                  openClientHref={`/clients/${card.clientId}`}
+                  buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
+                  metaSyncedAt={card.lastSyncedAt}
+                  performance={buildSprintPerformanceProps(card, sprint.sprintId)}
+                  returnTo={returnTo}
+                  accountReviews={accountReviewsBySprintId?.get(sprint.sprintId) ?? []}
+                  newReviewHref={newReviewHref}
+                  buildReviewDetailHref={buildReviewDetailHref}
+                  taskManagers={managers}
+                  flat
+                />
+              );
+            })}
+          </div>
         ) : (
-          <p className="text-xs text-muted-foreground">Nenhuma sprint neste mês.</p>
+          <p className="p-3 text-xs text-muted-foreground">Nenhuma sprint neste mês.</p>
         )}
       </div>
     </details>
