@@ -92,12 +92,45 @@ export const getCurrentProfile = cache(async (): Promise<CurrentProfile | null> 
 
   const { data: member } = await supabase
     .from("team_members")
-    .select("id, name, system_role, organization_id")
+    .select("id, name, system_role, organization_id, invitation_status")
     .eq("auth_user_id", user.id)
     .eq("status", "ativo")
     .maybeSingle();
 
   if (member) {
+    // User Feedback Resolution 1.0 (Bug 1): inviteTeamMemberCore já grava
+    // `auth_user_id` no momento do convite (não só quando ele é aceito),
+    // então a checagem acima encontra o vínculo direto e nunca passa pelo
+    // fallback abaixo (`linkPendingTeamMember`) — sem isto,
+    // `invitation_status` permanecia "convite_pendente" para sempre no
+    // fluxo normal de convite, mesmo com o login já funcionando. Este é o
+    // único lugar que sabe, com certeza, que o convite foi aceito de
+    // verdade (autenticação bem-sucedida), então a transição acontece
+    // aqui. Autolimitado: só grava na primeira vez (o `.eq` abaixo garante
+    // que não repete a escrita nas próximas navegações, quando o status já
+    // estiver "acesso_ativo").
+    if (member.invitation_status === "convite_pendente") {
+      const { error: activationError } = await supabase
+        .from("team_members")
+        .update({ invitation_status: "acesso_ativo" })
+        .eq("id", member.id)
+        .eq("invitation_status", "convite_pendente");
+
+      if (!activationError) {
+        await recordOperationalEvent(
+          supabase,
+          { teamMemberId: member.id, authUserId: user.id, organizationId: member.organization_id },
+          {
+            eventType: OperationalEventType.TEAM_MEMBER_ACCESS_ACTIVATED,
+            entityType: "team_member",
+            entityId: member.id,
+            source: "server",
+            metadata: { via: "login_confirmed" },
+          },
+        );
+      }
+    }
+
     console.log(`[perf] getCurrentProfile — ${(performance.now() - start).toFixed(0)}ms`);
     return {
       id: member.id,

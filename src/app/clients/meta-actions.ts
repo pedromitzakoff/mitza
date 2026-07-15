@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { syncClientMetaSpend } from "@/lib/meta-sync";
+import { toUserFacingError } from "@/lib/user-facing-error";
 
 export async function syncClientMetaAction(clientId: string) {
   const supabase = await createSupabaseClient();
@@ -22,7 +23,7 @@ export async function syncClientMetaAction(clientId: string) {
     revalidatePath(`/clients/${clientId}`);
     query = `synced=${result.daysSynced}`;
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Erro ao sincronizar com o Meta";
+    const message = toUserFacingError(err, "Não foi possível atualizar os dados da Meta neste momento.");
     query = `error=${encodeURIComponent(message)}`;
   }
 
