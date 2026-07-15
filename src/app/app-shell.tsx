@@ -3,25 +3,23 @@
 import { useState } from "react";
 import type { UserRole } from "@/lib/supabase/database.types";
 import { Sidebar } from "./sidebar";
-import { TopBar } from "./top-bar";
-import { BODY_MIN_HEIGHT_CLASS } from "./app-shell-dimensions";
 
 /**
- * Dono do estado do menu mobile, compartilhado entre o botão "Menu" (Top
- * Bar) e o drawer da sidebar.
+ * Dono do estado do menu mobile, compartilhado entre o gatilho flutuante e
+ * o drawer, ambos dentro da própria Sidebar.
  *
- * Hierarquia (Top Bar acima de tudo, largura cheia; Sidebar e conteúdo lado
- * a lado abaixo dela):
+ * Hierarquia (Etapa Global UX Refinement 1.0 — a Top Bar global foi
+ * removida; a Sidebar é agora o único elemento estrutural fixo, ocupando
+ * 100% da altura da viewport):
  *
  *   AppShell
- *   ├── TopBar            (100% da largura, topo do viewport)
- *   └── Body              (linha: Sidebar + MainArea)
- *       ├── Sidebar        (sticky abaixo da Top Bar, scroll próprio)
+ *   └── Body              (linha: Sidebar + MainArea, sem cabeçalho acima)
+ *       ├── Sidebar        (sticky, altura cheia, scroll próprio)
  *       └── MainArea       (ClientContextBar + conteúdo da rota)
  *
  * A página continua rolando normalmente (sem trocar pra um shell de altura
- * fixa) — Top Bar, Sidebar e ClientContextBar usam `position: sticky`, que
- * preserva âncoras (`#sprint-...`) e o comportamento nativo de scroll.
+ * fixa) — Sidebar e ClientContextBar usam `position: sticky`, que preserva
+ * âncoras (`#sprint-...`) e o comportamento nativo de scroll.
  */
 export function AppShell({
   profile,
@@ -33,12 +31,14 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="min-h-dvh">
-      <TopBar onOpenMenu={() => setMobileOpen(true)} />
-      <div className={`flex md:items-start ${BODY_MIN_HEIGHT_CLASS}`}>
-        <Sidebar profile={profile} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
-        <main className="min-w-0 flex-1">{children}</main>
-      </div>
+    <div className="flex min-h-dvh md:items-start">
+      <Sidebar
+        profile={profile}
+        mobileOpen={mobileOpen}
+        onOpen={() => setMobileOpen(true)}
+        onClose={() => setMobileOpen(false)}
+      />
+      <main className="min-w-0 flex-1">{children}</main>
     </div>
   );
 }

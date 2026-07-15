@@ -5,10 +5,12 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useSyncExternalStore } from "react";
 import {
   Building2,
+  Clock,
   FileText,
   LayoutGrid,
   ListChecks,
   LogOut,
+  Menu,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -20,13 +22,9 @@ import {
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { syncAllMetaAction } from "@/app/global-actions";
+import { formatAgencyDateTime } from "@/lib/format";
 import type { UserRole } from "@/lib/supabase/database.types";
-import {
-  SIDEBAR_COLLAPSED_WIDTH_CLASS,
-  SIDEBAR_EXPANDED_WIDTH_CLASS,
-  SIDEBAR_HEIGHT_CLASS,
-  TOP_BAR_OFFSET_CLASS,
-} from "./app-shell-dimensions";
+import { SIDEBAR_COLLAPSED_WIDTH_CLASS, SIDEBAR_EXPANDED_WIDTH_CLASS, SIDEBAR_HEIGHT_CLASS } from "./app-shell-dimensions";
 
 /**
  * Preferência de sidebar recolhida (só desktop) — fica salva no navegador,
@@ -35,7 +33,7 @@ import {
  * anti-padrão de setState dentro de efeito e pra não gerar mismatch de
  * hydration: o servidor não tem acesso a localStorage, então a snapshot do
  * servidor é sempre "expandida", e o valor real do cliente só substitui
- * depois da hydration — igual ao relógio da Top Bar. Só afeta telas
+ * depois da hydration — igual ao relógio do rodapé. Só afeta telas
  * desktop (md+) — o drawer mobile sempre mostra o conteúdo completo.
  */
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "mitza:sidebar-collapsed";
@@ -57,6 +55,56 @@ function getCollapsedServerSnapshot() {
 function setSidebarCollapsedPreference(value: boolean) {
   window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, value ? "1" : "0");
   window.dispatchEvent(new Event(SIDEBAR_COLLAPSED_EVENT));
+}
+
+/** Relógio da agência — migrado da Top Bar (removida na Etapa Global UX
+ * Refinement 1.0) para o rodapé da Sidebar. `useSyncExternalStore` pelo
+ * mesmo motivo do estado de collapsed acima: o servidor não tem hora real,
+ * então a snapshot do servidor é `null` (evita mismatch de hydration) e o
+ * valor de verdade só aparece depois, no cliente. */
+function subscribeToClock(callback: () => void) {
+  const interval = setInterval(callback, 30_000);
+  return () => clearInterval(interval);
+}
+function getClientNow() {
+  return Date.now();
+}
+function getServerNow() {
+  return null;
+}
+
+/** Expandida: texto discreto "Ter • 14 Jul • 16:42" (baixo contraste, nunca
+ * compete com a navegação). Recolhida (só md+, via `md:hidden` no texto):
+ * some o texto, fica só o ícone — com o dia/data/hora completos no
+ * `title`, que os navegadores mostram como tooltip nativo ao passar o
+ * mouse. Mobile não tem hover, mas nunca fica recolhido (o `collapsed`
+ * salvo é uma preferência só de desktop, e as classes que o escondem levam
+ * o prefixo `md:`), então o texto aparece sempre que o drawer está aberto. */
+function SidebarClock({ collapsed }: { collapsed: boolean }) {
+  const nowMs = useSyncExternalStore(subscribeToClock, getClientNow, getServerNow);
+
+  if (nowMs === null) {
+    return (
+      <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+        <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span className="invisible">00:00</span>
+      </div>
+    );
+  }
+
+  const { weekday, weekdayShort, date, dateShort, time } = formatAgencyDateTime(new Date(nowMs));
+
+  return (
+    <div
+      className={`flex items-center gap-1.5 text-[11px] text-zinc-500 ${collapsed ? "md:justify-center" : ""}`}
+      title={`${weekday} / ${date} / ${time}`}
+    >
+      <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <span className={collapsed ? "md:hidden" : ""}>
+        {weekdayShort} • {dateShort} • {time}
+      </span>
+    </div>
+  );
 }
 
 interface NavItem {
@@ -125,7 +173,7 @@ function NavLink({
     return (
       <span
         title={item.label}
-        className={`flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-muted-foreground/60 ${collapsed ? "md:justify-center" : ""}`}
+        className={`flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-zinc-600 ${collapsed ? "md:justify-center" : ""}`}
       >
         <span className="flex items-center gap-2.5">
           <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -141,9 +189,7 @@ function NavLink({
       href={item.href}
       title={item.label}
       className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm ${collapsed ? "md:justify-center" : ""} ${
-        active
-          ? "bg-brand/10 font-semibold text-brand"
-          : "font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+        active ? "bg-brand/15 font-semibold text-brand" : "font-medium text-zinc-200 hover:bg-white/10"
       }`}
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -192,7 +238,7 @@ function SidebarContent({
           onClick={toggleCollapsed}
           aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
-          className="hidden shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-zinc-100 hover:text-foreground md:block dark:hover:bg-zinc-900"
+          className="hidden shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 md:block"
         >
           {collapsed ? (
             <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
@@ -233,7 +279,7 @@ function SidebarContent({
                 <button
                   type="submit"
                   title="Atualizar Meta (todos)"
-                  className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-zinc-100 hover:text-foreground dark:hover:bg-zinc-900"
+                  className="shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
                 >
                   <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
                 </button>
@@ -243,22 +289,30 @@ function SidebarContent({
         )}
       </div>
 
-      {/* RODAPÉ — sempre visível, uma borda sutil separando do resto. */}
-      <div className="shrink-0 border-t border-border p-2.5">
-        <div className={`flex items-center gap-2 ${collapsed ? "md:justify-center" : ""}`} title={`${profile.name} · ${profile.role === "admin" ? "Admin" : "Gestor"}`}>
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-semibold text-brand">
+      {/* RODAPÉ — sempre visível, uma borda sutil separando do resto.
+       * Relógio da agência (data/hora globais, migrados da Top Bar) fica
+       * aqui, acima da identidade do usuário — discreto, nunca competindo
+       * com a navegação (Etapa Global UX Refinement 1.0). */}
+      <div className="shrink-0 space-y-2 border-t border-white/10 p-2.5">
+        <SidebarClock collapsed={collapsed} />
+
+        <div
+          className={`flex items-center gap-2 ${collapsed ? "md:justify-center" : ""}`}
+          title={`${profile.name} · ${profile.role === "admin" ? "Admin" : "Gestor"}`}
+        >
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand/15 text-xs font-semibold text-brand">
             {initial}
           </span>
           <span className={`min-w-0 ${collapsed ? "md:hidden" : ""}`}>
-            <p className="truncate text-sm font-medium text-foreground">{profile.name}</p>
-            <p className="text-xs text-muted-foreground">{profile.role === "admin" ? "Admin" : "Gestor"}</p>
+            <p className="truncate text-sm font-medium text-zinc-100">{profile.name}</p>
+            <p className="text-xs text-zinc-500">{profile.role === "admin" ? "Admin" : "Gestor"}</p>
           </span>
         </div>
-        <form action={logout} className="mt-1.5">
+        <form action={logout}>
           <button
             type="submit"
             title="Sair"
-            className={`flex w-full items-center justify-center gap-1.5 rounded-md border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900 ${collapsed ? "md:px-0" : ""}`}
+            className={`flex w-full items-center justify-center gap-1.5 rounded-md border border-white/15 px-3 py-1 text-xs font-medium text-zinc-200 hover:bg-white/10 ${collapsed ? "md:px-0" : ""}`}
           >
             <LogOut className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <ItemLabel collapsed={collapsed}>Sair</ItemLabel>
@@ -274,16 +328,28 @@ function SidebarMode({ onMode }: { onMode: (mode: string | null) => React.ReactN
   return <>{onMode(searchParams.get("mode"))}</>;
 }
 
-/** O botão "Menu" e o relógio/marca vivem na Top Bar global
- * (src/app/top-bar.tsx); a Sidebar recebe o estado do drawer mobile por
- * fora (dono é o AppShell) em vez de administrar o seu próprio. */
+/**
+ * A Sidebar é o único elemento estrutural fixo da plataforma (Decisão 012 —
+ * a Top Bar global foi removida): fundo preto permanente (não acompanha o
+ * tema claro/escuro do resto da aplicação — por isso as cores aqui usam
+ * `zinc-*`/`white/*` fixos em vez dos tokens de tema `foreground`/`border`/
+ * `card`), ocupa exatamente 100% da altura da viewport em qualquer
+ * breakpoint (`SIDEBAR_HEIGHT_CLASS`) e é o principal elemento de
+ * navegação da plataforma. No mobile ela continua sendo um drawer (abrir
+ * tudo o tempo todo tomaria a área operacional inteira — Cap. 17 dos
+ * Princípios de Arquitetura); como não existe mais Top Bar cujo botão
+ * "Menu" a acionava, o próprio componente expõe um gatilho flutuante
+ * (`onOpen`) — só visível no mobile e só quando o drawer está fechado.
+ */
 export function Sidebar({
   profile,
   mobileOpen,
+  onOpen,
   onClose,
 }: {
   profile: { name: string; role: UserRole };
   mobileOpen: boolean;
+  onOpen: () => void;
   onClose: () => void;
 }) {
   const pathname = usePathname();
@@ -292,17 +358,23 @@ export function Sidebar({
 
   return (
     <>
-      {mobileOpen && (
+      {!mobileOpen && (
         <button
           type="button"
-          aria-label="Fechar menu"
-          onClick={onClose}
-          className={`fixed inset-x-0 bottom-0 z-40 bg-black/30 md:hidden ${TOP_BAR_OFFSET_CLASS}`}
-        />
+          onClick={onOpen}
+          aria-label="Abrir menu"
+          className="fixed left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-black text-zinc-100 shadow-[var(--shadow-float)] md:hidden"
+        >
+          <Menu className="h-4 w-4" aria-hidden="true" />
+        </button>
+      )}
+
+      {mobileOpen && (
+        <button type="button" aria-label="Fechar menu" onClick={onClose} className="fixed inset-0 z-40 bg-black/30 md:hidden" />
       )}
 
       <aside
-        className={`fixed bottom-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-card transition-transform duration-200 md:sticky md:bottom-auto md:z-0 md:translate-x-0 md:transition-[width] ${TOP_BAR_OFFSET_CLASS} ${SIDEBAR_HEIGHT_CLASS} ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-black transition-transform duration-200 md:sticky md:top-0 md:z-0 md:translate-x-0 md:border-r md:border-white/10 md:transition-[width] ${SIDEBAR_HEIGHT_CLASS} ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         } ${collapsed ? SIDEBAR_COLLAPSED_WIDTH_CLASS : SIDEBAR_EXPANDED_WIDTH_CLASS}`}
       >

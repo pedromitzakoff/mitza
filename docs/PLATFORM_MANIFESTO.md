@@ -344,3 +344,33 @@ Toda informação operacional deve nascer do cliente:
 - Os históricos pertencem ao cliente.
 
 A plataforma nunca deve inverter essa lógica.
+
+## Capítulo 17 — Toda informação operacional deve permitir ação
+
+Mostrar uma informação sem oferecer o que fazer com ela é deixar o gestor
+sozinho com o problema.
+
+Sempre que a plataforma exibe um item operacional, o gestor deve poder agir
+sobre ele imediatamente, no mesmo lugar, se essa ação for segura:
+
+- uma tarefa exibida deve poder ser concluída ali;
+- uma reunião exibida deve poder ser reagendada ali;
+- uma entrega exibida deve poder ser marcada como realizada ou reagendada
+  ali;
+- um investimento exibido deve poder ser atualizado ali.
+
+A plataforma deve evitar informação puramente de consulta quando uma ação
+poderia acontecer no mesmo contexto. Mostrar sem permitir agir é a metade
+de um trabalho.
+
+## Capítulo 18 — A plataforma favorece ação, não navegação
+
+O gestor entra na plataforma para executar trabalho, não para navegar por
+telas.
+
+Sempre que existir um conflito entre "navegar até a ação" e "agir onde já
+se está", a plataforma escolhe agir onde já se está.
+
+Isso vale para toda funcionalidade futura: antes de desenhar uma tela nova
+ou um fluxo novo, a pergunta é se ele favorece a ação imediata do gestor ou
+se apenas adiciona mais um lugar para ele visitar.

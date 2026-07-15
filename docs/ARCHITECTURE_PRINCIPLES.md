@@ -262,3 +262,28 @@ Reduzir:
 - divisórias desnecessárias;
 - componentes repetidos;
 - cabeçalhos duplicados.
+
+## Capítulo 16 — A navegação ocupa o menor espaço possível
+
+Navegação existe para dar contexto, não para competir com a operação.
+
+Menus, barras, filtros, cabeçalhos e qualquer elemento estrutural devem
+ocupar apenas o espaço necessário para cumprir sua função — nunca mais que
+isso.
+
+Toda área recuperada de um elemento estrutural deve se converter em área
+útil de trabalho para o gestor.
+
+## Capítulo 17 — Área operacional em primeiro lugar
+
+Toda decisão de UX deve priorizar o aumento da área operacional útil.
+
+Sempre que um elemento estrutural competir com a área operacional, sua
+existência deve ser questionada.
+
+Antes de adicionar qualquer elemento novo à interface, a pergunta
+obrigatória é:
+
+> Isso ajuda o gestor a trabalhar ou apenas ocupa espaço?
+
+Se a resposta for "apenas ocupa espaço", o elemento não deve existir.

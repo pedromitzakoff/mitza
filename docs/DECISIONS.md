@@ -46,6 +46,7 @@ capítulo final ("Como adicionar novas decisões").
 - [Decisão 009: Card fechado do cliente também mostra tarefas e otimizações](#decisão-009-card-fechado-do-cliente-também-mostra-tarefas-e-otimizações)
 - [Decisão 010: A Plataforma não é um ClickUp](#decisão-010-a-plataforma-não-é-um-clickup)
 - [Decisão 011: Sprint é uma árvore operacional](#decisão-011-sprint-é-uma-árvore-operacional)
+- [Decisão 012: A Sidebar é o único elemento estrutural fixo](#decisão-012-a-sidebar-é-o-único-elemento-estrutural-fixo)
 
 ## Capítulo 1 — Formato de uma Decisão
 
@@ -459,6 +460,69 @@ Permitir que um gestor escaneie dezenas de clientes rapidamente.
 ### Impactos
 
 Não especificado nesta decisão.
+
+## Decisão 012: A Sidebar é o único elemento estrutural fixo
+
+**Data:** 2026-07-15
+**Status:** Ativa.
+
+### Contexto
+
+A plataforma tinha dois elementos estruturais globais competindo por
+espaço vertical: a Top Bar (largura cheia, no topo, com o botão de menu
+mobile, a marca e o relógio da agência) e a Sidebar (navegação principal,
+abaixo da Top Bar). Em telas de notebook comuns, a Top Bar consumia uma
+faixa inteira sem oferecer valor proporcional ao espaço — não fazia nada
+que a Sidebar já não pudesse fazer.
+
+### Problema
+
+Cada elemento estrutural que não converte em área operacional é espaço
+tirado do gestor. A Top Bar só carregava marca, botão de menu mobile e
+relógio — nenhuma dessas três coisas precisa de uma faixa própria de
+largura total.
+
+### Alternativas consideradas
+
+Manter a Top Bar só no mobile (para o botão de menu) e removê-la no
+desktop: rejeitada por criar dois comportamentos estruturais diferentes
+entre mobile e desktop, o que contraria a ideia de a Sidebar ser um
+elemento único e consistente em qualquer tela.
+
+### Decisão tomada
+
+A Top Bar global é removida por completo. A Sidebar passa a ser o único
+elemento estrutural fixo da plataforma: ocupa exatamente 100% da altura da
+viewport, em qualquer breakpoint, e nunca termina antes do fim da tela. As
+únicas informações que eram exclusivas da Top Bar (data e horário da
+agência) migram para o rodapé da Sidebar — texto discreto quando expandida,
+ícone com tooltip quando recolhida (desktop), texto completo sempre que o
+drawer estiver aberto (mobile, onde não existe hover). O botão de abrir o
+menu no mobile deixa de viver na Top Bar (que não existe mais) e passa a
+ser um gatilho flutuante próprio, exposto pela própria Sidebar.
+
+### Justificativa
+
+Um elemento estrutural deve justificar o espaço que ocupa (Capítulo 17 dos
+Princípios de Arquitetura: "área operacional em primeiro lugar"). A Top
+Bar não passava nesse teste. Consolidar tudo na Sidebar também reforça a
+Sidebar como o principal — e agora único — elemento de navegação e
+identidade estrutural da plataforma, transmitindo estabilidade e
+continuidade em vez de duas faixas competindo entre si.
+
+### Impactos
+
+- `src/app/top-bar.tsx` removido.
+- `src/app/app-shell-dimensions.ts` simplificado (sem mais cálculo de
+  altura descontando a Top Bar).
+- `src/app/sidebar.tsx`: fundo preto permanente (não acompanha o tema
+  claro/escuro do resto da aplicação — é chrome estrutural, não conteúdo),
+  altura cheia em qualquer breakpoint, relógio da agência no rodapé,
+  gatilho de menu mobile próprio.
+- `src/app/clients/client-identity-sticky.tsx`: ajustado para não
+  descontar mais a altura da Top Bar (ela não existe).
+- Nenhuma regra de negócio, banco de dados, permissão ou integração foi
+  alterada.
 
 ## Como adicionar novas decisões
 

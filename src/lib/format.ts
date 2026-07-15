@@ -257,10 +257,16 @@ export function formatActiveMonths(contractStartDate: string | null, today: Date
 }
 
 const agencyWeekdayFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: APP_TIMEZONE });
+const agencyWeekdayShortFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: APP_TIMEZONE });
 const agencyDateFormatter = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "long",
   year: "numeric",
+  timeZone: APP_TIMEZONE,
+});
+const agencyDateShortFormatter = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "short",
   timeZone: APP_TIMEZONE,
 });
 const agencyTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -269,16 +275,30 @@ const agencyTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
   timeZone: APP_TIMEZONE,
 });
 
+/** "ter." → "Ter", "jul." → "Jul" — o Intl pt-BR sempre devolve a forma
+ * curta com ponto final; a Sidebar (relógio do rodapé) quer só a palavra. */
+function capitalizeNoDot(value: string): string {
+  return capitalize(value.replace(/\.$/, ""));
+}
+
 /**
  * Dia da semana + data + horário no fuso da agência — ao contrário das
  * outras funções deste arquivo (que formatam datas civis já corretas com
  * timeZone "UTC"), esta recebe um instante real (`new Date()`) e por isso
- * converte de verdade pro fuso America/Sao_Paulo. Usada na Top Bar global.
+ * converte de verdade pro fuso America/Sao_Paulo. Usada no relógio da
+ * Sidebar (rodapé, Etapa Global UX Refinement 1.0 — antes vivia na Top Bar,
+ * removida nesta etapa): `weekday`/`date` completos alimentam o tooltip da
+ * Sidebar recolhida; `weekdayShort`/`dateShort` alimentam o texto discreto
+ * da Sidebar expandida ("Ter • 14 Jul • 16:42").
  */
-export function formatAgencyDateTime(date: Date): { weekday: string; date: string; time: string } {
+export function formatAgencyDateTime(
+  date: Date,
+): { weekday: string; weekdayShort: string; date: string; dateShort: string; time: string } {
   return {
     weekday: capitalize(agencyWeekdayFormatter.format(date)),
+    weekdayShort: capitalizeNoDot(agencyWeekdayShortFormatter.format(date)),
     date: agencyDateFormatter.format(date),
+    dateShort: capitalizeNoDot(agencyDateShortFormatter.format(date)),
     time: agencyTimeFormatter.format(date),
   };
 }
