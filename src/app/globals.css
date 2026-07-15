@@ -130,3 +130,50 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/*
+ * Interaction & Motion System 1.0 — animações de entrada compartilhadas
+ * (drawers/overlays) + guarda global de `prefers-reduced-motion`. Curtas,
+ * discretas, só opacity/transform (nunca propriedades de layout): o
+ * objetivo é comunicar continuidade, nunca chamar atenção. Ficam aqui (não
+ * repetidas por componente) porque toda a plataforma deve usar a mesma
+ * linguagem de transição.
+ */
+@keyframes mitza-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mitza-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.mitza-backdrop-in {
+  animation: mitza-fade-in 150ms ease-out;
+}
+
+.mitza-panel-in {
+  animation: mitza-panel-in 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

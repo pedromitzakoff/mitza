@@ -18,6 +18,7 @@ import { getLatestPerformanceUpdateText, type SprintPerformanceView } from "@/li
 import { formatPerformanceResult, PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { ROW_GRID_CLASSES } from "@/app/sprints/row-grid";
+import { SubmitButton } from "@/app/submit-button";
 
 /** Dados de performance de UMA sprint (Etapa 71) — sempre opcional: quem
  * ainda não busca `performance_records` (nenhuma tela hoje) simplesmente
@@ -231,9 +232,9 @@ function SprintPerformanceSection({
           <div className="hidden items-center gap-1.5 peer-checked/revert:flex">
             <span className="text-[11px] text-muted-foreground">Substituir valor manual pelo do Meta?</span>
             <form action={resetSprintSpendSourceAction.bind(null, sprint.sprintId, clientId, returnTo)}>
-              <button type="submit" className="text-[11px] font-medium text-brand hover:underline">
+              <SubmitButton className="text-[11px] font-medium text-brand hover:underline" pendingChildren="Confirmando...">
                 Confirmar
-              </button>
+              </SubmitButton>
             </form>
             <label htmlFor={revertSourceToggleId} className="cursor-pointer text-[11px] text-muted-foreground hover:underline">
               Cancelar
@@ -278,12 +279,12 @@ function SprintPerformanceSection({
                 </div>
               ))}
             <div className="flex items-center gap-1.5">
-              <button
-                type="submit"
+              <SubmitButton
                 className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                pendingChildren="Salvando..."
               >
                 Salvar
-              </button>
+              </SubmitButton>
               <label htmlFor={editToggleId} className="cursor-pointer text-[11px] text-muted-foreground hover:underline">
                 Cancelar
               </label>

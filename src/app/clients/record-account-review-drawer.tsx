@@ -17,6 +17,7 @@ import {
 } from "@/lib/account-reviews";
 import type { AccountReviewOutcome, AccountReviewReason } from "@/lib/supabase/database.types";
 import { recordAccountReviewAction } from "./account-review-actions";
+import { SubmitButton } from "@/app/submit-button";
 
 /**
  * Primeiro formulário verdadeiramente client-side do app (seção 33/10 do
@@ -69,8 +70,8 @@ export function RecordAccountReviewDrawer({
 
   return (
     <>
-      <Link href={closeHref} scroll={false} className="fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
+      <Link href={closeHref} scroll={false} className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
+      <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-lg font-semibold text-foreground">Registrar otimização</h2>
           <Link
@@ -317,13 +318,13 @@ export function RecordAccountReviewDrawer({
           )}
 
           <div className="flex items-center gap-2 border-t border-border pt-4">
-            <button
-              type="submit"
+            <SubmitButton
               disabled={!canSave}
+              pendingChildren="Salvando..."
               className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               Salvar otimização
-            </button>
+            </SubmitButton>
             <Link
               href={closeHref}
               scroll={false}

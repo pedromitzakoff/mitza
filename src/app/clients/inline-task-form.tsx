@@ -1,5 +1,6 @@
 import { TASK_TYPE_LABEL } from "@/app/clients/task-labels";
 import { createTaskAction, updateTaskAction } from "@/app/clients/tasks-actions";
+import { SubmitButton } from "@/app/submit-button";
 import type { TaskType } from "@/lib/supabase/database.types";
 
 export interface InlineTaskManagerOption {
@@ -109,12 +110,12 @@ export function InlineCreateTaskForm({
         <input type="hidden" name="return_to" value={returnTo} />
         <TaskFormFields managers={managers} defaultDueDate={defaultDueDate} />
         <div className="flex items-center gap-1.5">
-          <button
-            type="submit"
+          <SubmitButton
             className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            pendingChildren="Salvando..."
           >
             Salvar
-          </button>
+          </SubmitButton>
           <label htmlFor={toggleId} className="cursor-pointer text-[11px] text-muted-foreground hover:underline">
             Cancelar
           </label>
@@ -172,12 +173,12 @@ export function InlineEditTaskForm({
           managers={managers}
         />
         <div className="flex items-center gap-2 text-[11px]">
-          <button
-            type="submit"
+          <SubmitButton
             className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
+            pendingChildren="Salvando..."
           >
             Salvar
-          </button>
+          </SubmitButton>
           <label htmlFor={toggleId} className="cursor-pointer text-muted-foreground hover:underline">
             Cancelar
           </label>

@@ -10,6 +10,7 @@ import {
 import type { AccountReviewOutcome, AccountReviewReason, OptimizationType } from "@/lib/supabase/database.types";
 import { generateClientUpdateAction } from "./client-update-actions";
 import { ClientUpdateEditor } from "./client-update-editor";
+import { SubmitButton } from "@/app/submit-button";
 
 export interface ClientUpdateDetail {
   id: string;
@@ -65,8 +66,8 @@ export function AccountReviewDetailDrawer({
 }) {
   return (
     <>
-      <Link href={closeHref} scroll={false} className="fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
+      <Link href={closeHref} scroll={false} className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
+      <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-lg font-semibold text-foreground">Otimização</h2>
           <Link
@@ -184,12 +185,12 @@ export function AccountReviewDetailDrawer({
                   `${closeHref}${closeHref.includes("?") ? "&" : "?"}reviewDetail=${review.id}`,
                 )}
               >
-                <button
-                  type="submit"
+                <SubmitButton
+                  pendingChildren="Gerando..."
                   className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
                 >
                   Gerar atualização
-                </button>
+                </SubmitButton>
               </form>
             </div>
           )}

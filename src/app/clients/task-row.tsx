@@ -1,9 +1,26 @@
+"use client";
+
+import { useOptimistic, useState, useTransition } from "react";
 import Link from "next/link";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
 import { formatCompactTaskDate } from "@/lib/format";
 import type { TaskStatus, TaskType, TeamMemberStatus } from "@/lib/supabase/database.types";
 import { completeTaskAction } from "./tasks-actions";
+
+/** `redirect()` de dentro de um Server Action lança um erro especial com
+ * `digest` começando em "NEXT_REDIRECT" — precisa deixar esse erro
+ * atravessar sem tratar como falha (senão o redirecionamento de
+ * `completeTaskAction` pra "tarefa não encontrada" nunca aconteceria). */
+function isRedirectSignal(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    typeof (error as { digest?: unknown }).digest === "string" &&
+    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  );
+}
 
 export interface TaskListItem {
   id: string;
@@ -43,6 +60,14 @@ export function formatDueDate(value: string): string {
  * pular pro topo. Reaproveitada em TaskList (tarefas soltas), SprintTaskList
  * (tarefas da sprint) e SprintClientGroup (tela Sprints) — qualquer ajuste
  * visual aqui reflete nos três lugares.
+ *
+ * Interaction & Motion System 1.0: concluir tarefa é UI otimista
+ * (`useOptimistic`) — o círculo vira check verde no clique, antes de
+ * `completeTaskAction` responder; o Server Action continua sendo a única
+ * fonte de verdade (nenhuma regra de conclusão muda), só a espera some da
+ * experiência. Se a ação falhar (exceto o redirect esperado de "tarefa não
+ * encontrada"), o `useOptimistic` volta sozinho ao estado real assim que a
+ * transition termina, e uma mensagem discreta explica o que aconteceu.
  */
 export function TaskRow({
   task,
@@ -60,7 +85,9 @@ export function TaskRow({
   hideAssigneeIfName?: string;
 }) {
   const effectiveStatus = effectiveTaskStatus(task);
-  const isDone = effectiveStatus === "feito";
+  const [isDone, setOptimisticDone] = useOptimistic(effectiveStatus === "feito");
+  const [, startTransition] = useTransition();
+  const [completeError, setCompleteError] = useState<string | null>(null);
   const isNotDone = effectiveStatus === "nao_realizado";
   const isOverdue = effectiveStatus === "atrasado";
   const isToday = task.due_date === todayDateString();
@@ -75,9 +102,22 @@ export function TaskRow({
 
   const rowOpacityClass = isDone || isNotDone ? "opacity-60" : isFuture ? "opacity-70" : "";
 
+  function handleComplete() {
+    setCompleteError(null);
+    startTransition(async () => {
+      setOptimisticDone(true);
+      try {
+        await completeTaskAction(task.id, clientId);
+      } catch (error) {
+        if (isRedirectSignal(error)) throw error;
+        setCompleteError("Não foi possível concluir. Tente novamente.");
+      }
+    });
+  }
+
   return (
     <li className="border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
-      <div className={`flex items-center gap-2.5 ${rowOpacityClass}`}>
+      <div className={`flex items-center gap-2.5 transition-opacity duration-150 ${rowOpacityClass}`}>
         {isDone ? (
           <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none text-green-700 dark:bg-green-950 dark:text-green-300">
             ✓
@@ -91,20 +131,19 @@ export function TaskRow({
             ×
           </span>
         ) : (
-          <form action={completeTaskAction.bind(null, task.id, clientId)}>
-            <button
-              type="submit"
-              aria-label="Marcar como feito"
-              title="Marcar como feito"
-              className={`block h-4 w-4 shrink-0 rounded-full border-2 hover:border-brand hover:bg-brand/10 ${
-                isOverdue
-                  ? "border-red-400 dark:border-red-700"
-                  : isToday
-                    ? "border-brand"
-                    : "border-zinc-300 dark:border-zinc-600"
-              }`}
-            />
-          </form>
+          <button
+            type="button"
+            onClick={handleComplete}
+            aria-label="Marcar como feito"
+            title="Marcar como feito"
+            className={`block h-4 w-4 shrink-0 rounded-full border-2 transition-colors hover:border-brand hover:bg-brand/10 ${
+              isOverdue
+                ? "border-red-400 dark:border-red-700"
+                : isToday
+                  ? "border-brand"
+                  : "border-zinc-300 dark:border-zinc-600"
+            }`}
+          />
         )}
 
         <span className={`w-20 shrink-0 text-xs tabular-nums ${dateClasses}`}>{dueDate}</span>
@@ -146,6 +185,7 @@ export function TaskRow({
           •••
         </Link>
       </div>
+      {completeError && <p className="mt-0.5 pl-[26px] text-[11px] text-red-600 dark:text-red-400">{completeError}</p>}
     </li>
   );
 }

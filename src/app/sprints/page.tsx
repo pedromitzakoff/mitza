@@ -631,6 +631,7 @@ export default async function SprintsPage({
             <div className="flex h-8 items-center gap-0.5 rounded-md border border-border px-1 text-sm">
               <Link
                 href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
+                scroll={false}
                 className="rounded px-1 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
                 aria-label="Mês anterior"
               >
@@ -639,13 +640,14 @@ export default async function SprintsPage({
               <span className="min-w-[7.5rem] text-center text-xs font-medium text-foreground">{monthLabel}</span>
               <Link
                 href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
+                scroll={false}
                 className="rounded px-1 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
                 aria-label="Próximo mês"
               >
                 &rsaquo;
               </Link>
               {params.month && (
-                <Link href={buildUrl({ month: "" })} className="ml-1 text-[11px] text-brand hover:underline">
+                <Link href={buildUrl({ month: "" })} scroll={false} className="ml-1 text-[11px] text-brand hover:underline">
                   Hoje
                 </Link>
               )}

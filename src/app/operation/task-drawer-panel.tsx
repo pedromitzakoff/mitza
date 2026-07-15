@@ -8,6 +8,7 @@ import { completeTaskAction, deleteTaskAction } from "@/app/clients/tasks-action
 import { createCommentAction } from "@/app/clients/comments-actions";
 import { DeleteTaskButton } from "@/app/clients/delete-task-button";
 import { InlineEditTaskForm, type InlineTaskManagerOption } from "@/app/clients/inline-task-form";
+import { SubmitButton } from "@/app/submit-button";
 import { saveScrollForReturn } from "@/lib/scroll-restore";
 import type { CommentItem } from "@/app/clients/comment-thread";
 import type { OperationTaskItem } from "./operation-data";
@@ -51,10 +52,10 @@ export function TaskDrawerPanel({
       <Link
         href={closeHref}
         scroll={false}
-        className="fixed inset-0 z-40 bg-black/30"
+        className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30"
         aria-label="Fechar"
       />
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
+      <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs text-muted-foreground">
@@ -100,12 +101,12 @@ export function TaskDrawerPanel({
         <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
           {status !== "feito" && (
             <form action={completeTaskAction.bind(null, task.id, clientId)}>
-              <button
-                type="submit"
+              <SubmitButton
                 className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
+                pendingChildren="Concluindo..."
               >
                 Marcar como feito
-              </button>
+              </SubmitButton>
             </form>
           )}
           {managers ? (
@@ -175,12 +176,9 @@ export function TaskDrawerPanel({
               required
               className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none"
             />
-            <button
-              type="submit"
-              className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            >
+            <SubmitButton className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900">
               Enviar
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </div>

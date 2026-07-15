@@ -78,6 +78,15 @@ export function SprintsFilters({
     return `/sprints?${next.toString()}`;
   }
 
+  /** Interaction & Motion System 1.0: toda troca de filtro é a mesma
+   * página, só o search param muda — `scroll: false` evita que a lista
+   * pule pro topo a cada clique num filtro, preservando onde o gestor
+   * estava olhando (mesmo princípio já usado nos links do drawer de
+   * tarefa/otimização). */
+  function pushFilters(overrides: Record<string, string>) {
+    router.push(buildUrl(overrides), { scroll: false });
+  }
+
   const secondaryCount = [
     health !== "todos",
     ritmo !== "todos",
@@ -90,18 +99,16 @@ export function SprintsFilters({
   const hasAnythingToClear = secondaryCount > 0 || Boolean(selectedClientId);
 
   function clearFilters() {
-    router.push(
-      buildUrl({
-        manager: isAdmin ? "all" : "me",
-        client: "",
-        health: "",
-        ritmo: "",
-        tasks: "",
-        optimization: "",
-        activity: "",
-        display: "",
-      }),
-    );
+    pushFilters({
+      manager: isAdmin ? "all" : "me",
+      client: "",
+      health: "",
+      ritmo: "",
+      tasks: "",
+      optimization: "",
+      activity: "",
+      display: "",
+    });
     setOpen(false);
   }
 
@@ -112,7 +119,7 @@ export function SprintsFilters({
     <div className="flex flex-wrap items-center gap-2">
       <select
         value={manager}
-        onChange={(e) => router.push(buildUrl({ manager: e.target.value }))}
+        onChange={(e) => pushFilters({ manager: e.target.value })}
         className="h-8 rounded-md border border-border bg-transparent px-2 text-xs text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         aria-label="Carteira"
       >
@@ -128,7 +135,7 @@ export function SprintsFilters({
       <ClientCombobox
         clients={clients}
         selectedClientId={selectedClientId}
-        onSelect={(clientId) => router.push(buildUrl({ client: clientId }))}
+        onSelect={(clientId) => pushFilters({ client: clientId })}
         label=""
       />
 
@@ -159,7 +166,7 @@ export function SprintsFilters({
               <div className="flex flex-col gap-2">
                 <select
                   value={ritmo}
-                  onChange={(e) => router.push(buildUrl({ ritmo: e.target.value }))}
+                  onChange={(e) => pushFilters({ ritmo: e.target.value })}
                   className={selectClasses}
                 >
                   <option value="todos">Situação do investimento: todas</option>
@@ -171,7 +178,7 @@ export function SprintsFilters({
 
                 <select
                   value={health}
-                  onChange={(e) => router.push(buildUrl({ health: e.target.value }))}
+                  onChange={(e) => pushFilters({ health: e.target.value })}
                   className={selectClasses}
                 >
                   <option value="todos">Situação operacional: todas</option>
@@ -183,7 +190,7 @@ export function SprintsFilters({
 
                 <select
                   value={tasks}
-                  onChange={(e) => router.push(buildUrl({ tasks: e.target.value }))}
+                  onChange={(e) => pushFilters({ tasks: e.target.value })}
                   className={selectClasses}
                 >
                   <option value="todas">Tarefas: todas</option>
@@ -194,7 +201,7 @@ export function SprintsFilters({
 
                 <select
                   value={optimization}
-                  onChange={(e) => router.push(buildUrl({ optimization: e.target.value }))}
+                  onChange={(e) => pushFilters({ optimization: e.target.value })}
                   className={selectClasses}
                 >
                   <option value="todas">Última otimização: todas</option>
@@ -206,7 +213,7 @@ export function SprintsFilters({
 
                 <select
                   value={activity}
-                  onChange={(e) => router.push(buildUrl({ activity: e.target.value }))}
+                  onChange={(e) => pushFilters({ activity: e.target.value })}
                   className={selectClasses}
                 >
                   <option value="todos">Atividade operacional: toda</option>
@@ -216,7 +223,7 @@ export function SprintsFilters({
 
                 <select
                   value={display}
-                  onChange={(e) => router.push(buildUrl({ display: e.target.value }))}
+                  onChange={(e) => pushFilters({ display: e.target.value })}
                   className={selectClasses}
                 >
                   <option value="todos">Exibir: todos os clientes</option>
