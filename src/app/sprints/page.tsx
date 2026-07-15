@@ -713,7 +713,7 @@ export default async function SprintsPage({
         {attentionCount > 0 && ` · ${attentionCount} precisa${attentionCount !== 1 ? "m" : ""} de atenção`}
       </p>
 
-      <div className="mt-3 flex flex-col gap-2">
+      <div className="mt-3 flex flex-col gap-1.5">
         {cards.length > 0 ? (
           view === "current" ? (
             cards.map((card) => (
@@ -725,6 +725,7 @@ export default async function SprintsPage({
                 isAdmin={isAdmin}
                 comments={card.sprint ? sprintCommentsById.get(card.sprint.sprintId) ?? [] : []}
                 accountReviews={card.sprint ? accountReviewsBySprintId.get(card.sprint.sprintId) ?? [] : []}
+                managers={gestores ?? []}
               />
             ))
           ) : grouping === "consolidated" ? (
@@ -753,6 +754,7 @@ export default async function SprintsPage({
                 sprintCommentsById={sprintCommentsById}
                 accountReviewsBySprintId={accountReviewsBySprintId}
                 monthTemporalStatus={monthTemporalStatus}
+                managers={gestores ?? []}
               />
             ))
           )
@@ -773,6 +775,7 @@ export default async function SprintsPage({
           closeHref={buildUrl({ task: "" })}
           returnTo={buildUrl({ task: "" })}
           isAdmin={isAdmin}
+          managers={gestores ?? []}
         />
       )}
 

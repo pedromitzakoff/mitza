@@ -323,6 +323,7 @@ export function SprintCardBody({
   metaSyncedAt,
   performance,
   returnTo,
+  taskManagers,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -356,6 +357,10 @@ export function SprintCardBody({
   /** Dados de performance desta sprint (Etapa 71) — opcional, mesmo padrão
    * de `accountReviews`/`alerts`. */
   performance?: SprintPerformanceProps;
+  /** Sprint UX 2.0 Fase 2 — só a tela Sprints passa isto: habilita "+ Tarefa"
+   * inline em `SprintTaskList` (formulário sem navegar pra `/tasks/new`). A
+   * página do cliente não passa, então continua com o link de sempre. */
+  taskManagers?: { id: string; name: string }[];
 }) {
   const isCurrent = sprint.temporalStatus === "atual";
   const sourceTimestampText = describeSpendSourceTimestamp(
@@ -435,7 +440,14 @@ export function SprintCardBody({
         <div className="mt-3 border-t border-border pt-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Execução da sprint</p>
           <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-            <SprintTaskList tasks={tasks} clientId={clientId} sprintId={sprint.sprintId} buildTaskHref={buildTaskHref} />
+            <SprintTaskList
+              tasks={tasks}
+              clientId={clientId}
+              sprintId={sprint.sprintId}
+              buildTaskHref={buildTaskHref}
+              managers={taskManagers}
+              returnTo={taskManagers ? returnTo : undefined}
+            />
             {accountReviews && newReviewHref && buildReviewDetailHref && (
               <AccountReviewsSection
                 reviews={accountReviews}
@@ -517,6 +529,8 @@ export function SprintCard({
   metaSyncedAt,
   performance,
   returnTo,
+  flat,
+  taskManagers,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -538,6 +552,17 @@ export function SprintCard({
   /** Pra onde voltar depois de salvar investimento/performance (Etapa MVP
    * 1.3) — ver doc de `SprintCardBody`. */
   returnTo: string;
+  /** Sprint UX 2.0 Fase 2 — ver doc de `SprintCardBody`. */
+  taskManagers?: { id: string; name: string }[];
+  /** Sprint UX 2.0 Fase 2 (Decisão 011) — quando a sprint é filha visual de
+   * um cliente já expandido (painel Sprints, "Mensal > Por sprints"), o
+   * próprio card não deveria repetir moldura de card (borda/fundo/raio):
+   * isso é "card dentro de card", o que a árvore operacional evita. `flat`
+   * troca a moldura por só uma divisória inferior discreta + menos padding,
+   * indentação fica por conta de quem chama (o wrapper do grupo). Nunca
+   * passado pela página do cliente — lá a sprint continua com moldura de
+   * card própria, sem cliente "pai" visível na mesma tela. */
+  flat?: boolean;
 }) {
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
   const isCurrent = sprint.temporalStatus === "atual";
@@ -550,9 +575,15 @@ export function SprintCard({
     <details
       id={`sprint-${sprint.sprintId}`}
       open={isOpen}
-      className={`group scroll-mt-4 rounded-lg border bg-card [&_summary::-webkit-details-marker]:hidden ${
-        isCurrent ? "border-l-4 border-l-brand border-y-border border-r-border" : "border-border"
-      }`}
+      className={
+        flat
+          ? `group scroll-mt-4 border-b border-border/60 last:border-0 [&_summary::-webkit-details-marker]:hidden ${
+              isCurrent ? "bg-brand/[0.03]" : ""
+            }`
+          : `group scroll-mt-4 rounded-lg border bg-card [&_summary::-webkit-details-marker]:hidden ${
+              isCurrent ? "border-l-4 border-l-brand border-y-border border-r-border" : "border-border"
+            }`
+      }
     >
       {/* Linha compacta — Etapa 73/74: prioriza realizado + performance real,
           nunca mais orientação/planejamento financeiro semanal (isso vive só
@@ -561,7 +592,9 @@ export function SprintCard({
           próprio badge temporal já cobre "status operacional" (Sprint atual/
           Concluída/Futura) — nunca um segundo selo Acima/Abaixo/Dentro/Sem
           planejamento aqui, essas classificações são só do nível mensal. */}
-      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+      <summary
+        className={`flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 ${flat ? "px-2 py-1.5" : "px-3 py-2"}`}
+      >
         <span className="shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90">
           ▸
         </span>
@@ -618,6 +651,7 @@ export function SprintCard({
         newReviewHref={newReviewHref}
         buildReviewDetailHref={buildReviewDetailHref}
         manualSpendUpdatedAt={manualSpendUpdatedAt}
+        taskManagers={taskManagers}
         metaSyncedAt={metaSyncedAt}
         performance={performance}
         returnTo={returnTo}

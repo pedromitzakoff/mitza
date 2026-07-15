@@ -26,6 +26,7 @@ export function SprintCurrentClientGroup({
   isAdmin,
   comments,
   accountReviews,
+  managers,
 }: {
   card: OperationClientCardData;
   returnTo: string;
@@ -35,6 +36,8 @@ export function SprintCurrentClientGroup({
   /** Otimizações (account_reviews) da sprint atual deste cliente — Sprint UX
    * 2.0. Vazio por padrão pra quem ainda não busca a query nova. */
   accountReviews?: AccountReviewSummaryItem[];
+  /** Sprint UX 2.0 Fase 2 — habilita "+ Tarefa" inline (ver `SprintCardBody`). */
+  managers?: { id: string; name: string }[];
 }) {
   if (!card.sprint) {
     return (
@@ -83,6 +86,7 @@ export function SprintCurrentClientGroup({
         accountReviews={reviews}
         newReviewHref={`${returnTo}&review=new&reviewClient=${card.clientId}`}
         buildReviewDetailHref={(reviewId) => `${returnTo}&reviewDetail=${reviewId}`}
+        taskManagers={managers}
       />
     </details>
   );
