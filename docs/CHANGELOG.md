@@ -30,6 +30,17 @@ efeito observável não precisam de entrada.
 
 ### 1. Não lançado
 
+- **Sprints — leitura em colunas (desktop), em vez de texto corrido.**
+  No desktop, a linha do cliente e a linha da sprint (na visão "Mensal > Por
+  sprints") passaram a usar as mesmas colunas alinhadas — Cliente/Gestor,
+  Período, Investimento, Tarefas, Otimizações, Status — com um cabeçalho
+  fixo no topo da lista. Antes, cada linha era uma frase com "·" separando
+  os itens, que quebrava de forma diferente dependendo do tamanho do texto.
+  Agora dá pra bater o olho numa coluna (por exemplo, Status) e escanear
+  todos os clientes de uma vez. Mobile continua com o texto corrido de
+  antes (colunas ficariam espremidas demais numa tela estreita). Nenhuma
+  regra financeira mudou — a célula de Investimento passou a mostrar
+  Realizado/Planejado em R$ além do %.
 - **Sprints — árvore operacional mais densa e tarefas editáveis sem sair da
   tela.** O card fechado de cada cliente virou uma única linha compacta
   (antes eram quatro linhas empilhadas). Na visão "Mensal > Por sprints",

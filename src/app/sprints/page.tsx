@@ -43,6 +43,7 @@ import {
   type SprintsTasksFilter,
 } from "./sprints-filters";
 import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
+import { ROW_GRID_CLASSES } from "./row-grid";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
 
 type SprintsView = "current" | "monthly";
@@ -713,7 +714,33 @@ export default async function SprintsPage({
         {attentionCount > 0 && ` · ${attentionCount} precisa${attentionCount !== 1 ? "m" : ""} de atenção`}
       </p>
 
-      <div className="mt-3 flex flex-col gap-1.5">
+      {/* Sprint UX 2.0 Fase 3: cabeçalho de colunas — mesmo grid da linha do
+          cliente/sprint (`ROW_GRID_CLASSES`), pra deixar explícito que a
+          lista é uma tabela de verdade (leitura vertical por coluna), não
+          um bloco de texto corrido. Só desktop (a lista em telas estreitas
+          já quebra as colunas em texto empilhado — repetir esses rótulos lá
+          seria ruído sem a mesma grade visual por trás). */}
+      {cards.length > 0 && (
+        <div className="mt-3 flex items-center gap-2 px-2.5">
+          {/* Espaçador invisível do mesmo tamanho do "▸" + gap de cada linha
+              abaixo — sem ele, as colunas do cabeçalho não alinham com as
+              colunas reais (cada linha tem um caret antes da própria grade). */}
+          <span aria-hidden="true" className="invisible shrink-0 text-xs">▸</span>
+          <div
+            className={`flex-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground ${ROW_GRID_CLASSES}`}
+          >
+            <span />
+            <span>Cliente / Gestor</span>
+            <span>Período</span>
+            <span>Investimento</span>
+            <span>Tarefas</span>
+            <span>Otimiz.</span>
+            <span>Status</span>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-1.5 flex flex-col gap-1.5">
         {cards.length > 0 ? (
           view === "current" ? (
             cards.map((card) => (
