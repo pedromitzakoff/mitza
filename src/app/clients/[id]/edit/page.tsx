@@ -129,7 +129,7 @@ export default async function EditClientPage({
               className="w-28 rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm text-black dark:border-zinc-700 dark:text-zinc-50"
             />
           </div>
-          <button type="submit" className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
+          <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover">
             Adicionar KPI
           </button>
         </form>
@@ -173,7 +173,7 @@ export default async function EditClientPage({
             />
             Cadência ativa
           </label>
-          <button type="submit" className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
+          <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover">
             Salvar cadência
           </button>
         </form>
