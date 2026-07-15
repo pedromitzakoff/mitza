@@ -10,7 +10,7 @@ import {
   shiftMonthParam,
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
-import { formatFullDate, formatMonthLabel } from "@/lib/format";
+import { formatMonthLabel } from "@/lib/format";
 import { getMonthTemporalStatus, resolveMonthlyBudget } from "@/lib/monthly-budget";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import type { SprintClosedSnapshot } from "@/lib/sprint-recommendation";
@@ -49,15 +49,16 @@ import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
 type SprintsView = "current" | "monthly";
 type MonthlyGrouping = "consolidated" | "sprints";
 
-const VIEW_LABEL: Record<SprintsView, string> = {
-  current: "Sprint atual",
-  monthly: "Mensal",
-};
-
-const GROUPING_LABEL: Record<MonthlyGrouping, string> = {
-  consolidated: "Consolidado",
-  sprints: "Por sprints",
-};
+/** Reconstrução do cabeçalho (aproximação de UX a partir de uma referência
+ * visual) — as 3 combinações de view+grouping viram abas únicas, lado a
+ * lado, em vez de uma aba "Mensal" com um segundo controle aninhado só
+ * pra escolher o agrupamento. Mesmas 3 combinações de sempre, só a
+ * apresentação muda (nenhum novo estado, nenhuma URL nova). */
+const TABS = [
+  { key: "current", label: "Sprint atual", view: "current" as SprintsView, grouping: undefined },
+  { key: "monthly-consolidated", label: "Mensal consolidado", view: "monthly" as SprintsView, grouping: "consolidated" as MonthlyGrouping },
+  { key: "monthly-sprints", label: "Mensal por sprints", view: "monthly" as SprintsView, grouping: "sprints" as MonthlyGrouping },
+] as const;
 
 const OPTIMIZATION_DAY_MS = 86_400_000;
 
@@ -606,110 +607,97 @@ export default async function SprintsPage({
       }
     : null;
 
+  const activeTabKey =
+    view === "current" ? "current" : grouping === "consolidated" ? "monthly-consolidated" : "monthly-sprints";
+
   return (
-    <div className="mx-auto max-w-6xl px-6 py-6">
+    <div className="mx-auto max-w-6xl px-6 py-4">
       <ScrollRestoreOnMount />
+
+      {/* Linha 1 — título/subtítulo à esquerda, todos os controles à
+          direita, na mesma linha-base (reconstrução do cabeçalho: menos
+          caixas, mais interface — nenhum filtro/funcionalidade mudou, só a
+          disposição visual). */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Sprints</h1>
-          <p className="text-sm text-muted-foreground">{formatFullDate(today)}</p>
+          <h1 className="text-xl font-semibold text-foreground">Sprints</h1>
+          <p className="text-xs text-muted-foreground">
+            Acompanhe o desempenho das contas, sprints e otimizações.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {view === "monthly" && (
+            <div className="flex h-8 items-center gap-0.5 rounded-md border border-border px-1 text-sm">
+              <Link
+                href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
+                className="rounded px-1 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                aria-label="Mês anterior"
+              >
+                &lsaquo;
+              </Link>
+              <span className="min-w-[7.5rem] text-center text-xs font-medium text-foreground">{monthLabel}</span>
+              <Link
+                href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
+                className="rounded px-1 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                aria-label="Próximo mês"
+              >
+                &rsaquo;
+              </Link>
+              {params.month && (
+                <Link href={buildUrl({ month: "" })} className="ml-1 text-[11px] text-brand hover:underline">
+                  Hoje
+                </Link>
+              )}
+            </div>
+          )}
+
+          <SprintsFilters
+            clients={clientOptions}
+            selectedClientId={clientFilter}
+            view={view}
+            grouping={grouping}
+            month={view === "monthly" ? params.month : undefined}
+            isAdmin={isAdmin}
+            gestores={gestores ?? []}
+            manager={managerFilter}
+            health={healthFilter}
+            ritmo={ritmoFilter}
+            tasks={tasksFilter}
+            optimization={optimizationFilter}
+            activity={activityFilter}
+            display={displayFilter}
+          />
         </div>
       </div>
 
       {(params.taskError || params.commentError) && (
-        <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           {params.taskError || params.commentError}
         </p>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <div className="flex flex-wrap gap-2">
-          {(Object.keys(VIEW_LABEL) as SprintsView[]).map((v) => (
-            <Link
-              key={v}
-              href={buildUrl({
-                view: v,
-                month: v === "monthly" ? (params.month ?? "") : "",
-                // Entrar em Mensal vindo de Sprint atual sempre cai em
-                // Consolidado (o padrão); reclicar na aba já ativa preserva
-                // o agrupamento que já estava selecionado.
-                grouping: v === "monthly" ? (v === view ? grouping : "consolidated") : "",
-              })}
-              className={`rounded-md px-3 py-1 text-sm font-medium ${
-                v === view
-                  ? "bg-brand text-white"
-                  : "border border-border text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              }`}
-            >
-              {VIEW_LABEL[v]}
-            </Link>
-          ))}
-        </div>
-
-        {view === "monthly" && (
-          <div className="flex items-center gap-0.5 text-sm">
-            <Link
-              href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
-              className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              aria-label="Mês anterior"
-            >
-              &lsaquo;
-            </Link>
-            <span className="min-w-[8.5rem] text-center font-medium text-foreground">{monthLabel}</span>
-            <Link
-              href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
-              className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              aria-label="Próximo mês"
-            >
-              &rsaquo;
-            </Link>
-            {params.month && (
-              <Link href={buildUrl({ month: "" })} className="ml-1.5 text-xs text-brand hover:underline">
-                Mês atual
-              </Link>
-            )}
-          </div>
-        )}
-
-        {view === "monthly" && (
-          <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5 text-xs">
-            {(Object.keys(GROUPING_LABEL) as MonthlyGrouping[]).map((g) => (
-              <Link
-                key={g}
-                href={buildUrl({ grouping: g })}
-                className={`rounded px-2 py-1 font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
-                  g === grouping
-                    ? "bg-brand/10 text-brand"
-                    : "text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                }`}
-              >
-                {GROUPING_LABEL[g]}
-              </Link>
-            ))}
-          </div>
-        )}
+      {/* Linha 2 — abas: as 3 combinações de view+grouping ficam lado a
+          lado (Sprint atual / Mensal consolidado / Mensal por sprints),
+          direto abaixo do cabeçalho, sem virar uma segunda barra de
+          ferramentas (texto + sublinhado, não pílulas/caixas). */}
+      <div className="mt-2.5 flex items-center gap-4 border-b border-border text-sm">
+        {TABS.map((tab) => (
+          <Link
+            key={tab.key}
+            href={buildUrl({ view: tab.view, month: tab.grouping ? (params.month ?? "") : "", grouping: tab.grouping ?? "" })}
+            className={`-mb-px border-b-2 pb-1.5 font-medium transition-colors ${
+              tab.key === activeTabKey
+                ? "border-brand text-brand"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </Link>
+        ))}
       </div>
 
-      <div className="mt-3">
-        <SprintsFilters
-          clients={clientOptions}
-          selectedClientId={clientFilter}
-          view={view}
-          grouping={grouping}
-          month={view === "monthly" ? params.month : undefined}
-          isAdmin={isAdmin}
-          gestores={gestores ?? []}
-          manager={managerFilter}
-          health={healthFilter}
-          ritmo={ritmoFilter}
-          tasks={tasksFilter}
-          optimization={optimizationFilter}
-          activity={activityFilter}
-          display={displayFilter}
-        />
-      </div>
-
-      <p className="mt-3 text-xs text-muted-foreground">
+      <p className="mt-2 text-xs text-muted-foreground">
         {cards.length !== baseCount ? `${cards.length} de ${baseCount} clientes` : `${baseCount} cliente${baseCount !== 1 ? "s" : ""}`}
         {attentionCount > 0 && ` · ${attentionCount} precisa${attentionCount !== 1 ? "m" : ""} de atenção`}
       </p>

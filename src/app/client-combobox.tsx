@@ -82,7 +82,7 @@ export function ClientCombobox({
 
   return (
     <div className="relative flex w-full items-center gap-1.5 sm:w-auto">
-      <span className="text-xs text-muted-foreground">{label}</span>
+      {label && <span className="text-xs text-muted-foreground">{label}</span>}
       <button
         type="button"
         onClick={() => (open ? setOpen(false) : openCombobox())}

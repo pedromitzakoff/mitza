@@ -110,35 +110,33 @@ export function SprintsFilters({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">Carteira</span>
-        <select
-          value={manager}
-          onChange={(e) => router.push(buildUrl({ manager: e.target.value }))}
-          className={selectClasses}
-          aria-label="Carteira"
-        >
-          <option value="me">Meus clientes</option>
-          <option value="all">Todos os clientes</option>
-          {gestores.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <select
+        value={manager}
+        onChange={(e) => router.push(buildUrl({ manager: e.target.value }))}
+        className="h-8 rounded-md border border-border bg-transparent px-2 text-xs text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        aria-label="Carteira"
+      >
+        <option value="me">Meus clientes</option>
+        <option value="all">Todos os clientes</option>
+        {gestores.map((g) => (
+          <option key={g.id} value={g.id}>
+            {g.name}
+          </option>
+        ))}
+      </select>
 
       <ClientCombobox
         clients={clients}
         selectedClientId={selectedClientId}
         onSelect={(clientId) => router.push(buildUrl({ client: clientId }))}
+        label=""
       />
 
       <div className="relative">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-sm font-medium text-foreground transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+          className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
         >
           <Filter className="h-3.5 w-3.5" aria-hidden="true" />
           Filtros
