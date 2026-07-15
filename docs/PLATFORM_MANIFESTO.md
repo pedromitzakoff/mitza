@@ -261,3 +261,86 @@ proporcionalmente sua complexidade operacional.
 
 Ela deverá funcionar como o principal ambiente de organização, contexto e
 execução da operação.
+
+## Capítulo 14 — A Plataforma organiza contexto, não tarefas
+
+A Plataforma Mitza não é um gerenciador de tarefas.
+
+Ela é um Sistema Operacional para Gestão de Tráfego.
+
+Seu objetivo principal não é controlar listas de tarefas, mas organizar
+todo o contexto operacional necessário para que um gestor consiga tomar
+decisões rápidas e executar seu trabalho com segurança.
+
+As tarefas são apenas uma consequência desse contexto. Toda funcionalidade
+futura deve partir do cliente e da operação, nunca da tarefa.
+
+O fluxo natural da plataforma deve ser:
+
+> Cliente
+>
+> ↓
+>
+> Contexto
+>
+> ↓
+>
+> Decisão
+>
+> ↓
+>
+> Ação
+>
+> ↓
+>
+> Histórico
+
+Nunca:
+
+> Lista
+>
+> ↓
+>
+> Tarefa
+>
+> ↓
+>
+> Subtarefa
+>
+> ↓
+>
+> Status
+
+## Capítulo 15 — Densidade Operacional
+
+A Plataforma Mitza deve maximizar a quantidade de contexto operacional
+visível sem aumentar a carga cognitiva.
+
+Sempre que possível:
+
+- menos páginas
+- menos navegação
+- menos modais
+- menos cliques
+- menos troca de contexto
+- mais informação relevante
+- mais edição inline
+- mais continuidade visual
+- mais velocidade operacional
+
+O objetivo não é mostrar menos informações. O objetivo é mostrar mais
+informações de maneira organizada.
+
+## Capítulo 16 — O Cliente é a unidade operacional
+
+A plataforma gira em torno do cliente.
+
+Toda informação operacional deve nascer do cliente:
+
+- As sprints pertencem ao cliente.
+- As otimizações pertencem ao cliente.
+- As tarefas pertencem ao cliente.
+- Os investimentos pertencem ao cliente.
+- Os históricos pertencem ao cliente.
+
+A plataforma nunca deve inverter essa lógica.

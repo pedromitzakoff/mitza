@@ -44,6 +44,8 @@ capítulo final ("Como adicionar novas decisões").
 - [Decisão 007: Fonte única da verdade](#decisão-007-fonte-única-da-verdade)
 - [Decisão 008: A plataforma é um Sistema Operacional do Gestor](#decisão-008-a-plataforma-é-um-sistema-operacional-do-gestor)
 - [Decisão 009: Card fechado do cliente também mostra tarefas e otimizações](#decisão-009-card-fechado-do-cliente-também-mostra-tarefas-e-otimizações)
+- [Decisão 010: A Plataforma não é um ClickUp](#decisão-010-a-plataforma-não-é-um-clickup)
+- [Decisão 011: Sprint é uma árvore operacional](#decisão-011-sprint-é-uma-árvore-operacional)
 
 ## Capítulo 1 — Formato de uma Decisão
 
@@ -376,6 +378,87 @@ Afeta `src/app/sprints/account-card-summary.tsx` e os três agrupamentos que
 o consomem (`current-client-group.tsx`, `monthly-consolidated-group.tsx`,
 `monthly-sprints-group.tsx`). Nenhuma regra financeira ou de prioridade foi
 alterada — só a apresentação do card fechado.
+
+## Decisão 010: A Plataforma não é um ClickUp
+
+**Data:** 2026-07-14
+**Status:** Ativa.
+
+### Contexto
+
+Não especificado nesta decisão.
+
+### Problema
+
+Não especificado nesta decisão.
+
+### Alternativas consideradas
+
+Não especificado nesta decisão.
+
+### Decisão tomada
+
+A Plataforma Mitza não será construída como um gerenciador de tarefas. Ela
+será construída como um Sistema Operacional especializado para Gestão de
+Tráfego.
+
+O ClickUp continuará servindo apenas como inspiração de UX, especialmente
+em:
+
+- densidade visual;
+- rapidez operacional;
+- edição inline;
+- estrutura hierárquica;
+- continuidade de navegação.
+
+Não copiar:
+
+- Kanban;
+- gestão genérica de tarefas;
+- backlog;
+- projetos genéricos;
+- Gantt;
+- workflows universais.
+
+### Justificativa
+
+A plataforma resolve um problema diferente. O centro da operação é o
+cliente, e não a tarefa.
+
+### Impactos
+
+Não especificado nesta decisão.
+
+## Decisão 011: Sprint é uma árvore operacional
+
+**Data:** 2026-07-14
+**Status:** Ativa.
+
+### Contexto
+
+Não especificado nesta decisão.
+
+### Problema
+
+Não especificado nesta decisão.
+
+### Alternativas consideradas
+
+Não especificado nesta decisão.
+
+### Decisão tomada
+
+As sprints deixam de ser tratadas como grandes cards independentes. A
+relação Cliente → Sprint → Contexto → Ação deve ser comunicada
+visualmente através de uma estrutura hierárquica compacta.
+
+### Justificativa
+
+Permitir que um gestor escaneie dezenas de clientes rapidamente.
+
+### Impactos
+
+Não especificado nesta decisão.
 
 ## Como adicionar novas decisões
 
