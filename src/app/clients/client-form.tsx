@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { Database } from "@/lib/supabase/database.types";
 import { CONTRACTED_SERVICE_OPTIONS } from "@/lib/client-fields";
 import { formatCnpj } from "@/lib/cnpj";
@@ -200,9 +201,9 @@ export function ClientForm({
         <fieldset className="flex flex-col gap-2">
           <legend className="text-sm text-zinc-700 dark:text-zinc-300">Gestores de apoio</legend>
           {managers.length === 0 && (
-            <p className="text-sm text-zinc-500">
+            <EmptyState>
               Nenhum membro da equipe cadastrado ainda (cadastre em Equipe).
-            </p>
+            </EmptyState>
           )}
           {managers.map((manager) => (
             <label key={manager.id} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">

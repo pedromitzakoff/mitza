@@ -50,7 +50,7 @@ export function SettingsClientsFilters({ search, status }: { search: string; sta
       <select
         value={status}
         onChange={(event) => router.push(buildUrl({ status: event.target.value }))}
-        className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground"
+        className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none transition-colors focus:border-zinc-500"
       >
         <option value="todos">Status: todos</option>
         <option value="ativo">Ativo</option>

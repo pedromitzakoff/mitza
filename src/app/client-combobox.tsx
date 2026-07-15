@@ -113,8 +113,8 @@ export function ClientCombobox({
             className="fixed inset-0 z-40"
           />
           <div
-            className="absolute left-0 z-50 mt-1 w-72 rounded-xl border border-border bg-card p-2 shadow-[var(--shadow-float)]"
-            style={{ top: "100%" }}
+            className="mitza-menu-in absolute left-0 z-50 mt-1 w-72 rounded-xl border border-border bg-card p-2 shadow-[var(--shadow-float)]"
+            style={{ top: "100%", transformOrigin: "top left" }}
           >
             <input
               ref={inputRef}
@@ -127,7 +127,7 @@ export function ClientCombobox({
               onChange={(e) => handleQueryChange(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Buscar cliente..."
-              className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:border-zinc-500"
+              className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none transition-colors focus:border-zinc-500"
             />
             <ul id={listboxId} role="listbox" className="mt-1.5 max-h-56 overflow-y-auto">
               <li

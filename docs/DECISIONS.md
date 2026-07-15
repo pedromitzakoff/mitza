@@ -47,6 +47,7 @@ capítulo final ("Como adicionar novas decisões").
 - [Decisão 010: A Plataforma não é um ClickUp](#decisão-010-a-plataforma-não-é-um-clickup)
 - [Decisão 011: Sprint é uma árvore operacional](#decisão-011-sprint-é-uma-árvore-operacional)
 - [Decisão 012: A Sidebar é o único elemento estrutural fixo](#decisão-012-a-sidebar-é-o-único-elemento-estrutural-fixo)
+- [Decisão 013: Linguagem de interação única da plataforma](#decisão-013-linguagem-de-interação-única-da-plataforma)
 
 ## Capítulo 1 — Formato de uma Decisão
 
@@ -523,6 +524,70 @@ continuidade em vez de duas faixas competindo entre si.
   descontar mais a altura da Top Bar (ela não existe).
 - Nenhuma regra de negócio, banco de dados, permissão ou integração foi
   alterada.
+
+## Decisão 013: Linguagem de interação única da plataforma
+
+**Data:** 2026-07-15
+**Status:** Ativa.
+
+### Contexto
+
+Três etapas sucessivas (Interaction Physics 1.0, Interaction Delight
+1.0, densidade operacional) padronizaram motion, hover, foco, cursor,
+pressed state, drawers, popovers, chevrons e densidade em pontos
+específicos da plataforma. A etapa Platform Flow System 1.0 auditou a
+plataforma inteira (dropdowns, cards, tabs, tooltips, empty states,
+loading, toasts, scroll) para responder se essas telas realmente
+pertencem ao mesmo sistema.
+
+### Problema
+
+A auditoria confirmou diferenças reais entre telas: quatro convenções de
+foco coexistindo em `<select>`/`<input>`, dois vocabulários de card
+(`border-border`/`bg-card` vs `border-overview-border`/`bg-overview-surface`),
+três formas diferentes de escrever a mesma mensagem de estado vazio, um
+mecanismo de confirmação de sucesso duplicado em paralelo ao toast único
+da plataforma, e uma aba (Sprints) sem `scroll={false}` nem semântica de
+acessibilidade.
+
+### Alternativas consideradas
+
+1. Deixar cada tela nova escolher livremente seu próprio padrão visual.
+2. Documentar a linguagem já estabelecida e torná-la obrigatória pra
+   telas novas, corrigindo agora só o que for de baixo risco.
+3. Unificar tudo de uma vez (cards, selects, toasts) nesta mesma etapa.
+
+### Decisão tomada
+
+Adotada a alternativa 2. `docs/INTERACTION_LANGUAGE.md` passa a ser a
+referência oficial de motion, hover, foco, cursor, pressed state,
+drawers, popovers, chevrons, densidade, empty states, loading e toasts.
+Nenhuma tela nova pode criar uma interação diferente da descrita nesse
+documento sem justificativa arquitetural explícita registrada aqui em
+`DECISIONS.md`. A alternativa 3 foi descartada nesta rodada: unificar
+cards/selects/toasts exige tocar dezenas de arquivos de formulário e,
+no caso do banner de sucesso em `clients/[id]/page.tsx`, remover um
+fluxo de redirect existente — risco maior do que uma etapa de
+consistência deveria assumir de uma vez.
+
+### Justificativa
+
+Uma linguagem de interação só é útil se for a única opção — permitir
+exceções "só desta vez" reproduz exatamente a fragmentação que esta
+etapa foi feita pra eliminar.
+
+### Impactos
+
+- Cria `docs/INTERACTION_LANGUAGE.md`.
+- Corrige de imediato: `scroll={false}` ausente nas abas de Sprints,
+  popover do combobox de cliente sem `mitza-menu-in`, um `<select>` sem
+  nenhum estado de foco, e 7 mensagens de estado vazio escritas à mão
+  unificadas no componente `EmptyState` já existente.
+- Registra como dívida conhecida (não implementada nesta etapa): a
+  fusão dos dois vocabulários de card, a unificação das 4 convenções de
+  foco em inputs/selects, e a migração do banner de sucesso legado e do
+  feedback inline de `client-update-editor.tsx` pro toast único da
+  plataforma.
 
 ## Como adicionar novas decisões
 

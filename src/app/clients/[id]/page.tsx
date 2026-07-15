@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { EmptyState } from "@/components/ui/empty-state";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import {
@@ -858,9 +859,9 @@ export default async function ClientPage({
               />
             ))
           ) : (
-            <p className="text-sm text-zinc-500">
+            <EmptyState>
               Nenhuma sprint encontrada para este período — verifique se as sprints do mês já foram geradas.
-            </p>
+            </EmptyState>
           )}
         </div>
       </Section>

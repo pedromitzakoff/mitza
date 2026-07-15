@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { perfNow, perfLog } from "@/lib/perf-log";
+import { EmptyState } from "@/components/ui/empty-state";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
 import {
@@ -702,11 +703,14 @@ export default async function SprintsPage({
           lado (Sprint atual / Mensal consolidado / Mensal por sprints),
           direto abaixo do cabeçalho, sem virar uma segunda barra de
           ferramentas (texto + sublinhado, não pílulas/caixas). */}
-      <div className="mt-2.5 flex items-center gap-4 border-b border-border text-sm">
+      <div role="tablist" className="mt-2.5 flex items-center gap-4 border-b border-border text-sm">
         {TABS.map((tab) => (
           <Link
             key={tab.key}
             href={buildUrl({ view: tab.view, month: tab.grouping ? (params.month ?? "") : "", grouping: tab.grouping ?? "" })}
+            scroll={false}
+            role="tab"
+            aria-selected={tab.key === activeTabKey}
             className={`-mb-px border-b-2 pb-1.5 font-medium transition-colors ${
               tab.key === activeTabKey
                 ? "border-brand text-brand"
@@ -795,9 +799,9 @@ export default async function SprintsPage({
             ))
           )
         ) : (
-          <p className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-            Nenhum cliente encontrado com esses filtros.
-          </p>
+          <div className="rounded-lg border border-border bg-card p-4">
+            <EmptyState>Nenhum cliente encontrado com esses filtros.</EmptyState>
+          </div>
         )}
       </div>
 

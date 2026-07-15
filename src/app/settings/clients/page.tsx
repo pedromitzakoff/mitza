@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC } from "@/lib/today";
 import { formatActiveMonths } from "@/lib/format";
+import { EmptyState } from "@/components/ui/empty-state";
 import { normalizeCnpj } from "@/lib/cnpj";
 import type { ClientContractStatus } from "@/lib/supabase/database.types";
 import {
@@ -178,8 +179,8 @@ export default async function SettingsClientsPage({
               ))
             ) : (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  Nenhum cliente encontrado com esses filtros.
+                <td colSpan={9} className="px-3 py-6 text-center">
+                  <EmptyState>Nenhum cliente encontrado com esses filtros.</EmptyState>
                 </td>
               </tr>
             )}

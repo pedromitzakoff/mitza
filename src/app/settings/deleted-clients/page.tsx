@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { RestoreClientButton } from "./restore-client-button";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default async function DeletedClientsPage() {
   await requireAdmin();
@@ -40,8 +41,8 @@ export default async function DeletedClientsPage() {
             </li>
           ))
         ) : (
-          <li className="px-4 py-6 text-center text-sm text-zinc-500">
-            Nenhum cliente excluído.
+          <li className="px-4 py-6 text-center">
+            <EmptyState>Nenhum cliente excluído.</EmptyState>
           </li>
         )}
       </ul>

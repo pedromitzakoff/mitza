@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
+import { EmptyState } from "@/components/ui/empty-state";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { currentMonthRange, sumPlannedForMonth, type PlannedAllocationRow } from "@/lib/sprint-financials";
 import {
@@ -124,8 +125,8 @@ export default async function PainelMensalPage() {
               ))
             ) : (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
-                  Nenhum cliente cadastrado ainda.
+                <td colSpan={5} className="px-4 py-6 text-center">
+                  <EmptyState>Nenhum cliente cadastrado ainda.</EmptyState>
                 </td>
               </tr>
             )}

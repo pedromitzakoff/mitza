@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
+import { EmptyState } from "@/components/ui/empty-state";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC } from "@/lib/today";
 import { currentMonthRange, monthRangeFromParam, shiftMonthParam } from "@/lib/sprint-financials";
@@ -285,8 +286,8 @@ export default async function ReportsPage({
               })
             ) : (
               <tr>
-                <td colSpan={7} className="py-4 px-3 text-center text-sm text-muted-foreground">
-                  Nenhum cliente encontrado com esses filtros.
+                <td colSpan={7} className="py-4 px-3 text-center">
+                  <EmptyState>Nenhum cliente encontrado com esses filtros.</EmptyState>
                 </td>
               </tr>
             )}
