@@ -177,19 +177,30 @@ function SprintPerformanceSection({
   const performanceSourceText =
     view.kind === "has_data" ? getLatestPerformanceUpdateText(view.summary.latestSource, view.summary.latestUpdatedAt, formatShortDateTime) : null;
 
-  return (
-    <div className="rounded-lg border border-border bg-zinc-50 p-3 dark:bg-zinc-900/40">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Performance da sprint</p>
+  // Executive Dashboard 1.0: proveniência do dado (fonte/timestamp) é
+  // informação de auditoria — consultada raramente, nunca a primeira coisa
+  // que o gestor olha no card. Sai da linha sempre-visível e vira o title
+  // (tooltip nativo) do próprio rótulo "Performance da sprint", liberando
+  // uma linha inteira sem remover a informação nem a funcionalidade.
+  const sourceTooltip = performanceSourceText
+    ? `Investimento: ${investmentSourceText}\nResultados: ${performanceSourceText}`
+    : investmentSourceText;
 
-      <div className="mt-1.5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+  return (
+    <div className="rounded-lg border border-border bg-zinc-50 p-2.5 dark:bg-zinc-900/40">
+      <p title={sourceTooltip} className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Performance da sprint
+      </p>
+
+      <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Investimento realizado</p>
-          <p className="mt-0.5 text-lg font-semibold text-foreground">{formatCurrency(sprint.actualSpend)}</p>
+          <p className="text-base font-semibold text-foreground">{formatCurrency(sprint.actualSpend)}</p>
         </div>
 
         <div>
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Resultados</p>
-          <p className="mt-0.5 text-lg font-semibold text-foreground">{cells.resultsValue}</p>
+          <p className="text-base font-semibold text-foreground">{cells.resultsValue}</p>
           {cells.resultsAux && <p className="text-[11px] text-muted-foreground">{cells.resultsAux}</p>}
           {view.kind === "not_configured" && (
             <Link href={`/clients/${clientId}/edit`} className="text-[11px] font-medium text-brand hover:underline">
@@ -200,7 +211,7 @@ function SprintPerformanceSection({
 
         <div>
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Custo por resultado</p>
-          <p className="mt-0.5 text-lg font-semibold text-foreground">{cells.costValue}</p>
+          <p className="text-base font-semibold text-foreground">{cells.costValue}</p>
           {cells.costAux && (
             <p
               className={`text-[11px] font-medium ${cells.costAux.tone ? PERFORMANCE_STATUS_TEXT_CLASSES[cells.costAux.tone] : "text-muted-foreground"}`}
@@ -211,17 +222,8 @@ function SprintPerformanceSection({
         </div>
       </div>
 
-      {performanceSourceText ? (
-        <div className="mt-2 flex flex-col gap-0.5 text-[11px] text-muted-foreground">
-          <p>Investimento: {investmentSourceText}</p>
-          <p>Resultados: {performanceSourceText}</p>
-        </div>
-      ) : (
-        <p className="mt-2 text-[11px] text-muted-foreground">{investmentSourceText}</p>
-      )}
-
       {isManualSource && (
-        <div className="mt-0.5">
+        <div className="mt-1">
           <input type="checkbox" id={revertSourceToggleId} className="peer/revert hidden" />
           <label
             htmlFor={revertSourceToggleId}
@@ -248,7 +250,7 @@ function SprintPerformanceSection({
           <input type="checkbox" id={editToggleId} className="peer hidden" />
           <label
             htmlFor={editToggleId}
-            className="mt-2 inline-block cursor-pointer text-[11px] font-medium text-brand hover:underline peer-checked:hidden"
+            className="mt-1.5 inline-block cursor-pointer text-[11px] font-medium text-brand hover:underline peer-checked:hidden"
           >
             Atualizar performance
           </label>
@@ -378,16 +380,16 @@ export function SprintCardBody({
   const remainingAlerts = (alerts?.length ?? 0) - 1;
 
   return (
-    <div className="border-t border-border p-3">
+    <div className="border-t border-border p-2.5">
         {/* Contexto do período e do dia atual */}
         {isCurrent && (
-          <div className="mb-3 inline-flex flex-col rounded-md border border-brand/30 bg-brand/5 px-3 py-1.5">
+          <div className="mb-2 inline-flex flex-col rounded-md border border-brand/30 bg-brand/5 px-3 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-brand">Hoje</span>
             <span className="text-sm font-medium text-brand">{formatWeekdayAndDayMonth(todayUTC())}</span>
           </div>
         )}
         {isCurrent && executionLabel && (
-          <p className={`mb-3 text-xs ${EXECUTION_LABEL_CLASSES[executionSeverity ?? "neutro"]}`}>
+          <p className={`mb-2 text-xs ${EXECUTION_LABEL_CLASSES[executionSeverity ?? "neutro"]}`}>
             Última execução da sprint: {executionLabel}
           </p>
         )}
@@ -409,7 +411,7 @@ export function SprintCardBody({
         />
 
         {topAlert && (
-          <details className="group/alerts mt-3">
+          <details className="group/alerts mt-2">
             <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
               <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
               <span className="ml-auto shrink-0 font-medium text-brand">
@@ -439,7 +441,7 @@ export function SprintCardBody({
         {/* Execução da sprint — tarefas recorrentes e otimizações (revisões
             estratégicas da conta) lado a lado, mesmo nível hierárquico
             (Etapa 74). */}
-        <div className="mt-3 border-t border-border pt-2">
+        <div className="mt-2 border-t border-border pt-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Execução da sprint</p>
           <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
             <SprintTaskList
@@ -460,7 +462,7 @@ export function SprintCardBody({
           </div>
         </div>
 
-        <details className="mt-3 border-t border-border pt-2 [&_summary]:cursor-pointer [&_summary]:list-none">
+        <details className="mt-2 border-t border-border pt-2 [&_summary]:cursor-pointer [&_summary]:list-none">
           <summary className="text-xs font-medium text-muted-foreground hover:text-brand">
             Ver detalhes da sprint {comments.length > 0 ? `(${comments.length} comentário${comments.length !== 1 ? "s" : ""})` : ""}
           </summary>
@@ -475,7 +477,7 @@ export function SprintCardBody({
         </details>
 
         {openClientHref && (
-          <div className="mt-3 border-t border-border pt-2 text-xs">
+          <div className="mt-2 border-t border-border pt-2 text-xs">
             <Link href={openClientHref} className="text-muted-foreground hover:underline">
               Abrir cliente
             </Link>

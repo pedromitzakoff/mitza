@@ -429,3 +429,11 @@ movimento desnecessário.
 
 Espaço em branco deve existir para organizar a informação, nunca apenas
 para ocupar área.
+
+## Capítulo 26 — A plataforma deve comunicar resultado
+
+Os indicadores principais devem mostrar rapidamente o estado operacional
+e o impacto gerado para os clientes.
+
+A plataforma deve apresentar contexto suficiente para tomada de decisão
+sem exigir navegação desnecessária.

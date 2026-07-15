@@ -20,9 +20,15 @@ import {
 import type { AccountHealth } from "@/lib/attention-alerts";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import { computeFinancialSummary, computeManagerSummary, computeSpendRhythmCounts } from "@/lib/agency-metrics";
+import {
+  computeAgencyResultsSummary,
+  computeFinancialSummary,
+  computeManagerSummary,
+  computeSpendRhythmCounts,
+} from "@/lib/agency-metrics";
 import { buildClientPriorityQueue, sortCardsByPriority } from "@/lib/client-priority";
 import type { PerformanceChannelScope } from "@/lib/performance";
+import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
 import { PrioritiesDrawer, PrioritiesPanel } from "./priorities-panel";
@@ -458,6 +464,10 @@ export default async function Home({
     reviewClientIds: (reviewsForIndicators ?? []).map((r) => r.client_id),
     hasClientFilter: Boolean(clientFilter),
   });
+  // Etapa "Executive Dashboard 1.0" — resultado consolidado (leads/vendas/
+  // CPL/CPA), mesmo recorte de mês/carteira/cliente de `operationIndicators`
+  // (`indicatorCards`), nunca os filtros de recorte de `cards`.
+  const agencyResults = computeAgencyResultsSummary(indicatorCards);
 
   // Prioridade de cada cliente — uma única fonte (buildClientPriorityQueue,
   // MVP "Reformular Prioridades na Visão Geral"), reaproveitada pelo bloco
@@ -748,6 +758,52 @@ export default async function Home({
                 </p>
               </>
             )}
+          </div>
+
+          {/* Etapa "Executive Dashboard 1.0" — complementa os indicadores
+              operacionais/financeiros acima com uma dimensão de RESULTADO
+              (leads/vendas/CPL/CPA), derivada de `performance_records` já
+              buscado (nenhuma consulta nova). Cliente sem objetivo de
+              performance configurado, ou sem nenhum registro lançado no mês,
+              nunca contribui um "0" fabricado — some da soma, e o card some
+              "—" quando ninguém no recorte tem dado. Receita/ROAS não
+              aparecem aqui: nenhuma tabela da plataforma guarda valor
+              monetário de resultado hoje, só contagem (ver relatório da
+              etapa) — mostrar essas duas como "Não configurado" seria dar a
+              entender que a métrica existe e está vazia, quando na verdade
+              a plataforma ainda não tem de onde tirar esse número. */}
+          <div className="border-t border-overview-border px-5 py-4 sm:px-6 sm:py-5">
+            <SectionHeader title="Resultados da agência" />
+            <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+              <OperationMetric
+                label="Leads gerados"
+                value={agencyResults.leads.clientsWithData > 0 ? String(agencyResults.leads.count) : "—"}
+                context={
+                  agencyResults.leads.clientsWithData > 0
+                    ? `${agencyResults.leads.clientsWithData} cliente${agencyResults.leads.clientsWithData !== 1 ? "s" : ""} com dado no mês`
+                    : "Nenhum cliente com objetivo de leads configurado"
+                }
+              />
+              <OperationMetric
+                label={PERFORMANCE_GOALS.leads.costMetricLabel}
+                value={agencyResults.leads.costPerResult !== null ? formatCurrency(agencyResults.leads.costPerResult) : "—"}
+                context="Investimento somado ÷ leads somados"
+              />
+              <OperationMetric
+                label="Vendas geradas"
+                value={agencyResults.sales.clientsWithData > 0 ? String(agencyResults.sales.count) : "—"}
+                context={
+                  agencyResults.sales.clientsWithData > 0
+                    ? `${agencyResults.sales.clientsWithData} cliente${agencyResults.sales.clientsWithData !== 1 ? "s" : ""} com dado no mês`
+                    : "Nenhum cliente com objetivo de vendas configurado"
+                }
+              />
+              <OperationMetric
+                label={PERFORMANCE_GOALS.sales.costMetricLabel}
+                value={agencyResults.sales.costPerResult !== null ? formatCurrency(agencyResults.sales.costPerResult) : "—"}
+                context="Investimento somado ÷ vendas somadas"
+              />
+            </div>
           </div>
         </div>
 

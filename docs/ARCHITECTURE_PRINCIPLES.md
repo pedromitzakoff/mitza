@@ -350,3 +350,10 @@ visíveis na primeira dobra da tela.
 
 Maior densidade nunca deve comprometer clareza, acessibilidade ou
 facilidade de interação.
+
+## Capítulo 25 — Componentes compartilhados devem evoluir juntos
+
+Quando um componente operacional for refinado, todas as suas ocorrências
+na plataforma devem permanecer consistentes.
+
+Nunca permitir versões diferentes do mesmo componente coexistirem.

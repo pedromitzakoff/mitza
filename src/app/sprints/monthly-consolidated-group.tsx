@@ -68,8 +68,8 @@ export function SprintMonthlyConsolidatedGroup({
         optimizationCount={optimizationCount}
       />
 
-      <div className="border-t border-border p-3">
-        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+      <div className="border-t border-border p-2.5">
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
           {summary.planned > 0 && <span>Diferença pro ritmo esperado: {formatCurrency(diff)}</span>}
           <span>Última atividade: {card.activityLabel === "Nunca houve atividade" ? "Nunca" : card.activityLabel}</span>
         </div>
@@ -92,7 +92,7 @@ export function SprintMonthlyConsolidatedGroup({
           <EmptyState size="xs">Nenhuma tarefa neste mês.</EmptyState>
         )}
 
-        <div className="mt-3 border-t border-border pt-2 text-xs">
+        <div className="mt-2 border-t border-border pt-2 text-xs">
           <Link href={`/clients/${card.clientId}`} className="text-muted-foreground hover:underline">
             Abrir cliente
           </Link>
