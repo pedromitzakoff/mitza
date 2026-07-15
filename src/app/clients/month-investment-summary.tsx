@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, formatDateWithYear, formatPercent } from "@/lib/format";
 import type { SpendStatus } from "@/lib/spend-status";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
@@ -153,7 +154,7 @@ export function MonthInvestmentSummary({
       </div>
 
       {planned <= 0 ? (
-        <p className="mt-1 text-sm text-muted-foreground">Sem planejamento configurado para este mês.</p>
+        <EmptyState className="mt-1">Sem planejamento configurado para este mês.</EmptyState>
       ) : isFutureMonth ? (
         <>
           <p className="mt-1 text-sm text-foreground">

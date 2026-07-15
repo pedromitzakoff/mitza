@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, formatDateWithYear, formatDateTime, formatShortDateFromInstant } from "@/lib/format";
 
 export interface MonthlyBudgetChangeRow {
@@ -97,7 +98,7 @@ export function MonthlyBudgetHistoryDrawer({
             ))}
           </ul>
         ) : (
-          <p className="mt-4 text-sm text-muted-foreground">Nenhuma alteração registrada.</p>
+          <EmptyState className="mt-4">Nenhuma alteração registrada.</EmptyState>
         )}
       </div>
     </>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SectionHeader } from "@/components/ui/section-header";
 import { formatDateTime } from "@/lib/format";
 import {
   TEAM_INVITATION_BADGE_CLASSES,
@@ -137,7 +138,7 @@ export function EditTeamMemberDrawer({
   return (
     <DrawerShell title={member.name} closeHref={closeHref}>
       <section className="mt-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dados</h3>
+        <SectionHeader>Dados</SectionHeader>
         <form action={updateTeamMemberAction.bind(null, member.id)} className="mt-2 flex flex-col gap-3">
           <label className={labelClasses}>
             Nome <span className="text-red-500">*</span>
@@ -165,7 +166,7 @@ export function EditTeamMemberDrawer({
       </section>
 
       <section className="mt-5 border-t border-border pt-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Operação</h3>
+        <SectionHeader>Operação</SectionHeader>
         <dl className="mt-2 flex flex-col gap-1.5 text-sm">
           <div className="flex justify-between">
             <dt className="text-muted-foreground">Clientes atribuídos</dt>
@@ -183,7 +184,7 @@ export function EditTeamMemberDrawer({
       </section>
 
       <section className="mt-5 border-t border-border pt-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Acesso</h3>
+        <SectionHeader>Acesso</SectionHeader>
         <div className="mt-2 flex items-center gap-2">
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-medium ${TEAM_INVITATION_BADGE_CLASSES[member.invitation_status]}`}
@@ -227,7 +228,7 @@ export function EditTeamMemberDrawer({
       </section>
 
       <section className="mt-5 border-t border-border pt-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Equipe</h3>
+        <SectionHeader>Equipe</SectionHeader>
         <p className="mt-2 text-sm text-muted-foreground">
           Status atual: <span className="font-medium text-foreground">{TEAM_MEMBER_STATUS_LABEL[member.status]}</span>
         </p>

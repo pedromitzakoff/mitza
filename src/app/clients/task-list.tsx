@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/ui/empty-state";
 import { TaskRow, type TaskListItem } from "./task-row";
 
 export type { TaskListItem };
@@ -16,7 +17,7 @@ export function TaskList({ tasks, clientId }: { tasks: TaskListItem[]; clientId:
   const ordered = orderTasks(tasks);
 
   if (ordered.length === 0) {
-    return <p className="text-sm text-zinc-500">Nenhuma tarefa ainda.</p>;
+    return <EmptyState>Nenhuma tarefa ainda.</EmptyState>;
   }
 
   return (

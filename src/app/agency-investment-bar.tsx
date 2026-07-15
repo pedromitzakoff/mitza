@@ -1,4 +1,5 @@
 import { formatCurrency, formatPercent } from "@/lib/format";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { FinancialPeriodSummary } from "@/lib/financial-period";
 import {
   computeExpectedPct,
@@ -66,7 +67,7 @@ export function AgencyInvestmentBar({
     return (
       <div>
         <div className="h-3 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />
-        <p className="mt-1.5 text-[11px] text-muted-foreground">Nenhum planejamento configurado neste recorte.</p>
+        <EmptyState size="2xs" className="mt-1.5">Nenhum planejamento configurado neste recorte.</EmptyState>
       </div>
     );
   }

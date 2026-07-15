@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeDateTime } from "@/lib/format";
 import type { ClientHistoryRow } from "@/lib/client-operational-history";
 
@@ -95,7 +96,7 @@ export function CollapsibleAccountHistory({
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">Nenhuma atividade registrada neste período.</p>
+          <EmptyState>Nenhuma atividade registrada neste período.</EmptyState>
         )}
       </div>
     </details>

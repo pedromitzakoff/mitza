@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { EmptyState } from "@/components/ui/empty-state";
+import { SectionHeader } from "@/components/ui/section-header";
 import { formatDateTime } from "@/lib/format";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL } from "@/lib/account-reviews";
 import { CLIENT_UPDATE_STATUS_LABEL, type ClientUpdateStatus } from "@/lib/client-updates";
@@ -54,12 +56,15 @@ export function AccountReviewsSection({
 }) {
   return (
     <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-900">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Otimizações</h3>
-        <span className="text-xs text-muted-foreground">
-          {reviews.length} nesta sprint
-        </span>
-      </div>
+      <SectionHeader
+        action={
+          <span className="text-xs text-muted-foreground">
+            {reviews.length} nesta sprint
+          </span>
+        }
+      >
+        Otimizações
+      </SectionHeader>
 
       {reviews.length > 0 ? (
         <ul className="mt-1.5 flex flex-col gap-1">
@@ -92,7 +97,7 @@ export function AccountReviewsSection({
           ))}
         </ul>
       ) : (
-        <p className="mt-1.5 text-sm text-muted-foreground">Nenhuma otimização registrada nesta sprint.</p>
+        <EmptyState className="mt-1.5">Nenhuma otimização registrada nesta sprint.</EmptyState>
       )}
 
       <Link href={newReviewHref} scroll={false} className="mt-1.5 inline-block text-xs font-medium text-brand hover:underline">

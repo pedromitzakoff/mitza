@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EmptyState } from "@/components/ui/empty-state";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
@@ -280,7 +281,7 @@ export default async function ClientsPage({
             })}
           </ul>
         ) : (
-          <p className="bg-card p-4 text-sm text-muted-foreground">Nenhum cliente encontrado com esses filtros.</p>
+          <EmptyState className="bg-card p-4">Nenhum cliente encontrado com esses filtros.</EmptyState>
         )}
       </div>
     </div>

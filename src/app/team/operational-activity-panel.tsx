@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { EmptyState } from "@/components/ui/empty-state";
+import { SectionHeader } from "@/components/ui/section-header";
 import { formatDateTime } from "@/lib/format";
 import { ACTIVITY_PERIOD_LABEL, type ActivityPeriodKey, type TeamMemberActivitySummary, type TeamMemberTimelineRow } from "@/lib/team-member-activity";
 import { OPERATIONAL_EVENT_TYPE_LABEL, formatDelay } from "@/lib/operational-events";
@@ -35,23 +37,26 @@ export function OperationalActivityPanel({
 
   return (
     <section className="mt-5 border-t border-border pt-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Atividade operacional</h3>
-        <div className="flex gap-1 rounded-md border border-border p-0.5 text-xs">
-          {PERIODS.map((p) => (
-            <Link
-              key={p}
-              href={periodHref(p)}
-              scroll={false}
-              className={`rounded px-2 py-0.5 font-medium ${
-                p === period ? "bg-brand text-white" : "text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              }`}
-            >
-              {ACTIVITY_PERIOD_LABEL[p]}
-            </Link>
-          ))}
-        </div>
-      </div>
+      <SectionHeader
+        action={
+          <div className="flex gap-1 rounded-md border border-border p-0.5 text-xs">
+            {PERIODS.map((p) => (
+              <Link
+                key={p}
+                href={periodHref(p)}
+                scroll={false}
+                className={`rounded px-2 py-0.5 font-medium ${
+                  p === period ? "bg-brand text-white" : "text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                }`}
+              >
+                {ACTIVITY_PERIOD_LABEL[p]}
+              </Link>
+            ))}
+          </div>
+        }
+      >
+        Atividade operacional
+      </SectionHeader>
 
       <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
         <Stat label="Tarefas concluídas" value={summary.tasksCompleted} />
@@ -67,9 +72,9 @@ export function OperationalActivityPanel({
         <Stat label="Repassou por reatribuição" value={summary.tasksReassignedAway} />
       </dl>
 
-      <h4 className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Linha do tempo</h4>
+      <SectionHeader as="h4" className="mt-4">Linha do tempo</SectionHeader>
       {timelineRows.length === 0 ? (
-        <p className="mt-2 text-sm text-muted-foreground">Nenhum evento registrado ainda.</p>
+        <EmptyState className="mt-2">Nenhum evento registrado ainda.</EmptyState>
       ) : (
         <ul className="mt-2 flex flex-col gap-1.5">
           {timelineRows.map((row) => (

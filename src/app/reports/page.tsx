@@ -5,6 +5,7 @@ import { todayUTC } from "@/lib/today";
 import { currentMonthRange, monthRangeFromParam, shiftMonthParam } from "@/lib/sprint-financials";
 import { formatCurrency, formatMonthLabel } from "@/lib/format";
 import { buildOperationClientCard, type OperationClientRawData } from "@/app/operation/operation-data";
+import { SPEND_STATUS_BADGE_CLASSES } from "@/lib/spend-status";
 import type { SpendStatus } from "@/lib/spend-status";
 import { MONTHLY_REPORT_STATUS_BADGE_CLASSES, MONTHLY_REPORT_STATUS_LABEL } from "@/lib/monthly-reports";
 import type { MonthlyReportStatus } from "@/lib/supabase/database.types";
@@ -20,15 +21,6 @@ const SITUATION_LABEL: Record<SpendStatus, string> = {
   sem_meta: "Sem planejamento",
   nao_iniciado: "Ainda não iniciada",
   em_andamento: "Em andamento",
-};
-
-const SITUATION_BADGE_CLASSES: Record<SpendStatus, string> = {
-  dentro: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
-  acima: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-  abaixo: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  sem_meta: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
-  nao_iniciado: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
-  em_andamento: "bg-brand/10 text-brand",
 };
 
 export default async function ReportsPage({
@@ -269,7 +261,7 @@ export default async function ReportsPage({
                     </td>
                     <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">{pct !== null ? `${pct}%` : "—"}</td>
                     <td className="py-2 px-3">
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SITUATION_BADGE_CLASSES[card.monthStatus]}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[card.monthStatus]}`}>
                         {SITUATION_LABEL[card.monthStatus]}
                       </span>
                     </td>

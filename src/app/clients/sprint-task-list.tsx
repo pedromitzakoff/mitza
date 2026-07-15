@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EmptyState } from "@/components/ui/empty-state";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
 import { orderTasks } from "./task-list";
@@ -85,7 +86,7 @@ export function SprintTaskList({
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-xs text-zinc-500">Nenhuma tarefa vinculada a esta sprint ainda.</p>
+        <EmptyState size="xs" className="mt-2">Nenhuma tarefa vinculada a esta sprint ainda.</EmptyState>
       )}
     </div>
   );

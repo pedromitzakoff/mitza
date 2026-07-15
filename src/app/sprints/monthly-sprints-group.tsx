@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/ui/empty-state";
 import { buildSprintPerformanceProps, type OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
 import type { CommentItem } from "@/app/clients/comment-thread";
 import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-section";
@@ -108,7 +109,7 @@ export function SprintMonthlyBySprintsGroup({
             })}
           </div>
         ) : (
-          <p className="p-3 text-xs text-muted-foreground">Nenhuma sprint neste mês.</p>
+          <EmptyState size="xs" className="p-3">Nenhuma sprint neste mês.</EmptyState>
         )}
       </div>
     </details>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { EmptyState } from "@/components/ui/empty-state";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC } from "@/lib/today";
@@ -400,7 +401,7 @@ export default async function ClientReportPage({
               </table>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Nenhuma sprint neste mês ainda.</p>
+            <EmptyState>Nenhuma sprint neste mês ainda.</EmptyState>
           )}
         </SectionCard>
 
@@ -431,7 +432,7 @@ export default async function ClientReportPage({
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">Nenhum acontecimento registrado ainda.</p>
+            <EmptyState>Nenhum acontecimento registrado ainda.</EmptyState>
           )}
 
           {!isReadOnly && (
@@ -603,7 +604,7 @@ export default async function ClientReportPage({
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">Nenhuma pendência registrada.</p>
+            <EmptyState>Nenhuma pendência registrada.</EmptyState>
           )}
 
           {!isReadOnly && (

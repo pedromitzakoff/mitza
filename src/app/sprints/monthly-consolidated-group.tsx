@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency } from "@/lib/format";
 import type { OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
 import { resolveMonthPeriodSummary, computeRitmoDiff } from "@/lib/financial-period";
@@ -88,7 +89,7 @@ export function SprintMonthlyConsolidatedGroup({
             ))}
           </ul>
         ) : (
-          <p className="text-xs text-muted-foreground">Nenhuma tarefa neste mês.</p>
+          <EmptyState size="xs">Nenhuma tarefa neste mês.</EmptyState>
         )}
 
         <div className="mt-3 border-t border-border pt-2 text-xs">

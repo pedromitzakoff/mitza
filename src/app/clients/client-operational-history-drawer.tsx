@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EmptyState } from "@/components/ui/empty-state";
 import { formatDateTime } from "@/lib/format";
 import type { ClientHistoryRow } from "@/lib/client-operational-history";
 
@@ -65,7 +66,7 @@ export function ClientOperationalHistoryDrawer({
             ))}
           </ul>
         ) : (
-          <p className="mt-3 text-sm text-muted-foreground">Nenhum evento registrado em {monthLabel}.</p>
+          <EmptyState className="mt-3">Nenhum evento registrado em {monthLabel}.</EmptyState>
         )}
 
         {(page > 0 || hasMore) && (

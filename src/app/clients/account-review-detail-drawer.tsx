@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SectionHeader } from "@/components/ui/section-header";
 import { formatDateTime } from "@/lib/format";
 import { formatDelay } from "@/lib/operational-events";
 import {
@@ -106,9 +107,7 @@ export function AccountReviewDetailDrawer({
 
         {review.optimizations.length > 0 && (
           <section className="mt-4 border-t border-border pt-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Alterações realizadas
-            </h3>
+            <SectionHeader>Alterações realizadas</SectionHeader>
             <ul className="mt-2 flex flex-col gap-2">
               {review.optimizations.map((opt) => (
                 <li key={opt.id} className="rounded-md border border-border p-2.5 text-sm">
@@ -145,7 +144,7 @@ export function AccountReviewDetailDrawer({
 
         {review.outcome === "ISSUE_IDENTIFIED" && (
           <section className="mt-4 border-t border-border pt-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Problema identificado</h3>
+            <SectionHeader>Problema identificado</SectionHeader>
             <p className="mt-2 text-sm text-foreground">{review.issueDescription}</p>
             {review.issueCategory && <p className="mt-1 text-xs text-muted-foreground">Categoria: {review.issueCategory}</p>}
             {review.issueTaskTitle && (
@@ -156,15 +155,13 @@ export function AccountReviewDetailDrawer({
 
         {review.notes && (
           <section className="mt-4 border-t border-border pt-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Observações</h3>
+            <SectionHeader>Observações</SectionHeader>
             <p className="mt-2 text-sm text-foreground">{review.notes}</p>
           </section>
         )}
 
         <section className="mt-4 border-t border-border pt-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Atualização para o cliente
-          </h3>
+          <SectionHeader>Atualização para o cliente</SectionHeader>
           {review.clientUpdate ? (
             <ClientUpdateEditor
               clientUpdateId={review.clientUpdate.id}

@@ -121,7 +121,7 @@ export function AccountCardSummary({
               {statusBadge}
             </>
           ) : (
-            <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${SPEND_STATUS_BADGE_CLASSES.sem_meta}`}>
               Sem planejamento
             </span>
           )}
@@ -174,7 +174,7 @@ export function AccountCardSummary({
                 </div>
               </>
             ) : (
-              <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${SPEND_STATUS_BADGE_CLASSES.sem_meta}`}>
                 Sem planejamento
               </span>
             )}
