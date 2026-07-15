@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/lib/supabase/database.types";
@@ -58,13 +59,36 @@ async function linkPendingTeamMember(authUserId: string, email: string | undefin
   }
 }
 
-export async function getCurrentProfile(): Promise<CurrentProfile | null> {
+/**
+ * Envolvida em `cache()` do React — Navigation Performance & Perceived
+ * Speed 1.0: antes, o layout raiz E cada página chamavam esta função de
+ * forma independente, repetindo `auth.getUser()` + a mesma consulta em
+ * `team_members` duas vezes por navegação. `cache()` memoiza só dentro do
+ * mesmo request/render (React cria um escopo de cache por renderização de
+ * Server Components, descartado ao final do request) — nunca entre
+ * usuários, nunca entre requests, nunca persistido em disco/memória
+ * compartilhada. Isolamento multi-tenant preservado: a segunda chamada
+ * dentro da MESMA navegação só reaproveita o resultado já resolvido PARA
+ * AQUELE MESMO REQUEST; a próxima navegação (novo request) sempre resolve
+ * de novo, do zero. O `auth.getUser()` do proxy (`src/lib/supabase/middleware.ts`)
+ * continua completamente separado — roda antes deste código e não é
+ * afetado por este cache.
+ *
+ * Instrumentação temporária de performance (console.log, só no servidor,
+ * sem dados pessoais/tokens) — remover depois de confirmado o ganho em
+ * produção.
+ */
+export const getCurrentProfile = cache(async (): Promise<CurrentProfile | null> => {
+  const start = performance.now();
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return null;
+  if (!user) {
+    console.log(`[perf] getCurrentProfile sem usuário — ${(performance.now() - start).toFixed(0)}ms`);
+    return null;
+  }
 
   const { data: member } = await supabase
     .from("team_members")
@@ -74,6 +98,7 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     .maybeSingle();
 
   if (member) {
+    console.log(`[perf] getCurrentProfile — ${(performance.now() - start).toFixed(0)}ms`);
     return {
       id: member.id,
       name: member.name,
@@ -95,6 +120,8 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     .eq("status", "ativo")
     .maybeSingle();
 
+  console.log(`[perf] getCurrentProfile (fallback de vínculo) — ${(performance.now() - start).toFixed(0)}ms`);
+
   if (!linked) return null;
   return {
     id: linked.id,
@@ -103,7 +130,7 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     organizationId: linked.organization_id,
     authUserId: user.id,
   };
-}
+});
 
 /** Redireciona para a home se o usuário logado não for admin. */
 export async function requireAdmin(): Promise<CurrentProfile> {

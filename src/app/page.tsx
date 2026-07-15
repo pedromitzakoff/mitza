@@ -1,5 +1,6 @@
 import { Inter } from "next/font/google";
 import { getCurrentProfile } from "@/lib/auth";
+import { perfNow, perfLog } from "@/lib/perf-log";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
 import {
@@ -76,6 +77,11 @@ export default async function Home({
     platform?: string;
   }>;
 }) {
+  // Instrumentação temporária (Navigation Performance & Perceived Speed 1.0)
+  // — só console.log no servidor, sem dado pessoal/token; remover depois de
+  // confirmado o ganho em produção.
+  const __perfPageStart = perfNow();
+
   const profile = await getCurrentProfile();
   if (!profile) return null;
 
@@ -113,6 +119,7 @@ export default async function Home({
   const indicatorsMonthStart = `${monthRange.firstDay}T00:00:00Z`;
   const indicatorsMonthEnd = `${monthRange.lastDay}T23:59:59.999Z`;
 
+  const __perfBlock1Start = perfNow();
   const [
     { data: clients },
     { data: gestores },
@@ -187,23 +194,7 @@ export default async function Home({
     // volume pequeno e escopado por sprint, não por dia).
     supabase.from("sprint_channel_spend").select("client_id, sprint_id, channel, spend_source, manual_actual_spend"),
   ]);
-
-  // Etapa 74 — "Última otimização": sempre o dado GLOBAL mais recente por
-  // cliente (independe do mês selecionado), por isso uma busca própria sem
-  // filtro de data — mesma fonte usada no Acompanhamento da Conta.
-  const clientIdsForLastReview = (clients ?? []).map((c) => c.id);
-  const { data: lastReviews } =
-    clientIdsForLastReview.length > 0
-      ? await supabase
-          .from("account_reviews")
-          .select("client_id, reviewed_at")
-          .in("client_id", clientIdsForLastReview)
-          .order("reviewed_at", { ascending: false })
-      : { data: [] };
-  const lastReviewAtByClient = new Map<string, string>();
-  for (const row of lastReviews ?? []) {
-    if (!lastReviewAtByClient.has(row.client_id)) lastReviewAtByClient.set(row.client_id, row.reviewed_at);
-  }
+  perfLog("visão geral bloco 1 (11 queries)", __perfBlock1Start);
 
   const clientIds = (clients ?? []).map((c) => c.id);
   const currentSprintIds = (sprints ?? [])
@@ -216,20 +207,42 @@ export default async function Home({
     .filter((s) => s.start_date <= monthRange.lastDay && s.end_date >= monthRange.firstDay)
     .map((s) => s.id);
 
-  const [{ data: clientActivity }, { data: sprintActivity }, { data: performanceRecords }] = await Promise.all([
-    clientIds.length > 0
-      ? supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds)
-      : Promise.resolve({ data: [] }),
-    currentSprintIds.length > 0
-      ? supabase.from("sprint_last_operational_activity").select("sprint_id, last_activity_at").in("sprint_id", currentSprintIds)
-      : Promise.resolve({ data: [] }),
-    monthSprintIdsForPerformance.length > 0
-      ? supabase
-          .from("performance_records")
-          .select("client_id, sprint_id, channel, result_type, result_count, source, source_updated_at")
-          .in("sprint_id", monthSprintIdsForPerformance)
-      : Promise.resolve({ data: [] }),
-  ]);
+  const __perfBlock2Start = perfNow();
+  const [{ data: clientActivity }, { data: sprintActivity }, { data: performanceRecords }, { data: lastReviews }] =
+    await Promise.all([
+      clientIds.length > 0
+        ? supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds)
+        : Promise.resolve({ data: [] }),
+      currentSprintIds.length > 0
+        ? supabase.from("sprint_last_operational_activity").select("sprint_id, last_activity_at").in("sprint_id", currentSprintIds)
+        : Promise.resolve({ data: [] }),
+      monthSprintIdsForPerformance.length > 0
+        ? supabase
+            .from("performance_records")
+            .select("client_id, sprint_id, channel, result_type, result_count, source, source_updated_at")
+            .in("sprint_id", monthSprintIdsForPerformance)
+        : Promise.resolve({ data: [] }),
+      // Etapa 74 — "Última otimização": sempre o dado GLOBAL mais recente por
+      // cliente (independe do mês selecionado), por isso uma busca própria
+      // sem filtro de data — mesma fonte usada no Acompanhamento da Conta.
+      // Navigation Performance & Perceived Speed 1.0: não depende de nada
+      // deste Promise.all, só de clientIds (pronto desde o bloco anterior) —
+      // por isso entra aqui em vez de ser um round-trip sequencial à parte.
+      clientIds.length > 0
+        ? supabase
+            .from("account_reviews")
+            .select("client_id, reviewed_at")
+            .in("client_id", clientIds)
+            .order("reviewed_at", { ascending: false })
+        : Promise.resolve({ data: [] }),
+    ]);
+  perfLog("visão geral bloco 2 fundido (atividade/performance/lastReviews, antes lastReviews era sequencial à parte)", __perfBlock2Start);
+  perfLog("visão geral — dados totais carregados (auth + queries)", __perfPageStart);
+
+  const lastReviewAtByClient = new Map<string, string>();
+  for (const row of lastReviews ?? []) {
+    if (!lastReviewAtByClient.has(row.client_id)) lastReviewAtByClient.set(row.client_id, row.reviewed_at);
+  }
 
   type SprintRow = {
     id: string;

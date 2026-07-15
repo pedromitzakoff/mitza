@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
+import { perfNow, perfLog } from "@/lib/perf-log";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC, todayDateString } from "@/lib/today";
 import {
@@ -86,6 +87,11 @@ export default async function SprintsPage({
     reviewError?: string;
   }>;
 }) {
+  // Instrumentação temporária (Navigation Performance & Perceived Speed 1.0)
+  // — só console.log no servidor, sem dado pessoal/token; remover depois de
+  // confirmado o ganho em produção.
+  const __perfPageStart = perfNow();
+
   const profile = await getCurrentProfile();
   if (!profile) return null;
 
@@ -124,6 +130,7 @@ export default async function SprintsPage({
 
   const supabase = await createSupabaseClient();
 
+  const __perfBlock1Start = perfNow();
   const [
     { data: clients },
     { data: gestores },
@@ -172,6 +179,7 @@ export default async function SprintsPage({
       .select("client_id, new_amount, changed_at")
       .eq("month", monthRange.firstDay),
   ]);
+  perfLog("sprints bloco 1 (clients/team_members/sprints/daily_spend/tasks/allocations/budget)", __perfBlock1Start);
 
   const clientIds = (clients ?? []).map((c) => c.id);
   const allSprintIds = (sprints ?? []).map((s) => s.id);
@@ -188,6 +196,7 @@ export default async function SprintsPage({
   // Comentários de TODAS as sprints visíveis, buscados em lote uma única vez
   // (não por card) — pra o mesmo SprintCard da página do cliente também
   // mostrar comentários aqui, sem virar N+1.
+  const __perfBlock2Start = perfNow();
   const [{ data: clientActivity }, { data: sprintActivity }, { data: sprintComments }, { data: performanceRecords }] =
     await Promise.all([
       clientIds.length > 0
@@ -211,39 +220,53 @@ export default async function SprintsPage({
             .in("sprint_id", monthSprintIdsForPerformance)
         : Promise.resolve({ data: [] }),
     ]);
+  perfLog("sprints bloco 2 (atividade/comentários/performance)", __perfBlock2Start);
 
-  // Etapa 74 — "Última otimização"/filtro "optimization": sempre o dado
-  // GLOBAL mais recente por cliente (independe do mês selecionado), por
-  // isso uma busca própria sem filtro de data — mesma fonte usada na Visão
-  // Geral e no Acompanhamento da Conta (account_reviews.reviewed_at).
-  const { data: lastReviews } =
+  // Navigation Performance & Perceived Speed 1.0: lastReviews, sprintReviewRows
+  // e reportSelections não dependem umas das outras — só de clientIds/
+  // allSprintIds/allCommentIds, já disponíveis desde os blocos anteriores —
+  // então rodam num único Promise.all em vez de 3 round-trips sequenciais.
+  const allCommentIds = (sprintComments ?? []).map((c) => c.id);
+
+  const __perfBlock3Start = perfNow();
+  const [{ data: lastReviews }, { data: sprintReviewRows }, { data: reportSelections }] = await Promise.all([
+    // Etapa 74 — "Última otimização"/filtro "optimization": sempre o dado
+    // GLOBAL mais recente por cliente (independe do mês selecionado), por
+    // isso uma busca própria sem filtro de data — mesma fonte usada na Visão
+    // Geral e no Acompanhamento da Conta (account_reviews.reviewed_at).
     clientIds.length > 0
-      ? await supabase
+      ? supabase
           .from("account_reviews")
           .select("client_id, reviewed_at")
           .in("client_id", clientIds)
           .order("reviewed_at", { ascending: false })
-      : { data: [] };
-  const lastReviewAtByClient = new Map<string, string>();
-  for (const row of lastReviews ?? []) {
-    if (!lastReviewAtByClient.has(row.client_id)) lastReviewAtByClient.set(row.client_id, row.reviewed_at);
-  }
-
-  // Sprint UX 2.0 — "Otimizações" (account_reviews) direto na tela Sprints,
-  // igual à página do cliente: mesma query rica (Etapa 57), só filtrada
-  // pelas sprints já visíveis nesta tela (allSprintIds) em vez de por
-  // cliente, pra cobrir as 3 visões com uma única busca.
-  const { data: sprintReviewRows } =
+      : Promise.resolve({ data: [] }),
+    // Sprint UX 2.0 — "Otimizações" (account_reviews) direto na tela Sprints,
+    // igual à página do cliente: mesma query rica (Etapa 57), só filtrada
+    // pelas sprints já visíveis nesta tela (allSprintIds) em vez de por
+    // cliente, pra cobrir as 3 visões com uma única busca.
     allSprintIds.length > 0
-      ? await supabase
+      ? supabase
           .from("account_reviews")
           .select(
             "id, client_id, sprint_id, reviewed_at, reason, reason_other_description, outcome, notes, issue_description, issue_category, seconds_since_previous_review, team_member:team_members!account_reviews_team_member_id_fkey(name), optimizations:account_optimizations(id, optimization_type, optimization_action, description, reason, expected_impact), issue_task:tasks!account_reviews_issue_task_id_fkey(title)",
           )
           .in("sprint_id", allSprintIds)
           .order("reviewed_at", { ascending: false })
-      : { data: [] };
+      : Promise.resolve({ data: [] }),
+    allCommentIds.length > 0
+      ? supabase.from("report_comment_selections").select("comment_id").in("comment_id", allCommentIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  perfLog("sprints bloco 3 fundido (lastReviews/sprintReviewRows/reportSelections, antes eram 3 round-trips sequenciais)", __perfBlock3Start);
 
+  const lastReviewAtByClient = new Map<string, string>();
+  for (const row of lastReviews ?? []) {
+    if (!lastReviewAtByClient.has(row.client_id)) lastReviewAtByClient.set(row.client_id, row.reviewed_at);
+  }
+
+  // reviewClientUpdateRows depende de reviewIds (resultado de sprintReviewRows
+  // acima) — continua sequencial, não dá pra paralelizar com o bloco anterior.
   const reviewIds = (sprintReviewRows ?? []).map((r) => r.id);
   const { data: reviewClientUpdateRows } =
     reviewIds.length > 0
@@ -276,11 +299,6 @@ export default async function SprintsPage({
     accountReviewsBySprintId.set(review.sprint_id, list);
   }
 
-  const allCommentIds = (sprintComments ?? []).map((c) => c.id);
-  const { data: reportSelections } =
-    allCommentIds.length > 0
-      ? await supabase.from("report_comment_selections").select("comment_id").in("comment_id", allCommentIds)
-      : { data: [] };
   const includedCommentIds = new Set((reportSelections ?? []).map((r) => r.comment_id));
 
   const sprintCommentsById = new Map<string, CommentItem[]>();
@@ -391,6 +409,7 @@ export default async function SprintsPage({
       sprintClosedSnapshotsByClient.set(client.id, snapshots);
     }),
   );
+  perfLog("sprints — dados totais carregados (auth + queries)", __perfPageStart);
 
   const rawClients: OperationClientRawData[] = (clients ?? []).map((client) => {
     const clientSprints = sprintsByClient.get(client.id) ?? [];
