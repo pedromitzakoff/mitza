@@ -26,7 +26,7 @@ function PriorityRow({
   managerName: string | null;
 }) {
   return (
-    <li className="flex min-h-[52px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3.5 py-2 transition-colors duration-150 hover:bg-overview-surface-hover">
+    <li className="flex min-h-[44px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3.5 py-1.5 transition-colors duration-150 hover:bg-overview-surface-hover">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <Link href={`/clients/${priority.clientId}`} className="truncate text-sm font-semibold text-overview-text-primary hover:underline">
@@ -67,7 +67,7 @@ export function PrioritiesPanel({
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
-      <div className="flex items-center justify-between px-3.5 py-2.5">
+      <div className="flex items-center justify-between px-3.5 py-2">
         <SectionHeader title="Prioridades de hoje" />
         {totalCount > priorities.length && (
           <Button href={viewAllHref} variant="ghost" size="sm">

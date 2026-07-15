@@ -83,7 +83,7 @@ export function ClientObjectiveTable({
 
   return (
     <div className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
-      <div className="flex items-center justify-between px-3.5 py-2.5">
+      <div className="flex items-center justify-between px-3.5 py-2">
         <SectionHeader title={title} />
       </div>
 

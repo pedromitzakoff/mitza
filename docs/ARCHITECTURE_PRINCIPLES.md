@@ -339,3 +339,14 @@ apenas como decoração.
 
 Velocidade, easing, duração, foco, hover e feedback devem ser consistentes
 em toda a plataforma.
+
+## Capítulo 24 — Densidade é uma ferramenta de produtividade
+
+Toda tela deve buscar o melhor equilíbrio entre legibilidade e quantidade
+de contexto visível.
+
+Sempre que possível, os principais indicadores e ações devem permanecer
+visíveis na primeira dobra da tela.
+
+Maior densidade nunca deve comprometer clareza, acessibilidade ou
+facilidade de interação.

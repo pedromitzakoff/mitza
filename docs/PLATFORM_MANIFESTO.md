@@ -421,3 +421,11 @@ O usuário deve sentir que cada interação responde imediatamente.
 
 Mesmo pequenas interações devem comunicar continuidade, precisão e
 confiança.
+
+## Capítulo 25 — A densidade operacional reduz esforço
+
+Uma interface deve apresentar o máximo de contexto útil com o mínimo de
+movimento desnecessário.
+
+Espaço em branco deve existir para organizar a informação, nunca apenas
+para ocupar área.

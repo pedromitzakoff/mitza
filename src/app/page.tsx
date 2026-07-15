@@ -571,7 +571,7 @@ export default async function Home({
 
   return (
     <div className={`min-h-[calc(100dvh_-_3rem)] bg-overview-bg ${inter.variable}`} style={{ fontFamily: "var(--font-overview)" }}>
-      <div className="mx-auto max-w-7xl px-6 py-5">
+      <div className="mx-auto max-w-7xl px-6 py-4">
         <PageHeader
           title="Visão Geral"
           actions={
@@ -634,9 +634,9 @@ export default async function Home({
             espaçamento + tipografia) e reorganiza o Controle de Investimento
             em 2 camadas de destaque decrescente, sem subtítulos de grupo. */}
         <div className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
-          <div className="px-5 py-6 sm:px-6 sm:py-7">
+          <div className="px-5 py-4 sm:px-6 sm:py-5">
             <SectionHeader title="Indicadores da operação" />
-            <div className="mt-5 grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
               <OperationMetric
                 label="Clientes ativos"
                 value={String(operationIndicators.activeClientsCount)}
@@ -670,7 +670,7 @@ export default async function Home({
             </div>
           </div>
 
-          <div className="border-t border-overview-border px-5 py-6 sm:px-6 sm:py-7">
+          <div className="border-t border-overview-border px-5 py-4 sm:px-6 sm:py-5">
             <SectionHeader
               title={platformFilter === "consolidado" ? "Controle de investimento" : `Investimento · ${PLATFORM_LABEL[platformFilter]}`}
             />
@@ -678,7 +678,7 @@ export default async function Home({
             {platformFilter === "consolidado" ? (
               <>
                 {/* Camada 1 — os números que o olhar deve encontrar primeiro. */}
-                <div className="mt-5 grid grid-cols-1 gap-x-10 gap-y-4 sm:grid-cols-3">
+                <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-3">
                   <PrimaryInvestmentMetric label="Planejado" value={formatCurrency(financial.planned)} />
                   <PrimaryInvestmentMetric label="Realizado" value={formatCurrency(financial.actual)} />
                   <PrimaryInvestmentMetric
@@ -689,7 +689,7 @@ export default async function Home({
                 </div>
 
                 {/* Camada 2 — contexto de ritmo, deliberadamente mais discreto. */}
-                <div className="mt-7 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="mt-5 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
                   <SecondaryInvestmentMetric
                     label="Esperado hoje"
                     value={formatPercent(investmentExpectedPct)}
@@ -710,7 +710,7 @@ export default async function Home({
                   />
                 </div>
 
-                <div className="mt-8">
+                <div className="mt-5">
                   <ProgressBar
                     planned={financial.planned}
                     actual={financial.actual}
@@ -719,7 +719,7 @@ export default async function Home({
                   />
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-3">
                   {financial.semMeta > 0 ? (
                     <Button
                       href={drillDownUrl({ meta: "sem" })}
@@ -740,10 +740,10 @@ export default async function Home({
                     REALIZADO por plataforma — planejado/esperado/ritmo
                     dependem de um orçamento que ainda não é configurado por
                     canal (ver decisão registrada no relatório da etapa). */}
-                <div className="mt-5 grid grid-cols-1 gap-x-10 gap-y-4 sm:grid-cols-3">
+                <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-3">
                   <PrimaryInvestmentMetric label={`Realizado · ${PLATFORM_LABEL[platformFilter]}`} value={formatCurrency(channelActualTotal ?? 0)} />
                 </div>
-                <p className="mt-4 text-[13px] text-overview-text-muted">
+                <p className="mt-3 text-[13px] text-overview-text-muted">
                   Planejado e ritmo financeiro disponíveis só no recorte Consolidado — ainda não há orçamento configurado por plataforma.
                 </p>
               </>
