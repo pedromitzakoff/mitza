@@ -18,9 +18,10 @@ import { AccountCardSummary } from "./account-card-summary";
  * página individual do cliente, cada uma começando recolhida por sua vez
  * (dois níveis aqui fazem sentido: um controla "ver as sprints deste
  * cliente", outro controla "ver o detalhe desta sprint específica" — não é
- * a mesma informação duas vezes). Alertas só aparecem dentro do SprintCard
- * da sprint atual (quando ela está neste mês) — não duplicados aqui no
- * resumo, seguindo a mesma regra de "um local só" da visão Sprint atual.
+ * a mesma informação duas vezes). Etapa "Simplificação da Área Operacional
+ * da Sprint": `SprintCard` não exibe mais alertas em lugar nenhum (a Sprint
+ * é área de execução, não painel de alertas) — o cálculo continua intacto,
+ * só a apresentação saiu daqui.
  */
 export function SprintMonthlyBySprintsGroup({
   card,
@@ -92,7 +93,6 @@ export function SprintMonthlyBySprintsGroup({
                   tasks={card.monthSprintTasks[sprint.sprintId] ?? []}
                   executionLabel={isCurrent ? card.sprintExecutionLabel : null}
                   executionSeverity={isCurrent ? (card.sprintExecutionInfo?.severity ?? null) : null}
-                  alerts={isCurrent ? card.alerts : undefined}
                   defaultOpen={false}
                   openClientHref={`/clients/${card.clientId}`}
                   buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}

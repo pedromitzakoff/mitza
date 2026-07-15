@@ -1,12 +1,10 @@
 import Link from "next/link";
-import { TriangleAlert } from "lucide-react";
 import type { SprintFinancials } from "@/lib/sprint-financials";
 import { describeSpendSourceTimestamp } from "@/lib/sprint-financials";
 import { formatCurrency, formatShortDate, formatShortDateTime } from "@/lib/format";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
-import type { AttentionAlert } from "@/lib/attention-alerts";
 import { CommentThread, type CommentItem } from "./comment-thread";
 import { SprintTaskList } from "./sprint-task-list";
 import type { TaskListItem } from "./task-row";
@@ -136,27 +134,6 @@ const EXECUTION_LABEL_CLASSES: Record<"atencao" | "critico" | "neutro", string> 
   atencao: "text-amber-600 dark:text-amber-400",
   critico: "text-red-600 dark:text-red-400",
 };
-
-/** Linha compacta de alertas — 1 ícone + o alerta mais prioritário (já vêm
- * ordenados por severidade em buildAttentionAlerts, então `alerts[0]` já é
- * o mais prioritário sem recalcular nada) + quantos restam. Vermelho só
- * quando esse alerta é crítico. Vive aqui (não em cada tela que usa
- * SprintCard) porque é sempre a mesma apresentação nos lugares que a usam
- * (resumo recolhido + toggle "Ver alertas" expandido; também exportada pra
- * o resumo mensal consolidado da tela Sprints, que não tem SprintCard). */
-export function AlertsSummaryLine({ topAlert, remaining }: { topAlert: AttentionAlert; remaining: number }) {
-  const isCritical = topAlert.severity === "critico";
-  return (
-    <>
-      <TriangleAlert
-        className={`h-3 w-3 shrink-0 ${isCritical ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}
-        aria-hidden="true"
-      />
-      <span className={isCritical ? "font-medium text-red-600 dark:text-red-400" : ""}>{topAlert.message}</span>
-      {remaining > 0 && <span>· +{remaining} alerta{remaining !== 1 ? "s" : ""}</span>}
-    </>
-  );
-}
 
 /**
  * "Performance da sprint" (Etapa 74) — substitui os antigos blocos separados
@@ -355,13 +332,20 @@ function SprintPerformanceSection({
 /**
  * Conteúdo investigativo de uma sprint (Etapa 44: "card aberto = investigação
  * e execução") — "Performance da sprint" (investimento + resultado + custo,
- * Etapa 74) e "Execução da sprint" (tarefas + otimizações, Etapa 74),
- * alertas detalhados, comentários e "abrir cliente". Extraído de dentro do
- * próprio `<details>` de `SprintCard` pra poder ser reaproveitado também
- * pelo card compacto de conta da tela Sprints (Sprint atual), que precisa
- * do mesmo conteúdo de investigação mas sob um `<details>` próprio, com um
- * resumo fechado diferente (mais simples) — nunca uma segunda implementação
- * do financeiro/performance/tarefas/otimizações/comentários da sprint.
+ * Etapa 74), "Execução da sprint" (tarefas + otimizações, Etapa 74),
+ * comentários e "abrir cliente". Extraído de dentro do próprio `<details>` de
+ * `SprintCard` pra poder ser reaproveitado também pelo card compacto de conta
+ * da tela Sprints (Sprint atual), que precisa do mesmo conteúdo de
+ * investigação mas sob um `<details>` próprio, com um resumo fechado
+ * diferente (mais simples) — nunca uma segunda implementação do
+ * financeiro/performance/tarefas/otimizações/comentários da sprint.
+ *
+ * Etapa "Simplificação da Área Operacional da Sprint" (Parte 1): a Sprint
+ * deixou de exibir a lista de alertas (`AttentionAlert[]`) — a lógica e o
+ * cálculo continuam intactos em `buildAttentionAlerts`/`computeAccountHealth`
+ * (ainda alimentam `accountHealth`, `priorityTier` e a fila de prioridades),
+ * só a apresentação aqui dentro foi removida: a Sprint é área de execução,
+ * não painel de alertas.
  */
 export function SprintCardBody({
   sprint,
@@ -371,7 +355,6 @@ export function SprintCardBody({
   tasks,
   executionLabel,
   executionSeverity,
-  alerts,
   openClientHref,
   buildTaskHref,
   accountReviews,
@@ -390,7 +373,6 @@ export function SprintCardBody({
   tasks: TaskListItem[];
   executionLabel?: string | null;
   executionSeverity?: "atencao" | "critico" | null;
-  alerts?: AttentionAlert[];
   openClientHref?: string;
   buildTaskHref?: (taskId: string) => string;
   /** Pra onde voltar depois de salvar investimento/performance (Etapa MVP
@@ -399,8 +381,8 @@ export function SprintCardBody({
    * redirect fixo pra `/clients/{id}`. */
   returnTo: string;
   /** Otimizações desta sprint (Etapa 57/74) — opcional: só quem já consulta
-   * account_reviews passa isto (mesmo padrão de `alerts`/`executionLabel`,
-   * nem toda tela que usa este componente precisa). */
+   * account_reviews passa isto (mesmo padrão de `executionLabel`, nem toda
+   * tela que usa este componente precisa). */
   accountReviews?: AccountReviewSummaryItem[];
   newReviewHref?: string;
   buildReviewDetailHref?: (reviewId: string) => string;
@@ -413,7 +395,7 @@ export function SprintCardBody({
    * `undefined`/`null` de `manualSpendUpdatedAt` acima. */
   metaSyncedAt?: string | null;
   /** Dados de performance desta sprint (Etapa 71) — opcional, mesmo padrão
-   * de `accountReviews`/`alerts`. */
+   * de `accountReviews`. */
   performance?: SprintPerformanceProps;
   /** Sprint UX 2.0 Fase 2 — só a tela Sprints passa isto: habilita "+ Tarefa"
    * inline em `SprintTaskList` (formulário sem navegar pra `/tasks/new`). A
@@ -429,9 +411,6 @@ export function SprintCardBody({
   );
   const revertSourceToggleId = `revert-source-${sprint.sprintId}`;
   const isManualSource = sprint.spendSource === "manual";
-
-  const topAlert = alerts?.[0];
-  const remainingAlerts = (alerts?.length ?? 0) - 1;
 
   return (
     <div className="border-t border-border p-2.5">
@@ -467,34 +446,6 @@ export function SprintCardBody({
           returnTo={returnTo}
           revertSourceToggleId={revertSourceToggleId}
         />
-
-        {topAlert && (
-          <details className="group/alerts mt-2">
-            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
-              <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
-              <span className="ml-auto shrink-0 font-medium text-brand">
-                <span className="group-open/alerts:hidden">{(alerts?.length ?? 0) > 1 ? "Ver todos" : "Ver detalhe"}</span>
-                <span className="hidden group-open/alerts:inline">Ocultar alertas</span>
-              </span>
-            </summary>
-            <ul className="mt-1.5 flex flex-col gap-0.5 border-l-2 border-border pl-2">
-              {alerts?.map((alert, index) => (
-                <li
-                  key={index}
-                  className={`text-xs leading-tight ${
-                    alert.severity === "critico"
-                      ? "text-red-600 dark:text-red-400"
-                      : alert.severity === "atencao"
-                        ? "text-amber-600 dark:text-amber-400"
-                        : "text-muted-foreground"
-                  }`}
-                >
-                  {alert.message}
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
 
         {/* Execução da sprint — tarefas recorrentes e otimizações (revisões
             estratégicas da conta) lado a lado, mesmo nível hierárquico
@@ -559,18 +510,16 @@ export function SprintCardBody({
  * - `defaultOpen`: a página do cliente deixa a sprint atual já aberta por
  *   padrão (omitir a prop preserva esse comportamento); o painel Sprints
  *   passa sempre `false` (toda sprint começa recolhida lá).
- * - `alerts`: só o painel Sprints passa (a página do cliente já tem seu
- *   próprio AttentionPanel client-wide, acima da lista de sprints — não
- *   duplicar mostrando alerta dentro E fora do card). Quando fornecido,
- *   aparece um indicador compacto já no resumo recolhido (pra não perder a
- *   leitura rápida que o painel Sprints já tinha) e a lista completa no
- *   corpo expandido, exatamente como antes.
  * - `openClientHref`: só o painel Sprints passa ("Abrir cliente" não faz
  *   sentido dentro da própria página do cliente).
  * - `buildTaskHref`: como cada tela abre o drawer de tarefa a partir de uma
  *   URL diferente (a própria página do cliente vs. o painel Sprints
  *   preservando filtros/mês/modo), quem chama decide a URL; o padrão
  *   preserva o comportamento já existente na página do cliente.
+ *
+ * Etapa "Simplificação da Área Operacional da Sprint": esta função não
+ * recebe mais `alerts` — a lista de alertas deixou de ser exibida dentro da
+ * Sprint (ver doc de `SprintCardBody`).
  */
 export function SprintCard({
   sprint,
@@ -581,7 +530,6 @@ export function SprintCard({
   executionLabel,
   executionSeverity,
   defaultOpen,
-  alerts,
   openClientHref,
   buildTaskHref,
   accountReviews,
@@ -603,7 +551,6 @@ export function SprintCard({
   executionLabel?: string | null;
   executionSeverity?: "atencao" | "critico" | null;
   defaultOpen?: boolean;
-  alerts?: AttentionAlert[];
   openClientHref?: string;
   buildTaskHref?: (taskId: string) => string;
   accountReviews?: AccountReviewSummaryItem[];
@@ -637,9 +584,6 @@ export function SprintCard({
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
   const isCurrent = sprint.temporalStatus === "atual";
   const isOpen = defaultOpen ?? isCurrent;
-
-  const topAlert = alerts?.[0];
-  const remainingAlerts = (alerts?.length ?? 0) - 1;
 
   return (
     <details
@@ -741,12 +685,6 @@ export function SprintCard({
                 {TEMPORAL_LABEL[sprint.temporalStatus]}
               </span>
             </div>
-
-            {topAlert && (
-              <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
-              </span>
-            )}
           </div>
         </summary>
       ) : (
@@ -784,12 +722,6 @@ export function SprintCard({
               </span>
             )}
           </span>
-
-          {topAlert && (
-            <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
-              <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
-            </span>
-          )}
         </summary>
       )}
 
@@ -804,7 +736,6 @@ export function SprintCard({
               tasks={tasks}
               executionLabel={executionLabel}
               executionSeverity={executionSeverity}
-              alerts={alerts}
               openClientHref={openClientHref}
               buildTaskHref={buildTaskHref}
               accountReviews={accountReviews}
@@ -827,7 +758,6 @@ export function SprintCard({
           tasks={tasks}
           executionLabel={executionLabel}
           executionSeverity={executionSeverity}
-          alerts={alerts}
           openClientHref={openClientHref}
           buildTaskHref={buildTaskHref}
           accountReviews={accountReviews}

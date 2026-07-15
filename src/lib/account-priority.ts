@@ -52,11 +52,20 @@ export interface OperationalSummary {
  * fechado = decisão, card aberto = investigação") — nunca a lista inteira de
  * alertas, sempre o problema de maior prioridade. Não inventa nenhum sinal
  * novo: só decide, em ordem, qual dado já existente aparece primeiro —
- * tarefas atrasadas do período > sprint sem execução (só period="sprint",
- * mesma regra de `sprintFilterBucket`) > inatividade (`activityStatus`) >
- * otimização atrasada (alerta já existente, `kind: "otimizacao"`) > "Em dia".
- * A situação financeira (acima/abaixo do ritmo) tem seu próprio espaço no
- * card fechado — por isso não entra aqui de novo.
+ * tarefas atrasadas do período > inatividade (`activityStatus`) > otimização
+ * atrasada (alerta já existente, `kind: "otimizacao"`) > "Em dia". A situação
+ * financeira (acima/abaixo do ritmo) tem seu próprio espaço no card fechado
+ * — por isso não entra aqui de novo.
+ *
+ * Etapa "Simplificação da Área Operacional da Sprint" (Parte 2): removido o
+ * tier "Sem execução" (period="sprint", `sprintFilterBucket === "sem_execucao"`)
+ * — ele duplicava, aqui no resumo fechado da conta, a mesma informação que a
+ * própria Sprint já mostra em detalhe ao abrir ("Hoje, DD/MM · Última
+ * execução: Há N dias úteis", em `SprintCardBody`). Das duas, a mensagem da
+ * Sprint transmite melhor o estado (diz HÁ QUANTO TEMPO, não só "não teve"),
+ * então ela é a que sobrevive como fonte única — este resumo cai pro próximo
+ * sinal da cadeia (inatividade/otimização/"Em dia") quando não há tarefa
+ * atrasada. Nenhum cálculo de `sprintExecutionInfo` foi alterado.
  */
 export function operationalSummary(
   card: OperationClientCard,
@@ -67,10 +76,6 @@ export function operationalSummary(
   if (overdue > 0) {
     const plural = overdue !== 1 ? "s" : "";
     return { text: `${overdue} tarefa${plural} atrasada${plural}`, tone: "critical" };
-  }
-
-  if (period === "sprint" && card.sprintFilterBucket === "sem_execucao") {
-    return { text: "Sem execução", tone: card.sprintExecutionInfo?.severity === "critico" ? "critical" : "warning" };
   }
 
   if (card.activityStatus === "inativo") {

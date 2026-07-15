@@ -78,7 +78,6 @@ export function SprintCurrentClientGroup({
         tasks={card.sprintTasks}
         executionLabel={card.sprintExecutionLabel}
         executionSeverity={card.sprintExecutionInfo?.severity ?? null}
-        alerts={card.alerts}
         buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
         metaSyncedAt={card.lastSyncedAt}
         performance={buildSprintPerformanceProps(card, card.sprint.sprintId)}
