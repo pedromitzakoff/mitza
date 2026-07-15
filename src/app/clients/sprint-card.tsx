@@ -17,6 +17,7 @@ import { AccountReviewsSection, type AccountReviewSummaryItem } from "./account-
 import { getLatestPerformanceUpdateText, type SprintPerformanceView } from "@/lib/performance";
 import { formatPerformanceResult, PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+import { ROW_GRID_CLASSES } from "@/app/sprints/row-grid";
 
 /** Dados de performance de UMA sprint (Etapa 71) — sempre opcional: quem
  * ainda não busca `performance_records` (nenhuma tela hoje) simplesmente
@@ -591,50 +592,137 @@ export function SprintCard({
           temporal → investido → resultado/custo → tarefas → otimizações. O
           próprio badge temporal já cobre "status operacional" (Sprint atual/
           Concluída/Futura) — nunca um segundo selo Acima/Abaixo/Dentro/Sem
-          planejamento aqui, essas classificações são só do nível mensal. */}
-      <summary
-        className={`flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 ${flat ? "px-2 py-1.5" : "px-3 py-2"}`}
-      >
-        <span className="shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90">
-          ▸
-        </span>
-        <span className="shrink-0 text-sm font-semibold text-foreground">
-          {formatSprintPeriodLabel(sprint.startDate, sprint.endDate)}
-        </span>
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
-        >
-          {TEMPORAL_LABEL[sprint.temporalStatus]}
-        </span>
-
-        <span className="ml-auto flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          {/* Sprint futura sem nenhum gasto ainda: "R$0 investidos" é só
-              ruído (seção 8 do pedido) — a própria performance já mostra
-              "Performance ainda não iniciada" logo em seguida. */}
-          {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) && (
-            <span className="tabular-nums">{formatCurrency(sprint.actualSpend)} investidos</span>
-          )}
-          {performance && performance.view.kind !== "not_configured" && (
-            <span className="hidden tabular-nums sm:inline">{formatCompactPerformanceText(performance.view)}</span>
-          )}
-          {!(sprint.temporalStatus === "futura" && tasks.length === 0) && (
-            <span className="hidden sm:inline">
-              {tasksDone}/{tasks.length} tarefas
-            </span>
-          )}
-          {accountReviews && (
-            <span className="hidden sm:inline">
-              {accountReviews.length} {accountReviews.length === 1 ? "otimização" : "otimizações"}
-            </span>
-          )}
-        </span>
-
-        {topAlert && (
-          <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
-            <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
+          planejamento aqui, essas classificações são só do nível mensal.
+          Sprint UX 2.0 Fase 3: em modo `flat` (só a tela Sprints usa), essa
+          linha usa o mesmo grid de colunas da linha do cliente
+          (`ROW_GRID_CLASSES`) — a coluna "Cliente/Gestor" fica vazia (só a
+          indentação do wrapper do grupo já comunica "isto é filho do
+          cliente"), Período/Investimento/Tarefas/Otimizações/Status caem
+          exatamente sob as mesmas colunas de cima. A página do cliente
+          nunca passa `flat`, então mantém a linha corrida de sempre. */}
+      {flat ? (
+        <summary className="flex cursor-pointer list-none items-start gap-2 px-2 py-1.5">
+          <span className="mt-0.5 shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90">
+            ▸
           </span>
-        )}
-      </summary>
+          <div className="min-w-0 flex-1">
+            {/* Mobile (< sm): linha corrida — ver doc do bloco equivalente em
+                `account-card-summary.tsx`. */}
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs sm:hidden">
+              <span className="font-medium text-foreground">
+                {formatSprintPeriodLabel(sprint.startDate, sprint.endDate)}
+              </span>
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
+              >
+                {TEMPORAL_LABEL[sprint.temporalStatus]}
+              </span>
+              {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) && (
+                <span className="tabular-nums text-muted-foreground">{formatCurrency(sprint.actualSpend)} investidos</span>
+              )}
+              {!(sprint.temporalStatus === "futura" && tasks.length === 0) && (
+                <span className="tabular-nums text-muted-foreground">
+                  {tasksDone}/{tasks.length} tarefas
+                </span>
+              )}
+              {accountReviews && (
+                <span className="tabular-nums text-muted-foreground">
+                  {accountReviews.length} {accountReviews.length === 1 ? "otimização" : "otimizações"}
+                </span>
+              )}
+            </div>
+
+            {/* Desktop (sm+): mesmo grid da linha do cliente
+                (`ROW_GRID_CLASSES`) — a coluna "Cliente/Gestor" fica vazia
+                (só a indentação do wrapper do grupo já comunica "isto é filho
+                do cliente"); Período/Investimento/Tarefas/Otimizações/Status
+                caem exatamente sob as mesmas colunas de cima. */}
+            <div className={ROW_GRID_CLASSES}>
+              <span aria-hidden="true" />
+              <span aria-hidden="true" />
+              <span className="truncate text-xs text-muted-foreground">
+                {formatSprintPeriodLabel(sprint.startDate, sprint.endDate)}
+              </span>
+              <div className="min-w-0">
+                {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) ? (
+                  <>
+                    <p className="truncate text-xs tabular-nums text-muted-foreground">
+                      {formatCurrency(sprint.actualSpend)} / {formatCurrency(sprint.plannedSpend)}
+                    </p>
+                    <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                      <div
+                        className="h-full rounded-full bg-brand"
+                        style={{ width: `${Math.min(Math.max(sprint.progressPct, 0), 100)}%` }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Não iniciada</span>
+                )}
+              </div>
+              <span className="truncate text-xs tabular-nums text-muted-foreground">
+                {tasks.length === 0 ? "—" : `${tasksDone}/${tasks.length}`}
+              </span>
+              <span className="truncate text-xs tabular-nums text-muted-foreground">
+                {accountReviews ? (accountReviews.length === 0 ? "—" : accountReviews.length) : ""}
+              </span>
+              <span
+                className={`block w-fit rounded-full px-1.5 py-0.5 text-[10px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
+              >
+                {TEMPORAL_LABEL[sprint.temporalStatus]}
+              </span>
+            </div>
+
+            {topAlert && (
+              <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
+              </span>
+            )}
+          </div>
+        </summary>
+      ) : (
+        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+          <span className="shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90">
+            ▸
+          </span>
+          <span className="shrink-0 text-sm font-semibold text-foreground">
+            {formatSprintPeriodLabel(sprint.startDate, sprint.endDate)}
+          </span>
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
+          >
+            {TEMPORAL_LABEL[sprint.temporalStatus]}
+          </span>
+
+          <span className="ml-auto flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            {/* Sprint futura sem nenhum gasto ainda: "R$0 investidos" é só
+                ruído (seção 8 do pedido) — a própria performance já mostra
+                "Performance ainda não iniciada" logo em seguida. */}
+            {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) && (
+              <span className="tabular-nums">{formatCurrency(sprint.actualSpend)} investidos</span>
+            )}
+            {performance && performance.view.kind !== "not_configured" && (
+              <span className="hidden tabular-nums sm:inline">{formatCompactPerformanceText(performance.view)}</span>
+            )}
+            {!(sprint.temporalStatus === "futura" && tasks.length === 0) && (
+              <span className="hidden sm:inline">
+                {tasksDone}/{tasks.length} tarefas
+              </span>
+            )}
+            {accountReviews && (
+              <span className="hidden sm:inline">
+                {accountReviews.length} {accountReviews.length === 1 ? "otimização" : "otimizações"}
+              </span>
+            )}
+          </span>
+
+          {topAlert && (
+            <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+              <AlertsSummaryLine topAlert={topAlert} remaining={remainingAlerts} />
+            </span>
+          )}
+        </summary>
+      )}
 
       <SprintCardBody
         sprint={sprint}
