@@ -154,7 +154,7 @@ export function AgencyFilters({
               onClick={() => setOpen(false)}
               className="fixed inset-0 z-40"
             />
-            <div className="absolute right-0 z-50 mt-2 w-72 rounded-lg border border-overview-border bg-overview-surface p-3 shadow-[var(--shadow-float)]">
+            <div className="mitza-menu-in absolute right-0 z-50 mt-2 w-72 rounded-lg border border-overview-border bg-overview-surface p-3 shadow-[var(--shadow-float)]">
               <div className="flex flex-col gap-2">
                 <Select value={health} onChange={(e) => router.push(buildUrl({ health: e.target.value }))} className="w-full">
                   <option value="todos">Status da conta: todos</option>

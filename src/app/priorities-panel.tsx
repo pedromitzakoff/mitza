@@ -123,8 +123,8 @@ export function PrioritiesDrawer({
 
   return (
     <>
-      <Link href={closeHref} scroll={false} className="fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-overview-border bg-overview-surface p-5 shadow-[var(--shadow-float)]">
+      <Link href={closeHref} scroll={false} className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
+      <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-overview-border bg-overview-surface p-5 shadow-[var(--shadow-float)]">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-lg font-semibold text-navy">Prioridades de hoje</h2>
           <Button href={closeHref} variant="secondary" size="sm">

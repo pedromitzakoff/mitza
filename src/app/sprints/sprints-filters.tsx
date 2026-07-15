@@ -162,7 +162,7 @@ export function SprintsFilters({
               onClick={() => setOpen(false)}
               className="fixed inset-0 z-40"
             />
-            <div className="absolute right-0 z-50 mt-2 w-72 rounded-xl border border-border bg-card p-3 shadow-[var(--shadow-float)]">
+            <div className="mitza-menu-in absolute right-0 z-50 mt-2 w-72 rounded-xl border border-border bg-card p-3 shadow-[var(--shadow-float)]">
               <div className="flex flex-col gap-2">
                 <select
                   value={ritmo}

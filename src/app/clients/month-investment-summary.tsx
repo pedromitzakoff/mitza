@@ -225,7 +225,7 @@ export function MonthInvestmentSummary({
       {hasDetails && (
         <details className="group/details mt-2 border-t border-border pt-1.5 [&_summary::-webkit-details-marker]:hidden">
           <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm text-[11px] font-medium text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-brand">
-            <span className="text-xs transition-transform group-open/details:rotate-90">▸</span>
+            <span className="mitza-chevron text-xs group-open/details:rotate-90">▸</span>
             <span className="group-open/details:hidden">Ver detalhes do investimento</span>
             <span className="hidden group-open/details:inline">Ocultar detalhes do investimento</span>
           </summary>

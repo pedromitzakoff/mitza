@@ -533,6 +533,7 @@ export function SprintCard({
   returnTo,
   flat,
   taskManagers,
+  accordionRowsPrototype,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -556,6 +557,13 @@ export function SprintCard({
   returnTo: string;
   /** Sprint UX 2.0 Fase 2 — ver doc de `SprintCardBody`. */
   taskManagers?: { id: string; name: string }[];
+  /** Interaction Physics 1.0 — protótipo ISOLADO da técnica
+   * `grid-template-rows: 0fr → 1fr` (ver `.mitza-accordion-rows` em
+   * globals.css). Opt-in, nunca default: só o chamador que está testando o
+   * protótipo passa `true`, e só pra UMA sprint. Anima somente a abertura
+   * (limitação da técnica sem JS — ver comentário do CSS); fechar continua
+   * instantâneo, sem regressão frente ao comportamento atual. */
+  accordionRowsPrototype?: boolean;
   /** Sprint UX 2.0 Fase 2 (Decisão 011) — quando a sprint é filha visual de
    * um cliente já expandido (painel Sprints, "Mensal > Por sprints"), o
    * próprio card não deveria repetir moldura de card (borda/fundo/raio):
@@ -603,7 +611,7 @@ export function SprintCard({
           nunca passa `flat`, então mantém a linha corrida de sempre. */}
       {flat ? (
         <summary className="flex cursor-pointer list-none items-start gap-2 px-2 py-1.5">
-          <span className="mt-0.5 shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90">
+          <span className="mitza-chevron mt-0.5 shrink-0 text-xs text-muted-foreground group-open:rotate-90">
             ▸
           </span>
           <div className="min-w-0 flex-1">
@@ -683,7 +691,7 @@ export function SprintCard({
         </summary>
       ) : (
         <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
-          <span className="shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90">
+          <span className="mitza-chevron shrink-0 text-xs text-muted-foreground group-open:rotate-90">
             ▸
           </span>
           <span className="shrink-0 text-sm font-semibold text-foreground">
@@ -725,26 +733,53 @@ export function SprintCard({
         </summary>
       )}
 
-      <SprintCardBody
-        sprint={sprint}
-        comments={comments}
-        clientId={clientId}
-        isAdmin={isAdmin}
-        tasks={tasks}
-        executionLabel={executionLabel}
-        executionSeverity={executionSeverity}
-        alerts={alerts}
-        openClientHref={openClientHref}
-        buildTaskHref={buildTaskHref}
-        accountReviews={accountReviews}
-        newReviewHref={newReviewHref}
-        buildReviewDetailHref={buildReviewDetailHref}
-        manualSpendUpdatedAt={manualSpendUpdatedAt}
-        taskManagers={taskManagers}
-        metaSyncedAt={metaSyncedAt}
-        performance={performance}
-        returnTo={returnTo}
-      />
+      {accordionRowsPrototype ? (
+        <div className="mitza-accordion-rows">
+          <div className="mitza-accordion-rows-inner">
+            <SprintCardBody
+              sprint={sprint}
+              comments={comments}
+              clientId={clientId}
+              isAdmin={isAdmin}
+              tasks={tasks}
+              executionLabel={executionLabel}
+              executionSeverity={executionSeverity}
+              alerts={alerts}
+              openClientHref={openClientHref}
+              buildTaskHref={buildTaskHref}
+              accountReviews={accountReviews}
+              newReviewHref={newReviewHref}
+              buildReviewDetailHref={buildReviewDetailHref}
+              manualSpendUpdatedAt={manualSpendUpdatedAt}
+              taskManagers={taskManagers}
+              metaSyncedAt={metaSyncedAt}
+              performance={performance}
+              returnTo={returnTo}
+            />
+          </div>
+        </div>
+      ) : (
+        <SprintCardBody
+          sprint={sprint}
+          comments={comments}
+          clientId={clientId}
+          isAdmin={isAdmin}
+          tasks={tasks}
+          executionLabel={executionLabel}
+          executionSeverity={executionSeverity}
+          alerts={alerts}
+          openClientHref={openClientHref}
+          buildTaskHref={buildTaskHref}
+          accountReviews={accountReviews}
+          newReviewHref={newReviewHref}
+          buildReviewDetailHref={buildReviewDetailHref}
+          manualSpendUpdatedAt={manualSpendUpdatedAt}
+          taskManagers={taskManagers}
+          metaSyncedAt={metaSyncedAt}
+          performance={performance}
+          returnTo={returnTo}
+        />
+      )}
     </details>
   );
 }

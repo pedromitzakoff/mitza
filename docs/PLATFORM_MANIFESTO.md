@@ -404,3 +404,13 @@ Toda ação relevante deve produzir uma confirmação perceptível.
 Essa confirmação deve acontecer sem interromper o fluxo de trabalho.
 
 Sem bloquear a interface. Sem alterar o contexto.
+
+## Capítulo 22 — A velocidade real sustenta a velocidade percebida
+
+A plataforma não deve apenas esconder a espera.
+
+Ela deve reduzir o trabalho necessário para entregar cada página.
+
+## Capítulo 23 — A interface deve parecer leve
+
+Nenhuma interação comum deve transmitir peso, rigidez ou atraso.

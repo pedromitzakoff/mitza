@@ -188,7 +188,7 @@ function NavLink({
     <Link
       href={item.href}
       title={item.label}
-      className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm ${collapsed ? "md:justify-center" : ""} ${
+      className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] ${collapsed ? "md:justify-center" : ""} ${
         active ? "bg-brand/15 font-semibold text-brand" : "font-medium text-zinc-200 hover:bg-white/10"
       }`}
     >
@@ -238,7 +238,7 @@ function SidebarContent({
           onClick={toggleCollapsed}
           aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
-          className="hidden shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 md:block"
+          className="hidden shrink-0 rounded-md p-1.5 text-zinc-400 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-white/10 hover:text-zinc-100 md:block"
         >
           {collapsed ? (
             <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
@@ -370,7 +370,12 @@ export function Sidebar({
       )}
 
       {mobileOpen && (
-        <button type="button" aria-label="Fechar menu" onClick={onClose} className="fixed inset-0 z-40 bg-black/30 md:hidden" />
+        <button
+          type="button"
+          aria-label="Fechar menu"
+          onClick={onClose}
+          className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30 md:hidden"
+        />
       )}
 
       <aside

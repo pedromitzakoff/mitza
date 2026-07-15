@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { TASK_STATUS_BADGE_CLASSES, TASK_STATUS_LABEL, TASK_TYPE_LABEL } from "@/app/clients/task-labels";
 import { formatDueDate } from "@/app/clients/task-row";
@@ -46,16 +48,61 @@ export function TaskDrawerPanel({
   managers?: InlineTaskManagerOption[];
 }) {
   const status = effectiveTaskStatus(task);
+  const router = useRouter();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [isClosing, setIsClosing] = useState(false);
+
+  /**
+   * Interaction Physics 1.0 (piloto) — este é o único drawer com animação de
+   * SAÍDA nesta rodada. A resposta visual começa na hora (`isClosing` troca
+   * a classe de entrada pela de saída no mesmo clique); a navegação de
+   * verdade (que desmonta o componente) só acontece quando a animação do
+   * painel termina de fato (`animationend`), nunca num tempo fixo chutado em
+   * JS — se a duração do token mudar em globals.css, este código não precisa
+   * mudar junto. `closeHref` continua sendo a única fonte da URL de destino,
+   * só adiada: nenhuma lógica de navegação nova, só o momento em que ela roda.
+   */
+  useEffect(() => {
+    if (!isClosing) return;
+    const node = panelRef.current;
+    if (!node) return;
+    let done = false;
+    function finishClose() {
+      if (done) return;
+      done = true;
+      router.push(closeHref, { scroll: false });
+    }
+    node.addEventListener("animationend", finishClose);
+    // Rede de segurança: se por algum motivo o evento não disparar, ainda
+    // fecha (só bem mais devagar que qualquer animação real da plataforma).
+    const safetyTimeout = setTimeout(finishClose, 500);
+    return () => {
+      node.removeEventListener("animationend", finishClose);
+      clearTimeout(safetyTimeout);
+    };
+  }, [isClosing, router, closeHref]);
+
+  function requestClose(event: React.MouseEvent<HTMLAnchorElement>) {
+    // Clique modificado (nova aba, etc.) continua nativo — só o clique
+    // simples de fechar é interceptado pra dar tempo da animação de saída.
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    setIsClosing(true);
+  }
 
   return (
     <>
       <Link
         href={closeHref}
         scroll={false}
-        className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30"
+        onClick={requestClose}
+        className={`${isClosing ? "mitza-backdrop-out" : "mitza-backdrop-in"} fixed inset-0 z-40 bg-black/30`}
         aria-label="Fechar"
       />
-      <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
+      <div
+        ref={panelRef}
+        className={`${isClosing ? "mitza-panel-out" : "mitza-panel-in"} fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg`}
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs text-muted-foreground">
@@ -67,6 +114,7 @@ export function TaskDrawerPanel({
           <Link
             href={closeHref}
             scroll={false}
+            onClick={requestClose}
             className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
           >
             Fechar

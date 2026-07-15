@@ -324,3 +324,13 @@ obrigatória é:
 A atualização local deve ser sempre a primeira opção.
 
 A navegação deve ser sempre a última.
+
+## Capítulo 21 — Medir antes de otimizar
+
+Nenhuma otimização de performance deve ser implementada sem identificar o
+gargalo e comparar o estado antes e depois.
+
+## Capítulo 22 — Movimento comunica continuidade
+
+Toda animação deve conectar dois estados da interface e nunca existir
+apenas como decoração.

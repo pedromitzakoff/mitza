@@ -100,7 +100,7 @@ export function AccountCardSummary({
 
   return (
     <summary className="flex cursor-pointer list-none items-start gap-2 px-2.5 py-1.5">
-      <span className="mt-0.5 shrink-0 text-xs text-muted-foreground transition-transform group-open:rotate-90">
+      <span className="mitza-chevron mt-0.5 shrink-0 text-xs text-muted-foreground group-open:rotate-90">
         ▸
       </span>
 

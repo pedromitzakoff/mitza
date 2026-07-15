@@ -59,6 +59,16 @@
   --overview-warning-subtle: #fbf0de;
   --overview-danger: #c0342b;
   --overview-danger-subtle: #fbe9e7;
+
+  /* Motion tokens (Etapa Interaction Physics 1.0) — única fonte de duração/
+     curva pra qualquer animação nova da plataforma. Nada de valor solto em
+     componente: quem precisar de duração/easing referencia uma destas. */
+  --motion-instant: 90ms;
+  --motion-fast: 150ms;
+  --motion-standard: 220ms;
+  --motion-panel: 260ms;
+  --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 
 @theme inline {
@@ -202,6 +212,101 @@ body {
 .mitza-menu-in {
   animation: mitza-menu-in 120ms ease-out;
   transform-origin: top right;
+}
+
+/* Interaction Physics 1.0 — piloto controlado. Tudo abaixo usa os tokens de
+ * motion declarados em :root; nenhuma duração/curva nova é escrita solta. */
+
+/* Modal centralizado (ex.: agendar reunião/entrega) — visualmente distinto
+ * do drawer lateral: nasce do centro da tela, nunca desliza de uma borda. */
+@keyframes mitza-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.mitza-modal-in {
+  animation: mitza-modal-in var(--motion-standard) var(--ease-enter);
+}
+
+/* Saída do painel de tarefa (Sprints) — único drawer com animação de saída
+ * nesta rodada (piloto). O componente aplica esta classe só depois do clique
+ * de fechar, e só navega quando ela termina (ver task-drawer-panel.tsx). */
+@keyframes mitza-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes mitza-panel-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+.mitza-backdrop-out {
+  animation: mitza-fade-out var(--motion-fast) var(--ease-exit);
+}
+
+.mitza-panel-out {
+  animation: mitza-panel-out var(--motion-panel) var(--ease-exit);
+}
+
+/* Botões com feedback de "pressionado" — só transform (nunca desloca
+ * layout), nunca ativo quando `disabled` (a pseudo-classe já cobre isso
+ * sozinha). `prefers-reduced-motion` zera a duração como qualquer outra
+ * transição (regra global abaixo). */
+.mitza-pressable {
+  transition: transform var(--motion-instant) var(--ease-exit), background-color var(--motion-fast) var(--ease-enter),
+    opacity var(--motion-fast) var(--ease-enter);
+}
+
+.mitza-pressable:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Chevron de accordion (▸) — mesma rotação de sempre, só com duração/curva
+ * explícitas em vez do default implícito do Tailwind. */
+.mitza-chevron {
+  transition: transform var(--motion-fast) var(--ease-enter);
+}
+
+/* Protótipo ISOLADO (Interaction Physics 1.0) — técnica grid-template-rows
+ * pra tentar animar um único <details>/<summary> sem JS. Aplicado em UM
+ * ÚNICO accordion de sprint (ver `sprint-card.tsx`, prop
+ * `accordionRowsPrototype`), nunca generalizado nesta rodada. Limitação
+ * conhecida: só a ABERTURA anima por CSS puro — o navegador esconde o
+ * conteúdo (deixa de renderizar) no mesmo instante em que o atributo
+ * `open` sai do `<details>`, antes de qualquer transição rodar; fechar
+ * continua instantâneo, igual a todo outro accordion da plataforma hoje
+ * (nenhuma regressão, só a abertura ganha o movimento). Resolver o
+ * fechamento exigiria interceptar o toggle nativo via JS — decisão
+ * registrada no relatório desta etapa, não implementada aqui. */
+.mitza-accordion-rows {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--motion-standard) var(--ease-enter);
+}
+
+details[open] > .mitza-accordion-rows {
+  grid-template-rows: 1fr;
+}
+
+.mitza-accordion-rows-inner {
+  overflow: hidden;
 }
 
 @media (prefers-reduced-motion: reduce) {

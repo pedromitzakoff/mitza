@@ -40,7 +40,12 @@ export function ToastActionButton({
 
   return (
     <div className="flex flex-col gap-1">
-      <button type="button" onClick={handleClick} disabled={isPending} className={className}>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={isPending}
+        className={`${className} mitza-pressable disabled:cursor-not-allowed disabled:opacity-60`}
+      >
         {isPending ? pendingLabel : children}
       </button>
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}

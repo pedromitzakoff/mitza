@@ -31,7 +31,7 @@ export function SubmitButton({
       type="submit"
       disabled={pending || disabled}
       aria-busy={pending}
-      className={`${className} transition-opacity disabled:cursor-not-allowed disabled:opacity-60`}
+      className={`${className} mitza-pressable disabled:cursor-not-allowed disabled:opacity-60`}
     >
       {pending ? (pendingChildren ?? children) : children}
     </button>

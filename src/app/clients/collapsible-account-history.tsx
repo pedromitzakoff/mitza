@@ -73,7 +73,7 @@ export function CollapsibleAccountHistory({
   return (
     <details className="group mt-3 border-t border-border pt-1.5 [&_summary::-webkit-details-marker]:hidden">
       <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-brand">
-        <span className="text-xs text-muted-foreground transition-transform group-open:rotate-90">▸</span>
+        <span className="mitza-chevron text-xs text-muted-foreground group-open:rotate-90">▸</span>
         <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           Histórico de {monthLabel}
           {countSuffix}

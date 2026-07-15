@@ -80,7 +80,7 @@ export function SprintMonthlyBySprintsGroup({
       <div className="border-t border-border pl-3">
         {card.monthSprints.length > 0 ? (
           <div className="border-l border-border/60 pl-2">
-            {card.monthSprints.map((sprint) => {
+            {card.monthSprints.map((sprint, index) => {
               const isCurrent = sprint.temporalStatus === "atual";
               return (
                 <SprintCard
@@ -104,6 +104,10 @@ export function SprintMonthlyBySprintsGroup({
                   buildReviewDetailHref={buildReviewDetailHref}
                   taskManagers={managers}
                   flat
+                  // Interaction Physics 1.0 — protótipo ISOLADO (ver doc da
+                  // prop em `sprint-card.tsx`): só a primeira sprint deste
+                  // grupo testa a técnica, nunca todas.
+                  accordionRowsPrototype={index === 0}
                 />
               );
             })}

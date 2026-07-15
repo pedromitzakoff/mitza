@@ -110,8 +110,8 @@ export function MonthlyBudgetEditor({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/30" onClick={close} aria-hidden />
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
+      <div className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30" onClick={close} aria-hidden />
+      <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-lg font-semibold text-foreground">Orçamento de {monthLabel}</h2>
           <button
