@@ -910,7 +910,6 @@ export default async function ClientPage({
                 performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
                 returnTo={returnTo}
                 hideNextAction={sprint.temporalStatus === "atual"}
-                taskManagers={managers ?? []}
               />
             ))
           ) : (

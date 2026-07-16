@@ -33,7 +33,6 @@ export function SprintMonthlyBySprintsGroup({
   sprintCommentsById,
   accountReviewsBySprintId,
   monthTemporalStatus,
-  managers,
 }: {
   card: OperationClientCardData;
   monthLabel: string;
@@ -46,8 +45,6 @@ export function SprintMonthlyBySprintsGroup({
    * Sprint UX 2.0. Opcional só por retrocompatibilidade de tipo. */
   accountReviewsBySprintId?: Map<string, AccountReviewSummaryItem[]>;
   monthTemporalStatus?: MonthTemporalStatus;
-  /** Sprint UX 2.0 Fase 2 — habilita "+ Tarefa" inline (ver `SprintCardBody`). */
-  managers?: { id: string; name: string }[];
 }) {
   const summary = resolveMonthPeriodSummary(card, monthLabel, monthRange);
   const operational = operationalSummary(card, "month");
@@ -104,7 +101,6 @@ export function SprintMonthlyBySprintsGroup({
                   accountReviews={accountReviewsBySprintId?.get(sprint.sprintId) ?? []}
                   newReviewHref={newReviewHref}
                   buildReviewDetailHref={buildReviewDetailHref}
-                  taskManagers={managers}
                   flat
                   // Interaction Physics 1.0 — protótipo ISOLADO (ver doc da
                   // prop em `sprint-card.tsx`): só a primeira sprint deste

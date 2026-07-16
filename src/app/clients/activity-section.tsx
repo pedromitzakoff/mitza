@@ -1,14 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { EmptyStateRow } from "@/components/ui/empty-state";
-import { SectionHeader, SECONDARY_ACTION_BUTTON_CLASSES } from "@/components/ui/section-header";
+import { SectionHeader } from "@/components/ui/section-header";
 import { effectiveTaskStatus } from "@/lib/task-status";
-import { todayDateString } from "@/lib/today";
 import { useOptimisticTasks } from "@/lib/optimistic-tasks";
 import { buildActivityFeed } from "./activity";
 import { TaskRow, type TaskListItem } from "./task-row";
-import { InlineCreateTaskForm, type InlineTaskManagerOption } from "./inline-task-form";
+import { ActivityComposer } from "./activity-composer";
 import { AccountReviewRow, type AccountReviewSummaryItem } from "./account-reviews-section";
 
 /**
@@ -22,19 +20,26 @@ import { AccountReviewRow, type AccountReviewSummaryItem } from "./account-revie
  * componentes oficiais de cada domínio (`TaskRow`/`AccountReviewRow`), cada
  * um com um rótulo discreto de tipo pra desambiguar dentro da fila comum.
  *
- * Absorve a lógica que antes vivia em `SprintTaskList` (optimistic UI de
- * tarefas via `useOptimisticTasks`, criação inline, contador/barra de
- * progresso) — esse componente deixou de ter uso próprio e foi removido.
+ * MITZA Unified Activities 1.0 (correção de modelo de produto): "Atividades"
+ * é uma camada de LEITURA e histórico, não uma entidade única de criação —
+ * por isso não existe mais um botão "+ Nova tarefa"/"+ Registrar revisão"
+ * lado a lado aqui (essa dupla sugeria que as duas eram formas equivalentes
+ * de adicionar a mesma coisa, o que nunca foi verdade). Em vez disso:
+ * - tarefas nascem pelo `ActivityComposer` logo abaixo do cabeçalho —
+ *   criação rápida, só título, sempre visível, nunca um modal;
+ * - revisões de conta nascem em "Performance" (`SprintPerformanceSection`,
+ *   "+ Registrar revisão"), porque revisão é um registro estruturado ligado
+ *   à análise da conta, não um item de trabalho rápido.
+ * Ambas continuam aparecendo juntas nesta mesma fila depois de criadas —
+ * só o CAMINHO de criação é diferente, nunca a leitura.
  */
 export function ActivitySection({
   tasks,
   clientId,
   sprintId,
   taskHrefPrefix,
-  managers,
   isAdmin,
   reviews,
-  newReviewHref,
   reviewHrefPrefix,
 }: {
   tasks: TaskListItem[];
@@ -43,14 +48,11 @@ export function ActivitySection({
   /** Cada tela abre o drawer de tarefa a partir de uma URL diferente — ver
    * doc equivalente em `SprintCardBody`. */
   taskHrefPrefix?: string;
-  managers: InlineTaskManagerOption[];
   /** Habilita "Excluir tarefa" no menu "•••" de cada linha de tarefa. */
   isAdmin?: boolean;
   /** Revisões de conta desta sprint — opcional: quem ainda não busca
-   * `account_reviews` simplesmente não passa (a fila mostra só tarefas,
-   * sem CTA de "Registrar revisão"). */
+   * `account_reviews` simplesmente não passa (a fila mostra só tarefas). */
   reviews?: AccountReviewSummaryItem[];
-  newReviewHref?: string;
   /** PREFIXO de string (não função — este é um Client Component, uma
    * função não atravessa a fronteira servidor→cliente como prop, ver
    * `taskHrefPrefix`/doc em `SprintCardBody`), concatenado com
@@ -62,44 +64,34 @@ export function ActivitySection({
   const progressPct = optimisticTasks.length > 0 ? (tasksDone / optimisticTasks.length) * 100 : 0;
   const reviewList = reviews ?? [];
   const activities = buildActivityFeed(optimisticTasks, reviewList);
-  const canRegisterReview = Boolean(newReviewHref && reviewHrefPrefix);
 
   return (
     <div>
       <SectionHeader
         action={
-          <span className="flex shrink-0 flex-wrap items-center gap-2.5">
-            {/* Etapa Parte 8: só a métrica de tarefas (concluídas/total) — a
-                mesma de sempre, nunca fundida com a contagem de revisões
-                (métricas semanticamente diferentes). O total de atividades
-                já é visível na própria lista, sem precisar de um segundo
-                número no cabeçalho. */}
-            {optimisticTasks.length > 0 && (
-              <span className="text-[11px] tabular-nums text-muted-foreground">
-                {tasksDone}/{optimisticTasks.length} concluída{optimisticTasks.length !== 1 ? "s" : ""}
-              </span>
-            )}
-            <InlineCreateTaskForm
-              clientId={clientId}
-              sprintId={sprintId}
-              managers={managers}
-              defaultDueDate={todayDateString()}
-              triggerLabel="+ Nova tarefa"
-              onCreated={(task) => dispatchOptimisticTask({ type: "create", task })}
-            />
-            {canRegisterReview && (
-              <Link href={newReviewHref!} scroll={false} className={SECONDARY_ACTION_BUTTON_CLASSES}>
-                + Registrar revisão
-              </Link>
-            )}
-          </span>
+          /* Etapa Parte 8: só a métrica de tarefas (concluídas/total) — a
+             mesma de sempre, nunca fundida com a contagem de revisões
+             (métricas semanticamente diferentes). */
+          optimisticTasks.length > 0 ? (
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {tasksDone}/{optimisticTasks.length} concluída{optimisticTasks.length !== 1 ? "s" : ""}
+            </span>
+          ) : undefined
         }
       >
         Atividades
       </SectionHeader>
 
+      <div className="mt-1.5">
+        <ActivityComposer
+          clientId={clientId}
+          sprintId={sprintId}
+          onCreated={(task) => dispatchOptimisticTask({ type: "create", task })}
+        />
+      </div>
+
       {optimisticTasks.length > 0 && (
-        <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
           <div
             className="h-full rounded-full bg-brand transition-[width] duration-150"
             style={{ width: `${Math.min(Math.max(progressPct, 0), 100)}%` }}

@@ -159,6 +159,7 @@ function SprintPerformanceSection({
   revertSourceToggleId,
   editToggleId,
   returnTo,
+  newReviewHref,
 }: {
   sprint: SprintFinancials;
   performance?: SprintPerformanceProps;
@@ -176,6 +177,12 @@ function SprintPerformanceSection({
    * aqui dentro, que sim exige irmandade direta). */
   editToggleId: string;
   returnTo: string;
+  /** MITZA Unified Activities 1.0 (correção de modelo de produto): revisão
+   * de conta é um registro estruturado ligado à análise da conta — sua
+   * ação de criação vive aqui, dentro de Performance, nunca no cabeçalho
+   * da fila "Atividades" (que é só leitura). Opcional: quem não busca
+   * `account_reviews` simplesmente não vê a ação. */
+  newReviewHref?: string;
 }) {
   const view = performance?.view ?? { kind: "not_configured" as const };
   const cells = derivePerformanceCellTexts(view);
@@ -291,13 +298,22 @@ function SprintPerformanceSection({
           </>
         )}
 
-        {isAdmin && (
-          <label
-            htmlFor={editToggleId}
-            className="mitza-pressable ml-auto shrink-0 cursor-pointer rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand peer-checked:hidden"
-          >
-            Atualizar performance
-          </label>
+        {(newReviewHref || isAdmin) && (
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            {newReviewHref && (
+              <Link href={newReviewHref} scroll={false} className={SECONDARY_ACTION_BUTTON_CLASSES}>
+                + Registrar revisão
+              </Link>
+            )}
+            {isAdmin && (
+              <label
+                htmlFor={editToggleId}
+                className="mitza-pressable shrink-0 cursor-pointer rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand peer-checked:hidden"
+              >
+                Atualizar performance
+              </label>
+            )}
+          </span>
         )}
       </div>
 
@@ -396,7 +412,6 @@ export function SprintCardBody({
   metaSyncedAt,
   performance,
   returnTo,
-  taskManagers,
   hideNextAction,
 }: {
   sprint: SprintFinancials;
@@ -430,11 +445,6 @@ export function SprintCardBody({
   /** Dados de performance desta sprint (Etapa 71) — opcional, mesmo padrão
    * de `accountReviews`. */
   performance?: SprintPerformanceProps;
-  /** Sprint UX 2.0 Fase 2 — só a tela Sprints passa isto: habilita "+ Nova
-   * tarefa" inline em `ActivitySection` (formulário sem navegar pra
-   * `/tasks/new`). A página do cliente não passa, então continua com o
-   * link de sempre. */
-  taskManagers?: { id: string; name: string }[];
   /** Etapa "MITZA Operational Workspace 1.0" — a página do cliente promoveu
    * "Próxima ação" da sprint atual pro topo da página (`SprintFocusBar`,
    * primeiro conteúdo operacional, antes de qualquer scroll), então passa
@@ -580,10 +590,8 @@ export function SprintCardBody({
             clientId={clientId}
             sprintId={sprint.sprintId}
             taskHrefPrefix={taskHrefPrefix}
-            managers={taskManagers ?? []}
             isAdmin={isAdmin}
             reviews={accountReviews}
-            newReviewHref={newReviewHref}
             reviewHrefPrefix={reviewHrefPrefix}
           />
         </div>
@@ -613,6 +621,7 @@ export function SprintCardBody({
               returnTo={returnTo}
               revertSourceToggleId={revertSourceToggleId}
               editToggleId={editToggleId}
+              newReviewHref={newReviewHref}
             />
           </div>
         </details>
@@ -705,7 +714,6 @@ export function SprintCard({
   performance,
   returnTo,
   flat,
-  taskManagers,
   accordionRowsPrototype,
   hideNextAction,
 }: {
@@ -728,8 +736,6 @@ export function SprintCard({
   /** Pra onde voltar depois de salvar investimento/performance (Etapa MVP
    * 1.3) — ver doc de `SprintCardBody`. */
   returnTo: string;
-  /** Sprint UX 2.0 Fase 2 — ver doc de `SprintCardBody`. */
-  taskManagers?: { id: string; name: string }[];
   /** Interaction Physics 1.0 — protótipo ISOLADO da técnica
    * `grid-template-rows: 0fr → 1fr` (ver `.mitza-accordion-rows` em
    * globals.css). Opt-in, nunca default: só o chamador que está testando o
@@ -923,7 +929,6 @@ export function SprintCard({
               newReviewHref={newReviewHref}
               buildReviewDetailHref={buildReviewDetailHref}
               manualSpendUpdatedAt={manualSpendUpdatedAt}
-              taskManagers={taskManagers}
               metaSyncedAt={metaSyncedAt}
               performance={performance}
               returnTo={returnTo}
@@ -946,7 +951,6 @@ export function SprintCard({
           newReviewHref={newReviewHref}
           buildReviewDetailHref={buildReviewDetailHref}
           manualSpendUpdatedAt={manualSpendUpdatedAt}
-          taskManagers={taskManagers}
           metaSyncedAt={metaSyncedAt}
           performance={performance}
           returnTo={returnTo}

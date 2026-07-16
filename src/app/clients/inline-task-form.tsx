@@ -124,7 +124,6 @@ export function InlineCreateTaskForm({
   managers,
   defaultDueDate,
   onCreated,
-  triggerLabel,
 }: {
   clientId: string;
   /** `null` cria uma tarefa solta (seção "Outras tarefas"), sem vínculo com
@@ -136,12 +135,6 @@ export function InlineCreateTaskForm({
    * ANTES do servidor confirmar — ver `useOptimisticTasks` (Etapa
    * "Workspace-First Tasks 1.0"). */
   onCreated: (task: TaskListItem) => void;
-  /** MITZA Unified Activities 1.0 — texto do botão fechado, default "+
-   * Tarefa" (preserva todo chamador existente). A fila unificada
-   * "Atividades" passa "+ Nova tarefa" pra ficar lado a lado com "+
-   * Registrar revisão" no mesmo cabeçalho, sem repetir a palavra "Tarefa"
-   * já usada no rótulo de tipo de cada linha. */
-  triggerLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -199,7 +192,7 @@ export function InlineCreateTaskForm({
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className={SECONDARY_ACTION_BUTTON_CLASSES}>
-        {triggerLabel ?? "+ Tarefa"}
+        + Tarefa
       </button>
     );
   }
