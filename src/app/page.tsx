@@ -635,13 +635,48 @@ export default async function Home({
           />
         </div>
 
+        {/* MITZA Operational Workspace 2.0 (Partes 2/4): Prioridade sobe pra
+            logo depois dos filtros, antes de qualquer consulta agregada —
+            "o que exige minha atenção?" responde primeiro; "como estão os
+            números da agência?" (bloco financeiro/operacional logo abaixo,
+            agora recolhível) é consulta, não decisão. Nenhum dado, cálculo
+            ou link mudou, só a ordem e o destaque. */}
+        <div className="mt-3">
+          <PrioritiesPanel
+            priorities={prioritiesTop}
+            managerNameByClient={primaryManagerNameByClient}
+            totalCount={priorityQueue.length}
+            viewAllHref={openPrioritiesHref}
+          />
+        </div>
+
+        {prioritiesOpen && (
+          <PrioritiesDrawer
+            priorities={priorityQueue}
+            managerNameByClient={primaryManagerNameByClient}
+            severity={prioritySeverity}
+            closeHref={closePrioritiesHref}
+            buildSeverityHref={prioritiesSeverityHref}
+          />
+        )}
+
         {/* Refinamento de Densidade, Hierarquia e Contexto Operacional
-            (Parte 4) — nova ordem: Resultados (o que estamos gerando) →
-            Investimento (quanto e como) → Operação (como está a execução).
-            Nenhum cálculo mudou, só a hierarquia visual — as 3 seções
-            continuam compartilhando a mesma superfície contínua (Etapa 69),
-            só a ordem das divisórias mudou pra acompanhar. */}
-        <div className="mt-2.5 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
+            (Parte 4) — nova ordem interna: Resultados (o que estamos
+            gerando) → Investimento (quanto e como) → Operação (como está a
+            execução). Nenhum cálculo mudou, só a hierarquia visual — as 3
+            seções continuam compartilhando a mesma superfície contínua
+            (Etapa 69), só a ordem das divisórias mudou pra acompanhar.
+            MITZA Operational Workspace 2.0: todo o bloco virou uma
+            consulta recolhível — Prioridade (acima) já responde "o que
+            exige atenção", este painel responde "como estão os números",
+            uma pergunta de consulta, não de decisão (mesmo tratamento já
+            dado à "Ver análises adicionais", logo abaixo). */}
+        <details className="mt-2.5 overflow-hidden rounded-lg border border-overview-border bg-overview-surface [&_summary]:cursor-pointer [&_summary]:list-none">
+          <summary className="flex items-center justify-between px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted hover:text-brand sm:px-6">
+            Painel financeiro e operacional da agência
+            <span className="text-sm">▾</span>
+          </summary>
+
           {/* Etapa "Executive Dashboard 1.0" — complementa os indicadores
               operacionais/financeiros abaixo com uma dimensão de RESULTADO
               (leads/vendas/CPL/CPA), derivada de `performance_records` já
@@ -804,33 +839,7 @@ export default async function Home({
               />
             </div>
           </div>
-        </div>
-
-        {/* MVP "Reformular Prioridades na Visão Geral": só 2 tipos de item
-            (custo por resultado acima da meta / ritmo fora do esperado) —
-            ritmo só existe no Consolidado (sem orçamento por canal), custo
-            por resultado continua disponível em qualquer plataforma (já tem
-            investimento real por canal, Etapa 2/3) — ver `performanceScope`
-            acima. Painel nunca escondido por completo; some sozinho quando
-            a fila está vazia (EmptyState do próprio componente). */}
-        <div className="mt-3">
-          <PrioritiesPanel
-            priorities={prioritiesTop}
-            managerNameByClient={primaryManagerNameByClient}
-            totalCount={priorityQueue.length}
-            viewAllHref={openPrioritiesHref}
-          />
-        </div>
-
-        {prioritiesOpen && (
-          <PrioritiesDrawer
-            priorities={priorityQueue}
-            managerNameByClient={primaryManagerNameByClient}
-            severity={prioritySeverity}
-            closeHref={closePrioritiesHref}
-            buildSeverityHref={prioritiesSeverityHref}
-          />
-        )}
+        </details>
 
         {/* MVP "Reformular a tabela de clientes": a tabela única (Etapa 49)
             vira 2 tabelas por objetivo da conta — "Clientes de leads" e
