@@ -486,127 +486,132 @@ export function SprintCardBody({
 
   return (
     <div className="border-t border-border p-1.5">
-        {/* Etapa "Sprint Workspace Polish 2.0" (Parte 3): Performance subiu
-            pra primeira posição — é a informação principal da sprint;
-            "Última execução" é só contexto complementar, e "Próxima ação"
-            fecha o fluxo "contexto atual → próxima ação" logo depois. Nenhum
-            dado ou cálculo mudou, só a ordem de leitura. */}
-        <SprintPerformanceSection
-          sprint={sprint}
-          performance={performance}
-          clientId={clientId}
-          isAdmin={isAdmin}
-          sourceTimestampText={sourceTimestampText}
-          isManualSource={isManualSource}
-          returnTo={returnTo}
-          revertSourceToggleId={revertSourceToggleId}
-          editToggleId={editToggleId}
-        />
-
-        {/* Etapa "Sprint Workspace Polish 1.0" (Parte 1): "Hoje, DD/MM" saiu
-            daqui — o gestor já sabe o dia atual, e essa data já aparece em
-            outros contextos da plataforma (ex.: cabeçalho da Visão Geral).
-            Repeti-la dentro de cada Sprint era ruído puro. Sobra só a
-            informação operacional de fato — a única que muda de sprint pra
-            sprint —, condicionada à própria existência do dado (nunca uma
-            linha vazia quando não há `executionLabel`). */}
-        {executionLabel && (
-          <p className={`mt-1 text-xs ${EXECUTION_LABEL_CLASSES[executionSeverity ?? "neutro"]}`}>
-            Última execução: {executionLabel}
-          </p>
-        )}
-
-        {/* Etapa "Sprint Workspace MVP Finalization 2.0" (Parte 10): "Próxima
-            ação" — uma única recomendação executável, nunca um alerta (sem
-            vermelho, sem "crítico"/"atenção", nunca uma lista). Cada destino
-            reaproveita uma ação JÁ existente na própria Sprint: tarefa leva
-            direto à tarefa, "Atualizar performance" abre o MESMO formulário
-            de sempre (via o mesmo `editToggleId` que o botão da toolbar usa),
-            "Configurar objetivo" reaproveita o próprio `ClientPerformanceGoalEditor`
-            (2ª instância montada, mesmo componente/Server Action — nunca uma
-            segunda implementação), e "Registrar otimização" reaproveita
-            `newReviewHref`. Nenhum dado novo, nenhuma tarefa criada
-            automaticamente.
-            Etapa "Sprint Workspace Polish 2.0" (Parte 4): a ação deixou de
-            ser um link azul solto — vira um botão de verdade
-            (`SECONDARY_ACTION_BUTTON_CLASSES`, mesmo componente visual de
-            "+ Tarefa"/"Registrar otimização"/"Atualizar performance"). Pra
-            tarefa, o texto descritivo (qual tarefa, quando) continua como
-            contexto ao lado do botão genérico "Abrir tarefa" — um botão com
-            o título inteiro da tarefa dentro ficaria comprido demais pro
-            padrão de botão compacto da plataforma. */}
-        {!hideNextAction && nextAction && nextAction.kind !== "none" && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="font-medium text-muted-foreground">Próxima ação:</span>
-            {nextAction.taskId ? (
-              <>
-                <span className="text-foreground">{nextAction.text}</span>
-                <Link
-                  href={buildTaskHref ? buildTaskHref(nextAction.taskId) : `/clients/${clientId}?task=${nextAction.taskId}`}
-                  scroll={false}
-                  className={SECONDARY_ACTION_BUTTON_CLASSES}
-                >
-                  Abrir tarefa
+        {/* MITZA Operational Card Architecture 2.0 (Steve Jobs Review):
+            "Próxima ação" abre o corpo expandido — é a única pergunta que a
+            Sprint aberta precisa responder de cara ("o que eu faço agora?").
+            "Última execução" só aparece quando exige atenção (ver abaixo).
+            Performance virou um disclosure (mais abaixo): é informação de
+            CONSULTA ("como estão os números"), não a decisão em si — nasce
+            escondida, exatamente como Comentários já nascia. Nenhum dado ou
+            cálculo mudou, só a ordem e o que fica visível sem clique. */}
+        <div className="flex flex-col gap-1">
+          {/* Etapa "Sprint Workspace MVP Finalization 2.0" (Parte 10): "Próxima
+              ação" — uma única recomendação executável, nunca um alerta (sem
+              vermelho, sem "crítico"/"atenção", nunca uma lista). Cada destino
+              reaproveita uma ação JÁ existente na própria Sprint: tarefa leva
+              direto à tarefa, "Atualizar performance" abre o MESMO formulário
+              de sempre (via o mesmo `editToggleId` que o botão da toolbar
+              usa), "Configurar objetivo" reaproveita o próprio
+              `ClientPerformanceGoalEditor` (2ª instância montada, mesmo
+              componente/Server Action — nunca uma segunda implementação), e
+              "Registrar otimização" reaproveita `newReviewHref`. Nenhum dado
+              novo, nenhuma tarefa criada automaticamente. */}
+          {!hideNextAction && nextAction && nextAction.kind !== "none" && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="font-medium text-muted-foreground">Próxima ação:</span>
+              {nextAction.taskId ? (
+                <>
+                  <span className="text-foreground">{nextAction.text}</span>
+                  <Link
+                    href={buildTaskHref ? buildTaskHref(nextAction.taskId) : `/clients/${clientId}?task=${nextAction.taskId}`}
+                    scroll={false}
+                    className={SECONDARY_ACTION_BUTTON_CLASSES}
+                  >
+                    Abrir tarefa
+                  </Link>
+                </>
+              ) : nextAction.kind === "update_performance" && isAdmin ? (
+                <label htmlFor={editToggleId} className={`${SECONDARY_ACTION_BUTTON_CLASSES} cursor-pointer`}>
+                  {nextAction.text}
+                </label>
+              ) : nextAction.kind === "configure_objective" ? (
+                <ClientPerformanceGoalEditor
+                  clientId={clientId}
+                  currentGoal={performance?.performanceGoal ?? null}
+                  triggerClassName={SECONDARY_ACTION_BUTTON_CLASSES}
+                  triggerLabel={nextAction.text}
+                />
+              ) : nextAction.kind === "register_optimization" && newReviewHref ? (
+                <Link href={newReviewHref} scroll={false} className={SECONDARY_ACTION_BUTTON_CLASSES}>
+                  {nextAction.text}
                 </Link>
-              </>
-            ) : nextAction.kind === "update_performance" && isAdmin ? (
-              <label htmlFor={editToggleId} className={`${SECONDARY_ACTION_BUTTON_CLASSES} cursor-pointer`}>
-                {nextAction.text}
-              </label>
-            ) : nextAction.kind === "configure_objective" ? (
-              <ClientPerformanceGoalEditor
-                clientId={clientId}
-                currentGoal={performance?.performanceGoal ?? null}
-                triggerClassName={SECONDARY_ACTION_BUTTON_CLASSES}
-                triggerLabel={nextAction.text}
-              />
-            ) : nextAction.kind === "register_optimization" && newReviewHref ? (
-              <Link href={newReviewHref} scroll={false} className={SECONDARY_ACTION_BUTTON_CLASSES}>
-                {nextAction.text}
-              </Link>
-            ) : (
-              <span className="text-muted-foreground">{nextAction.text}</span>
-            )}
-          </div>
-        )}
-        {!hideNextAction && nextAction && nextAction.kind === "none" && (
-          <p className="mt-1.5 text-xs text-muted-foreground">Próxima ação: {nextAction.text}</p>
-        )}
+              ) : (
+                <span className="text-muted-foreground">{nextAction.text}</span>
+              )}
+            </div>
+          )}
+          {!hideNextAction && nextAction && nextAction.kind === "none" && (
+            <p className="text-xs text-muted-foreground">Próxima ação: {nextAction.text}</p>
+          )}
+
+          {/* MITZA Operational Card Architecture 2.0: "Última execução" só
+              nasce visível quando sinaliza atenção/crítico — no caso neutro
+              (sprint sendo executada normalmente) ela não respondia a
+              nenhuma decisão, só ocupava uma linha porque "havia espaço",
+              o que o Princípio 2 desta etapa proíbe explicitamente. O
+              cálculo (`sprintExecutionInfo`/severidade) continua o mesmo;
+              só a condição de exibição mudou. */}
+          {executionLabel && executionSeverity && (
+            <p className={`text-xs ${EXECUTION_LABEL_CLASSES[executionSeverity]}`}>
+              Última execução: {executionLabel}
+            </p>
+          )}
+        </div>
 
         {/* Tarefas + Otimizações (revisões estratégicas da conta) lado a
-            lado, mesmo nível hierárquico (Etapa 74). Etapa "Sprint
-            Workspace Polish 1.1" (Parte 4): as duas colunas
-            (`SprintTaskList`/`AccountReviewsSection`) pararam de desenhar
-            sua própria divisória superior — era uma segunda borda logo
-            abaixo desta, redundante. A separação entre as duas no mobile
-            empilhado agora é só espaço (`gap-y-2`), sem borda extra — os
-            próprios cabeçalhos "Tarefas"/"Otimizações" já distinguem as
-            seções.
-            Etapa "Sprint Workspace MVP Finalization 2.0" (Parte 3): o
-            título "EXECUÇÃO DA SPRINT" saiu daqui — o contexto já está
-            claro (o usuário está dentro de uma Sprint expandida), repetir
-            isso como rótulo era ruído. A divisória (borda + margem)
-            continua, ela sozinha já separa visualmente esta área da
-            Performance acima. */}
-        <div className="mt-1 border-t border-border pt-1">
-          <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
-            <SprintTaskList
-              tasks={tasks}
-              clientId={clientId}
-              sprintId={sprint.sprintId}
-              taskHrefPrefix={taskHrefPrefix}
-              managers={taskManagers ?? []}
-              isAdmin={isAdmin}
+            lado, mesmo nível hierárquico (Etapa 74) — a área de EXECUÇÃO de
+            verdade: é o motivo real pelo qual alguém abre uma Sprint, por
+            isso continua sempre visível, nunca atrás de disclosure. Etapa
+            "Sprint Workspace Polish 1.1" (Parte 4): as duas colunas
+            (`SprintTaskList`/`AccountReviewsSection`) já não desenham borda
+            própria acima — os cabeçalhos "Tarefas"/"Otimizações" já
+            distinguem as seções, sem precisar de uma segunda linha. */}
+        <div className="mt-1.5 grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
+          <SprintTaskList
+            tasks={tasks}
+            clientId={clientId}
+            sprintId={sprint.sprintId}
+            taskHrefPrefix={taskHrefPrefix}
+            managers={taskManagers ?? []}
+            isAdmin={isAdmin}
+          />
+          {accountReviews && newReviewHref && buildReviewDetailHref && (
+            <AccountReviewsSection
+              reviews={accountReviews}
+              newReviewHref={newReviewHref}
+              buildDetailHref={buildReviewDetailHref}
             />
-            {accountReviews && newReviewHref && buildReviewDetailHref && (
-              <AccountReviewsSection
-                reviews={accountReviews}
-                newReviewHref={newReviewHref}
-                buildDetailHref={buildReviewDetailHref}
-              />
-            )}
-          </div>
+          )}
         </div>
+
+        {/* MITZA Operational Card Architecture 2.0: Performance virou um
+            disclosure — mesmo padrão exato de Comentários logo abaixo
+            (botão pill + chevron, conteúdo revelado só com intenção). O
+            resumo já visível na linha fechada da Sprint (`formatCompactPerformanceText`,
+            no `<summary>` acima) cobre o "olhar rápido"; o que está aqui
+            dentro é comparação com meta + as ações de edição — informação
+            de consulta, nunca a decisão em si. Nenhum número, fórmula ou
+            ação mudou, só deixou de ficar sempre montada como uma caixa
+            cheia permanente. */}
+        <details className="group mt-1.5 border-t border-border pt-1 [&_summary::-webkit-details-marker]:hidden">
+          <summary className="mitza-pressable inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+            <span className="mitza-chevron text-xs text-muted-foreground group-open:rotate-90">▸</span>
+            Performance
+          </summary>
+          <div className="mt-1.5">
+            <SprintPerformanceSection
+              sprint={sprint}
+              performance={performance}
+              clientId={clientId}
+              isAdmin={isAdmin}
+              sourceTimestampText={sourceTimestampText}
+              isManualSource={isManualSource}
+              returnTo={returnTo}
+              revertSourceToggleId={revertSourceToggleId}
+              editToggleId={editToggleId}
+            />
+          </div>
+        </details>
 
         {/* Etapa "Sprint Workspace Polish 1.1" (Parte 1): botão secundário de
             verdade — mesma altura, borda, hover e focus-visible de
