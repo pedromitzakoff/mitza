@@ -260,7 +260,7 @@ export default async function ReportsPage({
                     <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
                       {formatCurrency(card.monthActual)} / {formatCurrency(card.monthPlanned)}
                     </td>
-                    <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">{pct !== null ? `${pct}%` : "—"}</td>
+                    <td className="py-2 px-3 text-right font-semibold tabular-nums text-foreground">{pct !== null ? `${pct}%` : "—"}</td>
                     <td className="py-2 px-3">
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[card.monthStatus]}`}>
                         {SITUATION_LABEL[card.monthStatus]}

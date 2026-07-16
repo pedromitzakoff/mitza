@@ -37,9 +37,9 @@ export function SprintFocusBar({
         >
           {SPEND_STATUS_LABEL[spendStatus]}
         </span>
-        <span className="text-sm text-foreground">
-          <span className="font-medium text-muted-foreground">Próxima ação: </span>
-          {nextActionText}
+        <span className="text-sm">
+          <span className="text-muted-foreground">Próxima ação: </span>
+          <span className="font-semibold text-foreground">{nextActionText}</span>
         </span>
       </div>
       {ctaHref && ctaLabel && (

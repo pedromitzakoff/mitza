@@ -8,7 +8,7 @@ function Kpi({ label, value, auxiliary }: { label: string; value: string; auxili
   return (
     <div className="flex flex-col gap-0.5">
       <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-base font-semibold text-foreground">{value}</p>
+      <p className="text-xl font-semibold tracking-tight text-foreground">{value}</p>
       {auxiliary && <p className="text-xs text-muted-foreground">{auxiliary}</p>}
     </div>
   );

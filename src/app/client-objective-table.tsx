@@ -132,7 +132,7 @@ export function ClientObjectiveTable({
                     {primaryManagerNameByClient.get(card.clientId) ?? "Sem gestor"}
                   </td>
                   <td className="py-2.5 px-3.5 text-overview-text-secondary">{formatClientPlatforms(card)}</td>
-                  <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">{formatCurrency(investmentValue)}</td>
+                  <td className="py-2.5 px-3.5 text-right font-semibold tabular-nums text-overview-text-primary">{formatCurrency(investmentValue)}</td>
                   {goalConfig && <td className="py-2.5 px-3.5 text-overview-text-secondary">{resultText}</td>}
                   {goalConfig && <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">{costText}</td>}
                   {goalConfig && <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">{targetText}</td>}

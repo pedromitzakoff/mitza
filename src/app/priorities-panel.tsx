@@ -23,6 +23,34 @@ const SEVERITY_TONE: Record<AccountHealth, StatusTone> = {
   saudavel: "success",
 };
 
+/** Cor do desvio percentual dentro de `priority.title` (ex.: "42%" em "CPL
+ * 42% acima da meta") — o único número que de fato reduz o esforço de
+ * leitura da linha (o quão fora do esperado a conta está). Reaproveita o
+ * mesmo tom de `SEVERITY_TONE`/`StatusDot`: a cor já significa a mesma coisa
+ * na mesma linha, só reforçada exatamente onde o olho precisa parar. */
+const SEVERITY_TEXT_CLASSES: Record<AccountHealth, string> = {
+  critico: "text-overview-danger",
+  atencao: "text-overview-warning",
+  saudavel: "text-overview-success",
+};
+
+/** Destaca só o desvio percentual dentro do título ("CPL 42% acima da
+ * meta"/"Investimento 38% acima do ritmo") — nunca a frase inteira. O resto
+ * do título continua com o mesmo peso de sempre. */
+function emphasizeDeviation(title: string, severity: AccountHealth) {
+  const match = title.match(/\d+%/);
+  if (!match || match.index === undefined) return title;
+  const start = match.index;
+  const end = start + match[0].length;
+  return (
+    <>
+      {title.slice(0, start)}
+      <span className={`font-semibold ${SEVERITY_TEXT_CLASSES[severity]}`}>{match[0]}</span>
+      {title.slice(end)}
+    </>
+  );
+}
+
 function PriorityRow({
   priority,
   managerName,
@@ -40,7 +68,7 @@ function PriorityRow({
           <StatusDot tone={SEVERITY_TONE[priority.severity]} label={SEVERITY_LABEL[priority.severity]} emphasize />
         </div>
         <p className="mt-0.5 truncate text-xs text-overview-text-secondary">
-          {priority.title}
+          {emphasizeDeviation(priority.title, priority.severity)}
           <span className="text-overview-text-muted"> · {priority.description}</span>
           {managerName ? <span className="text-overview-text-muted"> · {managerName}</span> : null}
         </p>
