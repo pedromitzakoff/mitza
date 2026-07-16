@@ -73,7 +73,7 @@ export function RecordAccountReviewDrawer({
       <Link href={closeHref} scroll={false} className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
       <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-foreground">Registrar otimização</h2>
+          <h2 className="text-lg font-semibold text-foreground">Registrar revisão de conta</h2>
           <Link
             href={closeHref}
             scroll={false}
@@ -323,7 +323,7 @@ export function RecordAccountReviewDrawer({
               pendingChildren="Salvando..."
               className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Salvar otimização
+              Salvar revisão de conta
             </SubmitButton>
             <Link
               href={closeHref}

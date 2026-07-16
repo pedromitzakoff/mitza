@@ -73,12 +73,12 @@ export function AccountReviewsSection({
           <span className="flex shrink-0 flex-wrap items-center gap-2.5">
             {reviews.length > 0 && <span className="text-[11px] text-muted-foreground">{reviews.length} nesta sprint</span>}
             <Link href={newReviewHref} scroll={false} className={SECONDARY_ACTION_BUTTON_CLASSES}>
-              + Registrar otimização
+              + Registrar revisão de conta
             </Link>
           </span>
         }
       >
-        Otimizações
+        Revisões de conta
       </SectionHeader>
 
       {reviews.length > 0 ? (

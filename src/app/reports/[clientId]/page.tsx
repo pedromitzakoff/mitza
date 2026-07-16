@@ -20,6 +20,7 @@ import {
   formatKpiValue,
 } from "@/lib/monthly-reports";
 import { SPEND_STATUS_BADGE_CLASSES } from "@/lib/spend-status";
+import { REPORT_ACTION_ITEM_STATUS_REGISTRY } from "@/lib/status-registry";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
 import { SubmitButton } from "@/app/submit-button";
 import { buildReportViewData } from "../report-data";
@@ -65,10 +66,14 @@ const TIMELINE_TYPE_LABEL: Record<ReportTimelineEventType, string> = {
   outro: "Outro",
 };
 
+/** Deriva do Status Registry (`@/lib/status-registry`), ver Platform
+ * Integrity Wave 1 — `em_andamento` agora é "Item em andamento"
+ * (qualificado: o mesmo valor de enum também existe, com outro
+ * significado, em `SpendStatus` e `MonthlyReportStatus`). */
 const ACTION_ITEM_STATUS_LABEL: Record<ReportActionItemStatus, string> = {
-  pendente: "Pendente",
-  em_andamento: "Em andamento",
-  concluido: "Concluído",
+  pendente: REPORT_ACTION_ITEM_STATUS_REGISTRY["report_action_item.pendente"].label,
+  em_andamento: REPORT_ACTION_ITEM_STATUS_REGISTRY["report_action_item.em_andamento"].label,
+  concluido: REPORT_ACTION_ITEM_STATUS_REGISTRY["report_action_item.concluido"].label,
 };
 
 const DEPENDENCY_OPTIONS: ReportActionItemDependency[] = ["agencia", "cliente", "terceiro"];
@@ -263,13 +268,13 @@ export default async function ClientReportPage({
         {/* Bloco 2 — Performance */}
         <SectionCard id="performance" title="Performance">
           {data.kpis.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+            <EmptyState>
               Nenhum KPI configurado para este cliente ainda. Configure em{" "}
               <Link href={`/clients/${clientId}/edit`} className="text-brand hover:underline">
                 Editar cliente
               </Link>
               .
-            </p>
+            </EmptyState>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-sm">
@@ -337,7 +342,7 @@ export default async function ClientReportPage({
         >
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div>
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Otimizações realizadas</p>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Revisões de conta realizadas</p>
               <p className="text-base font-semibold text-foreground">{data.execution.optimizationsDone}</p>
             </div>
             <div>

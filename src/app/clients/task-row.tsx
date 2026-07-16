@@ -3,6 +3,7 @@
 import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { effectiveTaskStatus } from "@/lib/task-status";
+import { Tooltip } from "@/components/ui/tooltip";
 import { todayDateString } from "@/lib/today";
 import { formatCompactTaskDate } from "@/lib/format";
 import { saveFocusForReturn } from "@/lib/focus-restore";
@@ -357,27 +358,29 @@ export function TaskRow({
             ✓
           </span>
         ) : isNotDone ? (
-          <span
-            aria-label="Não realizado"
-            title="Não realizado"
-            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[10px] leading-none text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
-          >
-            ×
-          </span>
+          <Tooltip label="Não realizado">
+            <span
+              aria-label="Não realizado"
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[10px] leading-none text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+            >
+              ×
+            </span>
+          </Tooltip>
         ) : (
-          <button
-            type="button"
-            onClick={handleComplete}
-            aria-label="Marcar como feito"
-            title="Marcar como feito"
-            className={`relative z-10 block h-4 w-4 shrink-0 rounded-full border-2 transition-colors hover:border-brand hover:bg-brand/10 ${
-              isOverdue
-                ? "border-red-400 dark:border-red-700"
-                : isToday
-                  ? "border-brand"
-                  : "border-zinc-300 dark:border-zinc-600"
-            }`}
-          />
+          <Tooltip label="Marcar como feito">
+            <button
+              type="button"
+              onClick={handleComplete}
+              aria-label="Marcar como feito"
+              className={`relative z-10 block h-4 w-4 shrink-0 rounded-full border-2 transition-colors hover:border-brand hover:bg-brand/10 ${
+                isOverdue
+                  ? "border-red-400 dark:border-red-700"
+                  : isToday
+                    ? "border-brand"
+                    : "border-zinc-300 dark:border-zinc-600"
+              }`}
+            />
+          </Tooltip>
         )}
 
         <span className={`w-20 shrink-0 text-xs tabular-nums ${dateClasses}`}>{dueDate}</span>

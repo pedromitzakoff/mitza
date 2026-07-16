@@ -163,10 +163,10 @@ export function AccountActivitySummary({
   clientId: string;
   returnTo: string;
 }) {
-  const lastOptimizationLabelPrefix = isCurrentMonth ? "Última otimização" : `Última otimização em ${monthLabel}`;
+  const lastOptimizationLabelPrefix = isCurrentMonth ? "Última revisão de conta" : `Última revisão de conta em ${monthLabel}`;
   const lastOptimizationDateValue = lastOptimization
     ? formatRelativeDateTime(lastOptimization.reviewedAt, new Date())
-    : "Sem otimização registrada";
+    : "Sem revisão registrada";
   const detail = lastOptimization ? lastOptimizationDetail(lastOptimization) : null;
 
   return (

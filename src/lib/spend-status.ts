@@ -1,3 +1,5 @@
+import { SPEND_STATUS_REGISTRY } from "@/lib/status-registry";
+
 /** Margem de tolerância pra considerar um gasto "dentro do esperado" — MVP
  * Etapa "Regras centrais de saúde da conta": ±20% (antes ±10%), sobre o
  * `relativeDeviation` abaixo. Única constante de ritmo financeiro do
@@ -77,21 +79,25 @@ export function classifySpendStatus(
 /** Rótulo usado quando o status compara com o planejado total (sem
  * prorateio por dia) — painel geral do mês e resumo do mês na página do
  * cliente. Etapa 53: nunca mais "Bateu meta"/"Meta atingida" — o
- * acompanhamento é de RITMO de investimento, não de conquista de meta. */
+ * acompanhamento é de RITMO de investimento, não de conquista de meta.
+ * Deriva do Status Registry (`@/lib/status-registry`), ver Platform
+ * Integrity Wave 1 — `em_andamento` agora é "Sprint em andamento"
+ * (qualificado: o mesmo valor de enum também existe, com outro
+ * significado, em `MonthlyReportStatus` e `ReportActionItemStatus`). */
 export const SPEND_STATUS_LABEL: Record<SpendStatus, string> = {
-  dentro: "Dentro",
-  acima: "Acima",
-  abaixo: "Abaixo",
-  sem_meta: "Sem planejamento",
-  nao_iniciado: "Ainda não iniciada",
-  em_andamento: "Em andamento",
+  dentro: SPEND_STATUS_REGISTRY["spend.dentro"].label,
+  acima: SPEND_STATUS_REGISTRY["spend.acima"].label,
+  abaixo: SPEND_STATUS_REGISTRY["spend.abaixo"].label,
+  sem_meta: SPEND_STATUS_REGISTRY["spend.sem_meta"].label,
+  nao_iniciado: SPEND_STATUS_REGISTRY["spend.nao_iniciado"].label,
+  em_andamento: SPEND_STATUS_REGISTRY["spend.em_andamento"].label,
 };
 
 export const SPEND_STATUS_BADGE_CLASSES: Record<SpendStatus, string> = {
-  dentro: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
-  acima: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-  abaixo: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  sem_meta: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
-  nao_iniciado: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
-  em_andamento: "bg-brand/10 text-brand",
+  dentro: SPEND_STATUS_REGISTRY["spend.dentro"].badgeClassName,
+  acima: SPEND_STATUS_REGISTRY["spend.acima"].badgeClassName,
+  abaixo: SPEND_STATUS_REGISTRY["spend.abaixo"].badgeClassName,
+  sem_meta: SPEND_STATUS_REGISTRY["spend.sem_meta"].badgeClassName,
+  nao_iniciado: SPEND_STATUS_REGISTRY["spend.nao_iniciado"].badgeClassName,
+  em_andamento: SPEND_STATUS_REGISTRY["spend.em_andamento"].badgeClassName,
 };

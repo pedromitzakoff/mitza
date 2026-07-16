@@ -64,7 +64,7 @@ export function OperationalActivityPanel({
         <Stat label="Atrasadas" value={summary.tasksCompletedLate} />
         <Stat label="Taxa no prazo" value={summary.onTimeRate !== null ? `${summary.onTimeRate}%` : "—"} />
         <Stat label="Atraso médio" value={summary.averageDelayLabel} small />
-        <Stat label="Otimizações realizadas" value={summary.optimizationsCompleted} />
+        <Stat label="Revisões de conta realizadas" value={summary.optimizationsCompleted} />
         <Stat label="Reuniões realizadas" value={summary.meetingsCompleted} />
         <Stat label="Entregas de criativos" value={summary.creativeDeliveriesCompleted} />
         <Stat label="Tarefas reabertas" value={summary.tasksReopened} />

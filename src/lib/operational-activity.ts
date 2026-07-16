@@ -1,4 +1,5 @@
 import { businessDaysSince } from "./business-days";
+import { OPERATIONAL_ACTIVITY_STATUS_REGISTRY } from "@/lib/status-registry";
 
 /**
  * Limites centralizados do conceito de "atividade operacional relevante" —
@@ -12,16 +13,20 @@ export const OPERATIONAL_ACTIVITY_THRESHOLDS = {
 
 export type OperationalActivityStatus = "ativo" | "atencao" | "inativo";
 
+/** Deriva do Status Registry (`@/lib/status-registry`), ver Platform
+ * Integrity Wave 1 — `atencao` agora é "Operação em atenção" (qualificado:
+ * o mesmo valor de enum também existe, com outro significado, em
+ * `AccountHealth`). */
 export const OPERATIONAL_ACTIVITY_STATUS_LABEL: Record<OperationalActivityStatus, string> = {
-  ativo: "Ativo",
-  atencao: "Atenção",
-  inativo: "Inativo",
+  ativo: OPERATIONAL_ACTIVITY_STATUS_REGISTRY["operational_activity.ativo"].label,
+  atencao: OPERATIONAL_ACTIVITY_STATUS_REGISTRY["operational_activity.atencao"].label,
+  inativo: OPERATIONAL_ACTIVITY_STATUS_REGISTRY["operational_activity.inativo"].label,
 };
 
 export const OPERATIONAL_ACTIVITY_STATUS_BADGE_CLASSES: Record<OperationalActivityStatus, string> = {
-  ativo: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
-  atencao: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  inativo: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+  ativo: OPERATIONAL_ACTIVITY_STATUS_REGISTRY["operational_activity.ativo"].badgeClassName,
+  atencao: OPERATIONAL_ACTIVITY_STATUS_REGISTRY["operational_activity.atencao"].badgeClassName,
+  inativo: OPERATIONAL_ACTIVITY_STATUS_REGISTRY["operational_activity.inativo"].badgeClassName,
 };
 
 /**

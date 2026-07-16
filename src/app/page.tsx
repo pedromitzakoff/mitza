@@ -35,6 +35,7 @@ import { PrioritiesDrawer, PrioritiesPanel } from "./priorities-panel";
 import { OperationMetric } from "./operation-metric";
 import { PrimaryInvestmentMetric, SecondaryInvestmentMetric } from "./investment-metric";
 import { ClientObjectiveTable, ClientObjectiveTablesEmptyState, PLATFORM_LABEL } from "./client-objective-table";
+import { EmptyState } from "@/components/workspace/empty-state";
 import { Button, IconButton } from "@/components/workspace/button";
 import { ProgressBar } from "@/components/workspace/progress-bar";
 import { PageHeader } from "@/components/workspace/page-header";
@@ -790,14 +791,15 @@ export default async function Home({
                 context={`${operationIndicators.completedTasksCount} de ${operationIndicators.tasksTotalCount} concluídas`}
               />
               {/* MVP Etapa "Indicadores operacionais e refinamento visual":
-                  rótulo direto ("Otimizações no mês") em vez do genérico
-                  "Atividade operacional" — mesmo dado de sempre
-                  (optimizationsCount, um registro de account_reviews =
-                  uma otimização, nunca contado duas vezes), só o nome
-                  deixa de esconder o que o número mede. */}
+                  rótulo direto ("Revisões de conta no mês", renomeado de
+                  "Otimizações no mês" na etapa "MITZA Platform Constitution
+                  1.0") em vez do genérico "Atividade operacional" — mesmo
+                  dado de sempre (optimizationsCount, um registro de
+                  account_reviews = uma revisão, nunca contado duas vezes),
+                  só o nome deixa de esconder o que o número mede. */}
               <OperationMetric
-                label="Otimizações no mês"
-                value={`${operationIndicators.optimizationsCount} otimizações`}
+                label="Revisões de conta no mês"
+                value={`${operationIndicators.optimizationsCount} revisões`}
                 context="Revisões estratégicas registradas"
               />
             </div>
@@ -931,7 +933,7 @@ export default async function Home({
               </table>
             </div>
           ) : (
-            <p className="mt-2 text-sm text-overview-text-secondary">Nenhum gestor encontrado.</p>
+            <EmptyState title="Nenhum gestor encontrado." className="mt-2" />
           )}
           </div>
         </details>

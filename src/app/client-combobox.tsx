@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export interface ClientComboboxOption {
   id: string;
@@ -155,7 +156,9 @@ export function ClientCombobox({
                   </li>
                 ))
               ) : (
-                <li className="px-2 py-1.5 text-sm text-muted-foreground">Nenhum cliente encontrado.</li>
+                <li className="px-2 py-1.5">
+                  <EmptyState size="sm">Nenhum cliente encontrado.</EmptyState>
+                </li>
               )}
             </ul>
           </div>

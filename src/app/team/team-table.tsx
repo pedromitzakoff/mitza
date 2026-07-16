@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   TEAM_INVITATION_BADGE_CLASSES,
   TEAM_INVITATION_STATUS_LABEL,
@@ -38,8 +39,8 @@ export interface TeamTableRow {
 export function TeamTable({ rows, isAdmin }: { rows: TeamTableRow[]; isAdmin: boolean }) {
   if (rows.length === 0) {
     return (
-      <div className="rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-        Nenhum membro cadastrado ainda.
+      <div className="rounded-lg border border-border bg-card px-4 py-6 text-center">
+        <EmptyState>Nenhum membro cadastrado ainda.</EmptyState>
       </div>
     );
   }

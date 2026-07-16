@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useSyncExternalStore } from "react";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   Building2,
   Clock,
@@ -228,14 +229,15 @@ function SidebarContent({
        * próprio pro botão de recolher. */}
       <div className="flex shrink-0 items-center gap-1.5 p-2">
         {isAdmin && (
-          <Link
-            href="/clients/new"
-            title="Novo cliente"
-            className={`mitza-pressable flex flex-1 items-center justify-center gap-1.5 rounded-md bg-brand px-2.5 py-1 text-sm font-medium text-white hover:bg-brand-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:px-0" : ""}`}
-          >
-            <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <ItemLabel collapsed={collapsed}>Novo cliente</ItemLabel>
-          </Link>
+          <Tooltip label="Novo cliente">
+            <Link
+              href="/clients/new"
+              className={`mitza-pressable flex flex-1 items-center justify-center gap-1.5 rounded-md bg-brand px-2.5 py-1 text-sm font-medium text-white hover:bg-brand-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:px-0" : ""}`}
+            >
+              <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <ItemLabel collapsed={collapsed}>Novo cliente</ItemLabel>
+            </Link>
+          </Tooltip>
         )}
         <button
           type="button"
@@ -280,13 +282,15 @@ function SidebarContent({
             </nav>
             {isAdmin && (
               <form action={syncAllMetaAction}>
-                <button
-                  type="submit"
-                  title="Atualizar Meta (todos)"
-                  className="mitza-pressable shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-                >
-                  <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
-                </button>
+                <Tooltip label="Atualizar Meta (todos)">
+                  <button
+                    type="submit"
+                    aria-label="Atualizar Meta (todos)"
+                    className="mitza-pressable shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                  >
+                    <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  </button>
+                </Tooltip>
               </form>
             )}
           </div>
@@ -313,14 +317,15 @@ function SidebarContent({
           </span>
         </div>
         <form action={logout}>
-          <button
-            type="submit"
-            title="Sair"
-            className={`mitza-pressable flex w-full items-center justify-center gap-1.5 rounded-md border border-white/15 px-3 py-1 text-xs font-medium text-zinc-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:px-0" : ""}`}
-          >
-            <LogOut className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <ItemLabel collapsed={collapsed}>Sair</ItemLabel>
-          </button>
+          <Tooltip label="Sair">
+            <button
+              type="submit"
+              className={`mitza-pressable flex w-full items-center justify-center gap-1.5 rounded-md border border-white/15 px-3 py-1 text-xs font-medium text-zinc-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:px-0" : ""}`}
+            >
+              <LogOut className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <ItemLabel collapsed={collapsed}>Sair</ItemLabel>
+            </button>
+          </Tooltip>
         </form>
       </div>
     </div>

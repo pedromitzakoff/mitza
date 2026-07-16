@@ -5,11 +5,16 @@ import { Button } from "@/components/workspace/button";
 import { SectionHeader } from "@/components/workspace/section-header";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { StatusDot, type StatusTone } from "@/components/workspace/status-dot";
+import { ACCOUNT_HEALTH_REGISTRY } from "@/lib/status-registry";
 
+/** Deriva do Status Registry (`@/lib/status-registry`), ver Platform
+ * Integrity Wave 1 — `atencao` agora é "Conta em atenção" (qualificado: o
+ * mesmo valor de enum também existe, com outro significado, em
+ * `OperationalActivityStatus`). */
 const SEVERITY_LABEL: Record<AccountHealth, string> = {
-  critico: "Crítico",
-  atencao: "Atenção",
-  saudavel: "Normal",
+  critico: ACCOUNT_HEALTH_REGISTRY["account_health.critico"].label,
+  atencao: ACCOUNT_HEALTH_REGISTRY["account_health.atencao"].label,
+  saudavel: ACCOUNT_HEALTH_REGISTRY["account_health.saudavel"].label,
 };
 
 const SEVERITY_TONE: Record<AccountHealth, StatusTone> = {
@@ -151,7 +156,7 @@ export function PrioritiesDrawer({
             ))}
           </ul>
         ) : (
-          <p className="mt-3 text-sm text-overview-text-secondary">Nenhuma prioridade nesta severidade.</p>
+          <EmptyState title="Nenhuma prioridade nesta severidade." />
         )}
       </div>
     </>

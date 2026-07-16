@@ -714,7 +714,7 @@ export default async function ClientPage({
           opcional, nunca gera a atualização automaticamente. */}
       {reviewSaved && !clientUpdatesByReviewId.has(reviewSaved) && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
-          <span className="text-foreground">Otimização registrada com sucesso.</span>
+          <span className="text-foreground">Revisão de conta registrada com sucesso.</span>
           <div className="flex items-center gap-2">
             <form action={generateClientUpdateAction.bind(null, reviewSaved, withParam(returnTo, `reviewDetail=${reviewSaved}`))}>
               <button

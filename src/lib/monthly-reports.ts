@@ -16,19 +16,24 @@ import {
   computeSprintMonthActualSpend,
 } from "@/lib/sprint-financials";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
+import { KPI_TARGET_STATUS_REGISTRY, MONTHLY_REPORT_STATUS_REGISTRY } from "@/lib/status-registry";
 
+/** Deriva do Status Registry (`@/lib/status-registry`), ver Platform
+ * Integrity Wave 1 — `em_andamento` agora é "Relatório em andamento"
+ * (qualificado: o mesmo valor de enum também existe, com outro
+ * significado, em `SpendStatus` e `ReportActionItemStatus`). */
 export const MONTHLY_REPORT_STATUS_LABEL: Record<MonthlyReportStatus, string> = {
-  nao_iniciado: "Não iniciado",
-  em_andamento: "Em andamento",
-  pronto_revisao: "Pronto para revisão",
-  finalizado: "Finalizado",
+  nao_iniciado: MONTHLY_REPORT_STATUS_REGISTRY["monthly_report.nao_iniciado"].label,
+  em_andamento: MONTHLY_REPORT_STATUS_REGISTRY["monthly_report.em_andamento"].label,
+  pronto_revisao: MONTHLY_REPORT_STATUS_REGISTRY["monthly_report.pronto_revisao"].label,
+  finalizado: MONTHLY_REPORT_STATUS_REGISTRY["monthly_report.finalizado"].label,
 };
 
 export const MONTHLY_REPORT_STATUS_BADGE_CLASSES: Record<MonthlyReportStatus, string> = {
-  nao_iniciado: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
-  em_andamento: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  pronto_revisao: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-  finalizado: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
+  nao_iniciado: MONTHLY_REPORT_STATUS_REGISTRY["monthly_report.nao_iniciado"].badgeClassName,
+  em_andamento: MONTHLY_REPORT_STATUS_REGISTRY["monthly_report.em_andamento"].badgeClassName,
+  pronto_revisao: MONTHLY_REPORT_STATUS_REGISTRY["monthly_report.pronto_revisao"].badgeClassName,
+  finalizado: MONTHLY_REPORT_STATUS_REGISTRY["monthly_report.finalizado"].badgeClassName,
 };
 
 export const KPI_UNIT_LABEL: Record<KpiUnit, string> = {
@@ -67,16 +72,18 @@ export function classifyKpiTargetStatus(
   return hit ? "atingiu" : "abaixo";
 }
 
+/** Deriva do Status Registry (`@/lib/status-registry`), ver Platform
+ * Integrity Wave 1. */
 export const KPI_TARGET_STATUS_LABEL: Record<KpiTargetStatus, string> = {
-  atingiu: "Bateu meta",
-  abaixo: "Abaixo da meta",
-  sem_meta: "Sem meta",
+  atingiu: KPI_TARGET_STATUS_REGISTRY["kpi_target.atingiu"].label,
+  abaixo: KPI_TARGET_STATUS_REGISTRY["kpi_target.abaixo"].label,
+  sem_meta: KPI_TARGET_STATUS_REGISTRY["kpi_target.sem_meta"].label,
 };
 
 export const KPI_TARGET_STATUS_BADGE_CLASSES: Record<KpiTargetStatus, string> = {
-  atingiu: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
-  abaixo: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  sem_meta: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  atingiu: KPI_TARGET_STATUS_REGISTRY["kpi_target.atingiu"].badgeClassName,
+  abaixo: KPI_TARGET_STATUS_REGISTRY["kpi_target.abaixo"].badgeClassName,
+  sem_meta: KPI_TARGET_STATUS_REGISTRY["kpi_target.sem_meta"].badgeClassName,
 };
 
 /** Variação percentual entre o resultado do mês e o do mês anterior — não

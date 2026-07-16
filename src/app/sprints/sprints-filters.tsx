@@ -204,7 +204,7 @@ export function SprintsFilters({
                   onChange={(e) => pushFilters({ optimization: e.target.value })}
                   className={selectClasses}
                 >
-                  <option value="todas">Última otimização: todas</option>
+                  <option value="todas">Última revisão de conta: todas</option>
                   <option value="hoje">Hoje</option>
                   <option value="7dias">Últimos 7 dias</option>
                   <option value="mais7">Há mais de 7 dias</option>

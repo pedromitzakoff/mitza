@@ -1,17 +1,20 @@
 import type { ClientContractStatus, ClientMainObjective } from "@/lib/supabase/database.types";
+import { CLIENT_CONTRACT_STATUS_REGISTRY } from "@/lib/status-registry";
 
 /** Status CONTRATUAL (cadastral) — diferente da saúde operacional
- * (AccountHealth) mostrada em Sprints/Visão Geral. Não misturar os dois. */
+ * (AccountHealth) mostrada em Sprints/Visão Geral. Não misturar os dois.
+ * Deriva do Status Registry (`@/lib/status-registry`), ver Platform
+ * Integrity Wave 1. */
 export const CLIENT_STATUS_LABEL: Record<ClientContractStatus, string> = {
-  ativo: "Ativo",
-  pausado: "Pausado",
-  encerrado: "Encerrado",
+  ativo: CLIENT_CONTRACT_STATUS_REGISTRY["client_contract.ativo"].label,
+  pausado: CLIENT_CONTRACT_STATUS_REGISTRY["client_contract.pausado"].label,
+  encerrado: CLIENT_CONTRACT_STATUS_REGISTRY["client_contract.encerrado"].label,
 };
 
 export const CLIENT_STATUS_BADGE_CLASSES: Record<ClientContractStatus, string> = {
-  ativo: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
-  pausado: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  encerrado: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  ativo: CLIENT_CONTRACT_STATUS_REGISTRY["client_contract.ativo"].badgeClassName,
+  pausado: CLIENT_CONTRACT_STATUS_REGISTRY["client_contract.pausado"].badgeClassName,
+  encerrado: CLIENT_CONTRACT_STATUS_REGISTRY["client_contract.encerrado"].badgeClassName,
 };
 
 export const CLIENT_MAIN_OBJECTIVE_LABEL: Record<ClientMainObjective, string> = {

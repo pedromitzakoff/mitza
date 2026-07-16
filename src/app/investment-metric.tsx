@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { StatusTone } from "@/components/workspace/status-dot";
+import { Tooltip } from "@/components/ui/tooltip";
 
 /** Etapa "Refinamento de Densidade..." (Parte 5): Planejado/Realizado
  * dominavam demais a tela (30px, bem acima de tudo ao redor). Reduzido pra
@@ -67,12 +68,13 @@ export function SecondaryInvestmentMetric({
   href?: string;
   title?: string;
 }) {
-  const content = (
-    <div title={title}>
+  const metric = (
+    <div>
       <p className="text-[12px] text-overview-text-muted">{label}</p>
       <p className={`mt-0.5 text-[19px] font-medium leading-tight tabular-nums ${TONE_TEXT_CLASSES[tone]}`}>{value}</p>
     </div>
   );
+  const content = title ? <Tooltip label={title}>{metric}</Tooltip> : metric;
 
   if (!href) return content;
 
