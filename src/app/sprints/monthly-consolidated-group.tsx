@@ -6,7 +6,7 @@ import { resolveMonthPeriodSummary, computeRitmoDiff } from "@/lib/financial-per
 import type { MonthTemporalStatus } from "@/lib/monthly-budget";
 import { operationalSummary } from "@/lib/account-priority";
 import { effectiveTaskStatus } from "@/lib/task-status";
-import { orderTasks } from "@/app/clients/task-list";
+import { orderTasks } from "@/app/clients/task-order";
 import { TaskRow } from "@/app/clients/task-row";
 import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-section";
 import { AccountCardSummary } from "./account-card-summary";

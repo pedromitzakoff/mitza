@@ -5,7 +5,7 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
 import { useOptimisticTasks } from "@/lib/optimistic-tasks";
-import { orderTasks } from "./task-list";
+import { orderTasks } from "./task-order";
 import { TaskRow, type TaskListItem } from "./task-row";
 import { InlineCreateTaskForm, type InlineTaskManagerOption } from "./inline-task-form";
 
