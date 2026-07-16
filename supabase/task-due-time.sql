@@ -1,12 +1,21 @@
--- Etapa 62 (evolução da página do cliente) — horário opcional pra reuniões.
+-- Etapa 62 (evolução da página do cliente) — horário opcional pra tarefas.
 --
--- NÃO EXECUTAR sem aprovação.
+-- APROVADA e NECESSÁRIA — Etapa "MITZA Workspace-First Tasks 1.0" (Parte 1):
+-- causa raiz confirmada do erro em produção "Could not find the 'due_time'
+-- column of 'tasks' in the schema cache". O código (`createTaskAction`/
+-- `updateTaskAction`, a página do cliente, `/tasks/new` e
+-- `/tasks/[taskId]/edit`) já lê e grava `due_time` desde a Etapa 62; os
+-- tipos gerados (`database.types.ts`) já declaram a coluna. Só esta
+-- migration nunca chegou a ser executada no banco — por isso toda
+-- criação/edição de tarefa falha hoje, em qualquer tela.
+--
+-- EXECUTAR no SQL Editor do Supabase (ou via CLI) antes de publicar esta
+-- etapa — este ambiente de desenvolvimento não tem acesso à base ao vivo,
+-- então esta migration não pode ser aplicada automaticamente por aqui.
 --
 -- Menor alteração possível: uma única coluna nullable em `tasks`, sem
 -- afetar nenhuma linha existente (todas continuam com due_time = null,
--- exatamente como hoje). Só reuniões usam de fato horário na interface
--- (entregas de criativo continuam só com data), mas a coluna fica
--- disponível pra qualquer tipo de tarefa — não há necessidade de uma
--- coluna exclusiva de `reuniao`, que exigiria lógica condicional a mais
--- no schema pra nenhum ganho real.
+-- exatamente como hoje). A coluna fica disponível pra qualquer tipo de
+-- tarefa — não há necessidade de uma coluna exclusiva de `reuniao`, que
+-- exigiria lógica condicional a mais no schema pra nenhum ganho real.
 alter table tasks add column if not exists due_time time;

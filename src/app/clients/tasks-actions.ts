@@ -18,49 +18,76 @@ function resolveReturnTo(formData: FormData, fallback: string): string {
   return typeof returnTo === "string" && returnTo.length > 0 ? returnTo : fallback;
 }
 
-export async function createTaskAction(clientId: string, formData: FormData) {
-  const supabase = await createSupabaseClient();
+/** Campos oficiais de criação/edição de tarefa — mesmo modelo usado pelas
+ * páginas dedicadas legadas (`/tasks/new`, `/tasks/[taskId]/edit`) e pelo
+ * fluxo inline (Etapa "MITZA Workspace-First Tasks 1.0"). Única fonte de
+ * verdade: `parseTaskFormData` extrai isto de um `<form>` nativo (rota
+ * legada); o fluxo inline monta o mesmo formato diretamente em JS — os dois
+ * caminhos convergem pro mesmo insert/update logo abaixo. */
+export interface TaskActionFields {
+  title: string;
+  type: TaskType;
+  assigneeId: string | null;
+  dueDate: string;
+  dueTime: string | null;
+  recurrence: TaskRecurrence;
+  notes: string | null;
+  sprintId: string | null;
+}
 
-  const title = String(formData.get("title") ?? "").trim();
-  const type = String(formData.get("type") ?? "outro") as TaskType;
-  const assigneeId = String(formData.get("assignee_id") ?? "") || null;
-  const dueDate = String(formData.get("due_date") ?? "");
-  const dueTime = String(formData.get("due_time") ?? "").trim() || null;
-  const recurrence = String(formData.get("recurrence") ?? "nenhuma") as TaskRecurrence;
-  const notes = String(formData.get("notes") ?? "").trim() || null;
-  const sprintId = String(formData.get("sprint_id") ?? "") || null;
-  const returnTo = resolveReturnTo(formData, `/clients/${clientId}`);
+function parseTaskFormData(formData: FormData): TaskActionFields {
+  return {
+    title: String(formData.get("title") ?? "").trim(),
+    type: String(formData.get("type") ?? "outro") as TaskType,
+    assigneeId: String(formData.get("assignee_id") ?? "") || null,
+    dueDate: String(formData.get("due_date") ?? ""),
+    dueTime: String(formData.get("due_time") ?? "").trim() || null,
+    recurrence: String(formData.get("recurrence") ?? "nenhuma") as TaskRecurrence,
+    notes: String(formData.get("notes") ?? "").trim() || null,
+    sprintId: String(formData.get("sprint_id") ?? "") || null,
+  };
+}
+
+/** Insere a tarefa e grava os eventos operacionais — única implementação
+ * real de "criar tarefa" (Parte 7: única fonte de verdade). Nunca navega,
+ * nunca decide mensagem de UI: isso é responsabilidade de quem chama
+ * (`createTaskAction`, legado, ou `createTaskInlineAction`, oficial). */
+async function performCreateTask(
+  clientId: string,
+  fields: TaskActionFields,
+): Promise<{ error: string } | { taskId: string }> {
+  const supabase = await createSupabaseClient();
 
   const { data: created, error } = await supabase
     .from("tasks")
     .insert(
       withOriginalDueDate({
         client_id: clientId,
-        title,
-        type,
-        assignee_id: assigneeId,
-        due_date: dueDate,
-        due_time: dueTime,
-        recurrence,
-        notes,
-        sprint_id: sprintId,
+        title: fields.title,
+        type: fields.type,
+        assignee_id: fields.assigneeId,
+        due_date: fields.dueDate,
+        due_time: fields.dueTime,
+        recurrence: fields.recurrence,
+        notes: fields.notes,
+        sprint_id: fields.sprintId,
       }),
     )
     .select("id")
     .single();
 
   if (error || !created) {
-    const sprintParam = sprintId ? `&sprintId=${sprintId}` : "";
-    redirect(
-      `/clients/${clientId}/tasks/new?error=${encodeURIComponent(error?.message ?? "Erro ao criar tarefa")}${sprintParam}`,
-    );
+    // Etapa "MITZA Workspace-First Tasks 1.0" (Parte 1): a mensagem crua do
+    // Supabase/Postgrest nunca mais chega à interface — só o log do
+    // servidor guarda o detalhe técnico real.
+    return { error: toUserFacingError(error, "Não foi possível criar a tarefa. Tente novamente.") };
   }
 
   const profile = await getCurrentProfile();
   if (profile) {
     await logOperationalActivity(supabase, {
       clientId,
-      sprintId,
+      sprintId: fields.sprintId,
       taskId: created.id,
       userId: profile.id,
       activityType: "task_created",
@@ -72,26 +99,26 @@ export async function createTaskAction(clientId: string, formData: FormData) {
       entityType: "task",
       entityId: created.id,
       clientId,
-      sprintId,
+      sprintId: fields.sprintId,
       source: "web",
       metadata: {
-        task_type: type,
-        task_title: title,
-        due_date: dueDate,
-        assignee_team_member_id: assigneeId,
+        task_type: fields.type,
+        task_title: fields.title,
+        due_date: fields.dueDate,
+        assignee_team_member_id: fields.assigneeId,
         origin: "manual",
       },
     });
 
-    if (assigneeId) {
+    if (fields.assigneeId) {
       await recordOperationalEvent(supabase, actor, {
         eventType: OperationalEventType.TASK_ASSIGNED,
         entityType: "task",
         entityId: created.id,
         clientId,
-        sprintId,
+        sprintId: fields.sprintId,
         source: "web",
-        metadata: { assignee_team_member_id: assigneeId },
+        metadata: { assignee_team_member_id: fields.assigneeId },
       });
     }
   }
@@ -100,46 +127,108 @@ export async function createTaskAction(clientId: string, formData: FormData) {
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
+
+  return { taskId: created.id };
+}
+
+/**
+ * Criação de tarefa — rota legada (`/tasks/new`, mantida só por
+ * compatibilidade — Etapa "MITZA Workspace-First Tasks 1.0", Parte 6):
+ * `<form action>` nativo, sempre redireciona (erro ou sucesso), exatamente
+ * como sempre funcionou. Nenhum botão da interface atual aponta pra cá —
+ * ver `createTaskInlineAction` pro fluxo oficial (workspace, sem navegar).
+ */
+export async function createTaskAction(clientId: string, formData: FormData): Promise<void> {
+  const fields = parseTaskFormData(formData);
+  const returnTo = resolveReturnTo(formData, `/clients/${clientId}`);
+
+  const result = await performCreateTask(clientId, fields);
+  if ("error" in result) {
+    const sprintParam = fields.sprintId ? `&sprintId=${fields.sprintId}` : "";
+    redirect(`/clients/${clientId}/tasks/new?error=${encodeURIComponent(result.error)}${sprintParam}`);
+  }
   redirect(returnTo);
 }
 
-export async function updateTaskAction(taskId: string, clientId: string, formData: FormData) {
+/**
+ * Criação de tarefa — fluxo oficial (Etapa "MITZA Workspace-First Tasks
+ * 1.0"): chamado diretamente por `InlineCreateTaskForm` (sem `<form
+ * action>` nativo), nunca redireciona — devolve `{error?; message?}`, o
+ * mesmo contrato já usado por `completeTaskAction`/`ToastActionButton` em
+ * toda a plataforma. Mesma query, mesmos eventos operacionais de
+ * `createTaskAction` (via `performCreateTask`) — só o desfecho muda.
+ */
+export async function createTaskInlineAction(
+  clientId: string,
+  fields: TaskActionFields,
+): Promise<{ error?: string; message?: string }> {
+  const result = await performCreateTask(clientId, fields);
+  if ("error" in result) {
+    return { error: result.error };
+  }
+  return { message: `"${fields.title}" criada.` };
+}
+
+/** Campos de edição inline (Etapa "MITZA Workspace-First Tasks 1.0") —
+ * `dueTime`/`recurrence` são OPCIONAIS aqui, ao contrário de
+ * `TaskActionFields`: nem todo formulário que edita uma tarefa carrega o
+ * valor atual desses dois campos (ex.: drawer aberto a partir de /operation
+ * ou /sprints, cujo modelo `OperationTaskItem` não busca `due_time`/
+ * `recurrence`). Achado da investigação desta etapa: a edição inline já
+ * existente enviava sempre `due_time: null`/`recurrence: "nenhuma"` mesmo
+ * quando o formulário nunca mostrava esses campos — resetando em silêncio
+ * o horário e a recorrência de qualquer tarefa editada por ali. `undefined`
+ * agora significa "este formulário não trata este campo" e preserva o
+ * valor atual (nunca reseta o que a interface não mostrou pro gestor). */
+export interface TaskUpdateFields {
+  title: string;
+  type: TaskType;
+  assigneeId: string | null;
+  dueDate: string;
+  notes: string | null;
+  dueTime?: string | null;
+  recurrence?: TaskRecurrence;
+}
+
+/** Atualiza a tarefa e grava os eventos operacionais — única implementação
+ * real de "editar tarefa" (Parte 7). Nenhuma regra de reatribuição/
+ * alteração de prazo mudou: a leitura do estado anterior e o cálculo de
+ * `reassignment_count`/`due_date_change_count` são idênticos em qualquer
+ * caminho que chame esta função. */
+async function performUpdateTask(
+  taskId: string,
+  clientId: string,
+  fields: TaskUpdateFields,
+): Promise<{ error: string } | { title: string }> {
   const supabase = await createSupabaseClient();
 
-  const title = String(formData.get("title") ?? "").trim();
-  const type = String(formData.get("type") ?? "outro") as TaskType;
-  const assigneeId = String(formData.get("assignee_id") ?? "") || null;
-  const dueDate = String(formData.get("due_date") ?? "");
-  const dueTime = String(formData.get("due_time") ?? "").trim() || null;
-  const recurrence = String(formData.get("recurrence") ?? "nenhuma") as TaskRecurrence;
-  const notes = String(formData.get("notes") ?? "").trim() || null;
-  const returnTo = resolveReturnTo(formData, `/clients/${clientId}`);
-
   // Lê o estado anterior ANTES de sobrescrever — necessário pra detectar
-  // reatribuição/alteração de prazo e preservar original_due_date (achado
-  // da investigação: esta action fazia um update cego, sem nunca ler o
-  // valor anterior de assignee_id/due_date).
+  // reatribuição/alteração de prazo, preservar original_due_date e (achado
+  // desta etapa) preservar due_time/recurrence quando o formulário que
+  // chamou não os conhece.
   const { data: previous } = await supabase
     .from("tasks")
-    .select("assignee_id, due_date, sprint_id, reassignment_count, due_date_change_count")
+    .select("assignee_id, due_date, due_time, recurrence, sprint_id, reassignment_count, due_date_change_count")
     .eq("id", taskId)
     .single();
 
   const wasAlreadyOverdue = previous ? previous.due_date < todayDateString() : false;
-  const isReassignment = previous ? assigneeId !== previous.assignee_id : false;
+  const isReassignment = previous ? fields.assigneeId !== previous.assignee_id : false;
   const isFirstAssignment = isReassignment && !previous?.assignee_id;
-  const isDueDateChange = previous ? dueDate !== previous.due_date : false;
+  const isDueDateChange = previous ? fields.dueDate !== previous.due_date : false;
+  const nextDueTime = fields.dueTime !== undefined ? fields.dueTime : (previous?.due_time ?? null);
+  const nextRecurrence = fields.recurrence !== undefined ? fields.recurrence : (previous?.recurrence ?? "nenhuma");
 
   const { data: updated, error } = await supabase
     .from("tasks")
     .update({
-      title,
-      type,
-      assignee_id: assigneeId,
-      due_date: dueDate,
-      due_time: dueTime,
-      recurrence,
-      notes,
+      title: fields.title,
+      type: fields.type,
+      assignee_id: fields.assigneeId,
+      due_date: fields.dueDate,
+      due_time: nextDueTime,
+      recurrence: nextRecurrence,
+      notes: fields.notes,
       reassignment_count: (previous?.reassignment_count ?? 0) + (isReassignment && !isFirstAssignment ? 1 : 0),
       due_date_change_count: (previous?.due_date_change_count ?? 0) + (isDueDateChange ? 1 : 0),
       // original_due_date nunca é escrito aqui de propósito — é preenchido
@@ -151,7 +240,7 @@ export async function updateTaskAction(taskId: string, clientId: string, formDat
     .single();
 
   if (error) {
-    redirect(`/clients/${clientId}/tasks/${taskId}/edit?error=${encodeURIComponent(error.message)}`);
+    return { error: toUserFacingError(error, "Não foi possível salvar a tarefa. Tente novamente.") };
   }
 
   const profile = await getCurrentProfile();
@@ -177,8 +266,8 @@ export async function updateTaskAction(taskId: string, clientId: string, formDat
         source: "web",
         metadata: {
           previous_assignee_team_member_id: previous?.assignee_id ?? null,
-          new_assignee_team_member_id: assigneeId,
-          current_due_date: dueDate,
+          new_assignee_team_member_id: fields.assigneeId,
+          current_due_date: fields.dueDate,
           was_already_overdue: wasAlreadyOverdue,
         },
       });
@@ -194,7 +283,7 @@ export async function updateTaskAction(taskId: string, clientId: string, formDat
         source: "web",
         metadata: {
           previous_due_date: previous?.due_date ?? null,
-          new_due_date: dueDate,
+          new_due_date: fields.dueDate,
           was_already_overdue: wasAlreadyOverdue,
           due_date_change_count: (previous?.due_date_change_count ?? 0) + 1,
         },
@@ -206,7 +295,44 @@ export async function updateTaskAction(taskId: string, clientId: string, formDat
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
+
+  return { title: fields.title };
+}
+
+/**
+ * Edição de tarefa — rota legada (`/tasks/[taskId]/edit`, mantida só por
+ * compatibilidade — Parte 6): `<form action>` nativo, sempre redireciona,
+ * exatamente como sempre funcionou. Ver `updateTaskInlineAction` pro fluxo
+ * oficial (drawer, sem navegar).
+ */
+export async function updateTaskAction(taskId: string, clientId: string, formData: FormData): Promise<void> {
+  const fields = parseTaskFormData(formData);
+  const returnTo = resolveReturnTo(formData, `/clients/${clientId}`);
+
+  const result = await performUpdateTask(taskId, clientId, fields);
+  if ("error" in result) {
+    redirect(`/clients/${clientId}/tasks/${taskId}/edit?error=${encodeURIComponent(result.error)}`);
+  }
   redirect(returnTo);
+}
+
+/**
+ * Edição de tarefa — fluxo oficial (Etapa "MITZA Workspace-First Tasks
+ * 1.0"): chamado diretamente por `InlineEditTaskForm` dentro do drawer,
+ * nunca redireciona nem navega — devolve `{error?; message?}`. Mesma query
+ * e mesmos eventos operacionais de `updateTaskAction` (via
+ * `performUpdateTask`) — só o desfecho muda.
+ */
+export async function updateTaskInlineAction(
+  taskId: string,
+  clientId: string,
+  fields: TaskUpdateFields,
+): Promise<{ error?: string; message?: string }> {
+  const result = await performUpdateTask(taskId, clientId, fields);
+  if ("error" in result) {
+    return { error: result.error };
+  }
+  return { message: `"${result.title}" atualizada.` };
 }
 
 export async function completeTaskAction(taskId: string, clientId: string): Promise<{ error?: string }> {
