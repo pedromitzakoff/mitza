@@ -589,6 +589,86 @@ etapa foi feita pra eliminar.
   feedback inline de `client-update-editor.tsx` pro toast único da
   plataforma.
 
+## Decisão 014: Optimistic UI compartilhado e memória de contexto via sessionStorage
+
+**Data:** 2026-07-16
+**Status:** Ativa (numeração provisória — branch ainda não mesclada, ver
+Capítulo 8 de `CONTRIBUTING.md`).
+
+### Contexto
+
+A etapa "Instant Action & Context Memory 1.0" pediu resposta otimista pra
+concluir/excluir tarefa (contador e barra de progresso incluídos, não só o
+check da linha) e memória de contexto na tela Sprints (cliente/sprint
+expandidos, scroll), sem alterar regra de negócio, banco ou permissões.
+
+### Problema
+
+`useOptimistic` já existia isolado em `TaskRow` (só o check da própria
+linha); o contador "X/Y concluídas" e a barra de progresso, calculados a
+partir da prop `tasks` vinda do servidor, só atualizavam depois do
+`revalidatePath` responder. Cliente/Sprint expandidos na tela Sprints são
+`<details>` nativos sem nenhuma persistência — sempre resetam ao navegar
+pra fora e voltar.
+
+### Alternativas consideradas
+
+1. Manter o otimismo só na própria linha (`TaskRow`), sem tocar contador
+   nem progresso.
+2. Levantar UM `useOptimistic` compartilhado pro nível da lista
+   (`SprintTaskList`), com cada linha despachando pra ele dentro da sua
+   própria `useTransition` — contador e progresso reagem junto, cada linha
+   mantém seu próprio `isPending`.
+3. Um store global (Context/Zustand) pra todo estado otimista da
+   plataforma.
+
+### Decisão tomada
+
+Alternativa 2. `SprintTaskList` virou Client Component segurando
+`useOptimisticTasks` (`src/lib/optimistic-tasks.ts`); cada `TaskRow`
+continua com seu próprio `useTransition` (nunca um `isPending` global) e
+despacha pro reducer compartilhado dentro da mesma transição. Reabrir
+tarefa concluída **não** foi implementado — auditado e confirmado que essa
+funcionalidade não existe hoje na plataforma (nem Server Action nem UI);
+criá-la seria uma regra de negócio nova, fora do escopo desta etapa
+(decisão tomada em conjunto com o usuário).
+
+Pra memória de contexto: mês/visão/filtros já viviam na URL (nada mudou
+ali). Cliente/Sprint expandidos e scroll passaram a ser salvos em
+`sessionStorage` (`src/app/sprints/context-memory.ts`), versionados e
+com chave de contexto (`buildSprintsContextKey`) — um contexto salvo só é
+aplicado se a chave bater exatamente com mês/visão/filtros atuais, nunca
+sobrescrevendo uma escolha nova do usuário. A restauração/observação do
+`<details>` acontece via manipulação direta do DOM (`document.getElementById`
++ `.open`), com `id`s estáveis (`client-{id}`/`sprint-{id}`) adicionados
+aos cards — o mesmo tipo de escape-hatch imperativo já usado em
+`scroll-restore.tsx`/`focus-restore.tsx`. Alternativa 3 descartada: um
+store global de otimismo seria genérico demais pra um problema hoje restrito
+à tela Sprints (ver `CONTRIBUTING.md`, "evitar criar novas abstrações
+quando não forem necessárias").
+
+### Justificativa
+
+Fonte única do estado otimista dentro de uma sprint (o contador nunca
+diverge do que cada linha mostra) sem introduzir um `isPending` global que
+travaria a lista inteira — e memória de contexto do lado certo (URL pro
+que é compartilhável, `sessionStorage` pro que é só navegação temporária),
+igual ao Capítulo 20 do Manifesto ("o contexto é sagrado").
+
+### Impactos
+
+- Novos: `src/lib/optimistic-tasks.ts`, `src/app/sprints/context-memory.ts`,
+  `src/app/sprints/context-memory-client.tsx`.
+- `SprintTaskList` virou Client Component; `buildTaskHref` (função) virou
+  `taskHrefPrefix` (string) nessa mesma borda, porque uma função não
+  atravessa a fronteira servidor→cliente como prop.
+- `useToast` ganhou um segundo parâmetro opcional `tone?: "success" | "error"`
+  — necessário porque a exclusão otimista remove a linha (e o componente
+  que mostraria o erro inline) antes do servidor confirmar; se falhar, o
+  toast é o único canal que sobrevive pra avisar.
+- Registrado como dívida conhecida: "reabrir tarefa concluída" ainda não
+  existe como funcionalidade — candidato a uma etapa futura, não desta.
+
 ## Como adicionar novas decisões
 
 Sempre que uma alteração modificar a arquitetura da plataforma ou sua

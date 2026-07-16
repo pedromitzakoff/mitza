@@ -437,3 +437,11 @@ e o impacto gerado para os clientes.
 
 A plataforma deve apresentar contexto suficiente para tomada de decisão
 sem exigir navegação desnecessária.
+
+## Capítulo 27 — A plataforma responde e lembra.
+
+A interface deve responder imediatamente às ações seguras e preservar o
+contexto do gestor entre etapas do trabalho.
+
+O gestor não deve esperar desnecessariamente nem precisar reconstruir onde
+estava.

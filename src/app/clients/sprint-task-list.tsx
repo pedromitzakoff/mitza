@@ -1,8 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import { EmptyStateRow } from "@/components/ui/empty-state";
 import { SectionHeader, SECONDARY_ACTION_BUTTON_CLASSES } from "@/components/ui/section-header";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
+import { useOptimisticTasks } from "@/lib/optimistic-tasks";
 import { orderTasks } from "./task-list";
 import { TaskRow, type TaskListItem } from "./task-row";
 import { InlineCreateTaskForm, type InlineTaskManagerOption } from "./inline-task-form";
@@ -12,12 +15,21 @@ import { InlineCreateTaskForm, type InlineTaskManagerOption } from "./inline-tas
  * (`SectionHeader`) e mesmo estado vazio em linha (`EmptyStateRow`) que
  * `AccountReviewsSection` — as duas colunas de "Execução da sprint" agora
  * compartilham a mesma linguagem visual, só o conteúdo interno muda.
+ *
+ * Etapa "Instant Action & Context Memory 1.0" (Partes 2/3/5): virou Client
+ * Component pra segurar UM `useOptimistic` (`useOptimisticTasks`)
+ * compartilhado por toda a coluna — concluir/excluir passam a atualizar o
+ * contador "X/Y concluídas" e a barra de progresso na hora, e não só o
+ * check da própria linha (que já era otimista desde a Polish 1.0, mas
+ * sozinho — o contador ficava esperando o servidor). Cada `TaskRow`
+ * continua com seu próprio `useTransition`/`isPending` (Parte 4: só aquela
+ * linha fica protegida contra clique duplo, nunca a lista inteira).
  */
 export function SprintTaskList({
   tasks,
   clientId,
   sprintId,
-  buildTaskHref,
+  taskHrefPrefix,
   managers,
   returnTo,
   isAdmin,
@@ -27,9 +39,13 @@ export function SprintTaskList({
   sprintId: string;
   /** Cada tela abre o drawer de tarefa a partir de uma URL diferente (a
    * própria página do cliente vs. o painel Sprints, preservando filtros/mês/
-   * modo) — por isso quem chama decide a URL. Omitir preserva o link direto
-   * pra página do cliente, de sempre. */
-  buildTaskHref?: (taskId: string) => string;
+   * modo) — por isso quem chama decide o prefixo (`${prefix}${taskId}`).
+   * Omitir preserva o link direto pra página do cliente, de sempre.
+   * Etapa "Instant Action & Context Memory 1.0": era uma função
+   * (`buildTaskHref`) — virou string porque este componente agora é Client
+   * Component, e uma função não pode atravessar a fronteira servidor→cliente
+   * como prop (ver comentário em `SprintCardBody`). */
+  taskHrefPrefix?: string;
   /** Sprint UX 2.0 Fase 2 — quando informado (só a tela Sprints passa),
    * "+ Tarefa" vira um formulário inline (sem navegar pra `/tasks/new`). A
    * página do cliente não passa isto, então continua com o link de sempre. */
@@ -39,9 +55,10 @@ export function SprintTaskList({
    * "•••" de cada linha (ver `TaskRow`). */
   isAdmin?: boolean;
 }) {
-  const ordered = orderTasks(tasks);
-  const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
-  const progressPct = tasks.length > 0 ? (tasksDone / tasks.length) * 100 : 0;
+  const [optimisticTasks, dispatchOptimisticTask] = useOptimisticTasks(tasks);
+  const ordered = orderTasks(optimisticTasks);
+  const tasksDone = optimisticTasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
+  const progressPct = optimisticTasks.length > 0 ? (tasksDone / optimisticTasks.length) * 100 : 0;
   const canCreateInline = managers !== undefined && returnTo !== undefined;
 
   return (
@@ -53,9 +70,9 @@ export function SprintTaskList({
                 concluídas" virou "X/Y concluídas" — mesma leitura, menos
                 espaço, mesmo padrão de contagem já usado no resumo fechado
                 (`AccountCardSummary`, "X/Y tarefas"). */}
-            {tasks.length > 0 && (
+            {optimisticTasks.length > 0 && (
               <span className="text-[11px] tabular-nums text-muted-foreground">
-                {tasksDone}/{tasks.length} concluída{tasks.length !== 1 ? "s" : ""}
+                {tasksDone}/{optimisticTasks.length} concluída{optimisticTasks.length !== 1 ? "s" : ""}
               </span>
             )}
             {canCreateInline ? (
@@ -78,10 +95,10 @@ export function SprintTaskList({
         Tarefas
       </SectionHeader>
 
-      {tasks.length > 0 && (
+      {optimisticTasks.length > 0 && (
         <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
           <div
-            className="h-full rounded-full bg-brand"
+            className="h-full rounded-full bg-brand transition-[width] duration-150"
             style={{ width: `${Math.min(Math.max(progressPct, 0), 100)}%` }}
           />
         </div>
@@ -94,8 +111,10 @@ export function SprintTaskList({
               key={task.id}
               task={task}
               clientId={clientId}
-              detailsHref={buildTaskHref ? buildTaskHref(task.id) : `/clients/${clientId}?task=${task.id}`}
+              detailsHref={taskHrefPrefix ? `${taskHrefPrefix}${task.id}` : `/clients/${clientId}?task=${task.id}`}
               isAdmin={isAdmin}
+              onOptimisticComplete={() => dispatchOptimisticTask({ type: "complete", taskId: task.id })}
+              onOptimisticDelete={() => dispatchOptimisticTask({ type: "delete", taskId: task.id })}
             />
           ))}
         </ul>

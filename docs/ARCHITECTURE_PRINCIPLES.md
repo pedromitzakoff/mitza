@@ -357,3 +357,13 @@ Quando um componente operacional for refinado, todas as suas ocorrências
 na plataforma devem permanecer consistentes.
 
 Nunca permitir versões diferentes do mesmo componente coexistirem.
+
+## Capítulo 26 — Optimistic UI exige rollback.
+
+Toda atualização otimista deve possuir confirmação, reconciliação e
+restauração em caso de falha.
+
+## Capítulo 27 — Contexto persistido possui validade.
+
+Todo estado preservado deve possuir escopo, prioridade, versionamento e
+regra de invalidação.

@@ -57,7 +57,10 @@ export function SprintCurrentClientGroup({
   const tasksDone = card.sprintTasks.filter((t) => effectiveTaskStatus(t) === "feito").length;
 
   return (
-    <details className="group rounded-lg border border-border bg-card [&_summary::-webkit-details-marker]:hidden">
+    <details
+      id={`client-${card.clientId}`}
+      className="group rounded-lg border border-border bg-card [&_summary::-webkit-details-marker]:hidden"
+    >
       <AccountCardSummary
         clientId={card.clientId}
         clientName={card.clientName}

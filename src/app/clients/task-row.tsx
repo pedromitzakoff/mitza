@@ -37,17 +37,29 @@ const DELETE_CONFIRM_TIMEOUT_MS = 5000;
  * "perder clique". Portal escapa desse clipping (e de qualquer outro
  * ancestral com overflow/stacking context) sem depender de onde o menu é
  * usado — mesmo comportamento em todas as listas.
+ *
+ * Etapa "Instant Action & Context Memory 1.0" (Parte 3): quando quem chama
+ * passa `onOptimisticDelete`, a tarefa some da lista ANTES do servidor
+ * confirmar (ver `SprintTaskList`) — nesse caso, se a exclusão falhar, este
+ * componente já foi desmontado pelo React (a linha sumiu), então o erro
+ * inline de sempre (`error`/`setError`) nunca chegaria a ser visto. Por
+ * isso o erro vira um toast (`tone: "error"`) nesse caminho — o único canal
+ * de feedback que sobrevive à própria linha desaparecer. Sem a prop (telas
+ * que ainda não passam otimismo pra cá), nada muda: mensagem inline de
+ * sempre, linha nunca some sozinha.
  */
 function TaskRowMenu({
   taskId,
   clientId,
   detailsHref,
   isAdmin,
+  onOptimisticDelete,
 }: {
   taskId: string;
   clientId: string;
   detailsHref: string;
   isAdmin: boolean;
+  onOptimisticDelete?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -72,9 +84,14 @@ function TaskRowMenu({
   function handleDelete() {
     setError(null);
     startTransition(async () => {
+      onOptimisticDelete?.();
       const result = await deleteTaskAction(taskId, clientId);
       if (result?.error) {
-        setError(result.error);
+        if (onOptimisticDelete) {
+          showToast(result.error, "error");
+        } else {
+          setError(result.error);
+        }
         setConfirming(false);
         return;
       }
@@ -232,13 +249,28 @@ export function formatDueDate(value: string): string {
  * experiência. Se a ação falhar (exceto o redirect esperado de "tarefa não
  * encontrada"), o `useOptimistic` volta sozinho ao estado real assim que a
  * transition termina, e uma mensagem discreta explica o que aconteceu.
- */
+ *
+ * Etapa "Instant Action & Context Memory 1.0" (Partes 2-5): quando quem
+ * chama passa `onOptimisticComplete`/`onOptimisticDelete` (hoje só
+ * `SprintTaskList`), esta linha para de segurar seu próprio
+ * `useOptimistic` de conclusão — em vez disso, despacha pro `useOptimistic`
+ * COMPARTILHADO da lista inteira (`useOptimisticTasks`), pra que o contador
+ * "X/Y concluídas" e a barra de progresso mudem junto com o check, na
+ * mesma hora (antes só o check era otimista; o contador esperava o
+ * servidor). Sem essas props (`TaskList`/`MonthlyConsolidatedGroup`, que
+ * ainda não compartilham um estado de lista), o comportamento de sempre
+ * continua: `useOptimistic` local, só o check muda na hora. Em ambos os
+ * casos o `useTransition` continua LOCAL a esta linha (Parte 4: nunca um
+ * `isPending` global travando a lista inteira, só a linha em processamento
+ * fica protegida contra clique duplo). */
 export function TaskRow({
   task,
   clientId,
   detailsHref,
   hideAssigneeIfName,
   isAdmin,
+  onOptimisticComplete,
+  onOptimisticDelete,
 }: {
   task: TaskListItem;
   clientId: string;
@@ -254,9 +286,16 @@ export function TaskRow({
    * comportamento anterior — usado pelas telas que ainda não passam esta
    * prop. */
   isAdmin?: boolean;
+  /** Etapa "Instant Action & Context Memory 1.0" — despacha a conclusão
+   * pro `useOptimistic` compartilhado da lista (ver doc acima). Opcional:
+   * omitir preserva o `useOptimistic` local de antes. */
+  onOptimisticComplete?: () => void;
+  /** Idem, pra exclusão — repassado ao `TaskRowMenu`. */
+  onOptimisticDelete?: () => void;
 }) {
   const effectiveStatus = effectiveTaskStatus(task);
-  const [isDone, setOptimisticDone] = useOptimistic(effectiveStatus === "feito");
+  const [localOptimisticDone, setLocalOptimisticDone] = useOptimistic(effectiveStatus === "feito");
+  const isDone = onOptimisticComplete ? effectiveStatus === "feito" : localOptimisticDone;
   const [, startTransition] = useTransition();
   const [completeError, setCompleteError] = useState<string | null>(null);
   const isNotDone = effectiveStatus === "nao_realizado";
@@ -276,7 +315,11 @@ export function TaskRow({
   function handleComplete() {
     setCompleteError(null);
     startTransition(async () => {
-      setOptimisticDone(true);
+      if (onOptimisticComplete) {
+        onOptimisticComplete();
+      } else {
+        setLocalOptimisticDone(true);
+      }
       try {
         await completeTaskAction(task.id, clientId);
       } catch (error) {
@@ -346,7 +389,13 @@ export function TaskRow({
           )}
         </span>
 
-        <TaskRowMenu taskId={task.id} clientId={clientId} detailsHref={detailsHref} isAdmin={isAdmin ?? false} />
+        <TaskRowMenu
+          taskId={task.id}
+          clientId={clientId}
+          detailsHref={detailsHref}
+          isAdmin={isAdmin ?? false}
+          onOptimisticDelete={onOptimisticDelete}
+        />
       </div>
       {completeError && <p className="mt-0.5 pl-[26px] text-[11px] text-red-600 dark:text-red-400">{completeError}</p>}
     </li>

@@ -47,6 +47,7 @@ import {
 import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
 import { ROW_GRID_CLASSES } from "./row-grid";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
+import { SprintsContextMemory } from "./context-memory-client";
 
 type SprintsView = "current" | "monthly";
 type MonthlyGrouping = "consolidated" | "sprints";
@@ -633,6 +634,19 @@ export default async function SprintsPage({
   return (
     <div className="mx-auto max-w-6xl px-6 py-4">
       <ScrollRestoreOnMount />
+      <SprintsContextMemory
+        view={view}
+        grouping={view === "monthly" ? grouping : undefined}
+        month={view === "monthly" ? params.month : undefined}
+        manager={managerFilter}
+        health={healthFilter}
+        ritmo={ritmoFilter}
+        tasks={tasksFilter}
+        optimization={optimizationFilter}
+        activity={activityFilter}
+        display={displayFilter}
+        client={clientFilter}
+      />
 
       {/* Linha 1 — só os controles, alinhados à direita (Etapa "Sprint
           Workspace Polish 2.0", Parte 5): título "Sprints" e subtítulo

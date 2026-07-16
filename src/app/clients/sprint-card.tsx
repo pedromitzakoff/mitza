@@ -444,6 +444,18 @@ export function SprintCardBody({
   const editToggleId = `edit-performance-${sprint.sprintId}`;
   const isManualSource = sprint.spendSource === "manual";
 
+  // Etapa "Instant Action & Context Memory 1.0": `SprintTaskList` virou
+  // Client Component (precisa de `useOptimistic` pra contador/progresso
+  // reagirem junto com o check da linha — Parte 2/5). Uma função não pode
+  // atravessar a fronteira servidor→cliente como prop, então em vez de
+  // repassar `buildTaskHref` (closure) pra ela, calculamos aqui — ainda no
+  // servidor — o PREFIXO de string equivalente (chamando a própria função
+  // com `taskId=""`, já que as duas fórmulas existentes hoje só concatenam
+  // o id no final) e passamos só essa string, serializável. Nenhuma URL
+  // gerada muda — é o mesmo destino de sempre, só a forma de entregar o
+  // dado pra um Client Component é que precisou mudar.
+  const taskHrefPrefix = buildTaskHref ? buildTaskHref("") : `/clients/${clientId}?task=`;
+
   // Etapa "Sprint Workspace MVP Finalization 2.0" (Parte 10): "Próxima
   // ação" só na sprint atual — é o ponto onde o gestor de fato começa o dia
   // (fluxo "cliente → contexto atual → próxima ação → execução" do pedido).
@@ -573,7 +585,7 @@ export function SprintCardBody({
               tasks={tasks}
               clientId={clientId}
               sprintId={sprint.sprintId}
-              buildTaskHref={buildTaskHref}
+              taskHrefPrefix={taskHrefPrefix}
               managers={taskManagers}
               returnTo={taskManagers ? returnTo : undefined}
               isAdmin={isAdmin}
@@ -721,6 +733,16 @@ export function SprintCard({
   return (
     <details
       id={`sprint-${sprint.sprintId}`}
+      // Etapa "Instant Action & Context Memory 1.0" (Parte 9): continua
+      // `open={isOpen}`, não uma prop "default" — React não existe pra
+      // `<details>` (só `value`/`checked` têm essa dualidade controlada/
+      // não-controlada). Isso continua seguro porque o React só reaplica
+      // um atributo quando o VALOR da prop muda entre renders; `isOpen`
+      // (derivado de `sprint.temporalStatus`, estável durante a sessão)
+      // não muda sozinho entre revalidações, então nem o toggle manual do
+      // usuário nem a restauração de contexto via DOM
+      // (`SprintsContextMemory`) são desfeitos pelas novas ações otimistas
+      // que chamam `revalidatePath`.
       open={isOpen}
       className={
         flat
