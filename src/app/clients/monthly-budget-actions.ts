@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import { todayDateString } from "@/lib/today";
 import { monthRangeFromParam } from "@/lib/sprint-financials";
 import { resolveBudgetEffectiveDate, CLOSED_MONTH_MESSAGE } from "@/lib/monthly-budget";
+import { toUserFacingError } from "@/lib/user-facing-error";
 
 /**
  * Aplica uma alteração de orçamento mensal — toda a redistribuição roda numa
@@ -52,7 +53,7 @@ export async function applyMonthlyBudgetChangeAction(
   });
 
   if (error) {
-    return { error: error.message };
+    return { error: toUserFacingError(error, "Não foi possível aplicar a mudança de orçamento.") };
   }
 
   // O orçamento mensal alimenta a distribuição das sprints (planned_spend),

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
+import { toUserFacingError } from "@/lib/user-facing-error";
 
 /** Volta a sprint pra origem "meta_api" — o gasto real exibido passa a ser
  * de novo a soma de daily_spend. Não apaga o valor manual salvo (fica
@@ -21,7 +22,7 @@ export async function resetSprintSpendSourceAction(sprintId: string, clientId: s
   const { error } = await supabase.from("sprints").update({ spend_source: "meta_api" }).eq("id", sprintId);
 
   if (error) {
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(error.message)}`);
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(toUserFacingError(error, "Não foi possível reverter a origem do gasto."))}`);
   }
 
   // Platform Continuity System 1.0: sem redirect no sucesso — `returnTo`

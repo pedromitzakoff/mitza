@@ -74,7 +74,7 @@ export async function updateSprintPerformanceAction(
     .eq("id", sprintId);
 
   if (spendError) {
-    redirect(withError(returnTo, spendError.message));
+    redirect(withError(returnTo, toUserFacingError(spendError, "Não foi possível salvar o investimento.")));
   }
 
   if (channelEntries.length > 0) {
@@ -100,7 +100,7 @@ export async function updateSprintPerformanceAction(
     );
 
     if (perfError) {
-      redirect(withError(returnTo, perfError.message));
+      redirect(withError(returnTo, toUserFacingError(perfError, "Não foi possível salvar os resultados.")));
     }
   }
 

@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/auth";
 import { normalizeCnpj } from "@/lib/cnpj";
 import { OperationalEventType } from "@/lib/operational-events";
 import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
+import { toUserFacingError } from "@/lib/user-facing-error";
 import type { ClientContractStatus, ClientMainObjective, PerformanceGoalDb } from "@/lib/supabase/database.types";
 
 function optionalText(formData: FormData, name: string): string | null {
@@ -197,7 +198,7 @@ export async function updateClientAction(clientId: string, returnTo: string, for
     .eq("id", clientId);
 
   if (error) {
-    redirect(`/clients/${clientId}/edit?error=${encodeURIComponent(error.message)}`);
+    redirect(`/clients/${clientId}/edit?error=${encodeURIComponent(toUserFacingError(error, "Não foi possível salvar as alterações do cliente."))}`);
   }
 
   await supabase.from("client_managers").delete().eq("client_id", clientId);
@@ -255,7 +256,7 @@ export async function deleteClientAction(clientId: string) {
     .eq("id", clientId);
 
   if (error) {
-    redirect(`/clients/${clientId}/edit?error=${encodeURIComponent(error.message)}`);
+    redirect(`/clients/${clientId}/edit?error=${encodeURIComponent(toUserFacingError(error, "Não foi possível excluir o cliente."))}`);
   }
 
   revalidatePath("/");

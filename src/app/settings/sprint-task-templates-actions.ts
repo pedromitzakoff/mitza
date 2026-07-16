@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
+import { toUserFacingError } from "@/lib/user-facing-error";
 import { TASK_TYPE_DEFAULT_TITLE } from "@/app/clients/task-labels";
 import type { TaskType, Weekday } from "@/lib/supabase/database.types";
 
@@ -61,7 +62,7 @@ export async function createGlobalTemplateAction(formData: FormData) {
     .single();
 
   if (error || !data) {
-    redirect(`${BASE_PATH}?templateError=${encodeURIComponent(error?.message ?? "Erro ao criar")}`);
+    redirect(`${BASE_PATH}?templateError=${encodeURIComponent(toUserFacingError(error, "Não foi possível criar o template."))}`);
   }
 
   await replaceTemplateClients(supabase, data.id, appliesToAll, clientIds);
@@ -87,7 +88,7 @@ export async function updateGlobalTemplateAction(templateId: string, formData: F
     .eq("id", templateId);
 
   if (error) {
-    redirect(`${BASE_PATH}?templateError=${encodeURIComponent(error.message)}`);
+    redirect(`${BASE_PATH}?templateError=${encodeURIComponent(toUserFacingError(error, "Não foi possível salvar o template."))}`);
   }
 
   await replaceTemplateClients(supabase, templateId, appliesToAll, clientIds);
@@ -140,7 +141,7 @@ export async function runBackfillAction(): Promise<{ error?: string }> {
   const { error } = await supabase.rpc("backfill_sprint_tasks_from_templates");
 
   if (error) {
-    return { error: error.message };
+    return { error: toUserFacingError(error, "Não foi possível aplicar os templates às sprints existentes.") };
   }
 
   revalidatePath(BASE_PATH);
