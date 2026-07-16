@@ -238,10 +238,10 @@ export default async function ReportsPage({
           <thead>
             <tr className="border-b border-border bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-muted-foreground dark:bg-zinc-900">
               <th className="py-2 px-3">Cliente</th>
-              <th className="py-2 px-3">Gestor</th>
               <th className="py-2 px-3 text-right">Investimento</th>
               <th className="py-2 px-3 text-right">% realizado</th>
               <th className="py-2 px-3">Situação do mês</th>
+              <th className="py-2 px-3">Gestor</th>
               <th className="py-2 px-3">Status do relatório</th>
               <th className="py-2 px-3 text-right">Ação</th>
             </tr>
@@ -254,9 +254,6 @@ export default async function ReportsPage({
                 return (
                   <tr key={card.clientId} className="border-b border-border/60 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
                     <td className="py-2 px-3 font-bold text-foreground">{card.clientName}</td>
-                    <td className="py-2 px-3 text-muted-foreground">
-                      {primaryManagerNameByClient.get(card.clientId) ?? "Sem gestor"}
-                    </td>
                     <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
                       {formatCurrency(card.monthActual)} / {formatCurrency(card.monthPlanned)}
                     </td>
@@ -265,6 +262,9 @@ export default async function ReportsPage({
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[card.monthStatus]}`}>
                         {SITUATION_LABEL[card.monthStatus]}
                       </span>
+                    </td>
+                    <td className="py-2 px-3 text-muted-foreground">
+                      {primaryManagerNameByClient.get(card.clientId) ?? "Sem gestor"}
                     </td>
                     <td className="py-2 px-3">
                       <span

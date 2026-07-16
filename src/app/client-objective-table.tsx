@@ -92,13 +92,13 @@ export function ClientObjectiveTable({
           <thead>
             <tr className="border-b border-overview-border bg-overview-surface-subtle text-left text-[12px] font-semibold text-overview-text-secondary">
               <th className="py-2 px-3.5 font-semibold">Cliente</th>
+              <th className="py-2 px-3.5 text-right font-semibold">Investimento</th>
+              <th className="py-2 px-3.5 font-semibold">Ritmo financeiro</th>
               <th className="py-2 px-3.5 font-semibold">Gestor</th>
               <th className="py-2 px-3.5 font-semibold">Plataforma</th>
-              <th className="py-2 px-3.5 text-right font-semibold">Investimento</th>
               {goalConfig && <th className="py-2 px-3.5 font-semibold">{goalConfig.resultMetricLabel}</th>}
               {goalConfig && <th className="py-2 px-3.5 text-right font-semibold">{goalConfig.costMetricShortLabel}</th>}
               {goalConfig && <th className="py-2 px-3.5 text-right font-semibold">Meta de {goalConfig.costMetricShortLabel}</th>}
-              <th className="py-2 px-3.5 font-semibold">Ritmo financeiro</th>
               <th className="py-2 px-3.5 font-semibold">Sprint atual</th>
               <th className="py-2 px-3.5 text-right font-semibold">Abrir cliente</th>
             </tr>
@@ -128,14 +128,7 @@ export function ClientObjectiveTable({
                   className="border-b border-overview-border/70 transition-colors duration-150 last:border-0 hover:bg-overview-surface-hover"
                 >
                   <td className="py-2.5 px-3.5 font-semibold text-overview-text-primary">{card.clientName}</td>
-                  <td className="py-2.5 px-3.5 text-overview-text-secondary">
-                    {primaryManagerNameByClient.get(card.clientId) ?? "Sem gestor"}
-                  </td>
-                  <td className="py-2.5 px-3.5 text-overview-text-secondary">{formatClientPlatforms(card)}</td>
                   <td className="py-2.5 px-3.5 text-right font-semibold tabular-nums text-overview-text-primary">{formatCurrency(investmentValue)}</td>
-                  {goalConfig && <td className="py-2.5 px-3.5 text-overview-text-secondary">{resultText}</td>}
-                  {goalConfig && <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">{costText}</td>}
-                  {goalConfig && <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">{targetText}</td>}
                   <td className="py-2.5 px-3.5">
                     {isConsolidado ? (
                       <StatusDot tone={SITUATION_TONE[card.monthStatus]} label={SITUATION_LABEL[card.monthStatus]} />
@@ -143,6 +136,13 @@ export function ClientObjectiveTable({
                       <span className="text-overview-text-muted">—</span>
                     )}
                   </td>
+                  <td className="py-2.5 px-3.5 text-overview-text-secondary">
+                    {primaryManagerNameByClient.get(card.clientId) ?? "Sem gestor"}
+                  </td>
+                  <td className="py-2.5 px-3.5 text-overview-text-secondary">{formatClientPlatforms(card)}</td>
+                  {goalConfig && <td className="py-2.5 px-3.5 text-overview-text-secondary">{resultText}</td>}
+                  {goalConfig && <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">{costText}</td>}
+                  {goalConfig && <td className="py-2.5 px-3.5 text-right tabular-nums text-overview-text-secondary">{targetText}</td>}
                   <td className="py-2.5 px-3.5 text-overview-text-secondary">{card.sprintPeriodLabel ?? "—"}</td>
                   <td className="py-2.5 px-3.5 text-right">
                     <Button href={`/clients/${card.clientId}`} variant="ghost" size="sm">

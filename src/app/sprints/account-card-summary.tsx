@@ -50,26 +50,36 @@ const OPERATIONAL_TONE_CLASSES = {
  * Sprint UX 2.0 Fase 3 (aproximação de UX/densidade a partir de uma
  * referência visual): a linha deixou de ser texto corrido com "·" entre os
  * itens (frase) e virou colunas de verdade (`ROW_GRID_CLASSES`, compartilhado
- * com a linha da sprint em `sprint-card.tsx`) — Cliente/Gestor, Período,
- * Investimento, Tarefas, Otimizações e Status sempre na mesma posição
- * horizontal, em qualquer linha da lista. Isso permite "leitura vertical":
- * bater o olho numa coluna (ex.: Status) e escanear todos os clientes de
- * uma vez, sem depender de quanto texto cada linha tem. A célula de
- * Investimento passou a mostrar Realizado/Planejado em R$ (antes só o %) —
- * cabe numa coluna estreita sem virar "diferença em reais" (não é um delta,
- * são os dois valores brutos, a mesma informação que já existia em % só que
- * também em R$).
+ * com a linha da sprint em `sprint-card.tsx`) — Cliente/Gestor, Investimento,
+ * Status, Tarefas e Otimizações sempre na mesma posição horizontal, em
+ * qualquer linha da lista. Isso permite "leitura vertical": bater o olho numa
+ * coluna (ex.: Status) e escanear todos os clientes de uma vez, sem depender
+ * de quanto texto cada linha tem. A célula de Investimento passou a mostrar
+ * Realizado/Planejado em R$ (antes só o %) — cabe numa coluna estreita sem
+ * virar "diferença em reais" (não é um delta, são os dois valores brutos, a
+ * mesma informação que já existia em % só que também em R$).
  *
  * Etapa "Sprint Workspace Density 1.0": padding do cabeçalho reduzido
  * (`px-2.5 py-1.5` → `px-2 py-1`) — mesma área de clique (o `<summary>`
  * continua ocupando a linha inteira), só menos espaço morto ao redor do
  * conteúdo.
+ *
+ * MITZA Operational Tables 1.0 (Information Architecture): a coluna
+ * "Período" saiu da linha fechada — nas visões Mensais era o mesmo mês
+ * repetido em toda linha (informação já visível no contexto da tela: aba
+ * ativa + navegador de mês); na Sprint atual é uma data secundária sem valor
+ * decisório na leitura de 3 segundos. Ordem das colunas restantes agora
+ * segue o padrão fixo da plataforma: Cliente → Investimento → Status →
+ * Tarefas → Otimizações (Status subiu de última para logo depois de
+ * Investimento). O período de cada sprint continua existindo — só não mais
+ * como coluna própria da linha fechada; ver `sprint-card.tsx` (modo `flat`),
+ * onde ele volta a aparecer no lugar de "Cliente/Gestor" (vazio ali), porque
+ * é a única lista onde o período de fato diferencia elementos entre si.
  */
 export function AccountCardSummary({
   clientId,
   clientName,
   managerName,
-  periodLabel,
   summary,
   operational,
   tasksDone,
@@ -79,7 +89,6 @@ export function AccountCardSummary({
   clientId: string;
   clientName: string;
   managerName: string | null;
-  periodLabel: string;
   summary: FinancialPeriodSummary;
   operational: OperationalSummary;
   /** Etapa 68, seção 16 — mantido por compatibilidade de chamada; não é
@@ -119,7 +128,6 @@ export function AccountCardSummary({
             {clientName}
           </Link>
           {managerName && <span className="text-muted-foreground">· {managerName}</span>}
-          <span className="text-muted-foreground">{periodLabel}</span>
           {investedPct !== null ? (
             <>
               <span className="tabular-nums text-muted-foreground">{investedPct}% investido</span>
@@ -176,8 +184,6 @@ export function AccountCardSummary({
             </p>
           </div>
 
-          <span className="truncate text-xs text-muted-foreground">{periodLabel}</span>
-
           <div className="min-w-0">
             {investedPct !== null ? (
               <>
@@ -195,6 +201,8 @@ export function AccountCardSummary({
             )}
           </div>
 
+          <div className="min-w-0">{statusBadge}</div>
+
           <span className="truncate text-xs tabular-nums text-muted-foreground">
             {tasksTotal !== undefined ? (tasksTotal === 0 ? "—" : `${tasksDone ?? 0}/${tasksTotal}`) : ""}
           </span>
@@ -202,8 +210,6 @@ export function AccountCardSummary({
           <span className="truncate text-xs tabular-nums text-muted-foreground">
             {optimizationCount !== undefined ? (optimizationCount === 0 ? "—" : optimizationCount) : ""}
           </span>
-
-          <div className="min-w-0">{statusBadge}</div>
         </div>
 
         {operational.tone !== "neutral" && (

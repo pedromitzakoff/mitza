@@ -65,7 +65,6 @@ export function SprintCurrentClientGroup({
         clientId={card.clientId}
         clientName={card.clientName}
         managerName={primaryManagerName}
-        periodLabel={summary.label}
         summary={summary}
         operational={operational}
         tasksDone={tasksDone}

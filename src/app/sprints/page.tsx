@@ -750,11 +750,10 @@ export default async function SprintsPage({
           >
             <span />
             <span>Cliente / Gestor</span>
-            <span>Período</span>
             <span>Investimento</span>
+            <span>Status</span>
             <span>Tarefas</span>
             <span>Otimiz.</span>
-            <span>Status</span>
           </div>
         </div>
       )}

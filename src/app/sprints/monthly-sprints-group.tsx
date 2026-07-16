@@ -68,7 +68,6 @@ export function SprintMonthlyBySprintsGroup({
         clientId={card.clientId}
         clientName={card.clientName}
         managerName={primaryManagerName}
-        periodLabel={monthLabel}
         summary={summary}
         operational={operational}
         monthTemporalStatus={monthTemporalStatus}

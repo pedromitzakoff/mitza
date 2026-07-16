@@ -11,9 +11,18 @@
  * nível tivesse sua própria largura de coluna, a leitura horizontal (bater o
  * olho na coluna "Status" e ver todo mundo alinhado, por exemplo) se perde.
  *
- * Ordem das colunas: caret · Cliente/Gestor (vazio na linha da sprint,
- * fica só a indentação) · Período · Investimento (realizado/planejado + %
- * + barra) · Tarefas (concluídas/total) · Otimizações · Status.
+ * Ordem das colunas (MITZA Operational Tables 1.0 — mesma ordem em toda a
+ * plataforma, nunca muda de posição entre telas): caret · Cliente/Gestor ·
+ * Investimento (realizado/planejado + % + barra) · Status · Tarefas
+ * (concluídas/total) · Otimizações.
+ *
+ * O "Período" deixou de ser coluna própria: era informação global repetida
+ * em toda linha (o mês inteiro, idêntico em cada card, nas visões Mensais)
+ * ou uma data secundária sem valor decisório (Sprint atual). A 1ª coluna
+ * (Cliente/Gestor) é reaproveitada pela linha filha da sprint (`SprintCard`
+ * modo `flat`, único lugar onde o período de fato diferencia elementos da
+ * lista — cada sprint do mês tem sua própria janela) pra mostrar a data
+ * daquela sprint específica, no lugar que ficaria vazio (só indentação).
  */
 export const ROW_GRID_CLASSES =
-  "hidden sm:grid sm:grid-cols-[16px_minmax(0,1.4fr)_84px_minmax(0,1.3fr)_84px_76px_104px] sm:items-center sm:gap-x-2.5";
+  "hidden sm:grid sm:grid-cols-[16px_minmax(0,1.5fr)_minmax(0,1.3fr)_104px_76px_84px] sm:items-center sm:gap-x-2.5";
