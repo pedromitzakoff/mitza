@@ -412,6 +412,7 @@ export function SprintCardBody({
   metaSyncedAt,
   performance,
   returnTo,
+  taskManagers,
   hideNextAction,
 }: {
   sprint: SprintFinancials;
@@ -445,6 +446,10 @@ export function SprintCardBody({
   /** Dados de performance desta sprint (Etapa 71) — opcional, mesmo padrão
    * de `accountReviews`. */
   performance?: SprintPerformanceProps;
+  /** MITZA Unified Activities — Task Inline Editing: gestores ativos,
+   * repassados pra `ActivitySection` (select de responsável na expansão
+   * inline de cada linha de tarefa). */
+  taskManagers?: { id: string; name: string }[];
   /** Etapa "MITZA Operational Workspace 1.0" — a página do cliente promoveu
    * "Próxima ação" da sprint atual pro topo da página (`SprintFocusBar`,
    * primeiro conteúdo operacional, antes de qualquer scroll), então passa
@@ -590,6 +595,7 @@ export function SprintCardBody({
             clientId={clientId}
             sprintId={sprint.sprintId}
             taskHrefPrefix={taskHrefPrefix}
+            managers={taskManagers}
             isAdmin={isAdmin}
             reviews={accountReviews}
             reviewHrefPrefix={reviewHrefPrefix}
@@ -713,6 +719,7 @@ export function SprintCard({
   metaSyncedAt,
   performance,
   returnTo,
+  taskManagers,
   flat,
   accordionRowsPrototype,
   hideNextAction,
@@ -736,6 +743,9 @@ export function SprintCard({
   /** Pra onde voltar depois de salvar investimento/performance (Etapa MVP
    * 1.3) — ver doc de `SprintCardBody`. */
   returnTo: string;
+  /** MITZA Unified Activities — Task Inline Editing: ver doc de
+   * `SprintCardBody`. */
+  taskManagers?: { id: string; name: string }[];
   /** Interaction Physics 1.0 — protótipo ISOLADO da técnica
    * `grid-template-rows: 0fr → 1fr` (ver `.mitza-accordion-rows` em
    * globals.css). Opt-in, nunca default: só o chamador que está testando o
@@ -930,6 +940,7 @@ export function SprintCard({
               buildReviewDetailHref={buildReviewDetailHref}
               manualSpendUpdatedAt={manualSpendUpdatedAt}
               metaSyncedAt={metaSyncedAt}
+              taskManagers={taskManagers}
               performance={performance}
               returnTo={returnTo}
               hideNextAction={hideNextAction}
@@ -952,6 +963,7 @@ export function SprintCard({
           buildReviewDetailHref={buildReviewDetailHref}
           manualSpendUpdatedAt={manualSpendUpdatedAt}
           metaSyncedAt={metaSyncedAt}
+          taskManagers={taskManagers}
           performance={performance}
           returnTo={returnTo}
           hideNextAction={hideNextAction}

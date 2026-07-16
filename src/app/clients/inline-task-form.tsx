@@ -241,6 +241,9 @@ export function InlineEditTaskForm({
   defaultDueDate,
   defaultDueTime,
   defaultNotes,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger,
 }: {
   taskId: string;
   clientId: string;
@@ -254,8 +257,21 @@ export function InlineEditTaskForm({
    * valor real é preservado no servidor, nunca resetado (ver doc acima). */
   defaultDueTime?: string | null;
   defaultNotes?: string | null;
+  /** MITZA Unified Activities — Task Inline Editing: aberto/fechado
+   * controlado por quem chama (ex.: expansão de linha em `TaskRow`, onde
+   * só uma tarefa pode estar expandida por vez). Omitir preserva o
+   * comportamento de sempre — estado interno próprio (`TaskDrawerPanel`,
+   * que continua sem passar essas duas props). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Não renderiza o botão "Editar tarefa" quando fechado — usado quando
+   * quem chama já fornece seu próprio gatilho de abertura (a própria linha
+   * expansível em `TaskRow`). */
+  hideTrigger?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -295,6 +311,7 @@ export function InlineEditTaskForm({
   }
 
   if (!open) {
+    if (hideTrigger) return null;
     return (
       <button
         type="button"

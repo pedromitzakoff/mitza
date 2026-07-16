@@ -13,6 +13,7 @@ import { isRedirectSignal } from "@/lib/next-redirect";
 import { useToast } from "@/app/toast-provider";
 import type { TaskStatus, TaskType, TeamMemberStatus } from "@/lib/supabase/database.types";
 import { completeTaskAction, deleteTaskAction } from "./tasks-actions";
+import { InlineEditTaskForm, type InlineTaskManagerOption } from "./inline-task-form";
 
 const DELETE_CONFIRM_TIMEOUT_MS = 5000;
 
@@ -60,6 +61,7 @@ function TaskRowMenu({
   onDeleteStart,
   onDeleteError,
   waitForExit,
+  onToggleExpand,
 }: {
   taskId: string;
   taskTitle: string;
@@ -79,6 +81,12 @@ function TaskRowMenu({
    * `useRowExitAnimation` (`TaskRow`), repassado aqui pra `handleDelete`
    * esperar a transição CSS terminar antes de despachar a remoção real. */
   waitForExit: () => Promise<void>;
+  /** MITZA Unified Activities — Task Inline Editing: quando presente,
+   * "Ver detalhes" deixa de navegar pro drawer (`detailsHref`) e passa a
+   * expandir a própria linha (mesma superfície de "clicar na linha") — só
+   * a fila "Atividades" passa isto; outras listas de tarefa continuam
+   * abrindo o drawer de sempre. */
+  onToggleExpand?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -146,18 +154,32 @@ function TaskRowMenu({
         closeLabel="Fechar menu"
         className="w-44 -translate-x-full rounded-lg border border-border bg-card p-1 shadow-[var(--shadow-float)]"
       >
-        <Link
-          href={detailsHref}
-          scroll={false}
-          role="menuitem"
-          onClick={(event) => {
-            saveFocusForReturn(event.currentTarget);
-            closeMenu();
-          }}
-          className="mitza-pressable block rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
-        >
-          Ver detalhes
-        </Link>
+        {onToggleExpand ? (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              onToggleExpand();
+              closeMenu();
+            }}
+            className="mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+          >
+            Ver detalhes
+          </button>
+        ) : (
+          <Link
+            href={detailsHref}
+            scroll={false}
+            role="menuitem"
+            onClick={(event) => {
+              saveFocusForReturn(event.currentTarget);
+              closeMenu();
+            }}
+            className="mitza-pressable block rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+          >
+            Ver detalhes
+          </Link>
+        )}
 
         {isAdmin &&
           (confirming ? (
@@ -203,6 +225,12 @@ export interface TaskListItem {
   due_date: string;
   status: TaskStatus;
   assignee: { name: string; status: TeamMemberStatus } | null;
+  /** MITZA Unified Activities — Task Inline Editing: opcional porque nem
+   * todo consumidor de `TaskListItem` busca esta coluna (o tipo mínimo
+   * histórico da lista); `OperationTaskItem` (usado por Sprints/Cliente,
+   * que já busca `notes`) sempre carrega o valor real aqui — `undefined`
+   * só ocorre em consumidores que nunca precisaram desse campo. */
+  notes?: string | null;
 }
 
 const dueDateFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -277,6 +305,9 @@ export function TaskRow({
   onOptimisticComplete,
   onOptimisticDelete,
   typeLabel,
+  isExpanded,
+  onToggleExpand,
+  managers,
 }: {
   task: TaskListItem;
   clientId: string;
@@ -306,6 +337,17 @@ export function TaskRow({
    * exatamente como antes, sem o rótulo — usado pelas listas de tarefas
    * que não fazem parte da fila unificada (ex.: "Outras tarefas"). */
   typeLabel?: string;
+  /** MITZA Unified Activities — Task Inline Editing: quando presente
+   * (junto com `onToggleExpand`), clicar na linha (ou em "Ver detalhes")
+   * expande a própria linha em vez de abrir o drawer — responsável, data,
+   * tipo e notas passam a ser editados ali mesmo, sem sair da Sprint. Só
+   * a fila "Atividades" passa isto; quem não passa mantém o comportamento
+   * de sempre (`detailsHref` navega pro drawer). */
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
+  /** Gestores ativos — só usado quando a linha é expansível (assignee do
+   * formulário de edição inline). */
+  managers?: InlineTaskManagerOption[];
 }) {
   const effectiveStatus = effectiveTaskStatus(task);
   const [localOptimisticDone, setLocalOptimisticDone] = useOptimistic(effectiveStatus === "feito");
@@ -358,13 +400,23 @@ export function TaskRow({
     <li
       className={`relative flex min-h-[28px] items-center border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 mitza-row-exit ${isLeaving ? "mitza-row-exit-active" : ""}`}
     >
-      <Link
-        href={detailsHref}
-        scroll={false}
-        onClick={(event) => saveFocusForReturn(event.currentTarget)}
-        aria-label={task.title}
-        className="absolute inset-0 z-0"
-      />
+      {onToggleExpand ? (
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          aria-label={task.title}
+          aria-expanded={isExpanded}
+          className="absolute inset-0 z-0"
+        />
+      ) : (
+        <Link
+          href={detailsHref}
+          scroll={false}
+          onClick={(event) => saveFocusForReturn(event.currentTarget)}
+          aria-label={task.title}
+          className="absolute inset-0 z-0"
+        />
+      )}
       <div className={`flex items-center gap-2.5 transition-opacity duration-150 ${rowOpacityClass}`}>
         {isDone ? (
           <span className="mitza-check-in flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none text-green-700 dark:bg-green-950 dark:text-green-300">
@@ -434,9 +486,43 @@ export function TaskRow({
           onDeleteStart={startExit}
           onDeleteError={cancelExit}
           waitForExit={waitForExit}
+          onToggleExpand={onToggleExpand}
         />
       </div>
       {completeError && <p className="mt-0.5 pl-[26px] text-[11px] text-red-600 dark:text-red-400">{completeError}</p>}
+
+      {/* MITZA Unified Activities — Task Inline Editing: expansão da
+          própria linha (nunca um drawer) — reaproveita o MESMO
+          `InlineEditTaskForm`/`updateTaskInlineAction` que o drawer
+          sempre usou, só controlado externamente (`open`/`onOpenChange`)
+          pra que `ActivitySection` garanta uma única linha expandida por
+          vez. `defaultAssigneeId` resolvido por nome contra `managers`
+          — mesma limitação conhecida já aceita em `TaskDrawerPanel`
+          (o modelo de dados da lista nunca carregou o id do responsável,
+          só nome/status). `defaultDueTime` nunca é passado aqui (mesmo
+          padrão do drawer): o campo não aparece e o valor real nunca é
+          resetado. */}
+      {isExpanded && onToggleExpand && (
+        <div className="relative z-10 mt-1.5 border-t border-border pl-[26px] pt-1.5">
+          <InlineEditTaskForm
+            taskId={task.id}
+            clientId={clientId}
+            managers={managers ?? []}
+            defaultTitle={task.title}
+            defaultType={task.type}
+            defaultAssigneeId={
+              task.assignee ? ((managers ?? []).find((m) => m.name === task.assignee?.name)?.id ?? null) : null
+            }
+            defaultDueDate={task.due_date}
+            defaultNotes={task.notes ?? null}
+            open
+            onOpenChange={(open) => {
+              if (!open) onToggleExpand();
+            }}
+            hideTrigger
+          />
+        </div>
+      )}
     </li>
   );
 }

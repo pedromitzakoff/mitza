@@ -1,10 +1,21 @@
 # Unified Activities — Correção do Modelo de Criação
 
-Corrige um erro conceitual introduzido em "Unified Activities 1.0": a fila
-"Atividades" tratava criação de tarefa e registro de revisão como duas
-formas equivalentes de "adicionar uma atividade" (botões "+ Nova tarefa" e
-"+ Registrar revisão" lado a lado). A definição correta: **Atividades é
-uma camada de LEITURA/histórico, não uma entidade única de criação.**
+Corrige dois erros conceituais introduzidos em "Unified Activities 1.0".
+
+**Primeiro** (rodada 1 desta correção): a fila "Atividades" tratava criação
+de tarefa e registro de revisão como duas formas equivalentes de
+"adicionar uma atividade" (botões "+ Nova tarefa" e "+ Registrar revisão"
+lado a lado). A definição correta: **Atividades é uma camada de
+LEITURA/histórico, não uma entidade única de criação.**
+
+**Segundo** (rodada 2, esta revisão do relatório): a rodada 1 manteve a
+configuração posterior da tarefa (responsável/data/tipo/notas) no drawer
+lateral (`TaskDrawerPanel`) e classificou isso como decisão aceita/
+candidato de V2. Essa leitura estava errada — "configurar na mesma tela,
+sem abrir outra janela" é uma exigência central desta etapa, não
+opcional. Esta revisão substitui o drawer por uma **expansão inline da
+própria linha** dentro da fila de Atividades — ver "O que mudou (rodada
+2)" abaixo.
 
 ---
 
@@ -30,13 +41,18 @@ uma camada de LEITURA/histórico, não uma entidade única de criação.**
   (cria rápido, detalha depois) — não havia necessidade de construir uma
   segunda superfície de edição inline dentro da própria linha.
 
-**Decisão de menor risco**: criar um composer novo, pequeno e sem estado
-complexo (só título) que chama a MESMA Server Action de sempre; mover
-"+ Registrar revisão" para dentro de Performance sem tocar
-`RecordAccountReviewDrawer`/`recordAccountReviewAction`; continuar
-reaproveitando o drawer já existente para configuração posterior (em vez
-de construir uma expansão inline nova, que seria a única peça
-genuinamente nova de UI e o maior risco desta correção).
+**Decisão de menor risco (rodada 1)**: criar um composer novo, pequeno e
+sem estado complexo (só título) que chama a MESMA Server Action de
+sempre; mover "+ Registrar revisão" para dentro de Performance sem tocar
+`RecordAccountReviewDrawer`/`recordAccountReviewAction`.
+
+**Correção de rota (rodada 2)**: manter o drawer para configuração
+posterior contrariava a exigência central "mesma tela, sem abrir outra
+janela". A peça de menor risco pra corrigir isso não é um editor novo —
+é **reaproveitar o próprio `InlineEditTaskForm`** (já usado dentro do
+drawer) num modo controlado, renderizado dentro da linha em vez de dentro
+de um drawer. Nenhuma validação, Server Action ou campo novo; só o
+contêiner ao redor do formulário muda.
 
 ---
 
@@ -67,12 +83,46 @@ gestor abre essa seção — coerente com "revisão é registro ligado à
 análise da conta", que já vive ali). `RecordAccountReviewDrawer`/
 `recordAccountReviewAction` continuam exatamente os mesmos.
 
-### 4. Configuração posterior
-Nenhuma mudança — o drawer de tarefa (`TaskDrawerPanel`/
-`InlineEditTaskForm`), já reaproveitado por toda a plataforma, continua
-sendo o lugar onde responsável/data/tipo/notas são ajustados depois da
-criação rápida. Ver "Limitações" sobre a leitura literal de "sem abrir
-outra janela".
+### 4. Configuração posterior — expansão inline da linha (rodada 2)
+A versão original desta correção manteve o drawer de tarefa
+(`TaskDrawerPanel`) como lugar de configuração posterior, o que
+contrariava a exigência "configurados na mesma tela, sem abrir outra
+janela". Substituído por uma expansão inline da própria linha:
+
+- `src/app/clients/inline-task-form.tsx` — `InlineEditTaskForm` ganhou 3
+  props opcionais: `open` (estado controlado de fora), `onOpenChange`
+  (avisa o pai quando fecha) e `hideTrigger` (não renderiza o botão
+  "Editar tarefa" próprio, já que quem abre/fecha agora é a linha). Sem
+  essas props, o componente se comporta exatamente como antes
+  (`internalOpen` local) — nenhum chamador existente foi afetado.
+- `src/app/clients/task-row.tsx` — `TaskRow` ganhou `isExpanded`,
+  `onToggleExpand` e `managers`. Clicar na linha (área clicável inteira,
+  antes um `<Link>` pro drawer) ou em "Ver detalhes" no menu "•••" agora
+  chama `onToggleExpand` em vez de navegar. Quando `isExpanded` é
+  verdadeiro, a própria linha renderiza `InlineEditTaskForm` (controlado,
+  `hideTrigger`) abaixo do conteúdo da linha, com os MESMOS defaults que o
+  drawer já calculava (`defaultAssigneeId` resolvido por nome — limitação
+  pré-existente e documentada, não nova; `defaultDueTime` omitido pelo
+  mesmo motivo de sempre).
+- `src/app/clients/activity-section.tsx` — `expandedTaskId` (estado no
+  componente pai) garante que só uma linha fica expandida por vez em toda
+  a fila de Atividades; fechar uma linha ou expandir outra usa o mesmo
+  `onToggleExpand`.
+- Salvar chama `updateTaskInlineAction` (a MESMA Server Action de sempre);
+  sucesso ou fechar a expansão nunca navegam pra outra página — o usuário
+  permanece na Sprint o tempo todo. A conclusão de tarefa continua sem
+  alterar posição (regra pré-existente, intocada). Optimistic UI e
+  tratamento de erro do `InlineEditTaskForm` são exatamente os mesmos já
+  usados pelo drawer.
+- `taskManagers`/`managers` — removido na rodada 1 (item 5, abaixo) por
+  ter ficado sem uso; voltou a ser passado por `SprintCard` →
+  `SprintCardBody` → `ActivitySection` → `TaskRow`, agora alimentando o
+  select de responsável da expansão inline (motivo diferente do original,
+  mesmo dado).
+- **O drawer antigo (`TaskDrawerPanel`) continua existindo** — ainda é
+  usado por outros fluxos que não passaram por esta correção (ex.: "Abrir
+  tarefa" a partir de "Próxima ação" em `SprintCardBody`), mas deixou de
+  ser o caminho de configuração dentro da fila de Atividades.
 
 ### 5. Limpeza de prop morta
 `taskManagers`/`managers` era passado por `SprintCard`/`SprintCardBody` só
@@ -107,9 +157,13 @@ de uma abordagem já substituída.
 ## Resultado
 
 Na seção Atividades: sem botões "+ Nova tarefa"/"+ Registrar revisão"
-lado a lado; existe o composer inline; Enter cria; nenhuma janela abre; a
-atividade aparece imediatamente (otimista); configurações continuam
-disponíveis depois, no drawer oficial da tarefa.
+lado a lado; existe o composer inline; Enter cria só com título; a
+atividade aparece imediatamente (otimista); clicar na linha (ou "Ver
+detalhes" no "•••") expande a própria linha, onde responsável, data, tipo
+e demais propriedades são editados; salvar ou fechar a expansão nunca
+abre drawer, modal ou outra página — o usuário permanece na Sprint;
+apenas uma linha fica expandida por vez; a conclusão de tarefa não altera
+a posição.
 
 Na seção Performance: existe "+ Registrar revisão"; revisões registradas
 continuam aparecendo na fila de Atividades pelo mesmo adapter de sempre.
@@ -117,37 +171,47 @@ continuam aparecendo na fila de Atividades pelo mesmo adapter de sempre.
 ## Arquivos alterados
 
 - **Novo:** `src/app/clients/activity-composer.tsx`.
-- **Modificados:** `src/app/clients/activity-section.tsx` (remove os 2
-  CTAs, adiciona o composer), `src/app/clients/sprint-card.tsx`
-  (`SprintPerformanceSection` ganha `newReviewHref`/CTA; remove
-  `taskManagers` morto de `SprintCard`/`SprintCardBody`),
-  `src/app/clients/inline-task-form.tsx` (reverte `triggerLabel`, sem
-  chamador), `src/app/sprints/current-client-group.tsx`,
-  `src/app/sprints/monthly-sprints-group.tsx`, `src/app/sprints/page.tsx`,
-  `src/app/clients/[id]/page.tsx` (removem a prop `managers`/`taskManagers`
-  agora morta, sem tocar o restante do uso de `gestores`/`managers` nesses
-  arquivos).
+- **Modificados:**
+  - `src/app/clients/activity-section.tsx` — remove os 2 CTAs, adiciona o
+    composer (rodada 1); adiciona `expandedTaskId` e repassa
+    `managers`/`isExpanded`/`onToggleExpand` pra `TaskRow` (rodada 2).
+  - `src/app/clients/task-row.tsx` — adiciona `notes` a `TaskListItem`;
+    `TaskRow`/`TaskRowMenu` ganham expansão inline reaproveitando
+    `InlineEditTaskForm` (rodada 2).
+  - `src/app/clients/inline-task-form.tsx` — reverte `triggerLabel` sem
+    chamador (rodada 1); `InlineEditTaskForm` ganha modo controlado
+    (`open`/`onOpenChange`/`hideTrigger`) pra ser usado dentro da linha
+    (rodada 2).
+  - `src/app/clients/sprint-card.tsx` — `SprintPerformanceSection` ganha
+    `newReviewHref`/CTA (rodada 1); remove e depois re-adiciona
+    `taskManagers` em `SprintCard`/`SprintCardBody`, agora alimentando a
+    expansão inline em vez do formulário de criação removido (rodada 1 e
+    2).
+  - `src/app/sprints/current-client-group.tsx`,
+    `src/app/sprints/monthly-sprints-group.tsx`, `src/app/sprints/page.tsx`,
+    `src/app/clients/[id]/page.tsx` — mesma remoção/re-adição de
+    `managers`/`taskManagers` (rodada 1 e 2), sem tocar o restante do uso
+    de `gestores`/`managers` nesses arquivos.
 
 ## Decisões e limitações
 
-- **"Não abrir outra janela" (Parte 2) — leitura adotada**: interpretei
-  isso como aplicável à CRIAÇÃO inicial (Parte 1, onde é explícito e
-  taxativo). Para configuração POSTERIOR, mantive o drawer de tarefa já
-  existente (`TaskDrawerPanel`) em vez de construir uma expansão inline
-  nova dentro da própria linha — não existe hoje nenhum precedente desse
-  padrão na plataforma, e criar um do zero seria a peça de maior risco
-  desta correção, contrariando a própria orientação final do pedido
-  ("audite... componentes de edição [existentes], para propor a alteração
-  de menor risco"). Registrado como candidato de V2 caso o produto valide
-  que o drawer não é suficiente.
+- **Comentários ficam inacessíveis a partir da fila de Atividades**: o
+  drawer de tarefa também mostrava a thread de comentários da tarefa; a
+  expansão inline não tem essa seção (o pedido desta correção lista
+  explicitamente "responsável, data, tipo e demais propriedades", não
+  comentários). Quem precisar comentar numa tarefa ainda pode fazê-lo por
+  outro fluxo que abra o drawer (ex. "Próxima ação → Abrir tarefa"). Essa
+  é uma limitação real e mais estreita do que a antiga classificação de
+  "V2" — não é um adiamento de escopo, é um recorte explícito do que foi
+  pedido.
+- `TaskDrawerPanel` continua existindo e sendo usado por fluxos fora da
+  fila de Atividades (não removido, não deprecado).
 - Nenhuma tabela, Server Action ou regra de recorrência/conclusão/
-  permissão foi alterada.
+  permissão foi alterada em nenhuma das duas rodadas.
 - Sem suíte de testes automatizada no repositório.
 
-## Validação técnica
+## Validação técnica (rodada 2)
 
 - `npx tsc --noEmit`: limpo.
-- `npx eslint`: limpo (o aviso `taskManagers` unused, que apareceu durante
-  o desenvolvimento, foi resolvido removendo a prop morta em cascata, não
-  suprimido).
-- `npm run build`: limpo, todas as rotas geradas normalmente.
+- `npx eslint` nos arquivos alterados: limpo.
+- `npm run build`: limpo, todas as 20 rotas geradas normalmente.

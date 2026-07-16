@@ -770,6 +770,7 @@ export default async function SprintsPage({
                 isAdmin={isAdmin}
                 comments={card.sprint ? sprintCommentsById.get(card.sprint.sprintId) ?? [] : []}
                 accountReviews={card.sprint ? accountReviewsBySprintId.get(card.sprint.sprintId) ?? [] : []}
+                managers={gestores ?? []}
               />
             ))
           ) : grouping === "consolidated" ? (
@@ -799,6 +800,7 @@ export default async function SprintsPage({
                 sprintCommentsById={sprintCommentsById}
                 accountReviewsBySprintId={accountReviewsBySprintId}
                 monthTemporalStatus={monthTemporalStatus}
+                managers={gestores ?? []}
               />
             ))
           )

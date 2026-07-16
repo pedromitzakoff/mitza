@@ -26,6 +26,7 @@ export function SprintCurrentClientGroup({
   isAdmin,
   comments,
   accountReviews,
+  managers,
 }: {
   card: OperationClientCardData;
   returnTo: string;
@@ -35,6 +36,9 @@ export function SprintCurrentClientGroup({
   /** Otimizações (account_reviews) da sprint atual deste cliente — Sprint UX
    * 2.0. Vazio por padrão pra quem ainda não busca a query nova. */
   accountReviews?: AccountReviewSummaryItem[];
+  /** Gestores ativos — ver doc de `SprintCardBody` (expansão inline de
+   * tarefa dentro de Atividades). */
+  managers?: { id: string; name: string }[];
 }) {
   if (!card.sprint) {
     return (
@@ -79,6 +83,7 @@ export function SprintCurrentClientGroup({
         executionSeverity={card.sprintExecutionInfo?.severity ?? null}
         buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
         metaSyncedAt={card.lastSyncedAt}
+        taskManagers={managers}
         performance={buildSprintPerformanceProps(card, card.sprint.sprintId)}
         returnTo={returnTo}
         accountReviews={reviews}

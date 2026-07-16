@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { EmptyStateRow } from "@/components/ui/empty-state";
 import { SectionHeader } from "@/components/ui/section-header";
 import { effectiveTaskStatus } from "@/lib/task-status";
@@ -7,6 +8,7 @@ import { useOptimisticTasks } from "@/lib/optimistic-tasks";
 import { buildActivityFeed } from "./activity";
 import { TaskRow, type TaskListItem } from "./task-row";
 import { ActivityComposer } from "./activity-composer";
+import type { InlineTaskManagerOption } from "./inline-task-form";
 import { AccountReviewRow, type AccountReviewSummaryItem } from "./account-reviews-section";
 
 /**
@@ -32,12 +34,22 @@ import { AccountReviewRow, type AccountReviewSummaryItem } from "./account-revie
  *   à análise da conta, não um item de trabalho rápido.
  * Ambas continuam aparecendo juntas nesta mesma fila depois de criadas —
  * só o CAMINHO de criação é diferente, nunca a leitura.
+ *
+ * MITZA Unified Activities — Task Inline Editing: configuração posterior
+ * (responsável/data/tipo/notas) acontece na PRÓPRIA linha, nunca num
+ * drawer — clicar na linha (ou "Ver detalhes" no "•••") expande a tarefa
+ * em vez de navegar. `expandedTaskId` garante uma única linha expandida
+ * por vez em toda a fila (nunca duas ao mesmo tempo). O drawer
+ * (`TaskDrawerPanel`) continua existindo pra outros fluxos que ainda
+ * dependem dele (ex.: "Abrir tarefa" a partir de "Próxima ação"), mas
+ * deixou de ser o caminho de configuração dentro desta fila.
  */
 export function ActivitySection({
   tasks,
   clientId,
   sprintId,
   taskHrefPrefix,
+  managers,
   isAdmin,
   reviews,
   reviewHrefPrefix,
@@ -46,8 +58,13 @@ export function ActivitySection({
   clientId: string;
   sprintId: string;
   /** Cada tela abre o drawer de tarefa a partir de uma URL diferente — ver
-   * doc equivalente em `SprintCardBody`. */
+   * doc equivalente em `SprintCardBody`. Continua computado (usado por
+   * "Próxima ação" em `SprintCardBody`), mas as próprias linhas desta fila
+   * não navegam mais pra lá — expandem in-line (ver acima). */
   taskHrefPrefix?: string;
+  /** Gestores ativos — usado pelo select de responsável na expansão
+   * inline de cada linha de tarefa. */
+  managers?: InlineTaskManagerOption[];
   /** Habilita "Excluir tarefa" no menu "•••" de cada linha de tarefa. */
   isAdmin?: boolean;
   /** Revisões de conta desta sprint — opcional: quem ainda não busca
@@ -64,6 +81,8 @@ export function ActivitySection({
   const progressPct = optimisticTasks.length > 0 ? (tasksDone / optimisticTasks.length) * 100 : 0;
   const reviewList = reviews ?? [];
   const activities = buildActivityFeed(optimisticTasks, reviewList);
+  // Só uma tarefa expandida por vez em toda a fila.
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
   return (
     <div>
@@ -114,6 +133,11 @@ export function ActivitySection({
                 typeLabel="Tarefa"
                 onOptimisticComplete={() => dispatchOptimisticTask({ type: "complete", taskId: item.task.id })}
                 onOptimisticDelete={() => dispatchOptimisticTask({ type: "delete", taskId: item.task.id })}
+                managers={managers}
+                isExpanded={expandedTaskId === item.task.id}
+                onToggleExpand={() =>
+                  setExpandedTaskId((current) => (current === item.task.id ? null : item.task.id))
+                }
               />
             ) : (
               <AccountReviewRow

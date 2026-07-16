@@ -33,6 +33,7 @@ export function SprintMonthlyBySprintsGroup({
   sprintCommentsById,
   accountReviewsBySprintId,
   monthTemporalStatus,
+  managers,
 }: {
   card: OperationClientCardData;
   monthLabel: string;
@@ -45,6 +46,9 @@ export function SprintMonthlyBySprintsGroup({
    * Sprint UX 2.0. Opcional só por retrocompatibilidade de tipo. */
   accountReviewsBySprintId?: Map<string, AccountReviewSummaryItem[]>;
   monthTemporalStatus?: MonthTemporalStatus;
+  /** Gestores ativos — ver doc de `SprintCardBody` (expansão inline de
+   * tarefa dentro de Atividades). */
+  managers?: { id: string; name: string }[];
 }) {
   const summary = resolveMonthPeriodSummary(card, monthLabel, monthRange);
   const operational = operationalSummary(card, "month");
@@ -96,6 +100,7 @@ export function SprintMonthlyBySprintsGroup({
                   openClientHref={`/clients/${card.clientId}`}
                   buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
                   metaSyncedAt={card.lastSyncedAt}
+                  taskManagers={managers}
                   performance={buildSprintPerformanceProps(card, sprint.sprintId)}
                   returnTo={returnTo}
                   accountReviews={accountReviewsBySprintId?.get(sprint.sprintId) ?? []}

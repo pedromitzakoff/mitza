@@ -907,6 +907,7 @@ export default async function ClientPage({
                 buildReviewDetailHref={buildReviewDetailHref}
                 manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
                 metaSyncedAt={lastSync?.synced_at ?? null}
+                taskManagers={managers ?? []}
                 performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
                 returnTo={returnTo}
                 hideNextAction={sprint.temporalStatus === "atual"}
