@@ -18,6 +18,7 @@ import { formatPerformanceResult, PERFORMANCE_GOALS, type PerformanceGoal } from
 import { ClientPerformanceGoalEditor } from "./client-performance-goal-editor";
 import { TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { ROW_GRID_CLASSES } from "@/app/sprints/row-grid";
+import { SECONDARY_ACTION_BUTTON_CLASSES } from "@/components/ui/section-header";
 import { SubmitButton } from "@/app/submit-button";
 
 /** Dados de performance de UMA sprint (Etapa 71) — sempre opcional: quem
@@ -464,6 +465,23 @@ export function SprintCardBody({
 
   return (
     <div className="border-t border-border p-1.5">
+        {/* Etapa "Sprint Workspace Polish 2.0" (Parte 3): Performance subiu
+            pra primeira posição — é a informação principal da sprint;
+            "Última execução" é só contexto complementar, e "Próxima ação"
+            fecha o fluxo "contexto atual → próxima ação" logo depois. Nenhum
+            dado ou cálculo mudou, só a ordem de leitura. */}
+        <SprintPerformanceSection
+          sprint={sprint}
+          performance={performance}
+          clientId={clientId}
+          isAdmin={isAdmin}
+          sourceTimestampText={sourceTimestampText}
+          isManualSource={isManualSource}
+          returnTo={returnTo}
+          revertSourceToggleId={revertSourceToggleId}
+          editToggleId={editToggleId}
+        />
+
         {/* Etapa "Sprint Workspace Polish 1.0" (Parte 1): "Hoje, DD/MM" saiu
             daqui — o gestor já sabe o dia atual, e essa data já aparece em
             outros contextos da plataforma (ex.: cabeçalho da Visão Geral).
@@ -472,7 +490,7 @@ export function SprintCardBody({
             sprint —, condicionada à própria existência do dado (nunca uma
             linha vazia quando não há `executionLabel`). */}
         {executionLabel && (
-          <p className={`mb-1 text-xs ${EXECUTION_LABEL_CLASSES[executionSeverity ?? "neutro"]}`}>
+          <p className={`mt-1 text-xs ${EXECUTION_LABEL_CLASSES[executionSeverity ?? "neutro"]}`}>
             Última execução: {executionLabel}
           </p>
         )}
@@ -487,54 +505,52 @@ export function SprintCardBody({
             (2ª instância montada, mesmo componente/Server Action — nunca uma
             segunda implementação), e "Registrar otimização" reaproveita
             `newReviewHref`. Nenhum dado novo, nenhuma tarefa criada
-            automaticamente. */}
-        {nextAction && (
-          <p className="mb-1 text-xs">
-            <span className="font-medium text-muted-foreground">Próxima ação: </span>
+            automaticamente.
+            Etapa "Sprint Workspace Polish 2.0" (Parte 4): a ação deixou de
+            ser um link azul solto — vira um botão de verdade
+            (`SECONDARY_ACTION_BUTTON_CLASSES`, mesmo componente visual de
+            "+ Tarefa"/"Registrar otimização"/"Atualizar performance"). Pra
+            tarefa, o texto descritivo (qual tarefa, quando) continua como
+            contexto ao lado do botão genérico "Abrir tarefa" — um botão com
+            o título inteiro da tarefa dentro ficaria comprido demais pro
+            padrão de botão compacto da plataforma. */}
+        {nextAction && nextAction.kind !== "none" && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="font-medium text-muted-foreground">Próxima ação:</span>
             {nextAction.taskId ? (
-              <Link
-                href={buildTaskHref ? buildTaskHref(nextAction.taskId) : `/clients/${clientId}?task=${nextAction.taskId}`}
-                scroll={false}
-                className="font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-              >
-                {nextAction.text}
-              </Link>
+              <>
+                <span className="text-foreground">{nextAction.text}</span>
+                <Link
+                  href={buildTaskHref ? buildTaskHref(nextAction.taskId) : `/clients/${clientId}?task=${nextAction.taskId}`}
+                  scroll={false}
+                  className={SECONDARY_ACTION_BUTTON_CLASSES}
+                >
+                  Abrir tarefa
+                </Link>
+              </>
             ) : nextAction.kind === "update_performance" && isAdmin ? (
-              <label htmlFor={editToggleId} className="cursor-pointer font-medium text-brand hover:underline">
+              <label htmlFor={editToggleId} className={`${SECONDARY_ACTION_BUTTON_CLASSES} cursor-pointer`}>
                 {nextAction.text}
               </label>
             ) : nextAction.kind === "configure_objective" ? (
-              <ClientPerformanceGoalEditor clientId={clientId} currentGoal={performance?.performanceGoal ?? null} />
+              <ClientPerformanceGoalEditor
+                clientId={clientId}
+                currentGoal={performance?.performanceGoal ?? null}
+                triggerClassName={SECONDARY_ACTION_BUTTON_CLASSES}
+                triggerLabel={nextAction.text}
+              />
             ) : nextAction.kind === "register_optimization" && newReviewHref ? (
-              <Link
-                href={newReviewHref}
-                scroll={false}
-                className="font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-              >
+              <Link href={newReviewHref} scroll={false} className={SECONDARY_ACTION_BUTTON_CLASSES}>
                 {nextAction.text}
               </Link>
             ) : (
               <span className="text-muted-foreground">{nextAction.text}</span>
             )}
-          </p>
+          </div>
         )}
-
-        {/* Performance da sprint — investimento realizado, resultados e custo
-            por resultado juntos, com uma única ação de atualização (Etapa 74).
-            Etapa 73: a camada de planejamento/recomendação financeira POR
-            SPRINT continua fora da interface operacional (fica só no nível
-            mensal, "Investimento do mês") — aqui só o que de fato aconteceu. */}
-        <SprintPerformanceSection
-          sprint={sprint}
-          performance={performance}
-          clientId={clientId}
-          isAdmin={isAdmin}
-          sourceTimestampText={sourceTimestampText}
-          isManualSource={isManualSource}
-          returnTo={returnTo}
-          revertSourceToggleId={revertSourceToggleId}
-          editToggleId={editToggleId}
-        />
+        {nextAction && nextAction.kind === "none" && (
+          <p className="mt-1.5 text-xs text-muted-foreground">Próxima ação: {nextAction.text}</p>
+        )}
 
         {/* Tarefas + Otimizações (revisões estratégicas da conta) lado a
             lado, mesmo nível hierárquico (Etapa 74). Etapa "Sprint

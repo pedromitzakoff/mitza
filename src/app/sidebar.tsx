@@ -119,9 +119,12 @@ interface NavItem {
   group: "principal" | "moderado" | "flexivel";
 }
 
+/** Etapa "Sprint Workspace Polish 2.0" (Parte 8): Sprints subiu pra antes
+ * de Clientes — Sprints é o centro operacional diário da plataforma (onde
+ * o gestor começa o dia), Clientes é área de cadastro/configuração, usada
+ * com menos frequência no dia a dia. */
 const NAV_ITEMS: NavItem[] = [
   { label: "Visão Geral", href: "/", icon: LayoutGrid, isActive: (p) => p === "/", group: "principal" },
-  { label: "Clientes", href: "/clients", icon: Building2, isActive: (p) => p === "/clients", group: "principal" },
   {
     label: "Sprints",
     href: "/sprints",
@@ -129,6 +132,7 @@ const NAV_ITEMS: NavItem[] = [
     isActive: (p) => p === "/sprints" || p === "/operation",
     group: "principal",
   },
+  { label: "Clientes", href: "/clients", icon: Building2, isActive: (p) => p === "/clients", group: "principal" },
   {
     label: "Relatórios",
     href: "/reports",

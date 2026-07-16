@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { updateClientPerformanceGoalAction } from "./performance-actions";
 import { useToast } from "@/app/toast-provider";
+import { useFloatingMenuPosition } from "@/lib/floating-menu";
 import { PERFORMANCE_GOALS, PERFORMANCE_GOAL_OPTIONS, type PerformanceGoal } from "@/lib/performance-goals";
 
 /**
@@ -20,18 +22,38 @@ import { PERFORMANCE_GOALS, PERFORMANCE_GOAL_OPTIONS, type PerformanceGoal } fro
  * hover/focus já deixam claro que é clicável. O rótulo "Objetivo:" saiu
  * daqui de dentro: quem chama (`SprintPerformanceSection`) já mostra esse
  * rótulo fora, uma vez só — nunca "Objetivo: Objetivo: Vendas".
+ *
+ * Etapa "Sprint Workspace Polish 2.0" (Parte 2/9): popover passou a
+ * renderizar via Portal (mesmo motivo/técnica de `TaskRowMenu` em
+ * `task-row.tsx`) — dentro da sprint-piloto do protótipo de accordion
+ * (`accordionRowsPrototype`), o `overflow: hidden` da animação clipava este
+ * popover também.
+ *
+ * Etapa "Sprint Workspace Polish 2.0" (Parte 4): `triggerClassName`/
+ * `triggerLabel` opcionais permitem reaproveitar este MESMO componente e a
+ * mesma Server Action no botão "Configurar objetivo" da linha "Próxima
+ * ação" (`sprint-card.tsx`) — mesmo padrão visual de botão secundário
+ * (`SECONDARY_ACTION_BUTTON_CLASSES`) em vez da pílula discreta de sempre.
+ * Omitir os dois preserva exatamente o comportamento/visual anterior (só a
+ * toolbar de Performance usa o padrão), então nenhum outro uso muda.
  */
 export function ClientPerformanceGoalEditor({
   clientId,
   currentGoal,
+  triggerClassName,
+  triggerLabel,
 }: {
   clientId: string;
   currentGoal: PerformanceGoal | null;
+  triggerClassName?: string;
+  triggerLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const position = useFloatingMenuPosition(triggerRef, open, "left");
 
   function handleSelect(goal: PerformanceGoal) {
     setError(null);
@@ -49,48 +71,55 @@ export function ClientPerformanceGoalEditor({
   return (
     <span className="relative inline-block">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={isPending}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={`Objetivo: ${currentGoal ? PERFORMANCE_GOALS[currentGoal].label : "não configurado"} — clique para alterar`}
-        className="mitza-pressable rounded-full border border-border bg-card px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:border-brand hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
+        className={
+          triggerClassName ??
+          "mitza-pressable rounded-full border border-border bg-card px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:border-brand hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
+        }
       >
-        {currentGoal ? PERFORMANCE_GOALS[currentGoal].label : "Não configurado"}
+        {triggerLabel ?? (currentGoal ? PERFORMANCE_GOALS[currentGoal].label : "Não configurado")}
       </button>
 
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-label="Fechar seleção de objetivo"
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-40"
-          />
-          <div
-            role="listbox"
-            className="mitza-menu-in absolute left-0 z-50 mt-1 w-40 rounded-lg border border-border bg-card p-1 shadow-[var(--shadow-float)]"
-            style={{ top: "100%" }}
-          >
-            {PERFORMANCE_GOAL_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                role="option"
-                aria-selected={option.value === currentGoal}
-                disabled={isPending}
-                onClick={() => handleSelect(option.value)}
-                className={`mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900 ${
-                  option.value === currentGoal ? "font-medium text-brand" : "text-foreground"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      {open &&
+        position &&
+        createPortal(
+          <>
+            <button
+              type="button"
+              aria-label="Fechar seleção de objetivo"
+              onClick={() => setOpen(false)}
+              className="fixed inset-0 z-40"
+            />
+            <div
+              role="listbox"
+              className="mitza-menu-in fixed z-50 w-40 rounded-lg border border-border bg-card p-1 shadow-[var(--shadow-float)]"
+              style={{ top: position.top, left: position.left }}
+            >
+              {PERFORMANCE_GOAL_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="option"
+                  aria-selected={option.value === currentGoal}
+                  disabled={isPending}
+                  onClick={() => handleSelect(option.value)}
+                  className={`mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900 ${
+                    option.value === currentGoal ? "font-medium text-brand" : "text-foreground"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </>,
+          document.body,
+        )}
 
       {error && <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">{error}</p>}
     </span>

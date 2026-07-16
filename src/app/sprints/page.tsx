@@ -634,63 +634,56 @@ export default async function SprintsPage({
     <div className="mx-auto max-w-6xl px-6 py-4">
       <ScrollRestoreOnMount />
 
-      {/* Linha 1 — título/subtítulo à esquerda, todos os controles à
-          direita, na mesma linha-base (reconstrução do cabeçalho: menos
-          caixas, mais interface — nenhum filtro/funcionalidade mudou, só a
-          disposição visual). */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Sprints</h1>
-          <p className="text-xs text-muted-foreground">
-            Acompanhe o desempenho das contas, sprints e otimizações.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {view === "monthly" && (
-            <div className="flex h-8 items-center gap-0.5 rounded-md border border-border px-1 text-sm">
-              <Link
-                href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
-                scroll={false}
-                className="rounded px-1 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                aria-label="Mês anterior"
-              >
-                &lsaquo;
+      {/* Linha 1 — só os controles, alinhados à direita (Etapa "Sprint
+          Workspace Polish 2.0", Parte 5): título "Sprints" e subtítulo
+          removidos — a navegação por abas logo abaixo já deixa claro onde o
+          usuário está, repetir o nome da tela aqui era redundante e custava
+          uma linha inteira de espaço vertical. Nenhum filtro/funcionalidade
+          mudou, só a disposição visual. */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {view === "monthly" && (
+          <div className="flex h-8 items-center gap-0.5 rounded-md border border-border px-1 text-sm">
+            <Link
+              href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
+              scroll={false}
+              className="rounded px-1 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              aria-label="Mês anterior"
+            >
+              &lsaquo;
+            </Link>
+            <span className="min-w-[7.5rem] text-center text-xs font-medium text-foreground">{monthLabel}</span>
+            <Link
+              href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
+              scroll={false}
+              className="rounded px-1 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              aria-label="Próximo mês"
+            >
+              &rsaquo;
+            </Link>
+            {params.month && (
+              <Link href={buildUrl({ month: "" })} scroll={false} className="ml-1 text-[11px] text-brand hover:underline">
+                Hoje
               </Link>
-              <span className="min-w-[7.5rem] text-center text-xs font-medium text-foreground">{monthLabel}</span>
-              <Link
-                href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
-                scroll={false}
-                className="rounded px-1 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                aria-label="Próximo mês"
-              >
-                &rsaquo;
-              </Link>
-              {params.month && (
-                <Link href={buildUrl({ month: "" })} scroll={false} className="ml-1 text-[11px] text-brand hover:underline">
-                  Hoje
-                </Link>
-              )}
-            </div>
-          )}
+            )}
+          </div>
+        )}
 
-          <SprintsFilters
-            clients={clientOptions}
-            selectedClientId={clientFilter}
-            view={view}
-            grouping={grouping}
-            month={view === "monthly" ? params.month : undefined}
-            isAdmin={isAdmin}
-            gestores={gestores ?? []}
-            manager={managerFilter}
-            health={healthFilter}
-            ritmo={ritmoFilter}
-            tasks={tasksFilter}
-            optimization={optimizationFilter}
-            activity={activityFilter}
-            display={displayFilter}
-          />
-        </div>
+        <SprintsFilters
+          clients={clientOptions}
+          selectedClientId={clientFilter}
+          view={view}
+          grouping={grouping}
+          month={view === "monthly" ? params.month : undefined}
+          isAdmin={isAdmin}
+          gestores={gestores ?? []}
+          manager={managerFilter}
+          health={healthFilter}
+          ritmo={ritmoFilter}
+          tasks={tasksFilter}
+          optimization={optimizationFilter}
+          activity={activityFilter}
+          display={displayFilter}
+        />
       </div>
 
       {(params.taskError || params.commentError) && (

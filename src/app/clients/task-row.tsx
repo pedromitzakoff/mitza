@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useOptimistic, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
 import { formatCompactTaskDate } from "@/lib/format";
 import { saveFocusForReturn } from "@/lib/focus-restore";
+import { useFloatingMenuPosition } from "@/lib/floating-menu";
 import { useToast } from "@/app/toast-provider";
 import type { TaskStatus, TaskType, TeamMemberStatus } from "@/lib/supabase/database.types";
 import { completeTaskAction, deleteTaskAction } from "./tasks-actions";
@@ -23,6 +25,18 @@ const DELETE_CONFIRM_TIMEOUT_MS = 5000;
  * por "Confirmar exclusão? Sim/Não", que desaparece sozinho depois de alguns
  * segundos ou ao clicar fora — igual ao padrão já usado pra reverter a fonte
  * manual do investimento em `sprint-card.tsx`.
+ *
+ * Etapa "Sprint Workspace Polish 2.0" (Parte 2): o popover renderiza via
+ * Portal (`createPortal` pro `document.body`, posição calculada por
+ * `useFloatingMenuPosition`) em vez de `position: absolute` dentro do
+ * próprio botão. Motivo: dentro da sprint-piloto do protótipo de accordion
+ * (`accordionRowsPrototype`, ver `sprint-card.tsx`/globals.css), o
+ * `overflow: hidden` do wrapper da animação clipava o menu — ele aparecia
+ * atrás do conteúdo, com sombra cortada, e o botão de fechar (que cobre a
+ * tela pra detectar clique fora) ficava clipado junto, fazendo o menu
+ * "perder clique". Portal escapa desse clipping (e de qualquer outro
+ * ancestral com overflow/stacking context) sem depender de onde o menu é
+ * usado — mesmo comportamento em todas as listas.
  */
 function TaskRowMenu({
   taskId,
@@ -40,6 +54,8 @@ function TaskRowMenu({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const position = useFloatingMenuPosition(triggerRef, open, "right");
 
   useEffect(() => {
     if (!confirming) return;
@@ -68,8 +84,9 @@ function TaskRowMenu({
   }
 
   return (
-    <span className="relative inline-block shrink-0">
+    <span className="relative z-10 inline-block shrink-0">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="menu"
@@ -80,62 +97,65 @@ function TaskRowMenu({
         •••
       </button>
 
-      {open && (
-        <>
-          <button type="button" aria-label="Fechar menu" onClick={closeMenu} className="fixed inset-0 z-40" />
-          <div
-            role="menu"
-            className="mitza-menu-in absolute right-0 z-50 mt-1 w-44 rounded-lg border border-border bg-card p-1 shadow-[var(--shadow-float)]"
-            style={{ top: "100%" }}
-          >
-            <Link
-              href={detailsHref}
-              scroll={false}
-              role="menuitem"
-              onClick={(event) => {
-                saveFocusForReturn(event.currentTarget);
-                closeMenu();
-              }}
-              className="mitza-pressable block rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+      {open &&
+        position &&
+        createPortal(
+          <>
+            <button type="button" aria-label="Fechar menu" onClick={closeMenu} className="fixed inset-0 z-40" />
+            <div
+              role="menu"
+              className="mitza-menu-in fixed z-50 w-44 -translate-x-full rounded-lg border border-border bg-card p-1 shadow-[var(--shadow-float)]"
+              style={{ top: position.top, left: position.left }}
             >
-              Ver detalhes
-            </Link>
+              <Link
+                href={detailsHref}
+                scroll={false}
+                role="menuitem"
+                onClick={(event) => {
+                  saveFocusForReturn(event.currentTarget);
+                  closeMenu();
+                }}
+                className="mitza-pressable block rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+              >
+                Ver detalhes
+              </Link>
 
-            {isAdmin &&
-              (confirming ? (
-                <div className="mt-0.5 flex items-center gap-1.5 px-2 py-1">
-                  <span className="text-[11px] text-muted-foreground">Confirmar exclusão?</span>
+              {isAdmin &&
+                (confirming ? (
+                  <div className="mt-0.5 flex items-center gap-1.5 px-2 py-1">
+                    <span className="text-[11px] text-muted-foreground">Confirmar exclusão?</span>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={handleDelete}
+                      className="mitza-pressable rounded px-1 text-[11px] font-medium text-red-600 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400"
+                    >
+                      {isPending ? "Excluindo..." : "Sim"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirming(false)}
+                      className="mitza-pressable rounded px-1 text-[11px] text-muted-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                    >
+                      Não
+                    </button>
+                  </div>
+                ) : (
                   <button
                     type="button"
-                    disabled={isPending}
-                    onClick={handleDelete}
-                    className="mitza-pressable rounded px-1 text-[11px] font-medium text-red-600 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400"
+                    role="menuitem"
+                    onClick={() => setConfirming(true)}
+                    className="mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:text-red-400 dark:hover:bg-red-950"
                   >
-                    {isPending ? "Excluindo..." : "Sim"}
+                    Excluir tarefa
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirming(false)}
-                    className="mitza-pressable rounded px-1 text-[11px] text-muted-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-                  >
-                    Não
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => setConfirming(true)}
-                  className="mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:text-red-400 dark:hover:bg-red-950"
-                >
-                  Excluir tarefa
-                </button>
-              ))}
+                ))}
 
-            {error && <p className="px-2 py-1 text-[11px] text-red-600 dark:text-red-400">{error}</p>}
-          </div>
-        </>
-      )}
+              {error && <p className="px-2 py-1 text-[11px] text-red-600 dark:text-red-400">{error}</p>}
+            </div>
+          </>,
+          document.body,
+        )}
     </span>
   );
 }
@@ -179,14 +199,26 @@ export function formatDueDate(value: string): string {
  * [responsável] [status temporal] [ações], seguindo a prioridade de leitura
  * do gestor (feito? quando? o quê? quem? precisa de atenção?). Cada sinal
  * aparece uma única vez — tarefa feita é só o check verde + linha com
- * opacidade reduzida (sem tachado nem badge "Feito"); tarefa atrasada é só
- * o círculo/data em vermelho discreto + badge "Atrasado" (nunca a linha
- * inteira vermelha); tarefa futura normal não tem nenhum badge. O tipo da
- * tarefa não aparece ao lado do título porque as tarefas geradas por
- * template já têm o tipo como próprio título (ex.: "Otimização") — mostrar
- * os dois seria repetir a mesma palavra duas vezes na mesma linha.
+ * opacidade reduzida (sem tachado nem badge "Feito"); tarefa futura normal
+ * não tem nenhum badge. O tipo da tarefa não aparece ao lado do título
+ * porque as tarefas geradas por template já têm o tipo como próprio título
+ * (ex.: "Otimização") — mostrar os dois seria repetir a mesma palavra duas
+ * vezes na mesma linha.
+ *
+ * Etapa "Sprint Workspace Polish 2.0" (Parte 1): tarefa atrasada tinha três
+ * sinais pra mesma informação (círculo vermelho + data vermelha + badge
+ * "Atrasado") — o badge saiu, sobra só círculo e data em vermelho discreto.
+ *
+ * Etapa "Sprint Workspace Polish 2.0" (Parte 6): clicar em qualquer lugar
+ * da linha abre a tarefa (antes só o título era clicável) — via um `<Link>`
+ * "esticado" (`absolute inset-0`, primeiro filho do `<li>`, que virou
+ * `relative`) cobrindo a linha inteira. Checkbox de concluir e o menu "•••"
+ * continuam com comportamento próprio: ambos ganham `relative z-10` pra
+ * ficar acima do link esticado na ordem de pintura e continuar capturando
+ * o próprio clique.
+ *
  * Observações, editar e comentários não ficam permanentemente na linha —
- * clicar no título ou no "•••" abre o drawer lateral (TaskDrawerPanel) com
+ * clicar na linha ou no "•••" abre o drawer lateral (TaskDrawerPanel) com
  * os detalhes completos. Os links pro drawer usam `scroll={false}`: é a
  * mesma página (só o search param `task` muda), então não faz sentido
  * pular pro topo. Reaproveitada em TaskList (tarefas soltas), SprintTaskList
@@ -255,7 +287,14 @@ export function TaskRow({
   }
 
   return (
-    <li className="flex min-h-[28px] items-center border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
+    <li className="relative flex min-h-[28px] items-center border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
+      <Link
+        href={detailsHref}
+        scroll={false}
+        onClick={(event) => saveFocusForReturn(event.currentTarget)}
+        aria-label={task.title}
+        className="absolute inset-0 z-0"
+      />
       <div className={`flex items-center gap-2.5 transition-opacity duration-150 ${rowOpacityClass}`}>
         {isDone ? (
           <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none text-green-700 dark:bg-green-950 dark:text-green-300">
@@ -275,7 +314,7 @@ export function TaskRow({
             onClick={handleComplete}
             aria-label="Marcar como feito"
             title="Marcar como feito"
-            className={`block h-4 w-4 shrink-0 rounded-full border-2 transition-colors hover:border-brand hover:bg-brand/10 ${
+            className={`relative z-10 block h-4 w-4 shrink-0 rounded-full border-2 transition-colors hover:border-brand hover:bg-brand/10 ${
               isOverdue
                 ? "border-red-400 dark:border-red-700"
                 : isToday
@@ -287,14 +326,7 @@ export function TaskRow({
 
         <span className={`w-20 shrink-0 text-xs tabular-nums ${dateClasses}`}>{dueDate}</span>
 
-        <Link
-          href={detailsHref}
-          scroll={false}
-          onClick={(event) => saveFocusForReturn(event.currentTarget)}
-          className="min-w-0 flex-1 truncate"
-        >
-          <span className="text-sm font-medium text-foreground">{task.title}</span>
-        </Link>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{task.title}</span>
 
         {(!hideAssigneeIfName || task.assignee?.name !== hideAssigneeIfName) && (
           <span className="hidden w-28 shrink-0 truncate text-xs text-muted-foreground md:block">
@@ -304,11 +336,6 @@ export function TaskRow({
         )}
 
         <span className="hidden w-16 shrink-0 sm:block">
-          {!isDone && isOverdue && (
-            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
-              Atrasado
-            </span>
-          )}
           {!isDone && !isOverdue && isToday && (
             <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">Hoje</span>
           )}
