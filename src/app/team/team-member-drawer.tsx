@@ -16,7 +16,6 @@ import {
   revokeAccessAction,
   updateTeamMemberAction,
 } from "./actions";
-import { DeactivateMemberButton } from "./deactivate-member-button";
 import { OperationalActivityPanel } from "./operational-activity-panel";
 import { SubmitButton } from "@/app/submit-button";
 import { ToastActionButton } from "@/app/toast-action-button";
@@ -234,16 +233,21 @@ export function EditTeamMemberDrawer({
         </p>
         <div className="mt-2">
           {member.status === "ativo" ? (
-            <DeactivateMemberButton action={deactivateTeamMemberAction.bind(null, member.id, member.id)} />
+            <ToastActionButton
+              action={deactivateTeamMemberAction.bind(null, member.id)}
+              pendingLabel="Desativando..."
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Desativar membro
+            </ToastActionButton>
           ) : (
-            <form action={reactivateTeamMemberAction.bind(null, member.id, member.id)}>
-              <SubmitButton
-                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                pendingChildren="Reativando..."
-              >
-                Reativar membro
-              </SubmitButton>
-            </form>
+            <ToastActionButton
+              action={reactivateTeamMemberAction.bind(null, member.id)}
+              pendingLabel="Reativando..."
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Reativar membro
+            </ToastActionButton>
           )}
         </div>
       </section>

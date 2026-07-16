@@ -9,6 +9,7 @@ import { isValidEmail } from "@/lib/validation";
 import { normalizeTeamMemberEmail } from "@/lib/team-members";
 import { OperationalEventType } from "@/lib/operational-events";
 import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
+import { toUserFacingError } from "@/lib/user-facing-error";
 import type { TeamSystemRole } from "@/lib/supabase/database.types";
 
 /**
@@ -138,15 +139,16 @@ export async function updateTeamMemberAction(memberId: string, formData: FormDat
 }
 
 /**
- * `editId` opcional: quando a ação parte do drawer de edição (passado como
- * o próprio `memberId`), o redirect reabre o mesmo drawer em vez de fechar
- * tudo — Interaction Design System 1.0. Chamada rápida da tabela (menu
- * "•••", sem drawer aberto) não passa `editId` e continua voltando pra
- * lista como sempre. Desativar é seguro e reversível (existe "Reativar"),
- * então a interface não pergunta antes — executa na hora e, ao reabrir o
- * drawer, "Reativar membro" já está ali no lugar de "Desativar membro".
+ * Etapa "MITZA Platform Integrity Wave 3" — contrato alinhado ao padrão da
+ * Sprint (concluir/excluir tarefa): sem redirect, `{error?/message?}` pro
+ * botão (`ToastActionButton`) mostrar erro inline ou disparar o toast.
+ * Antes, um `editId` opcional decidia pra qual URL o redirect voltava (o
+ * mesmo drawer ou a lista) — sem redirect, essa distinção deixa de fazer
+ * sentido: a tela em que o gestor já estava nunca muda de qualquer jeito.
+ * Desativar é seguro e reversível (existe "Reativar"), então a interface
+ * não pergunta antes — executa na hora.
  */
-export async function deactivateTeamMemberAction(memberId: string, editId?: string) {
+export async function deactivateTeamMemberAction(memberId: string): Promise<{ error?: string; message?: string }> {
   const profile = await requireAdmin();
   const supabase = await createSupabaseClient();
 
@@ -156,7 +158,7 @@ export async function deactivateTeamMemberAction(memberId: string, editId?: stri
     .eq("id", memberId)
     .eq("organization_id", profile.organizationId);
 
-  if (error) failure("Não foi possível desativar o membro.", editId);
+  if (error) return { error: toUserFacingError(error, "Não foi possível desativar o membro.") };
 
   await recordOperationalEvent(supabase, actorFromProfile(profile), {
     eventType: OperationalEventType.TEAM_MEMBER_DEACTIVATED,
@@ -166,9 +168,10 @@ export async function deactivateTeamMemberAction(memberId: string, editId?: stri
   });
 
   revalidateTeam();
+  return { message: "Membro desativado." };
 }
 
-export async function reactivateTeamMemberAction(memberId: string, editId?: string) {
+export async function reactivateTeamMemberAction(memberId: string): Promise<{ error?: string; message?: string }> {
   const profile = await requireAdmin();
   const supabase = await createSupabaseClient();
 
@@ -178,7 +181,7 @@ export async function reactivateTeamMemberAction(memberId: string, editId?: stri
     .eq("id", memberId)
     .eq("organization_id", profile.organizationId);
 
-  if (error) failure("Não foi possível reativar o membro.", editId);
+  if (error) return { error: toUserFacingError(error, "Não foi possível reativar o membro.") };
 
   await recordOperationalEvent(supabase, actorFromProfile(profile), {
     eventType: OperationalEventType.TEAM_MEMBER_REACTIVATED,
@@ -188,6 +191,7 @@ export async function reactivateTeamMemberAction(memberId: string, editId?: stri
   });
 
   revalidateTeam();
+  return { message: "Membro reativado." };
 }
 
 /**

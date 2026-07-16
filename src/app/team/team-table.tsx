@@ -10,7 +10,6 @@ import {
 import type { TeamInvitationStatus, TeamMemberStatus, TeamSystemRole } from "@/lib/supabase/database.types";
 import { deactivateTeamMemberAction, deleteTeamMemberAction, reactivateTeamMemberAction, resendInviteAction } from "./actions";
 import { DeleteTeamMemberButton } from "./delete-team-member-button";
-import { SubmitButton } from "@/app/submit-button";
 import { ToastActionButton } from "@/app/toast-action-button";
 
 export interface TeamTableRow {
@@ -119,24 +118,22 @@ export function TeamTable({ rows, isAdmin }: { rows: TeamTableRow[]; isAdmin: bo
                         </ToastActionButton>
                       )}
                       {member.status === "ativo" ? (
-                        <form action={deactivateTeamMemberAction.bind(null, member.id, undefined)}>
-                          <SubmitButton
-                            pendingChildren="Desativando..."
-                            className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                          >
-                            Desativar
-                          </SubmitButton>
-                        </form>
+                        <ToastActionButton
+                          action={deactivateTeamMemberAction.bind(null, member.id)}
+                          pendingLabel="Desativando..."
+                          className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                        >
+                          Desativar
+                        </ToastActionButton>
                       ) : (
                         <>
-                          <form action={reactivateTeamMemberAction.bind(null, member.id, undefined)}>
-                            <SubmitButton
-                              pendingChildren="Reativando..."
-                              className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                            >
-                              Reativar
-                            </SubmitButton>
-                          </form>
+                          <ToastActionButton
+                            action={reactivateTeamMemberAction.bind(null, member.id)}
+                            pendingLabel="Reativando..."
+                            className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                          >
+                            Reativar
+                          </ToastActionButton>
                           <DeleteTeamMemberButton
                             action={deleteTeamMemberAction.bind(null, member.id)}
                             memberName={member.name}
