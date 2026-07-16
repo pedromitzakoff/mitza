@@ -20,8 +20,8 @@ export type OptimisticTaskAction =
  * otimista futura da plataforma reaproveita sem duplicar o reducer. A
  * assinatura pública (`useOptimisticTasks(tasks)` devolvendo
  * `[optimisticTasks, dispatch]`, `dispatch` aceitando
- * `{type: "complete"|"delete", taskId}`) não mudou — `SprintTaskList`
- * continua chamando exatamente como antes.
+ * `{type: "complete"|"delete", taskId}`) não mudou — `ActivitySection`
+ * (antes `SprintTaskList`) continua chamando exatamente como antes.
  *
  * "complete" só troca `status` — nunca reordena (`orderTasks`, em
  * `task-list.tsx`, ordena por `due_date`/`id`, nunca por status, então a

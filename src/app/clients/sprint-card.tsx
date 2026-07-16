@@ -7,12 +7,12 @@ import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
 import { computeNextAction } from "@/lib/next-action";
 import { CommentThread, type CommentItem } from "./comment-thread";
-import { SprintTaskList } from "./sprint-task-list";
+import { ActivitySection } from "./activity-section";
 import type { TaskListItem } from "./task-row";
 import { resetSprintSpendSourceAction } from "./sprint-actions";
 import { updateSprintPerformanceAction } from "./performance-actions";
 import { MoneyInput } from "./money-input";
-import { AccountReviewsSection, type AccountReviewSummaryItem } from "./account-reviews-section";
+import type { AccountReviewSummaryItem } from "./account-reviews-section";
 import { getLatestPerformanceUpdateText, type SprintPerformanceView } from "@/lib/performance";
 import { formatPerformanceResult, PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { ClientPerformanceGoalEditor } from "./client-performance-goal-editor";
@@ -430,9 +430,10 @@ export function SprintCardBody({
   /** Dados de performance desta sprint (Etapa 71) — opcional, mesmo padrão
    * de `accountReviews`. */
   performance?: SprintPerformanceProps;
-  /** Sprint UX 2.0 Fase 2 — só a tela Sprints passa isto: habilita "+ Tarefa"
-   * inline em `SprintTaskList` (formulário sem navegar pra `/tasks/new`). A
-   * página do cliente não passa, então continua com o link de sempre. */
+  /** Sprint UX 2.0 Fase 2 — só a tela Sprints passa isto: habilita "+ Nova
+   * tarefa" inline em `ActivitySection` (formulário sem navegar pra
+   * `/tasks/new`). A página do cliente não passa, então continua com o
+   * link de sempre. */
   taskManagers?: { id: string; name: string }[];
   /** Etapa "MITZA Operational Workspace 1.0" — a página do cliente promoveu
    * "Próxima ação" da sprint atual pro topo da página (`SprintFocusBar`,
@@ -453,16 +454,17 @@ export function SprintCardBody({
   const editToggleId = `edit-performance-${sprint.sprintId}`;
   const isManualSource = sprint.spendSource === "manual";
 
-  // Etapa "Instant Action & Context Memory 1.0": `SprintTaskList` virou
-  // Client Component (precisa de `useOptimistic` pra contador/progresso
-  // reagirem junto com o check da linha — Parte 2/5). Uma função não pode
-  // atravessar a fronteira servidor→cliente como prop, então em vez de
-  // repassar `buildTaskHref` (closure) pra ela, calculamos aqui — ainda no
-  // servidor — o PREFIXO de string equivalente (chamando a própria função
-  // com `taskId=""`, já que as duas fórmulas existentes hoje só concatenam
-  // o id no final) e passamos só essa string, serializável. Nenhuma URL
-  // gerada muda — é o mesmo destino de sempre, só a forma de entregar o
-  // dado pra um Client Component é que precisou mudar.
+  // Etapa "Instant Action & Context Memory 1.0" (hoje em `ActivitySection`,
+  // que absorveu o que antes era `SprintTaskList`): Client Component
+  // (precisa de `useOptimistic` pra contador/progresso reagirem junto com o
+  // check da linha — Parte 2/5). Uma função não pode atravessar a
+  // fronteira servidor→cliente como prop, então em vez de repassar
+  // `buildTaskHref` (closure) pra ela, calculamos aqui — ainda no servidor —
+  // o PREFIXO de string equivalente (chamando a própria função com
+  // `taskId=""`, já que as duas fórmulas existentes hoje só concatenam o id
+  // no final) e passamos só essa string, serializável. Nenhuma URL gerada
+  // muda — é o mesmo destino de sempre, só a forma de entregar o dado pra
+  // um Client Component é que precisou mudar.
   const taskHrefPrefix = buildTaskHref ? buildTaskHref("") : `/clients/${clientId}?task=`;
 
   // Etapa "Sprint Workspace MVP Finalization 2.0" (Parte 10): "Próxima
@@ -558,30 +560,26 @@ export function SprintCardBody({
           )}
         </div>
 
-        {/* Tarefas + Otimizações (revisões estratégicas da conta) lado a
-            lado, mesmo nível hierárquico (Etapa 74) — a área de EXECUÇÃO de
-            verdade: é o motivo real pelo qual alguém abre uma Sprint, por
-            isso continua sempre visível, nunca atrás de disclosure. Etapa
-            "Sprint Workspace Polish 1.1" (Parte 4): as duas colunas
-            (`SprintTaskList`/`AccountReviewsSection`) já não desenham borda
-            própria acima — os cabeçalhos "Tarefas"/"Otimizações" já
-            distinguem as seções, sem precisar de uma segunda linha. */}
-        <div className="mt-1.5 grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
-          <SprintTaskList
+        {/* "Atividades" (MITZA Unified Activities 1.0) — fila única de
+            trabalho da Sprint: tarefa e revisão de conta convivem na mesma
+            lista, uma linha por atividade, cada uma com o componente
+            oficial do próprio domínio (`TaskRow`/`AccountReviewRow`).
+            Substitui a antiga divisão "Tarefas" | "Revisões de conta" (duas
+            colunas lado a lado, cada uma com cabeçalho e estado vazio
+            próprios) — é o motivo real pelo qual alguém abre uma Sprint,
+            por isso continua sempre visível, nunca atrás de disclosure. */}
+        <div className="mt-1.5">
+          <ActivitySection
             tasks={tasks}
             clientId={clientId}
             sprintId={sprint.sprintId}
             taskHrefPrefix={taskHrefPrefix}
             managers={taskManagers ?? []}
             isAdmin={isAdmin}
+            reviews={accountReviews}
+            newReviewHref={newReviewHref}
+            buildReviewDetailHref={buildReviewDetailHref}
           />
-          {accountReviews && newReviewHref && buildReviewDetailHref && (
-            <AccountReviewsSection
-              reviews={accountReviews}
-              newReviewHref={newReviewHref}
-              buildDetailHref={buildReviewDetailHref}
-            />
-          )}
         </div>
 
         {/* MITZA Operational Card Architecture 2.0: Performance virou um

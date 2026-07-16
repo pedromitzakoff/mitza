@@ -42,7 +42,7 @@ const DELETE_CONFIRM_TIMEOUT_MS = 5000;
  *
  * Etapa "Instant Action & Context Memory 1.0" (Parte 3): quando quem chama
  * passa `onOptimisticDelete`, a tarefa some da lista ANTES do servidor
- * confirmar (ver `SprintTaskList`) — nesse caso, se a exclusão falhar, este
+ * confirmar (ver `ActivitySection`) — nesse caso, se a exclusão falhar, este
  * componente já foi desmontado pelo React (a linha sumiu), então o erro
  * inline de sempre (`error`/`setError`) nunca chegaria a ser visto. Por
  * isso o erro vira um toast (`tone: "error"`) nesse caminho — o único canal
@@ -243,9 +243,9 @@ export function formatDueDate(value: string): string {
  * clicar na linha ou no "•••" abre o drawer lateral (TaskDrawerPanel) com
  * os detalhes completos. Os links pro drawer usam `scroll={false}`: é a
  * mesma página (só o search param `task` muda), então não faz sentido
- * pular pro topo. Reaproveitada em TaskList (tarefas soltas), SprintTaskList
- * (tarefas da sprint) e SprintClientGroup (tela Sprints) — qualquer ajuste
- * visual aqui reflete nos três lugares.
+ * pular pro topo. Reaproveitada em TaskList (tarefas soltas), ActivitySection
+ * (tarefas da sprint, junto com revisões de conta) e SprintClientGroup (tela
+ * Sprints) — qualquer ajuste visual aqui reflete nos três lugares.
  *
  * Interaction & Motion System 1.0: concluir tarefa é UI otimista
  * (`useOptimistic`) — o círculo vira check verde no clique, antes de
@@ -257,7 +257,7 @@ export function formatDueDate(value: string): string {
  *
  * Etapa "Instant Action & Context Memory 1.0" (Partes 2-5): quando quem
  * chama passa `onOptimisticComplete`/`onOptimisticDelete` (hoje só
- * `SprintTaskList`), esta linha para de segurar seu próprio
+ * `ActivitySection`), esta linha para de segurar seu próprio
  * `useOptimistic` de conclusão — em vez disso, despacha pro `useOptimistic`
  * COMPARTILHADO da lista inteira (`useOptimisticTasks`), pra que o contador
  * "X/Y concluídas" e a barra de progresso mudem junto com o check, na
@@ -276,6 +276,7 @@ export function TaskRow({
   isAdmin,
   onOptimisticComplete,
   onOptimisticDelete,
+  typeLabel,
 }: {
   task: TaskListItem;
   clientId: string;
@@ -297,6 +298,14 @@ export function TaskRow({
   onOptimisticComplete?: () => void;
   /** Idem, pra exclusão — repassado ao `TaskRowMenu`. */
   onOptimisticDelete?: () => void;
+  /** MITZA Unified Activities 1.0 — rótulo discreto de tipo ("Tarefa"),
+   * visível só em telas largas (`lg:`). Existe pra desambiguar a linha
+   * dentro da fila única "Atividades" (`activity-section.tsx`), onde
+   * tarefa e revisão de conta convivem na mesma lista — contexto, não
+   * protagonista (ver Information Design 1.0). Omitir preserva a linha
+   * exatamente como antes, sem o rótulo — usado pelas listas de tarefas
+   * que não fazem parte da fila unificada (ex.: "Outras tarefas"). */
+  typeLabel?: string;
 }) {
   const effectiveStatus = effectiveTaskStatus(task);
   const [localOptimisticDone, setLocalOptimisticDone] = useOptimistic(effectiveStatus === "feito");
@@ -408,6 +417,12 @@ export function TaskRow({
             </span>
           )}
         </span>
+
+        {typeLabel && (
+          <span className="hidden w-24 shrink-0 truncate text-[10px] uppercase tracking-wide text-muted-foreground lg:block">
+            {typeLabel}
+          </span>
+        )}
 
         <TaskRowMenu
           taskId={task.id}

@@ -11,10 +11,15 @@ export type { TaskListItem };
 /**
  * "Outras tarefas" (sem sprint vinculada) — Etapa "MITZA Workspace-First
  * Tasks 1.0": ganhou o mesmo cabeçalho com criação inline e a mesma lista
- * otimista (`useOptimisticTasks`) que `SprintTaskList` já usava, em vez de
- * um link fixo pra `/tasks/new` no `action` da `Section` que envolve este
+ * otimista (`useOptimisticTasks`) que a Sprint já usava, em vez de um link
+ * fixo pra `/tasks/new` no `action` da `Section` que envolve este
  * componente (removido em `[id]/page.tsx`). Mesma Server Action
  * (`createTaskInlineAction`), mesmo contrato — só a superfície muda.
+ *
+ * MITZA Unified Activities 1.0: esta lista continua fora da fila
+ * "Atividades" de propósito — não existe revisão de conta pra unificar
+ * aqui (tarefas soltas, sem sprint vinculada, não têm equivalente de
+ * revisão), então não ganhou `typeLabel` nem CTA de revisão.
  */
 export function TaskList({
   tasks,
