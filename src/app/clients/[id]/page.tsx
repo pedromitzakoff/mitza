@@ -15,6 +15,7 @@ import {
 } from "@/lib/sprint-financials";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus } from "@/lib/spend-status";
+import { computeNextAction } from "@/lib/next-action";
 import { buildSprintExecutionAlert, formatSprintExecutionLabel } from "@/lib/sprint-execution";
 import {
   resolveBudgetEffectiveDate,
@@ -57,6 +58,7 @@ import {
 import { AVAILABLE_TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
 import { PerformanceSummarySection } from "../performance-summary";
 import type { SprintPerformanceProps } from "../sprint-card";
+import { SprintFocusBar } from "../sprint-focus-bar";
 
 function groupAccountReviewsBySprintId(
   reviews: (AccountReviewSummaryItem & { sprintId: string })[],
@@ -618,6 +620,44 @@ export default async function ClientPage({
     ? formatSprintPeriodLabel(openTaskSprint.startDate, openTaskSprint.endDate)
     : null;
 
+  // "Foco agora" (Etapa "MITZA Operational Workspace 1.0") — mesma
+  // `computeNextAction` que já roda dentro do card da sprint atual, só
+  // promovida pra fora dela: nenhum critério, tabela ou cálculo novo, apenas
+  // avaliada aqui mais cedo pra alimentar `SprintFocusBar` (primeiro
+  // conteúdo operacional da página, antes de qualquer bloco de consulta).
+  const currentSprintTasksForFocus = currentSprint ? (tasksBySprintId.get(currentSprint.sprintId) ?? []) : [];
+  const currentSprintOptimizationCountForFocus = currentSprint
+    ? (accountReviewsBySprintId.get(currentSprint.sprintId) ?? []).length
+    : null;
+  const currentSprintPerformanceKindForFocus = currentSprint
+    ? (sprintPerformanceBySprintId.get(currentSprint.sprintId)?.view.kind ?? null)
+    : null;
+  const nextAction = currentSprint
+    ? computeNextAction({
+        tasks: currentSprintTasksForFocus,
+        today: todayStr,
+        performanceViewKind: currentSprintPerformanceKindForFocus,
+        performanceGoal,
+        optimizationCount: currentSprintOptimizationCountForFocus,
+        canConfigureObjective: isAdmin,
+      })
+    : null;
+  const newReviewHref = withParam(returnTo, "review=new");
+  let nextActionCtaHref: string | null = null;
+  let nextActionCtaLabel: string | null = null;
+  if (nextAction && currentSprint) {
+    if (nextAction.taskId) {
+      nextActionCtaHref = withParam(returnTo, `task=${nextAction.taskId}`);
+      nextActionCtaLabel = "Abrir tarefa";
+    } else if (nextAction.kind === "update_performance" || nextAction.kind === "configure_objective") {
+      nextActionCtaHref = `#sprint-${currentSprint.sprintId}`;
+      nextActionCtaLabel = "Ir para a sprint";
+    } else if (nextAction.kind === "register_optimization") {
+      nextActionCtaHref = newReviewHref;
+      nextActionCtaLabel = "Registrar otimização";
+    }
+  }
+
   // Identificação do cliente (Etapa 74) — substitui o antigo ClientContextBar
   // (subheader sticky compartilhado por toda /clients/[id]/**, removido).
   // Status já aparece como badge ao lado do nome, por isso não se repete
@@ -757,10 +797,25 @@ export default async function ClientPage({
         </div>
       </div>
 
-      {/* 3. Acompanhamento da conta — primeiro bloco principal depois do
-          período: ao abrir um cliente, a primeira pergunta operacional é
-          "essa conta está sendo acompanhada corretamente e o que foi feito
-          recentemente?" */}
+      {/* 2.5. Foco agora (Etapa "MITZA Operational Workspace 1.0") — antes de
+          qualquer bloco de consulta: ritmo financeiro do mês + Próxima Ação
+          da sprint atual, sem precisar rolar a página nem expandir nada. Só
+          existe quando há sprint atual (mesmo mês selecionado que já
+          controla o resto da página) — num mês passado/futuro não existe
+          "próxima ação" por definição, igual ao critério já usado dentro do
+          card da sprint. */}
+      {currentSprint && nextAction && (
+        <SprintFocusBar
+          spendStatus={monthStatus}
+          nextActionText={nextAction.text}
+          ctaHref={nextActionCtaHref}
+          ctaLabel={nextActionCtaLabel}
+        />
+      )}
+
+      {/* 3. Acompanhamento da conta — depois do foco operacional imediato: a
+          próxima pergunta é "essa conta está sendo acompanhada corretamente
+          e o que foi feito recentemente?" */}
       <div className="mt-3">
         <AccountFollowUpPanel
           monthLabel={monthLabel}
@@ -848,12 +903,13 @@ export default async function ClientPage({
                     : null
                 }
                 accountReviews={accountReviewsBySprintId.get(sprint.sprintId) ?? []}
-                newReviewHref={withParam(returnTo, "review=new")}
+                newReviewHref={newReviewHref}
                 buildReviewDetailHref={buildReviewDetailHref}
                 manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
                 metaSyncedAt={lastSync?.synced_at ?? null}
                 performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
                 returnTo={returnTo}
+                hideNextAction={sprint.temporalStatus === "atual"}
               />
             ))
           ) : (

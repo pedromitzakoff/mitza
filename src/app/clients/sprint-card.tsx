@@ -397,6 +397,7 @@ export function SprintCardBody({
   performance,
   returnTo,
   taskManagers,
+  hideNextAction,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -433,6 +434,14 @@ export function SprintCardBody({
    * inline em `SprintTaskList` (formulário sem navegar pra `/tasks/new`). A
    * página do cliente não passa, então continua com o link de sempre. */
   taskManagers?: { id: string; name: string }[];
+  /** Etapa "MITZA Operational Workspace 1.0" — a página do cliente promoveu
+   * "Próxima ação" da sprint atual pro topo da página (`SprintFocusBar`,
+   * primeiro conteúdo operacional, antes de qualquer scroll), então passa
+   * `true` só pra ela, pra não repetir a mesma frase duas vezes na mesma
+   * tela. O cálculo (`computeNextAction`) continua rodando normalmente —
+   * só a renderização deste bloco é omitida; o painel Sprints não passa
+   * esta prop, então continua exatamente como antes. */
+  hideNextAction?: boolean;
 }) {
   const sourceTimestampText = describeSpendSourceTimestamp(
     sprint.spendSource,
@@ -526,7 +535,7 @@ export function SprintCardBody({
             contexto ao lado do botão genérico "Abrir tarefa" — um botão com
             o título inteiro da tarefa dentro ficaria comprido demais pro
             padrão de botão compacto da plataforma. */}
-        {nextAction && nextAction.kind !== "none" && (
+        {!hideNextAction && nextAction && nextAction.kind !== "none" && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
             <span className="font-medium text-muted-foreground">Próxima ação:</span>
             {nextAction.taskId ? (
@@ -560,7 +569,7 @@ export function SprintCardBody({
             )}
           </div>
         )}
-        {nextAction && nextAction.kind === "none" && (
+        {!hideNextAction && nextAction && nextAction.kind === "none" && (
           <p className="mt-1.5 text-xs text-muted-foreground">Próxima ação: {nextAction.text}</p>
         )}
 
@@ -690,6 +699,7 @@ export function SprintCard({
   flat,
   taskManagers,
   accordionRowsPrototype,
+  hideNextAction,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -728,6 +738,8 @@ export function SprintCard({
    * passado pela página do cliente — lá a sprint continua com moldura de
    * card própria, sem cliente "pai" visível na mesma tela. */
   flat?: boolean;
+  /** Etapa "MITZA Operational Workspace 1.0" — ver doc de `SprintCardBody`. */
+  hideNextAction?: boolean;
 }) {
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
   const isCurrent = sprint.temporalStatus === "atual";
@@ -904,6 +916,7 @@ export function SprintCard({
               metaSyncedAt={metaSyncedAt}
               performance={performance}
               returnTo={returnTo}
+              hideNextAction={hideNextAction}
             />
           </div>
         </div>
@@ -926,6 +939,7 @@ export function SprintCard({
           metaSyncedAt={metaSyncedAt}
           performance={performance}
           returnTo={returnTo}
+          hideNextAction={hideNextAction}
         />
       )}
     </details>
