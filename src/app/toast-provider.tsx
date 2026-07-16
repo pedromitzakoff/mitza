@@ -24,6 +24,10 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const TOAST_DURATION_MS = 3500;
+/** Mesma duração de `.mitza-toast-out` (`globals.css`, `var(--motion-fast)`
+ * = 150ms) — o toast só desmonta de fato depois que a animação de saída
+ * termina, nunca no mesmo frame em que ela começa (Platform Feel 1.0). */
+const TOAST_EXIT_DURATION_MS = 150;
 
 /**
  * Único componente de confirmação visual da plataforma inteira — nenhuma
@@ -39,16 +43,23 @@ const TOAST_DURATION_MS = 3500;
  */
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toast, setToast] = useState<{ id: number; message: string; tone: ToastTone } | null>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const removeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextId = useRef(0);
 
   const showToast = useCallback((message: string, tone: ToastTone = "success") => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    if (removeTimeoutRef.current) clearTimeout(removeTimeoutRef.current);
     nextId.current += 1;
     const id = nextId.current;
+    setIsLeaving(false);
     setToast({ id, message, tone });
-    timeoutRef.current = setTimeout(() => {
-      setToast((current) => (current?.id === id ? null : current));
+    hideTimeoutRef.current = setTimeout(() => {
+      setIsLeaving(true);
+      removeTimeoutRef.current = setTimeout(() => {
+        setToast((current) => (current?.id === id ? null : current));
+      }, TOAST_EXIT_DURATION_MS);
     }, TOAST_DURATION_MS);
   }, []);
 
@@ -62,7 +73,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           key={toast.id}
           role="status"
           aria-live="polite"
-          className="mitza-toast-in pointer-events-none fixed inset-x-0 bottom-6 z-[70] flex justify-center px-4"
+          className={`${isLeaving ? "mitza-toast-out" : "mitza-toast-in"} pointer-events-none fixed inset-x-0 bottom-6 z-[70] flex justify-center px-4`}
         >
           <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm text-foreground shadow-[var(--shadow-float)]">
             {toast.tone === "error" ? (

@@ -27,8 +27,14 @@ const SHOW_DELAY_MS = 250;
  * de leve) e imediatamente no foco por teclado (foco já é uma intenção
  * explícita, não precisa do mesmo atraso). Fecha com Esc, blur ou mouse
  * leave. `onFocus`/`onBlur` do React borbulham de descendentes focáveis
- * até este wrapper, então funciona com qualquer gatilho focável dentro
- * dele sem precisar saber qual elemento é.
+ * até este wrapper, então funciona com qualquer gatilho focável dentro dele
+ * sem precisar saber qual elemento é.
+ *
+ * Etapa "MITZA Platform Feel 1.0" — nasce com `mitza-tooltip-in` (mesmo
+ * fade + leve escala de qualquer popover/menu pequeno da plataforma,
+ * `globals.css`), pra não ser o único elemento flutuante que aparece sem
+ * transição nenhuma; `prefers-reduced-motion` zera a duração como
+ * qualquer outra animação da plataforma (regra global em `globals.css`).
  */
 export function Tooltip({ label, children }: { label: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -84,7 +90,7 @@ export function Tooltip({ label, children }: { label: string; children: ReactNod
             <span
               id={tooltipId}
               role="tooltip"
-              className="fixed z-50 max-w-xs -translate-x-1/2 rounded-md bg-zinc-900 px-2 py-1 text-xs text-zinc-100 shadow-[var(--shadow-float)] dark:bg-zinc-100 dark:text-zinc-900"
+              className="mitza-tooltip-in fixed z-50 max-w-xs -translate-x-1/2 rounded-md bg-zinc-900 px-2 py-1 text-xs text-zinc-100 shadow-[var(--shadow-float)] dark:bg-zinc-100 dark:text-zinc-900"
               style={{ top: position.top, left: position.left }}
             >
               {label}

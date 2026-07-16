@@ -170,11 +170,11 @@ body {
 }
 
 .mitza-backdrop-in {
-  animation: mitza-fade-in 150ms ease-out;
+  animation: mitza-fade-in var(--motion-fast) var(--ease-enter);
 }
 
 .mitza-panel-in {
-  animation: mitza-panel-in 180ms ease-out;
+  animation: mitza-panel-in var(--motion-standard) var(--ease-enter);
 }
 
 /* Platform Continuity System 1.0 — confirmação de sucesso única da
@@ -192,7 +192,27 @@ body {
 }
 
 .mitza-toast-in {
-  animation: mitza-toast-in 180ms ease-out;
+  animation: mitza-toast-in var(--motion-standard) var(--ease-enter);
+}
+
+/* Platform Feel 1.0 — o toast some sozinho depois de alguns segundos, mas
+ * até esta etapa desaparecia de um frame pro outro: o único elemento
+ * flutuante da plataforma sem uma saída correspondente à sua entrada
+ * (drawer, modal e popover já tinham). `ToastProvider` aplica esta classe
+ * pouco antes de desmontar o toast, na mesma duração usada aqui. */
+@keyframes mitza-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.mitza-toast-out {
+  animation: mitza-toast-out var(--motion-fast) var(--ease-exit);
 }
 
 /* Interaction Design System 1.0 — menus/popovers pequenos e ancorados (ex.:
@@ -210,8 +230,18 @@ body {
 }
 
 .mitza-menu-in {
-  animation: mitza-menu-in 120ms ease-out;
+  animation: mitza-menu-in var(--motion-fast) var(--ease-enter);
   transform-origin: top right;
+}
+
+/* Platform Feel 1.0 — mesmo nascimento do menu (`mitza-menu-in`), só com
+ * origem central: o Tooltip (`src/components/ui/tooltip.tsx`) é o único
+ * elemento flutuante pequeno da plataforma sem nenhuma animação de
+ * entrada — aparecia "seco" enquanto qualquer popover/menu ancorado nasce
+ * com o mesmo fade + leve escala. */
+.mitza-tooltip-in {
+  animation: mitza-menu-in var(--motion-fast) var(--ease-enter);
+  transform-origin: top center;
 }
 
 /* MITZA Interaction Engine v1 (Parte 6 — microinterações) — check de
