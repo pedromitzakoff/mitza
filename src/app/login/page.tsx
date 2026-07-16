@@ -14,7 +14,7 @@ export default async function LoginPage({
         className="flex w-full max-w-sm flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
       >
         <div>
-          <h1 className="text-xl font-semibold text-black dark:text-zinc-50">
+          <h1 className="text-xl font-semibold text-foreground">
             Mitza
           </h1>
           <p className="text-sm text-zinc-500">Entre com seu e-mail e senha.</p>

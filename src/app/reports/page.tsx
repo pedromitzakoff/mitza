@@ -253,7 +253,7 @@ export default async function ReportsPage({
                 const reportStatus = reportStatusFor(card.clientId);
                 return (
                   <tr key={card.clientId} className="border-b border-border/60 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
-                    <td className="py-2 px-3 font-bold text-black dark:text-white">{card.clientName}</td>
+                    <td className="py-2 px-3 font-bold text-foreground">{card.clientName}</td>
                     <td className="py-2 px-3 text-muted-foreground">
                       {primaryManagerNameByClient.get(card.clientId) ?? "Sem gestor"}
                     </td>

@@ -87,7 +87,7 @@ export function OperationalActivityPanel({
                 {[row.clientName, row.taskTitle].filter(Boolean).join(" · ") || "—"}
               </p>
               {row.wasOnTime !== null && (
-                <p className={row.wasOnTime ? "mt-0.5 text-emerald-600 dark:text-emerald-400" : "mt-0.5 text-amber-600 dark:text-amber-400"}>
+                <p className={row.wasOnTime ? "mt-0.5 text-green-600 dark:text-green-400" : "mt-0.5 text-amber-600 dark:text-amber-400"}>
                   {row.wasOnTime ? "No prazo" : formatDelay(row.delaySeconds)}
                 </p>
               )}

@@ -152,7 +152,7 @@ export function ClientUpdateEditor({
 
       {sentAt && (
         <div className="relative flex items-center justify-between gap-2 text-xs">
-          <span className="text-emerald-600 dark:text-emerald-400">
+          <span className="text-green-600 dark:text-green-400">
             Enviada em {formatDateTimeWithYear(sentAt)}
             {sentByName && ` por ${sentByName}`}
           </span>

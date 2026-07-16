@@ -44,7 +44,7 @@ export default async function EditClientPage({
         &larr; Voltar
       </Link>
 
-      <h1 className="mt-4 text-2xl font-semibold text-black dark:text-zinc-50">
+      <h1 className="mt-4 text-2xl font-semibold text-foreground">
         Editar cliente
       </h1>
 

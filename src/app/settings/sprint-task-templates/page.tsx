@@ -43,7 +43,7 @@ export default async function SprintTaskTemplatesPage({
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
+        <h1 className="text-2xl font-semibold text-foreground">
           Tarefas padrão de sprint
         </h1>
         <BackfillButton />

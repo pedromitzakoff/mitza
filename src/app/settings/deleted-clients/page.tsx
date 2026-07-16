@@ -15,7 +15,7 @@ export default async function DeletedClientsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-12">
-      <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
+      <h1 className="text-2xl font-semibold text-foreground">
         Clientes excluídos
       </h1>
       <p className="mt-1 text-sm text-zinc-500">
@@ -31,7 +31,7 @@ export default async function DeletedClientsPage() {
               className="flex items-center justify-between gap-3 px-4 py-3"
             >
               <div className="min-w-0">
-                <p className="truncate text-black dark:text-zinc-50">{client.name}</p>
+                <p className="truncate text-foreground">{client.name}</p>
                 <p className="text-xs text-zinc-500">
                   {client.meta_ad_account_id} · excluído em{" "}
                   {new Date(client.deleted_at!).toLocaleDateString("pt-BR")}

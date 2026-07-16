@@ -23,7 +23,7 @@ export interface AccountReviewSummaryItem {
 
 const OUTCOME_TEXT_CLASSES: Record<AccountReviewOutcome, string> = {
   NO_CHANGE: "text-muted-foreground",
-  OPTIMIZATION_PERFORMED: "text-emerald-600 dark:text-emerald-400",
+  OPTIMIZATION_PERFORMED: "text-green-600 dark:text-green-400",
   ISSUE_IDENTIFIED: "text-amber-600 dark:text-amber-400",
 };
 
