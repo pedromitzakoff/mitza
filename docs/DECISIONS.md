@@ -749,6 +749,78 @@ uma reescrita arriscada de fluxos antigos numa etapa só.
   otimista de fato.
 - `globals.css`: `mitza-check-in`, `mitza-row-exit`/`mitza-row-exit-active`.
 
+## Decisão 016: Infraestrutura do Interaction Engine vira genérica (`src/lib`)
+
+**Data:** 2026-07-16
+**Status:** Ativa (numeração provisória — branch ainda não mesclada, ver
+Capítulo 8 de `CONTRIBUTING.md`).
+
+### Contexto
+
+As três etapas anteriores construíram optimistic UI, memória de contexto,
+rollback, toast inteligente e microinterações resolvendo o problema
+concreto da tela Sprints. O usuário pediu que essa infraestrutura parasse
+de estar acoplada a componentes específicos, pra qualquer funcionalidade
+nova já nascer com o mesmo comportamento.
+
+### Problema
+
+Uma auditoria encontrou 4 pontos de duplicação/acoplamento reais: (1)
+`TaskRowMenu` e `ClientPerformanceGoalEditor` reimplementavam cada um o
+mesmo trio Portal+backdrop+posicionamento; (2) `isRedirectSignal` vivia
+como função privada em `task-row.tsx`, mas qualquer optimistic action
+futura que chame uma Server Action fora de um `<form>` precisa da mesma
+checagem; (3) o reducer de `useOptimisticTasks` só sabia "completar"/
+"excluir" tarefa — a mecânica de "trocar campo"/"remover item" de uma
+lista otimista é genérica; (4) `context-memory.ts`/`context-memory-client.tsx`
+só sabiam lidar com o formato específico da tela Sprints (campos fixos
+`expandedClientIds`/`expandedSprintIds`/`expandedCommentIds`, chave de
+armazenamento hardcoded) — uma tela nova com suas próprias categorias de
+expansão precisaria reescrever tudo do zero.
+
+### Decisão tomada
+
+Extraídos 6 módulos novos em `src/lib/`: `next-redirect.ts`
+(`isRedirectSignal`), `optimistic-list.ts` (`useOptimisticList<T>` —
+patch/remove/insert genéricos por `id`), `row-exit-animation.ts`
+(`useRowExitAnimation` — encolhe/esmaece antes de remover), e o par
+`screen-memory.ts`/`screen-memory-client.tsx` (`buildContextKey`,
+`useScreenMemory` — restaura/observa expansões em conjunto + scroll,
+parametrizado por `storageKey`/`version`/`prefixes`, nenhum campo fixo).
+`floating-menu.tsx` ganhou `FloatingPortalPanel`, componente compartilhado
+pro trio Portal+backdrop+posicionamento. Os consumidores existentes
+(`task-row.tsx`, `client-performance-goal-editor.tsx`,
+`optimistic-tasks.ts`, `context-memory.ts`/`context-memory-client.tsx` da
+tela Sprints) foram reescritos como instâncias finas desses módulos —
+mesma assinatura pública, mesmo comportamento visual, zero regra de
+negócio tocada. `SPRINTS_CONTEXT_VERSION` subiu de 2 pra 3 só por causa da
+mudança de formato interno (campos fixos → dicionário genérico), não por
+mudança de comportamento.
+
+### Justificativa
+
+Consolidar depois de ter 2-3 usos reais (nunca antes) é a mesma lógica
+de "evolução incremental" de `CONTRIBUTING.md` — a duplicação encontrada
+era real e pequena o bastante pra generalizar com segurança, sem
+inventar abstração especulativa pra funcionalidades que ainda não
+existem.
+
+### Impactos
+
+- Novos: `src/lib/next-redirect.ts`, `src/lib/optimistic-list.ts`,
+  `src/lib/row-exit-animation.ts`, `src/lib/screen-memory.ts`,
+  `src/lib/screen-memory-client.tsx`.
+- `src/lib/floating-menu.tsx`: novo export `FloatingPortalPanel`.
+- `src/lib/optimistic-tasks.ts`: reescrito sobre `useOptimisticList`,
+  mesma API pública.
+- `src/app/sprints/context-memory.ts`/`context-memory-client.tsx`:
+  reescritos como instância fina de `@/lib/screen-memory*`;
+  `SPRINTS_CONTEXT_VERSION` 2 → 3.
+- `task-row.tsx`/`client-performance-goal-editor.tsx`: usam os módulos
+  extraídos em vez de reimplementar a mesma lógica.
+- Nenhuma tela nova foi criada; nenhuma regra de negócio, permissão ou
+  comportamento visual mudou.
+
 ## Como adicionar novas decisões
 
 Sempre que uma alteração modificar a arquitetura da plataforma ou sua

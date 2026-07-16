@@ -1,6 +1,7 @@
 "use client";
 
-import { useLayoutEffect, useState, type RefObject } from "react";
+import { useLayoutEffect, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 
 export interface FloatingMenuPosition {
   top: number;
@@ -54,4 +55,46 @@ export function useFloatingMenuPosition(
   }, [open, anchorRef, align]);
 
   return position;
+}
+
+/**
+ * Etapa "MITZA Interaction Engine v1.5" — extraído de `TaskRowMenu`
+ * (`task-row.tsx`) e `ClientPerformanceGoalEditor`, que reimplementavam o
+ * mesmo trio Portal + botão-backdrop + painel posicionado cada um do seu
+ * jeito. Qualquer popover ancorado (menu de linha, seletor pequeno) que
+ * precise escapar de um ancestral com `overflow: hidden`/stacking context
+ * (ver doc de `useFloatingMenuPosition`) usa este componente em vez de
+ * remontar o Portal na mão. Não estiliza o conteúdo interno — só entrega o
+ * botão que fecha ao clicar fora (`aria-label={closeLabel}`) e o `<div>`
+ * posicionado (`role`/`className` decididos por quem chama, já que menu de
+ * ações e listbox de seleção têm papéis ARIA e larguras diferentes).
+ */
+export function FloatingPortalPanel({
+  open,
+  position,
+  onClose,
+  role,
+  closeLabel,
+  className,
+  children,
+}: {
+  open: boolean;
+  position: FloatingMenuPosition | null;
+  onClose: () => void;
+  role: "menu" | "listbox";
+  closeLabel: string;
+  className: string;
+  children: ReactNode;
+}) {
+  if (!open || !position) return null;
+
+  return createPortal(
+    <>
+      <button type="button" aria-label={closeLabel} onClick={onClose} className="fixed inset-0 z-40" />
+      <div role={role} className={`mitza-menu-in fixed z-50 ${className}`} style={{ top: position.top, left: position.left }}>
+        {children}
+      </div>
+    </>,
+    document.body,
+  );
 }

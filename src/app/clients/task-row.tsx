@@ -1,22 +1,19 @@
 "use client";
 
 import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
 import Link from "next/link";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
 import { formatCompactTaskDate } from "@/lib/format";
 import { saveFocusForReturn } from "@/lib/focus-restore";
-import { useFloatingMenuPosition } from "@/lib/floating-menu";
+import { useFloatingMenuPosition, FloatingPortalPanel } from "@/lib/floating-menu";
+import { useRowExitAnimation } from "@/lib/row-exit-animation";
+import { isRedirectSignal } from "@/lib/next-redirect";
 import { useToast } from "@/app/toast-provider";
 import type { TaskStatus, TaskType, TeamMemberStatus } from "@/lib/supabase/database.types";
 import { completeTaskAction, deleteTaskAction } from "./tasks-actions";
 
 const DELETE_CONFIRM_TIMEOUT_MS = 5000;
-/** Etapa "MITZA Interaction Engine v1" (Parte 6) — mesma duração de
- * `--motion-standard` (globals.css): a linha encolhe/esmaece por esse
- * tempo ANTES de sumir de fato da lista, nunca some instantaneamente. */
-const ROW_EXIT_DURATION_MS = 220;
 
 /**
  * Menu "•••" da tarefa (Etapa "Sprint Workspace Polish 1.0") — antes era um
@@ -61,6 +58,7 @@ function TaskRowMenu({
   onOptimisticDelete,
   onDeleteStart,
   onDeleteError,
+  waitForExit,
 }: {
   taskId: string;
   taskTitle: string;
@@ -76,6 +74,10 @@ function TaskRowMenu({
   /** Desfaz a animação de saída se a exclusão falhar — a linha "descolapsa"
    * de volta, já que ela nunca chegou a sair da lista de verdade. */
   onDeleteError?: () => void;
+  /** Etapa "MITZA Interaction Engine v1.5" — `waitForExit` de
+   * `useRowExitAnimation` (`TaskRow`), repassado aqui pra `handleDelete`
+   * esperar a transição CSS terminar antes de despachar a remoção real. */
+  waitForExit: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -101,9 +103,9 @@ function TaskRowMenu({
     setError(null);
     onDeleteStart?.();
     startTransition(async () => {
-      // Espera a animação de saída (Parte 6) terminar antes de remover de
-      // fato — nunca some instantaneamente.
-      await new Promise((resolve) => setTimeout(resolve, ROW_EXIT_DURATION_MS));
+      // Espera a animação de saída terminar antes de remover de fato —
+      // nunca some instantaneamente.
+      await waitForExit();
       onOptimisticDelete?.();
       const result = await deleteTaskAction(taskId, clientId);
       if (result?.error) {
@@ -135,80 +137,61 @@ function TaskRowMenu({
         •••
       </button>
 
-      {open &&
-        position &&
-        createPortal(
-          <>
-            <button type="button" aria-label="Fechar menu" onClick={closeMenu} className="fixed inset-0 z-40" />
-            <div
-              role="menu"
-              className="mitza-menu-in fixed z-50 w-44 -translate-x-full rounded-lg border border-border bg-card p-1 shadow-[var(--shadow-float)]"
-              style={{ top: position.top, left: position.left }}
-            >
-              <Link
-                href={detailsHref}
-                scroll={false}
-                role="menuitem"
-                onClick={(event) => {
-                  saveFocusForReturn(event.currentTarget);
-                  closeMenu();
-                }}
-                className="mitza-pressable block rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+      <FloatingPortalPanel
+        open={open}
+        position={position}
+        onClose={closeMenu}
+        role="menu"
+        closeLabel="Fechar menu"
+        className="w-44 -translate-x-full rounded-lg border border-border bg-card p-1 shadow-[var(--shadow-float)]"
+      >
+        <Link
+          href={detailsHref}
+          scroll={false}
+          role="menuitem"
+          onClick={(event) => {
+            saveFocusForReturn(event.currentTarget);
+            closeMenu();
+          }}
+          className="mitza-pressable block rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+        >
+          Ver detalhes
+        </Link>
+
+        {isAdmin &&
+          (confirming ? (
+            <div className="mt-0.5 flex items-center gap-1.5 px-2 py-1">
+              <span className="text-[11px] text-muted-foreground">Confirmar exclusão?</span>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={handleDelete}
+                className="mitza-pressable rounded px-1 text-[11px] font-medium text-red-600 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400"
               >
-                Ver detalhes
-              </Link>
-
-              {isAdmin &&
-                (confirming ? (
-                  <div className="mt-0.5 flex items-center gap-1.5 px-2 py-1">
-                    <span className="text-[11px] text-muted-foreground">Confirmar exclusão?</span>
-                    <button
-                      type="button"
-                      disabled={isPending}
-                      onClick={handleDelete}
-                      className="mitza-pressable rounded px-1 text-[11px] font-medium text-red-600 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400"
-                    >
-                      {isPending ? "Excluindo..." : "Sim"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirming(false)}
-                      className="mitza-pressable rounded px-1 text-[11px] text-muted-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-                    >
-                      Não
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => setConfirming(true)}
-                    className="mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:text-red-400 dark:hover:bg-red-950"
-                  >
-                    Excluir tarefa
-                  </button>
-                ))}
-
-              {error && <p className="px-2 py-1 text-[11px] text-red-600 dark:text-red-400">{error}</p>}
+                {isPending ? "Excluindo..." : "Sim"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                className="mitza-pressable rounded px-1 text-[11px] text-muted-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              >
+                Não
+              </button>
             </div>
-          </>,
-          document.body,
-        )}
-    </span>
-  );
-}
+          ) : (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => setConfirming(true)}
+              className="mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:text-red-400 dark:hover:bg-red-950"
+            >
+              Excluir tarefa
+            </button>
+          ))}
 
-/** `redirect()` de dentro de um Server Action lança um erro especial com
- * `digest` começando em "NEXT_REDIRECT" — precisa deixar esse erro
- * atravessar sem tratar como falha (senão o redirecionamento de
- * `completeTaskAction` pra "tarefa não encontrada" nunca aconteceria). */
-function isRedirectSignal(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "digest" in error &&
-    typeof (error as { digest?: unknown }).digest === "string" &&
-    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+        {error && <p className="px-2 py-1 text-[11px] text-red-600 dark:text-red-400">{error}</p>}
+      </FloatingPortalPanel>
+    </span>
   );
 }
 
@@ -322,8 +305,8 @@ export function TaskRow({
   // Etapa "MITZA Interaction Engine v1" (Parte 6) — a linha encolhe/esmaece
   // (`mitza-row-exit-active`) assim que a exclusão é confirmada, antes de
   // sumir de fato da lista (`TaskRowMenu` chama `onDeleteStart`/espera
-  // `ROW_EXIT_DURATION_MS` antes de despachar a remoção de verdade).
-  const [isLeaving, setIsLeaving] = useState(false);
+  // `waitForExit` antes de despachar a remoção de verdade).
+  const { isLeaving, startExit, cancelExit, waitForExit } = useRowExitAnimation();
   const { showToast } = useToast();
   const isNotDone = effectiveStatus === "nao_realizado";
   const isOverdue = effectiveStatus === "atrasado";
@@ -426,8 +409,9 @@ export function TaskRow({
           detailsHref={detailsHref}
           isAdmin={isAdmin ?? false}
           onOptimisticDelete={onOptimisticDelete}
-          onDeleteStart={() => setIsLeaving(true)}
-          onDeleteError={() => setIsLeaving(false)}
+          onDeleteStart={startExit}
+          onDeleteError={cancelExit}
+          waitForExit={waitForExit}
         />
       </div>
       {completeError && <p className="mt-0.5 pl-[26px] text-[11px] text-red-600 dark:text-red-400">{completeError}</p>}
