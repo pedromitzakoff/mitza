@@ -12,12 +12,16 @@ export async function createCommentAction(
   commentableId: string,
   clientId: string,
   formData: FormData,
-) {
+): Promise<{ error?: string }> {
   const supabase = await createSupabaseClient();
   const profile = await getCurrentProfile();
 
   if (!profile) {
-    redirect(`/clients/${clientId}?commentError=${encodeURIComponent("Sessão expirada, faça login de novo")}`);
+    // Sessão expirada é uma navegação de verdade (precisa logar de novo),
+    // não um erro de mutação — continua sendo o único `redirect()` desta
+    // action (Platform Integrity Wave 2, Decisão do contrato de Server
+    // Action: redirect só quando o destino é genuinamente outra tela).
+    redirect("/login");
   }
 
   const content = String(formData.get("content") ?? "").trim();
@@ -31,7 +35,7 @@ export async function createCommentAction(
     });
 
     if (error) {
-      redirect(`/clients/${clientId}?commentError=${encodeURIComponent(error.message)}`);
+      return { error: "Não foi possível salvar seu comentário. Tente novamente." };
     }
 
     let sprintId: string | null = null;
@@ -66,4 +70,6 @@ export async function createCommentAction(
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
+
+  return {};
 }

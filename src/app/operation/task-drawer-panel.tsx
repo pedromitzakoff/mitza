@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { restoreFocusForReturn } from "@/lib/focus-restore";
@@ -11,8 +11,8 @@ import { completeTaskAction, deleteTaskAction } from "@/app/clients/tasks-action
 import { createCommentAction } from "@/app/clients/comments-actions";
 import { DeleteTaskButton } from "@/app/clients/delete-task-button";
 import { InlineEditTaskForm, type InlineTaskManagerOption } from "@/app/clients/inline-task-form";
-import { SubmitButton } from "@/app/submit-button";
 import { saveScrollForReturn } from "@/lib/scroll-restore";
+import { useToast } from "@/app/toast-provider";
 import type { CommentItem } from "@/app/clients/comment-thread";
 import type { OperationTaskItem } from "./operation-data";
 
@@ -52,6 +52,35 @@ export function TaskDrawerPanel({
   const router = useRouter();
   const panelRef = useRef<HTMLDivElement>(null);
   const [isClosing, setIsClosing] = useState(false);
+  const [isCompletePending, startCompleteTransition] = useTransition();
+  const [isCommentPending, startCommentTransition] = useTransition();
+  const commentFormRef = useRef<HTMLFormElement>(null);
+  const { showToast } = useToast();
+
+  function handleComplete() {
+    startCompleteTransition(async () => {
+      const result = await completeTaskAction(task.id, clientId);
+      if (result?.error) {
+        showToast(result.error, "error");
+        return;
+      }
+      showToast(`"${task.title}" concluída.`);
+    });
+  }
+
+  function handleCommentSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    startCommentTransition(async () => {
+      const result = await createCommentAction("task", task.id, clientId, formData);
+      if (result?.error) {
+        showToast(result.error, "error");
+        return;
+      }
+      form.reset();
+    });
+  }
 
   /**
    * Interaction Physics 1.0 (piloto) — este é o único drawer com animação de
@@ -151,14 +180,14 @@ export function TaskDrawerPanel({
 
         <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
           {status !== "feito" && (
-            <form action={completeTaskAction.bind(null, task.id, clientId)}>
-              <SubmitButton
-                className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
-                pendingChildren="Concluindo..."
-              >
-                Marcar como feito
-              </SubmitButton>
-            </form>
+            <button
+              type="button"
+              disabled={isCompletePending}
+              onClick={handleComplete}
+              className="mitza-pressable rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isCompletePending ? "Concluindo..." : "Marcar como feito"}
+            </button>
           )}
           {managers ? (
             <InlineEditTaskForm
@@ -217,19 +246,21 @@ export function TaskDrawerPanel({
             </ul>
           )}
 
-          <form
-            action={createCommentAction.bind(null, "task", task.id, clientId)}
-            className="mt-2 flex gap-2"
-          >
+          <form ref={commentFormRef} onSubmit={handleCommentSubmit} className="mt-2 flex gap-2">
             <input
               name="content"
               placeholder="Comentar..."
               required
-              className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none transition-colors focus:border-zinc-500"
+              disabled={isCommentPending}
+              className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none transition-colors focus:border-zinc-500 disabled:opacity-60"
             />
-            <SubmitButton className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900">
-              Enviar
-            </SubmitButton>
+            <button
+              type="submit"
+              disabled={isCommentPending}
+              className="mitza-pressable shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900"
+            >
+              {isCommentPending ? "Enviando..." : "Enviar"}
+            </button>
           </form>
         </div>
       </div>

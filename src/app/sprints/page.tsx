@@ -82,7 +82,6 @@ export default async function SprintsPage({
     display?: string;
     task?: string;
     taskError?: string;
-    commentError?: string;
     review?: string;
     reviewClient?: string;
     reviewDetail?: string;
@@ -700,9 +699,9 @@ export default async function SprintsPage({
         />
       </div>
 
-      {(params.taskError || params.commentError) && (
+      {params.taskError && (
         <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          {params.taskError || params.commentError}
+          {params.taskError}
         </p>
       )}
 

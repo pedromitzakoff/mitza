@@ -10,6 +10,7 @@ import { OperationalEventType } from "@/lib/operational-events";
 import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
 import { todayDateString } from "@/lib/today";
 import { withOriginalDueDate } from "@/lib/task-creation";
+import { toUserFacingError } from "@/lib/user-facing-error";
 import type { TaskRecurrence, TaskType } from "@/lib/supabase/database.types";
 
 function resolveReturnTo(formData: FormData, fallback: string): string {
@@ -208,7 +209,7 @@ export async function updateTaskAction(taskId: string, clientId: string, formDat
   redirect(returnTo);
 }
 
-export async function completeTaskAction(taskId: string, clientId: string) {
+export async function completeTaskAction(taskId: string, clientId: string): Promise<{ error?: string }> {
   const supabase = await createSupabaseClient();
 
   const { data: task, error: fetchError } = await supabase
@@ -218,40 +219,40 @@ export async function completeTaskAction(taskId: string, clientId: string) {
     .single();
 
   if (fetchError || !task) {
-    redirect(`/clients/${clientId}?taskError=${encodeURIComponent("Tarefa não encontrada")}`);
+    return { error: "Tarefa não encontrada." };
   }
 
   const profile = await getCurrentProfile();
+
+  if (!profile) {
+    // Sessão expirada é uma navegação de verdade, não um erro de mutação
+    // (Platform Integrity Wave 2 — contrato de Server Action).
+    redirect("/login");
+  }
 
   // tasks.status="feito" + o(s) evento(s) operational_events (task_completed
   // e, quando aplicável, optimization_completed/meeting_completed/
   // creative_delivery_completed correlacionados) são gravados atomicamente
   // nesta única função de banco — nunca tarefa concluída sem evento, nem
   // evento sem a tarefa realmente concluída (seção 7 do pedido).
-  if (profile) {
-    const { error: rpcError } = await supabase.rpc("complete_task_and_record_event", {
-      p_task_id: taskId,
-      p_actor_team_member_id: profile.id,
-      p_actor_auth_user_id: profile.authUserId,
-      p_source: "web",
-    });
+  const { error: rpcError } = await supabase.rpc("complete_task_and_record_event", {
+    p_task_id: taskId,
+    p_actor_team_member_id: profile.id,
+    p_actor_auth_user_id: profile.authUserId,
+    p_source: "web",
+  });
 
-    if (rpcError) {
-      redirect(`/clients/${clientId}?taskError=${encodeURIComponent(rpcError.message)}`);
-    }
-
-    await logOperationalActivity(supabase, {
-      clientId,
-      sprintId: task.sprint_id,
-      taskId,
-      userId: profile.id,
-      activityType: "task_completed",
-    });
-  } else {
-    // Sem sessão resolvida (não deveria acontecer numa Server Action
-    // protegida por auth, mas nunca conclui silenciosamente sem ator).
-    redirect(`/clients/${clientId}?taskError=${encodeURIComponent("Sessão expirada, faça login de novo")}`);
+  if (rpcError) {
+    return { error: toUserFacingError(rpcError, "Não foi possível concluir a tarefa.") };
   }
+
+  await logOperationalActivity(supabase, {
+    clientId,
+    sprintId: task.sprint_id,
+    taskId,
+    userId: profile.id,
+    activityType: "task_completed",
+  });
 
   const nextDate = nextDueDate(task.due_date, task.recurrence);
   if (nextDate) {
@@ -284,6 +285,8 @@ export async function completeTaskAction(taskId: string, clientId: string) {
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
+
+  return {};
 }
 
 /**
@@ -295,12 +298,14 @@ export async function completeTaskAction(taskId: string, clientId: string) {
  * escreve completed_at, só resolved_at, pra não inflar o indicador
  * "Tarefas concluídas" da Visão Geral com tarefas que não foram concluídas.
  */
-export async function markTaskNotDoneAction(taskId: string, clientId: string) {
+export async function markTaskNotDoneAction(taskId: string, clientId: string): Promise<{ error?: string }> {
   const supabase = await createSupabaseClient();
   const profile = await getCurrentProfile();
 
   if (!profile) {
-    redirect(`/clients/${clientId}?taskError=${encodeURIComponent("Sessão expirada, faça login de novo")}`);
+    // Sessão expirada é uma navegação de verdade, não um erro de mutação
+    // (Platform Integrity Wave 2 — contrato de Server Action).
+    redirect("/login");
   }
 
   const { error: rpcError } = await supabase.rpc("mark_task_not_done_and_record_event", {
@@ -311,7 +316,7 @@ export async function markTaskNotDoneAction(taskId: string, clientId: string) {
   });
 
   if (rpcError) {
-    redirect(`/clients/${clientId}?taskError=${encodeURIComponent(rpcError.message)}`);
+    return { error: toUserFacingError(rpcError, "Não foi possível marcar como não realizada.") };
   }
 
   await logOperationalActivity(supabase, {
@@ -326,6 +331,8 @@ export async function markTaskNotDoneAction(taskId: string, clientId: string) {
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
+
+  return {};
 }
 
 /**

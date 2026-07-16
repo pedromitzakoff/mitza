@@ -134,7 +134,6 @@ export default async function ClientPage({
     synced?: string;
     saved?: string;
     taskError?: string;
-    commentError?: string;
     task?: string;
     historicoOrcamento?: string;
     review?: string;
@@ -155,7 +154,6 @@ export default async function ClientPage({
     synced,
     saved,
     taskError,
-    commentError,
     task: openTaskId,
     historicoOrcamento,
     review: openReview,
@@ -552,7 +550,6 @@ export default async function ClientPage({
 
   const banners = [
     error && { tone: "red", text: error },
-    commentError && { tone: "red", text: commentError },
     taskError && { tone: "red", text: taskError },
     reviewError && { tone: "red", text: reviewError },
     clientUpdateError && { tone: "red", text: clientUpdateError },

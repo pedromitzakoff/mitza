@@ -332,7 +332,11 @@ export function TaskRow({
         setLocalOptimisticDone(true);
       }
       try {
-        await completeTaskAction(task.id, clientId);
+        const result = await completeTaskAction(task.id, clientId);
+        if (result?.error) {
+          setCompleteError(result.error);
+          return;
+        }
         showToast(`"${task.title}" concluída.`);
       } catch (error) {
         if (isRedirectSignal(error)) throw error;

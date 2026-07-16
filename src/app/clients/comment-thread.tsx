@@ -1,6 +1,11 @@
+"use client";
+
+import { useRef, useTransition } from "react";
 import type { CommentableType } from "@/lib/supabase/database.types";
 import { createCommentAction } from "./comments-actions";
 import { toggleCommentReportSelectionAction } from "@/app/reports/report-actions";
+import { useToast } from "@/app/toast-provider";
+import { isRedirectSignal } from "@/lib/next-redirect";
 
 export interface CommentItem {
   id: string;
@@ -35,6 +40,30 @@ export function CommentThread({
   clientId: string;
   returnTo?: string;
 }) {
+  const { showToast } = useToast();
+  const [isPending, startTransition] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+
+    startTransition(async () => {
+      try {
+        const result = await createCommentAction(commentableType, commentableId, clientId, formData);
+        if (result?.error) {
+          showToast(result.error, "error");
+          return;
+        }
+        form.reset();
+      } catch (error) {
+        if (isRedirectSignal(error)) throw error;
+        showToast("Não foi possível salvar seu comentário. Tente novamente.", "error");
+      }
+    });
+  }
+
   return (
     <div className="mt-2 border-t border-border pt-2">
       {comments.length > 0 && (
@@ -67,20 +96,19 @@ export function CommentThread({
         </ul>
       )}
 
-      <form
-        action={createCommentAction.bind(null, commentableType, commentableId, clientId)}
-        className="mt-1.5 flex gap-2"
-      >
+      <form ref={formRef} onSubmit={handleSubmit} className="mt-1.5 flex gap-2">
         {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
         <input
           name="content"
           placeholder="Comentar..."
           required
-          className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none focus:border-zinc-500"
+          disabled={isPending}
+          className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none focus:border-zinc-500 disabled:opacity-60"
         />
         <button
           type="submit"
-          className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          disabled={isPending}
+          className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 disabled:opacity-60 dark:hover:bg-zinc-900"
         >
           Enviar
         </button>
