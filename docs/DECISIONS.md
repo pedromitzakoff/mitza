@@ -821,6 +821,211 @@ existem.
 - Nenhuma tela nova foi criada; nenhuma regra de negócio, permissão ou
   comportamento visual mudou.
 
+## Decisão 017: A plataforma passa a ter uma Constituição de integridade conceitual
+
+**Data:** 2026-07-16
+**Status:** Ativa.
+
+### Contexto
+
+Três etapas em sequência — "MITZA Platform Integrity Audit 1.0" (auditoria
+pura, sem código), "MITZA Platform Integrity Review 1.0" (transformação
+dos achados em decisões arquiteturais) e "MITZA Platform Constitution
+1.0" (esta) — concluíram que a plataforma tinha, além de bugs pontuais,
+uma classe de inconsistência estrutural: o mesmo conceito (Status,
+Cliente, Otimização/Revisão de conta) se comportando ou se representando
+de formas ligeiramente diferentes em telas diferentes, sem que isso fosse
+nunca uma decisão consciente.
+
+### Problema
+
+Sem um documento único que registrasse "qual é a forma oficial de cada
+conceito", cada nova implementação corria o risco de reinventar um
+padrão já existente (o achado mais concreto: 8 mapas `_BADGE_CLASSES` e
+~20 mapas `_LABEL` independentes pra representar status, dois deles
+colidindo no mesmo valor de string — `"atencao"` e `"em_andamento"` —
+com significados diferentes).
+
+### Alternativas consideradas
+
+1. Corrigir cada inconsistência encontrada isoladamente, sem registrar um
+   documento novo.
+2. Criar `docs/PLATFORM_INTEGRITY.md` como a Constituição viva da
+   plataforma — o registro permanente de qual é a forma oficial de cada
+   conceito — e implementar só a primeira Wave (Representação) como
+   prova de que a Constituição funciona na prática.
+3. Corrigir tudo de uma vez (todas as 4 Waves do roadmap) nesta mesma
+   etapa.
+
+### Decisão tomada
+
+Alternativa 2. `docs/PLATFORM_INTEGRITY.md` criado com 17 seções
+(preâmbulo, princípio fundamental, glossário de conceitos, fonte da
+verdade, superfícies de edição, contrato de Server Actions, registry de
+representação, vocabulário oficial, padrão visual, comportamento por
+tipo de ação, permissões, Interaction Engine/Context Memory, decisões
+numeradas, roadmap por Waves, conceitos candidatos, processo de emenda,
+checklist). Alternativa 1 rejeitada porque não resolve o problema real
+(a ausência de um registro único); Alternativa 3 rejeitada por escopo —
+Waves 2-4 envolvem mudança de contrato de Server Action e migração de
+fluxos vivos (Relatórios, Cliente), risco maior do que uma única etapa
+controlada deveria assumir de uma vez.
+
+### Justificativa
+
+Uma Constituição só vale alguma coisa se a primeira coisa que ela faz é
+provar que funciona — por isso a Wave 1 foi implementada junto, não só
+proposta.
+
+### Impactos
+
+- Novo: `docs/PLATFORM_INTEGRITY.md`.
+- Novo: `docs/HOW_WE_BUILD_FEATURES.md` (checklist prático) e
+  `docs/CONCEPT_IMPACT_ASSESSMENT.md` (template de análise de impacto).
+- `docs/PLATFORM_MANIFESTO.md`: novo Capítulo 28 ("A Plataforma é um
+  sistema único").
+- `docs/ARCHITECTURE_PRINCIPLES.md`: novos Capítulos 29-31 (registry de
+  representação, contrato de Server Actions, consultar a Constituição
+  antes de criar padrão novo).
+- `docs/CONTRIBUTING.md`: fluxo de contribuição passa a referenciar
+  `PLATFORM_INTEGRITY.md` e o Concept Impact Assessment.
+
+## Decisão 018: Status Registry — representação centralizada, enums continuam múltiplos
+
+**Data:** 2026-07-16
+**Status:** Ativa.
+
+### Contexto
+
+A Platform Integrity Audit encontrou ~10 enums de status independentes
+(`TaskStatus`, `ClientContractStatus`, `SpendStatus`,
+`OperationalActivityStatus`, `AccountHealth`, `TeamMemberStatus`,
+`TeamInvitationStatus`, `MonthlyReportStatus`, `ReportActionItemStatus`,
+`KpiTargetStatus`), cada um com seu próprio mapa de label e de cor de
+badge, dois deles reaproveitando o mesmo valor de string
+(`"atencao"` em `AccountHealth`/`OperationalActivityStatus`;
+`"em_andamento"` em `SpendStatus`/`MonthlyReportStatus`/
+`ReportActionItemStatus` — esta terceira colisão encontrada só durante a
+implementação desta etapa, não na auditoria original) com significados
+diferentes.
+
+### Problema
+
+Unificar os enums num só destruiria informação real — são eixos de
+negócio genuinamente diferentes (saúde de conta ≠ atividade operacional
+do gestor ≠ status de relatório mensal). O problema não era ter vários
+enums; era ter várias implementações independentes da MESMA ideia
+("como represento visualmente um estado") sem nenhuma delas saber da
+existência das outras.
+
+### Alternativas consideradas
+
+1. Deixar cada domínio com seu próprio mapa de label/cor, só documentando
+   a colisão de string como um risco conhecido.
+2. Criar `src/lib/status-registry.ts` com chaves qualificadas por domínio
+   (`"task.pendente"`, `"account_health.atencao"`) centralizando label,
+   classe de badge e ordem — sem fundir os enums de negócio — e
+   transformar os arquivos de domínio existentes em adapters finos que
+   derivam dele, preservando a API pública (`TASK_STATUS_LABEL` etc.)
+   pra não quebrar nenhum ponto de consumo já existente.
+3. Fundir todos os enums num `Status` único global.
+
+### Decisão tomada
+
+Alternativa 2. Nenhuma classe visual de cor foi alterada durante a
+migração — são as mesmas classes Tailwind que já existiam em cada
+`_BADGE_CLASSES` original, só centralizadas. Os labels que colidiam em
+texto (`"atencao"`, `"em_andamento"`) foram qualificados ("Conta em
+atenção" / "Operação em atenção"; "Sprint em andamento" / "Relatório em
+andamento" / "Item em andamento") — mudança de vocabulário já aprovada na
+Platform Integrity Review. Alternativa 1 rejeitada por não resolver nada
+de fato; Alternativa 3 rejeitada porque destruiria a distinção real entre
+eixos de negócio diferentes.
+
+### Justificativa
+
+Centralizar REPRESENTAÇÃO sem fundir DADO é a mesma lógica do Capítulo 5
+de `ARCHITECTURE_PRINCIPLES.md` (fonte única da verdade) aplicada a um
+nível acima: a fonte do DADO já era única por domínio; agora a fonte da
+REPRESENTAÇÃO desse dado também é.
+
+### Impactos
+
+- Novo: `src/lib/status-registry.ts`.
+- `src/app/clients/task-labels.ts`, `src/lib/client-fields.ts`,
+  `src/lib/spend-status.ts`, `src/lib/operational-activity.ts`,
+  `src/lib/team-members.ts`, `src/lib/monthly-reports.ts`,
+  `src/app/priorities-panel.tsx`, `src/app/reports/[clientId]/page.tsx`:
+  constantes de label/badge agora derivam do registry — mesma API
+  pública, mesmo valor de classe visual, texto qualificado só onde havia
+  colisão real.
+- Nenhuma regra de cálculo de status foi alterada.
+
+## Decisão 019: Empty State e Tooltip — consolidação parcial, um componente novo
+
+**Data:** 2026-07-16
+**Status:** Ativa.
+
+### Contexto
+
+A auditoria encontrou ~9 textos de estado vazio escritos à mão (fora dos
+componentes `EmptyState`/`EmptyStateRow` já existentes) e nenhum
+componente oficial de tooltip (uso disperso do atributo nativo
+`title=""`).
+
+### Problema
+
+Existem hoje DOIS componentes `EmptyState` com nomes iguais mas APIs
+diferentes: `@/components/ui/empty-state.tsx` (texto livre como
+`children`, família visual "app") e `@/components/workspace/
+empty-state.tsx` (props `title`/`description`, família visual "Visão
+Geral"). Unificá-los exigiria escolher uma API única e migrar todo
+consumo — mudança de Wave 3, não de Wave 1.
+
+### Alternativas consideradas
+
+1. Migrar os textos hand-rolled para qualquer um dos dois componentes,
+   sem se preocupar com qual família visual cada tela já usa.
+2. Migrar cada texto hand-rolled para o componente `EmptyState` da MESMA
+   família visual que a tela já usa, documentar a duplicação dos dois
+   componentes como pendência de Wave 3, e criar um componente `Tooltip`
+   novo (não existia nenhum) — migrando só os usos de `title=""` que são
+   informação real (fórmula, ação sem texto visível), preservando o uso
+   nativo em casos especiais (mensagem de validação de `pattern` em
+   input, que depende do atributo `title` nativo do HTML5).
+3. Não tocar em Empty State/Tooltip nesta etapa.
+
+### Decisão tomada
+
+Alternativa 2. Migrados: `team-table.tsx`, `client-combobox.tsx`,
+`priorities-panel.tsx` (segundo estado vazio do drawer de severidade),
+`src/app/page.tsx` ("Nenhum gestor encontrado"), `reports/[clientId]/
+page.tsx` (KPIs). Criado `src/components/ui/tooltip.tsx` (portal,
+`aria-describedby` via `cloneElement`, delay no hover, imediato no foco,
+fecha com Esc, sem animação — respeita `prefers-reduced-motion` por
+padrão em vez de precisar de uma exceção pra ele) e migrados os usos em
+`task-row.tsx` (2), `sidebar.tsx` (2) e `investment-metric.tsx` (1, usado
+por `SecondaryInvestmentMetric` em `src/app/page.tsx`). Preservado sem
+migrar: o `title` de validação de formato do CNPJ/conta Meta em
+`client-form.tsx` (mecanismo nativo do HTML5, migrar quebraria a mensagem
+de erro de `pattern`).
+
+### Justificativa
+
+Migrar cada estado vazio pra dentro da família visual certa é consistente
+com a própria auditoria (a inconsistência encontrada era texto solto, não
+a existência de duas famílias visuais — essa é uma divergência conhecida
+e endereçada separadamente, não escondida).
+
+### Impactos
+
+- Novo: `src/components/ui/tooltip.tsx`.
+- `src/components/workspace/empty-state.tsx`: novo prop opcional
+  `className` (aditivo, não quebra nenhum consumo existente).
+- Nenhuma migração de dado, nenhuma Action alterada.
+- Pendência registrada em `docs/PLATFORM_INTEGRITY.md` Seção 9/14 (Wave
+  3): unificar os dois componentes `EmptyState` num só.
+
 ## Como adicionar novas decisões
 
 Sempre que uma alteração modificar a arquitetura da plataforma ou sua

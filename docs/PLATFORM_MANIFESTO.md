@@ -445,3 +445,21 @@ contexto do gestor entre etapas do trabalho.
 
 O gestor não deve esperar desnecessariamente nem precisar reconstruir onde
 estava.
+
+## Capítulo 28 — A Plataforma é um sistema único
+
+A Mitza não é uma coleção de telas independentes. É um sistema único, e
+cada conceito que ela representa — Cliente, Sprint, Tarefa, Status,
+Performance — atravessa várias telas ao mesmo tempo.
+
+Um conceito deve se comportar exatamente igual em qualquer lugar onde
+exista. O gestor nunca deve encontrar dois comportamentos, duas cores ou
+dois textos diferentes pro mesmo conceito só porque ele apareceu em duas
+telas diferentes.
+
+Toda mudança que toca um conceito existente deve considerar seu impacto
+global — não só a tela onde o pedido chegou. `docs/PLATFORM_INTEGRITY.md`
+é o registro oficial de como cada conceito deve se comportar; ele nasceu
+da constatação de que consistência de produto não é um detalhe estético —
+é a mesma promessa do Capítulo 9 (a plataforma como segundo cérebro
+operacional) aplicada a ela mesma.

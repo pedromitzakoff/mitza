@@ -11,7 +11,8 @@
 - [Capítulo 7: Antes do push](#capítulo-7-antes-do-push)
 - [Capítulo 8: Numeração de decisões em branches paralelas](#capítulo-8-numeração-de-decisões-em-branches-paralelas)
 - [Capítulo 9: Atualização da documentação](#capítulo-9-atualização-da-documentação)
-- [Capítulo 10: Princípio mais importante](#capítulo-10-princípio-mais-importante)
+- [Capítulo 10: Guardrails para assistentes de IA](#capítulo-10-guardrails-para-assistentes-de-ia)
+- [Capítulo 11: Princípio mais importante](#capítulo-11-princípio-mais-importante)
 
 ---
 
@@ -41,6 +42,16 @@ Ler `/docs/ARCHITECTURE_PRINCIPLES.md`.
 Consultar `/docs/DECISIONS.md` para verificar se já existe alguma decisão
 relacionada.
 
+### Passo 3.1
+
+Consultar `/docs/PLATFORM_INTEGRITY.md` — a Constituição da plataforma:
+qual é o conceito oficial que o pedido afeta, qual sua fonte da verdade,
+sua superfície de edição oficial e sua representação (label/cor/badge)
+já definidas ali. Se o pedido toca mais de uma superfície do mesmo
+conceito, seguir o fluxo obrigatório de mudança transversal em
+`/docs/HOW_WE_BUILD_FEATURES.md` (Concept Impact Assessment antes de
+propor).
+
 ### Passo 4
 
 Auditar cuidadosamente a implementação atual. Identificar:
@@ -53,6 +64,9 @@ Auditar cuidadosamente a implementação atual. Identificar:
 - funções
 - relacionamentos
 - arquitetura existente
+- **todas as superfícies (telas/componentes) onde o conceito afetado já
+  aparece** — nunca alterar apenas a tela onde o pedido chegou sem
+  verificar as demais
 
 Sempre reutilizar o que já existe quando possível.
 
@@ -167,7 +181,27 @@ verificar se é necessário atualizar:
 
 Nunca deixar documentação desatualizada em relação ao código.
 
-## Capítulo 10: Princípio mais importante
+## Capítulo 10: Guardrails para assistentes de IA
+
+Versão condensada do checklist completo em
+`/docs/HOW_WE_BUILD_FEATURES.md` — vale tanto pra um dev quanto pra um
+assistente de IA implementando uma etapa:
+
+- Não criar componente semelhante sem procurar o oficial primeiro.
+- Não criar enum, label ou badge local sem consultar `status-registry.ts`.
+- Não criar Server Action nova sem seguir o contrato oficial (`{error?}` +
+  `revalidatePath`; `redirect()` só para navegação de verdade).
+- Não exibir erro técnico cru; não criar empty state manual; não criar
+  popover/drawer ad-hoc.
+- Não alterar um conceito sem mapear todas as superfícies onde aparece.
+- Não generalizar prematuramente sem um segundo uso real já existente.
+- Não implementar uma recomendação futura (roadmap, "candidato") sem
+  aprovação explícita — recomendação não é aprovação.
+- Sempre diferenciar, no relatório final, o que foi **auditado como
+  fato**, o que foi **decidido e aprovado**, e o que é **hipótese ou
+  sugestão**.
+
+## Capítulo 11: Princípio mais importante
 
 Toda decisão deve respeitar esta regra:
 

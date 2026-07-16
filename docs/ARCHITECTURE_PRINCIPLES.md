@@ -381,3 +381,33 @@ sistema desfaz a ação automaticamente.
 
 Este passa a ser o padrão obrigatório para toda funcionalidade nova
 desenvolvida na plataforma.
+
+## Capítulo 29 — Um conceito, uma fonte, uma representação
+
+Todo conceito de dado possui uma única fonte da verdade (Capítulo 5). A
+partir da MITZA Platform Constitution 1.0, isso se estende à
+REPRESENTAÇÃO desse dado: label, cor de badge e ordem de exibição também
+possuem uma única origem por eixo de status (`src/lib/status-registry.ts`,
+ver `docs/PLATFORM_INTEGRITY.md` Seção 7). Domínios diferentes continuam
+com enums diferentes quando representam eixos de negócio genuinamente
+diferentes — o que nunca deve se repetir é a REIMPLEMENTAÇÃO independente
+da mesma cor/label em arquivos separados.
+
+## Capítulo 30 — Server Actions possuem contrato oficial
+
+Toda Server Action de mutação retorna `{error?: string}` e aciona
+`revalidatePath` — nunca `redirect()` para sinalizar erro, mesmo quando a
+mesma Action também navega em caso de sucesso. `redirect()` é reservado
+para navegação genuinamente intencional (Capítulo 19). Uma Action com
+contrato misto (sucesso em `{error?}`, erro em `redirect()`) é uma
+inconsistência a corrigir, nunca um padrão a copiar em código novo.
+
+## Capítulo 31 — Consultar a Constituição antes de criar um padrão novo
+
+Antes de criar um componente, um enum de status, um contrato de Action ou
+qualquer padrão visual novo, consultar `docs/PLATFORM_INTEGRITY.md` e
+`docs/HOW_WE_BUILD_FEATURES.md`. Se o conceito já existe lá, estender o
+padrão oficial. Se não existe, a implementação pode estar introduzindo um
+conceito novo — tratar como decisão arquitetural, não como detalhe local
+(ver processo de emenda constitucional, `docs/PLATFORM_INTEGRITY.md`
+Seção 16).
