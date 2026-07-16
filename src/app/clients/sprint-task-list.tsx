@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { EmptyStateRow } from "@/components/ui/empty-state";
-import { SectionHeader, SECONDARY_ACTION_BUTTON_CLASSES } from "@/components/ui/section-header";
+import { SectionHeader } from "@/components/ui/section-header";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { todayDateString } from "@/lib/today";
 import { useOptimisticTasks } from "@/lib/optimistic-tasks";
@@ -24,6 +23,12 @@ import { InlineCreateTaskForm, type InlineTaskManagerOption } from "./inline-tas
  * sozinho — o contador ficava esperando o servidor). Cada `TaskRow`
  * continua com seu próprio `useTransition`/`isPending` (Parte 4: só aquela
  * linha fica protegida contra clique duplo, nunca a lista inteira).
+ *
+ * Etapa "MITZA Workspace-First Tasks 1.0": `InlineCreateTaskForm` deixou de
+ * ser opcional — nenhum caminho aqui volta a navegar pra `/tasks/new`. A
+ * nova tarefa entra na lista via inserção otimista (`dispatchOptimisticTask`
+ * "create"), junto com o contador/barra de progresso, exatamente como
+ * concluir/excluir já faziam.
  */
 export function SprintTaskList({
   tasks,
@@ -31,7 +36,6 @@ export function SprintTaskList({
   sprintId,
   taskHrefPrefix,
   managers,
-  returnTo,
   isAdmin,
 }: {
   tasks: TaskListItem[];
@@ -46,11 +50,7 @@ export function SprintTaskList({
    * Component, e uma função não pode atravessar a fronteira servidor→cliente
    * como prop (ver comentário em `SprintCardBody`). */
   taskHrefPrefix?: string;
-  /** Sprint UX 2.0 Fase 2 — quando informado (só a tela Sprints passa),
-   * "+ Tarefa" vira um formulário inline (sem navegar pra `/tasks/new`). A
-   * página do cliente não passa isto, então continua com o link de sempre. */
-  managers?: InlineTaskManagerOption[];
-  returnTo?: string;
+  managers: InlineTaskManagerOption[];
   /** Etapa "Sprint Workspace Polish 1.0" — habilita "Excluir tarefa" no menu
    * "•••" de cada linha (ver `TaskRow`). */
   isAdmin?: boolean;
@@ -59,7 +59,6 @@ export function SprintTaskList({
   const ordered = orderTasks(optimisticTasks);
   const tasksDone = optimisticTasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
   const progressPct = optimisticTasks.length > 0 ? (tasksDone / optimisticTasks.length) * 100 : 0;
-  const canCreateInline = managers !== undefined && returnTo !== undefined;
 
   return (
     <div>
@@ -75,20 +74,13 @@ export function SprintTaskList({
                 {tasksDone}/{optimisticTasks.length} concluída{optimisticTasks.length !== 1 ? "s" : ""}
               </span>
             )}
-            {canCreateInline ? (
-              <InlineCreateTaskForm
-                clientId={clientId}
-                sprintId={sprintId}
-                managers={managers}
-                returnTo={returnTo}
-                toggleId={`new-task-${sprintId}`}
-                defaultDueDate={todayDateString()}
-              />
-            ) : (
-              <Link href={`/clients/${clientId}/tasks/new?sprintId=${sprintId}`} className={SECONDARY_ACTION_BUTTON_CLASSES}>
-                + Tarefa
-              </Link>
-            )}
+            <InlineCreateTaskForm
+              clientId={clientId}
+              sprintId={sprintId}
+              managers={managers}
+              defaultDueDate={todayDateString()}
+              onCreated={(task) => dispatchOptimisticTask({ type: "create", task })}
+            />
           </span>
         }
       >

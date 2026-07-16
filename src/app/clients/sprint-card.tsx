@@ -595,8 +595,7 @@ export function SprintCardBody({
               clientId={clientId}
               sprintId={sprint.sprintId}
               taskHrefPrefix={taskHrefPrefix}
-              managers={taskManagers}
-              returnTo={taskManagers ? returnTo : undefined}
+              managers={taskManagers ?? []}
               isAdmin={isAdmin}
             />
             {accountReviews && newReviewHref && buildReviewDetailHref && (

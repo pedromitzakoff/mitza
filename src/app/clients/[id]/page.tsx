@@ -910,6 +910,7 @@ export default async function ClientPage({
                 performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
                 returnTo={returnTo}
                 hideNextAction={sprint.temporalStatus === "atual"}
+                taskManagers={managers ?? []}
               />
             ))
           ) : (
@@ -920,21 +921,11 @@ export default async function ClientPage({
         </div>
       </Section>
 
-      <Section
-        title="Outras tarefas"
-        action={
-          <Link
-            href={`/clients/${client.id}/tasks/new`}
-            className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
-          >
-            + Nova tarefa
-          </Link>
-        }
-      >
+      <Section title="Outras tarefas">
         <p className="mb-3 text-xs text-zinc-500">
           Tarefas sem sprint vinculada — as de cada sprint aparecem no card dela, acima.
         </p>
-        <TaskList tasks={unlinkedTasks} clientId={client.id} />
+        <TaskList tasks={unlinkedTasks} clientId={client.id} managers={managers ?? []} />
       </Section>
 
       <div className="mt-3">
@@ -963,6 +954,7 @@ export default async function ClientPage({
           closeHref={returnTo}
           returnTo={returnTo}
           isAdmin={isAdmin}
+          managers={managers ?? []}
         />
       )}
 
