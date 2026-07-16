@@ -214,6 +214,25 @@ body {
   transform-origin: top right;
 }
 
+/* MITZA Interaction Engine v1 (Parte 6 — microinterações) — check de
+ * "tarefa concluída" nasce com um pequeno "pop" em vez de simplesmente
+ * trocar de ícone sem transição; reforça que a ação foi recebida sem
+ * chamar atenção além do necessário. */
+@keyframes mitza-check-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.mitza-check-in {
+  animation: mitza-check-in var(--motion-fast) var(--ease-enter);
+}
+
 /* Interaction Physics 1.0 — piloto controlado. Tudo abaixo usa os tokens de
  * motion declarados em :root; nenhuma duração/curva nova é escrita solta. */
 
@@ -263,6 +282,30 @@ body {
 
 .mitza-panel-out {
   animation: mitza-panel-out var(--motion-panel) var(--ease-exit);
+}
+
+/* MITZA Interaction Engine v1 (Parte 6 — microinterações) — linha de
+ * tarefa "saindo" antes de ser removida da lista (exclusão otimista):
+ * some por opacidade E encolhe a altura, nunca só um corte seco. A
+ * remoção de fato (o item sair do array otimista) só acontece DEPOIS
+ * dessa transição terminar — ver `task-row.tsx`. `max-height` precisa de
+ * um valor fixo (nunca `auto`) pra poder ser transicionado; 200px é de
+ * propósito bem maior que uma linha real (~28-50px, mesmo com a mensagem
+ * de erro de conclusão quebrando em duas linhas) — a classe base NUNCA
+ * corta conteúdo normal, só serve de ponto de partida pra transição até 0
+ * quando `-active` é aplicada. */
+.mitza-row-exit {
+  max-height: 200px;
+  overflow: hidden;
+  transition: max-height var(--motion-standard) var(--ease-exit), opacity var(--motion-standard) var(--ease-exit),
+    padding var(--motion-standard) var(--ease-exit);
+}
+
+.mitza-row-exit-active {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
 }
 
 /* Botões com feedback de "pressionado" — só transform (nunca desloca

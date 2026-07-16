@@ -1,18 +1,25 @@
 /**
- * Etapa "Instant Action & Context Memory 1.0" (Partes 6-9/12/13) — memória
- * de contexto da tela Sprints. Mês, visão e filtros já são preservados pela
- * URL (nada a fazer ali — ver auditoria do relatório desta etapa); o que
- * falta é o que a URL não guarda hoje: qual cliente/sprint estava
- * expandido e a posição de scroll. Guardado em `sessionStorage` (estado
- * temporário de navegação, nunca dado de negócio — Parte 7 do pedido:
- * "não persistir no banco").
+ * Etapa "Instant Action & Context Memory 1.0" (Partes 6-9/12/13), expandida
+ * pela etapa "MITZA Interaction Engine v1" (Parte 3 — "Context Memory 2.0")
+ * — memória de contexto da tela Sprints. Mês, visão e filtros já são
+ * preservados pela URL (nada a fazer ali); o que falta é o que a URL não
+ * guarda hoje: quais clientes/sprints/comentários estavam expandidos e a
+ * posição de scroll. Guardado em `sessionStorage` (estado temporário de
+ * navegação, nunca dado de negócio).
+ *
+ * Context Memory 2.0: a v1 lembrava só o ÚLTIMO cliente/sprint expandido.
+ * Esta versão lembra TODOS os que estavam abertos (conjuntos, não um único
+ * id) — o gestor pode ter 3 clientes e 2 sprints abertos ao mesmo tempo, e
+ * ao voltar todos devem reaparecer, não só o último. Mudança de formato
+ * (de id único pra lista) => versão bump (`v: 2`): um valor salvo no
+ * formato antigo nunca é lido por engano como se fosse o novo formato.
  *
  * Funções puras (sem `window`/`sessionStorage` aqui dentro dos helpers de
  * chave) pra serem testáveis sem precisar de DOM.
  */
 
 export const SPRINTS_CONTEXT_STORAGE_KEY = "mitza:sprints-context";
-export const SPRINTS_CONTEXT_VERSION = 1;
+export const SPRINTS_CONTEXT_VERSION = 2;
 
 export interface SprintsContextKeyParams {
   view: string;
@@ -31,8 +38,9 @@ export interface SprintsContextKeyParams {
 export interface SprintsContextState {
   v: number;
   contextKey: string;
-  expandedClientId: string | null;
-  expandedSprintId: string | null;
+  expandedClientIds: string[];
+  expandedSprintIds: string[];
+  expandedCommentIds: string[];
   scrollY: number;
 }
 
@@ -71,8 +79,9 @@ export function loadSprintsContext(contextKey: string): SprintsContextState | nu
     return {
       v: parsed.v,
       contextKey: parsed.contextKey,
-      expandedClientId: parsed.expandedClientId ?? null,
-      expandedSprintId: parsed.expandedSprintId ?? null,
+      expandedClientIds: Array.isArray(parsed.expandedClientIds) ? parsed.expandedClientIds : [],
+      expandedSprintIds: Array.isArray(parsed.expandedSprintIds) ? parsed.expandedSprintIds : [],
+      expandedCommentIds: Array.isArray(parsed.expandedCommentIds) ? parsed.expandedCommentIds : [],
       scrollY: typeof parsed.scrollY === "number" ? parsed.scrollY : 0,
     };
   } catch {
@@ -86,8 +95,9 @@ export function saveSprintsContext(contextKey: string, patch: Partial<Omit<Sprin
     const next: SprintsContextState = {
       v: SPRINTS_CONTEXT_VERSION,
       contextKey,
-      expandedClientId: current?.expandedClientId ?? null,
-      expandedSprintId: current?.expandedSprintId ?? null,
+      expandedClientIds: current?.expandedClientIds ?? [],
+      expandedSprintIds: current?.expandedSprintIds ?? [],
+      expandedCommentIds: current?.expandedCommentIds ?? [],
       scrollY: current?.scrollY ?? 0,
       ...patch,
     };
@@ -96,4 +106,14 @@ export function saveSprintsContext(contextKey: string, patch: Partial<Omit<Sprin
     // sessionStorage indisponível (modo privado etc.) — sem memória de
     // contexto, sem quebrar a navegação.
   }
+}
+
+/** Adiciona `id` ao conjunto (sem duplicar) — usado quando um `<details>` abre. */
+export function addToSet(ids: string[], id: string): string[] {
+  return ids.includes(id) ? ids : [...ids, id];
+}
+
+/** Remove `id` do conjunto — usado quando um `<details>` fecha. */
+export function removeFromSet(ids: string[], id: string): string[] {
+  return ids.includes(id) ? ids.filter((existing) => existing !== id) : ids;
 }

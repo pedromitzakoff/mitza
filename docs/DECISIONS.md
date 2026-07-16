@@ -669,6 +669,86 @@ igual ao Capítulo 20 do Manifesto ("o contexto é sagrado").
 - Registrado como dívida conhecida: "reabrir tarefa concluída" ainda não
   existe como funcionalidade — candidato a uma etapa futura, não desta.
 
+## Decisão 015: MITZA Interaction Engine — padrão obrigatório de resposta imediata
+
+**Data:** 2026-07-16
+**Status:** Ativa (numeração provisória — branch ainda não mesclada, ver
+Capítulo 8 de `CONTRIBUTING.md`).
+
+### Contexto
+
+A etapa "Instant Action & Context Memory 1.0" tratou concluir/excluir
+tarefa e memória de contexto da tela Sprints como um problema pontual. O
+usuário pediu que isso virasse padrão OFICIAL da plataforma — toda ação
+que não altera regra de negócio deve responder imediatamente, por
+princípio, não por exceção.
+
+### Problema
+
+Uma auditoria completa (ver relatório desta etapa) encontrou ações em
+estágios bem diferentes: algumas já não redirecionavam mas ainda
+esperavam `revalidatePath` pra atualizar a tela (objetivo de performance,
+6 células inline de Configurações > Clientes); outras ainda dependem de
+`redirect()`+query-param pra erro (registrar otimização, atualizar
+performance, criar/editar tarefa, criar comentário, editar cliente via
+página `/edit`) — tornar essas totalmente otimistas exigiria mudar o
+contrato de retorno da Server Action (de redirect pra `{error}`) e, em
+alguns casos, inserir uma entrada temporária antes do servidor confirmar
+um id real.
+
+### Alternativas consideradas
+
+1. Reescrever todas as Server Actions listadas pra um contrato único
+   (`{error}`, nunca redirect) nesta mesma etapa.
+2. Aplicar o otimismo só onde a ação já tinha o contrato certo
+   (revalidate-only, sem redirect no sucesso), documentar o resto como
+   candidato a etapas futuras.
+3. Não tocar em nada além do que a etapa anterior já tinha feito.
+
+### Decisão tomada
+
+Alternativa 2. Registrado formalmente o princípio (Capítulo 28 de
+`ARCHITECTURE_PRINCIPLES.md`): toda ação que não altera regra de negócio
+deve responder imediatamente; server confirma depois; erro desfaz
+sozinho. Implementado agora: objetivo de performance (`ClientPerformanceGoalEditor`),
+as 6 células inline de Configurações > Clientes, memória de contexto
+expandida pra conjuntos (Context Memory 2.0 — vários clientes/sprints/
+comentários abertos ao mesmo tempo, não só o último), e microinterações
+(check "pop", linha de exclusão encolhe antes de sumir). Alternativa 1
+descartada por escopo — mudar o contrato de erro de `registrar
+otimização`/`atualizar performance`/`criar tarefa`/etc. afeta todo
+chamador dessas actions (drawers, formulários inline, página de edição)
+e não é uma mudança pequena o bastante pra uma única etapa. Ficam
+registradas como candidatas à V2, sem implementação nesta rodada:
+registrar otimização com inserção otimista (linha aparece antes do id
+real existir), atualizar performance com números da toolbar mudando
+sem esperar revalidação, editar cliente via página dedicada (fluxo de
+redirect completo), editar orçamento mensal propagando pro resto da
+página (a prévia dentro do próprio editor já é instantânea hoje).
+
+### Justificativa
+
+Aplicar o princípio só onde o contrato de dados já suporta é a mesma
+lógica de "evolução incremental" de `CONTRIBUTING.md` — declarar a regra
+geral agora (pra toda funcionalidade NOVA nascer já otimista) sem forçar
+uma reescrita arriscada de fluxos antigos numa etapa só.
+
+### Impactos
+
+- `docs/ARCHITECTURE_PRINCIPLES.md`: novo Capítulo 28 (MITZA Interaction
+  Engine) — padrão obrigatório pra toda implementação futura.
+- `ClientPerformanceGoalEditor`: `useOptimistic` no objetivo escolhido;
+  toast passou a dizer qual objetivo foi escolhido.
+- `settings/clients/inline-cell.tsx`: as 6 células ganharam
+  `useOptimistic` (paravam de "piscar" pro valor antigo antes da
+  revalidação chegar).
+- `context-memory.ts`/`context-memory-client.tsx`: formato mudou de um id
+  único por categoria pra um conjunto (`string[]`) — versão bump (`v: 2`).
+- `task-row.tsx`: toast de conclusão/exclusão passou a citar o título da
+  tarefa; nova animação de saída (`mitza-row-exit`) antes da remoção
+  otimista de fato.
+- `globals.css`: `mitza-check-in`, `mitza-row-exit`/`mitza-row-exit-active`.
+
 ## Como adicionar novas decisões
 
 Sempre que uma alteração modificar a arquitetura da plataforma ou sua

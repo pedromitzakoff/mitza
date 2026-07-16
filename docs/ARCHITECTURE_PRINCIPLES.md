@@ -367,3 +367,17 @@ restauração em caso de falha.
 
 Todo estado preservado deve possuir escopo, prioridade, versionamento e
 regra de invalidação.
+
+## Capítulo 28 — MITZA Interaction Engine
+
+Toda ação que não altera regras de negócio deve responder imediatamente na
+interface.
+
+O usuário nunca deve esperar o servidor para perceber que sua ação foi
+recebida.
+
+A interface reage primeiro. O servidor confirma depois. Caso haja erro, o
+sistema desfaz a ação automaticamente.
+
+Este passa a ser o padrão obrigatório para toda funcionalidade nova
+desenvolvida na plataforma.

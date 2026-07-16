@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useOptimistic, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { updateClientPerformanceGoalAction } from "./performance-actions";
 import { useToast } from "@/app/toast-provider";
@@ -36,6 +36,15 @@ import { PERFORMANCE_GOALS, PERFORMANCE_GOAL_OPTIONS, type PerformanceGoal } fro
  * (`SECONDARY_ACTION_BUTTON_CLASSES`) em vez da pílula discreta de sempre.
  * Omitir os dois preserva exatamente o comportamento/visual anterior (só a
  * toolbar de Performance usa o padrão), então nenhum outro uso muda.
+ *
+ * Etapa "MITZA Interaction Engine v1" (Parte 2/5): o gatilho agora mostra o
+ * objetivo escolhido na hora (`useOptimistic`), sem esperar a revalidação
+ * — a Server Action já não redirecionava (Platform Continuity System 1.0),
+ * só faltava a interface parar de esperar por ela. Rollback automático: se
+ * a troca falhar, `currentGoal` (a prop real) nunca muda, e o
+ * `useOptimistic` volta sozinho pro valor real assim que a transition
+ * termina. O toast também passou a dizer qual objetivo foi escolhido (Parte
+ * 7 — "toast inteligente"), não só "atualizado".
  */
 export function ClientPerformanceGoalEditor({
   clientId,
@@ -49,6 +58,7 @@ export function ClientPerformanceGoalEditor({
   triggerLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [optimisticGoal, setOptimisticGoal] = useOptimistic(currentGoal);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
@@ -57,14 +67,15 @@ export function ClientPerformanceGoalEditor({
 
   function handleSelect(goal: PerformanceGoal) {
     setError(null);
+    setOpen(false);
     startTransition(async () => {
+      setOptimisticGoal(goal);
       const result = await updateClientPerformanceGoalAction(clientId, goal);
       if (result.error) {
         setError(result.error);
         return;
       }
-      showToast("Objetivo de performance atualizado.");
-      setOpen(false);
+      showToast(`Objetivo alterado para ${PERFORMANCE_GOALS[goal].label}.`);
     });
   }
 
@@ -77,13 +88,13 @@ export function ClientPerformanceGoalEditor({
         disabled={isPending}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={`Objetivo: ${currentGoal ? PERFORMANCE_GOALS[currentGoal].label : "não configurado"} — clique para alterar`}
+        aria-label={`Objetivo: ${optimisticGoal ? PERFORMANCE_GOALS[optimisticGoal].label : "não configurado"} — clique para alterar`}
         className={
           triggerClassName ??
           "mitza-pressable rounded-full border border-border bg-card px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:border-brand hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
         }
       >
-        {triggerLabel ?? (currentGoal ? PERFORMANCE_GOALS[currentGoal].label : "Não configurado")}
+        {triggerLabel ?? (optimisticGoal ? PERFORMANCE_GOALS[optimisticGoal].label : "Não configurado")}
       </button>
 
       {open &&
@@ -106,11 +117,11 @@ export function ClientPerformanceGoalEditor({
                   key={option.value}
                   type="button"
                   role="option"
-                  aria-selected={option.value === currentGoal}
+                  aria-selected={option.value === optimisticGoal}
                   disabled={isPending}
                   onClick={() => handleSelect(option.value)}
                   className={`mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900 ${
-                    option.value === currentGoal ? "font-medium text-brand" : "text-foreground"
+                    option.value === optimisticGoal ? "font-medium text-brand" : "text-foreground"
                   }`}
                 >
                   {option.label}

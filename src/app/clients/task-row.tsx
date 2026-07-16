@@ -13,6 +13,10 @@ import type { TaskStatus, TaskType, TeamMemberStatus } from "@/lib/supabase/data
 import { completeTaskAction, deleteTaskAction } from "./tasks-actions";
 
 const DELETE_CONFIRM_TIMEOUT_MS = 5000;
+/** Etapa "MITZA Interaction Engine v1" (Parte 6) — mesma duração de
+ * `--motion-standard` (globals.css): a linha encolhe/esmaece por esse
+ * tempo ANTES de sumir de fato da lista, nunca some instantaneamente. */
+const ROW_EXIT_DURATION_MS = 220;
 
 /**
  * Menu "•••" da tarefa (Etapa "Sprint Workspace Polish 1.0") — antes era um
@@ -50,16 +54,28 @@ const DELETE_CONFIRM_TIMEOUT_MS = 5000;
  */
 function TaskRowMenu({
   taskId,
+  taskTitle,
   clientId,
   detailsHref,
   isAdmin,
   onOptimisticDelete,
+  onDeleteStart,
+  onDeleteError,
 }: {
   taskId: string;
+  taskTitle: string;
   clientId: string;
   detailsHref: string;
   isAdmin: boolean;
   onOptimisticDelete?: () => void;
+  /** Etapa "MITZA Interaction Engine v1" (Parte 6) — dispara a animação de
+   * saída da linha (`mitza-row-exit-active`, em `TaskRow`) no instante em
+   * que o usuário confirma a exclusão, antes de qualquer chamada ao
+   * servidor ou remoção de fato do item. */
+  onDeleteStart?: () => void;
+  /** Desfaz a animação de saída se a exclusão falhar — a linha "descolapsa"
+   * de volta, já que ela nunca chegou a sair da lista de verdade. */
+  onDeleteError?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -83,10 +99,15 @@ function TaskRowMenu({
 
   function handleDelete() {
     setError(null);
+    onDeleteStart?.();
     startTransition(async () => {
+      // Espera a animação de saída (Parte 6) terminar antes de remover de
+      // fato — nunca some instantaneamente.
+      await new Promise((resolve) => setTimeout(resolve, ROW_EXIT_DURATION_MS));
       onOptimisticDelete?.();
       const result = await deleteTaskAction(taskId, clientId);
       if (result?.error) {
+        onDeleteError?.();
         if (onOptimisticDelete) {
           showToast(result.error, "error");
         } else {
@@ -95,7 +116,7 @@ function TaskRowMenu({
         setConfirming(false);
         return;
       }
-      showToast("Tarefa excluída.");
+      showToast(`"${taskTitle}" excluída.`);
       closeMenu();
     });
   }
@@ -298,6 +319,12 @@ export function TaskRow({
   const isDone = onOptimisticComplete ? effectiveStatus === "feito" : localOptimisticDone;
   const [, startTransition] = useTransition();
   const [completeError, setCompleteError] = useState<string | null>(null);
+  // Etapa "MITZA Interaction Engine v1" (Parte 6) — a linha encolhe/esmaece
+  // (`mitza-row-exit-active`) assim que a exclusão é confirmada, antes de
+  // sumir de fato da lista (`TaskRowMenu` chama `onDeleteStart`/espera
+  // `ROW_EXIT_DURATION_MS` antes de despachar a remoção de verdade).
+  const [isLeaving, setIsLeaving] = useState(false);
+  const { showToast } = useToast();
   const isNotDone = effectiveStatus === "nao_realizado";
   const isOverdue = effectiveStatus === "atrasado";
   const isToday = task.due_date === todayDateString();
@@ -322,6 +349,7 @@ export function TaskRow({
       }
       try {
         await completeTaskAction(task.id, clientId);
+        showToast(`"${task.title}" concluída.`);
       } catch (error) {
         if (isRedirectSignal(error)) throw error;
         setCompleteError("Não foi possível concluir. Tente novamente.");
@@ -330,7 +358,9 @@ export function TaskRow({
   }
 
   return (
-    <li className="relative flex min-h-[28px] items-center border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
+    <li
+      className={`relative flex min-h-[28px] items-center border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 mitza-row-exit ${isLeaving ? "mitza-row-exit-active" : ""}`}
+    >
       <Link
         href={detailsHref}
         scroll={false}
@@ -340,7 +370,7 @@ export function TaskRow({
       />
       <div className={`flex items-center gap-2.5 transition-opacity duration-150 ${rowOpacityClass}`}>
         {isDone ? (
-          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none text-green-700 dark:bg-green-950 dark:text-green-300">
+          <span className="mitza-check-in flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none text-green-700 dark:bg-green-950 dark:text-green-300">
             ✓
           </span>
         ) : isNotDone ? (
@@ -391,10 +421,13 @@ export function TaskRow({
 
         <TaskRowMenu
           taskId={task.id}
+          taskTitle={task.title}
           clientId={clientId}
           detailsHref={detailsHref}
           isAdmin={isAdmin ?? false}
           onOptimisticDelete={onOptimisticDelete}
+          onDeleteStart={() => setIsLeaving(true)}
+          onDeleteError={() => setIsLeaving(false)}
         />
       </div>
       {completeError && <p className="mt-0.5 pl-[26px] text-[11px] text-red-600 dark:text-red-400">{completeError}</p>}

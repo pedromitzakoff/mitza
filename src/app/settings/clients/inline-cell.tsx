@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { formatCnpj, isValidCnpjLength, normalizeCnpj } from "@/lib/cnpj";
 import { isValidEmail } from "@/lib/validation";
 import { formatCurrency, formatDateWithYear } from "@/lib/format";
@@ -19,10 +19,15 @@ const STATUS_OPTIONS = (Object.keys(CLIENT_STATUS_LABEL) as ClientContractStatus
 }));
 
 /**
- * Célula de Status: mesmo padrão de clique-pra-editar das outras, mas o
- * selo colorido é montado aqui dentro (não dá pra passar uma função de
- * renderização de um Server Component pra um Client Component — só dados e
- * Server Actions cruzam essa fronteira).
+ * Etapa "MITZA Interaction Engine v1" (Parte 2/5) — as 6 células desta tela
+ * (Configurações > Clientes) já não redirecionavam (`settings/clients/actions.ts`
+ * sempre foi só `revalidatePath`), mas 4 delas (data/CNPJ/e-mail/mensalidade)
+ * fechavam o modo de edição IMEDIATAMENTE ao confirmar, exibindo de volta o
+ * `value` antigo (a prop, ainda não revalidada) até a revalidação chegar —
+ * um "pisca pro valor antigo, depois pula pro novo" visível. Cada célula
+ * ganhou `useOptimistic`: ao confirmar, mostra o valor novo na hora — sem
+ * esperar `revalidatePath` — e reverte sozinha se a Server Action falhar
+ * (o `value` real nunca muda nesse caso).
  */
 export function InlineStatusCell({
   value,
@@ -32,13 +37,14 @@ export function InlineStatusCell({
   action: (value: string) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
+  const [optimisticValue, setOptimisticValue] = useOptimistic(value);
   const [pending, startTransition] = useTransition();
 
   if (!editing) {
     return (
       <button type="button" onClick={() => setEditing(true)} className={cellButtonClasses} disabled={pending}>
-        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CLIENT_STATUS_BADGE_CLASSES[value]}`}>
-          {CLIENT_STATUS_LABEL[value]}
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CLIENT_STATUS_BADGE_CLASSES[optimisticValue]}`}>
+          {CLIENT_STATUS_LABEL[optimisticValue]}
         </span>
       </button>
     );
@@ -51,10 +57,11 @@ export function InlineStatusCell({
       defaultValue={value}
       disabled={pending}
       onChange={(event) => {
-        const next = event.target.value;
+        const next = event.target.value as ClientContractStatus;
+        setEditing(false);
         startTransition(async () => {
+          setOptimisticValue(next);
           await action(next);
-          setEditing(false);
         });
       }}
       onBlur={() => setEditing(false)}
@@ -89,8 +96,9 @@ export function InlineSelectCell({
   ariaLabel: string;
 }) {
   const [editing, setEditing] = useState(false);
+  const [optimisticValue, setOptimisticValue] = useOptimistic(value);
   const [pending, startTransition] = useTransition();
-  const currentLabel = options.find((o) => o.value === value)?.label ?? emptyLabel ?? "—";
+  const currentLabel = options.find((o) => o.value === optimisticValue)?.label ?? emptyLabel ?? "—";
 
   if (!editing) {
     return (
@@ -108,9 +116,10 @@ export function InlineSelectCell({
       disabled={pending}
       onChange={(event) => {
         const next = event.target.value;
+        setEditing(false);
         startTransition(async () => {
+          setOptimisticValue(next);
           await action(next);
-          setEditing(false);
         });
       }}
       onBlur={() => setEditing(false)}
@@ -143,19 +152,21 @@ export function InlineDateCell({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
+  const [optimisticValue, setOptimisticValue] = useOptimistic(value);
   const [pending, startTransition] = useTransition();
 
   function commit() {
     setEditing(false);
     const next = draft || null;
-    if (next === value) return;
-    startTransition(() => {
-      action(next);
+    if (next === optimisticValue) return;
+    startTransition(async () => {
+      setOptimisticValue(next);
+      await action(next);
     });
   }
 
   function cancel() {
-    setDraft(value ?? "");
+    setDraft(optimisticValue ?? "");
     setEditing(false);
   }
 
@@ -165,12 +176,12 @@ export function InlineDateCell({
         type="button"
         disabled={pending}
         onClick={() => {
-          setDraft(value ?? "");
+          setDraft(optimisticValue ?? "");
           setEditing(true);
         }}
         className={cellButtonClasses}
       >
-        {value ? formatDateWithYear(value) : "—"}
+        {optimisticValue ? formatDateWithYear(optimisticValue) : "—"}
       </button>
     );
   }
@@ -206,23 +217,25 @@ export function InlineCnpjCell({
 }) {
   const [editing, setEditing] = useState(false);
   const [digits, setDigits] = useState(value ?? "");
+  const [optimisticValue, setOptimisticValue] = useOptimistic(value);
   const [pending, startTransition] = useTransition();
 
   function commit() {
     if (!isValidCnpjLength(digits)) {
-      setDigits(value ?? "");
+      setDigits(optimisticValue ?? "");
       setEditing(false);
       return;
     }
     setEditing(false);
-    if (digits === (value ?? "")) return;
-    startTransition(() => {
-      action(digits);
+    if (digits === (optimisticValue ?? "")) return;
+    startTransition(async () => {
+      setOptimisticValue(digits);
+      await action(digits);
     });
   }
 
   function cancel() {
-    setDigits(value ?? "");
+    setDigits(optimisticValue ?? "");
     setEditing(false);
   }
 
@@ -232,12 +245,12 @@ export function InlineCnpjCell({
         type="button"
         disabled={pending}
         onClick={() => {
-          setDigits(value ?? "");
+          setDigits(optimisticValue ?? "");
           setEditing(true);
         }}
         className={cellButtonClasses}
       >
-        {value ? formatCnpj(value) : "—"}
+        {optimisticValue ? formatCnpj(optimisticValue) : "—"}
       </button>
     );
   }
@@ -273,24 +286,26 @@ export function InlineEmailCell({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
+  const [optimisticValue, setOptimisticValue] = useOptimistic(value);
   const [pending, startTransition] = useTransition();
 
   function commit() {
     const trimmed = draft.trim();
     if (trimmed && !isValidEmail(trimmed)) {
-      setDraft(value ?? "");
+      setDraft(optimisticValue ?? "");
       setEditing(false);
       return;
     }
     setEditing(false);
-    if (trimmed === (value ?? "")) return;
-    startTransition(() => {
-      action(trimmed);
+    if (trimmed === (optimisticValue ?? "")) return;
+    startTransition(async () => {
+      setOptimisticValue(trimmed);
+      await action(trimmed);
     });
   }
 
   function cancel() {
-    setDraft(value ?? "");
+    setDraft(optimisticValue ?? "");
     setEditing(false);
   }
 
@@ -299,14 +314,14 @@ export function InlineEmailCell({
       <button
         type="button"
         disabled={pending}
-        title={value ?? undefined}
+        title={optimisticValue ?? undefined}
         onClick={() => {
-          setDraft(value ?? "");
+          setDraft(optimisticValue ?? "");
           setEditing(true);
         }}
         className={cellButtonClasses}
       >
-        {value || "—"}
+        {optimisticValue || "—"}
       </button>
     );
   }
@@ -342,35 +357,38 @@ export function InlineMoneyCell({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value !== null ? formatMoneyDisplay(value) : "");
+  const [optimisticValue, setOptimisticValue] = useOptimistic(value);
   const [pending, startTransition] = useTransition();
 
   function commit() {
     const trimmed = draft.trim();
     if (trimmed === "") {
       setEditing(false);
-      if (value === null) return;
-      startTransition(() => {
-        action(null);
+      if (optimisticValue === null) return;
+      startTransition(async () => {
+        setOptimisticValue(null);
+        await action(null);
       });
       return;
     }
 
     const parsed = parseMoneyInput(trimmed);
     if (parsed === null) {
-      setDraft(value !== null ? formatMoneyDisplay(value) : "");
+      setDraft(optimisticValue !== null ? formatMoneyDisplay(optimisticValue) : "");
       setEditing(false);
       return;
     }
 
     setEditing(false);
-    if (parsed === value) return;
-    startTransition(() => {
-      action(parsed);
+    if (parsed === optimisticValue) return;
+    startTransition(async () => {
+      setOptimisticValue(parsed);
+      await action(parsed);
     });
   }
 
   function cancel() {
-    setDraft(value !== null ? formatMoneyDisplay(value) : "");
+    setDraft(optimisticValue !== null ? formatMoneyDisplay(optimisticValue) : "");
     setEditing(false);
   }
 
@@ -380,12 +398,12 @@ export function InlineMoneyCell({
         type="button"
         disabled={pending}
         onClick={() => {
-          setDraft(value !== null ? formatMoneyDisplay(value) : "");
+          setDraft(optimisticValue !== null ? formatMoneyDisplay(optimisticValue) : "");
           setEditing(true);
         }}
         className={`${cellButtonClasses} tabular-nums`}
       >
-        {value !== null ? formatCurrency(value) : "—"}
+        {optimisticValue !== null ? formatCurrency(optimisticValue) : "—"}
       </button>
     );
   }

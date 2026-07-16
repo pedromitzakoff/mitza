@@ -2,26 +2,44 @@
 
 import { useEffect, useRef } from "react";
 import {
+  addToSet,
   buildSprintsContextKey,
   loadSprintsContext,
+  removeFromSet,
   saveSprintsContext,
   type SprintsContextKeyParams,
 } from "./context-memory";
 
+const ID_PREFIXES = [
+  { prefix: "client-", field: "expandedClientIds" as const },
+  { prefix: "sprint-", field: "expandedSprintIds" as const },
+  { prefix: "comments-", field: "expandedCommentIds" as const },
+];
+
 /**
- * Etapa "Instant Action & Context Memory 1.0" (Partes 6-9/13) — montado uma
- * vez na página `/sprints`. Não renderiza nada: só (1) restaura, uma única
- * vez por montagem, o último cliente/sprint expandido e a posição de
- * scroll salvos pra este MESMO contexto (mês/visão/filtros — ver
- * `buildSprintsContextKey`), e (2) fica ouvindo togglings de `<details
- * id="client-*"|"sprint-*">` e o scroll da página pra manter essa memória
- * atualizada enquanto o usuário trabalha.
+ * Etapa "Instant Action & Context Memory 1.0" (Partes 6-9/13), expandida
+ * pela etapa "MITZA Interaction Engine v1" (Parte 3 — "Context Memory
+ * 2.0"). Montado uma vez na página `/sprints`. Não renderiza nada: só (1)
+ * restaura, uma única vez por montagem, TODOS os clientes/sprints/
+ * comentários que estavam expandidos e a posição de scroll salvos pra este
+ * MESMO contexto (mês/visão/filtros — ver `buildSprintsContextKey`), e (2)
+ * fica ouvindo togglings de `<details id="client-*"|"sprint-*"|"comments-*">`
+ * e o scroll da página pra manter essa memória atualizada enquanto o
+ * usuário trabalha.
+ *
+ * Context Memory 2.0: antes só o ÚLTIMO cliente/sprint expandido era
+ * lembrado; agora cada categoria é um conjunto (`string[]` sem duplicatas,
+ * via `addToSet`/`removeFromSet`) — abrir 3 clientes e 2 sprints ao mesmo
+ * tempo e voltar depois reabre os 5, não só o mais recente. "Scroll
+ * inteligente": like antes, a posição salva é restaurada DEPOIS de reabrir
+ * tudo — se o usuário estava rolado até dentro da 3ª sprint expandida, ela
+ * já reabre e a página já cai exatamente lá, não no topo.
  *
  * Trabalha em cima do DOM (não de estado React) de propósito: os cards de
- * cliente/sprint são `<details>` nativos, renderizados por Server
- * Components — não há um estado React "único" de abertura pra controlar
- * daqui. `document.getElementById`/`.open` é o mesmo tipo de manipulação
- * imperativa pós-montagem já usado em `scroll-restore.tsx`.
+ * cliente/sprint/comentários são `<details>` nativos, renderizados por
+ * Server Components — não há um estado React "único" de abertura pra
+ * controlar daqui. `document.getElementById`/`.open` é o mesmo tipo de
+ * manipulação imperativa pós-montagem já usado em `scroll-restore.tsx`.
  */
 export function SprintsContextMemory(params: SprintsContextKeyParams) {
   const contextKey = buildSprintsContextKey(params);
@@ -38,29 +56,27 @@ export function SprintsContextMemory(params: SprintsContextKeyParams) {
     const saved = loadSprintsContext(contextKey);
     if (!saved) return;
 
-    // Parte 9: só reabre se o elemento existir no recorte atual (cliente
+    // Parte 9: só reabre o que ainda existir no recorte atual (cliente
     // fora do filtro, sprint que não existe mais etc.) — senão ignora
     // silenciosamente, sem gerar erro.
     let didExpand = false;
-    if (saved.expandedClientId) {
-      const clientDetails = document.getElementById(`client-${saved.expandedClientId}`);
-      if (clientDetails instanceof HTMLDetailsElement) {
-        clientDetails.open = true;
-        didExpand = true;
-      }
-    }
-    if (saved.expandedSprintId) {
-      const sprintDetails = document.getElementById(`sprint-${saved.expandedSprintId}`);
-      if (sprintDetails instanceof HTMLDetailsElement) {
-        sprintDetails.open = true;
+    const allIds = [
+      ...saved.expandedClientIds.map((id) => `client-${id}`),
+      ...saved.expandedSprintIds.map((id) => `sprint-${id}`),
+      ...saved.expandedCommentIds.map((id) => `comments-${id}`),
+    ];
+    for (const domId of allIds) {
+      const details = document.getElementById(domId);
+      if (details instanceof HTMLDetailsElement) {
+        details.open = true;
         didExpand = true;
       }
     }
 
-    // Scroll só depois das expansões (abrir `<details>` muda a altura da
-    // página) — dois frames de espera pro navegador terminar o layout
-    // antes de rolar, pra não saltar pra posição errada (Parte 8: "evitar
-    // animação ou salto estranho").
+    // Scroll só depois das expansões (abrir vários `<details>` muda a
+    // altura da página) — dois frames de espera pro navegador terminar o
+    // layout antes de rolar, pra não saltar pra posição errada (Parte 8:
+    // "evitar animação ou salto estranho").
     const scrollToSaved = () => window.scrollTo(0, saved.scrollY);
     if (didExpand) {
       requestAnimationFrame(() => requestAnimationFrame(scrollToSaved));
@@ -74,32 +90,23 @@ export function SprintsContextMemory(params: SprintsContextKeyParams) {
       const target = event.target;
       if (!(target instanceof HTMLDetailsElement)) return;
 
-      if (target.id.startsWith("client-")) {
-        const id = target.id.slice("client-".length);
-        if (target.open) {
-          saveSprintsContext(contextKey, { expandedClientId: id });
-        } else if (loadSprintsContext(contextKey)?.expandedClientId === id) {
-          // Só limpa se ESTE era o cliente lembrado — fechar um segundo
-          // card aberto não deve apagar a memória do primeiro (Parte 9
-          // aceita guardar só "o último", não uma pilha completa, mas
-          // fechar um card que não era o lembrado não deveria contar como
-          // "fechou o lembrado").
-          saveSprintsContext(contextKey, { expandedClientId: null });
-        }
-      } else if (target.id.startsWith("sprint-")) {
-        const id = target.id.slice("sprint-".length);
-        if (target.open) {
-          saveSprintsContext(contextKey, { expandedSprintId: id });
-        } else if (loadSprintsContext(contextKey)?.expandedSprintId === id) {
-          saveSprintsContext(contextKey, { expandedSprintId: null });
-        }
+      const match = ID_PREFIXES.find(({ prefix }) => target.id.startsWith(prefix));
+      if (!match) return;
+
+      const id = target.id.slice(match.prefix.length);
+      const current = loadSprintsContext(contextKey);
+      const currentSet = current?.[match.field] ?? [];
+      const nextSet = target.open ? addToSet(currentSet, id) : removeFromSet(currentSet, id);
+      if (nextSet !== currentSet) {
+        saveSprintsContext(contextKey, { [match.field]: nextSet });
       }
     }
 
     // `toggle` não borbulha em `<details>` — um listener em fase de
     // CAPTURA (`true`) intercepta o evento em qualquer nível da árvore de
     // qualquer forma, funcionando como delegação sem precisar de um
-    // listener por card (Parte 13: uma fonte só, reutilizável).
+    // listener por card (Parte 11 da etapa anterior: uma fonte só,
+    // reutilizável).
     document.addEventListener("toggle", handleToggle, true);
 
     let scrollFrame: number | null = null;

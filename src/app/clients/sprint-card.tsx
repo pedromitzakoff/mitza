@@ -612,7 +612,10 @@ export function SprintCardBody({
             comentários (`CommentThread`), então o nome genérico só
             escondia o que de fato tinha ali. Contador reaproveita
             `comments.length`, já calculado — nenhuma contagem nova. */}
-        <details className="group mt-1 border-t border-border pt-1 [&_summary::-webkit-details-marker]:hidden">
+        <details
+          id={`comments-${sprint.sprintId}`}
+          className="group mt-1 border-t border-border pt-1 [&_summary::-webkit-details-marker]:hidden"
+        >
           <summary className="mitza-pressable inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
             <span className="mitza-chevron text-xs text-muted-foreground group-open:rotate-90">▸</span>
             Comentários{comments.length > 0 ? ` · ${comments.length}` : ""}
