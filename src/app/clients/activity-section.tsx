@@ -35,7 +35,7 @@ export function ActivitySection({
   isAdmin,
   reviews,
   newReviewHref,
-  buildReviewDetailHref,
+  reviewHrefPrefix,
 }: {
   tasks: TaskListItem[];
   clientId: string;
@@ -51,14 +51,18 @@ export function ActivitySection({
    * sem CTA de "Registrar revisão"). */
   reviews?: AccountReviewSummaryItem[];
   newReviewHref?: string;
-  buildReviewDetailHref?: (reviewId: string) => string;
+  /** PREFIXO de string (não função — este é um Client Component, uma
+   * função não atravessa a fronteira servidor→cliente como prop, ver
+   * `taskHrefPrefix`/doc em `SprintCardBody`), concatenado com
+   * `review.id` pra formar o href completo do drawer de detalhe. */
+  reviewHrefPrefix?: string;
 }) {
   const [optimisticTasks, dispatchOptimisticTask] = useOptimisticTasks(tasks);
   const tasksDone = optimisticTasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
   const progressPct = optimisticTasks.length > 0 ? (tasksDone / optimisticTasks.length) * 100 : 0;
   const reviewList = reviews ?? [];
   const activities = buildActivityFeed(optimisticTasks, reviewList);
-  const canRegisterReview = Boolean(newReviewHref && buildReviewDetailHref);
+  const canRegisterReview = Boolean(newReviewHref && reviewHrefPrefix);
 
   return (
     <div>
@@ -123,7 +127,7 @@ export function ActivitySection({
               <AccountReviewRow
                 key={`review-${item.review.id}`}
                 review={item.review}
-                detailHref={buildReviewDetailHref!(item.review.id)}
+                detailHref={`${reviewHrefPrefix}${item.review.id}`}
                 typeLabel="Revisão de conta"
               />
             ),

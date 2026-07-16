@@ -467,6 +467,12 @@ export function SprintCardBody({
   // um Client Component é que precisou mudar.
   const taskHrefPrefix = buildTaskHref ? buildTaskHref("") : `/clients/${clientId}?task=`;
 
+  // MITZA Unified Activities 1.0 — CORREÇÃO CRÍTICA: mesmo motivo do
+  // `taskHrefPrefix` acima. `ActivitySection` (Client Component) não pode
+  // receber `buildReviewDetailHref` como função — só o PREFIXO de string
+  // equivalente, serializável. Nenhuma URL gerada muda.
+  const reviewHrefPrefix = buildReviewDetailHref ? buildReviewDetailHref("") : undefined;
+
   // Etapa "Sprint Workspace MVP Finalization 2.0" (Parte 10): "Próxima
   // ação" só na sprint atual — é o ponto onde o gestor de fato começa o dia
   // (fluxo "cliente → contexto atual → próxima ação → execução" do pedido).
@@ -578,7 +584,7 @@ export function SprintCardBody({
             isAdmin={isAdmin}
             reviews={accountReviews}
             newReviewHref={newReviewHref}
-            buildReviewDetailHref={buildReviewDetailHref}
+            reviewHrefPrefix={reviewHrefPrefix}
           />
         </div>
 
