@@ -33,6 +33,20 @@ planejar uma nova fase de trabalho.
 
 ### 3. Planejado — Curto Prazo
 
+- **Responsável padrão do composer de Atividades por ID, não por nome.**
+  Origem: etapa "Reduzir atrito da criação" (2026-07-17). Hoje
+  `ActivityComposer` pré-seleciona o gestor principal do cliente
+  resolvendo `primaryManagerName` por NOME contra a lista de gestores
+  ativos (mesmo padrão já aceito em `TaskDrawerPanel`/`TaskRow`) — se dois
+  gestores ativos tiverem o mesmo nome, a pré-seleção pode escolher o
+  errado (o usuário sempre pode corrigir antes do Enter, então não é um
+  bug de dados, só uma pré-seleção imprecisa). Corrigir de vez exige
+  passar o `primary_manager_id` (uuid) direto, em vez do nome — hoje só
+  `sprints/page.tsx` busca esse id junto do nome; `current-client-group.tsx`/
+  `monthly-sprints-group.tsx`/`[id]/page.tsx` seriam ajustados pra
+  repassar/buscar o id também. Aceito como está nesta etapa; registrado
+  aqui a pedido do responsável de produto.
+
 ### 4. Planejado — Médio/Longo Prazo
 
 ### 5. Ideias em Avaliação (não comprometidas)
