@@ -413,6 +413,7 @@ export function SprintCardBody({
   performance,
   returnTo,
   taskManagers,
+  defaultAssigneeName,
   hideNextAction,
 }: {
   sprint: SprintFinancials;
@@ -448,8 +449,12 @@ export function SprintCardBody({
   performance?: SprintPerformanceProps;
   /** MITZA Unified Activities — Task Inline Editing: gestores ativos,
    * repassados pra `ActivitySection` (select de responsável na expansão
-   * inline de cada linha de tarefa). */
+   * inline de cada linha de tarefa e no composer de criação). */
   taskManagers?: { id: string; name: string }[];
+  /** Etapa "Reduzir atrito da criação" — nome do gestor principal do
+   * cliente, repassado pra `ActivitySection`/`ActivityComposer` só pra
+   * pré-selecionar o responsável ao abrir a linha de criação. */
+  defaultAssigneeName?: string | null;
   /** Etapa "MITZA Operational Workspace 1.0" — a página do cliente promoveu
    * "Próxima ação" da sprint atual pro topo da página (`SprintFocusBar`,
    * primeiro conteúdo operacional, antes de qualquer scroll), então passa
@@ -596,6 +601,7 @@ export function SprintCardBody({
             sprintId={sprint.sprintId}
             taskHrefPrefix={taskHrefPrefix}
             managers={taskManagers}
+            defaultAssigneeName={defaultAssigneeName}
             isAdmin={isAdmin}
             reviews={accountReviews}
             reviewHrefPrefix={reviewHrefPrefix}
@@ -720,6 +726,7 @@ export function SprintCard({
   performance,
   returnTo,
   taskManagers,
+  defaultAssigneeName,
   flat,
   accordionRowsPrototype,
   hideNextAction,
@@ -746,6 +753,8 @@ export function SprintCard({
   /** MITZA Unified Activities — Task Inline Editing: ver doc de
    * `SprintCardBody`. */
   taskManagers?: { id: string; name: string }[];
+  /** Etapa "Reduzir atrito da criação" — ver doc de `SprintCardBody`. */
+  defaultAssigneeName?: string | null;
   /** Interaction Physics 1.0 — protótipo ISOLADO da técnica
    * `grid-template-rows: 0fr → 1fr` (ver `.mitza-accordion-rows` em
    * globals.css). Opt-in, nunca default: só o chamador que está testando o
@@ -941,6 +950,7 @@ export function SprintCard({
               manualSpendUpdatedAt={manualSpendUpdatedAt}
               metaSyncedAt={metaSyncedAt}
               taskManagers={taskManagers}
+              defaultAssigneeName={defaultAssigneeName}
               performance={performance}
               returnTo={returnTo}
               hideNextAction={hideNextAction}
@@ -964,6 +974,7 @@ export function SprintCard({
           manualSpendUpdatedAt={manualSpendUpdatedAt}
           metaSyncedAt={metaSyncedAt}
           taskManagers={taskManagers}
+          defaultAssigneeName={defaultAssigneeName}
           performance={performance}
           returnTo={returnTo}
           hideNextAction={hideNextAction}

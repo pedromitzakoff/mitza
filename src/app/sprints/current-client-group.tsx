@@ -84,6 +84,7 @@ export function SprintCurrentClientGroup({
         buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
         metaSyncedAt={card.lastSyncedAt}
         taskManagers={managers}
+        defaultAssigneeName={primaryManagerName}
         performance={buildSprintPerformanceProps(card, card.sprint.sprintId)}
         returnTo={returnTo}
         accountReviews={reviews}

@@ -51,6 +51,7 @@ export function ActivitySection({
   sprintId,
   taskHrefPrefix,
   managers,
+  defaultAssigneeName,
   isAdmin,
   reviews,
   reviewHrefPrefix,
@@ -64,8 +65,12 @@ export function ActivitySection({
    * não navegam mais pra lá — expandem in-line (ver acima). */
   taskHrefPrefix?: string;
   /** Gestores ativos — usado pelo select de responsável na expansão
-   * inline de cada linha de tarefa. */
+   * inline de cada linha de tarefa E no composer (ver `ActivityComposer`). */
   managers?: InlineTaskManagerOption[];
+  /** Nome do gestor principal do cliente — repassado pro `ActivityComposer`
+   * só pra pré-selecionar o responsável ao abrir a linha de criação (ver
+   * doc no próprio componente). */
+  defaultAssigneeName?: string | null;
   /** Habilita "Excluir tarefa" no menu "•••" de cada linha de tarefa. */
   isAdmin?: boolean;
   /** Revisões de conta desta sprint — opcional: quem ainda não busca
@@ -118,6 +123,8 @@ export function ActivitySection({
         <ActivityComposer
           clientId={clientId}
           sprintId={sprintId}
+          managers={managers ?? []}
+          defaultAssigneeName={defaultAssigneeName}
           onCreated={(task) => dispatchOptimisticTask({ type: "create", task })}
         />
         {activities.length > 0 ? (

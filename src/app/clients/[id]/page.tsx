@@ -908,6 +908,7 @@ export default async function ClientPage({
                 manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
                 metaSyncedAt={lastSync?.synced_at ?? null}
                 taskManagers={managers ?? []}
+                defaultAssigneeName={client.primary_manager?.name ?? null}
                 performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
                 returnTo={returnTo}
                 hideNextAction={sprint.temporalStatus === "atual"}

@@ -101,6 +101,7 @@ export function SprintMonthlyBySprintsGroup({
                   buildTaskHref={(taskId) => `${returnTo}&task=${taskId}`}
                   metaSyncedAt={card.lastSyncedAt}
                   taskManagers={managers}
+                  defaultAssigneeName={primaryManagerName}
                   performance={buildSprintPerformanceProps(card, sprint.sprintId)}
                   returnTo={returnTo}
                   accountReviews={accountReviewsBySprintId?.get(sprint.sprintId) ?? []}
