@@ -9,6 +9,13 @@ import { TaskRow, type TaskListItem } from "./task-row";
 import { ActivityComposer } from "./activity-composer";
 import type { InlineTaskManagerOption } from "./inline-task-form";
 import { AccountReviewRow, type AccountReviewSummaryItem } from "./account-reviews-section";
+import {
+  ACTIVITY_COL_ACTIONS,
+  ACTIVITY_COL_ASSIGNEE,
+  ACTIVITY_COL_DATE,
+  ACTIVITY_COL_STATUS,
+  ACTIVITY_COL_TYPE,
+} from "./activity-columns";
 
 /**
  * "ATIVIDADES" (MITZA Unified Activities 1.0) — substitui a antiga divisão
@@ -26,10 +33,8 @@ import { AccountReviewRow, type AccountReviewSummaryItem } from "./account-revie
  * por isso não existe mais um botão "+ Nova tarefa"/"+ Registrar revisão"
  * lado a lado aqui (essa dupla sugeria que as duas eram formas equivalentes
  * de adicionar a mesma coisa, o que nunca foi verdade). Em vez disso:
- * - tarefas nascem pelo `ActivityComposer`, que é a PRIMEIRA linha desta
- *   mesma lista (Etapa "UX de linha, não formulário" — ver doc no próprio
- *   componente): "+ Adicionar atividade..." colapsado até o clique, sem
- *   caixa/borda de formulário, pra parecer só mais uma linha da lista;
+ * - tarefas nascem pelo `ActivityComposer`, num bloco de destaque acima da
+ *   tabela (ver doc no próprio componente);
  * - revisões de conta nascem em "Performance" (`SprintPerformanceSection`,
  *   "+ Registrar revisão"), porque revisão é um registro estruturado ligado
  *   à análise da conta, não um item de trabalho rápido.
@@ -44,6 +49,16 @@ import { AccountReviewRow, type AccountReviewSummaryItem } from "./account-revie
  * (`TaskDrawerPanel`) continua existindo pra outros fluxos que ainda
  * dependem dele (ex.: "Abrir tarefa" a partir de "Próxima ação"), mas
  * deixou de ser o caminho de configuração dentro desta fila.
+ *
+ * Etapa "Padronizar e destacar criação de Atividades": a lista de leitura
+ * ganhou um cabeçalho de colunas (STATUS/DATA/ATIVIDADE/RESPONSÁVEL/TIPO)
+ * — mesma grade de larguras de `TaskRow`/`AccountReviewRow`
+ * (`./activity-columns.ts`), pra nenhuma coluna "flutuar" entre o
+ * cabeçalho e as linhas, nem entre um tipo de linha e outro. O composer
+ * de criação passou a ser um bloco visualmente separado ACIMA desta
+ * tabela (antes era a primeira linha dela) — tem mais destaque visual de
+ * propósito, então não faz sentido compartilhar a mesma moldura discreta
+ * da tabela de leitura.
  */
 export function ActivitySection({
   tasks,
@@ -116,10 +131,7 @@ export function ActivitySection({
         </div>
       )}
 
-      {/* Etapa "UX de linha, não formulário": o composer é a PRIMEIRA linha
-          desta lista (não mais um bloco separado acima dela) — por isso a
-          lista sempre existe, mesmo sem nenhuma atividade ainda. */}
-      <ul className="mt-1.5 rounded-lg border border-border [&>li:first-child]:rounded-t-lg [&>li:last-child]:rounded-b-lg">
+      <div className="mt-1.5">
         <ActivityComposer
           clientId={clientId}
           sprintId={sprintId}
@@ -127,41 +139,55 @@ export function ActivitySection({
           defaultAssigneeName={defaultAssigneeName}
           onCreated={(task) => dispatchOptimisticTask({ type: "create", task })}
         />
-        {activities.length > 0 ? (
-          activities.map((item) =>
-            item.kind === "task" ? (
-              <TaskRow
-                key={`task-${item.task.id}`}
-                task={item.task}
-                clientId={clientId}
-                detailsHref={
-                  taskHrefPrefix ? `${taskHrefPrefix}${item.task.id}` : `/clients/${clientId}?task=${item.task.id}`
-                }
-                isAdmin={isAdmin}
-                typeLabel="Tarefa"
-                onOptimisticComplete={() => dispatchOptimisticTask({ type: "complete", taskId: item.task.id })}
-                onOptimisticDelete={() => dispatchOptimisticTask({ type: "delete", taskId: item.task.id })}
-                managers={managers}
-                isExpanded={expandedTaskId === item.task.id}
-                onToggleExpand={() =>
-                  setExpandedTaskId((current) => (current === item.task.id ? null : item.task.id))
-                }
-              />
-            ) : (
-              <AccountReviewRow
-                key={`review-${item.review.id}`}
-                review={item.review}
-                detailHref={`${reviewHrefPrefix}${item.review.id}`}
-                typeLabel="Revisão de conta"
-              />
-            ),
-          )
-        ) : (
-          <li className="flex min-h-[28px] items-center border-b border-border/60 px-2 py-1 text-xs text-muted-foreground last:border-0">
-            Nenhuma atividade nesta sprint.
-          </li>
-        )}
-      </ul>
+      </div>
+
+      <div className="mt-1.5 overflow-hidden rounded-lg border border-border">
+        <div className="flex items-center gap-2.5 border-b border-border bg-zinc-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground dark:bg-zinc-900/40">
+          <span className={`${ACTIVITY_COL_STATUS} truncate`}>Status</span>
+          <span className={ACTIVITY_COL_DATE}>Data</span>
+          <span className="min-w-0 flex-1">Atividade</span>
+          <span className={ACTIVITY_COL_ASSIGNEE}>Responsável</span>
+          <span className={ACTIVITY_COL_TYPE}>Tipo</span>
+          <span className={ACTIVITY_COL_ACTIONS} aria-hidden="true" />
+        </div>
+
+        <ul className="[&>li:last-child]:border-0">
+          {activities.length > 0 ? (
+            activities.map((item) =>
+              item.kind === "task" ? (
+                <TaskRow
+                  key={`task-${item.task.id}`}
+                  task={item.task}
+                  clientId={clientId}
+                  detailsHref={
+                    taskHrefPrefix ? `${taskHrefPrefix}${item.task.id}` : `/clients/${clientId}?task=${item.task.id}`
+                  }
+                  isAdmin={isAdmin}
+                  typeLabel="Tarefa"
+                  onOptimisticComplete={() => dispatchOptimisticTask({ type: "complete", taskId: item.task.id })}
+                  onOptimisticDelete={() => dispatchOptimisticTask({ type: "delete", taskId: item.task.id })}
+                  managers={managers}
+                  isExpanded={expandedTaskId === item.task.id}
+                  onToggleExpand={() =>
+                    setExpandedTaskId((current) => (current === item.task.id ? null : item.task.id))
+                  }
+                />
+              ) : (
+                <AccountReviewRow
+                  key={`review-${item.review.id}`}
+                  review={item.review}
+                  detailHref={`${reviewHrefPrefix}${item.review.id}`}
+                  typeLabel="Revisão de conta"
+                />
+              ),
+            )
+          ) : (
+            <li className="flex min-h-[28px] items-center px-2 py-1 text-xs text-muted-foreground">
+              Nenhuma atividade nesta sprint.
+            </li>
+          )}
+        </ul>
+      </div>
     </div>
   );
 }

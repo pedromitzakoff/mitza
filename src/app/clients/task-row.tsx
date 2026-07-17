@@ -2,6 +2,7 @@
 
 import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { User } from "lucide-react";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { Tooltip } from "@/components/ui/tooltip";
 import { todayDateString } from "@/lib/today";
@@ -14,6 +15,13 @@ import { useToast } from "@/app/toast-provider";
 import type { TaskStatus, TaskType, TeamMemberStatus } from "@/lib/supabase/database.types";
 import { completeTaskAction, deleteTaskAction } from "./tasks-actions";
 import { InlineEditTaskForm, type InlineTaskManagerOption } from "./inline-task-form";
+import {
+  ACTIVITY_COL_ACTIONS,
+  ACTIVITY_COL_ASSIGNEE,
+  ACTIVITY_COL_DATE,
+  ACTIVITY_COL_STATUS,
+  ACTIVITY_COL_TYPE,
+} from "./activity-columns";
 
 const DELETE_CONFIRM_TIMEOUT_MS = 5000;
 
@@ -418,76 +426,74 @@ export function TaskRow({
         />
       )}
       <div className={`flex items-center gap-2.5 transition-opacity duration-150 ${rowOpacityClass}`}>
-        {isDone ? (
-          <span className="mitza-check-in flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none text-green-700 dark:bg-green-950 dark:text-green-300">
-            ✓
-          </span>
-        ) : isNotDone ? (
-          <Tooltip label="Não realizado">
-            <span
-              aria-label="Não realizado"
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[10px] leading-none text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
-            >
-              ×
+        <span className={ACTIVITY_COL_STATUS}>
+          {isDone ? (
+            <span className="mitza-check-in flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none text-green-700 dark:bg-green-950 dark:text-green-300">
+              ✓
             </span>
-          </Tooltip>
-        ) : (
-          <Tooltip label="Marcar como feito">
-            <button
-              type="button"
-              onClick={handleComplete}
-              aria-label="Marcar como feito"
-              className={`relative z-10 block h-4 w-4 shrink-0 rounded-full border-2 transition-colors hover:border-brand hover:bg-brand/10 ${
-                isOverdue
-                  ? "border-red-400 dark:border-red-700"
-                  : isToday
-                    ? "border-brand"
-                    : "border-zinc-300 dark:border-zinc-600"
-              }`}
-            />
-          </Tooltip>
-        )}
+          ) : isNotDone ? (
+            <Tooltip label="Não realizado">
+              <span
+                aria-label="Não realizado"
+                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[10px] leading-none text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+              >
+                ×
+              </span>
+            </Tooltip>
+          ) : (
+            <Tooltip label="Marcar como feito">
+              <button
+                type="button"
+                onClick={handleComplete}
+                aria-label="Marcar como feito"
+                className={`relative z-10 block h-4 w-4 shrink-0 rounded-full border-2 transition-colors hover:border-brand hover:bg-brand/10 ${
+                  isOverdue
+                    ? "border-red-400 dark:border-red-700"
+                    : isToday
+                      ? "border-brand"
+                      : "border-zinc-300 dark:border-zinc-600"
+                }`}
+              />
+            </Tooltip>
+          )}
+        </span>
 
-        <span className={`w-20 shrink-0 text-xs tabular-nums ${dateClasses}`}>{dueDate}</span>
+        <span className={`${ACTIVITY_COL_DATE} ${dateClasses}`}>{dueDate}</span>
 
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{task.title}</span>
 
         {(!hideAssigneeIfName || task.assignee?.name !== hideAssigneeIfName) && (
-          <span className="hidden w-28 shrink-0 truncate text-xs text-muted-foreground md:block">
-            {task.assignee?.name ?? "Sem responsável"}
-            {task.assignee?.status === "inativo" && " (inativo)"}
+          <span className={ACTIVITY_COL_ASSIGNEE}>
+            <User className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="min-w-0 truncate text-xs text-muted-foreground">
+              {task.assignee?.name ?? "Sem responsável"}
+              {task.assignee?.status === "inativo" && " (inativo)"}
+            </span>
           </span>
         )}
-
-        <span className="hidden w-16 shrink-0 sm:block">
-          {!isDone && !isOverdue && isToday && (
-            <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">Hoje</span>
-          )}
-          {isNotDone && (
-            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-              Não realizado
-            </span>
-          )}
-        </span>
 
         {typeLabel && (
-          <span className="hidden w-24 shrink-0 truncate text-[10px] uppercase tracking-wide text-muted-foreground lg:block">
-            {typeLabel}
+          <span className={ACTIVITY_COL_TYPE}>
+            <span className="inline-flex max-w-full items-center truncate rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground dark:bg-zinc-800">
+              {typeLabel}
+            </span>
           </span>
         )}
 
-        <TaskRowMenu
-          taskId={task.id}
-          taskTitle={task.title}
-          clientId={clientId}
-          detailsHref={detailsHref}
-          isAdmin={isAdmin ?? false}
-          onOptimisticDelete={onOptimisticDelete}
-          onDeleteStart={startExit}
-          onDeleteError={cancelExit}
-          waitForExit={waitForExit}
-          onToggleExpand={onToggleExpand}
-        />
+        <span className={ACTIVITY_COL_ACTIONS}>
+          <TaskRowMenu
+            taskId={task.id}
+            taskTitle={task.title}
+            clientId={clientId}
+            detailsHref={detailsHref}
+            isAdmin={isAdmin ?? false}
+            onOptimisticDelete={onOptimisticDelete}
+            onDeleteStart={startExit}
+            onDeleteError={cancelExit}
+            waitForExit={waitForExit}
+            onToggleExpand={onToggleExpand}
+          />
+        </span>
       </div>
       {completeError && <p className="mt-0.5 pl-[26px] text-[11px] text-red-600 dark:text-red-400">{completeError}</p>}
 
