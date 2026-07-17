@@ -70,13 +70,12 @@ export interface OperationalSummary {
  *
  * 1. "Sem otimização recente" saiu de vez. O alerta de origem
  *    (`kind: "otimizacao"`) é `!optimizationRecentlyDone`, calculado sobre
- *    `client.lastReviewAt` — na prática, sempre que ele dispara, a contagem
- *    de otimizações do período em foco (`optimizationCount`, já exibida
- *    como coluna própria no card fechado) também é zero: não existe caso em
- *    que o período tenha uma otimização registrada e ainda assim aterrisse
- *    aqui. Mostrar os dois ao mesmo tempo ("0 otimizações" na coluna +
- *    "Sem otimização recente" nesta linha) é literalmente repetir o mesmo
- *    fato duas vezes — a coluna já basta.
+ *    `client.lastReviewAt`. (Histórico: o card fechado já teve uma coluna
+ *    própria "Otimizações" mostrando essa contagem do período — removida na
+ *    Etapa "Painel Operacional 1.0", ver `AccountCardSummary`/`ROW_GRID_CLASSES`
+ *    — mas o motivo de este alerta nunca ter sido reintroduzido continua o
+ *    mesmo: sempre que ele dispara, o período em foco não tem otimização
+ *    registrada nenhuma, então não há fato novo pra este texto comunicar.)
  * 2. "Sem atividade recente"/"Atenção por inatividade" (`activityStatus`)
  *    agora só aparece no período "month" (Mensal). Na visão "sprint"
  *    (Sprint Atual), o corpo aberto sempre mostra "Última execução: há N

@@ -242,14 +242,17 @@ function SprintPerformanceSection({
       {isAdmin && <input type="checkbox" id={editToggleId} className="peer hidden" />}
 
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
-        <span
-          title={sourceTooltip}
-          className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-        >
-          Performance
+        {/* Etapa "Painel Operacional 1.0" (item 5 do pedido): removido o
+            rótulo "Performance" que abria esta linha — o próprio botão de
+            disclosure logo acima (`<summary>Performance</summary>`, ainda
+            visível quando aberto) já diz isso; repetir aqui era ler a
+            mesma palavra duas vezes seguidas. O tooltip de proveniência do
+            dado (fonte/timestamp) que vivia nesse rótulo migrou pro
+            primeiro valor real da linha ("Investido:"), sem perder a
+            informação. */}
+        <span title={sourceTooltip} className="text-muted-foreground">
+          Investido:
         </span>
-
-        <span className="text-muted-foreground">Investido:</span>
         <span className="font-semibold text-foreground">{formatCurrency(sprint.actualSpend)}</span>
 
         <span className="text-border" aria-hidden="true">
@@ -804,23 +807,27 @@ export function SprintCard({
     >
       {/* Linha compacta — Etapa 73/74: prioriza realizado + performance real,
           nunca mais orientação/planejamento financeiro semanal (isso vive só
-          na seção mensal "Investimento do mês"). Ordem: período → investido →
-          status temporal → tarefas → otimizações. O próprio badge temporal já
-          cobre "status operacional" (Sprint atual/Concluída/Futura) — nunca
-          um segundo selo Acima/Abaixo/Dentro/Sem planejamento aqui, essas
-          classificações são só do nível mensal.
+          na seção mensal "Investimento do mês").
+          Etapa "Painel Operacional 1.0": o badge temporal (Sprint atual/
+          Concluída/Futura) saiu de coluna própria e passou a viver dentro
+          da célula de Investimento (mesma lógica de `AccountCardSummary` —
+          "como está esta sprint?" é uma pergunta só, não duas colunas).
+          Tarefas + Otimizações (2 colunas) viraram "Progresso" (1: barra +
+          fração de tarefas concluídas) — otimizações do período continuam
+          visíveis ao abrir a sprint (Atividades), não precisam de mais uma
+          coluna na leitura de 3 segundos.
           Sprint UX 2.0 Fase 3: em modo `flat` (só a tela Sprints usa), essa
           linha usa o mesmo grid de colunas da linha do cliente
           (`ROW_GRID_CLASSES`) — a 1ª coluna (Cliente/Gestor na linha do
           cliente) mostra aqui o período desta sprint (a indentação do
           wrapper do grupo já comunica "isto é filho do cliente", então a
-          coluna nunca fica ociosa); Investimento/Status/Tarefas/Otimizações
-          caem exatamente sob as mesmas colunas de cima (MITZA Operational
-          Tables 1.0: esta é a única lista da plataforma onde o período segue
-          existindo como coluna própria, porque é a única onde ele de fato
-          diferencia elementos entre si — cada sprint do mês tem sua própria
-          janela). A página do cliente nunca passa `flat`, então mantém a
-          linha corrida de sempre. */}
+          coluna nunca fica ociosa); Investimento/Progresso caem exatamente
+          sob as mesmas colunas de cima (MITZA Operational Tables 1.0: esta
+          é a única lista da plataforma onde o período segue existindo como
+          coluna própria, porque é a única onde ele de fato diferencia
+          elementos entre si — cada sprint do mês tem sua própria janela).
+          A página do cliente nunca passa `flat`, então mantém a linha
+          corrida de sempre. */}
       {flat ? (
         <summary className="flex cursor-pointer list-none items-start gap-2 px-2 py-1">
           <span className="mitza-chevron mt-0.5 shrink-0 text-xs text-muted-foreground group-open:rotate-90">
@@ -846,17 +853,12 @@ export function SprintCard({
                   {tasksDone}/{tasks.length} tarefas
                 </span>
               )}
-              {accountReviews && (
-                <span className="tabular-nums text-muted-foreground">
-                  {accountReviews.length} {accountReviews.length === 1 ? "otimização" : "otimizações"}
-                </span>
-              )}
             </div>
 
             {/* Desktop (sm+): mesmo grid da linha do cliente
                 (`ROW_GRID_CLASSES`) — ver doc acima: a 1ª coluna mostra o
-                período desta sprint; Investimento/Status/Tarefas/Otimizações
-                caem exatamente sob as mesmas colunas de cima. */}
+                período desta sprint; Investimento/Progresso caem
+                exatamente sob as mesmas colunas de cima. */}
             <div className={ROW_GRID_CLASSES}>
               <span aria-hidden="true" />
               <span className="truncate text-xs font-medium text-foreground">
@@ -878,18 +880,29 @@ export function SprintCard({
                 ) : (
                   <span className="text-xs text-muted-foreground">Não iniciada</span>
                 )}
+                <span
+                  className={`mt-0.5 block w-fit rounded-full px-1.5 py-0.5 text-[10px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
+                >
+                  {TEMPORAL_LABEL[sprint.temporalStatus]}
+                </span>
               </div>
-              <span
-                className={`block w-fit rounded-full px-1.5 py-0.5 text-[10px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
-              >
-                {TEMPORAL_LABEL[sprint.temporalStatus]}
-              </span>
-              <span className="truncate text-xs tabular-nums text-muted-foreground">
-                {tasks.length === 0 ? "—" : `${tasksDone}/${tasks.length}`}
-              </span>
-              <span className="truncate text-xs tabular-nums text-muted-foreground">
-                {accountReviews ? (accountReviews.length === 0 ? "—" : accountReviews.length) : ""}
-              </span>
+              <div className="min-w-0">
+                {tasks.length > 0 ? (
+                  <>
+                    <span className="truncate text-xs tabular-nums text-muted-foreground">
+                      {tasksDone}/{tasks.length}
+                    </span>
+                    <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                      <div
+                        className="h-full rounded-full bg-brand"
+                        style={{ width: `${Math.min(Math.max((tasksDone / tasks.length) * 100, 0), 100)}%` }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <span className="truncate text-xs text-muted-foreground">—</span>
+                )}
+              </div>
             </div>
           </div>
         </summary>

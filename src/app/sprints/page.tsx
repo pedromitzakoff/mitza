@@ -738,7 +738,9 @@ export default async function SprintsPage({
           lista é uma tabela de verdade (leitura vertical por coluna), não
           um bloco de texto corrido. Só desktop (a lista em telas estreitas
           já quebra as colunas em texto empilhado — repetir esses rótulos lá
-          seria ruído sem a mesma grade visual por trás). */}
+          seria ruído sem a mesma grade visual por trás). Etapa "Painel
+          Operacional 1.0": "Status"/"Tarefas"/"Otimiz." (3 rótulos) viraram
+          "Progresso" (1) — ver doc de `ROW_GRID_CLASSES`. */}
       {cards.length > 0 && (
         <div className="mt-3 flex items-center gap-2 px-2.5">
           {/* Espaçador invisível do mesmo tamanho do "▸" + gap de cada linha
@@ -751,9 +753,7 @@ export default async function SprintsPage({
             <span />
             <span>Cliente / Gestor</span>
             <span>Investimento</span>
-            <span>Status</span>
-            <span>Tarefas</span>
-            <span>Otimiz.</span>
+            <span>Progresso</span>
           </div>
         </div>
       )}
@@ -782,7 +782,6 @@ export default async function SprintsPage({
                 monthRange={monthRange}
                 primaryManagerName={primaryManagerNameByClient.get(card.clientId) ?? null}
                 returnTo={buildUrl({})}
-                accountReviewsBySprintId={accountReviewsBySprintId}
                 monthTemporalStatus={monthTemporalStatus}
                 isAdmin={isAdmin}
               />

@@ -70,7 +70,6 @@ export function SprintCurrentClientGroup({
         operational={operational}
         tasksDone={tasksDone}
         tasksTotal={card.sprintTasks.length}
-        optimizationCount={reviews.length}
       />
 
       <SprintCardBody

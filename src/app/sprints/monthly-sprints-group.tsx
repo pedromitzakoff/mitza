@@ -53,10 +53,6 @@ export function SprintMonthlyBySprintsGroup({
   const summary = resolveMonthPeriodSummary(card, monthLabel, monthRange);
   const operational = operationalSummary(card, "month");
   const tasksDone = card.monthTasks.filter((t) => effectiveTaskStatus(t) === "feito").length;
-  const optimizationCount = card.monthSprints.reduce(
-    (sum, sprint) => sum + (accountReviewsBySprintId?.get(sprint.sprintId)?.length ?? 0),
-    0,
-  );
   const newReviewHref = `${returnTo}&review=new&reviewClient=${card.clientId}`;
   const buildReviewDetailHref = (reviewId: string) => `${returnTo}&reviewDetail=${reviewId}`;
 
@@ -74,7 +70,6 @@ export function SprintMonthlyBySprintsGroup({
         monthTemporalStatus={monthTemporalStatus}
         tasksDone={tasksDone}
         tasksTotal={card.monthTasks.length}
-        optimizationCount={optimizationCount}
       />
 
       {/* Sprint UX 2.0 Fase 2 (Decisão 011): sprints como filhos visuais do

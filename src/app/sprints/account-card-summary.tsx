@@ -30,51 +30,29 @@ const OPERATIONAL_TONE_CLASSES = {
  * três visões (Sprint atual, Mensal Consolidado, Mensal Por sprints), só
  * trocando o período (`summary`, já resolvido por `resolveSprintPeriodSummary`/
  * `resolveMonthPeriodSummary`) e o texto operacional (`operational`, já
- * decidido por `operationalSummary`). Regra "card fechado = decisão": nome,
- * período, % investido, situação financeira, UMA informação operacional,
- * tarefas e otimizações do período (Decisão 009) — nunca lista de alertas
- * nem diferença em reais aqui (isso fica no card aberto).
+ * decidido por `operationalSummary`).
+ *
+ * Etapa "Painel Operacional 1.0" (aproximação de UX a partir de uma segunda
+ * referência visual — painel operacional denso): revisa a Decisão 009
+ * ("card fechado também mostra tarefas e otimizações"). A situação
+ * financeira deixou de ter coluna própria — agora é um selo dentro da
+ * própria célula de Investimento (as duas respondem "como está o dinheiro
+ * desta conta?", nunca precisaram de duas colunas). Tarefas e Otimizações
+ * (2 colunas) viraram "Progresso" (1 coluna: barra + fração de tarefas
+ * concluídas) — a contagem de otimizações saiu da leitura de 3 segundos:
+ * ela não muda uma decisão imediata da mesma forma que "tem trabalho
+ * pendente?" muda, e continua disponível um nível abaixo (dentro da
+ * própria Sprint) pra quem quiser investigar. Ver Decisão 020 em
+ * `docs/DECISIONS.md` (supersede parcialmente a 009).
  *
  * Sprint UX 2.0 Fase 2 (Decisão 011: "Sprint é uma árvore operacional" — a
- * mesma lógica de densidade vale pro cliente): o card fechado do cliente
- * virou uma ÚNICA linha (antes eram 4 linhas empilhadas — nome/período,
- * %/status, tarefas/otimizações, barra). O marcador de "esperado até hoje" e
- * a legenda de cores da barra somem do card fechado (viram um sliver de 1
- * linha, `showExpectedMarker=false showLegend=false` — nenhuma conta muda,
- * só a apresentação): essa informação continua disponível no card aberto
- * (`Diferença pro ritmo esperado`/`MonthInvestmentSummary`). O texto
- * operacional só aparece quando não é neutro ("Em dia" some — já é o que o
- * badge de status comunica; só atenção/crítico aparecem, pra não repetir
- * informação em toda linha saudável).
- *
- * Sprint UX 2.0 Fase 3 (aproximação de UX/densidade a partir de uma
- * referência visual): a linha deixou de ser texto corrido com "·" entre os
- * itens (frase) e virou colunas de verdade (`ROW_GRID_CLASSES`, compartilhado
- * com a linha da sprint em `sprint-card.tsx`) — Cliente/Gestor, Investimento,
- * Status, Tarefas e Otimizações sempre na mesma posição horizontal, em
- * qualquer linha da lista. Isso permite "leitura vertical": bater o olho numa
- * coluna (ex.: Status) e escanear todos os clientes de uma vez, sem depender
- * de quanto texto cada linha tem. A célula de Investimento passou a mostrar
- * Realizado/Planejado em R$ (antes só o %) — cabe numa coluna estreita sem
- * virar "diferença em reais" (não é um delta, são os dois valores brutos, a
- * mesma informação que já existia em % só que também em R$).
- *
- * Etapa "Sprint Workspace Density 1.0": padding do cabeçalho reduzido
- * (`px-2.5 py-1.5` → `px-2 py-1`) — mesma área de clique (o `<summary>`
- * continua ocupando a linha inteira), só menos espaço morto ao redor do
- * conteúdo.
- *
- * MITZA Operational Tables 1.0 (Information Architecture): a coluna
- * "Período" saiu da linha fechada — nas visões Mensais era o mesmo mês
- * repetido em toda linha (informação já visível no contexto da tela: aba
- * ativa + navegador de mês); na Sprint atual é uma data secundária sem valor
- * decisório na leitura de 3 segundos. Ordem das colunas restantes agora
- * segue o padrão fixo da plataforma: Cliente → Investimento → Status →
- * Tarefas → Otimizações (Status subiu de última para logo depois de
- * Investimento). O período de cada sprint continua existindo — só não mais
- * como coluna própria da linha fechada; ver `sprint-card.tsx` (modo `flat`),
- * onde ele volta a aparecer no lugar de "Cliente/Gestor" (vazio ali), porque
- * é a única lista onde o período de fato diferencia elementos entre si.
+ * mesma lógica de densidade vale pro cliente): o card fechado do cliente é
+ * uma ÚNICA linha. O marcador de "esperado até hoje" e a legenda de cores
+ * da barra somem do card fechado (`showExpectedMarker=false
+ * showLegend=false` — nenhuma conta muda, só a apresentação): essa
+ * informação continua disponível no card aberto. O texto operacional só
+ * aparece quando não é neutro ("Em dia" some — já é o que o selo de
+ * status comunica; só atenção/crítico aparecem).
  */
 export function AccountCardSummary({
   clientId,
@@ -84,7 +62,6 @@ export function AccountCardSummary({
   operational,
   tasksDone,
   tasksTotal,
-  optimizationCount,
 }: {
   clientId: string;
   clientName: string;
@@ -96,17 +73,17 @@ export function AccountCardSummary({
    * fechado), mas os chamadores continuam podendo passar sem erro. */
   monthTemporalStatus?: MonthTemporalStatus;
   /** Tarefas do período em foco (sprint atual ou mês, conforme a visão) —
-   * `tasksTotal` 0 mostra "Sem tarefas no período" em vez de "0/0 tarefas". */
+   * alimenta a coluna "Progresso" (barra + fração). `tasksTotal` 0 mostra
+   * "—" (nada a progredir), nunca "0/0". */
   tasksDone?: number;
   tasksTotal?: number;
-  /** Otimizações registradas (account_reviews) no período em foco. */
-  optimizationCount?: number;
 }) {
   const investedPct = summary.pct !== null ? Math.round(summary.pct) : null;
+  const progressPct = tasksTotal && tasksTotal > 0 ? ((tasksDone ?? 0) / tasksTotal) * 100 : null;
 
   const statusBadge = investedPct !== null && (
     <span
-      className={`block w-fit rounded-full px-1.5 py-0.5 text-[10px] font-medium ${SPEND_STATUS_BADGE_CLASSES[summary.status]}`}
+      className={`mt-0.5 block w-fit rounded-full px-1.5 py-0.5 text-[10px] font-medium ${SPEND_STATUS_BADGE_CLASSES[summary.status]}`}
     >
       {PERIOD_STATUS_LABEL[summary.status]}
     </span>
@@ -131,7 +108,9 @@ export function AccountCardSummary({
           {investedPct !== null ? (
             <>
               <span className="tabular-nums text-muted-foreground">{investedPct}% investido</span>
-              {statusBadge}
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${SPEND_STATUS_BADGE_CLASSES[summary.status]}`}>
+                {PERIOD_STATUS_LABEL[summary.status]}
+              </span>
             </>
           ) : (
             <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${SPEND_STATUS_BADGE_CLASSES.sem_meta}`}>
@@ -141,13 +120,6 @@ export function AccountCardSummary({
           {tasksTotal !== undefined && (
             <span className="tabular-nums text-muted-foreground">
               {tasksTotal === 0 ? "Sem tarefas no período" : `${tasksDone ?? 0}/${tasksTotal} tarefas`}
-            </span>
-          )}
-          {optimizationCount !== undefined && (
-            <span className="tabular-nums text-muted-foreground">
-              {optimizationCount === 0
-                ? "Sem otimizações no período"
-                : `${optimizationCount} otimizaç${optimizationCount === 1 ? "ão" : "ões"}`}
             </span>
           )}
         </div>
@@ -193,6 +165,7 @@ export function AccountCardSummary({
                 <div className="mt-0.5">
                   <AgencyInvestmentBar summary={summary} showExpectedMarker={false} showLegend={false} />
                 </div>
+                {statusBadge}
               </>
             ) : (
               <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${SPEND_STATUS_BADGE_CLASSES.sem_meta}`}>
@@ -201,15 +174,23 @@ export function AccountCardSummary({
             )}
           </div>
 
-          <div className="min-w-0">{statusBadge}</div>
-
-          <span className="truncate text-xs tabular-nums text-muted-foreground">
-            {tasksTotal !== undefined ? (tasksTotal === 0 ? "—" : `${tasksDone ?? 0}/${tasksTotal}`) : ""}
-          </span>
-
-          <span className="truncate text-xs tabular-nums text-muted-foreground">
-            {optimizationCount !== undefined ? (optimizationCount === 0 ? "—" : optimizationCount) : ""}
-          </span>
+          <div className="min-w-0">
+            {progressPct !== null ? (
+              <>
+                <span className="truncate text-xs tabular-nums text-muted-foreground">
+                  {tasksDone ?? 0}/{tasksTotal}
+                </span>
+                <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                  <div
+                    className="h-full rounded-full bg-brand"
+                    style={{ width: `${Math.min(Math.max(progressPct, 0), 100)}%` }}
+                  />
+                </div>
+              </>
+            ) : (
+              <span className="truncate text-xs text-muted-foreground">—</span>
+            )}
+          </div>
         </div>
 
         {operational.tone !== "neutral" && (

@@ -8,7 +8,6 @@ import { operationalSummary } from "@/lib/account-priority";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { orderTasks } from "@/app/clients/task-order";
 import { TaskRow } from "@/app/clients/task-row";
-import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-section";
 import { AccountCardSummary } from "./account-card-summary";
 
 /**
@@ -30,7 +29,6 @@ export function SprintMonthlyConsolidatedGroup({
   monthRange,
   primaryManagerName,
   returnTo,
-  accountReviewsBySprintId,
   monthTemporalStatus,
   isAdmin,
 }: {
@@ -39,9 +37,6 @@ export function SprintMonthlyConsolidatedGroup({
   monthRange: { firstDay: string; lastDay: string };
   primaryManagerName: string | null;
   returnTo: string;
-  /** Otimizações (account_reviews) de todas as sprints do mês, por sprint —
-   * Sprint UX 2.0. Opcional só por retrocompatibilidade de tipo. */
-  accountReviewsBySprintId?: Map<string, AccountReviewSummaryItem[]>;
   monthTemporalStatus?: MonthTemporalStatus;
   /** Etapa "Sprint Workspace Polish 1.0" — habilita "Excluir tarefa" no menu
    * "•••" de cada linha (ver `TaskRow`). */
@@ -52,10 +47,6 @@ export function SprintMonthlyConsolidatedGroup({
   const operational = operationalSummary(card, "month");
   const orderedTasks = orderTasks(card.monthTasks);
   const tasksDone = card.monthTasks.filter((t) => effectiveTaskStatus(t) === "feito").length;
-  const optimizationCount = card.monthSprints.reduce(
-    (sum, sprint) => sum + (accountReviewsBySprintId?.get(sprint.sprintId)?.length ?? 0),
-    0,
-  );
 
   return (
     <details
@@ -71,7 +62,6 @@ export function SprintMonthlyConsolidatedGroup({
         monthTemporalStatus={monthTemporalStatus}
         tasksDone={tasksDone}
         tasksTotal={card.monthTasks.length}
-        optimizationCount={optimizationCount}
       />
 
       <div className="border-t border-border p-2">

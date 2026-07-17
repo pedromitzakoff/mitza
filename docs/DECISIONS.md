@@ -48,6 +48,7 @@ capítulo final ("Como adicionar novas decisões").
 - [Decisão 011: Sprint é uma árvore operacional](#decisão-011-sprint-é-uma-árvore-operacional)
 - [Decisão 012: A Sidebar é o único elemento estrutural fixo](#decisão-012-a-sidebar-é-o-único-elemento-estrutural-fixo)
 - [Decisão 013: Linguagem de interação única da plataforma](#decisão-013-linguagem-de-interação-única-da-plataforma)
+- [Decisão 020: Painel Operacional — card fechado perde a coluna de Otimizações, ganha Progresso](#decisão-020-painel-operacional--card-fechado-perde-a-coluna-de-otimizações-ganha-progresso)
 
 ## Capítulo 1 — Formato de uma Decisão
 
@@ -333,8 +334,11 @@ Não detalhado no registro original.
 ## Decisão 009: Card fechado do cliente também mostra tarefas e otimizações
 
 **Data:** 2026-07-14
-**Status:** Ativa. Substitui parcialmente a regra de densidade descrita na
-Decisão 001/registro original da tela Sprints (ver Contexto).
+**Status:** Parcialmente substituída pela Decisão 020 (2026-07-17): a
+contagem de otimizações saiu do card fechado; tarefas continuam, agora como
+barra de progresso em vez de fração solta. Substitui parcialmente a regra
+de densidade descrita na Decisão 001/registro original da tela Sprints (ver
+Contexto).
 
 ### Contexto
 
@@ -1025,6 +1029,80 @@ e endereçada separadamente, não escondida).
 - Nenhuma migração de dado, nenhuma Action alterada.
 - Pendência registrada em `docs/PLATFORM_INTEGRITY.md` Seção 9/14 (Wave
   3): unificar os dois componentes `EmptyState` num só.
+
+## Decisão 020: Painel Operacional — card fechado perde a coluna de Otimizações, ganha Progresso
+
+**Data:** 2026-07-17
+**Status:** Ativa. Substitui parcialmente a Decisão 009.
+
+### Contexto
+
+Uma segunda referência visual (painel operacional denso: Cliente/Gestor →
+Investimento → Progresso Sprint, sem coluna de status separada) foi
+usada como inspiração pra uma etapa de simplificação da tela Sprints —
+"o gestor deve entender o estado operacional batendo o olho", com o
+princípio explícito "se removermos este elemento, o gestor perde alguma
+informação realmente importante?".
+
+### Problema
+
+O card fechado do cliente (`AccountCardSummary`, compartilhado pelas 3
+visões da tela Sprints, mesma grade de `SprintCard` em modo `flat`) tinha
+6 colunas: caret, Cliente/Gestor, Investimento, Status (selo financeiro),
+Tarefas, Otimizações. Duas dessas — Status e Otimizações — competiam por
+atenção sem, na prática, mudar uma decisão imediata do gestor: Status é a
+mesma pergunta que Investimento já responde ("como está o dinheiro desta
+conta?"); Otimizações informa que uma revisão aconteceu, mas não indica
+trabalho pendente nem risco imediato — e continua disponível um nível
+abaixo (dentro da própria Sprint) pra quem quiser investigar.
+
+### Alternativas consideradas
+
+1. Manter as 6 colunas, só reduzindo padding/tipografia (otimização
+   cosmética, não resolve a competição por atenção).
+2. Reduzir pra 4 colunas: fundir Status dentro de Investimento (mesmo
+   assunto, mesma célula) e fundir Tarefas + Otimizações numa única
+   coluna "Progresso" (barra + fração de tarefas), removendo a contagem
+   de otimizações da leitura de 3 segundos.
+3. Remover Tarefas também, deixando só Cliente/Investimento (radical
+   demais — tarefas pendentes é exatamente o tipo de "trabalho pendente"
+   que a etapa pede pra destacar, não esconder).
+
+### Decisão tomada
+
+Alternativa 2. `ROW_GRID_CLASSES` (`src/app/sprints/row-grid.ts`) caiu de
+6 pra 4 colunas. Aplicada nos dois lugares que compartilham essa grade —
+`AccountCardSummary` (card fechado do cliente) e a linha `flat` de
+`SprintCard` (card fechado de cada sprint, usado em "Mensal > Por
+sprints") — pelo mesmo motivo de sempre: as duas precisam continuar
+usando exatamente as mesmas colunas pra parecer uma árvore contínua. Na
+segunda, o badge temporal (Sprint atual/Concluída/Futura) seguiu a mesma
+lógica de fusão do badge financeiro.
+
+### Justificativa
+
+Reduzir colunas que respondem a mesma pergunta (Status+Investimento) ou
+que não mudam uma decisão imediata (Otimizações) segue diretamente o
+princípio orientador da etapa. A contagem de otimizações nunca foi
+excluída da plataforma — só deixou de competir por atenção na visão mais
+densa e mais frequentemente escaneada.
+
+### Impactos
+
+- `src/app/sprints/row-grid.ts`: grid de 6 pra 4 colunas.
+- `src/app/sprints/account-card-summary.tsx`: remove prop
+  `optimizationCount`; selo financeiro migra pra dentro da célula de
+  Investimento; nova célula "Progresso" (barra + fração de tarefas).
+- `src/app/clients/sprint-card.tsx` (linha `flat`): mesma fusão (badge
+  temporal + Investimento; Tarefas/Otimizações → Progresso).
+- `src/app/sprints/{current-client-group,monthly-consolidated-group,
+  monthly-sprints-group}.tsx`, `src/app/sprints/page.tsx`: removida a
+  prop/cálculo agora mortos de `optimizationCount` (cascata verificada —
+  os dados de `account_reviews` continuam buscados e usados em outros
+  pontos da mesma tela, ex.: `accountReviews` da Sprint aberta).
+- Nenhuma Server Action, schema, permissão ou regra de cálculo
+  financeiro/tarefas/otimizações foi alterada — só a apresentação do card
+  fechado.
 
 ## Como adicionar novas decisões
 
