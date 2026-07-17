@@ -8,21 +8,22 @@ import { todayDateString } from "@/lib/today";
 import type { TaskListItem } from "./task-row";
 
 /**
- * Composer inline de "Atividades" (MITZA Unified Activities 1.0 — correção
- * de modelo de produto): criação rápida, sempre visível, só com título —
- * nunca um modal/drawer/popover. Enter publica; nenhum outro campo é
- * pedido aqui (responsável, data, tipo ficam com o valor padrão de sempre
- * e podem ser ajustados depois, na própria linha, abrindo o drawer oficial
- * da tarefa — progressive disclosure: primeiro registra o que precisa ser
- * feito, depois adiciona detalhes só quando necessário).
+ * Linha de criação de "Atividades" — Etapa "UX de linha, não formulário".
+ * Renderiza como `<li>`, primeiro item do MESMO `<ul>` de `ActivitySection`
+ * (não mais um bloco separado acima da lista): parada, é só "+ Adicionar
+ * atividade..." — texto discreto, sem caixa, sem borda, do tamanho de uma
+ * linha comum. Clicar transforma a própria linha num círculo + input
+ * (mesma linguagem visual do checkbox/título de `TaskRow`), sem abrir
+ * modal/drawer/popover. Depois de salvar (ou cancelar com Esc/blur vazio),
+ * a linha volta sozinha ao estado colapsado, pronta pra próxima.
  *
- * Internamente isto continua sendo `createTaskInlineAction` (a mesma
- * Server Action de sempre) e o mesmo `TaskListItem` otimista de sempre —
- * "atividade" aqui é só a palavra que a interface usa; o domínio continua
- * sendo Tarefa. Revisão de conta NUNCA é criada por este composer (ver
- * `SprintPerformanceSection`, onde "+ Registrar revisão" agora vive) — as
- * duas entidades continuam com fluxos de criação diferentes mesmo
- * aparecendo na mesma fila de leitura.
+ * A lógica de criação é EXATAMENTE a mesma de antes (mesma
+ * `createTaskInlineAction`, mesmo optimistic UI via `onCreated`, mesmo
+ * tratamento de erro com toast + texto restaurado) — só ganhou um estado
+ * `isEditing` a mais pra controlar a troca de aparência colapsada ↔
+ * editando. "Atividade" continua sendo só a palavra que a interface usa;
+ * o domínio continua Tarefa. Revisão de conta continua nascendo em
+ * "Performance" (`SprintPerformanceSection`), nunca aqui.
  */
 export function ActivityComposer({
   clientId,
@@ -38,10 +39,16 @@ export function ActivityComposer({
    * de sempre (`useOptimisticTasks`). */
   onCreated: (task: TaskListItem) => void;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState("");
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
+
+  function cancelEditing() {
+    setIsEditing(false);
+    setValue("");
+  }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,12 +56,11 @@ export function ActivityComposer({
     if (!title || isPending) return;
 
     const dueDate = todayDateString();
-    // Campo limpo imediatamente (Parte 1: "o campo é limpo e permanece
-    // disponível para a próxima atividade") — se a criação falhar, o texto
-    // volta pro campo (ver catch/error abaixo), nunca se perde.
     setValue("");
 
     startTransition(async () => {
+      // Otimista ANTES do await: a atividade aparece na lista na hora,
+      // mesmo com a linha de criação ainda fechando.
       onCreated({
         id: `temp-${crypto.randomUUID()}`,
         title,
@@ -78,28 +84,63 @@ export function ActivityComposer({
         if (result?.error) {
           showToast(result.error, "error");
           setValue(title);
+          inputRef.current?.focus();
+          return;
         }
       } catch (err) {
         if (isRedirectSignal(err)) throw err;
         showToast("Não foi possível criar a atividade. Tente novamente.", "error");
         setValue(title);
+        inputRef.current?.focus();
+        return;
       }
-      inputRef.current?.focus();
+      // Sucesso: volta pro estado colapsado, pronta pra adicionar a próxima.
+      setIsEditing(false);
     });
   }
 
+  if (!isEditing) {
+    return (
+      <li className="border-b border-border/60 last:border-0">
+        <button
+          type="button"
+          onClick={() => setIsEditing(true)}
+          className="mitza-pressable flex min-h-[28px] w-full items-center px-2 py-1 text-left text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          + Adicionar atividade...
+        </button>
+      </li>
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit}>
-      <input
-        ref={inputRef}
-        type="text"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder="Escreva uma atividade e pressione Enter…"
-        disabled={isPending}
-        aria-label="Nova atividade"
-        className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-brand disabled:opacity-60"
+    <li className="flex min-h-[28px] items-center gap-2.5 border-b border-border/60 px-2 py-1 last:border-0">
+      <span
+        aria-hidden
+        className="block h-4 w-4 shrink-0 rounded-full border-2 border-zinc-300 dark:border-zinc-600"
       />
-    </form>
+      <form onSubmit={handleSubmit} className="min-w-0 flex-1">
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onBlur={() => {
+            if (!value.trim()) cancelEditing();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              cancelEditing();
+            }
+          }}
+          placeholder="Adicionar atividade..."
+          disabled={isPending}
+          autoFocus
+          aria-label="Nova atividade"
+          className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60"
+        />
+      </form>
+    </li>
   );
 }

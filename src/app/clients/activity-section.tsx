@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { EmptyStateRow } from "@/components/ui/empty-state";
 import { SectionHeader } from "@/components/ui/section-header";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { useOptimisticTasks } from "@/lib/optimistic-tasks";
@@ -27,8 +26,10 @@ import { AccountReviewRow, type AccountReviewSummaryItem } from "./account-revie
  * por isso não existe mais um botão "+ Nova tarefa"/"+ Registrar revisão"
  * lado a lado aqui (essa dupla sugeria que as duas eram formas equivalentes
  * de adicionar a mesma coisa, o que nunca foi verdade). Em vez disso:
- * - tarefas nascem pelo `ActivityComposer` logo abaixo do cabeçalho —
- *   criação rápida, só título, sempre visível, nunca um modal;
+ * - tarefas nascem pelo `ActivityComposer`, que é a PRIMEIRA linha desta
+ *   mesma lista (Etapa "UX de linha, não formulário" — ver doc no próprio
+ *   componente): "+ Adicionar atividade..." colapsado até o clique, sem
+ *   caixa/borda de formulário, pra parecer só mais uma linha da lista;
  * - revisões de conta nascem em "Performance" (`SprintPerformanceSection`,
  *   "+ Registrar revisão"), porque revisão é um registro estruturado ligado
  *   à análise da conta, não um item de trabalho rápido.
@@ -101,14 +102,6 @@ export function ActivitySection({
         Atividades
       </SectionHeader>
 
-      <div className="mt-1.5">
-        <ActivityComposer
-          clientId={clientId}
-          sprintId={sprintId}
-          onCreated={(task) => dispatchOptimisticTask({ type: "create", task })}
-        />
-      </div>
-
       {optimisticTasks.length > 0 && (
         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
           <div
@@ -118,9 +111,17 @@ export function ActivitySection({
         </div>
       )}
 
-      {activities.length > 0 ? (
-        <ul className="mt-1.5 rounded-lg border border-border [&>li:first-child]:rounded-t-lg [&>li:last-child]:rounded-b-lg">
-          {activities.map((item) =>
+      {/* Etapa "UX de linha, não formulário": o composer é a PRIMEIRA linha
+          desta lista (não mais um bloco separado acima dela) — por isso a
+          lista sempre existe, mesmo sem nenhuma atividade ainda. */}
+      <ul className="mt-1.5 rounded-lg border border-border [&>li:first-child]:rounded-t-lg [&>li:last-child]:rounded-b-lg">
+        <ActivityComposer
+          clientId={clientId}
+          sprintId={sprintId}
+          onCreated={(task) => dispatchOptimisticTask({ type: "create", task })}
+        />
+        {activities.length > 0 ? (
+          activities.map((item) =>
             item.kind === "task" ? (
               <TaskRow
                 key={`task-${item.task.id}`}
@@ -147,11 +148,13 @@ export function ActivitySection({
                 typeLabel="Revisão de conta"
               />
             ),
-          )}
-        </ul>
-      ) : (
-        <EmptyStateRow className="mt-1.5">Nenhuma atividade nesta sprint.</EmptyStateRow>
-      )}
+          )
+        ) : (
+          <li className="flex min-h-[28px] items-center border-b border-border/60 px-2 py-1 text-xs text-muted-foreground last:border-0">
+            Nenhuma atividade nesta sprint.
+          </li>
+        )}
+      </ul>
     </div>
   );
 }
