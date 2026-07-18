@@ -276,6 +276,7 @@ export interface Database {
           important_seasonal_dates: string | null;
           performance_goal: PerformanceGoalDb | null;
           target_cost_per_result: number | null;
+          wallet_position: number | null;
         };
         Insert: {
           id?: string;
@@ -320,6 +321,7 @@ export interface Database {
           important_seasonal_dates?: string | null;
           performance_goal?: PerformanceGoalDb | null;
           target_cost_per_result?: number | null;
+          wallet_position?: number | null;
         };
         Update: {
           id?: string;
@@ -364,6 +366,7 @@ export interface Database {
           important_seasonal_dates?: string | null;
           performance_goal?: PerformanceGoalDb | null;
           target_cost_per_result?: number | null;
+          wallet_position?: number | null;
         };
         Relationships: [
           {

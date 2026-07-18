@@ -5,7 +5,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useSyncExternalStore } from "react";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
-  Building2,
   Clock,
   FileText,
   LayoutGrid,
@@ -127,7 +126,13 @@ interface NavItem {
  * Etapa "Operação 1.0": "Sprints" saiu da navegação principal — vira
  * "Operação" (`/operation`, tela nova de triagem, ver `lib/operation-triage.ts`).
  * `/sprints` continua existindo (nenhum arquivo/rota apagado), só sem
- * porta de entrada aqui — mesmo padrão já usado com "Reuniões". */
+ * porta de entrada aqui — mesmo padrão já usado com "Reuniões".
+ *
+ * Etapa "Árvore Viva 1.0": "Clientes" também saiu da navegação principal —
+ * a árvore "Contas da Agência" (busca + estrutura por gestor) e a Operação
+ * (quando o cliente tem um desvio) já cobrem qualquer acesso operacional a
+ * uma conta. `/clients` continua existindo (mesmo padrão acima) — cadastro
+ * administrativo agora vive em Configurações > Clientes. */
 const NAV_ITEMS: NavItem[] = [
   { label: "Visão Geral", href: "/", icon: LayoutGrid, isActive: (p) => p === "/", group: "principal" },
   {
@@ -137,7 +142,6 @@ const NAV_ITEMS: NavItem[] = [
     isActive: (p) => p === "/operation",
     group: "principal",
   },
-  { label: "Clientes", href: "/clients", icon: Building2, isActive: (p) => p === "/clients", group: "principal" },
   {
     label: "Relatórios",
     href: "/reports",

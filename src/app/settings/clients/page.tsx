@@ -25,13 +25,14 @@ import {
 import { SettingsClientsFilters } from "./filters";
 
 /**
- * Configurações > Clientes — manutenção eficiente dos dados estruturais:
- * status, gestor principal, início de contrato, CNPJ, e-mail e mensalidade
+ * Configurações > Clientes — cadastro administrativo da carteira: status,
+ * gestor principal, início de contrato, CNPJ, e-mail e mensalidade
  * editáveis direto na tabela (clique na célula, Enter salva, Escape
- * cancela). Diferente de /clients (consulta operacional, todo mundo
- * acessa): esta tela é só admin e cobre exatamente os campos cadastrais
- * cobrados — nome só é editável na edição completa (evita alteração
- * acidental do identificador principal do cliente).
+ * cancela). Etapa "Árvore Viva 1.0": abrir uma conta pra trabalhar nela é
+ * fluxo da árvore lateral (Contas da Agência) ou da Operação, não desta
+ * tela — esta é só admin e cobre exatamente os campos cadastrais cobrados
+ * — nome só é editável na edição completa (evita alteração acidental do
+ * identificador principal do cliente).
  */
 export default async function SettingsClientsPage({
   searchParams,
@@ -81,11 +82,8 @@ export default async function SettingsClientsPage({
         <div>
           <h1 className="text-xl font-semibold text-foreground">Clientes</h1>
           <p className="text-xs text-muted-foreground">
-            Manutenção dos dados cadastrais — consulta operacional rápida continua em{" "}
-            <Link href="/clients" className="text-brand hover:underline">
-              /clients
-            </Link>
-            .
+            Manutenção dos dados cadastrais. Para abrir uma conta e trabalhar nela, use a árvore
+            &ldquo;Contas da Agência&rdquo; na barra lateral ou a Operação.
           </p>
         </div>
         <Link

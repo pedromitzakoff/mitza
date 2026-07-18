@@ -2,23 +2,40 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Folder } from "lucide-react";
-import { moveClientInTree, type AgencyTree } from "@/lib/agency-accounts-tree";
-import { useToast } from "@/app/toast-provider";
+import { usePathname, useRouter } from "next/navigation";
+import { Folder, Search } from "lucide-react";
 import {
-  getOpenTaskCountForManagerAction,
-  transferClientManagerAction,
-  type ClientTransferMode,
-} from "./agency-accounts-tree-actions";
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+  type DropAnimation,
+} from "@dnd-kit/core";
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { type AgencyTree, type AgencyTreeClient } from "@/lib/agency-accounts-tree";
+import { useToast } from "@/app/toast-provider";
+import { getOpenTaskCountForManagerAction, moveClientAction, type ClientTransferMode } from "./agency-accounts-tree-actions";
 import { AgencyTransferDialog } from "./agency-accounts-tree-transfer-dialog";
 
 const UNASSIGNED_KEY = "__unassigned__";
 /** Tempo de hover sobre uma pasta recolhida, arrastando um cliente por
- * cima, até ela se abrir sozinha (item 3 do pedido). Curto o bastante pra
- * não parecer travado, longo o bastante pra não abrir sozinha ao só
- * passar por cima de passagem. */
+ * cima, até ela se abrir sozinha. Curto o bastante pra não parecer
+ * travado, longo o bastante pra não abrir sozinha ao só passar por cima de
+ * passagem. */
 const HOVER_EXPAND_DELAY_MS = 600;
+
+const DROP_ANIMATION: DropAnimation = {
+  duration: 220,
+  easing: "cubic-bezier(0.2, 0, 0, 1)",
+};
 
 /** Extrai o id do cliente da própria rota (`/clients/<id>`, incluindo
  * subrotas como `/clients/<id>/edit`) — mesmo mecanismo que `NAV_ITEMS` já
@@ -30,70 +47,92 @@ function activeClientIdFromPathname(pathname: string): string | null {
   return match[1] === "new" ? null : match[1];
 }
 
-function keyForClient(tree: AgencyTree, clientId: string): string | null {
-  for (const manager of tree.managers) {
-    if (manager.clients.some((client) => client.id === clientId)) return manager.id;
+type Containers = Record<string, AgencyTreeClient[]>;
+
+function buildContainers(tree: AgencyTree): Containers {
+  const result: Containers = { [UNASSIGNED_KEY]: [...tree.unassigned] };
+  for (const manager of tree.managers) result[manager.id] = [...manager.clients];
+  return result;
+}
+
+/** Container (pasta) que contém o id informado — o próprio id de uma
+ * pasta conta como match (soltar sobre a área da pasta, não sobre um
+ * cliente específico: pasta vazia ou ainda recolhida). */
+function findContainerKey(containers: Containers, id: string): string | null {
+  if (id in containers) return id;
+  for (const key of Object.keys(containers)) {
+    if (containers[key].some((client) => client.id === id)) return key;
   }
-  if (tree.unassigned.some((client) => client.id === clientId)) return UNASSIGNED_KEY;
   return null;
 }
 
-function findClientName(tree: AgencyTree, clientId: string): string | null {
-  for (const manager of tree.managers) {
-    const match = manager.clients.find((client) => client.id === clientId);
-    if (match) return match.name;
-  }
-  return tree.unassigned.find((client) => client.id === clientId)?.name ?? null;
+/** Normaliza acento/caixa pra busca — "judclass" encontra "JudClass",
+ * "sao" encontra "São". */
+function normalizeSearch(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
-/** "Sem responsável" pro bucket especial, nome do gestor pros demais —
- * usado tanto pro rótulo do destino quanto pro nome do gestor anterior no
- * diálogo de confirmação. */
-function labelForKey(tree: AgencyTree, key: string): string {
-  if (key === UNASSIGNED_KEY) return "Sem responsável";
-  return tree.managers.find((manager) => manager.id === key)?.name ?? "";
+interface PendingTransfer {
+  clientId: string;
+  clientName: string;
+  previousManagerId: string | null;
+  previousManagerName: string | null;
+  targetKey: string;
+  targetManagerId: string | null;
+  targetLabel: string;
+  previousSiblingId: string | null;
+  nextSiblingId: string | null;
+  openTaskCount: number;
+  /** Arranjo completo (todos os containers) já refletindo a movimentação —
+   * aplicado de volta ao estado só quando o usuário confirma. Até lá, a
+   * árvore visível volta pro snapshot anterior ao drag: a confirmação é
+   * obrigatória antes de qualquer mudança visual real. */
+  optimisticContainers: Containers;
 }
 
 function ClientLeaf({
-  id,
-  name,
+  client,
   isActive,
-  isAdmin,
-  isDragging,
-  isBusy,
-  onDragStart,
-  onDragEnd,
+  isSearchMatch,
+  disabled,
 }: {
-  id: string;
-  name: string;
+  client: AgencyTreeClient;
   isActive: boolean;
-  isAdmin: boolean;
-  isDragging: boolean;
-  isBusy: boolean;
-  onDragStart: (clientId: string) => void;
-  onDragEnd: () => void;
+  isSearchMatch: boolean;
+  disabled: boolean;
 }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: client.id,
+    disabled,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
   return (
-    <li>
+    <li ref={setNodeRef} style={style}>
       <Link
-        href={`/clients/${id}`}
-        title={name}
-        draggable={isAdmin && !isBusy}
-        onDragStart={(event) => {
-          event.dataTransfer.setData("text/plain", id);
-          event.dataTransfer.effectAllowed = "move";
-          onDragStart(id);
-        }}
-        onDragEnd={onDragEnd}
+        href={`/clients/${client.id}`}
+        title={client.name}
+        {...attributes}
+        {...listeners}
         className={`flex items-center justify-between gap-2 rounded-md py-1 pl-7 pr-2 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
-          isActive ? "bg-brand/15 font-semibold text-brand" : "font-normal text-zinc-300 hover:bg-white/10"
-        } ${isDragging ? "opacity-40" : ""}`}
+          disabled ? "" : "cursor-grab touch-none active:cursor-grabbing"
+        } ${
+          isActive
+            ? "bg-brand/15 font-semibold text-brand"
+            : isSearchMatch
+              ? "bg-brand/10 font-medium text-brand"
+              : "font-normal text-zinc-300 hover:bg-white/10"
+        } ${isDragging ? "opacity-30" : ""}`}
       >
-        {/* Slot reservado pra informação futura ao lado do cliente (status,
-            pendências, revisão etc.) — nada renderiza aqui ainda. Manter o
-            `justify-between` já prepara o espaço sem precisar redesenhar a
-            linha quando esse dia chegar. */}
-        <span className="min-w-0 truncate">{name}</span>
+        <span className="min-w-0 truncate">{client.name}</span>
       </Link>
     </li>
   );
@@ -106,51 +145,30 @@ function ManagerFolder({
   isExpanded,
   onToggle,
   activeClientId,
-  isAdmin,
-  isBusy,
+  searchMatchIds,
+  dragDisabled,
   isDropTarget,
-  draggingClientId,
-  onDragEnterFolder,
-  onDragLeaveFolder,
-  onDropOnFolder,
-  onDragStartClient,
-  onDragEndClient,
+  isDimmed,
 }: {
   folderKey: string;
   name: string;
-  clients: { id: string; name: string }[];
+  clients: AgencyTreeClient[];
   isExpanded: boolean;
   onToggle: () => void;
   activeClientId: string | null;
-  isAdmin: boolean;
-  isBusy: boolean;
+  searchMatchIds: Set<string>;
+  dragDisabled: boolean;
   isDropTarget: boolean;
-  draggingClientId: string | null;
-  onDragEnterFolder: (key: string) => void;
-  onDragLeaveFolder: (key: string) => void;
-  onDropOnFolder: () => void;
-  onDragStartClient: (clientId: string) => void;
-  onDragEndClient: () => void;
+  isDimmed: boolean;
 }) {
+  const { setNodeRef } = useDroppable({ id: folderKey });
+
   return (
     <li
-      onDragOver={(event) => {
-        if (!isAdmin || isBusy) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
-        onDragEnterFolder(folderKey);
-      }}
-      onDragLeave={(event) => {
-        if (!isAdmin) return;
-        if (event.currentTarget.contains(event.relatedTarget as Node)) return;
-        onDragLeaveFolder(folderKey);
-      }}
-      onDrop={(event) => {
-        if (!isAdmin || isBusy) return;
-        event.preventDefault();
-        onDropOnFolder();
-      }}
-      className={`rounded-md ${isDropTarget ? "bg-brand/10 ring-1 ring-inset ring-brand/40" : ""}`}
+      ref={setNodeRef}
+      className={`rounded-md transition-[opacity,background-color] duration-[var(--motion-fast)] ease-[var(--ease-enter)] ${
+        isDropTarget ? "bg-brand/10 ring-1 ring-inset ring-brand/40" : ""
+      } ${isDimmed ? "opacity-40" : ""}`}
     >
       <button
         type="button"
@@ -160,52 +178,39 @@ function ManagerFolder({
         className="mitza-pressable flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-[13px] font-medium text-zinc-200 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       >
         <span
-          className={`mitza-chevron shrink-0 text-xs text-zinc-500 ${isExpanded ? "rotate-90" : ""}`}
+          className={`mitza-chevron shrink-0 text-xs ${isDropTarget ? "text-brand" : "text-zinc-500"} ${isExpanded ? "rotate-90" : ""}`}
           aria-hidden="true"
         >
           ▸
         </span>
-        <Folder className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden="true" />
+        <Folder className={`h-4 w-4 shrink-0 ${isDropTarget ? "text-brand" : "text-zinc-500"}`} aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate text-left">{name}</span>
         {!isExpanded && clients.length > 0 && (
-          <span className="shrink-0 text-xs text-zinc-500">{clients.length}</span>
+          <span className={`shrink-0 text-xs ${isDropTarget ? "text-brand" : "text-zinc-500"}`}>{clients.length}</span>
         )}
       </button>
 
       {isExpanded && (
-        <ul className="flex flex-col gap-0.5">
-          {clients.length > 0 ? (
-            clients.map((client) => (
-              <ClientLeaf
-                key={client.id}
-                id={client.id}
-                name={client.name}
-                isActive={client.id === activeClientId}
-                isAdmin={isAdmin}
-                isBusy={isBusy}
-                isDragging={draggingClientId === client.id}
-                onDragStart={onDragStartClient}
-                onDragEnd={onDragEndClient}
-              />
-            ))
-          ) : (
-            <li className="py-1 pl-7 pr-2 text-xs text-zinc-500">Nenhum cliente</li>
-          )}
-        </ul>
+        <SortableContext items={clients.map((client) => client.id)} strategy={verticalListSortingStrategy}>
+          <ul className="flex flex-col gap-0.5">
+            {clients.length > 0 ? (
+              clients.map((client) => (
+                <ClientLeaf
+                  key={client.id}
+                  client={client}
+                  isActive={client.id === activeClientId}
+                  isSearchMatch={searchMatchIds.has(client.id)}
+                  disabled={dragDisabled}
+                />
+              ))
+            ) : (
+              <li className="py-1 pl-7 pr-2 text-xs text-zinc-500">Nenhum cliente</li>
+            )}
+          </ul>
+        </SortableContext>
       )}
     </li>
   );
-}
-
-interface PendingTransfer {
-  clientId: string;
-  clientName: string;
-  previousManagerId: string | null;
-  previousManagerName: string | null;
-  targetKey: string;
-  targetManagerId: string | null;
-  targetLabel: string;
-  openTaskCount: number;
 }
 
 /**
@@ -216,11 +221,18 @@ interface PendingTransfer {
  * expandidas, e nenhuma pasta que o usuário já abriu na sessão é fechada
  * automaticamente — só entram novos ids no conjunto, nunca saem.
  *
- * Admin pode arrastar um cliente pra outra pasta pra transferir
- * `clients.primary_manager_id` (Etapa "Drag and drop de Contas da
- * Agência") — gestor comum continua navegando normalmente, só não inicia
- * o arraste (a Server Action também exige admin, isto é só a UI não
- * sugerir uma interação que falharia).
+ * Etapa "Árvore Viva 1.0": substitui a busca antiga por um campo no topo
+ * que encontra cliente OU gestor em qualquer pasta (item aprovado:
+ * "busca deve filtrar a árvore inteira"), com expansão temporária das
+ * pastas relevantes — nunca escreve em `expanded`, então limpar a busca
+ * restaura exatamente o estado anterior. Admin também pode arrastar um
+ * cliente (`@dnd-kit`) pra reordenar dentro da mesma pasta (persistido em
+ * `clients.wallet_position`, sem diálogo) ou pra outra pasta (troca de
+ * `primary_manager_id`, com a mesma confirmação de transferência de
+ * atividades já validada antes) — ambos os fluxos passam por
+ * `moveClientAction`, o único ponto de entrada de movimentação de
+ * cliente. Busca ativa desabilita o arraste (a lista filtrada não é uma
+ * ordem estável pra reordenar contra).
  */
 export function AgencyAccountsTreeView({
   tree,
@@ -232,6 +244,7 @@ export function AgencyAccountsTreeView({
   isAdmin: boolean;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const activeClientId = activeClientIdFromPathname(pathname);
   const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -242,54 +255,91 @@ export function AgencyAccountsTreeView({
       initial.add(currentManagerId);
     }
     if (activeClientId) {
-      const key = keyForClient(tree, activeClientId);
+      const key = findContainerKey(buildContainers(tree), activeClientId);
       if (key) initial.add(key);
     }
     return initial;
   });
 
-  // Estado otimista da transferência: aplicado sobre a árvore vinda do
-  // servidor assim que o usuário confirma (não ao soltar — a confirmação
-  // é obrigatória antes de qualquer mudança visual real), pra a
-  // movimentação parecer instantânea. Em caso de erro, a entrada é
-  // removida e o cliente volta a aparecer na pasta original, porque
-  // `effectiveTree` cai de volta a computar só a partir de `tree` (que
-  // nunca mudou de verdade nesse caso).
-  const [optimisticMoves, setOptimisticMoves] = useState<Map<string, string | null>>(new Map());
-  const effectiveTree = useMemo(() => {
-    let result = tree;
-    for (const [clientId, targetManagerId] of optimisticMoves) {
-      result = moveClientInTree(result, clientId, targetManagerId);
-    }
-    return result;
-  }, [tree, optimisticMoves]);
-
-  const [draggingClientId, setDraggingClientId] = useState<string | null>(null);
-  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const [containers, setContainers] = useState<Containers>(() => buildContainers(tree));
+  const [lastSyncedTree, setLastSyncedTree] = useState(tree);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [pendingTransfer, setPendingTransfer] = useState<PendingTransfer | null>(null);
 
-  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hoverKeyRef = useRef<string | null>(null);
+  // Ressincroniza com a árvore vinda do servidor quando ela mudar de
+  // verdade (revalidatePath após qualquer movimentação) — nunca durante um
+  // drag em curso, senão uma revalidação de outra origem apagaria o
+  // deslocamento visual em andamento. Mesmo padrão de "ajustar estado
+  // durante o render ao mudar uma prop" já usado logo abaixo pra
+  // `lastActiveClientId` (estado, não ref — refs não podem ser lidas
+  // durante o render).
+  if (tree !== lastSyncedTree && activeId === null && !pendingTransfer) {
+    setLastSyncedTree(tree);
+    setContainers(buildContainers(tree));
+  }
 
-  function clearHoverExpand() {
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    hoverTimerRef.current = null;
-    hoverKeyRef.current = null;
+  const snapshotRef = useRef<Containers>(containers);
+  const dragStartContainerRef = useRef<string | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isBusy = isPending || pendingTransfer !== null;
+
+  const managerNameByKey = useMemo(() => {
+    const map = new Map<string, string>([[UNASSIGNED_KEY, "Sem responsável"]]);
+    for (const manager of tree.managers) map.set(manager.id, manager.name);
+    return map;
+  }, [tree]);
+
+  const clientNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const manager of tree.managers) for (const client of manager.clients) map.set(client.id, client.name);
+    for (const client of tree.unassigned) map.set(client.id, client.name);
+    return map;
+  }, [tree]);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const normalizedQuery = normalizeSearch(searchQuery);
+  const searchActive = normalizedQuery.length > 0;
+
+  const searchMatchIds = useMemo(() => {
+    if (!searchActive) return new Set<string>();
+    const ids = new Set<string>();
+    for (const key of Object.keys(containers)) {
+      for (const client of containers[key]) {
+        if (normalizeSearch(client.name).includes(normalizedQuery)) ids.add(client.id);
+      }
+    }
+    return ids;
+  }, [containers, normalizedQuery, searchActive]);
+
+  // Expansão temporária: derivada da busca, nunca escrita em `expanded` —
+  // limpar o campo faz `searchExpandedKeys` voltar a `null` e a árvore
+  // volta a ler `expanded` puro, exatamente como estava antes de buscar.
+  const searchExpandedKeys = useMemo(() => {
+    if (!searchActive) return null;
+    const keys = new Set<string>();
+    for (const key of Object.keys(containers)) {
+      const managerMatches = key !== UNASSIGNED_KEY && normalizeSearch(managerNameByKey.get(key) ?? "").includes(normalizedQuery);
+      const hasMatchingClient = containers[key].some((client) => searchMatchIds.has(client.id));
+      if (managerMatches || hasMatchingClient) keys.add(key);
+    }
+    return keys;
+  }, [searchActive, containers, managerNameByKey, normalizedQuery, searchMatchIds]);
+
+  function isExpanded(key: string): boolean {
+    return searchExpandedKeys ? searchExpandedKeys.has(key) : expanded.has(key);
   }
 
   // Navegar pra um cliente de uma carteira ainda fechada deve revelá-la —
-  // sem isso, "o cliente atualmente aberto" (Objetivo do recurso) deixaria
-  // de valer ao trocar de cliente via link direto/busca. O guard compara
-  // contra o ÚLTIMO cliente ativo visto (não contra `expanded.has(key)`
-  // diretamente): se comparasse contra o Set, fechar manualmente a
-  // carteira do cliente ativo reabriria sozinha no próximo render — o
-  // usuário nunca conseguiria recolher a própria carteira aberta. Só a
-  // TROCA pra um cliente novo dispara a expansão. Estado (não ref) por
-  // exigência do React: ler/mutar ref durante o render não é seguro.
+  // sem isso, "o cliente atualmente aberto" deixaria de valer ao trocar de
+  // cliente via link direto/busca. Compara contra o ÚLTIMO cliente ativo
+  // visto (não contra `expanded.has(key)`): só a TROCA pra um cliente novo
+  // dispara a expansão, senão fechar manualmente a carteira ativa
+  // reabriria sozinha no próximo render.
   const [lastActiveClientId, setLastActiveClientId] = useState(activeClientId);
   if (activeClientId !== lastActiveClientId) {
     setLastActiveClientId(activeClientId);
-    const key = activeClientId ? keyForClient(effectiveTree, activeClientId) : null;
+    const key = activeClientId ? findContainerKey(containers, activeClientId) : null;
     if (key) {
       setExpanded((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
     }
@@ -304,50 +354,147 @@ export function AgencyAccountsTreeView({
     });
   }
 
-  function handleDragStartClient(clientId: string) {
-    setDraggingClientId(clientId);
+  function clearHoverExpand() {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = null;
   }
 
-  function handleDragEndClient() {
-    setDraggingClientId(null);
-    setDragOverKey(null);
+  const [dragOverFolderKey, setDragOverFolderKey] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  function handleDragStart(event: DragStartEvent) {
+    const id = event.active.id as string;
+    snapshotRef.current = containers;
+    dragStartContainerRef.current = findContainerKey(containers, id);
+    setActiveId(id);
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId2 = active.id as string;
+    const overId = over.id as string;
+    const activeContainer = findContainerKey(containers, activeId2);
+    const overContainer = findContainerKey(containers, overId);
+    if (!activeContainer || !overContainer) return;
+
+    if (overContainer !== dragOverFolderKey) {
+      setDragOverFolderKey(overContainer);
+      clearHoverExpand();
+      hoverTimerRef.current = setTimeout(() => {
+        setExpanded((prev) => (prev.has(overContainer) ? prev : new Set(prev).add(overContainer)));
+      }, HOVER_EXPAND_DELAY_MS);
+    }
+
+    if (activeContainer === overContainer) return;
+
+    setContainers((prev) => {
+      const activeItems = prev[activeContainer];
+      const overItems = prev[overContainer];
+      const activeIndex = activeItems.findIndex((client) => client.id === activeId2);
+      if (activeIndex === -1) return prev;
+      const overIndex = overItems.findIndex((client) => client.id === overId);
+      const insertIndex = overIndex >= 0 ? overIndex : overItems.length;
+      const movingClient = activeItems[activeIndex];
+      return {
+        ...prev,
+        [activeContainer]: activeItems.filter((client) => client.id !== activeId2),
+        [overContainer]: [...overItems.slice(0, insertIndex), movingClient, ...overItems.slice(insertIndex)],
+      };
+    });
+  }
+
+  function resetDragUi() {
+    setActiveId(null);
+    setDragOverFolderKey(null);
     clearHoverExpand();
+    dragStartContainerRef.current = null;
   }
 
-  function handleDragEnterFolder(key: string) {
-    setDragOverKey((prev) => (prev === key ? prev : key));
-    if (hoverKeyRef.current === key) return;
-    clearHoverExpand();
-    hoverKeyRef.current = key;
-    hoverTimerRef.current = setTimeout(() => {
-      setExpanded((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
-    }, HOVER_EXPAND_DELAY_MS);
+  function handleDragCancel() {
+    setContainers(snapshotRef.current);
+    resetDragUi();
   }
 
-  function handleDragLeaveFolder(key: string) {
-    // Só reage se a pasta que está saindo ainda é a destacada — evita que
-    // uma saída "atrasada" de A apague o realce de B quando o arraste já
-    // entrou em B antes do evento de saída de A chegar.
-    setDragOverKey((prev) => (prev === key ? null : prev));
-    if (hoverKeyRef.current === key) clearHoverExpand();
+  function commitSameFolderReorder(
+    clientId: string,
+    targetManagerId: string | null,
+    previousSiblingId: string | null,
+    nextSiblingId: string | null,
+  ) {
+    startTransition(async () => {
+      const result = await moveClientAction(clientId, targetManagerId, targetManagerId, previousSiblingId, nextSiblingId);
+      if (result.error) {
+        setContainers(snapshotRef.current);
+        showToast(result.error, "error");
+      }
+    });
   }
 
-  function handleDropOnFolder(targetKey: string, targetManagerId: string | null) {
-    clearHoverExpand();
-    setDragOverKey(null);
-    const clientId = draggingClientId;
-    setDraggingClientId(null);
-    if (!clientId || isPending || pendingTransfer) return;
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    const startContainer = dragStartContainerRef.current;
+    resetDragUi();
 
-    const sourceKey = keyForClient(effectiveTree, clientId);
-    if (!sourceKey || sourceKey === targetKey) return;
+    if (!over || !startContainer) {
+      setContainers(snapshotRef.current);
+      return;
+    }
 
-    const clientName = findClientName(effectiveTree, clientId);
-    if (!clientName) return;
+    const clientId = active.id as string;
+    const overId = over.id as string;
+    const endContainer = findContainerKey(containers, clientId);
+    if (!endContainer) {
+      setContainers(snapshotRef.current);
+      return;
+    }
 
-    const previousManagerId = sourceKey === UNASSIGNED_KEY ? null : sourceKey;
-    const previousManagerName = sourceKey === UNASSIGNED_KEY ? null : labelForKey(effectiveTree, sourceKey);
-    const targetLabel = labelForKey(effectiveTree, targetKey);
+    if (startContainer === endContainer) {
+      const items = containers[endContainer];
+      const oldIndex = items.findIndex((client) => client.id === clientId);
+      const overIndex = items.findIndex((client) => client.id === overId);
+      const newIndex = overIndex >= 0 ? overIndex : items.length - 1;
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+
+      const reordered = [...items];
+      const [moved] = reordered.splice(oldIndex, 1);
+      reordered.splice(newIndex, 0, moved);
+      setContainers((prev) => ({ ...prev, [endContainer]: reordered }));
+
+      const finalIndex = reordered.findIndex((client) => client.id === clientId);
+      const previousSibling = finalIndex > 0 ? reordered[finalIndex - 1] : null;
+      const nextSibling = finalIndex < reordered.length - 1 ? reordered[finalIndex + 1] : null;
+      const targetManagerId = endContainer === UNASSIGNED_KEY ? null : endContainer;
+
+      commitSameFolderReorder(clientId, targetManagerId, previousSibling?.id ?? null, nextSibling?.id ?? null);
+      return;
+    }
+
+    // Movimentação entre pastas: `containers` já reflete o deslocamento ao
+    // vivo do onDragOver. Guarda esse arranjo pra reaplicar só se
+    // confirmado, e volta a árvore visível pro snapshot até lá.
+    const finalItems = containers[endContainer];
+    const finalIndex = finalItems.findIndex((client) => client.id === clientId);
+    if (finalIndex === -1) {
+      setContainers(snapshotRef.current);
+      return;
+    }
+
+    const previousSibling = finalIndex > 0 ? finalItems[finalIndex - 1] : null;
+    const nextSibling = finalIndex < finalItems.length - 1 ? finalItems[finalIndex + 1] : null;
+    const clientName = finalItems[finalIndex].name;
+    const optimisticContainers = containers;
+
+    setContainers(snapshotRef.current);
+
+    const previousManagerId = startContainer === UNASSIGNED_KEY ? null : startContainer;
+    const targetManagerId = endContainer === UNASSIGNED_KEY ? null : endContainer;
+    const targetLabel = managerNameByKey.get(endContainer) ?? "";
 
     if (!previousManagerId) {
       setPendingTransfer({
@@ -355,14 +502,18 @@ export function AgencyAccountsTreeView({
         clientName,
         previousManagerId: null,
         previousManagerName: null,
-        targetKey,
+        targetKey: endContainer,
         targetManagerId,
         targetLabel,
+        previousSiblingId: previousSibling?.id ?? null,
+        nextSiblingId: nextSibling?.id ?? null,
         openTaskCount: 0,
+        optimisticContainers,
       });
       return;
     }
 
+    const previousManagerName = managerNameByKey.get(startContainer) ?? "";
     startTransition(async () => {
       const result = await getOpenTaskCountForManagerAction(clientId, previousManagerId);
       if ("error" in result) {
@@ -374,10 +525,13 @@ export function AgencyAccountsTreeView({
         clientName,
         previousManagerId,
         previousManagerName,
-        targetKey,
+        targetKey: endContainer,
         targetManagerId,
         targetLabel,
+        previousSiblingId: previousSibling?.id ?? null,
+        nextSiblingId: nextSibling?.id ?? null,
         openTaskCount: result.count,
+        optimisticContainers,
       });
     });
   }
@@ -389,94 +543,131 @@ export function AgencyAccountsTreeView({
 
   function handleConfirmTransfer(mode: ClientTransferMode) {
     if (!pendingTransfer) return;
-    const { clientId, previousManagerId, targetManagerId, targetKey, clientName, targetLabel } = pendingTransfer;
+    const {
+      clientId,
+      previousManagerId,
+      targetManagerId,
+      targetKey,
+      clientName,
+      targetLabel,
+      previousSiblingId,
+      nextSiblingId,
+      optimisticContainers,
+    } = pendingTransfer;
 
-    setOptimisticMoves((prev) => new Map(prev).set(clientId, targetManagerId));
+    setContainers(optimisticContainers);
     setExpanded((prev) => (prev.has(targetKey) ? prev : new Set(prev).add(targetKey)));
 
     startTransition(async () => {
-      const result = await transferClientManagerAction(clientId, previousManagerId, targetManagerId, mode);
+      const result = await moveClientAction(clientId, previousManagerId, targetManagerId, previousSiblingId, nextSiblingId, mode);
       if (result.error) {
-        setOptimisticMoves((prev) => {
-          const next = new Map(prev);
-          next.delete(clientId);
-          return next;
-        });
+        setContainers(snapshotRef.current);
         showToast(result.error, "error");
         setPendingTransfer(null);
         return;
       }
       showToast(`${clientName} transferido para ${targetLabel}.`);
-      setOptimisticMoves((prev) => {
-        const next = new Map(prev);
-        next.delete(clientId);
-        return next;
-      });
       setPendingTransfer(null);
     });
   }
 
-  if (effectiveTree.managers.length === 0 && effectiveTree.unassigned.length === 0) return null;
+  function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter") return;
+    if (searchMatchIds.size === 1) {
+      const [onlyId] = searchMatchIds;
+      router.push(`/clients/${onlyId}`);
+    }
+  }
+
+  const dragDisabled = !isAdmin || isBusy || searchActive;
+  const activeContainerKey = activeId ? findContainerKey(containers, activeId) : null;
+
+  const managerFolders = tree.managers.map((manager) => ({ key: manager.id, name: manager.name }));
+  const unassignedClients = containers[UNASSIGNED_KEY] ?? [];
+
+  if (managerFolders.length === 0 && unassignedClients.length === 0) return null;
 
   return (
-    <div className="mt-2 flex min-h-0 flex-col px-2.5">
-      <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-        Contas da Agência
-      </p>
-      <ul className="flex flex-col gap-0.5">
-        {effectiveTree.managers.map((manager) => (
-          <ManagerFolder
-            key={manager.id}
-            folderKey={manager.id}
-            name={manager.name}
-            clients={manager.clients}
-            isExpanded={expanded.has(manager.id)}
-            onToggle={() => toggle(manager.id)}
-            activeClientId={activeClientId}
-            isAdmin={isAdmin}
-            isBusy={isPending || pendingTransfer !== null}
-            isDropTarget={dragOverKey === manager.id}
-            draggingClientId={draggingClientId}
-            onDragEnterFolder={handleDragEnterFolder}
-            onDragLeaveFolder={handleDragLeaveFolder}
-            onDropOnFolder={() => handleDropOnFolder(manager.id, manager.id)}
-            onDragStartClient={handleDragStartClient}
-            onDragEndClient={handleDragEndClient}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <div className="mt-2 flex min-h-0 flex-col px-2.5">
+        <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Contas da Agência</p>
+
+        <div className="relative px-0.5 pb-1.5">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" aria-hidden="true" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            placeholder="Abrir cliente..."
+            aria-label="Buscar cliente ou gestor"
+            className="w-full rounded-md border border-white/10 bg-white/5 py-1 pl-7 pr-2 text-[13px] text-zinc-100 placeholder:text-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
           />
-        ))}
-        {effectiveTree.unassigned.length > 0 && (
-          <ManagerFolder
-            key={UNASSIGNED_KEY}
-            folderKey={UNASSIGNED_KEY}
-            name="Sem responsável"
-            clients={effectiveTree.unassigned}
-            isExpanded={expanded.has(UNASSIGNED_KEY)}
-            onToggle={() => toggle(UNASSIGNED_KEY)}
-            activeClientId={activeClientId}
-            isAdmin={isAdmin}
-            isBusy={isPending || pendingTransfer !== null}
-            isDropTarget={dragOverKey === UNASSIGNED_KEY}
-            draggingClientId={draggingClientId}
-            onDragEnterFolder={handleDragEnterFolder}
-            onDragLeaveFolder={handleDragLeaveFolder}
-            onDropOnFolder={() => handleDropOnFolder(UNASSIGNED_KEY, null)}
-            onDragStartClient={handleDragStartClient}
-            onDragEndClient={handleDragEndClient}
+        </div>
+
+        <ul className="flex flex-col gap-0.5">
+          {managerFolders.map((manager) => (
+            <ManagerFolder
+              key={manager.key}
+              folderKey={manager.key}
+              name={manager.name}
+              clients={containers[manager.key] ?? []}
+              isExpanded={isExpanded(manager.key)}
+              onToggle={() => toggle(manager.key)}
+              activeClientId={activeClientId}
+              searchMatchIds={searchMatchIds}
+              dragDisabled={dragDisabled}
+              isDropTarget={dragOverFolderKey === manager.key}
+              isDimmed={activeId !== null && activeContainerKey !== manager.key}
+            />
+          ))}
+          {unassignedClients.length > 0 && (
+            <ManagerFolder
+              key={UNASSIGNED_KEY}
+              folderKey={UNASSIGNED_KEY}
+              name="Sem responsável"
+              clients={unassignedClients}
+              isExpanded={isExpanded(UNASSIGNED_KEY)}
+              onToggle={() => toggle(UNASSIGNED_KEY)}
+              activeClientId={activeClientId}
+              searchMatchIds={searchMatchIds}
+              dragDisabled={dragDisabled}
+              isDropTarget={dragOverFolderKey === UNASSIGNED_KEY}
+              isDimmed={activeId !== null && activeContainerKey !== UNASSIGNED_KEY}
+            />
+          )}
+        </ul>
+
+        {pendingTransfer && (
+          <AgencyTransferDialog
+            clientName={pendingTransfer.clientName}
+            targetLabel={pendingTransfer.targetLabel}
+            previousManagerName={pendingTransfer.previousManagerName}
+            openTaskCount={pendingTransfer.openTaskCount}
+            pending={isPending}
+            onCancel={handleCancelTransfer}
+            onConfirm={handleConfirmTransfer}
           />
         )}
-      </ul>
+      </div>
 
-      {pendingTransfer && (
-        <AgencyTransferDialog
-          clientName={pendingTransfer.clientName}
-          targetLabel={pendingTransfer.targetLabel}
-          previousManagerName={pendingTransfer.previousManagerName}
-          openTaskCount={pendingTransfer.openTaskCount}
-          pending={isPending}
-          onCancel={handleCancelTransfer}
-          onConfirm={handleConfirmTransfer}
-        />
-      )}
-    </div>
+      <DragOverlay dropAnimation={DROP_ANIMATION}>
+        {activeId ? (
+          <div
+            className="flex cursor-grabbing items-center gap-2 rounded-md bg-zinc-800 px-3 py-1.5 text-[13px] font-medium text-zinc-100 shadow-xl ring-1 ring-white/10"
+            style={{ transform: "scale(1.03) rotate(-1deg)" }}
+          >
+            <span className="min-w-0 truncate">{clientNameById.get(activeId) ?? ""}</span>
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
