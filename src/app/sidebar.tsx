@@ -205,12 +205,14 @@ function NavLink({
 
 function SidebarContent({
   profile,
+  agencyTree,
   pathname,
   mode,
   collapsed,
   toggleCollapsed,
 }: {
   profile: { name: string; role: UserRole };
+  agencyTree?: React.ReactNode;
   pathname: string;
   mode: string | null;
   collapsed: boolean;
@@ -270,6 +272,10 @@ function SidebarContent({
             ))}
           </nav>
         )}
+
+        {/* Recolhida (só desktop): não tenta mostrar a árvore no modo
+         * compacto, mesmo comportamento das demais seções da nav. */}
+        <div className={collapsed ? "md:hidden" : ""}>{agencyTree}</div>
 
         <div className="flex-1" />
 
@@ -352,11 +358,13 @@ function SidebarMode({ onMode }: { onMode: (mode: string | null) => React.ReactN
  */
 export function Sidebar({
   profile,
+  agencyTree,
   mobileOpen,
   onOpen,
   onClose,
 }: {
   profile: { name: string; role: UserRole };
+  agencyTree?: React.ReactNode;
   mobileOpen: boolean;
   onOpen: () => void;
   onClose: () => void;
@@ -396,6 +404,7 @@ export function Sidebar({
           fallback={
             <SidebarContent
               profile={profile}
+              agencyTree={agencyTree}
               pathname={pathname}
               mode={null}
               collapsed={collapsed}
@@ -407,6 +416,7 @@ export function Sidebar({
             onMode={(mode) => (
               <SidebarContent
                 profile={profile}
+                agencyTree={agencyTree}
                 pathname={pathname}
                 mode={mode}
                 collapsed={collapsed}
