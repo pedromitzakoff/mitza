@@ -119,17 +119,22 @@ interface NavItem {
   group: "principal" | "moderado" | "flexivel";
 }
 
-/** Etapa "Sprint Workspace Polish 2.0" (Parte 8): Sprints subiu pra antes
- * de Clientes — Sprints é o centro operacional diário da plataforma (onde
+/** Etapa "Sprint Workspace Polish 2.0" (Parte 8): posição antes de
+ * Clientes preservada — é o centro operacional diário da plataforma (onde
  * o gestor começa o dia), Clientes é área de cadastro/configuração, usada
- * com menos frequência no dia a dia. */
+ * com menos frequência no dia a dia.
+ *
+ * Etapa "Operação 1.0": "Sprints" saiu da navegação principal — vira
+ * "Operação" (`/operation`, tela nova de triagem, ver `lib/operation-triage.ts`).
+ * `/sprints` continua existindo (nenhum arquivo/rota apagado), só sem
+ * porta de entrada aqui — mesmo padrão já usado com "Reuniões". */
 const NAV_ITEMS: NavItem[] = [
   { label: "Visão Geral", href: "/", icon: LayoutGrid, isActive: (p) => p === "/", group: "principal" },
   {
-    label: "Sprints",
-    href: "/sprints",
+    label: "Operação",
+    href: "/operation",
     icon: ListChecks,
-    isActive: (p) => p === "/sprints" || p === "/operation",
+    isActive: (p) => p === "/operation",
     group: "principal",
   },
   { label: "Clientes", href: "/clients", icon: Building2, isActive: (p) => p === "/clients", group: "principal" },

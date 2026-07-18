@@ -1,21 +1,38 @@
-import { redirect } from "next/navigation";
+import { formatAgencyDateTime } from "@/lib/format";
+import { countOperationTriageBands } from "@/lib/operation-triage";
+import { loadOperationTriageClients } from "./operation-triage-data";
+import { OperationTriageView } from "./operation-triage-view";
+
+function currentMonthParam(): string {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`;
+}
 
 /**
- * Operação foi renomeada pra Sprints (mesma tela, mesmos filtros e modos) —
- * esta rota continua existindo só como redirect, preservando favoritos e
- * links antigos, sem quebrar nada que apontava pra cá.
+ * `/operation` — Etapa "Operação 1.0": deixa de ser um redirect pra Sprints
+ * e passa a ser a tela nova de triagem (ver `lib/operation-triage.ts` pro
+ * porquê ela não reaproveita nada da Sprint). `/sprints` continua existindo
+ * intacta, só não tem mais link na sidebar.
  */
-export default async function OperationRedirectPage({
+export default async function OperationPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<{ month?: string }>;
 }) {
   const params = await searchParams;
+  const monthParam = params.month ?? currentMonthParam();
 
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (typeof value === "string") query.set(key, value);
-  }
+  const clients = await loadOperationTriageClients(monthParam);
+  const bandCounts = countOperationTriageBands(clients);
 
-  redirect(`/sprints${query.toString() ? `?${query.toString()}` : ""}`);
+  const { weekdayShort, dateShort, time } = formatAgencyDateTime(new Date());
+
+  return (
+    <OperationTriageView
+      clients={clients}
+      monthParam={monthParam}
+      monthLastUpdatedLabel={`Atualizado ${weekdayShort} · ${dateShort} · ${time}`}
+      bandCounts={bandCounts}
+    />
+  );
 }
