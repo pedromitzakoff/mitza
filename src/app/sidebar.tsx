@@ -18,7 +18,6 @@ import {
   RefreshCw,
   Settings,
   Users,
-  Video,
   type LucideIcon,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
@@ -115,7 +114,7 @@ interface NavItem {
   adminOnly?: boolean;
   isActive?: (pathname: string, mode: string | null) => boolean;
   /** principal: Visão Geral/Clientes/Sprints. moderado: itens secundários
-   * (Reuniões/Equipe). flexivel: empurrado pro fim da nav via spacer
+   * (Equipe). flexivel: empurrado pro fim da nav via spacer
    * (Configurações), ficando logo acima do rodapé fixo. */
   group: "principal" | "moderado" | "flexivel";
 }
@@ -141,7 +140,6 @@ const NAV_ITEMS: NavItem[] = [
     isActive: (p) => p.startsWith("/reports"),
     group: "principal",
   },
-  { label: "Reuniões", icon: Video, group: "moderado" },
   { label: "Equipe", href: "/team", icon: Users, isActive: (p) => p.startsWith("/team"), group: "moderado" },
   {
     label: "Configurações",
@@ -178,9 +176,9 @@ function NavLink({
     return (
       <span
         title={item.label}
-        className={`flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-zinc-600 ${collapsed ? "md:justify-center" : ""}`}
+        className={`flex items-center justify-between rounded-md px-2.5 py-1 text-[13px] text-zinc-600 ${collapsed ? "md:justify-center" : ""}`}
       >
-        <span className="flex items-center gap-2.5">
+        <span className="flex items-center gap-2">
           <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
           <ItemLabel collapsed={collapsed}>{item.label}</ItemLabel>
         </span>
@@ -193,7 +191,7 @@ function NavLink({
     <Link
       href={item.href}
       title={item.label}
-      className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center" : ""} ${
+      className={`flex items-center gap-2 rounded-md px-2.5 py-1 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center" : ""} ${
         active ? "bg-brand/15 font-semibold text-brand" : "font-medium text-zinc-200 hover:bg-white/10"
       }`}
     >
@@ -266,7 +264,7 @@ function SidebarContent({
         </nav>
 
         {moderado.length > 0 && (
-          <nav className="mt-3 flex flex-col gap-0.5 px-2.5">
+          <nav className="mt-2 flex flex-col gap-0.5 px-2.5">
             {moderado.map((item) => (
               <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
             ))}

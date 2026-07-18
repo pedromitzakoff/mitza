@@ -59,3 +59,53 @@ export function buildAgencyAccountsTree(
 
   return { managers: treeManagers, unassigned };
 }
+
+/**
+ * Move um cliente pra outro bucket (gestor ou "sem responsável") dentro de
+ * uma árvore já construída — usado pelo estado otimista do drag and drop
+ * (`agency-accounts-tree-client.tsx`): a UI aplica isto sobre a árvore
+ * recebida do servidor assim que a transferência é confirmada, antes da
+ * Server Action responder, pra a movimentação parecer instantânea. Se o
+ * cliente não for encontrado em nenhum bucket, devolve a árvore como veio
+ * (no-op defensivo). Idempotente: aplicar o mesmo destino de novo depois
+ * que o servidor já refletir a mudança não duplica nem reordena de forma
+ * diferente.
+ */
+export function moveClientInTree(tree: AgencyTree, clientId: string, targetManagerId: string | null): AgencyTree {
+  let moved: AgencyTreeClient | null = null;
+
+  const managersWithoutClient = tree.managers.map((manager) => {
+    const match = manager.clients.find((client) => client.id === clientId);
+    if (!match) return manager;
+    moved = match;
+    return { ...manager, clients: manager.clients.filter((client) => client.id !== clientId) };
+  });
+
+  let unassignedWithoutClient = tree.unassigned;
+  if (!moved) {
+    const match = tree.unassigned.find((client) => client.id === clientId);
+    if (match) {
+      moved = match;
+      unassignedWithoutClient = tree.unassigned.filter((client) => client.id !== clientId);
+    }
+  }
+
+  if (!moved) return tree;
+  const movedClient: AgencyTreeClient = moved;
+
+  if (targetManagerId === null) {
+    return {
+      managers: managersWithoutClient,
+      unassigned: [...unassignedWithoutClient, movedClient].sort((a, b) => a.name.localeCompare(b.name)),
+    };
+  }
+
+  return {
+    managers: managersWithoutClient.map((manager) =>
+      manager.id === targetManagerId
+        ? { ...manager, clients: [...manager.clients, movedClient].sort((a, b) => a.name.localeCompare(b.name)) }
+        : manager,
+    ),
+    unassigned: unassignedWithoutClient,
+  };
+}

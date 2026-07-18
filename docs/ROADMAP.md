@@ -49,4 +49,21 @@ planejar uma nova fase de trabalho.
 
 ### 4. Planejado — Médio/Longo Prazo
 
+- **Templates de tarefa recorrente não seguem o `primary_manager_id` atual do
+  cliente.** Origem: auditoria pré-implementação da etapa "Drag and drop de
+  Contas da Agência" (2026-07-18). `generate_sprint_tasks_from_templates`
+  (`supabase/global-sprint-task-templates.sql`) atribui `assignee_id` a
+  partir de `sprint_task_templates.default_assignee_id` — um valor fixo
+  configurado em `/settings`, independente de quem é hoje o gestor
+  principal do cliente. O formulário manual de criação de tarefa
+  (`tasks/new/page.tsx`) também não pré-seleciona o responsável principal.
+  Ou seja: transferir a responsabilidade principal de um cliente (seja por
+  edição de cliente, seja pela árvore "Contas da Agência") não muda quem
+  recebe as próximas tarefas de template — isso só é resolvido manualmente
+  hoje. Débito aceito conscientemente pelo responsável de produto; não deve
+  ser corrigido de forma incidental dentro de outra etapa — exige uma etapa
+  dedicada ao sistema de atividades recorrentes (provavelmente: templates
+  passarem a resolver o assignee dinamicamente contra `primary_manager_id`
+  no momento da geração, em vez de carregar um id fixo).
+
 ### 5. Ideias em Avaliação (não comprometidas)
