@@ -5,6 +5,7 @@ import type { SpendStatus } from "@/lib/spend-status";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
 import { computeExpectedPct, resolveMonthPeriodSummary } from "@/lib/financial-period";
 import { computeMonthlyBudgetPlan, computeUtilizedPct, type MonthlyBudgetPlanSprintInput } from "@/lib/monthly-budget";
+import type { PerformanceGoal } from "@/lib/performance-goals";
 import { MonthlyBudgetEditor } from "./monthly-budget-editor";
 
 export interface MonthlyBudgetChangeSummary {
@@ -54,6 +55,9 @@ export function MonthInvestmentSummary({
   isFutureMonth,
   lastChange,
   historyHref,
+  performanceGoal,
+  targetResultCount,
+  targetCostPerResult,
 }: {
   /** Orçamento mensal VIGENTE (Etapa 66) — sempre `resolveMonthlyBudget`,
    * nunca a soma dos planejamentos diários persistidos. */
@@ -76,6 +80,12 @@ export function MonthInvestmentSummary({
   isFutureMonth: boolean;
   lastChange: MonthlyBudgetChangeSummary | null;
   historyHref: string;
+  /** Metas vigentes do planejamento mensal (Etapa "Planejamento Mensal
+   * 1.0") — já resolvidas por `resolveMonthlyPerformanceTargets` por quem
+   * chama; este componente só repassa pro editor. */
+  performanceGoal: PerformanceGoal | null;
+  targetResultCount: number | null;
+  targetCostPerResult: number | null;
 }) {
   // A barra (sem marcador) ainda usa o formato central `FinancialPeriodSummary`
   // só pra decidir preenchimento/estouro — nenhum outro campo dele (status,
@@ -147,6 +157,9 @@ export function MonthInvestmentSummary({
                   effectiveDate={effectiveDate}
                   currentMonthlyBudget={planned}
                   monthActual={actual}
+                  performanceGoal={performanceGoal}
+                  currentTargetResultCount={targetResultCount}
+                  currentTargetCostPerResult={targetCostPerResult}
                 />
               )
             ))}

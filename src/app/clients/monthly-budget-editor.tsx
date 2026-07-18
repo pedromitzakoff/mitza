@@ -5,6 +5,7 @@ import { formatCurrency } from "@/lib/format";
 import { formatMoneyDisplay, parseMoneyInput } from "@/lib/money-format";
 import { computeMonthlyBudgetPlan, type MonthlyBudgetPlanSprintInput } from "@/lib/monthly-budget";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
+import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { applyMonthlyBudgetChangeAction } from "./monthly-budget-actions";
 import { useToast } from "@/app/toast-provider";
 
@@ -26,14 +27,19 @@ const SCENARIO_LABEL: Record<BudgetScenario, string> = {
 };
 
 /**
- * Editor de orçamento mensal (Etapa 66) — a prévia usa exatamente
- * `computeMonthlyBudgetPlan`, a mesma função central que decide o
- * "planejamento restante" exibido em "Investimento do mês" e em cada
- * `SprintCard`, nunca uma segunda conta própria deste componente (o motivo
- * de existir `computeMonthlyBudgetRedistribution` antes desta etapa). O
- * "orçamento atual" (`currentMonthlyBudget`) e o "já investido"
- * (`monthActual`) vêm prontos de quem chama — nunca recalculados aqui a
- * partir de `sprint_planned_allocations`/`daily_spend`.
+ * Editor do planejamento mensal do cliente (Etapa 66; ampliado na Etapa
+ * "Planejamento Mensal 1.0" pra incluir metas de performance, não só
+ * investimento) — a prévia financeira usa exatamente `computeMonthlyBudgetPlan`,
+ * a mesma função central que decide o "planejamento restante" exibido em
+ * "Investimento do mês" e em cada `SprintCard`, nunca uma segunda conta
+ * própria deste componente. O "orçamento atual" (`currentMonthlyBudget`) e
+ * o "já investido" (`monthActual`) vêm prontos de quem chama — nunca
+ * recalculados aqui a partir de `sprint_planned_allocations`/`daily_spend`.
+ *
+ * As metas (`currentTargetResultCount`/`currentTargetCostPerResult`) são
+ * opcionais: campo vazio ao confirmar = "não mexi nisso", e o banco carrega
+ * adiante o valor que já estava vigente (nunca zera uma meta só porque
+ * este envio não a tocou — ver `apply_monthly_budget_change`).
  */
 export function MonthlyBudgetEditor({
   clientId,
@@ -44,6 +50,9 @@ export function MonthlyBudgetEditor({
   effectiveDate,
   currentMonthlyBudget,
   monthActual,
+  performanceGoal,
+  currentTargetResultCount,
+  currentTargetCostPerResult,
 }: {
   clientId: string;
   monthParam: string;
@@ -53,17 +62,27 @@ export function MonthlyBudgetEditor({
   effectiveDate: string;
   currentMonthlyBudget: number;
   monthActual: number;
+  performanceGoal: PerformanceGoal | null;
+  currentTargetResultCount: number | null;
+  currentTargetCostPerResult: number | null;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const wasOpenRef = useRef(false);
   const [confirmStep, setConfirmStep] = useState(false);
   const [display, setDisplay] = useState(() => formatMoneyDisplay(currentMonthlyBudget));
+  const [resultCountDisplay, setResultCountDisplay] = useState(() =>
+    currentTargetResultCount !== null ? String(currentTargetResultCount) : "",
+  );
+  const [costDisplay, setCostDisplay] = useState(() =>
+    currentTargetCostPerResult !== null ? formatMoneyDisplay(currentTargetCostPerResult) : "",
+  );
   const [reason, setReason] = useState("");
   const [applyError, setApplyError] = useState<string | null>(null);
   const [isApplying, startApplyTransition] = useTransition();
   const { showToast } = useToast();
   const newBudget = parseMoneyInput(display) ?? 0;
+  const goalConfig = performanceGoal ? PERFORMANCE_GOALS[performanceGoal] : null;
 
   const currentPlan = useMemo(
     () => computeMonthlyBudgetPlan({ monthlyBudget: currentMonthlyBudget, monthActual, monthRange, effectiveDate, sprints }),
@@ -95,7 +114,7 @@ export function MonthlyBudgetEditor({
         onClick={() => setIsOpen(true)}
         className="mitza-pressable text-xs font-medium text-brand hover:underline"
       >
-        Editar orçamento
+        Editar planejamento
       </button>
     );
   }
@@ -104,19 +123,30 @@ export function MonthlyBudgetEditor({
     setIsOpen(false);
     setConfirmStep(false);
     setDisplay(formatMoneyDisplay(currentMonthlyBudget));
+    setResultCountDisplay(currentTargetResultCount !== null ? String(currentTargetResultCount) : "");
+    setCostDisplay(currentTargetCostPerResult !== null ? formatMoneyDisplay(currentTargetCostPerResult) : "");
     setReason("");
     setApplyError(null);
   };
 
   function handleApply() {
     setApplyError(null);
+    const parsedResultCount = resultCountDisplay.trim() ? Number(resultCountDisplay) : null;
+    const parsedCost = costDisplay.trim() ? parseMoneyInput(costDisplay) : null;
     startApplyTransition(async () => {
-      const result = await applyMonthlyBudgetChangeAction(clientId, monthParam, newBudget, reason.trim() || null);
+      const result = await applyMonthlyBudgetChangeAction(
+        clientId,
+        monthParam,
+        newBudget,
+        reason.trim() || null,
+        parsedResultCount,
+        parsedCost,
+      );
       if (result.error) {
         setApplyError(result.error);
         return;
       }
-      showToast("Orçamento do mês atualizado.");
+      showToast("Planejamento do mês atualizado.");
       close();
     });
   }
@@ -126,7 +156,7 @@ export function MonthlyBudgetEditor({
       <div className="mitza-backdrop-in fixed inset-0 z-40 cursor-pointer bg-black/30" onClick={close} aria-hidden />
       <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-foreground">Orçamento de {monthLabel}</h2>
+          <h2 className="text-lg font-semibold text-foreground">Planejamento de {monthLabel}</h2>
           <button
             type="button"
             onClick={close}
@@ -158,6 +188,44 @@ export function MonthlyBudgetEditor({
                 Orçamento atual: {formatCurrency(currentMonthlyBudget)}
               </p>
             </div>
+
+            {goalConfig && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Meta de {goalConfig.resultMetricLabel.toLowerCase()}
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={resultCountDisplay}
+                    onChange={(event) => setResultCountDisplay(event.target.value)}
+                    placeholder="Opcional"
+                    className="mt-1 w-full rounded-md border border-border px-2 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-zinc-500 dark:bg-zinc-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Meta de {goalConfig.costMetricShortLabel}
+                  </label>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <span className="text-sm text-muted-foreground">R$</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={costDisplay}
+                      onChange={(event) => setCostDisplay(event.target.value)}
+                      placeholder="Opcional"
+                      className="w-full rounded-md border border-border px-2 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-zinc-500 dark:bg-zinc-900"
+                    />
+                  </div>
+                </div>
+                <p className="col-span-2 text-[11px] text-muted-foreground">
+                  Deixar em branco mantém a meta vigente — nenhuma das duas é obrigatória a cada alteração.
+                </p>
+              </div>
+            )}
 
             <div className="rounded-md border border-border bg-zinc-50 p-3 text-xs dark:bg-zinc-900/40">
               <p className="font-semibold text-foreground">Prévia do impacto</p>

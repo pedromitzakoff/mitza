@@ -20,6 +20,7 @@ import { buildSprintExecutionAlert, formatSprintExecutionLabel } from "@/lib/spr
 import {
   resolveBudgetEffectiveDate,
   resolveMonthlyBudget,
+  resolveMonthlyPerformanceTargets,
   computeMonthlyExpectedToDateByCalendar,
 } from "@/lib/monthly-budget";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
@@ -218,6 +219,7 @@ export default async function ClientPage({
     { data: lastSync },
     { data: plannedAllocations },
     { data: budgetChanges },
+    { data: performanceTargetHistory },
   ] = await Promise.all([
     // Sobreposição com o mês (não "começa no mês") — uma sprint que
     // atravessa a fronteira (ex.: 27/jul-02/ago) precisa aparecer aqui
@@ -258,6 +260,19 @@ export default async function ClientPage({
       .eq("client_id", id)
       .eq("month", firstDay)
       .order("changed_at", { ascending: false }),
+    // Metas do planejamento mensal vigente (Etapa "Planejamento Mensal
+    // 1.0") — deliberadamente `.lte` em vez de `.eq`: a versão vigente do
+    // mês selecionado pode ter sido definida num mês anterior (ver
+    // `resolveMonthlyPerformanceTargets`), diferente da consulta de
+    // `budgetChanges` acima (que é só o HISTÓRICO deste mês específico).
+    supabase
+      .from("monthly_budget_changes")
+      .select("month, changed_at, target_result_count, target_cost_per_result")
+      .eq("client_id", id)
+      .lte("month", firstDay)
+      .order("month", { ascending: false })
+      .order("changed_at", { ascending: false })
+      .limit(1),
   ]);
 
   // Etapa 71: registros de performance de todas as sprints do mês
@@ -353,7 +368,22 @@ export default async function ClientPage({
   // do mês é sempre a soma direta dos registros já escopados às sprints do
   // mês selecionado (nenhum lançamento manual mensal independente).
   const performanceGoal = client.performance_goal;
-  const targetCostPerResult = client.target_cost_per_result;
+  // Etapa "Planejamento Mensal 1.0": meta de custo vigente vem do
+  // planejamento mensal (com `clients.target_cost_per_result` como
+  // fallback só pra quem nunca teve nenhuma versão de planejamento) —
+  // nunca mais lido direto de `clients` sem passar por este resolvedor.
+  const resolvedTargets = resolveMonthlyPerformanceTargets(
+    (performanceTargetHistory ?? []).map((row) => ({
+      month: row.month,
+      changedAt: row.changed_at,
+      targetResultCount: row.target_result_count,
+      targetCostPerResult: row.target_cost_per_result,
+    })),
+    firstDay,
+    client.target_cost_per_result,
+  );
+  const targetCostPerResult = resolvedTargets.targetCostPerResult;
+  const targetResultCount = resolvedTargets.targetResultCount;
   const monthPerformanceSummary = performanceGoal
     ? computePerformanceSummary({
         scope: "consolidated",
@@ -858,6 +888,9 @@ export default async function ClientPage({
           isFutureMonth={isFutureMonth}
           lastChange={lastChange}
           historyHref={historyDrawerHref}
+          performanceGoal={performanceGoal}
+          targetResultCount={targetResultCount}
+          targetCostPerResult={targetCostPerResult}
         />
       </div>
 

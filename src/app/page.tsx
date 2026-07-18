@@ -11,7 +11,7 @@ import {
   shiftMonthParam,
 } from "@/lib/sprint-financials";
 import { formatCurrency, formatMonthLabel, formatPercent } from "@/lib/format";
-import { computeMonthlyExpectedPct, getMonthTemporalStatus } from "@/lib/monthly-budget";
+import { computeMonthlyExpectedPct, getMonthTemporalStatus, resolveMonthlyPerformanceTargets } from "@/lib/monthly-budget";
 import {
   buildOperationClientCard,
   type OperationClientRawData,
@@ -139,6 +139,7 @@ export default async function Home({
     { data: completedTasksForIndicators },
     { data: reviewsForIndicators },
     { data: channelSpendOverrides },
+    { data: performanceTargetHistory },
   ] = await Promise.all([
     supabase
       .from("clients")
@@ -200,8 +201,19 @@ export default async function Home({
     // sprint+canal — mesmo padrão de `sprints` acima (sem filtro de data,
     // volume pequeno e escopado por sprint, não por dia).
     supabase.from("sprint_channel_spend").select("client_id, sprint_id, channel, spend_source, manual_actual_spend"),
+    // Metas do planejamento mensal vigente (Etapa "Planejamento Mensal
+    // 1.0") — `.lte` (não `.eq`) pelo mesmo motivo da página do Cliente: a
+    // versão vigente do mês selecionado pode ter sido definida num mês
+    // anterior. Sem filtro por cliente (é a Visão Geral inteira) — resolvido
+    // por cliente logo abaixo, com `resolveMonthlyPerformanceTargets`.
+    supabase
+      .from("monthly_budget_changes")
+      .select("client_id, month, changed_at, target_result_count, target_cost_per_result")
+      .lte("month", monthRange.firstDay)
+      .order("month", { ascending: false })
+      .order("changed_at", { ascending: false }),
   ]);
-  perfLog("visão geral bloco 1 (11 queries)", __perfBlock1Start);
+  perfLog("visão geral bloco 1 (12 queries)", __perfBlock1Start);
 
   const clientIds = (clients ?? []).map((c) => c.id);
   const currentSprintIds = (sprints ?? [])
@@ -333,6 +345,35 @@ export default async function Home({
     performanceRecordsByClient.set(r.client_id, list);
   }
 
+  // Meta de custo VIGENTE (Etapa "Planejamento Mensal 1.0") — primeira
+  // ocorrência por cliente já é a mais recente qualificada (query ordenada
+  // por month desc, changed_at desc), então um `Map.set` que nunca
+  // sobrescreve é suficiente pra "a primeira que eu vir, por cliente, é a
+  // vigente". Fallback pro campo permanente de `clients` fica dentro de
+  // `resolveMonthlyPerformanceTargets`, chamado por cliente logo abaixo.
+  const targetHistoryByClient = new Map<string, { month: string; changedAt: string; targetResultCount: number | null; targetCostPerResult: number | null }[]>();
+  for (const row of performanceTargetHistory ?? []) {
+    const list = targetHistoryByClient.get(row.client_id) ?? [];
+    list.push({
+      month: row.month,
+      changedAt: row.changed_at,
+      targetResultCount: row.target_result_count,
+      targetCostPerResult: row.target_cost_per_result,
+    });
+    targetHistoryByClient.set(row.client_id, list);
+  }
+  const permanentCostFallbackByClient = new Map((clients ?? []).map((c) => [c.id, c.target_cost_per_result]));
+  const resolvedTargetCostByClient = new Map<string, number | null>(
+    (clients ?? []).map((c) => [
+      c.id,
+      resolveMonthlyPerformanceTargets(
+        targetHistoryByClient.get(c.id) ?? [],
+        monthRange.firstDay,
+        permanentCostFallbackByClient.get(c.id) ?? null,
+      ).targetCostPerResult,
+    ]),
+  );
+
   const clientActivityById = new Map((clientActivity ?? []).map((r) => [r.client_id, r.last_activity_at]));
   const sprintActivityById = new Map((sprintActivity ?? []).map((r) => [r.sprint_id, r.last_activity_at]));
   const primaryManagerNameByClient = new Map(
@@ -362,7 +403,12 @@ export default async function Home({
       lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
       lastReviewAt: lastReviewAtByClient.get(client.id) ?? null,
       performanceGoal: client.performance_goal,
-      targetCostPerResult: client.target_cost_per_result,
+      // Etapa "Planejamento Mensal 1.0": meta de custo VIGENTE (planejamento
+      // mensal, com o campo permanente de `clients` só como fallback) —
+      // nunca mais o valor cru de `clients.target_cost_per_result` direto.
+      // `buildOperationClientCard` (operation-data.ts) não muda: só o valor
+      // que entra neste campo passou a ser resolvido aqui.
+      targetCostPerResult: resolvedTargetCostByClient.get(client.id) ?? client.target_cost_per_result ?? null,
       performanceRecords: performanceRecordsByClient.get(client.id) ?? [],
       dailySpendChannel: dailySpendChannelByClient.get(client.id) ?? [],
       channelSpendOverrides: channelOverridesByClient.get(client.id) ?? [],

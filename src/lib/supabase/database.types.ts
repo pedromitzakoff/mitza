@@ -1351,6 +1351,8 @@ export interface Database {
           is_below_consolidated: boolean;
           changed_at: string;
           reason: string | null;
+          target_result_count: number | null;
+          target_cost_per_result: number | null;
         };
         Insert: {
           id?: string;
@@ -1366,6 +1368,8 @@ export interface Database {
           is_below_consolidated?: boolean;
           changed_at?: string;
           reason?: string | null;
+          target_result_count?: number | null;
+          target_cost_per_result?: number | null;
         };
         Update: {
           id?: string;
@@ -1381,6 +1385,8 @@ export interface Database {
           is_below_consolidated?: boolean;
           changed_at?: string;
           reason?: string | null;
+          target_result_count?: number | null;
+          target_cost_per_result?: number | null;
         };
         Relationships: [
           {
@@ -1758,6 +1764,8 @@ export interface Database {
           p_today: string;
           p_changed_by: string;
           p_reason?: string | null;
+          p_target_result_count?: number | null;
+          p_target_cost_per_result?: number | null;
         };
         Returns: {
           consolidatedAmount: number;

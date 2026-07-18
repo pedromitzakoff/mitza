@@ -113,6 +113,58 @@ export function resolveMonthlyBudget(
   return latest.newAmount;
 }
 
+export interface MonthlyPerformanceTargetChange {
+  /** Primeiro dia do mês (`YYYY-MM-01`) a que esta versão do planejamento
+   * se refere — nunca a data de `changed_at`. */
+  month: string;
+  changedAt: string;
+  targetResultCount: number | null;
+  targetCostPerResult: number | null;
+}
+
+export interface ResolvedMonthlyPerformanceTargets {
+  targetResultCount: number | null;
+  targetCostPerResult: number | null;
+}
+
+/**
+ * Metas de performance VIGENTES pro mês selecionado — Etapa "Planejamento
+ * Mensal 1.0": `monthly_budget_changes` deixou de guardar só orçamento,
+ * cada linha é um snapshot completo do plano (investimento + metas). Regra
+ * central: só olha versões com `month <= selectedMonth` — uma alteração
+ * feita pra um mês futuro nunca vaza pra uma leitura de mês atual/passado,
+ * e a versão vigente de um mês sem alteração própria é a mais recente
+ * dentre os meses anteriores (nunca "sem meta" só porque ninguém tocou
+ * neste mês específico).
+ *
+ * Meta de custo tem fallback pro campo permanente (`clients.target_cost_per_result`)
+ * quando nenhuma versão do planejamento definiu uma própria — estratégia de
+ * transição (não perder configuração de cliente que nunca passou pelo
+ * planejamento mensal). Meta de quantidade não tem fallback permanente: não
+ * existe em nenhum outro lugar da plataforma, então "nenhuma versão
+ * definiu" é, de fato, "sem meta".
+ */
+export function resolveMonthlyPerformanceTargets(
+  changes: MonthlyPerformanceTargetChange[],
+  selectedMonth: string,
+  permanentCostFallback: number | null,
+): ResolvedMonthlyPerformanceTargets {
+  const eligible = changes.filter((change) => change.month <= selectedMonth);
+  if (eligible.length === 0) {
+    return { targetResultCount: null, targetCostPerResult: permanentCostFallback };
+  }
+
+  const latest = eligible.reduce((best, change) => {
+    if (change.month !== best.month) return change.month > best.month ? change : best;
+    return change.changedAt > best.changedAt ? change : best;
+  });
+
+  return {
+    targetResultCount: latest.targetResultCount,
+    targetCostPerResult: latest.targetCostPerResult ?? permanentCostFallback,
+  };
+}
+
 export interface MonthlyExpectedToDate {
   /** 0–100. `dias_transcorridos_no_mes / dias_totais_do_mes`. Mês futuro = 0;
    * mês encerrado = 100. */
