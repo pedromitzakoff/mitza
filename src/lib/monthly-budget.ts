@@ -165,6 +165,50 @@ export function resolveMonthlyPerformanceTargets(
   };
 }
 
+export interface MonthlyPlanChange extends MonthlyPerformanceTargetChange {
+  /** `new_amount` da versão — investimento vigente a partir desta linha. */
+  investment: number;
+}
+
+export interface ResolvedMonthlyPlanSnapshot extends ResolvedMonthlyPerformanceTargets {
+  investmentPlanned: number | null;
+}
+
+/**
+ * Snapshot completo do planejamento vigente (investimento + as duas metas de
+ * performance) — Etapa "Motor de Saúde da Conta" (Operação): as três coisas
+ * vêm sempre da MESMA linha de `monthly_budget_changes` (é literalmente o que
+ * "cada linha é um snapshot completo do plano" significa), então resolver as
+ * três juntas evita reduzir a mesma lista de mudanças duas vezes com lógicas
+ * ligeiramente diferentes. Mesma regra de elegibilidade de
+ * `resolveMonthlyPerformanceTargets` (`month <= selectedMonth`, versão mais
+ * recente dentre as elegíveis) — `investmentPlanned` NUNCA cai num fallback
+ * de soma de sprints (a Operação é deliberadamente independente de Sprint):
+ * sem nenhuma versão elegível, o investimento planejado é `null` ("sem
+ * planejamento definido"), nunca 0 nem uma soma substituta.
+ */
+export function resolveMonthlyPlanSnapshot(
+  changes: MonthlyPlanChange[],
+  selectedMonth: string,
+  permanentCostFallback: number | null,
+): ResolvedMonthlyPlanSnapshot {
+  const eligible = changes.filter((change) => change.month <= selectedMonth);
+  if (eligible.length === 0) {
+    return { investmentPlanned: null, targetResultCount: null, targetCostPerResult: permanentCostFallback };
+  }
+
+  const latest = eligible.reduce((best, change) => {
+    if (change.month !== best.month) return change.month > best.month ? change : best;
+    return change.changedAt > best.changedAt ? change : best;
+  });
+
+  return {
+    investmentPlanned: latest.investment,
+    targetResultCount: latest.targetResultCount,
+    targetCostPerResult: latest.targetCostPerResult ?? permanentCostFallback,
+  };
+}
+
 export interface MonthlyExpectedToDate {
   /** 0–100. `dias_transcorridos_no_mes / dias_totais_do_mes`. Mês futuro = 0;
    * mês encerrado = 100. */
