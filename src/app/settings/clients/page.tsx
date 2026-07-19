@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { requireQuery } from "@/lib/require-query";
 import { todayUTC } from "@/lib/today";
 import { formatActiveMonths } from "@/lib/format";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -47,15 +48,18 @@ export default async function SettingsClientsPage({
   const today = todayUTC();
 
   const supabase = await createSupabaseClient();
-  const [{ data: clients }, { data: managers }] = await Promise.all([
-    supabase
-      .from("clients")
-      .select(
-        "id, name, status, contract_start_date, primary_manager_id, cnpj, main_contact_email, agency_monthly_fee, primary_manager:team_members!clients_primary_manager_id_fkey(name)",
-      )
-      .is("deleted_at", null)
-      .order("name"),
-    supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
+  const [clients, managers] = await Promise.all([
+    requireQuery(
+      supabase
+        .from("clients")
+        .select(
+          "id, name, status, contract_start_date, primary_manager_id, cnpj, main_contact_email, agency_monthly_fee, primary_manager:team_members!clients_primary_manager_id_fkey(name)",
+        )
+        .is("deleted_at", null)
+        .order("name"),
+      "clients",
+    ),
+    requireQuery(supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"), "team_members"),
   ]);
 
   let rows = clients ?? [];

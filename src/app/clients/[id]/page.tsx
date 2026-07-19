@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { requireQuery } from "@/lib/require-query";
 import {
   assertSingleCurrentSprint,
   computeSprintEffectiveSpend,
@@ -213,80 +214,90 @@ export default async function ClientPage({
 
   // Etapa 50 (correção): a geração de sprints não roda mais durante o
   // carregamento da página — só via /api/cron/ensure-sprints.
-  const [
-    { data: sprints },
-    { data: dailySpend },
-    { data: lastSync },
-    { data: plannedAllocations },
-    { data: budgetChanges },
-    { data: performanceTargetHistory },
-  ] = await Promise.all([
-    // Sobreposição com o mês (não "começa no mês") — uma sprint que
-    // atravessa a fronteira (ex.: 27/jul-02/ago) precisa aparecer aqui
-    // mesmo com start_date no mês anterior.
-    supabase
-      .from("sprints")
-      .select(
-        "id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, manual_spend_updated_at, original_planned_amount, final_recommended_amount, final_actual_amount, snapshot_frozen_at",
-      )
-      .eq("client_id", id)
-      .lte("start_date", lastDay)
-      .gte("end_date", firstDay)
-      .order("start_date"),
-    supabase
-      .from("daily_spend")
-      .select("date, spend")
-      .eq("client_id", id)
-      .gte("date", firstDay)
-      .lte("date", lastDay),
-    supabase
-      .from("daily_spend")
-      .select("synced_at")
-      .eq("client_id", id)
-      .order("synced_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("sprint_planned_allocations")
-      .select("sprint_id, date, planned_amount")
-      .eq("client_id", id)
-      .gte("date", firstDay)
-      .lte("date", lastDay),
-    supabase
-      .from("monthly_budget_changes")
-      .select(
-        "id, effective_date, changed_at, previous_amount, new_amount, consolidated_amount, future_amount_distributed, resulting_total, is_below_consolidated, reason, changed_by_profile:team_members!monthly_budget_changes_changed_by_fkey(name)",
-      )
-      .eq("client_id", id)
-      .eq("month", firstDay)
-      .order("changed_at", { ascending: false }),
-    // Metas do planejamento mensal vigente (Etapa "Planejamento Mensal
-    // 1.0") — deliberadamente `.lte` em vez de `.eq`: a versão vigente do
-    // mês selecionado pode ter sido definida num mês anterior (ver
-    // `resolveMonthlyPerformanceTargets`), diferente da consulta de
-    // `budgetChanges` acima (que é só o HISTÓRICO deste mês específico).
-    supabase
-      .from("monthly_budget_changes")
-      .select("month, changed_at, target_result_count, target_cost_per_result")
-      .eq("client_id", id)
-      .lte("month", firstDay)
-      .order("month", { ascending: false })
-      .order("changed_at", { ascending: false })
-      .limit(1),
-  ]);
+  const [sprints, dailySpend, lastSync, plannedAllocations, budgetChanges, performanceTargetHistory] =
+    await Promise.all([
+      // Sobreposição com o mês (não "começa no mês") — uma sprint que
+      // atravessa a fronteira (ex.: 27/jul-02/ago) precisa aparecer aqui
+      // mesmo com start_date no mês anterior.
+      requireQuery(
+        supabase
+          .from("sprints")
+          .select(
+            "id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, manual_spend_updated_at, original_planned_amount, final_recommended_amount, final_actual_amount, snapshot_frozen_at",
+          )
+          .eq("client_id", id)
+          .lte("start_date", lastDay)
+          .gte("end_date", firstDay)
+          .order("start_date"),
+        "sprints",
+      ),
+      requireQuery(
+        supabase.from("daily_spend").select("date, spend").eq("client_id", id).gte("date", firstDay).lte("date", lastDay),
+        "daily_spend",
+      ),
+      requireQuery<{ synced_at: string } | null>(
+        supabase
+          .from("daily_spend")
+          .select("synced_at")
+          .eq("client_id", id)
+          .order("synced_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        "daily_spend:last-sync",
+      ),
+      requireQuery(
+        supabase
+          .from("sprint_planned_allocations")
+          .select("sprint_id, date, planned_amount")
+          .eq("client_id", id)
+          .gte("date", firstDay)
+          .lte("date", lastDay),
+        "sprint_planned_allocations",
+      ),
+      requireQuery(
+        supabase
+          .from("monthly_budget_changes")
+          .select(
+            "id, effective_date, changed_at, previous_amount, new_amount, consolidated_amount, future_amount_distributed, resulting_total, is_below_consolidated, reason, changed_by_profile:team_members!monthly_budget_changes_changed_by_fkey(name)",
+          )
+          .eq("client_id", id)
+          .eq("month", firstDay)
+          .order("changed_at", { ascending: false }),
+        "monthly_budget_changes:current-month",
+      ),
+      // Metas do planejamento mensal vigente (Etapa "Planejamento Mensal
+      // 1.0") — deliberadamente `.lte` em vez de `.eq`: a versão vigente do
+      // mês selecionado pode ter sido definida num mês anterior (ver
+      // `resolveMonthlyPerformanceTargets`), diferente da consulta de
+      // `budgetChanges` acima (que é só o HISTÓRICO deste mês específico).
+      requireQuery(
+        supabase
+          .from("monthly_budget_changes")
+          .select("month, changed_at, target_result_count, target_cost_per_result")
+          .eq("client_id", id)
+          .lte("month", firstDay)
+          .order("month", { ascending: false })
+          .order("changed_at", { ascending: false })
+          .limit(1),
+        "monthly_budget_changes:target-history",
+      ),
+    ]);
 
   // Etapa 71: registros de performance de todas as sprints do mês
   // selecionado — sempre por sprint (nenhum lançamento manual mensal
   // independente, ver migration), nunca uma query por sprint.
-  const monthSprintIds = (sprints ?? []).map((s) => s.id);
-  const { data: performanceRecordRows } =
+  const monthSprintIds = sprints.map((s) => s.id);
+  const performanceRecordRows =
     monthSprintIds.length > 0
-      ? await supabase
-          .from("performance_records")
-          .select("sprint_id, channel, result_type, result_count, source, source_updated_at")
-          .in("sprint_id", monthSprintIds)
-      : { data: [] };
-  const performanceRecords: PerformanceRecordRawRow[] = (performanceRecordRows ?? []).map((r) => ({
+      ? await requireQuery(
+          supabase
+            .from("performance_records")
+            .select("sprint_id, channel, result_type, result_count, source, source_updated_at")
+            .in("sprint_id", monthSprintIds),
+          "performance_records",
+        )
+      : [];
+  const performanceRecords: PerformanceRecordRawRow[] = performanceRecordRows.map((r) => ({
     sprintId: r.sprint_id,
     channel: r.channel,
     resultType: r.result_type,
@@ -295,8 +306,8 @@ export default async function ClientPage({
     sourceUpdatedAt: r.source_updated_at,
   }));
 
-  assertSingleCurrentSprint(sprints ?? [], today);
-  const sprintFinancials = (sprints ?? []).map((sprint) => {
+  assertSingleCurrentSprint(sprints, today);
+  const sprintFinancials = sprints.map((sprint) => {
     const actualSpend = computeSprintEffectiveSpend(sprint, dailySpend ?? []);
     return computeSprintFinancials(sprint, actualSpend, today, sprint.spend_source);
   });
@@ -430,31 +441,37 @@ export default async function ClientPage({
     startDate: sprint.startDate,
     endDate: sprint.endDate,
   }));
-  const lastBudgetChange = (budgetChanges ?? [])[0] ?? null;
+  const lastBudgetChange = budgetChanges[0] ?? null;
   const lastChange = lastBudgetChange
     ? {
         lastEffectiveDate: lastBudgetChange.effective_date,
         lastPreviousAmount: lastBudgetChange.previous_amount,
         lastNewAmount: lastBudgetChange.new_amount,
-        changeCountThisMonth: (budgetChanges ?? []).length,
+        changeCountThisMonth: budgetChanges.length,
       }
     : null;
 
-  const { data: sprintActivity } = currentSprint
-    ? await supabase
-        .from("sprint_last_operational_activity")
-        .select("last_activity_at")
-        .eq("sprint_id", currentSprint.sprintId)
-        .maybeSingle()
-    : { data: null };
+  const sprintActivity = currentSprint
+    ? await requireQuery<{ last_activity_at: string | null } | null>(
+        supabase
+          .from("sprint_last_operational_activity")
+          .select("last_activity_at")
+          .eq("sprint_id", currentSprint.sprintId)
+          .maybeSingle(),
+        "sprint_last_operational_activity",
+      )
+    : null;
 
-  const { data: tasks } = await supabase
-    .from("tasks")
-    .select(
-      "id, title, type, due_date, due_time, status, sprint_id, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
-    )
-    .eq("client_id", id)
-    .order("due_date");
+  const tasks = await requireQuery(
+    supabase
+      .from("tasks")
+      .select(
+        "id, title, type, due_date, due_time, status, sprint_id, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
+      )
+      .eq("client_id", id)
+      .order("due_date"),
+    "tasks",
+  );
 
   // Etapa 62: a janela fixa de 60 dias (Etapa 57) foi substituída por uma
   // busca sem filtro de data (as últimas 200 análises do cliente — teto
@@ -464,30 +481,36 @@ export default async function ClientPage({
   // passado) e "quais análises/otimizações aconteceram DENTRO do mês
   // selecionado" (mês anterior, Etapa 8) — uma janela fixa de 60 dias
   // quebraria a segunda pergunta pra qualquer mês mais antigo que isso.
-  const [{ data: accountReviewRows }, { data: managers }, { data: clientUpdateRows }] = await Promise.all([
-    supabase
-      .from("account_reviews")
-      .select(
-        "id, sprint_id, reviewed_at, reason, reason_other_description, outcome, notes, issue_description, issue_category, seconds_since_previous_review, team_member:team_members!account_reviews_team_member_id_fkey(name), optimizations:account_optimizations(id, optimization_type, optimization_action, description, reason, expected_impact), issue_task:tasks!account_reviews_issue_task_id_fkey(title)",
-      )
-      .eq("client_id", id)
-      .order("reviewed_at", { ascending: false })
-      .limit(200),
-    supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
+  const [accountReviewRows, managers, clientUpdateRows] = await Promise.all([
+    requireQuery(
+      supabase
+        .from("account_reviews")
+        .select(
+          "id, sprint_id, reviewed_at, reason, reason_other_description, outcome, notes, issue_description, issue_category, seconds_since_previous_review, team_member:team_members!account_reviews_team_member_id_fkey(name), optimizations:account_optimizations(id, optimization_type, optimization_action, description, reason, expected_impact), issue_task:tasks!account_reviews_issue_task_id_fkey(title)",
+        )
+        .eq("client_id", id)
+        .order("reviewed_at", { ascending: false })
+        .limit(200),
+      "account_reviews",
+    ),
+    requireQuery(supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"), "team_members"),
     // Etapa 59 — Atualização para o Cliente: uma linha por análise (no
     // máximo), buscada junto com o resto da página; nenhuma query separada
     // por análise (nem pro indicador discreto nem pro conteúdo do drawer).
-    supabase
-      .from("client_updates")
-      .select(
-        "id, account_review_id, content, copied_at, sent_at, sent_by_profile:team_members!client_updates_sent_by_fkey(name)",
-      )
-      .eq("client_id", id),
+    requireQuery(
+      supabase
+        .from("client_updates")
+        .select(
+          "id, account_review_id, content, copied_at, sent_at, sent_by_profile:team_members!client_updates_sent_by_fkey(name)",
+        )
+        .eq("client_id", id),
+      "client_updates",
+    ),
   ]);
 
-  const clientUpdatesByReviewId = new Map((clientUpdateRows ?? []).map((row) => [row.account_review_id, row]));
+  const clientUpdatesByReviewId = new Map(clientUpdateRows.map((row) => [row.account_review_id, row]));
 
-  const accountReviews = accountReviewRows ?? [];
+  const accountReviews = accountReviewRows;
   const accountReviewSummaries = accountReviews.map((review) => {
     const update = clientUpdatesByReviewId.get(review.id) ?? null;
     return {

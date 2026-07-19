@@ -1,4 +1,5 @@
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { requireQuery } from "@/lib/require-query";
 import { getCurrentProfile } from "@/lib/auth";
 import { OperationalEventType } from "@/lib/operational-events";
 import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
@@ -52,12 +53,16 @@ export async function getOrCreateReport(
     .select("id")
     .maybeSingle();
 
-  const { data: created } = await supabase
-    .from("monthly_reports")
-    .select("id, status")
-    .eq("client_id", clientId)
-    .eq("month_start", monthStart)
-    .single();
+  // Diferente do `existing` acima (onde `null` é um estado de negócio
+  // legítimo — "relatório ainda não criado"), aqui a linha DEVERIA existir
+  // sempre (acabamos de inserir ou outra requisição concorrente já
+  // inseriu) — se vier erro, é falha de infraestrutura de verdade, não
+  // "não encontrado"; `requireQuery` lança em vez de deixar `created!`
+  // mentir pro TypeScript sobre um valor que pode ser `undefined`.
+  const created = await requireQuery<{ id: string; status: MonthlyReportStatus }>(
+    supabase.from("monthly_reports").select("id, status").eq("client_id", clientId).eq("month_start", monthStart).single(),
+    "monthly_reports:get-or-create",
+  );
 
   // Primeira mutação de relatório deste cliente/mês — registra
   // monthly_report_started. Resolvido aqui (em vez de em cada uma das 8
@@ -215,51 +220,67 @@ export async function buildReportViewData(
   // vigente (`resolveMonthlyBudget`), realizado (`sumActualSpendForMonth`),
   // esperado até hoje (`computeMonthlyExpectedToDateByCalendar`, Etapa 67) e
   // `classifySpendStatus`, nunca uma conta paralela.
-  const [{ data: sprints }, { data: dailySpend }, { data: tasks }, { data: plannedAllocations }, { data: budgetChanges }, { count: optimizationsCount }] = await Promise.all([
-    // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
-    // mês precisa ser encontrada mesmo com start_date fora do intervalo.
-    supabase
-      .from("sprints")
-      .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
-      .eq("client_id", clientId)
-      .lte("start_date", monthRange.lastDay)
-      .gte("end_date", monthRange.firstDay),
-    supabase
-      .from("daily_spend")
-      .select("date, spend")
-      .eq("client_id", clientId)
-      .gte("date", monthRange.firstDay)
-      .lte("date", monthRange.lastDay),
-    supabase
-      .from("tasks")
-      .select("id, type, status, due_date, recurrence, sprint_id")
-      .eq("client_id", clientId)
-      .gte("due_date", monthRange.firstDay)
-      .lte("due_date", monthRange.lastDay),
-    supabase
-      .from("sprint_planned_allocations")
-      .select("sprint_id, date, planned_amount")
-      .eq("client_id", clientId)
-      .gte("date", monthRange.firstDay)
-      .lte("date", monthRange.lastDay),
-    supabase
-      .from("monthly_budget_changes")
-      .select("new_amount, changed_at")
-      .eq("client_id", clientId)
-      .eq("month", monthRange.firstDay),
-    // Otimizações do mês (Etapa 74) — revisões estratégicas da conta
-    // (account_reviews.reviewed_at) registradas no período, mesma definição
-    // usada na Visão Geral; `head: true` porque só a contagem importa aqui.
-    supabase
-      .from("account_reviews")
-      .select("id", { count: "exact", head: true })
-      .eq("client_id", clientId)
-      .gte("reviewed_at", `${monthRange.firstDay}T00:00:00Z`)
-      .lte("reviewed_at", `${monthRange.lastDay}T23:59:59.999Z`),
-  ]);
+  const [sprints, dailySpend, tasks, plannedAllocations, budgetChanges, { count: optimizationsCount }] =
+    await Promise.all([
+      // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
+      // mês precisa ser encontrada mesmo com start_date fora do intervalo.
+      requireQuery(
+        supabase
+          .from("sprints")
+          .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
+          .eq("client_id", clientId)
+          .lte("start_date", monthRange.lastDay)
+          .gte("end_date", monthRange.firstDay),
+        "sprints",
+      ),
+      requireQuery(
+        supabase
+          .from("daily_spend")
+          .select("date, spend")
+          .eq("client_id", clientId)
+          .gte("date", monthRange.firstDay)
+          .lte("date", monthRange.lastDay),
+        "daily_spend",
+      ),
+      requireQuery(
+        supabase
+          .from("tasks")
+          .select("id, type, status, due_date, recurrence, sprint_id")
+          .eq("client_id", clientId)
+          .gte("due_date", monthRange.firstDay)
+          .lte("due_date", monthRange.lastDay),
+        "tasks",
+      ),
+      requireQuery(
+        supabase
+          .from("sprint_planned_allocations")
+          .select("sprint_id, date, planned_amount")
+          .eq("client_id", clientId)
+          .gte("date", monthRange.firstDay)
+          .lte("date", monthRange.lastDay),
+        "sprint_planned_allocations",
+      ),
+      requireQuery(
+        supabase
+          .from("monthly_budget_changes")
+          .select("new_amount, changed_at")
+          .eq("client_id", clientId)
+          .eq("month", monthRange.firstDay),
+        "monthly_budget_changes",
+      ),
+      // Otimizações do mês (Etapa 74) — revisões estratégicas da conta
+      // (account_reviews.reviewed_at) registradas no período, mesma definição
+      // usada na Visão Geral; `head: true` porque só a contagem importa aqui.
+      supabase
+        .from("account_reviews")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", clientId)
+        .gte("reviewed_at", `${monthRange.firstDay}T00:00:00Z`)
+        .lte("reviewed_at", `${monthRange.lastDay}T23:59:59.999Z`),
+    ]);
 
-  const monthSprintRows = sprints ?? [];
-  const plannedAllocationRows = (plannedAllocations ?? []).map((a) => ({
+  const monthSprintRows = sprints;
+  const plannedAllocationRows = plannedAllocations.map((a) => ({
     date: a.date,
     sprintId: a.sprint_id,
     amount: a.planned_amount,
@@ -267,10 +288,10 @@ export async function buildReportViewData(
   // Etapa 66: orçamento mensal VIGENTE — nunca mais a soma dos planejamentos
   // diários persistidos (ver `resolveMonthlyBudget`).
   const planned = resolveMonthlyBudget(
-    (budgetChanges ?? []).map((c) => ({ newAmount: c.new_amount, changedAt: c.changed_at })),
+    budgetChanges.map((c) => ({ newAmount: c.new_amount, changedAt: c.changed_at })),
     sumPlannedForMonth(plannedAllocationRows, monthRange),
   );
-  const actual = sumActualSpendForMonth(monthSprintRows, monthRange, dailySpend ?? []);
+  const actual = sumActualSpendForMonth(monthSprintRows, monthRange, dailySpend);
   // Etapa 67: "esperado até hoje" nunca mais soma sprint_planned_allocations
   // — é só o avanço do calendário do mês aplicado ao orçamento vigente.
   const expectedToDate = computeMonthlyExpectedToDateByCalendar(
@@ -279,12 +300,12 @@ export async function buildReportViewData(
     today.toISOString().slice(0, 10),
   ).expectedToDate;
   const status = classifySpendStatus(actual, expectedToDate, planned);
-  const execution = computeAgencyExecutionSummary(tasks ?? [], today, optimizationsCount ?? 0);
+  const execution = computeAgencyExecutionSummary(tasks, today, optimizationsCount ?? 0);
   const sprintBehavior = computeSprintBehaviorRows(
     monthSprintRows,
     plannedAllocationRows,
-    dailySpend ?? [],
-    tasks ?? [],
+    dailySpend,
+    tasks,
     monthRange,
     today,
   );
@@ -322,54 +343,72 @@ export async function buildReportViewData(
   }
 
   const previousMonthParam = shiftMonthParam(monthRange, -1);
-  const [
-    { data: kpiDefinitions },
-    { data: kpiValues },
-    { data: previousReport },
-    { data: timelineEvents },
-    { data: commentSelections },
-    { data: actionItems },
-  ] = await Promise.all([
-    supabase
-      .from("client_kpi_definitions")
-      .select("id, name, unit, direction, target")
-      .eq("client_id", clientId)
-      .order("display_order"),
-    supabase.from("report_kpi_values").select("kpi_definition_id, result").eq("report_id", report.id),
-    supabase
-      .from("monthly_reports")
-      .select("id")
-      .eq("client_id", clientId)
-      .eq("month_start", monthRangeFromParam(previousMonthParam, today).firstDay)
-      .maybeSingle(),
-    supabase
-      .from("report_timeline_events")
-      .select("id, event_date, type, description, responsible:team_members!report_timeline_events_responsible_id_fkey(name)")
-      .eq("report_id", report.id)
-      .order("event_date", { ascending: false }),
-    supabase
-      .from("report_comment_selections")
-      .select("id, comment:comments(id, content, created_at, author:team_members!comments_author_id_fkey(name))")
-      .eq("report_id", report.id),
-    supabase
-      .from("report_action_items")
-      .select("id, title, description, due_date, dependency, status, sent_to_task_id, responsible_id, responsible:team_members(name)")
-      .eq("report_id", report.id)
-      .order("created_at"),
-  ]);
+  const [kpiDefinitions, kpiValues, previousReport, timelineEvents, commentSelections, actionItems] =
+    await Promise.all([
+      requireQuery(
+        supabase
+          .from("client_kpi_definitions")
+          .select("id, name, unit, direction, target")
+          .eq("client_id", clientId)
+          .order("display_order"),
+        "client_kpi_definitions",
+      ),
+      requireQuery(
+        supabase.from("report_kpi_values").select("kpi_definition_id, result").eq("report_id", report.id),
+        "report_kpi_values",
+      ),
+      // `.maybeSingle()` legítimo: `null` é "não existe relatório do mês
+      // anterior" (estado de negócio normal), não falha de consulta.
+      requireQuery<{ id: string } | null>(
+        supabase
+          .from("monthly_reports")
+          .select("id")
+          .eq("client_id", clientId)
+          .eq("month_start", monthRangeFromParam(previousMonthParam, today).firstDay)
+          .maybeSingle(),
+        "monthly_reports:previous-month",
+      ),
+      requireQuery(
+        supabase
+          .from("report_timeline_events")
+          .select(
+            "id, event_date, type, description, responsible:team_members!report_timeline_events_responsible_id_fkey(name)",
+          )
+          .eq("report_id", report.id)
+          .order("event_date", { ascending: false }),
+        "report_timeline_events",
+      ),
+      requireQuery(
+        supabase
+          .from("report_comment_selections")
+          .select("id, comment:comments(id, content, created_at, author:team_members!comments_author_id_fkey(name))")
+          .eq("report_id", report.id),
+        "report_comment_selections",
+      ),
+      requireQuery(
+        supabase
+          .from("report_action_items")
+          .select(
+            "id, title, description, due_date, dependency, status, sent_to_task_id, responsible_id, responsible:team_members(name)",
+          )
+          .eq("report_id", report.id)
+          .order("created_at"),
+        "report_action_items",
+      ),
+    ]);
 
   let previousValuesById = new Map<string, number>();
   if (previousReport) {
-    const { data: previousValues } = await supabase
-      .from("report_kpi_values")
-      .select("kpi_definition_id, result")
-      .eq("report_id", previousReport.id);
-    previousValuesById = new Map((previousValues ?? []).map((v) => [v.kpi_definition_id, v.result ?? 0]));
+    const previousValues = await requireQuery(
+      supabase.from("report_kpi_values").select("kpi_definition_id, result").eq("report_id", previousReport.id),
+      "report_kpi_values:previous-month",
+    );
+    previousValuesById = new Map(previousValues.map((v) => [v.kpi_definition_id, v.result ?? 0]));
   }
 
-  const resultById = new Map((kpiValues ?? []).map((v) => [v.kpi_definition_id, v.result]));
+  const resultById = new Map(kpiValues.map((v) => [v.kpi_definition_id, v.result]));
 
-  const kpis: ReportKpiRow[] = (kpiDefinitions ?? []).map((def) => ({
+  const kpis: ReportKpiRow[] = kpiDefinitions.map((def) => ({
     id: def.id,
     name: def.name,
     unit: def.unit,

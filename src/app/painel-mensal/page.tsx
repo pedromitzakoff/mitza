@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { EmptyState } from "@/components/ui/empty-state";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { requireQuery } from "@/lib/require-query";
 import { currentMonthRange, sumPlannedForMonth, type PlannedAllocationRow } from "@/lib/sprint-financials";
 import {
   classifySpendStatus,
@@ -18,43 +19,45 @@ export default async function PainelMensalPage() {
   const supabase = await createSupabaseClient();
   const { firstDay, lastDay } = currentMonthRange();
 
-  const [{ data: clients }, { data: plannedAllocations }, { data: dailySpend }, { data: budgetChanges }] = await Promise.all([
-    supabase.from("clients").select("id, name").is("deleted_at", null).order("name"),
+  const [clients, plannedAllocations, dailySpend, budgetChanges] = await Promise.all([
+    requireQuery(supabase.from("clients").select("id, name").is("deleted_at", null).order("name"), "clients"),
     // Soma direta das alocações diárias no intervalo do mês (Etapa 50) —
     // usada só como fallback do orçamento vigente (ver resolveMonthlyBudget).
-    supabase
-      .from("sprint_planned_allocations")
-      .select("client_id, date, planned_amount")
-      .gte("date", firstDay)
-      .lte("date", lastDay),
-    supabase
-      .from("daily_spend")
-      .select("client_id, spend")
-      .gte("date", firstDay)
-      .lte("date", lastDay),
+    requireQuery(
+      supabase
+        .from("sprint_planned_allocations")
+        .select("client_id, date, planned_amount")
+        .gte("date", firstDay)
+        .lte("date", lastDay),
+      "sprint_planned_allocations",
+    ),
+    requireQuery(
+      supabase.from("daily_spend").select("client_id, spend").gte("date", firstDay).lte("date", lastDay),
+      "daily_spend",
+    ),
     // Etapa 66: orçamento mensal VIGENTE — nunca mais a soma das alocações
     // diárias persistidas (ver resolveMonthlyBudget).
-    supabase
-      .from("monthly_budget_changes")
-      .select("client_id, new_amount, changed_at")
-      .eq("month", firstDay),
+    requireQuery(
+      supabase.from("monthly_budget_changes").select("client_id, new_amount, changed_at").eq("month", firstDay),
+      "monthly_budget_changes",
+    ),
   ]);
 
   const allocationsByClient = new Map<string, PlannedAllocationRow[]>();
-  for (const row of plannedAllocations ?? []) {
+  for (const row of plannedAllocations) {
     const list = allocationsByClient.get(row.client_id) ?? [];
     list.push({ date: row.date, sprintId: "", amount: row.planned_amount });
     allocationsByClient.set(row.client_id, list);
   }
   const budgetChangesByClient = new Map<string, { newAmount: number; changedAt: string }[]>();
-  for (const row of budgetChanges ?? []) {
+  for (const row of budgetChanges) {
     const list = budgetChangesByClient.get(row.client_id) ?? [];
     list.push({ newAmount: row.new_amount, changedAt: row.changed_at });
     budgetChangesByClient.set(row.client_id, list);
   }
 
   const plannedByClient = new Map<string, number>();
-  for (const client of clients ?? []) {
+  for (const client of clients) {
     const rows = allocationsByClient.get(client.id) ?? [];
     plannedByClient.set(
       client.id,
@@ -63,11 +66,11 @@ export default async function PainelMensalPage() {
   }
 
   const actualByClient = new Map<string, number>();
-  for (const row of dailySpend ?? []) {
+  for (const row of dailySpend) {
     actualByClient.set(row.client_id, (actualByClient.get(row.client_id) ?? 0) + row.spend);
   }
 
-  const rows = (clients ?? []).map((client) => {
+  const rows = clients.map((client) => {
     const planned = plannedByClient.get(client.id) ?? 0;
     const actual = actualByClient.get(client.id) ?? 0;
     const status = classifySpendStatus(actual, planned, planned);

@@ -2,6 +2,7 @@ import { Inter } from "next/font/google";
 import { getCurrentProfile } from "@/lib/auth";
 import { perfNow, perfLog } from "@/lib/perf-log";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { requireQuery } from "@/lib/require-query";
 import { todayUTC, todayDateString } from "@/lib/today";
 import {
   currentMonthRange,
@@ -128,90 +129,120 @@ export default async function Home({
 
   const __perfBlock1Start = perfNow();
   const [
-    { data: clients },
-    { data: gestores },
-    { data: sprints },
-    { data: dailySpend },
-    { data: tasks },
-    { data: plannedAllocations },
-    { data: budgetChanges },
-    { data: teamMembersForIndicators },
-    { data: completedTasksForIndicators },
-    { data: reviewsForIndicators },
-    { data: channelSpendOverrides },
-    { data: performanceTargetHistory },
+    clients,
+    gestores,
+    sprints,
+    dailySpend,
+    tasks,
+    plannedAllocations,
+    budgetChanges,
+    teamMembersForIndicators,
+    completedTasksForIndicators,
+    reviewsForIndicators,
+    channelSpendOverrides,
+    performanceTargetHistory,
   ] = await Promise.all([
-    supabase
-      .from("clients")
-      .select(
-        "id, name, meta_ad_account_id, status, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
-      )
-      .is("deleted_at", null)
-      .order("name"),
-    supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
+    requireQuery(
+      supabase
+        .from("clients")
+        .select(
+          "id, name, meta_ad_account_id, status, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
+        )
+        .is("deleted_at", null)
+        .order("name"),
+      "clients",
+    ),
+    requireQuery(supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"), "team_members"),
     // Sobreposição com a janela (não "começa na janela") — uma sprint que
     // atravessa mês (ex.: 27/jul-02/ago) precisa ser encontrada mesmo com
     // start_date fora do intervalo, senão sua parcela do outro mês some.
-    supabase
-      .from("sprints")
-      .select(
-        "id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, manual_spend_updated_at",
-      )
-      .lte("start_date", rangeEnd)
-      .gte("end_date", rangeStart),
-    supabase
-      .from("daily_spend")
-      .select("client_id, date, channel, spend, synced_at")
-      .gte("date", rangeStart)
-      .lte("date", rangeEnd),
-    supabase
-      .from("tasks")
-      .select(
-        "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
-      ),
-    supabase
-      .from("sprint_planned_allocations")
-      .select("client_id, sprint_id, date, planned_amount")
-      .gte("date", rangeStart)
-      .lte("date", rangeEnd),
+    requireQuery(
+      supabase
+        .from("sprints")
+        .select(
+          "id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, manual_spend_updated_at",
+        )
+        .lte("start_date", rangeEnd)
+        .gte("end_date", rangeStart),
+      "sprints",
+    ),
+    requireQuery(
+      supabase
+        .from("daily_spend")
+        .select("client_id, date, channel, spend, synced_at")
+        .gte("date", rangeStart)
+        .lte("date", rangeEnd),
+      "daily_spend",
+    ),
+    requireQuery(
+      supabase
+        .from("tasks")
+        .select(
+          "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
+        ),
+      "tasks",
+    ),
+    requireQuery(
+      supabase
+        .from("sprint_planned_allocations")
+        .select("client_id, sprint_id, date, planned_amount")
+        .gte("date", rangeStart)
+        .lte("date", rangeEnd),
+      "sprint_planned_allocations",
+    ),
     // Orçamento vigente (Etapa 66) — só do mês SELECIONADO (`monthRange`),
     // não da janela união com o mês corrente: `buildOperationClientCard` só
     // usa `monthRange` pra montar o card, nunca `rangeStart`/`rangeEnd`.
-    supabase
-      .from("monthly_budget_changes")
-      .select("client_id, new_amount, changed_at")
-      .eq("month", monthRange.firstDay),
+    requireQuery(
+      supabase
+        .from("monthly_budget_changes")
+        .select("client_id, new_amount, changed_at")
+        .eq("month", monthRange.firstDay),
+      "monthly_budget_changes:current-month",
+    ),
     // Consulta própria (independente de `gestores`, que serve o dropdown de
     // filtro e não pode ter seu comportamento alterado): precisa do papel de
     // cada membro pra nunca contar admin como gestor no indicador "Gestores
     // ativos".
-    supabase.from("team_members").select("id, system_role, status"),
-    supabase
-      .from("tasks")
-      .select("client_id")
-      .not("completed_at", "is", null)
-      .gte("completed_at", indicatorsMonthStart)
-      .lte("completed_at", indicatorsMonthEnd),
-    supabase
-      .from("account_reviews")
-      .select("client_id")
-      .gte("reviewed_at", indicatorsMonthStart)
-      .lte("reviewed_at", indicatorsMonthEnd),
+    requireQuery(supabase.from("team_members").select("id, system_role, status"), "team_members:roles"),
+    requireQuery(
+      supabase
+        .from("tasks")
+        .select("client_id")
+        .not("completed_at", "is", null)
+        .gte("completed_at", indicatorsMonthStart)
+        .lte("completed_at", indicatorsMonthEnd),
+      "tasks:completed-indicators",
+    ),
+    requireQuery(
+      supabase
+        .from("account_reviews")
+        .select("client_id")
+        .gte("reviewed_at", indicatorsMonthStart)
+        .lte("reviewed_at", indicatorsMonthEnd),
+      "account_reviews:indicators",
+    ),
     // Etapa 3 (MVP plataformas): override manual de gasto real por
     // sprint+canal — mesmo padrão de `sprints` acima (sem filtro de data,
     // volume pequeno e escopado por sprint, não por dia).
-    supabase.from("sprint_channel_spend").select("client_id, sprint_id, channel, spend_source, manual_actual_spend"),
+    requireQuery(
+      supabase.from("sprint_channel_spend").select("client_id, sprint_id, channel, spend_source, manual_actual_spend"),
+      "sprint_channel_spend",
+    ),
     // Metas do planejamento mensal vigente (Etapa "Planejamento Mensal
     // 1.0") — `.lte` (não `.eq`) pelo mesmo motivo da página do Cliente: a
     // versão vigente do mês selecionado pode ter sido definida num mês
     // anterior. Sem filtro por cliente (é a Visão Geral inteira) — resolvido
     // por cliente logo abaixo, com `resolveMonthlyPerformanceTargets`.
-    supabase
-      .from("monthly_budget_changes")
-      .select("client_id, month, changed_at, target_result_count, target_cost_per_result")
-      .lte("month", monthRange.firstDay)
-      .order("month", { ascending: false })
-      .order("changed_at", { ascending: false }),
+    requireQuery(
+      supabase
+        .from("monthly_budget_changes")
+        .select("client_id, month, changed_at, target_result_count, target_cost_per_result")
+        .lte("month", monthRange.firstDay)
+        .order("month", { ascending: false })
+        .order("changed_at", { ascending: false }),
+      "monthly_budget_changes:target-history",
+    ),
   ]);
   perfLog("visão geral bloco 1 (12 queries)", __perfBlock1Start);
 
@@ -227,34 +258,48 @@ export default async function Home({
     .map((s) => s.id);
 
   const __perfBlock2Start = perfNow();
-  const [{ data: clientActivity }, { data: sprintActivity }, { data: performanceRecords }, { data: lastReviews }] =
-    await Promise.all([
-      clientIds.length > 0
-        ? supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds)
-        : Promise.resolve({ data: [] }),
-      currentSprintIds.length > 0
-        ? supabase.from("sprint_last_operational_activity").select("sprint_id, last_activity_at").in("sprint_id", currentSprintIds)
-        : Promise.resolve({ data: [] }),
-      monthSprintIdsForPerformance.length > 0
-        ? supabase
+  const [clientActivity, sprintActivity, performanceRecords, lastReviews] = await Promise.all([
+    clientIds.length > 0
+      ? requireQuery(
+          supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds),
+          "client_last_operational_activity",
+        )
+      : Promise.resolve([]),
+    currentSprintIds.length > 0
+      ? requireQuery(
+          supabase
+            .from("sprint_last_operational_activity")
+            .select("sprint_id, last_activity_at")
+            .in("sprint_id", currentSprintIds),
+          "sprint_last_operational_activity",
+        )
+      : Promise.resolve([]),
+    monthSprintIdsForPerformance.length > 0
+      ? requireQuery(
+          supabase
             .from("performance_records")
             .select("client_id, sprint_id, channel, result_type, result_count, source, source_updated_at")
-            .in("sprint_id", monthSprintIdsForPerformance)
-        : Promise.resolve({ data: [] }),
-      // Etapa 74 — "Última otimização": sempre o dado GLOBAL mais recente por
-      // cliente (independe do mês selecionado), por isso uma busca própria
-      // sem filtro de data — mesma fonte usada no Acompanhamento da Conta.
-      // Navigation Performance & Perceived Speed 1.0: não depende de nada
-      // deste Promise.all, só de clientIds (pronto desde o bloco anterior) —
-      // por isso entra aqui em vez de ser um round-trip sequencial à parte.
-      clientIds.length > 0
-        ? supabase
+            .in("sprint_id", monthSprintIdsForPerformance),
+          "performance_records",
+        )
+      : Promise.resolve([]),
+    // Etapa 74 — "Última otimização": sempre o dado GLOBAL mais recente por
+    // cliente (independe do mês selecionado), por isso uma busca própria
+    // sem filtro de data — mesma fonte usada no Acompanhamento da Conta.
+    // Navigation Performance & Perceived Speed 1.0: não depende de nada
+    // deste Promise.all, só de clientIds (pronto desde o bloco anterior) —
+    // por isso entra aqui em vez de ser um round-trip sequencial à parte.
+    clientIds.length > 0
+      ? requireQuery(
+          supabase
             .from("account_reviews")
             .select("client_id, reviewed_at")
             .in("client_id", clientIds)
-            .order("reviewed_at", { ascending: false })
-        : Promise.resolve({ data: [] }),
-    ]);
+            .order("reviewed_at", { ascending: false }),
+          "account_reviews:last-reviews",
+        )
+      : Promise.resolve([]),
+  ]);
   perfLog("visão geral bloco 2 fundido (atividade/performance/lastReviews, antes lastReviews era sequencial à parte)", __perfBlock2Start);
   perfLog("visão geral — dados totais carregados (auth + queries)", __perfPageStart);
 

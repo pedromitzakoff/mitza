@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { requireQuery } from "@/lib/require-query";
 import { SprintTaskTemplatesList, type GlobalTemplateItem } from "../sprint-task-templates-list";
 import { BackfillButton } from "./backfill-button";
 
@@ -13,28 +14,33 @@ export default async function SprintTaskTemplatesPage({
 
   const supabase = await createSupabaseClient();
 
-  const [{ data: templates }, { data: templateClients }, { data: clients }, { data: managers }, { data: taskLinks }] =
-    await Promise.all([
+  const [templates, templateClients, clients, managers, taskLinks] = await Promise.all([
+    requireQuery(
       supabase
         .from("sprint_task_templates")
         .select("id, title, type, weekday, is_active, applies_to_all, default_assignee_id")
         .order("weekday"),
+      "sprint_task_templates",
+    ),
+    requireQuery(
       supabase.from("sprint_task_template_clients").select("template_id, client_id"),
-      supabase.from("clients").select("id, name").is("deleted_at", null).order("name"),
-      supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
-      supabase.from("tasks").select("template_id").not("template_id", "is", null),
-    ]);
+      "sprint_task_template_clients",
+    ),
+    requireQuery(supabase.from("clients").select("id, name").is("deleted_at", null).order("name"), "clients"),
+    requireQuery(supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"), "team_members"),
+    requireQuery(supabase.from("tasks").select("template_id").not("template_id", "is", null), "tasks:template_id"),
+  ]);
 
   const clientIdsByTemplate = new Map<string, string[]>();
-  for (const row of templateClients ?? []) {
+  for (const row of templateClients) {
     const list = clientIdsByTemplate.get(row.template_id) ?? [];
     list.push(row.client_id);
     clientIdsByTemplate.set(row.template_id, list);
   }
 
-  const templatesWithGeneratedTasks = new Set((taskLinks ?? []).map((row) => row.template_id));
+  const templatesWithGeneratedTasks = new Set(taskLinks.map((row) => row.template_id));
 
-  const templateItems: GlobalTemplateItem[] = (templates ?? []).map((template) => ({
+  const templateItems: GlobalTemplateItem[] = templates.map((template) => ({
     ...template,
     selectedClientIds: clientIdsByTemplate.get(template.id) ?? [],
     hasGeneratedTasks: templatesWithGeneratedTasks.has(template.id),

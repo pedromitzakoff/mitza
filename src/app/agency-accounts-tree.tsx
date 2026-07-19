@@ -1,6 +1,7 @@
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { buildAgencyAccountsTree } from "@/lib/agency-accounts-tree";
+import { requireQuery } from "@/lib/require-query";
 import { AgencyAccountsTreeView } from "./agency-accounts-tree-client";
 
 /**
@@ -21,17 +22,20 @@ export async function AgencyAccountsTree() {
   if (!profile) return null;
 
   const supabase = await createSupabaseClient();
-  const [{ data: clients }, { data: managers }] = await Promise.all([
-    supabase
-      .from("clients")
-      .select("id, name, wallet_position, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)")
-      .is("deleted_at", null)
-      .order("wallet_position", { ascending: true, nullsFirst: false })
-      .order("name"),
-    supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
+  const [clients, managers] = await Promise.all([
+    requireQuery(
+      supabase
+        .from("clients")
+        .select("id, name, wallet_position, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)")
+        .is("deleted_at", null)
+        .order("wallet_position", { ascending: true, nullsFirst: false })
+        .order("name"),
+      "clients",
+    ),
+    requireQuery(supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"), "team_members"),
   ]);
 
-  const tree = buildAgencyAccountsTree(clients ?? [], managers ?? []);
+  const tree = buildAgencyAccountsTree(clients, managers);
 
   return <AgencyAccountsTreeView tree={tree} currentManagerId={profile.id} isAdmin={profile.role === "admin"} />;
 }

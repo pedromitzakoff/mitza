@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { EmptyState } from "@/components/ui/empty-state";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { requireQuery } from "@/lib/require-query";
 import { todayUTC } from "@/lib/today";
 import { currentMonthRange, monthRangeFromParam, shiftMonthParam } from "@/lib/sprint-financials";
 import { formatCurrency, formatMonthLabel } from "@/lib/format";
@@ -45,49 +46,63 @@ export default async function ReportsPage({
 
   const supabase = await createSupabaseClient();
 
-  const [
-    { data: clients },
-    { data: gestores },
-    { data: sprints },
-    { data: dailySpend },
-    { data: tasks },
-    { data: reports },
-    { data: plannedAllocations },
-    { data: budgetChanges },
-  ] = await Promise.all([
-    supabase
-      .from("clients")
-      .select("id, name, meta_ad_account_id, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)")
-      .is("deleted_at", null)
-      .order("name"),
-    supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
+  const [clients, gestores, sprints, dailySpend, tasks, reports, plannedAllocations, budgetChanges] = await Promise.all([
+    requireQuery(
+      supabase
+        .from("clients")
+        .select("id, name, meta_ad_account_id, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)")
+        .is("deleted_at", null)
+        .order("name"),
+      "clients",
+    ),
+    requireQuery(supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"), "team_members"),
     // Sobreposição com a janela (não "começa na janela") — sprint que
     // atravessa mês precisa ser encontrada mesmo com start_date fora dela.
-    supabase
-      .from("sprints")
-      .select("id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
-      .lte("start_date", rangeEnd)
-      .gte("end_date", rangeStart),
-    supabase.from("daily_spend").select("client_id, date, spend, synced_at").gte("date", rangeStart).lte("date", rangeEnd),
-    supabase
-      .from("tasks")
-      .select("id, client_id, sprint_id, title, type, due_date, status, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)"),
-    supabase.from("monthly_reports").select("client_id, status").eq("month_start", monthRange.firstDay),
-    supabase
-      .from("sprint_planned_allocations")
-      .select("client_id, sprint_id, date, planned_amount")
-      .gte("date", rangeStart)
-      .lte("date", rangeEnd),
+    requireQuery(
+      supabase
+        .from("sprints")
+        .select("id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
+        .lte("start_date", rangeEnd)
+        .gte("end_date", rangeStart),
+      "sprints",
+    ),
+    requireQuery(
+      supabase.from("daily_spend").select("client_id, date, spend, synced_at").gte("date", rangeStart).lte("date", rangeEnd),
+      "daily_spend",
+    ),
+    requireQuery(
+      supabase
+        .from("tasks")
+        .select(
+          "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
+        ),
+      "tasks",
+    ),
+    requireQuery(
+      supabase.from("monthly_reports").select("client_id, status").eq("month_start", monthRange.firstDay),
+      "monthly_reports",
+    ),
+    requireQuery(
+      supabase
+        .from("sprint_planned_allocations")
+        .select("client_id, sprint_id, date, planned_amount")
+        .gte("date", rangeStart)
+        .lte("date", rangeEnd),
+      "sprint_planned_allocations",
+    ),
     // Orçamento vigente (Etapa 66) — só do mês SELECIONADO (`monthRange`),
     // não da janela união com o mês corrente.
-    supabase
-      .from("monthly_budget_changes")
-      .select("client_id, new_amount, changed_at")
-      .eq("month", monthRange.firstDay),
+    requireQuery(
+      supabase
+        .from("monthly_budget_changes")
+        .select("client_id, new_amount, changed_at")
+        .eq("month", monthRange.firstDay),
+      "monthly_budget_changes",
+    ),
   ]);
 
-  const sprintsByClient = new Map<string, NonNullable<typeof sprints>>();
-  for (const s of sprints ?? []) {
+  const sprintsByClient = new Map<string, typeof sprints>();
+  for (const s of sprints) {
     const list = sprintsByClient.get(s.client_id) ?? [];
     list.push(s);
     sprintsByClient.set(s.client_id, list);
@@ -95,7 +110,7 @@ export default async function ReportsPage({
 
   const dailySpendByClient = new Map<string, { date: string; spend: number }[]>();
   const lastSyncedByClient = new Map<string, string>();
-  for (const d of dailySpend ?? []) {
+  for (const d of dailySpend) {
     const list = dailySpendByClient.get(d.client_id) ?? [];
     list.push({ date: d.date, spend: d.spend });
     dailySpendByClient.set(d.client_id, list);
@@ -104,7 +119,7 @@ export default async function ReportsPage({
   }
 
   const tasksByClient = new Map<string, OperationClientRawData["tasks"]>();
-  for (const t of tasks ?? []) {
+  for (const t of tasks) {
     const list = tasksByClient.get(t.client_id) ?? [];
     list.push(t);
     tasksByClient.set(t.client_id, list);

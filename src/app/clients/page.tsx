@@ -2,6 +2,7 @@ import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { requireQuery } from "@/lib/require-query";
 import { todayUTC, todayDateString } from "@/lib/today";
 import { currentMonthRange, findSprintForDate, isDateWithinPeriod } from "@/lib/sprint-financials";
 import { computeMonthProjection } from "@/lib/client-metrics";
@@ -43,73 +44,96 @@ export default async function ClientsPage({
 
   const supabase = await createSupabaseClient();
 
-  const [
-    { data: clients },
-    { data: gestores },
-    { data: sprints },
-    { data: dailySpend },
-    { data: tasks },
-    { data: plannedAllocations },
-    { data: budgetChanges },
-  ] = await Promise.all([
-    supabase
-      .from("clients")
-      .select(
-        "id, name, meta_ad_account_id, status, contract_start_date, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
-      )
-      .is("deleted_at", null)
-      .order("name"),
-    supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
+  const [clients, gestores, sprints, dailySpend, tasks, plannedAllocations, budgetChanges] = await Promise.all([
+    requireQuery(
+      supabase
+        .from("clients")
+        .select(
+          "id, name, meta_ad_account_id, status, contract_start_date, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
+        )
+        .is("deleted_at", null)
+        .order("name"),
+      "clients",
+    ),
+    requireQuery(supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"), "team_members"),
     // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
     // mês precisa ser encontrada mesmo com start_date do mês anterior.
-    supabase
-      .from("sprints")
-      .select("id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
-      .lte("start_date", lastDay)
-      .gte("end_date", firstDay),
-    supabase
-      .from("daily_spend")
-      .select("client_id, date, spend, synced_at")
-      .gte("date", firstDay)
-      .lte("date", lastDay),
-    supabase
-      .from("tasks")
-      .select(
-        "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
-      ),
-    supabase
-      .from("sprint_planned_allocations")
-      .select("client_id, sprint_id, date, planned_amount")
-      .gte("date", firstDay)
-      .lte("date", lastDay),
-    supabase
-      .from("monthly_budget_changes")
-      .select("client_id, new_amount, changed_at")
-      .eq("month", firstDay),
+    requireQuery(
+      supabase
+        .from("sprints")
+        .select("id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
+        .lte("start_date", lastDay)
+        .gte("end_date", firstDay),
+      "sprints",
+    ),
+    requireQuery(
+      supabase
+        .from("daily_spend")
+        .select("client_id, date, spend, synced_at")
+        .gte("date", firstDay)
+        .lte("date", lastDay),
+      "daily_spend",
+    ),
+    requireQuery(
+      supabase
+        .from("tasks")
+        .select(
+          "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
+        ),
+      "tasks",
+    ),
+    requireQuery(
+      supabase
+        .from("sprint_planned_allocations")
+        .select("client_id, sprint_id, date, planned_amount")
+        .gte("date", firstDay)
+        .lte("date", lastDay),
+      "sprint_planned_allocations",
+    ),
+    requireQuery(
+      supabase.from("monthly_budget_changes").select("client_id, new_amount, changed_at").eq("month", firstDay),
+      "monthly_budget_changes",
+    ),
   ]);
 
-  const clientIds = (clients ?? []).map((c) => c.id);
-  const currentSprintIds = (sprints ?? [])
+  const clientIds = clients.map((c) => c.id);
+  const currentSprintIds = sprints
     .filter((s) => isDateWithinPeriod(todayStr, s.start_date, s.end_date))
     .map((s) => s.id);
 
-  const [{ data: clientActivity }, { data: sprintActivity }, { data: lastReviews }] = await Promise.all([
+  const [clientActivity, sprintActivity, lastReviews] = await Promise.all([
     clientIds.length > 0
-      ? supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds)
-      : Promise.resolve({ data: [] }),
+      ? requireQuery(
+          supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds),
+          "client_last_operational_activity",
+        )
+      : Promise.resolve([]),
     currentSprintIds.length > 0
-      ? supabase.from("sprint_last_operational_activity").select("sprint_id, last_activity_at").in("sprint_id", currentSprintIds)
-      : Promise.resolve({ data: [] }),
+      ? requireQuery(
+          supabase
+            .from("sprint_last_operational_activity")
+            .select("sprint_id, last_activity_at")
+            .in("sprint_id", currentSprintIds),
+          "sprint_last_operational_activity",
+        )
+      : Promise.resolve([]),
     // Etapa 74 — última otimização (account_reviews) por cliente, alimenta
     // o alerta "Nenhuma otimização registrada recentemente" por baixo de
     // buildOperationClientCard (accountHealth não é exibido nesta tela, mas
     // é calculado — precisa do dado real, nunca de um valor fictício).
     clientIds.length > 0
-      ? supabase.from("account_reviews").select("client_id, reviewed_at").in("client_id", clientIds).order("reviewed_at", { ascending: false })
-      : Promise.resolve({ data: [] }),
+      ? requireQuery(
+          supabase
+            .from("account_reviews")
+            .select("client_id, reviewed_at")
+            .in("client_id", clientIds)
+            .order("reviewed_at", { ascending: false }),
+          "account_reviews",
+        )
+      : Promise.resolve([]),
   ]);
   const lastReviewAtByClient = new Map<string, string>();
-  for (const row of lastReviews ?? []) {
+  for (const row of lastReviews) {
     if (!lastReviewAtByClient.has(row.client_id)) lastReviewAtByClient.set(row.client_id, row.reviewed_at);
   }
 

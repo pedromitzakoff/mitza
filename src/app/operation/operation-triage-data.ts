@@ -1,4 +1,5 @@
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { requireQuery } from "@/lib/require-query";
 import { todayUTC } from "@/lib/today";
 import { businessDaysSince } from "@/lib/business-days";
 import { effectiveTaskStatus } from "@/lib/task-status";
@@ -28,43 +29,54 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
   const monthStart = monthParam;
   const monthEnd = `${monthParam.slice(0, 7)}-31`;
 
-  const [
-    { data: clients },
-    { data: dailySpendRows },
-    { data: latestReviews },
-    { data: performanceRows },
-    { data: openTasks },
-    { data: lastActivityRows },
-  ] = await Promise.all([
-    supabase
-      .from("clients")
-      .select(
-        "id, name, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(name)",
-      )
-      .is("deleted_at", null)
-      .order("name"),
-    supabase
-      .from("daily_spend")
-      .select("client_id, date, spend")
-      .gte("date", previous.start)
-      .lte("date", current.end),
-    supabase.from("account_reviews").select("client_id, reviewed_at").order("reviewed_at", { ascending: false }),
-    supabase
-      .from("performance_records")
-      .select("client_id, result_type, result_count, period_start, period_end")
-      .lte("period_start", monthEnd)
-      .gte("period_end", monthStart),
-    supabase
-      .from("tasks")
-      .select("client_id, status, due_date")
-      .in("status", ["pendente", "atrasado"]),
-    supabase.from("client_last_operational_activity").select("client_id, last_activity_at"),
+  const [clients, dailySpendRows, latestReviews, performanceRows, openTasks, lastActivityRows] = await Promise.all([
+    requireQuery(
+      supabase
+        .from("clients")
+        .select(
+          "id, name, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(name)",
+        )
+        .is("deleted_at", null)
+        .order("name"),
+      "clients",
+    ),
+    requireQuery(
+      supabase
+        .from("daily_spend")
+        .select("client_id, date, spend")
+        .gte("date", previous.start)
+        .lte("date", current.end),
+      "daily_spend",
+    ),
+    requireQuery(
+      supabase.from("account_reviews").select("client_id, reviewed_at").order("reviewed_at", { ascending: false }),
+      "account_reviews",
+    ),
+    requireQuery(
+      supabase
+        .from("performance_records")
+        .select("client_id, result_type, result_count, period_start, period_end")
+        .lte("period_start", monthEnd)
+        .gte("period_end", monthStart),
+      "performance_records",
+    ),
+    requireQuery(
+      supabase
+        .from("tasks")
+        .select("client_id, status, due_date")
+        .in("status", ["pendente", "atrasado"]),
+      "tasks",
+    ),
+    requireQuery(
+      supabase.from("client_last_operational_activity").select("client_id, last_activity_at"),
+      "client_last_operational_activity",
+    ),
   ]);
 
   const monthSpendByClient = new Map<string, number>();
   const currentPeriodSpendByClient = new Map<string, number>();
   const previousPeriodSpendByClient = new Map<string, number>();
-  for (const row of dailySpendRows ?? []) {
+  for (const row of dailySpendRows) {
     if (row.date >= monthStart && row.date <= monthEnd) {
       monthSpendByClient.set(row.client_id, (monthSpendByClient.get(row.client_id) ?? 0) + row.spend);
     }

@@ -11,6 +11,7 @@ import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operation
 import { todayDateString } from "@/lib/today";
 import { withOriginalDueDate } from "@/lib/task-creation";
 import { toUserFacingError } from "@/lib/user-facing-error";
+import { queryOrError } from "@/lib/require-query";
 import type { TaskRecurrence, TaskType } from "@/lib/supabase/database.types";
 
 function resolveReturnTo(formData: FormData, fallback: string): string {
@@ -205,12 +206,28 @@ async function performUpdateTask(
   // Lê o estado anterior ANTES de sobrescrever — necessário pra detectar
   // reatribuição/alteração de prazo, preservar original_due_date e (achado
   // desta etapa) preservar due_time/recurrence quando o formulário que
-  // chamou não os conhece.
-  const { data: previous } = await supabase
-    .from("tasks")
-    .select("assignee_id, due_date, due_time, recurrence, sprint_id, reassignment_count, due_date_change_count")
-    .eq("id", taskId)
-    .single();
+  // chamou não os conhece. Erro aqui não pode virar "sem estado anterior"
+  // silencioso — isso gravaria reassignment_count/due_date_change_count
+  // errados.
+  const previousResult = await queryOrError<{
+    assignee_id: string | null;
+    due_date: string;
+    due_time: string | null;
+    recurrence: TaskRecurrence;
+    sprint_id: string | null;
+    reassignment_count: number;
+    due_date_change_count: number;
+  }>(
+    supabase
+      .from("tasks")
+      .select("assignee_id, due_date, due_time, recurrence, sprint_id, reassignment_count, due_date_change_count")
+      .eq("id", taskId)
+      .single(),
+    "tasks:previous-state",
+    "Não foi possível carregar o estado atual da tarefa.",
+  );
+  if ("error" in previousResult) return { error: previousResult.error };
+  const previous = previousResult.data;
 
   const wasAlreadyOverdue = previous ? previous.due_date < todayDateString() : false;
   const isReassignment = previous ? fields.assigneeId !== previous.assignee_id : false;
@@ -494,11 +511,22 @@ export async function deleteTaskAction(
   const profile = await requireAdmin();
   const supabase = await createSupabaseClient();
 
-  const { data: task } = await supabase
-    .from("tasks")
-    .select("title, type, due_date, assignee_id, sprint_id")
-    .eq("id", taskId)
-    .single();
+  // Só alimenta a metadata do evento de auditoria abaixo — uma falha aqui
+  // não deveria impedir a exclusão de verdade (que já é checada abaixo),
+  // mas também não pode ficar muda: `queryOrError` já loga o erro real,
+  // caindo pra `null` só na metadata (mesmo padrão defensivo de sempre).
+  const taskResult = await queryOrError<{
+    title: string;
+    type: TaskType;
+    due_date: string;
+    assignee_id: string | null;
+    sprint_id: string | null;
+  }>(
+    supabase.from("tasks").select("title, type, due_date, assignee_id, sprint_id").eq("id", taskId).single(),
+    "tasks:pre-delete-audit",
+    "Não foi possível carregar os dados da tarefa para o registro de auditoria.",
+  );
+  const task = "data" in taskResult ? taskResult.data : null;
 
   const { error } = await supabase.from("tasks").delete().eq("id", taskId);
 

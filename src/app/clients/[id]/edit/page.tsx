@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { requireQuery } from "@/lib/require-query";
 import { deleteClientAction, updateClientAction } from "../../actions";
 import { ClientForm } from "../../client-form";
 import { DeleteClientButton } from "../../delete-client-button";
@@ -23,18 +24,31 @@ export default async function EditClientPage({
   const returnTo = return_to && return_to.startsWith("/") ? return_to : `/clients/${id}`;
 
   const supabase = await createSupabaseClient();
-  const [{ data: client }, { data: allManagers }, { data: assigned }, { data: kpis }, { data: cadence }] =
-    await Promise.all([
-      supabase.from("clients").select("*").eq("id", id).is("deleted_at", null).single(),
-      supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
+  const [{ data: client }, allManagers, assigned, kpis, cadence] = await Promise.all([
+    // `.single()` já conflita "cliente não encontrado" (RLS filtrou, ou id
+    // inexistente) com "consulta falhou" — mesmo assim, distinção
+    // deliberada e pré-existente (não é o bug de ignorar erro): aqui não
+    // trocamos por `requireQuery`, senão um 404 legítimo viraria uma tela
+    // de erro genérica.
+    supabase.from("clients").select("*").eq("id", id).is("deleted_at", null).single(),
+    requireQuery(supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"), "team_members"),
+    requireQuery(
       supabase.from("client_managers").select("user_id, team_members(id, name)").eq("client_id", id),
+      "client_managers",
+    ),
+    requireQuery(
       supabase.from("client_kpi_definitions").select("*").eq("client_id", id).order("display_order"),
+      "client_kpi_definitions",
+    ),
+    requireQuery<{ reviews_per_week: number; max_business_days_without_review: number; is_active: boolean } | null>(
       supabase
         .from("account_review_cadences")
         .select("reviews_per_week, max_business_days_without_review, is_active")
         .eq("client_id", id)
         .maybeSingle(),
-    ]);
+      "account_review_cadences",
+    ),
+  ]);
 
   if (!client) notFound();
 

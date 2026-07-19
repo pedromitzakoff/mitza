@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import { OperationalEventType } from "@/lib/operational-events";
 import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
 import { toUserFacingError } from "@/lib/user-facing-error";
+import { queryOrError } from "@/lib/require-query";
 import { computeInsertPosition, needsNormalization, buildNormalizedPositions } from "@/lib/agency-wallet-position";
 import type { TaskStatus } from "@/lib/supabase/database.types";
 
@@ -45,7 +46,9 @@ export type ClientTransferMode = "account_only" | "account_and_open_tasks";
  * Resolve as posições REAIS dos vizinhos informados (nunca confia num
  * número calculado no navegador) e devolve a posição de inserção — com
  * normalização de segurança da pasta de destino quando o espaço entre os
- * vizinhos já ficou pequeno demais.
+ * vizinhos já ficou pequeno demais. Erro de leitura aqui não pode virar
+ * "pasta vazia" silencioso — resolveria a posição errada e persistiria
+ * uma reordenação incorreta.
  */
 async function resolveInsertPosition(
   supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
@@ -53,18 +56,24 @@ async function resolveInsertPosition(
   targetManagerId: string | null,
   previousSiblingId: string | null,
   nextSiblingId: string | null,
-): Promise<number> {
+): Promise<{ position: number } | { error: string }> {
   const siblingIds = [previousSiblingId, nextSiblingId].filter((id): id is string => id !== null);
-  const { data: siblingRows } =
+  const siblingRowsResult =
     siblingIds.length > 0
-      ? await supabase.from("clients").select("id, wallet_position").in("id", siblingIds)
+      ? await queryOrError(
+          supabase.from("clients").select("id, wallet_position").in("id", siblingIds),
+          "clients:wallet-siblings",
+          "Não foi possível verificar a posição dos clientes vizinhos.",
+        )
       : { data: [] as { id: string; wallet_position: number | null }[] };
-  const positionById = new Map((siblingRows ?? []).map((row) => [row.id, row.wallet_position]));
+  if ("error" in siblingRowsResult) return { error: siblingRowsResult.error };
+
+  const positionById = new Map(siblingRowsResult.data.map((row) => [row.id, row.wallet_position]));
   const prevPosition = previousSiblingId ? (positionById.get(previousSiblingId) ?? null) : null;
   const nextPosition = nextSiblingId ? (positionById.get(nextSiblingId) ?? null) : null;
 
   if (!needsNormalization(prevPosition, nextPosition)) {
-    return computeInsertPosition(prevPosition, nextPosition);
+    return { position: computeInsertPosition(prevPosition, nextPosition) };
   }
 
   // Mecanismo de segurança — não acontece a cada drag, só quando muitas
@@ -74,9 +83,14 @@ async function resolveInsertPosition(
   const folderQuery = targetManagerId
     ? supabase.from("clients").select("id").eq("primary_manager_id", targetManagerId)
     : supabase.from("clients").select("id").is("primary_manager_id", null);
-  const { data: folderClients } = await folderQuery.order("wallet_position", { ascending: true, nullsFirst: false });
+  const folderClientsResult = await queryOrError(
+    folderQuery.order("wallet_position", { ascending: true, nullsFirst: false }),
+    "clients:wallet-folder",
+    "Não foi possível reorganizar a pasta de destino.",
+  );
+  if ("error" in folderClientsResult) return { error: folderClientsResult.error };
 
-  const orderedIds = (folderClients ?? []).map((c) => c.id).filter((id) => id !== clientId);
+  const orderedIds = folderClientsResult.data.map((c) => c.id).filter((id) => id !== clientId);
   const insertIndex = previousSiblingId ? orderedIds.indexOf(previousSiblingId) + 1 : 0;
   orderedIds.splice(Math.max(insertIndex, 0), 0, clientId);
 
@@ -89,7 +103,7 @@ async function resolveInsertPosition(
     }
     await supabase.from("clients").update({ wallet_position: normalized[i] }).eq("id", orderedIds[i]);
   }
-  return resolvedPosition;
+  return { position: resolvedPosition };
 }
 
 /**
@@ -127,11 +141,12 @@ export async function moveClientAction(
   const profile = await requireAdmin();
   const supabase = await createSupabaseClient();
 
-  const newPosition = await resolveInsertPosition(supabase, clientId, newManagerId, previousSiblingId, nextSiblingId);
+  const positionResult = await resolveInsertPosition(supabase, clientId, newManagerId, previousSiblingId, nextSiblingId);
+  if ("error" in positionResult) return { error: positionResult.error };
 
   const { error } = await supabase
     .from("clients")
-    .update({ primary_manager_id: newManagerId, wallet_position: newPosition })
+    .update({ primary_manager_id: newManagerId, wallet_position: positionResult.position })
     .eq("id", clientId);
 
   if (error) {
@@ -161,14 +176,28 @@ export async function moveClientAction(
   });
 
   if (mode === "account_and_open_tasks" && previousManagerId) {
-    const { data: openTasks } = await supabase
-      .from("tasks")
-      .select("id, sprint_id, reassignment_count")
-      .eq("client_id", clientId)
-      .eq("assignee_id", previousManagerId)
-      .in("status", OPEN_TASK_STATUSES);
+    const openTasksResult = await queryOrError(
+      supabase
+        .from("tasks")
+        .select("id, sprint_id, reassignment_count")
+        .eq("client_id", clientId)
+        .eq("assignee_id", previousManagerId)
+        .in("status", OPEN_TASK_STATUSES),
+      "tasks:reassign-open",
+      "O cliente foi movido, mas não foi possível reatribuir as atividades abertas.",
+    );
+    if ("error" in openTasksResult) {
+      // A troca de responsável já foi commitada — revalida antes de
+      // devolver o erro, senão a árvore ficaria mostrando o estado antigo
+      // enquanto o banco já reflete a mudança.
+      revalidatePath("/", "layout");
+      revalidatePath("/clients");
+      revalidatePath(`/clients/${clientId}`);
+      revalidatePath("/sprints");
+      return { error: openTasksResult.error };
+    }
 
-    for (const task of openTasks ?? []) {
+    for (const task of openTasksResult.data) {
       const { error: taskError } = await supabase
         .from("tasks")
         .update({ assignee_id: newManagerId, reassignment_count: (task.reassignment_count ?? 0) + 1 })

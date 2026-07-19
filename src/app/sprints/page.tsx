@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { perfNow, perfLog } from "@/lib/perf-log";
 import { EmptyState } from "@/components/ui/empty-state";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { requireQuery } from "@/lib/require-query";
 import { todayUTC, todayDateString } from "@/lib/today";
 import {
   currentMonthRange,
@@ -132,65 +133,75 @@ export default async function SprintsPage({
   const supabase = await createSupabaseClient();
 
   const __perfBlock1Start = perfNow();
-  const [
-    { data: clients },
-    { data: gestores },
-    { data: sprints },
-    { data: dailySpend },
-    { data: tasks },
-    { data: plannedAllocations },
-    { data: budgetChanges },
-  ] = await Promise.all([
-    supabase
-      .from("clients")
-      .select(
-        "id, name, meta_ad_account_id, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
-      )
-      .is("deleted_at", null)
-      .order("name"),
-    supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"),
+  const [clients, gestores, sprints, dailySpend, tasks, plannedAllocations, budgetChanges] = await Promise.all([
+    requireQuery(
+      supabase
+        .from("clients")
+        .select(
+          "id, name, meta_ad_account_id, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
+        )
+        .is("deleted_at", null)
+        .order("name"),
+      "clients",
+    ),
+    requireQuery(supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"), "team_members"),
     // Sobreposição com a janela (não "começa na janela") — sprint que
     // atravessa mês precisa ser encontrada mesmo com start_date fora dela.
-    supabase
-      .from("sprints")
-      .select(
-        "id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, original_planned_amount, final_recommended_amount, final_actual_amount, snapshot_frozen_at",
-      )
-      .lte("start_date", rangeEnd)
-      .gte("end_date", rangeStart),
-    supabase
-      .from("daily_spend")
-      .select("client_id, date, spend, synced_at")
-      .gte("date", rangeStart)
-      .lte("date", rangeEnd),
-    supabase
-      .from("tasks")
-      .select(
-        "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
-      ),
-    supabase
-      .from("sprint_planned_allocations")
-      .select("client_id, sprint_id, date, planned_amount")
-      .gte("date", rangeStart)
-      .lte("date", rangeEnd),
+    requireQuery(
+      supabase
+        .from("sprints")
+        .select(
+          "id, client_id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, original_planned_amount, final_recommended_amount, final_actual_amount, snapshot_frozen_at",
+        )
+        .lte("start_date", rangeEnd)
+        .gte("end_date", rangeStart),
+      "sprints",
+    ),
+    requireQuery(
+      supabase
+        .from("daily_spend")
+        .select("client_id, date, spend, synced_at")
+        .gte("date", rangeStart)
+        .lte("date", rangeEnd),
+      "daily_spend",
+    ),
+    requireQuery(
+      supabase
+        .from("tasks")
+        .select(
+          "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
+        ),
+      "tasks",
+    ),
+    requireQuery(
+      supabase
+        .from("sprint_planned_allocations")
+        .select("client_id, sprint_id, date, planned_amount")
+        .gte("date", rangeStart)
+        .lte("date", rangeEnd),
+      "sprint_planned_allocations",
+    ),
     // Orçamento vigente (Etapa 66) — só do mês SELECIONADO (`monthRange`),
     // não da janela união com o mês corrente.
-    supabase
-      .from("monthly_budget_changes")
-      .select("client_id, new_amount, changed_at")
-      .eq("month", monthRange.firstDay),
+    requireQuery(
+      supabase
+        .from("monthly_budget_changes")
+        .select("client_id, new_amount, changed_at")
+        .eq("month", monthRange.firstDay),
+      "monthly_budget_changes",
+    ),
   ]);
   perfLog("sprints bloco 1 (clients/team_members/sprints/daily_spend/tasks/allocations/budget)", __perfBlock1Start);
 
-  const clientIds = (clients ?? []).map((c) => c.id);
-  const allSprintIds = (sprints ?? []).map((s) => s.id);
-  const currentSprintIds = (sprints ?? [])
+  const clientIds = clients.map((c) => c.id);
+  const allSprintIds = sprints.map((s) => s.id);
+  const currentSprintIds = sprints
     .filter((s) => isDateWithinPeriod(todayStr, s.start_date, s.end_date))
     .map((s) => s.id);
   // Etapa 71: só as sprints que de fato pertencem ao mês SELECIONADO (não a
   // janela união com o mês corrente) — igual à Visão Geral, pra nunca somar
   // no consolidado mensal um resultado de uma sprint de outro mês.
-  const monthSprintIdsForPerformance = (sprints ?? [])
+  const monthSprintIdsForPerformance = sprints
     .filter((s) => s.start_date <= monthRange.lastDay && s.end_date >= monthRange.firstDay)
     .map((s) => s.id);
 
@@ -198,90 +209,116 @@ export default async function SprintsPage({
   // (não por card) — pra o mesmo SprintCard da página do cliente também
   // mostrar comentários aqui, sem virar N+1.
   const __perfBlock2Start = perfNow();
-  const [{ data: clientActivity }, { data: sprintActivity }, { data: sprintComments }, { data: performanceRecords }] =
-    await Promise.all([
-      clientIds.length > 0
-        ? supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds)
-        : Promise.resolve({ data: [] }),
-      currentSprintIds.length > 0
-        ? supabase.from("sprint_last_operational_activity").select("sprint_id, last_activity_at").in("sprint_id", currentSprintIds)
-        : Promise.resolve({ data: [] }),
-      allSprintIds.length > 0
-        ? supabase
+  const [clientActivity, sprintActivity, sprintComments, performanceRecords] = await Promise.all([
+    clientIds.length > 0
+      ? requireQuery(
+          supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds),
+          "client_last_operational_activity",
+        )
+      : Promise.resolve([]),
+    currentSprintIds.length > 0
+      ? requireQuery(
+          supabase
+            .from("sprint_last_operational_activity")
+            .select("sprint_id, last_activity_at")
+            .in("sprint_id", currentSprintIds),
+          "sprint_last_operational_activity",
+        )
+      : Promise.resolve([]),
+    allSprintIds.length > 0
+      ? requireQuery(
+          supabase
             .from("comments")
             .select("id, commentable_id, content, created_at, author:team_members!comments_author_id_fkey(name)")
             .eq("commentable_type", "sprint")
             .in("commentable_id", allSprintIds)
-            .order("created_at")
-        : Promise.resolve({ data: [] }),
-      monthSprintIdsForPerformance.length > 0
-        ? supabase
+            .order("created_at"),
+          "comments",
+        )
+      : Promise.resolve([]),
+    monthSprintIdsForPerformance.length > 0
+      ? requireQuery(
+          supabase
             .from("performance_records")
             .select("client_id, sprint_id, channel, result_type, result_count, source, source_updated_at")
-            .in("sprint_id", monthSprintIdsForPerformance)
-        : Promise.resolve({ data: [] }),
-    ]);
+            .in("sprint_id", monthSprintIdsForPerformance),
+          "performance_records",
+        )
+      : Promise.resolve([]),
+  ]);
   perfLog("sprints bloco 2 (atividade/comentários/performance)", __perfBlock2Start);
 
   // Navigation Performance & Perceived Speed 1.0: lastReviews, sprintReviewRows
   // e reportSelections não dependem umas das outras — só de clientIds/
   // allSprintIds/allCommentIds, já disponíveis desde os blocos anteriores —
   // então rodam num único Promise.all em vez de 3 round-trips sequenciais.
-  const allCommentIds = (sprintComments ?? []).map((c) => c.id);
+  const allCommentIds = sprintComments.map((c) => c.id);
 
   const __perfBlock3Start = perfNow();
-  const [{ data: lastReviews }, { data: sprintReviewRows }, { data: reportSelections }] = await Promise.all([
+  const [lastReviews, sprintReviewRows, reportSelections] = await Promise.all([
     // Etapa 74 — "Última otimização"/filtro "optimization": sempre o dado
     // GLOBAL mais recente por cliente (independe do mês selecionado), por
     // isso uma busca própria sem filtro de data — mesma fonte usada na Visão
     // Geral e no Acompanhamento da Conta (account_reviews.reviewed_at).
     clientIds.length > 0
-      ? supabase
-          .from("account_reviews")
-          .select("client_id, reviewed_at")
-          .in("client_id", clientIds)
-          .order("reviewed_at", { ascending: false })
-      : Promise.resolve({ data: [] }),
+      ? requireQuery(
+          supabase
+            .from("account_reviews")
+            .select("client_id, reviewed_at")
+            .in("client_id", clientIds)
+            .order("reviewed_at", { ascending: false }),
+          "account_reviews:last-reviews",
+        )
+      : Promise.resolve([]),
     // Sprint UX 2.0 — "Otimizações" (account_reviews) direto na tela Sprints,
     // igual à página do cliente: mesma query rica (Etapa 57), só filtrada
     // pelas sprints já visíveis nesta tela (allSprintIds) em vez de por
     // cliente, pra cobrir as 3 visões com uma única busca.
     allSprintIds.length > 0
-      ? supabase
-          .from("account_reviews")
-          .select(
-            "id, client_id, sprint_id, reviewed_at, reason, reason_other_description, outcome, notes, issue_description, issue_category, seconds_since_previous_review, team_member:team_members!account_reviews_team_member_id_fkey(name), optimizations:account_optimizations(id, optimization_type, optimization_action, description, reason, expected_impact), issue_task:tasks!account_reviews_issue_task_id_fkey(title)",
-          )
-          .in("sprint_id", allSprintIds)
-          .order("reviewed_at", { ascending: false })
-      : Promise.resolve({ data: [] }),
+      ? requireQuery(
+          supabase
+            .from("account_reviews")
+            .select(
+              "id, client_id, sprint_id, reviewed_at, reason, reason_other_description, outcome, notes, issue_description, issue_category, seconds_since_previous_review, team_member:team_members!account_reviews_team_member_id_fkey(name), optimizations:account_optimizations(id, optimization_type, optimization_action, description, reason, expected_impact), issue_task:tasks!account_reviews_issue_task_id_fkey(title)",
+            )
+            .in("sprint_id", allSprintIds)
+            .order("reviewed_at", { ascending: false }),
+          "account_reviews:sprint-reviews",
+        )
+      : Promise.resolve([]),
     allCommentIds.length > 0
-      ? supabase.from("report_comment_selections").select("comment_id").in("comment_id", allCommentIds)
-      : Promise.resolve({ data: [] }),
+      ? requireQuery(
+          supabase.from("report_comment_selections").select("comment_id").in("comment_id", allCommentIds),
+          "report_comment_selections",
+        )
+      : Promise.resolve([]),
   ]);
   perfLog("sprints bloco 3 fundido (lastReviews/sprintReviewRows/reportSelections, antes eram 3 round-trips sequenciais)", __perfBlock3Start);
 
   const lastReviewAtByClient = new Map<string, string>();
-  for (const row of lastReviews ?? []) {
+  for (const row of lastReviews) {
     if (!lastReviewAtByClient.has(row.client_id)) lastReviewAtByClient.set(row.client_id, row.reviewed_at);
   }
 
   // reviewClientUpdateRows depende de reviewIds (resultado de sprintReviewRows
   // acima) — continua sequencial, não dá pra paralelizar com o bloco anterior.
-  const reviewIds = (sprintReviewRows ?? []).map((r) => r.id);
-  const { data: reviewClientUpdateRows } =
+  const reviewIds = sprintReviewRows.map((r) => r.id);
+  const reviewClientUpdateRows =
     reviewIds.length > 0
-      ? await supabase
-          .from("client_updates")
-          .select(
-            "id, account_review_id, content, copied_at, sent_at, sent_by_profile:team_members!client_updates_sent_by_fkey(name)",
-          )
-          .in("account_review_id", reviewIds)
-      : { data: [] };
-  const clientUpdatesByReviewId = new Map((reviewClientUpdateRows ?? []).map((row) => [row.account_review_id, row]));
+      ? await requireQuery(
+          supabase
+            .from("client_updates")
+            .select(
+              "id, account_review_id, content, copied_at, sent_at, sent_by_profile:team_members!client_updates_sent_by_fkey(name)",
+            )
+            .in("account_review_id", reviewIds),
+          "client_updates",
+        )
+      : [];
+  const clientUpdatesByReviewId = new Map(reviewClientUpdateRows.map((row) => [row.account_review_id, row]));
 
   const accountReviewsBySprintId = new Map<string, AccountReviewSummaryItem[]>();
-  for (const review of sprintReviewRows ?? []) {
+  for (const review of sprintReviewRows) {
     const update = clientUpdatesByReviewId.get(review.id) ?? null;
     const list = accountReviewsBySprintId.get(review.sprint_id) ?? [];
     list.push({

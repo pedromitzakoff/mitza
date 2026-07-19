@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { requireQuery } from "@/lib/require-query";
 import { todayDateString } from "@/lib/today";
 import { TeamTable, type TeamTableRow } from "./team-table";
 import { EditTeamMemberDrawer, NewTeamMemberDrawer } from "./team-member-drawer";
@@ -33,30 +34,33 @@ export default async function TeamPage({
   const isAdmin = profile.role === "admin";
   const supabase = await createSupabaseClient();
 
-  const [{ data: members }, { data: clients }, { data: clientManagers }, { data: tasks }] = await Promise.all([
-    supabase
-      .from("team_members")
-      .select(
-        "id, name, email, job_title, system_role, status, invitation_status, auth_user_id, invited_at, organization_id",
-      )
-      .eq("organization_id", profile.organizationId)
-      .order("name"),
-    supabase.from("clients").select("id, primary_manager_id").is("deleted_at", null),
-    supabase.from("client_managers").select("client_id, user_id"),
-    supabase.from("tasks").select("assignee_id, status, type, due_date"),
+  const [members, clients, clientManagers, tasks] = await Promise.all([
+    requireQuery(
+      supabase
+        .from("team_members")
+        .select(
+          "id, name, email, job_title, system_role, status, invitation_status, auth_user_id, invited_at, organization_id",
+        )
+        .eq("organization_id", profile.organizationId)
+        .order("name"),
+      "team_members",
+    ),
+    requireQuery(supabase.from("clients").select("id, primary_manager_id").is("deleted_at", null), "clients"),
+    requireQuery(supabase.from("client_managers").select("client_id, user_id"), "client_managers"),
+    requireQuery(supabase.from("tasks").select("assignee_id, status, type, due_date"), "tasks"),
   ]);
 
-  const rows = members ?? [];
+  const rows = members;
   const today = todayDateString();
 
   const clientsByMember = new Map<string, Set<string>>();
-  for (const client of clients ?? []) {
+  for (const client of clients) {
     if (!client.primary_manager_id) continue;
     const set = clientsByMember.get(client.primary_manager_id) ?? new Set<string>();
     set.add(client.id);
     clientsByMember.set(client.primary_manager_id, set);
   }
-  for (const cm of clientManagers ?? []) {
+  for (const cm of clientManagers) {
     const set = clientsByMember.get(cm.user_id) ?? new Set<string>();
     set.add(cm.client_id);
     clientsByMember.set(cm.user_id, set);
@@ -64,7 +68,7 @@ export default async function TeamPage({
 
   const pendingTasksByMember = new Map<string, number>();
   const futureMeetingsByMember = new Map<string, number>();
-  for (const task of tasks ?? []) {
+  for (const task of tasks) {
     if (!task.assignee_id) continue;
     if (task.status === "pendente") {
       pendingTasksByMember.set(task.assignee_id, (pendingTasksByMember.get(task.assignee_id) ?? 0) + 1);
