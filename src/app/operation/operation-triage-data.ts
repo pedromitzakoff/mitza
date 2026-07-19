@@ -9,49 +9,32 @@ import {
   resolveMonthlyPlanSnapshot,
   type MonthlyPlanChange,
 } from "@/lib/monthly-budget";
-import { evaluateAccountHealth, collectAccountHealthReasons, type AccountHealthInput, type HealthStatus } from "@/lib/account-health-engine";
+import { evaluateAccountHealth, type AccountHealthInput } from "@/lib/account-health-engine";
 import { DEFAULT_REVIEW_MAX_BUSINESS_DAYS } from "@/lib/operation-health-thresholds";
-import {
-  computeComparableSpendRanges,
-  monthRangeFromOperationParam,
-  sortOperationTriageClients,
-  type OperationTriageBand,
-  type OperationTriageClient,
-} from "@/lib/operation-triage";
+import { monthRangeFromOperationParam, sortOperationClientCards, type OperationClientCard } from "@/lib/operation-triage";
 
 /**
- * Pipeline de dados PRÓPRIO da Operação (seção 5 do pedido) — nenhuma
- * query aqui é compartilhada com `app/operation/operation-data.ts` (motor
- * da Sprint, usado por Visão Geral/Clientes/Relatórios) nem com
- * `app/sprints/`. Se este arquivo mudar, nada fora da Operação é afetado;
- * se a Sprint for removida (Etapa 5), nada aqui quebra.
+ * Pipeline de dados PRÓPRIO da Operação — nenhuma query aqui é
+ * compartilhada com `app/operation/operation-data.ts` (motor da Sprint,
+ * usado por Visão Geral/Clientes/Relatórios) nem com `app/sprints/`. Se
+ * este arquivo mudar, nada fora da Operação é afetado; se a Sprint for
+ * removida, nada aqui quebra.
  *
- * Etapa "Motor de Saúde da Conta" — PR 1 (só o motor, sem mudança visual):
- * resolve tudo (planejamento mensal, realizado, cadência de revisão) e
- * delega a classificação inteira pra `evaluateAccountHealth`
- * (`lib/account-health-engine.ts`); este arquivo nunca decide severidade
- * sozinho. O resultado é então mapeado de volta pro formato de
- * COMPATIBILIDADE `OperationTriageClient` — `operation-triage-view.tsx`
- * continua consumindo exatamente o mesmo formato de antes, sem nenhuma
- * mudança de interface nesta etapa (o redesenho visual troca a tela pra
- * consumir `AccountHealthEvaluation` diretamente, na próxima etapa).
+ * Etapa "Redesenho da Operação" (PR 2): resolve tudo (planejamento
+ * mensal, realizado, cadência de revisão) e delega a classificação
+ * inteira pra `evaluateAccountHealth` (`lib/account-health-engine.ts`);
+ * este arquivo nunca decide severidade sozinho. Diferente do PR 1, o
+ * `AccountHealthEvaluation` inteiro segue pra frente (`OperationClientCard.
+ * evaluation`) — a tela consome a estrutura completa (dimensões, motivo
+ * principal, dimensão principal) pra montar os termômetros e os filtros,
+ * nunca reimplementando nada que o motor já decidiu.
  */
 
-const HEALTH_STATUS_TO_BAND: Record<HealthStatus, OperationTriageBand> = {
-  // Rótulo "Precisa de atenção" mantido nesta etapa (renomear pra "Ação
-  // necessária" é mudança de interface — fica pro redesenho visual).
-  acao_necessaria: "precisa_atencao",
-  em_risco: "em_risco",
-  em_acompanhamento: "em_acompanhamento",
-  saudavel: "saudavel",
-};
-
-export async function loadOperationTriageClients(monthParam: string): Promise<OperationTriageClient[]> {
+export async function loadOperationTriageClients(monthParam: string): Promise<OperationClientCard[]> {
   const supabase = await createSupabaseClient();
   const today = todayUTC();
   const todayStr = todayDateString();
 
-  const { current, previous } = computeComparableSpendRanges(monthParam, today);
   const monthRange = monthRangeFromOperationParam(monthParam);
   const { firstDay: monthStart, lastDay: monthEnd } = monthRange;
   const monthExpectedPct = computeMonthlyExpectedPct(monthRange, todayStr);
@@ -71,9 +54,9 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
       requireQuery(
         supabase
           .from("daily_spend")
-          .select("client_id, date, spend")
-          .gte("date", previous.start)
-          .lte("date", current.end),
+          .select("client_id, date, spend, synced_at")
+          .gte("date", monthStart)
+          .lte("date", monthEnd),
         "daily_spend",
       ),
       requireQuery(
@@ -107,9 +90,8 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
           .lte("month", monthRange.firstDay),
         "monthly_budget_changes:plan-history",
       ),
-      // Cadência de revisão configurada por cliente (Etapa "Motor de Saúde
-      // da Conta") — substitui o limiar fixo antigo; cliente sem linha aqui
-      // usa `DEFAULT_REVIEW_MAX_BUSINESS_DAYS` como fallback.
+      // Cadência de revisão configurada por cliente — cliente sem linha
+      // aqui usa `DEFAULT_REVIEW_MAX_BUSINESS_DAYS` como fallback.
       requireQuery(
         supabase.from("account_review_cadences").select("client_id, max_business_days_without_review, is_active"),
         "account_review_cadences",
@@ -118,18 +100,13 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
 
   const monthSpendByClient = new Map<string, number>();
   const hasSyncedDataByClient = new Set<string>();
-  const currentPeriodSpendByClient = new Map<string, number>();
-  const previousPeriodSpendByClient = new Map<string, number>();
+  const lastSyncedAtByClient = new Map<string, string>();
   for (const row of dailySpendRows) {
-    if (row.date >= monthStart && row.date <= monthEnd) {
-      monthSpendByClient.set(row.client_id, (monthSpendByClient.get(row.client_id) ?? 0) + row.spend);
-      hasSyncedDataByClient.add(row.client_id);
-    }
-    if (row.date >= current.start && row.date <= current.end) {
-      currentPeriodSpendByClient.set(row.client_id, (currentPeriodSpendByClient.get(row.client_id) ?? 0) + row.spend);
-    }
-    if (row.date >= previous.start && row.date <= previous.end) {
-      previousPeriodSpendByClient.set(row.client_id, (previousPeriodSpendByClient.get(row.client_id) ?? 0) + row.spend);
+    monthSpendByClient.set(row.client_id, (monthSpendByClient.get(row.client_id) ?? 0) + row.spend);
+    hasSyncedDataByClient.add(row.client_id);
+    const previousLatest = lastSyncedAtByClient.get(row.client_id);
+    if (!previousLatest || row.synced_at > previousLatest) {
+      lastSyncedAtByClient.set(row.client_id, row.synced_at);
     }
   }
 
@@ -138,11 +115,8 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
     if (!latestReviewByClient.has(row.client_id)) latestReviewByClient.set(row.client_id, row.reviewed_at);
   }
 
-  // Corrige um bug latente do pipeline antigo: a soma de resultado nunca
-  // filtrava por `result_type`, então um cliente configurado pra "leads"
-  // que também tivesse registros de "sales" (ou vice-versa) somava os dois
-  // juntos. Cada linha só conta se bater com o `performance_goal` do
-  // próprio cliente.
+  // Cada linha de resultado só conta se bater com o `performance_goal` do
+  // próprio cliente — nunca soma leads e vendas juntos.
   const performanceGoalByClient = new Map((clients ?? []).map((client) => [client.id, client.performance_goal]));
   const resultCountByClient = new Map<string, number>();
   const hasPerformanceDataByClient = new Set<string>();
@@ -173,14 +147,9 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
 
   const reviewCadenceByClient = new Map((reviewCadences ?? []).map((row) => [row.client_id, row]));
 
-  const triageClients = (clients ?? []).map((client) => {
+  const cards: OperationClientCard[] = (clients ?? []).map((client) => {
     const managerName = client.primary_manager?.name ?? null;
     const monthSpend = monthSpendByClient.get(client.id) ?? 0;
-
-    const currentPeriodSpend = currentPeriodSpendByClient.get(client.id) ?? 0;
-    const previousPeriodSpend = previousPeriodSpendByClient.get(client.id) ?? 0;
-    const monthSpendDeltaFraction =
-      previousPeriodSpend > 0 ? (currentPeriodSpend - previousPeriodSpend) / previousPeriodSpend : null;
 
     const resultCount = resultCountByClient.get(client.id) ?? 0;
     const hasPerformanceData = hasPerformanceDataByClient.has(client.id);
@@ -217,20 +186,21 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
       reviewMaxBusinessDays,
     };
 
-    const evaluation = evaluateAccountHealth(input);
-
     return {
       clientId: client.id,
       clientName: client.name,
       managerName,
-      band: HEALTH_STATUS_TO_BAND[evaluation.healthStatus],
-      reasons: collectAccountHealthReasons(evaluation),
-      monthSpend,
-      monthSpendDeltaFraction,
-      reviewDaysAgo: reviewBusinessDaysAgo,
+      // Sem infraestrutura de avatar ainda (PR 3, exclusivo pra isso) — a
+      // Operação já consome `ClientAvatar`/`avatarUrl` no contrato, mas
+      // sempre `null` até o upload existir; nenhuma mudança no componente
+      // será necessária quando o PR 3 começar a preencher isto de verdade.
+      avatarUrl: null,
+      performanceGoal: client.performance_goal,
+      evaluation: evaluateAccountHealth(input),
       overdueTasksCount: overdueCountByClient.get(client.id) ?? 0,
+      lastDataSyncAt: lastSyncedAtByClient.get(client.id) ?? null,
     };
   });
 
-  return sortOperationTriageClients(triageClients);
+  return sortOperationClientCards(cards);
 }

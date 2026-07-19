@@ -41,9 +41,12 @@ export type DimensionSeverity = "nenhum" | "leve" | "relevante" | "grave";
 
 export type HealthStatus = "saudavel" | "em_acompanhamento" | "em_risco" | "acao_necessaria";
 
-/** Peso de comparação — nunca exposto, só usado internamente pra achar a
- * pior severidade e (em caso de empate) resolver a ordem de prioridade. */
-const SEVERITY_RANK: Record<DimensionSeverity, number> = { nenhum: 0, leve: 1, relevante: 2, grave: 3 };
+/** Peso de comparação entre severidades — exportado (Etapa "Redesenho da
+ * Operação") pra quem ordena clientes fora deste arquivo (ex.: desempate
+ * "severidade da dimensão principal" na lista da Operação) nunca duplicar
+ * este mapeamento; usado aqui pra achar a pior severidade e, em empate,
+ * resolver a ordem de prioridade. */
+export const DIMENSION_SEVERITY_RANK: Record<DimensionSeverity, number> = { nenhum: 0, leve: 1, relevante: 2, grave: 3 };
 
 const HEALTH_STATUS_BY_SEVERITY: Record<DimensionSeverity, HealthStatus> = {
   nenhum: "saudavel",
@@ -100,6 +103,13 @@ export interface InvestmentDimension {
   actual: number;
   planned: number | null;
   expected: number | null;
+  /** `false` quando não existe NENHUMA linha de `daily_spend` pro cliente
+   * neste mês (mesmo flag de `AccountHealthInput.investmentHasSyncedData`,
+   * só exposto aqui também) — distingue pra UI "Planejamento não definido"
+   * (`planned === null`) de "Sem dados de investimento" (`!hasSyncedData`):
+   * são dois estados de ausência diferentes, podem ocorrer juntos ou
+   * isolados, nenhum dos dois nunca é inferido de `actual === 0`. */
+  hasSyncedData: boolean;
 }
 
 export interface ResultDimension {
@@ -137,6 +147,12 @@ export interface ReviewDimension {
   actual: number | null;
   planned: number;
   expected: number;
+  /** `false` = cadência desativada (`account_review_cadences.is_active =
+   * false`) — a dimensão simplesmente não participa (não é saudável, não é
+   * ruim, não existe pra este cliente). `planned`/`expected` ficam em `0`
+   * só como valor de preenchimento nesse caso; a UI nunca deve lê-los sem
+   * checar `enabled` primeiro. */
+  enabled: boolean;
 }
 
 export interface DataQualityDimension {
@@ -150,6 +166,13 @@ export interface AccountHealthEvaluation {
    * arquivo pra decidir `healthStatus` (é o inverso: deriva DELE). */
   healthScore: number;
   primaryReason: string;
+  /** Chave de `dimensions` que originou `primaryReason` — `null` só quando
+   * `healthStatus === "saudavel"` (nenhuma dimensão tem motivo pra ser
+   * "principal" quando não há nenhum sinal). Exposta (Etapa "Redesenho da
+   * Operação") pra quem consome o motivo estruturado (filtro por dimensão,
+   * desempate de ordenação) nunca precisar dar parse no texto de
+   * `primaryReason`. */
+  primaryDimension: keyof AccountHealthEvaluation["dimensions"] | null;
   dimensions: {
     investment: InvestmentDimension;
     results: ResultDimension;
@@ -158,6 +181,24 @@ export interface AccountHealthEvaluation {
     dataQuality: DataQualityDimension;
   };
 }
+
+/**
+ * Ordem de prioridade em caso de empate de severidade entre dimensões
+ * (aprovada): qualidade dos dados > custo > resultado > investimento >
+ * revisão — "sem dados confiáveis não existe operação", depois eficiência,
+ * depois volume, depois orçamento, depois rotina. Fonte única — tanto
+ * `evaluateAccountHealth` (decide `primaryReason`/`primaryDimension`) quanto
+ * `collectAccountHealthReasons` (lista completa) quanto quem ordena a fila
+ * da Operação por fora deste arquivo usam exatamente este array, nunca uma
+ * cópia paralela.
+ */
+export const DIMENSION_PRIORITY_ORDER: (keyof AccountHealthEvaluation["dimensions"])[] = [
+  "dataQuality",
+  "cost",
+  "results",
+  "investment",
+  "review",
+];
 
 export interface AccountHealthInput {
   /** Investido no mês até hoje (soma real de `daily_spend`). */
@@ -208,9 +249,16 @@ export interface AccountHealthInput {
 }
 
 function evaluateInvestment(input: AccountHealthInput): InvestmentDimension {
-  const { investmentActual, investmentPlanned, monthExpectedPct } = input;
+  const { investmentActual, investmentPlanned, investmentHasSyncedData, monthExpectedPct } = input;
   if (investmentPlanned === null) {
-    return { status: "nenhum", deviation: null, actual: investmentActual, planned: null, expected: null };
+    return {
+      status: "nenhum",
+      deviation: null,
+      actual: investmentActual,
+      planned: null,
+      expected: null,
+      hasSyncedData: investmentHasSyncedData,
+    };
   }
   const expected = investmentPlanned * (monthExpectedPct / 100);
   const deviation = computeRelativeDeviation(investmentActual, expected);
@@ -220,7 +268,14 @@ function evaluateInvestment(input: AccountHealthInput): InvestmentDimension {
     INVESTMENT_DEVIATION_RELEVANTE,
     INVESTMENT_DEVIATION_GRAVE,
   );
-  return { status, deviation, actual: investmentActual, planned: investmentPlanned, expected };
+  return {
+    status,
+    deviation,
+    actual: investmentActual,
+    planned: investmentPlanned,
+    expected,
+    hasSyncedData: investmentHasSyncedData,
+  };
 }
 
 function evaluateResults(input: AccountHealthInput): ResultDimension {
@@ -295,7 +350,7 @@ function evaluateCost(input: AccountHealthInput): CostDimension {
 function evaluateReview(input: AccountHealthInput): ReviewDimension {
   const { reviewBusinessDaysAgo, reviewMaxBusinessDays } = input;
   if (reviewMaxBusinessDays === null) {
-    return { status: "nenhum", deviation: null, actual: reviewBusinessDaysAgo, planned: 0, expected: 0 };
+    return { status: "nenhum", deviation: null, actual: reviewBusinessDaysAgo, planned: 0, expected: 0, enabled: false };
   }
   if (reviewBusinessDaysAgo === null) {
     // Nunca revisada — sempre o pior caso, sem depender de fração nenhuma.
@@ -305,6 +360,7 @@ function evaluateReview(input: AccountHealthInput): ReviewDimension {
       actual: null,
       planned: reviewMaxBusinessDays,
       expected: reviewMaxBusinessDays,
+      enabled: true,
     };
   }
   const deviation = computeRelativeDeviation(reviewBusinessDaysAgo, reviewMaxBusinessDays);
@@ -322,6 +378,7 @@ function evaluateReview(input: AccountHealthInput): ReviewDimension {
     actual: reviewBusinessDaysAgo,
     planned: reviewMaxBusinessDays,
     expected: reviewMaxBusinessDays,
+    enabled: true,
   };
 }
 
@@ -388,29 +445,51 @@ function describeDataQualityReason(dimension: DataQualityDimension): string | nu
   return dimension.issues[0] ?? null;
 }
 
-/**
- * Ordem de prioridade em caso de empate de severidade entre dimensões
- * (aprovada): qualidade dos dados > custo > resultado > investimento >
- * revisão — "sem dados confiáveis não existe operação", depois eficiência,
- * depois volume, depois orçamento, depois rotina.
- */
-export function evaluateAccountHealth(input: AccountHealthInput): AccountHealthEvaluation {
-  const investment = evaluateInvestment(input);
-  const results = evaluateResults(input);
-  const cost = evaluateCost(input);
-  const review = evaluateReview(input);
-  const dataQuality = evaluateDataQuality(input, input.costPlanned !== null);
+function describeDimensionReason(
+  key: keyof AccountHealthEvaluation["dimensions"],
+  dimensions: AccountHealthEvaluation["dimensions"],
+): string | null {
+  switch (key) {
+    case "dataQuality":
+      return describeDataQualityReason(dimensions.dataQuality);
+    case "cost":
+      return describeCostReason(dimensions.cost);
+    case "results":
+      return describeResultReason(dimensions.results);
+    case "investment":
+      return describeInvestmentReason(dimensions.investment);
+    case "review":
+      return describeReviewReason(dimensions.review);
+  }
+}
 
-  const ordered: { severity: DimensionSeverity; reason: string | null }[] = [
-    { severity: dataQuality.status, reason: describeDataQualityReason(dataQuality) },
-    { severity: cost.status, reason: describeCostReason(cost) },
-    { severity: results.status, reason: describeResultReason(results) },
-    { severity: investment.status, reason: describeInvestmentReason(investment) },
-    { severity: review.status, reason: describeReviewReason(review) },
-  ];
+interface DimensionRankedEntry {
+  key: keyof AccountHealthEvaluation["dimensions"];
+  severity: DimensionSeverity;
+  reason: string | null;
+}
+
+function rankDimensions(dimensions: AccountHealthEvaluation["dimensions"]): DimensionRankedEntry[] {
+  return DIMENSION_PRIORITY_ORDER.map((key) => ({
+    key,
+    severity: dimensions[key].status,
+    reason: describeDimensionReason(key, dimensions),
+  }));
+}
+
+export function evaluateAccountHealth(input: AccountHealthInput): AccountHealthEvaluation {
+  const dimensions = {
+    investment: evaluateInvestment(input),
+    results: evaluateResults(input),
+    cost: evaluateCost(input),
+    review: evaluateReview(input),
+    dataQuality: evaluateDataQuality(input, input.costPlanned !== null),
+  };
+
+  const ordered = rankDimensions(dimensions);
 
   const worstSeverity = ordered.reduce<DimensionSeverity>(
-    (worst, entry) => (SEVERITY_RANK[entry.severity] > SEVERITY_RANK[worst] ? entry.severity : worst),
+    (worst, entry) => (DIMENSION_SEVERITY_RANK[entry.severity] > DIMENSION_SEVERITY_RANK[worst] ? entry.severity : worst),
     "nenhum",
   );
 
@@ -421,7 +500,8 @@ export function evaluateAccountHealth(input: AccountHealthInput): AccountHealthE
     healthStatus,
     healthScore: HEALTH_SCORE_BY_STATUS[healthStatus],
     primaryReason: primaryEntry?.reason ?? "Nenhum sinal de atenção no momento",
-    dimensions: { investment, results, cost, review, dataQuality },
+    primaryDimension: primaryEntry?.key ?? null,
+    dimensions,
   };
 }
 
@@ -430,20 +510,12 @@ export function evaluateAccountHealth(input: AccountHealthInput): AccountHealthE
  * `evaluateAccountHealth` — garante `reasons[0] === primaryReason` sempre,
  * nunca uma dimensão mais leve aparecendo antes de uma mais grave só porque
  * vem antes na lista de prioridade. `sort` é estável (ES2019+), então o
- * empate preserva a ordem de prioridade abaixo. Pra listas que queiram
- * mostrar "+N motivos" além do protagonista (mesmo padrão visual que a
- * Operação já usa hoje). */
+ * empate preserva a ordem de prioridade de `DIMENSION_PRIORITY_ORDER`. Pra
+ * listas que queiram mostrar "+N motivos" além do protagonista (mesmo
+ * padrão visual que a Operação já usa hoje). */
 export function collectAccountHealthReasons(evaluation: AccountHealthEvaluation): string[] {
-  const { dimensions } = evaluation;
-  const ordered: { severity: DimensionSeverity; reason: string | null }[] = [
-    { severity: dimensions.dataQuality.status, reason: describeDataQualityReason(dimensions.dataQuality) },
-    { severity: dimensions.cost.status, reason: describeCostReason(dimensions.cost) },
-    { severity: dimensions.results.status, reason: describeResultReason(dimensions.results) },
-    { severity: dimensions.investment.status, reason: describeInvestmentReason(dimensions.investment) },
-    { severity: dimensions.review.status, reason: describeReviewReason(dimensions.review) },
-  ];
-  return ordered
-    .filter((entry): entry is { severity: DimensionSeverity; reason: string } => entry.reason !== null)
-    .sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity])
+  return rankDimensions(evaluation.dimensions)
+    .filter((entry): entry is DimensionRankedEntry & { reason: string } => entry.reason !== null)
+    .sort((a, b) => DIMENSION_SEVERITY_RANK[b.severity] - DIMENSION_SEVERITY_RANK[a.severity])
     .map((entry) => entry.reason);
 }

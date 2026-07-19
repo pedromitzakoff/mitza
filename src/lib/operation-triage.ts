@@ -1,18 +1,27 @@
+import {
+  DIMENSION_PRIORITY_ORDER,
+  DIMENSION_SEVERITY_RANK,
+  type AccountHealthEvaluation,
+  type DimensionSeverity,
+  type HealthStatus,
+} from "@/lib/account-health-engine";
+import { APP_TIMEZONE } from "@/lib/today";
+import type { PerformanceGoal } from "@/lib/performance-goals";
+
 /**
- * Suporte da tela Operação (ordenação/contagem/navegação de mês) —
- * conceito NOVO, não uma evolução da Sprint. Nenhuma função aqui depende
- * de `sprints`, `sprint_id` ou de qualquer módulo sob `app/sprints/` ou
- * `app/operation/operation-data.ts` (o motor da Sprint), pra a Operação
- * poder evoluir sem carregar a Sprint junto.
+ * Suporte da tela Operação (fila de triagem, ordenação/contagem/navegação
+ * de mês) — conceito NOVO, não uma evolução da Sprint. Nenhuma função aqui
+ * depende de `sprints`, `sprint_id` ou de qualquer módulo sob
+ * `app/sprints/` ou `app/operation/operation-data.ts` (o motor da Sprint),
+ * pra a Operação poder evoluir sem carregar a Sprint junto.
  *
- * Etapa "Motor de Saúde da Conta": este arquivo deixou de conter a lógica
- * de classificação (score ponderado provisório) — isso agora vive em
- * `lib/account-health-engine.ts` (`evaluateAccountHealth`), que decide a
- * saúde geral sempre pela PIOR dimensão, nunca por soma/média de pesos.
- * `OperationTriageClient`/`OperationTriageBand` seguem aqui como o formato
- * de COMPATIBILIDADE que a tela (`operation-triage-view.tsx`) ainda
- * consome nesta etapa — o redesenho visual (próxima etapa) troca a tela
- * pra consumir `AccountHealthEvaluation` diretamente e este tipo some.
+ * A Operação não é um dashboard — é uma FILA DE TRABALHO. Um dashboard
+ * tenta mostrar tudo; uma fila inteligente mostra primeiro o que exige
+ * ação e só depois contexto. Por isso a ordenação (banda de saúde →
+ * dimensão principal → nome) é sempre resolvida aqui, nunca recalculada na
+ * UI, e por isso `OperationClientCard` carrega o `AccountHealthEvaluation`
+ * inteiro (Etapa "Motor de Saúde da Conta") em vez de só um resumo — a
+ * tela nunca reimplementa nenhuma classificação por conta própria.
  */
 
 export type OperationTriageBand = "precisa_atencao" | "em_risco" | "em_acompanhamento" | "saudavel";
@@ -24,18 +33,40 @@ export const OPERATION_TRIAGE_BAND_ORDER: OperationTriageBand[] = [
   "saudavel",
 ];
 
-export interface OperationTriageClient {
+const BAND_BY_HEALTH_STATUS: Record<HealthStatus, OperationTriageBand> = {
+  acao_necessaria: "precisa_atencao",
+  em_risco: "em_risco",
+  em_acompanhamento: "em_acompanhamento",
+  saudavel: "saudavel",
+};
+
+/** `healthStatus` (vocabulário do motor) → banda (vocabulário da tela) —
+ * único lugar que faz essa tradução; a chave interna `precisa_atencao`
+ * nunca muda mesmo que o rótulo exibido vire "Ação necessária"
+ * (`status-registry.ts`), preservando compatibilidade de quem já persiste/
+ * lê esse valor (filtro na URL, por exemplo). */
+export function bandFromHealthStatus(status: HealthStatus): OperationTriageBand {
+  return BAND_BY_HEALTH_STATUS[status];
+}
+
+/** Um cliente na fila da Operação — identidade mínima (nome, avatar,
+ * gestor, objetivo de performance pro rótulo do termômetro de resultado) +
+ * o `AccountHealthEvaluation` completo (Etapa "Motor de Saúde da Conta").
+ * Substitui o antigo `OperationTriageClient` (formato resumido de
+ * compatibilidade da primeira versão do redesenho) — nada fora dos
+ * arquivos da própria Operação consumia aquele tipo. */
+export interface OperationClientCard {
   clientId: string;
   clientName: string;
   managerName: string | null;
-  band: OperationTriageBand;
-  /** Já ordenados por importância — `reasons[0]` é o protagonista da
-   * linha (seção 4 do pedido). Vazio quando nenhum sinal disparou. */
-  reasons: string[];
-  monthSpend: number;
-  monthSpendDeltaFraction: number | null;
-  reviewDaysAgo: number | null;
+  avatarUrl: string | null;
+  performanceGoal: PerformanceGoal | null;
+  evaluation: AccountHealthEvaluation;
   overdueTasksCount: number;
+  /** `daily_spend.synced_at` mais recente do cliente (qualquer canal) —
+   * alimenta o indicador "Atualizado hoje/ontem/há N dias"
+   * (`formatDataFreshnessLabel`). `null` = nunca sincronizado. */
+  lastDataSyncAt: string | null;
 }
 
 const BAND_SEVERITY_RANK: Record<OperationTriageBand, number> = {
@@ -45,25 +76,81 @@ const BAND_SEVERITY_RANK: Record<OperationTriageBand, number> = {
   saudavel: 3,
 };
 
-/** Ordenação da fila inteira: banda primeiro (mais severa primeiro),
- * depois nome — determinístico, sem depender do score fora desta função. */
-export function sortOperationTriageClients(clients: OperationTriageClient[]): OperationTriageClient[] {
-  return [...clients].sort((a, b) => {
-    const bandDiff = BAND_SEVERITY_RANK[a.band] - BAND_SEVERITY_RANK[b.band];
+const DIMENSION_PRIORITY_RANK: Record<keyof AccountHealthEvaluation["dimensions"], number> = Object.fromEntries(
+  DIMENSION_PRIORITY_ORDER.map((key, index) => [key, index]),
+) as Record<keyof AccountHealthEvaluation["dimensions"], number>;
+
+function primaryDimensionSeverity(evaluation: AccountHealthEvaluation): DimensionSeverity {
+  return evaluation.primaryDimension ? evaluation.dimensions[evaluation.primaryDimension].status : "nenhum";
+}
+
+/**
+ * Ordenação da fila inteira (aprovada): banda (mais severa primeiro) →
+ * dentro da banda, severidade da dimensão principal (hoje sempre empatada
+ * dentro da banda, já que a banda É a pior severidade — mantido por
+ * completude, sem custo) → prioridade do motivo definida pelo motor
+ * (`DIMENSION_PRIORITY_ORDER`) → nome. Nenhum dos dois rankings é
+ * recalculado aqui — ambos vêm de `account-health-engine.ts`, única fonte.
+ */
+export function sortOperationClientCards(cards: OperationClientCard[]): OperationClientCard[] {
+  return [...cards].sort((a, b) => {
+    const bandDiff =
+      BAND_SEVERITY_RANK[bandFromHealthStatus(a.evaluation.healthStatus)] -
+      BAND_SEVERITY_RANK[bandFromHealthStatus(b.evaluation.healthStatus)];
     if (bandDiff !== 0) return bandDiff;
+
+    const severityDiff =
+      DIMENSION_SEVERITY_RANK[primaryDimensionSeverity(b.evaluation)] -
+      DIMENSION_SEVERITY_RANK[primaryDimensionSeverity(a.evaluation)];
+    if (severityDiff !== 0) return severityDiff;
+
+    const aPriority = a.evaluation.primaryDimension
+      ? DIMENSION_PRIORITY_RANK[a.evaluation.primaryDimension]
+      : DIMENSION_PRIORITY_ORDER.length;
+    const bPriority = b.evaluation.primaryDimension
+      ? DIMENSION_PRIORITY_RANK[b.evaluation.primaryDimension]
+      : DIMENSION_PRIORITY_ORDER.length;
+    const priorityDiff = aPriority - bPriority;
+    if (priorityDiff !== 0) return priorityDiff;
+
     return a.clientName.localeCompare(b.clientName);
   });
 }
 
-export function countOperationTriageBands(clients: OperationTriageClient[]): Record<OperationTriageBand, number> {
+export function countOperationTriageBands(cards: OperationClientCard[]): Record<OperationTriageBand, number> {
   const counts: Record<OperationTriageBand, number> = {
     precisa_atencao: 0,
     em_risco: 0,
     em_acompanhamento: 0,
     saudavel: 0,
   };
-  for (const client of clients) counts[client.band]++;
+  for (const card of cards) counts[bandFromHealthStatus(card.evaluation.healthStatus)]++;
   return counts;
+}
+
+const freshnessDayFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TIMEZONE });
+
+function daysBetweenDateStrings(earlier: string, later: string): number {
+  const a = new Date(`${earlier}T00:00:00Z`);
+  const b = new Date(`${later}T00:00:00Z`);
+  return Math.round((b.getTime() - a.getTime()) / 86_400_000);
+}
+
+/**
+ * "Atualizado hoje" / "Atualizado ontem" / "Sem atualização há N dias" —
+ * indicador de confiança nos números exibidos (aumenta a confiança do
+ * gestor de que o card reflete a realidade, não um cache velho). A partir
+ * do `lastDataSyncAt` (`daily_spend.synced_at` mais recente do cliente).
+ * Datas comparadas no fuso da agência (`APP_TIMEZONE`), nunca UTC cru —
+ * mesma régua de `todayDateString`.
+ */
+export function formatDataFreshnessLabel(lastSyncedAt: string | null, todayStr: string): string {
+  if (!lastSyncedAt) return "Sem dados sincronizados";
+  const syncedDateStr = freshnessDayFormatter.format(new Date(lastSyncedAt));
+  const daysAgo = daysBetweenDateStrings(syncedDateStr, todayStr);
+  if (daysAgo <= 0) return "Atualizado hoje";
+  if (daysAgo === 1) return "Atualizado ontem";
+  return `Sem atualização há ${daysAgo} dias`;
 }
 
 /** Desloca um parâmetro de mês (`YYYY-MM-01`) em N meses — helper local e
@@ -91,39 +178,3 @@ export function monthRangeFromOperationParam(monthParam: string): { firstDay: st
   return { firstDay: monthParam, lastDay: `${monthParam.slice(0, 7)}-${String(lastDay).padStart(2, "0")}` };
 }
 
-function addDays(dateStr: string, days: number): string {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
-}
-
-/**
- * Dois intervalos do mesmo tamanho (em dias) — mês selecionado até o dia
- * de corte, e o intervalo equivalente do mês anterior — pra "Investimento
- * (mês) vs. mês anterior" nunca comparar um mês parcial com um mês
- * inteiro (o que sempre pareceria uma queda enorme). Se o mês selecionado
- * já terminou, o corte é o próprio último dia dele (mês inteiro contra
- * mês inteiro). Puro — recebe `today` de fora, nunca lê o relógio.
- */
-export function computeComparableSpendRanges(
-  monthParam: string,
-  today: Date,
-): { current: { start: string; end: string }; previous: { start: string; end: string } } {
-  const [year, month] = monthParam.split("-").map(Number);
-  const todayParam = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, "0")}-01`;
-  const isCurrentMonth = monthParam === todayParam;
-  const lastDayOfMonth = daysInMonth(year, month);
-  const cutoffDay = isCurrentMonth ? today.getUTCDate() : lastDayOfMonth;
-
-  const currentStart = monthParam;
-  const currentEnd = addDays(monthParam, cutoffDay - 1);
-
-  const previousStart = shiftOperationMonth(monthParam, -1);
-  const [prevYear, prevMonth] = previousStart.split("-").map(Number);
-  const previousCutoffDay = Math.min(cutoffDay, daysInMonth(prevYear, prevMonth));
-  const previousEnd = addDays(previousStart, previousCutoffDay - 1);
-
-  return {
-    current: { start: currentStart, end: currentEnd },
-    previous: { start: previousStart, end: previousEnd },
-  };
-}

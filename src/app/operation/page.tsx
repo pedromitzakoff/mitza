@@ -1,4 +1,5 @@
 import { formatAgencyDateTime } from "@/lib/format";
+import { todayDateString } from "@/lib/today";
 import { countOperationTriageBands } from "@/lib/operation-triage";
 import { loadOperationTriageClients } from "./operation-triage-data";
 import { OperationTriageView } from "./operation-triage-view";
@@ -33,6 +34,7 @@ export default async function OperationPage({
       monthParam={monthParam}
       monthLastUpdatedLabel={`Atualizado ${weekdayShort} · ${dateShort} · ${time}`}
       bandCounts={bandCounts}
+      todayStr={todayDateString()}
     />
   );
 }

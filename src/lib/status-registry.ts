@@ -145,7 +145,10 @@ export const KPI_TARGET_STATUS_REGISTRY: Record<`kpi_target.${KpiTargetStatus}`,
  * inventa um 4º tom de cor) — é deliberadamente mais discreta que
  * `warning`, pra não competir visualmente com o que precisa de ação agora. */
 export const OPERATION_TRIAGE_BAND_REGISTRY: Record<`operation_triage.${OperationTriageBand}`, StatusEntry> = {
-  "operation_triage.precisa_atencao": { label: "Precisa de atenção", badgeClassName: DANGER, tone: "danger", order: 0 },
+  // Rótulo "Ação necessária" (Etapa "Redesenho da Operação") — só o texto
+  // exibido mudou; a chave interna `precisa_atencao` é mantida (usada em
+  // filtros/URLs e no mapeamento `bandFromHealthStatus`).
+  "operation_triage.precisa_atencao": { label: "Ação necessária", badgeClassName: DANGER, tone: "danger", order: 0 },
   "operation_triage.em_risco": { label: "Em risco", badgeClassName: WARNING, tone: "warning", order: 1 },
   "operation_triage.em_acompanhamento": { label: "Em acompanhamento", badgeClassName: NEUTRAL_MUTED, tone: "neutral", order: 2 },
   "operation_triage.saudavel": { label: "Saudável", badgeClassName: SUCCESS, tone: "success", order: 3 },
