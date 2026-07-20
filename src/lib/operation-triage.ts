@@ -11,9 +11,15 @@ import type { PerformanceGoal } from "@/lib/performance-goals";
 /**
  * Suporte da tela Operação (fila de triagem, ordenação/contagem/navegação
  * de mês) — conceito NOVO, não uma evolução da Sprint. Nenhuma função aqui
- * depende de `sprints`, `sprint_id` ou de qualquer módulo sob
- * `app/sprints/` ou `app/operation/operation-data.ts` (o motor da Sprint),
- * pra a Operação poder evoluir sem carregar a Sprint junto.
+ * importa de `lib/sprint-financials.ts`, `app/sprints/` ou
+ * `app/operation/operation-data.ts` (o motor/a interface da Sprint), pra a
+ * Operação poder evoluir sem carregar a Sprint junto. Independência da
+ * Operação não significa ignorar onde o dado oficial mora, porém: o
+ * investimento efetivo (`operation-triage-data.ts`) é resolvido chamando
+ * `sumEffectiveSpendForMonth` (`lib/effective-spend.ts`, módulo de domínio
+ * NEUTRO — nem da Sprint, nem da Operação) sobre uma query própria de
+ * `sprints`, exatamente como a página do Cliente faz — nenhuma fórmula
+ * duplicada em lugar nenhum, uma única implementação pras duas telas.
  *
  * A Operação não é um dashboard — é uma FILA DE TRABALHO. Um dashboard
  * tenta mostrar tudo; uma fila inteligente mostra primeiro o que exige

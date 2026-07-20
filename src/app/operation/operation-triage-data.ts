@@ -3,7 +3,8 @@ import { requireQuery } from "@/lib/require-query";
 import { todayUTC, todayDateString } from "@/lib/today";
 import { businessDaysSince } from "@/lib/business-days";
 import { effectiveTaskStatus } from "@/lib/task-status";
-import { computeCostPerResult } from "@/lib/performance";
+import { aggregatePerformanceResults, computeCostPerResult, type PerformanceRecordRow } from "@/lib/performance";
+import { sumEffectiveSpendForMonth, type SprintSpendSource, type DailySpendRow } from "@/lib/effective-spend";
 import {
   computeMonthlyExpectedPct,
   resolveMonthlyPlanSnapshot,
@@ -14,20 +15,27 @@ import { DEFAULT_REVIEW_MAX_BUSINESS_DAYS } from "@/lib/operation-health-thresho
 import { monthRangeFromOperationParam, sortOperationClientCards, type OperationClientCard } from "@/lib/operation-triage";
 
 /**
- * Pipeline de dados PRÓPRIO da Operação — nenhuma query aqui é
- * compartilhada com `app/operation/operation-data.ts` (motor da Sprint,
- * usado por Visão Geral/Clientes/Relatórios) nem com `app/sprints/`. Se
- * este arquivo mudar, nada fora da Operação é afetado; se a Sprint for
- * removida, nada aqui quebra.
+ * Pipeline de dados PRÓPRIO da Operação — nenhuma query aqui importa de
+ * `app/operation/operation-data.ts` (motor da Sprint, usado por Visão
+ * Geral/Clientes/Relatórios), `app/sprints/` ou `lib/sprint-financials.ts`.
+ * Se este arquivo mudar, nada fora da Operação é afetado.
  *
- * Etapa "Redesenho da Operação" (PR 2): resolve tudo (planejamento
- * mensal, realizado, cadência de revisão) e delega a classificação
- * inteira pra `evaluateAccountHealth` (`lib/account-health-engine.ts`);
- * este arquivo nunca decide severidade sozinho. Diferente do PR 1, o
- * `AccountHealthEvaluation` inteiro segue pra frente (`OperationClientCard.
- * evaluation`) — a tela consome a estrutura completa (dimensões, motivo
- * principal, dimensão principal) pra montar os termômetros e os filtros,
- * nunca reimplementando nada que o motor já decidiu.
+ * Etapa "Single Source of Truth — investimento": investimento e resultado
+ * agora resolvem pela MESMA fonte oficial que a página do Cliente usa —
+ * `sprints` (via `sumEffectiveSpendForMonth`, `lib/effective-spend.ts` —
+ * módulo de domínio NEUTRO, nem da Sprint nem da Operação, a única
+ * implementação da fórmula manual×meta_api/sobreposição de mês em toda a
+ * plataforma) e `performance_records` por `sprint_id` (não mais por
+ * `client_id`+sobreposição de datas, que ignorava o gasto manual e
+ * dependia de campos redundantes). A Operação consulta a tabela `sprints`
+ * diretamente — permitido: independência da Operação é não depender da
+ * INTERFACE/divisão visual das Sprints, nunca ignorar onde o dado oficial
+ * mora.
+ *
+ * Resolve tudo (planejamento mensal, realizado, cadência de revisão) e
+ * delega a classificação inteira pra `evaluateAccountHealth`
+ * (`lib/account-health-engine.ts`); este arquivo nunca decide severidade
+ * sozinho.
  */
 
 export async function loadOperationTriageClients(monthParam: string): Promise<OperationClientCard[]> {
@@ -39,7 +47,7 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
   const { firstDay: monthStart, lastDay: monthEnd } = monthRange;
   const monthExpectedPct = computeMonthlyExpectedPct(monthRange, todayStr);
 
-  const [clients, dailySpendRows, latestReviews, performanceRows, openTasks, planChanges, reviewCadences] =
+  const [clients, sprints, dailySpendRows, latestReviews, openTasks, planChanges, reviewCadences] =
     await Promise.all([
       requireQuery(
         supabase
@@ -50,6 +58,19 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
           .is("deleted_at", null)
           .order("name"),
         "clients",
+      ),
+      // Sprints que se sobrepõem ao mês, de TODOS os clientes (mesma
+      // condição de sobreposição usada pela página do Cliente:
+      // `start_date <= lastDay && end_date >= firstDay`) — fonte oficial
+      // de investimento (`spend_source`/`manual_actual_spend`) e a ponte
+      // pra `performance_records` via `sprint_id`.
+      requireQuery(
+        supabase
+          .from("sprints")
+          .select("id, client_id, start_date, end_date, spend_source, manual_actual_spend, manual_spend_updated_at")
+          .lte("start_date", monthEnd)
+          .gte("end_date", monthStart),
+        "sprints",
       ),
       requireQuery(
         supabase
@@ -62,14 +83,6 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
       requireQuery(
         supabase.from("account_reviews").select("client_id, reviewed_at").order("reviewed_at", { ascending: false }),
         "account_reviews",
-      ),
-      requireQuery(
-        supabase
-          .from("performance_records")
-          .select("client_id, result_type, result_count, period_start, period_end")
-          .lte("period_start", monthEnd)
-          .gte("period_end", monthStart),
-        "performance_records",
       ),
       requireQuery(
         supabase
@@ -98,32 +111,56 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
       ),
     ]);
 
-  const monthSpendByClient = new Map<string, number>();
-  const hasSyncedDataByClient = new Set<string>();
-  const lastSyncedAtByClient = new Map<string, string>();
+  const sprintsByClient = new Map<string, typeof sprints>();
+  const sprintIdToClientId = new Map<string, string>();
+  for (const sprint of sprints) {
+    const list = sprintsByClient.get(sprint.client_id) ?? [];
+    list.push(sprint);
+    sprintsByClient.set(sprint.client_id, list);
+    sprintIdToClientId.set(sprint.id, sprint.client_id);
+  }
+  const allSprintIds = sprints.map((s) => s.id);
+
+  const dailySpendByClient = new Map<string, { date: string; spend: number; synced_at: string }[]>();
   for (const row of dailySpendRows) {
-    monthSpendByClient.set(row.client_id, (monthSpendByClient.get(row.client_id) ?? 0) + row.spend);
-    hasSyncedDataByClient.add(row.client_id);
-    const previousLatest = lastSyncedAtByClient.get(row.client_id);
-    if (!previousLatest || row.synced_at > previousLatest) {
-      lastSyncedAtByClient.set(row.client_id, row.synced_at);
-    }
+    const list = dailySpendByClient.get(row.client_id) ?? [];
+    list.push(row);
+    dailySpendByClient.set(row.client_id, list);
+  }
+
+  // performance_records por sprint_id — mesmo caminho que a página do
+  // Cliente usa (nunca client_id + sobreposição de datas, que dependia de
+  // period_start/period_end ficarem sempre consistentes com a sprint).
+  const performanceRows =
+    allSprintIds.length > 0
+      ? await requireQuery(
+          supabase
+            .from("performance_records")
+            .select("sprint_id, channel, result_type, result_count, source, source_updated_at")
+            .in("sprint_id", allSprintIds),
+          "performance_records",
+        )
+      : [];
+
+  const performanceRowsByClient = new Map<string, PerformanceRecordRow[]>();
+  for (const row of performanceRows) {
+    if (!row.sprint_id) continue;
+    const clientId = sprintIdToClientId.get(row.sprint_id);
+    if (!clientId) continue;
+    const list = performanceRowsByClient.get(clientId) ?? [];
+    list.push({
+      channel: row.channel,
+      resultType: row.result_type,
+      resultCount: row.result_count,
+      source: row.source,
+      sourceUpdatedAt: row.source_updated_at,
+    });
+    performanceRowsByClient.set(clientId, list);
   }
 
   const latestReviewByClient = new Map<string, string>();
   for (const row of latestReviews ?? []) {
     if (!latestReviewByClient.has(row.client_id)) latestReviewByClient.set(row.client_id, row.reviewed_at);
-  }
-
-  // Cada linha de resultado só conta se bater com o `performance_goal` do
-  // próprio cliente — nunca soma leads e vendas juntos.
-  const performanceGoalByClient = new Map((clients ?? []).map((client) => [client.id, client.performance_goal]));
-  const resultCountByClient = new Map<string, number>();
-  const hasPerformanceDataByClient = new Set<string>();
-  for (const row of performanceRows ?? []) {
-    if (row.result_type !== performanceGoalByClient.get(row.client_id)) continue;
-    resultCountByClient.set(row.client_id, (resultCountByClient.get(row.client_id) ?? 0) + row.result_count);
-    hasPerformanceDataByClient.add(row.client_id);
   }
 
   const overdueCountByClient = new Map<string, number>();
@@ -149,11 +186,33 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
 
   const cards: OperationClientCard[] = (clients ?? []).map((client) => {
     const managerName = client.primary_manager?.name ?? null;
-    const monthSpend = monthSpendByClient.get(client.id) ?? 0;
 
-    const resultCount = resultCountByClient.get(client.id) ?? 0;
-    const hasPerformanceData = hasPerformanceDataByClient.has(client.id);
-    const costActual = computeCostPerResult(monthSpend, resultCount, hasPerformanceData);
+    const clientSprints: SprintSpendSource[] = (sprintsByClient.get(client.id) ?? []).map((sprint) => ({
+      startDate: sprint.start_date,
+      endDate: sprint.end_date,
+      spendSource: sprint.spend_source,
+      manualActualSpend: sprint.manual_actual_spend,
+      manualSpendUpdatedAt: sprint.manual_spend_updated_at,
+    }));
+    const clientDailySpend: DailySpendRow[] = (dailySpendByClient.get(client.id) ?? []).map((row) => ({
+      date: row.date,
+      spend: row.spend,
+      syncedAt: row.synced_at,
+    }));
+    const spend = sumEffectiveSpendForMonth(clientSprints, monthRange, clientDailySpend);
+
+    const performanceResult = client.performance_goal
+      ? aggregatePerformanceResults(performanceRowsByClient.get(client.id) ?? [], client.performance_goal)
+      : { resultCount: 0, hasAnyRecord: false, latestSource: null, latestUpdatedAt: null };
+
+    // `spend.hasData` vira `null` explícito (não `0`) pra `computeCostPerResult`
+    // nunca confundir "sem investimento confiável" com "investiu R$0" —
+    // mesma régua de ausência usada no resto da plataforma.
+    const costActual = computeCostPerResult(
+      spend.hasData ? spend.actual : null,
+      performanceResult.resultCount,
+      performanceResult.hasAnyRecord,
+    );
 
     const plan = resolveMonthlyPlanSnapshot(
       planChangesByClient.get(client.id) ?? [],
@@ -172,12 +231,12 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
       : DEFAULT_REVIEW_MAX_BUSINESS_DAYS;
 
     const input: AccountHealthInput = {
-      investmentActual: monthSpend,
+      investmentActual: spend.actual,
       investmentPlanned: plan.investmentPlanned,
-      investmentHasSyncedData: hasSyncedDataByClient.has(client.id),
-      resultActual: resultCount,
+      investmentHasSyncedData: spend.hasData,
+      resultActual: performanceResult.resultCount,
       resultPlanned: plan.targetResultCount,
-      hasPerformanceData,
+      hasPerformanceData: performanceResult.hasAnyRecord,
       performanceGoalConfigured: client.performance_goal !== null,
       costActual,
       costPlanned: plan.targetCostPerResult,
@@ -185,6 +244,13 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
       reviewBusinessDaysAgo,
       reviewMaxBusinessDays,
     };
+
+    const lastDataSyncAt =
+      spend.lastUpdatedAt && performanceResult.latestUpdatedAt
+        ? spend.lastUpdatedAt > performanceResult.latestUpdatedAt
+          ? spend.lastUpdatedAt
+          : performanceResult.latestUpdatedAt
+        : (spend.lastUpdatedAt ?? performanceResult.latestUpdatedAt ?? null);
 
     return {
       clientId: client.id,
@@ -198,7 +264,7 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
       performanceGoal: client.performance_goal,
       evaluation: evaluateAccountHealth(input),
       overdueTasksCount: overdueCountByClient.get(client.id) ?? 0,
-      lastDataSyncAt: lastSyncedAtByClient.get(client.id) ?? null,
+      lastDataSyncAt,
     };
   });
 

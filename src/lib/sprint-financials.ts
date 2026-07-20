@@ -1,12 +1,20 @@
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { todayUTC } from "@/lib/today";
+import {
+  resolveEffectiveSpend,
+  resolveEffectiveSpendForDateRange,
+  sumEffectiveSpendForMonth,
+  type SpendSource,
+} from "@/lib/effective-spend";
 
 export type SprintTemporalStatus = "futura" | "atual" | "concluida";
 
 /** Origem do gasto real de uma sprint: "meta_api" é o padrão (soma de
  * daily_spend, como sempre foi); "manual" é um valor digitado à mão
- * enquanto a sync do Meta não é a fonte de teste. */
-export type SpendSource = "manual" | "meta_api";
+ * enquanto a sync do Meta não é a fonte de teste. Reexportado (não
+ * redefinido) de `lib/effective-spend.ts` — módulo de domínio neutro que
+ * também a Operação usa, sem depender deste arquivo. */
+export type { SpendSource };
 
 export interface SprintFinancials {
   sprintId: string;
@@ -23,26 +31,33 @@ export interface SprintFinancials {
 
 /**
  * Decide qual valor de gasto real vale pra uma sprint: se a origem
- * configurada é "manual" e existe um valor manual salvo, esse valor manda —
- * a sync do Meta continua rodando e gravando em daily_spend normalmente,
- * mas essa função é o único lugar que decide se ela deve "aparecer" ou não.
- * Fora daqui (Sprints, Visão Geral, /clients), nada muda: essas telas nunca
- * chamam esta função e continuam com a soma de daily_spend de sempre.
+ * configurada é "manual" e existe um valor manual salvo, esse valor manda;
+ * senão cai pro sincronizado (`metaSpendSum`) — a sync do Meta continua
+ * rodando e gravando em `daily_spend` normalmente mesmo em sprints
+ * manuais, então "manual sem valor lançado ainda" nunca deve aparecer como
+ * R$0 se já existe sincronização real.
+ *
+ * Wrapper fino sobre `resolveEffectiveSpend` (`lib/effective-spend.ts`) —
+ * a única implementação desta regra na plataforma; existe aqui só pra
+ * adaptar o formato `snake_case` que todo o resto deste arquivo já usa,
+ * nunca reimplementando a decisão.
  */
 export function resolveSprintActualSpend(
   sprint: { spend_source: SpendSource; manual_actual_spend: number | null },
   metaSpendSum: number,
 ): number {
-  if (sprint.spend_source === "manual" && sprint.manual_actual_spend !== null) {
-    return sprint.manual_actual_spend;
-  }
-  return metaSpendSum;
+  return resolveEffectiveSpend({
+    spendSource: sprint.spend_source,
+    manualActualSpend: sprint.manual_actual_spend,
+    syncedSpend: metaSpendSum,
+  }).actual;
 }
 
 /** Fonte única do gasto real de UMA sprint: soma o daily_spend do período
  * dela e resolve manual x meta_api. Todo lugar que precisa do gasto real de
  * uma sprint (mensal consolidado, cartão da sprint, gráfico) passa por
- * aqui — nunca duplica o filtro+soma de daily_spend por conta própria. */
+ * aqui — nunca duplica o filtro+soma de daily_spend por conta própria.
+ * Wrapper fino sobre `resolveEffectiveSpendForDateRange`. */
 export function computeSprintEffectiveSpend(
   sprint: {
     start_date: string;
@@ -52,10 +67,16 @@ export function computeSprintEffectiveSpend(
   },
   dailySpend: { date: string; spend: number }[],
 ): number {
-  const metaSpendSum = dailySpend
-    .filter((d) => d.date >= sprint.start_date && d.date <= sprint.end_date)
-    .reduce((sum, d) => sum + d.spend, 0);
-  return resolveSprintActualSpend(sprint, metaSpendSum);
+  return resolveEffectiveSpendForDateRange(
+    {
+      startDate: sprint.start_date,
+      endDate: sprint.end_date,
+      spendSource: sprint.spend_source,
+      manualActualSpend: sprint.manual_actual_spend,
+    },
+    { start: sprint.start_date, end: sprint.end_date },
+    dailySpend,
+  ).actual;
 }
 
 /** Soma o gasto real efetivo de várias sprints — usado pra consolidar o
@@ -390,10 +411,13 @@ export function sumPlannedForMonth(
  * Gasto realizado de UMA sprint, pertencente a um mês — mesma decisão
  * manual×meta_api de `resolveSprintActualSpend`, recortada pelo mês: sprint
  * sincronizada soma só os dias de `daily_spend` dentro da interseção
- * sprint×mês (já granular por dia); sprint manual usa o valor único de
- * sempre (`manual_actual_spend`) — desde a correção da Etapa 50, nenhuma
- * sprint atravessa mais a fronteira do mês, então toda sprint pertence a
- * exatamente um mês e esse valor único já é sempre suficiente.
+ * sprint×mês (já granular por dia); sprint manual usa o valor de
+ * `manual_actual_spend` quando existe, senão cai pro sincronizado (mesma
+ * regra de `resolveEffectiveSpend` — antes esta função tinha uma segunda
+ * cópia, incorreta, que retornava `0` direto nesse caso; corrigido nesta
+ * etapa, já que "sem lançamento manual ainda" nunca deveria esconder um
+ * gasto sincronizado real). Wrapper fino sobre `sumEffectiveSpendForMonth`
+ * pra uma única sprint.
  */
 export function computeSprintMonthActualSpend(
   sprint: {
@@ -405,24 +429,27 @@ export function computeSprintMonthActualSpend(
   monthRange: { firstDay: string; lastDay: string },
   dailySpend: { date: string; spend: number }[],
 ): number {
-  const overlapStart = sprint.start_date > monthRange.firstDay ? sprint.start_date : monthRange.firstDay;
-  const overlapEnd = sprint.end_date < monthRange.lastDay ? sprint.end_date : monthRange.lastDay;
-  if (overlapStart > overlapEnd) return 0;
-
-  if (sprint.spend_source === "manual") {
-    return sprint.manual_actual_spend ?? 0;
-  }
-
-  return dailySpend
-    .filter((d) => d.date >= overlapStart && d.date <= overlapEnd)
-    .reduce((sum, d) => sum + d.spend, 0);
+  return sumEffectiveSpendForMonth(
+    [
+      {
+        startDate: sprint.start_date,
+        endDate: sprint.end_date,
+        spendSource: sprint.spend_source,
+        manualActualSpend: sprint.manual_actual_spend,
+      },
+    ],
+    monthRange,
+    dailySpend,
+  ).actual;
 }
 
 /** Soma o gasto realizado de várias sprints, pertencente a um mês — versão
  * mensal de `sumEffectiveSpend`. Recebe TODAS as sprints que se sobrepõem ao
  * mês (não só as que começam nele) — quem monta essa lista precisa filtrar
  * por sobreposição (`start_date <= lastDay && end_date >= firstDay`), nunca
- * por `start_date` dentro do mês. */
+ * por `start_date` dentro do mês. Wrapper fino sobre
+ * `sumEffectiveSpendForMonth` (`lib/effective-spend.ts`) — a mesma função
+ * que a Operação chama, nenhuma segunda implementação da fórmula. */
 export function sumActualSpendForMonth(
   sprints: {
     start_date: string;
@@ -433,7 +460,16 @@ export function sumActualSpendForMonth(
   monthRange: { firstDay: string; lastDay: string },
   dailySpend: { date: string; spend: number }[],
 ): number {
-  return sprints.reduce((sum, sprint) => sum + computeSprintMonthActualSpend(sprint, monthRange, dailySpend), 0);
+  return sumEffectiveSpendForMonth(
+    sprints.map((sprint) => ({
+      startDate: sprint.start_date,
+      endDate: sprint.end_date,
+      spendSource: sprint.spend_source,
+      manualActualSpend: sprint.manual_actual_spend,
+    })),
+    monthRange,
+    dailySpend,
+  ).actual;
 }
 
 /** Intervalo (YYYY-MM-DD) do mês corrente, usado pra filtrar sprints e daily_spend. */
