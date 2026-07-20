@@ -97,7 +97,7 @@ export function OperationTriageView({
       />
 
       {filteredClients.length > 0 ? (
-        <ul className="flex flex-col gap-3">
+        <ul className="flex flex-col gap-1">
           {filteredClients.map((card) => (
             <li key={card.clientId}>
               <OperationClientCard card={card} todayStr={todayStr} />

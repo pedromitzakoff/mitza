@@ -22,6 +22,7 @@ function paletteClassFor(name: string): string {
 }
 
 const SIZE_CLASSES = {
+  xs: "h-5 w-5 text-[9px]",
   sm: "h-8 w-8 text-sm",
   md: "h-10 w-10 text-base",
   lg: "h-14 w-14 text-lg",
