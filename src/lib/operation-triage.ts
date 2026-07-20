@@ -5,6 +5,7 @@ import {
   type DimensionSeverity,
   type HealthStatus,
 } from "@/lib/account-health-engine";
+import { formatAgencyDateTime } from "@/lib/format";
 import { APP_TIMEZONE } from "@/lib/today";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 
@@ -31,13 +32,6 @@ import type { PerformanceGoal } from "@/lib/performance-goals";
  */
 
 export type OperationTriageBand = "precisa_atencao" | "em_risco" | "em_acompanhamento" | "saudavel";
-
-export const OPERATION_TRIAGE_BAND_ORDER: OperationTriageBand[] = [
-  "precisa_atencao",
-  "em_risco",
-  "em_acompanhamento",
-  "saudavel",
-];
 
 const BAND_BY_HEALTH_STATUS: Record<HealthStatus, OperationTriageBand> = {
   acao_necessaria: "precisa_atencao",
@@ -123,15 +117,43 @@ export function sortOperationClientCards(cards: OperationClientCard[]): Operatio
   });
 }
 
-export function countOperationTriageBands(cards: OperationClientCard[]): Record<OperationTriageBand, number> {
-  const counts: Record<OperationTriageBand, number> = {
-    precisa_atencao: 0,
-    em_risco: 0,
-    em_acompanhamento: 0,
-    saudavel: 0,
-  };
-  for (const card of cards) counts[bandFromHealthStatus(card.evaluation.healthStatus)]++;
-  return counts;
+/** Um cliente conta como "precisa de revisão" quando a cadência está ativa
+ * (`enabled`) e já ultrapassou o prazo (`status !== "nenhum"`) — mesmo
+ * critério que já decidia a severidade da dimensão de revisão no motor,
+ * nunca recalculado aqui. */
+function needsReview(card: OperationClientCard): boolean {
+  const review = card.evaluation.dimensions.review;
+  return review.enabled && review.status !== "nenhum";
+}
+
+export interface OperationTriageSummary {
+  totalClients: number;
+  /** Clientes com ao menos 1 tarefa pendente/atrasada. */
+  withPendingTasks: number;
+  /** Clientes com revisão de conta em atraso. */
+  needingReview: number;
+  /** Clientes sem nenhum dado de investimento sincronizado neste mês. */
+  withoutSync: number;
+}
+
+/**
+ * Contadores operacionais do cabeçalho da Operação (Etapa "Fila de
+ * Prioridades 1.0") — substitui os antigos contadores por banda de saúde/
+ * dimensão de desvio, que exigiam entender o vocabulário do Motor de Saúde
+ * pra fazer sentido. Estes quatro só respondem perguntas operacionais
+ * diretas ("quantos clientes têm pendência?"), sem nenhuma banda/severidade
+ * envolvida.
+ */
+export function summarizeOperationTriage(cards: OperationClientCard[]): OperationTriageSummary {
+  let withPendingTasks = 0;
+  let needingReview = 0;
+  let withoutSync = 0;
+  for (const card of cards) {
+    if (card.overdueTasksCount > 0) withPendingTasks++;
+    if (needsReview(card)) needingReview++;
+    if (!card.evaluation.dimensions.investment.hasSyncedData) withoutSync++;
+  }
+  return { totalClients: cards.length, withPendingTasks, needingReview, withoutSync };
 }
 
 const freshnessDayFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TIMEZONE });
@@ -143,19 +165,23 @@ function daysBetweenDateStrings(earlier: string, later: string): number {
 }
 
 /**
- * "Atualizado hoje" / "Atualizado ontem" / "Sem atualização há N dias" —
- * indicador de confiança nos números exibidos (aumenta a confiança do
- * gestor de que o card reflete a realidade, não um cache velho). A partir
- * do `lastDataSyncAt` (`daily_spend.synced_at` mais recente do cliente).
- * Datas comparadas no fuso da agência (`APP_TIMEZONE`), nunca UTC cru —
- * mesma régua de `todayDateString`.
+ * "Atualizado hoje às 09:32" / "Atualizado ontem às 18:04" / "Sem
+ * atualização há N dias" — indicador de confiança nos números exibidos
+ * (aumenta a confiança do gestor de que o card reflete a realidade, não um
+ * cache velho). A partir do `lastDataSyncAt` (`daily_spend.synced_at` mais
+ * recente do cliente). O horário só aparece pra hoje/ontem (onde é preciso
+ * o bastante pra ser útil); atualizações mais antigas mostram só a
+ * contagem de dias. Datas comparadas no fuso da agência (`APP_TIMEZONE`),
+ * nunca UTC cru — mesma régua de `todayDateString`.
  */
 export function formatDataFreshnessLabel(lastSyncedAt: string | null, todayStr: string): string {
   if (!lastSyncedAt) return "Sem dados sincronizados";
-  const syncedDateStr = freshnessDayFormatter.format(new Date(lastSyncedAt));
+  const syncedDate = new Date(lastSyncedAt);
+  const syncedDateStr = freshnessDayFormatter.format(syncedDate);
   const daysAgo = daysBetweenDateStrings(syncedDateStr, todayStr);
-  if (daysAgo <= 0) return "Atualizado hoje";
-  if (daysAgo === 1) return "Atualizado ontem";
+  const time = formatAgencyDateTime(syncedDate).time;
+  if (daysAgo <= 0) return `Atualizado hoje às ${time}`;
+  if (daysAgo === 1) return `Atualizado ontem às ${time}`;
   return `Sem atualização há ${daysAgo} dias`;
 }
 

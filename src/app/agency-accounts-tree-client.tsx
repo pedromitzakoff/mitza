@@ -216,10 +216,13 @@ function ManagerFolder({
 /**
  * "Contas da Agência" — árvore de navegação (não de permissão): qualquer
  * gestor abre qualquer conta, independente de quem é o responsável
- * principal. Cada pasta (gestor) tem estado independente de expansão; a
- * carteira do próprio usuário e a do cliente atualmente aberto começam
- * expandidas, e nenhuma pasta que o usuário já abriu na sessão é fechada
- * automaticamente — só entram novos ids no conjunto, nunca saem.
+ * principal. Cada pasta (gestor) tem estado independente de expansão;
+ * todas começam fechadas quando a aplicação é aberta — só expandem por
+ * clique explícito na pasta (ou pelo hover ao arrastar um cliente por
+ * cima, ver `HOVER_EXPAND_DELAY_MS`). Nenhuma pasta que o usuário já abriu
+ * na sessão é fechada automaticamente — só entram novos ids no conjunto,
+ * nunca saem. Localizar um cliente sem abrir pasta por pasta é papel da
+ * busca (abaixo), não de auto-expansão (Etapa "Fila de Prioridades 1.0").
  *
  * Etapa "Árvore Viva 1.0": substitui a busca antiga por um campo no topo
  * que encontra cliente OU gestor em qualquer pasta (item aprovado:
@@ -236,11 +239,9 @@ function ManagerFolder({
  */
 export function AgencyAccountsTreeView({
   tree,
-  currentManagerId,
   isAdmin,
 }: {
   tree: AgencyTree;
-  currentManagerId: string;
   isAdmin: boolean;
 }) {
   const pathname = usePathname();
@@ -249,17 +250,7 @@ export function AgencyAccountsTreeView({
   const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
 
-  const [expanded, setExpanded] = useState<Set<string>>(() => {
-    const initial = new Set<string>();
-    if (tree.managers.some((manager) => manager.id === currentManagerId)) {
-      initial.add(currentManagerId);
-    }
-    if (activeClientId) {
-      const key = findContainerKey(buildContainers(tree), activeClientId);
-      if (key) initial.add(key);
-    }
-    return initial;
-  });
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
   const [containers, setContainers] = useState<Containers>(() => buildContainers(tree));
   const [lastSyncedTree, setLastSyncedTree] = useState(tree);
@@ -328,21 +319,6 @@ export function AgencyAccountsTreeView({
 
   function isExpanded(key: string): boolean {
     return searchExpandedKeys ? searchExpandedKeys.has(key) : expanded.has(key);
-  }
-
-  // Navegar pra um cliente de uma carteira ainda fechada deve revelá-la —
-  // sem isso, "o cliente atualmente aberto" deixaria de valer ao trocar de
-  // cliente via link direto/busca. Compara contra o ÚLTIMO cliente ativo
-  // visto (não contra `expanded.has(key)`): só a TROCA pra um cliente novo
-  // dispara a expansão, senão fechar manualmente a carteira ativa
-  // reabriria sozinha no próximo render.
-  const [lastActiveClientId, setLastActiveClientId] = useState(activeClientId);
-  if (activeClientId !== lastActiveClientId) {
-    setLastActiveClientId(activeClientId);
-    const key = activeClientId ? findContainerKey(containers, activeClientId) : null;
-    if (key) {
-      setExpanded((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
-    }
   }
 
   function toggle(key: string) {

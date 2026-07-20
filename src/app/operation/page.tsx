@@ -1,6 +1,6 @@
 import { formatAgencyDateTime } from "@/lib/format";
 import { todayDateString } from "@/lib/today";
-import { countOperationTriageBands } from "@/lib/operation-triage";
+import { summarizeOperationTriage } from "@/lib/operation-triage";
 import { loadOperationTriageClients } from "./operation-triage-data";
 import { OperationTriageView } from "./operation-triage-view";
 
@@ -24,7 +24,7 @@ export default async function OperationPage({
   const monthParam = params.month ?? currentMonthParam();
 
   const clients = await loadOperationTriageClients(monthParam);
-  const bandCounts = countOperationTriageBands(clients);
+  const summary = summarizeOperationTriage(clients);
 
   const { weekdayShort, dateShort, time } = formatAgencyDateTime(new Date());
 
@@ -33,7 +33,7 @@ export default async function OperationPage({
       clients={clients}
       monthParam={monthParam}
       monthLastUpdatedLabel={`Atualizado ${weekdayShort} · ${dateShort} · ${time}`}
-      bandCounts={bandCounts}
+      summary={summary}
       todayStr={todayDateString()}
     />
   );

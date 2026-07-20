@@ -1,174 +1,92 @@
 import Link from "next/link";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
-import { StatusDot } from "@/components/workspace/status-dot";
-import type { StatusTone as WorkspaceStatusTone } from "@/components/workspace/status-dot";
-import type { StatusTone } from "@/lib/status-registry";
-import { OPERATION_TRIAGE_BAND_REGISTRY } from "@/lib/status-registry";
+import { formatCurrency } from "@/lib/format";
 import { MIN_RELIABLE_RESULT_COUNT } from "@/lib/operation-health-thresholds";
-import type { DimensionSeverity } from "@/lib/account-health-engine";
-import {
-  bandFromHealthStatus,
-  formatDataFreshnessLabel,
-  type OperationClientCard as OperationClientCardData,
-  type OperationTriageBand,
-} from "@/lib/operation-triage";
-import { MetricThermometer, type MetricThermometerTone } from "./metric-thermometer";
-
-/** `StatusTone` do registry central inclui "info"/"brand", que as bandas da
- * Operação nunca usam — mesmo motivo do mapeamento que já existia aqui
- * antes do redesenho. */
-function toWorkspaceTone(tone: StatusTone): WorkspaceStatusTone {
-  if (tone === "info") return "neutral";
-  return tone;
-}
-
-const SEVERITY_TONE: Record<DimensionSeverity, MetricThermometerTone> = {
-  nenhum: "neutral",
-  leve: "neutral",
-  relevante: "warning",
-  grave: "danger",
-};
-
-/** Rótulo curto só de apresentação do card (rodada de refinamento fino) —
- * uma escala semântica de estado (nunca um verbo/chamada de ação), na
- * mesma ordem de severidade do badge original. `em_risco` reaproveita o
- * próprio texto do registry central (`OPERATION_TRIAGE_BAND_REGISTRY`),
- * que mantém a versão por extenso pra outros usos (ex.: chips de filtro). */
-const COMPACT_BAND_LABEL: Record<OperationTriageBand, string> = {
-  precisa_atencao: "Crítico",
-  em_risco: "Em risco",
-  em_acompanhamento: "Atenção",
-  saudavel: "Saudável",
-};
-
-/** Cor da faixa de severidade lateral — lida direto da variável CSS do
- * tom (funciona em claro/escuro sem duplicar os hex aqui). Aplicada via
- * `style` (não classe) pra sempre vencer o `border-color` do hover. */
-const STRIPE_COLOR_VAR: Record<StatusTone, string> = {
-  success: "var(--overview-success)",
-  warning: "var(--overview-warning)",
-  danger: "var(--overview-danger)",
-  neutral: "var(--overview-text-muted)",
-  info: "var(--overview-text-muted)",
-  brand: "var(--brand)",
-};
+import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
+import { formatDataFreshnessLabel, type OperationClientCard as OperationClientCardData } from "@/lib/operation-triage";
 
 const countFormatter = new Intl.NumberFormat("pt-BR");
 
-/** Moeda compacta ("R$3,2k") — só formatação de apresentação (o valor em
- * si já vem pronto do motor, nenhum cálculo novo). Existe porque os três
- * indicadores + a metadata precisam caber numa única linha (Etapa
- * "Compactação da Operação") — "R$ 3.200,00" por extenso não cabia. */
-function formatCompactCurrency(value: number): string {
-  if (Math.abs(value) >= 1000) {
-    return `R$${(value / 1000).toFixed(1).replace(".", ",")}k`;
-  }
-  return `R$${Math.round(value)}`;
+/** Moeda inteira ("R$ 2.413") — investimento é sempre exibido arredondado
+ * pro real mais próximo (a precisão de centavos não ajuda a leitura rápida
+ * do painel). Custo por resultado usa `formatCurrency` (2 casas), porque
+ * ali a diferença de centavos costuma ser o próprio ponto de atenção. */
+function formatWholeCurrency(value: number): string {
+  return `R$ ${Math.round(value).toLocaleString("pt-BR")}`;
+}
+
+function Stat({ label, value, title }: { label: string; value: string; title?: string }) {
+  return (
+    <div className="min-w-0 flex-1" title={title}>
+      <p className="truncate text-[11px] text-muted-foreground">{label}</p>
+      <p className="truncate text-xl font-semibold tabular-nums text-foreground">{value}</p>
+    </div>
+  );
 }
 
 /**
- * Card da Operação — versão compacta de 3 linhas (Etapa "Compactação da
- * Operação"): identidade+status / motivo principal / indicadores+metadata,
- * sempre na mesma altura, nunca variando por ausência de dado ou por
- * motivo secundário (que deixou de ser exibido nesta rodada — não foi
- * removido do motor, só não tem mais uma linha fixa reservada pra ele;
- * como ele volta a aparecer é decisão de uma etapa futura).
+ * Card da Operação (Etapa "Fila de Prioridades 1.0") — a tela deixou de
+ * comparar planejado vs. realizado, mostrar tendência ou qualquer selo de
+ * severidade: só os três números do estado atual da conta (investimento,
+ * resultado principal, custo por resultado), grandes o bastante pra ler em
+ * poucos segundos, e a metadata mínima (última atualização + pendências).
+ * `evaluation.primaryReason` volta a aparecer (uma linha, sem quebrar) logo
+ * abaixo do nome — é o contexto mínimo pra responder "por que este cliente
+ * está na fila?" sem reintroduzir nenhuma comparação longa. O motivo
+ * SECUNDÁRIO continua fora do card (`collectAccountHealthReasons` nunca é
+ * chamado aqui). `evaluation` (Motor de Saúde) continua sendo a única
+ * fonte dos valores — a ordenação da fila (fora deste componente) também
+ * continua vindo dele — só que a UI não narra mais desvio/severidade dos
+ * três números, apenas o valor bruto atual.
  */
 export function OperationClientCard({ card, todayStr }: { card: OperationClientCardData; todayStr: string }) {
   const { evaluation } = card;
-  const band = bandFromHealthStatus(evaluation.healthStatus);
-  const badge = OPERATION_TRIAGE_BAND_REGISTRY[`operation_triage.${band}`];
   const freshnessLabel = formatDataFreshnessLabel(card.lastDataSyncAt, todayStr);
+  const goalConfig = card.performanceGoal ? PERFORMANCE_GOALS[card.performanceGoal] : null;
 
   const investment = evaluation.dimensions.investment;
   const results = evaluation.dimensions.results;
   const cost = evaluation.dimensions.cost;
 
-  const investmentEmptyMessage =
-    investment.planned === null
-      ? "Planejamento não definido"
-      : !investment.hasSyncedData
-        ? "Sem dados de investimento"
-        : undefined;
+  const investmentValue = investment.hasSyncedData ? formatWholeCurrency(investment.actual) : "—";
+  const investmentTitle = investment.hasSyncedData ? undefined : "Sem dados de investimento";
 
-  const resultsEmptyMessage = !card.performanceGoal
+  const resultValue = !goalConfig || !results.hasPerformanceData ? "—" : countFormatter.format(results.actual);
+  const resultTitle = !goalConfig
     ? "Objetivo não configurado"
-    : results.planned === null
-      ? "Meta não definida"
-      : !results.hasPerformanceData
-        ? "Sem resultados registrados"
-        : undefined;
+    : !results.hasPerformanceData
+      ? "Sem resultados registrados"
+      : undefined;
 
-  const costEmptyMessage = !cost.hasReliableSample
+  const costValue = !cost.hasReliableSample || cost.actual === null ? "—" : formatCurrency(cost.actual);
+  const costTitle = !cost.hasReliableSample
     ? `Aguardando amostra suficiente — ${cost.sampleSize} de ${MIN_RELIABLE_RESULT_COUNT}`
-    : cost.planned === null
-      ? "Meta não definida"
-      : cost.actual === null
-        ? "Sem dados de custo"
-        : undefined;
+    : cost.actual === null
+      ? "Sem dados de custo"
+      : undefined;
 
   return (
     <Link
       href={`/clients/${card.clientId}`}
-      style={{ borderLeftColor: STRIPE_COLOR_VAR[badge.tone] }}
-      className="mitza-pressable group flex flex-col gap-1 rounded-lg border-y border-r border-l-[3px] border-border px-3 py-2 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:border-zinc-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:border-zinc-700"
+      className="mitza-pressable group flex items-center gap-4 rounded-lg border border-border px-4 py-3 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:border-zinc-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:border-zinc-700"
     >
-      {/* Linha 1: avatar (discreto) + nome + status compacto. Gestor
-       * deixou de aparecer aqui nesta rodada de refinamento (o cliente é
-       * o protagonista) — o dado continua em `card.managerName`, só não
-       * tem mais espaço reservado nesta linha. */}
-      <div className="flex items-center gap-2">
-        <ClientAvatar name={card.clientName} imageUrl={card.avatarUrl} size="xs" />
-        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{card.clientName}</p>
-        <StatusDot
-          tone={toWorkspaceTone(badge.tone)}
-          label={COMPACT_BAND_LABEL[band]}
-          emphasize={band !== "saudavel"}
-          className="shrink-0"
-        />
-      </div>
+      <ClientAvatar name={card.clientName} imageUrl={card.avatarUrl} size="sm" />
 
-      {/* Linha 2: motivo principal — uma linha só, nunca aumenta a altura
-       * do card (trunca em vez de quebrar). */}
-      <p className="truncate text-xs text-muted-foreground">{evaluation.primaryReason}</p>
-
-      {/* Linha 3: os três indicadores (ordem fixa: investimento → resultado
-       * → custo, sempre a mesma em todo card) + metadata, tudo numa linha. */}
-      <div className="flex items-center gap-3">
-        <MetricThermometer
-          mode="higher-better"
-          actual={investment.actual}
-          planned={investment.planned}
-          expected={investment.expected}
-          formattedActual={formatCompactCurrency(investment.actual)}
-          tone={SEVERITY_TONE[investment.status]}
-          emptyMessage={investmentEmptyMessage}
-        />
-        <MetricThermometer
-          mode="higher-better"
-          actual={results.actual}
-          planned={results.planned}
-          expected={results.expected}
-          formattedActual={countFormatter.format(results.actual)}
-          tone={SEVERITY_TONE[results.status]}
-          emptyMessage={resultsEmptyMessage}
-        />
-        <MetricThermometer
-          mode="lower-better"
-          actual={cost.actual}
-          planned={cost.planned}
-          expected={cost.expected}
-          formattedActual={cost.actual !== null ? formatCompactCurrency(cost.actual) : "—"}
-          tone={SEVERITY_TONE[cost.status]}
-          emptyMessage={costEmptyMessage}
-        />
-
-        <span className="ml-auto shrink-0 whitespace-nowrap text-[11px] text-muted-foreground">
+      <div className="flex w-48 min-w-0 shrink-0 flex-col">
+        <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
+        <p className="truncate text-xs text-muted-foreground">{evaluation.primaryReason}</p>
+        <p className="truncate text-[11px] text-muted-foreground/80">
           {freshnessLabel}
           {card.overdueTasksCount > 0
-            ? ` · ${card.overdueTasksCount} tarefa${card.overdueTasksCount > 1 ? "s" : ""} atrasada${card.overdueTasksCount > 1 ? "s" : ""}`
+            ? ` · ${card.overdueTasksCount} tarefa${card.overdueTasksCount > 1 ? "s" : ""} pendente${card.overdueTasksCount > 1 ? "s" : ""}`
             : ""}
-        </span>
+        </p>
+      </div>
+
+      <div className="flex flex-1 items-center gap-6">
+        <Stat label="Investimento" value={investmentValue} title={investmentTitle} />
+        <Stat label={goalConfig?.resultMetricLabel ?? "Resultado"} value={resultValue} title={resultTitle} />
+        <Stat label={goalConfig?.costMetricShortLabel ?? "Custo"} value={costValue} title={costTitle} />
       </div>
     </Link>
   );

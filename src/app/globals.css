@@ -362,6 +362,19 @@ body {
   transition: transform var(--motion-fast) var(--ease-enter);
 }
 
+/* Esconde a barra de rolagem sem desativar o scroll (Etapa "Fila de
+ * Prioridades 1.0") — usado na navegação da Sidebar, que agora abre com
+ * as pastas de gestor fechadas e raramente precisa rolar; quando precisar,
+ * a rolagem continua funcionando, só sem a barra visível competindo com a
+ * navegação. */
+.mitza-scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.mitza-scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 /* Protótipo ISOLADO (Interaction Physics 1.0) — técnica grid-template-rows
  * pra tentar animar um único <details>/<summary> sem JS. Aplicado em UM
  * ÚNICO accordion de sprint (ver `sprint-card.tsx`, prop

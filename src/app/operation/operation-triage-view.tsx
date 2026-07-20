@@ -4,45 +4,48 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { formatMonthLabel } from "@/lib/format";
 import {
-  bandFromHealthStatus,
   shiftOperationMonth,
   type OperationClientCard as OperationClientCardData,
-  type OperationTriageBand,
+  type OperationTriageSummary,
 } from "@/lib/operation-triage";
 import { OperationClientCard } from "./operation-client-card";
-import { OperationFilterBar, type OperationBandFilter, type OperationDimensionFilter } from "./operation-filter-bar";
+import { OperationFilterBar, type OperationQuickFilter } from "./operation-filter-bar";
 
 /**
- * Centro de Triagem da Operação (Etapa "Redesenho da Operação") — não é
+ * Centro de Triagem da Operação (Etapa "Fila de Prioridades 1.0") — não é
  * um dashboard, é uma FILA DE TRABALHO. Um dashboard tenta mostrar tudo;
  * esta tela mostra primeiro quem exige ação (ordenação já resolvida pela
  * camada de domínio — `sortOperationClientCards`, nunca recalculada aqui)
- * e só depois o contexto (termômetros, motivo secundário). Por isso não
- * há nenhuma métrica agregada de agência nesta tela (isso já existe na
- * Visão Geral) — só a fila, seus filtros, e "abrir o cliente certo".
+ * e só depois o estado atual da conta (investimento, resultado, custo).
+ * Nenhuma comparação planejado-vs-realizado, tendência ou selo de
+ * severidade aparece mais nesta tela — isso continua existindo na página
+ * do cliente, que é onde a análise detalhada acontece.
  */
 export function OperationTriageView({
   clients,
   monthParam,
   monthLastUpdatedLabel,
-  bandCounts,
+  summary,
   todayStr,
 }: {
   clients: OperationClientCardData[];
   monthParam: string;
   monthLastUpdatedLabel: string;
-  bandCounts: Record<OperationTriageBand, number>;
+  summary: OperationTriageSummary;
   todayStr: string;
 }) {
-  const [bandFilter, setBandFilter] = useState<OperationBandFilter>("todos");
-  const [dimensionFilter, setDimensionFilter] = useState<OperationDimensionFilter>("todos");
+  const [quickFilter, setQuickFilter] = useState<OperationQuickFilter>("todos");
   const [query, setQuery] = useState("");
 
   const filteredClients = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return clients.filter((card) => {
-      if (bandFilter !== "todos" && bandFromHealthStatus(card.evaluation.healthStatus) !== bandFilter) return false;
-      if (dimensionFilter !== "todos" && card.evaluation.dimensions[dimensionFilter].status === "nenhum") return false;
+      if (quickFilter === "pendencias" && card.overdueTasksCount === 0) return false;
+      if (quickFilter === "revisoes") {
+        const review = card.evaluation.dimensions.review;
+        if (!(review.enabled && review.status !== "nenhum")) return false;
+      }
+      if (quickFilter === "sem_sincronizacao" && card.evaluation.dimensions.investment.hasSyncedData) return false;
       if (normalizedQuery) {
         const matchesName = card.clientName.toLowerCase().includes(normalizedQuery);
         const matchesManager = (card.managerName ?? "").toLowerCase().includes(normalizedQuery);
@@ -50,9 +53,8 @@ export function OperationTriageView({
       }
       return true;
     });
-  }, [clients, bandFilter, dimensionFilter, query]);
+  }, [clients, quickFilter, query]);
 
-  const totalCount = clients.length;
   const prevMonthHref = `/operation?month=${shiftOperationMonth(monthParam, -1)}`;
   const nextMonthHref = `/operation?month=${shiftOperationMonth(monthParam, 1)}`;
 
@@ -86,12 +88,9 @@ export function OperationTriageView({
       </div>
 
       <OperationFilterBar
-        bandCounts={bandCounts}
-        totalCount={totalCount}
-        bandFilter={bandFilter}
-        onBandFilterChange={setBandFilter}
-        dimensionFilter={dimensionFilter}
-        onDimensionFilterChange={setDimensionFilter}
+        summary={summary}
+        quickFilter={quickFilter}
+        onQuickFilterChange={setQuickFilter}
         query={query}
         onQueryChange={setQuery}
       />
@@ -106,7 +105,7 @@ export function OperationTriageView({
         </ul>
       ) : (
         <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-          {totalCount === 0 ? "Nenhum cliente ativo neste mês." : "Nenhum cliente encontrado com esse filtro."}
+          {summary.totalClients === 0 ? "Nenhum cliente ativo neste mês." : "Nenhum cliente encontrado com esse filtro."}
         </p>
       )}
     </div>

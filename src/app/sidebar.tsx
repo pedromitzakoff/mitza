@@ -265,7 +265,7 @@ function SidebarContent({
 
       {/* Região com scroll próprio: só a navegação rola se não couber —
        * rodapé (usuário/sair) fica sempre visível, fora desta região. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className="mitza-scrollbar-hidden flex min-h-0 flex-1 flex-col overflow-y-auto">
         <nav className="flex flex-col gap-0.5 px-2.5">
           {principal.map((item) => (
             <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
