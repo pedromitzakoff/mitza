@@ -72,10 +72,10 @@ export function OperationClientCard({ card, todayStr }: { card: OperationClientC
     >
       <ClientAvatar name={card.clientName} imageUrl={card.avatarUrl} size="sm" />
 
-      <div className="flex w-48 min-w-0 shrink-0 flex-col">
+      <div className="flex w-64 min-w-0 shrink-0 flex-col">
         <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
-        <p className="truncate text-xs text-muted-foreground">{evaluation.primaryReason}</p>
-        <p className="truncate text-[11px] text-muted-foreground/80">
+        <p className="text-xs text-muted-foreground">{evaluation.primaryReason}</p>
+        <p className="text-[11px] text-muted-foreground/80">
           {freshnessLabel}
           {card.overdueTasksCount > 0
             ? ` · ${card.overdueTasksCount} tarefa${card.overdueTasksCount > 1 ? "s" : ""} pendente${card.overdueTasksCount > 1 ? "s" : ""}`
