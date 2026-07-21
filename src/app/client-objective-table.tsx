@@ -1,4 +1,4 @@
-import type { OperationClientCard } from "@/app/operation/operation-data";
+import type { ClientObjectiveTableRow as ClientObjectiveRow } from "./overview-client-view";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { PERFORMANCE_GOALS, formatPerformanceResult } from "@/lib/performance-goals";
 import type { SpendStatus } from "@/lib/spend-status";
@@ -38,7 +38,7 @@ const SITUATION_TONE: Record<SpendStatus, StatusTone> = {
 /** Plataformas configuradas do cliente (Etapa 2/3 — `clientUsesChannel`),
  * formatadas pra coluna "Plataforma" — "Meta", "Google", "Meta + Google" ou
  * "—" (nenhum dado de plataforma ainda, ex.: cliente recém-criado). */
-export function formatClientPlatforms(card: OperationClientCard): string {
+export function formatClientPlatforms(card: ClientObjectiveRow): string {
   const labels: string[] = [];
   if (card.clientUsesChannel.meta) labels.push("Meta");
   if (card.clientUsesChannel.google) labels.push("Google");
@@ -66,7 +66,7 @@ export function ClientObjectiveTable({
   platformFilter,
   primaryManagerNameByClient,
 }: {
-  cards: OperationClientCard[];
+  cards: ClientObjectiveRow[];
   objective: PerformanceGoal | null;
   platformFilter: "consolidado" | "meta" | "google";
   primaryManagerNameByClient: Map<string, string | null>;

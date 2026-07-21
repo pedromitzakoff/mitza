@@ -1,10 +1,13 @@
 import {
   DIMENSION_PRIORITY_ORDER,
   DIMENSION_SEVERITY_RANK,
+  evaluateAccountHealth,
   type AccountHealthEvaluation,
+  type AccountHealthInput,
   type DimensionSeverity,
   type HealthStatus,
 } from "@/lib/account-health-engine";
+import type { ClientChannelState } from "@/lib/client-channel-breakdown";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 
 /**
@@ -89,4 +92,50 @@ export function sortClientOperationalStates(cards: ClientOperationalState[]): Cl
 
     return a.clientName.localeCompare(b.clientName);
   });
+}
+
+/**
+ * Avaliação de saúde recortada por canal (Etapa "Consolidação da
+ * Arquitetura — Fase B", Prioridade 1) — reusa a MESMA `evaluateAccountHealth`
+ * (nunca um segundo motor), reconstruindo o `AccountHealthInput` bruto a
+ * partir das dimensões já calculadas em `state.evaluation` (revisão, meta de
+ * custo, sincronização) e trocando só o que de fato varia por canal
+ * (investimento realizado, resultado/custo do canal — `ClientChannelState`,
+ * `client-channel-breakdown.ts`).
+ *
+ * Investimento e resultado PLANEJADOS não existem por canal neste modelo de
+ * dados (só no Consolidado — mesma decisão já registrada em
+ * `client-priority.ts`: "ritmo financeiro continua uma exclusividade do
+ * Consolidado") — por isso os dois entram como `null`, e `evaluationScope:
+ * "channel"` avisa `evaluateDataQuality` que essa ausência é esperada, não
+ * uma lacuna de qualidade de dados. Revisão e meta de custo (`costPlanned`)
+ * são fatos de nível de conta, não de canal — continuam os mesmos,
+ * independente do canal selecionado.
+ */
+export function evaluateClientChannelHealth(
+  state: ClientOperationalState,
+  channelState: ClientChannelState,
+): AccountHealthEvaluation {
+  const { investment, review, cost } = state.evaluation.dimensions;
+
+  const input: AccountHealthInput = {
+    investmentActual: channelState.investmentActual,
+    investmentPlanned: null,
+    investmentHasSyncedData: investment.hasSyncedData,
+    resultActual: channelState.performanceSummary?.resultCount ?? 0,
+    resultPlanned: null,
+    hasPerformanceData: channelState.performanceSummary?.hasAnyRecord ?? false,
+    performanceGoalConfigured: state.performanceGoal !== null,
+    costActual: channelState.performanceSummary?.costPerResult ?? null,
+    costPlanned: cost.planned,
+    // Inerte aqui: só usado pra prorratear investimento/resultado
+    // ESPERADO, e os dois ficam `null` acima (evaluateInvestment/
+    // evaluateResults retornam antes de ler este campo).
+    monthExpectedPct: 0,
+    reviewBusinessDaysAgo: review.actual,
+    reviewMaxBusinessDays: review.enabled ? review.planned : null,
+    evaluationScope: "channel",
+  };
+
+  return evaluateAccountHealth(input);
 }

@@ -21,14 +21,13 @@ import {
 import type { AccountHealth } from "@/lib/attention-alerts";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import {
-  computeAgencyResultsSummary,
-  computeFinancialSummary,
-  computeManagerSummary,
-  computeSpendRhythmCounts,
-} from "@/lib/agency-metrics";
-import { buildClientPriorityQueue, sortCardsByPriority } from "@/lib/client-priority";
-import type { PerformanceChannelScope } from "@/lib/performance";
+import { computeFinancialSummary, computeManagerSummary, computeSpendRhythmCounts } from "@/lib/agency-metrics";
+import { computeHealthResultsSummary } from "@/lib/agency-health-aggregation";
+import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
+import { evaluateClientChannelHealth, sortClientOperationalStates, type ClientOperationalState } from "@/lib/client-operational-state";
+import { resolveClientChannelBreakdown, type ClientChannelState } from "@/lib/client-channel-breakdown";
+import { buildClientObjectiveRow, buildOverviewPriorityItem, type ClientObjectiveTableRow } from "./overview-client-view";
+import type { HealthStatus } from "@/lib/account-health-engine";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
@@ -128,20 +127,29 @@ export default async function Home({
   const indicatorsMonthEnd = `${monthRange.lastDay}T23:59:59.999Z`;
 
   const __perfBlock1Start = perfNow();
+  // Etapa "Consolidação da Arquitetura — Fase B": `clientOperationalStates`
+  // roda em paralelo com o bloco 1, seu próprio pipeline independente
+  // (`lib/client-operational-state-data.ts`, o mesmo que a Operação usa) —
+  // duplica algumas queries de propósito (mesmo princípio de isolamento já
+  // documentado nesse módulo), nunca reaproveita `rawClients`/`allCards`.
   const [
-    clients,
-    gestores,
-    sprints,
-    dailySpend,
-    tasks,
-    plannedAllocations,
-    budgetChanges,
-    teamMembersForIndicators,
-    completedTasksForIndicators,
-    reviewsForIndicators,
-    channelSpendOverrides,
-    performanceTargetHistory,
+    [
+      clients,
+      gestores,
+      sprints,
+      dailySpend,
+      tasks,
+      plannedAllocations,
+      budgetChanges,
+      teamMembersForIndicators,
+      completedTasksForIndicators,
+      reviewsForIndicators,
+      channelSpendOverrides,
+      performanceTargetHistory,
+    ],
+    clientOperationalStates,
   ] = await Promise.all([
+    Promise.all([
     requireQuery(
       supabase
         .from("clients")
@@ -243,8 +251,10 @@ export default async function Home({
         .order("changed_at", { ascending: false }),
       "monthly_budget_changes:target-history",
     ),
+    ]),
+    loadClientOperationalStates(supabase, monthRange.firstDay),
   ]);
-  perfLog("visão geral bloco 1 (12 queries)", __perfBlock1Start);
+  perfLog("visão geral bloco 1 (12 queries + ClientOperationalState)", __perfBlock1Start);
 
   const clientIds = (clients ?? []).map((c) => c.id);
   const currentSprintIds = (sprints ?? [])
@@ -425,6 +435,32 @@ export default async function Home({
     (clients ?? []).map((c) => [c.id, c.primary_manager?.name ?? null]),
   );
 
+  // Etapa "Consolidação da Arquitetura — Fase B": `ClientOperationalState`
+  // por cliente (Prioridade 1/2) + o recorte por canal (Prioridade 5,
+  // `client-channel-breakdown.ts`) — reaproveita os mesmos dados brutos já
+  // buscados acima (`sprintsByClient`/`dailySpendChannelByClient`/
+  // `channelOverridesByClient`/`performanceRecordsByClient`), nenhuma query
+  // nova só pra canal.
+  const operationalStateByClient = new Map(clientOperationalStates.map((state) => [state.clientId, state]));
+  const channelBreakdownByClient = new Map<string, ClientChannelState[]>(
+    (clients ?? []).map((client) => {
+      const clientSprintsForChannel = (sprintsByClient.get(client.id) ?? []).map((s) => ({
+        sprintId: s.id,
+        start_date: s.start_date,
+        end_date: s.end_date,
+      }));
+      const breakdown = resolveClientChannelBreakdown({
+        sprints: clientSprintsForChannel,
+        dailySpendChannel: dailySpendChannelByClient.get(client.id) ?? [],
+        channelSpendOverrides: channelOverridesByClient.get(client.id) ?? [],
+        performanceRecords: performanceRecordsByClient.get(client.id) ?? [],
+        performanceGoal: client.performance_goal,
+        targetCostPerResult: resolvedTargetCostByClient.get(client.id) ?? null,
+      });
+      return [client.id, breakdown];
+    }),
+  );
+
   const rawClients: OperationClientRawData[] = (clients ?? []).map((client) => {
     const clientSprints = sprintsByClient.get(client.id) ?? [];
     const currentSprint = findSprintForDate(clientSprints, todayStr);
@@ -556,31 +592,90 @@ export default async function Home({
     reviewClientIds: (reviewsForIndicators ?? []).map((r) => r.client_id),
     hasClientFilter: Boolean(clientFilter),
   });
-  // Etapa "Executive Dashboard 1.0" — resultado consolidado (leads/vendas/
-  // CPL/CPA), mesmo recorte de mês/carteira/cliente de `operationIndicators`
-  // (`indicatorCards`), nunca os filtros de recorte de `cards`.
-  const agencyResults = computeAgencyResultsSummary(indicatorCards);
+  // Etapa "Consolidação da Arquitetura — Fase B" (Prioridade 3): "Resultados
+  // da agência" migrou pra `computeHealthResultsSummary` — mesmo recorte de
+  // mês/carteira/cliente de `operationIndicators` (nunca os filtros de
+  // recorte de `cards`), só que sobre `ClientOperationalState[]` em vez do
+  // card legado. Paridade verificada via fixtures sintéticos (ver relatório).
+  let indicatorStates = clientOperationalStates;
+  if (managerFilter === "me") {
+    indicatorStates = indicatorStates.filter((state) => state.managerId === profile.id);
+  } else if (managerFilter !== "all") {
+    indicatorStates = indicatorStates.filter((state) => state.managerId === managerFilter);
+  }
+  if (clientFilter) {
+    indicatorStates = indicatorStates.filter((state) => state.clientId === clientFilter);
+  }
+  const agencyResults = computeHealthResultsSummary(indicatorStates);
 
-  // Prioridade de cada cliente — uma única fonte (buildClientPriorityQueue,
-  // MVP "Reformular Prioridades na Visão Geral"), reaproveitada pelo bloco
-  // "Prioridades de hoje" e pela ordenação padrão da tabela. A tabela em si
-  // não exibe mais uma coluna própria de severidade (Etapa 49 removeu
-  // "Prioridade" por duplicar "Status" sem contexto adicional).
+  // Etapa "Consolidação da Arquitetura — Fase B" (Prioridade 1): "Prioridades
+  // de hoje" migrou pra `ClientOperationalState` — uma linha por CLIENTE
+  // (não mais por problema), motivo sempre `evaluation.primaryReason` (nunca
+  // reconstruído aqui). Recorte: mesmo conjunto de clientes de `cards`
+  // (todos os filtros de recorte já aplicados), restrito a quem tem algum
+  // sinal (`healthStatus !== "saudavel"` — "saudável" nunca gera prioridade,
+  // mesmo espírito do antigo "sem problema não gera item").
   //
-  // `performanceScope`: custo por resultado já tem investimento real por
-  // canal (Etapa 2/3), então continua disponível fora do Consolidado; ritmo
-  // financeiro (a outra metade da fila) continua exclusividade do
-  // Consolidado — não existe orçamento configurado por canal ainda (mesma
-  // decisão da Etapa de filtro de plataforma). `buildClientPriorityQueue`
-  // já sabe disso e nunca gera item de ritmo fora do Consolidado.
-  const performanceScope: PerformanceChannelScope = platformFilter === "consolidado" ? "consolidated" : platformFilter;
-  const priorityQueue = buildClientPriorityQueue(cards, performanceScope);
+  // Correção (revisão do relatório original): fora do Consolidado, o
+  // veredito não pode continuar sendo o CONSOLIDADO disfarçado de "recorte
+  // por canal" — cada estado é reavaliado com `evaluateClientChannelHealth`
+  // (`client-operational-state.ts`, MESMA `evaluateAccountHealth`, nunca um
+  // segundo motor), usando o investimento/resultado/custo do canal
+  // selecionado (`channelBreakdownByClient`, Prioridade 5). Um cliente que
+  // não usa o canal selecionado simplesmente não entra (mesma regra que já
+  // filtra `cards` pra fora do Consolidado). A ordenação continua vindo do
+  // sorter canônico (`sortClientOperationalStates`) — reaplicado aqui porque
+  // trocar a avaliação de alguns clientes pode mudar sua posição relativa
+  // (a ordem pronta de `clientOperationalStates` só é válida pro recorte
+  // Consolidado).
+  const cardsClientIds = new Set(cards.map((card) => card.clientId));
+  const priorityStates: ClientOperationalState[] = clientOperationalStates
+    .filter((state) => cardsClientIds.has(state.clientId))
+    .flatMap((state) => {
+      if (platformFilter === "consolidado") {
+        return state.evaluation.healthStatus !== "saudavel" ? [state] : [];
+      }
+      const channelState = (channelBreakdownByClient.get(state.clientId) ?? []).find((c) => c.channel === platformFilter);
+      if (!channelState) return [];
+      const evaluation = evaluateClientChannelHealth(state, channelState);
+      return evaluation.healthStatus !== "saudavel" ? [{ ...state, evaluation }] : [];
+    });
+  const priorityQueue = sortClientOperationalStates(priorityStates).map(buildOverviewPriorityItem);
   const prioritiesTop = priorityQueue.slice(0, 6);
   const prioritiesOpen = params.prioridades === "1";
-  const prioritySeverity = (params.prioridadeSeveridade ?? "todos") as AccountHealth | "todos";
+  const prioritySeverity = (params.prioridadeSeveridade ?? "todos") as HealthStatus | "todos";
 
+  // Etapa "Consolidação da Arquitetura — Fase B": ordenação padrão da tabela
+  // (Prioridade 2/Ponto 3 da revisão) — `sortCardsByPriority` (legado) foi
+  // removida daqui porque não era só um reordenamento de shape: recalculava
+  // desvio de custo/ritmo por conta própria (`buildClientPriorityItems`),
+  // um segundo conceito de prioridade paralelo ao Motor de Saúde. A ordem
+  // padrão agora vem do sorter canônico (`sortClientOperationalStates`, via
+  // `clientOperationalStates`, sempre Consolidado — a Prioridade 2 não pediu
+  // recorte por canal na ordenação da tabela, só nos valores exibidos por
+  // célula, já cobertos por `channelBreakdownByClient`/`objectiveRows`).
+  const canonicalRankByClient = new Map(clientOperationalStates.map((state, index) => [state.clientId, index]));
   const sortedCards =
-    sort === "nome" ? [...cards].sort((a, b) => a.clientName.localeCompare(b.clientName)) : sortCardsByPriority(cards, performanceScope);
+    sort === "nome"
+      ? [...cards].sort((a, b) => a.clientName.localeCompare(b.clientName))
+      : [...cards].sort(
+          (a, b) =>
+            (canonicalRankByClient.get(a.clientId) ?? Number.MAX_SAFE_INTEGER) -
+            (canonicalRankByClient.get(b.clientId) ?? Number.MAX_SAFE_INTEGER),
+        );
+
+  // Etapa "Consolidação da Arquitetura — Fase B" (Prioridade 2): cada linha
+  // das tabelas por objetivo passa a ser derivada de `ClientOperationalState`
+  // (investimento/resultado/custo/meta) + o recorte por canal — a mesma
+  // ordem/filtro de `sortedCards` (motor legado) é preservada, só o SHAPE de
+  // cada linha muda de fonte. `monthStatus` (Ritmo financeiro, Prioridade 4)
+  // e `sprintPeriodLabel` ("Sprint atual", sem equivalente neste domínio)
+  // continuam vindo do card legado — nunca recalculados, só repassados.
+  const objectiveRows: ClientObjectiveTableRow[] = sortedCards.flatMap((card) => {
+    const state = operationalStateByClient.get(card.clientId);
+    if (!state) return [];
+    return [buildClientObjectiveRow(state, card.monthStatus, card.sprintPeriodLabel, channelBreakdownByClient.get(card.clientId) ?? [])];
+  });
 
   const spendRhythm = computeSpendRhythmCounts(cards);
   const outOfRhythmCount = spendRhythm.abaixo + spendRhythm.acima;
@@ -666,7 +761,7 @@ export default async function Home({
     buildUrl({ prioridades: overrides.prioridades ?? "", prioridadeSeveridade: overrides.prioridadeSeveridade ?? "" });
   const openPrioritiesHref = prioritiesUrl({ prioridades: "1" });
   const closePrioritiesHref = prioritiesUrl({});
-  const prioritiesSeverityHref = (severity: AccountHealth | "todos") =>
+  const prioritiesSeverityHref = (severity: HealthStatus | "todos") =>
     prioritiesUrl({ prioridades: "1", prioridadeSeveridade: severity === "todos" ? "" : severity });
 
   const monthLabel = formatMonthLabel(monthRange.firstDay);
@@ -951,22 +1046,22 @@ export default async function Home({
           </Button>
         </div>
 
-        {sortedCards.length > 0 ? (
+        {objectiveRows.length > 0 ? (
           <>
             <ClientObjectiveTable
-              cards={sortedCards.filter((c) => c.performanceGoal === "leads")}
+              cards={objectiveRows.filter((c) => c.performanceGoal === "leads")}
               objective="leads"
               platformFilter={platformFilter}
               primaryManagerNameByClient={primaryManagerNameByClient}
             />
             <ClientObjectiveTable
-              cards={sortedCards.filter((c) => c.performanceGoal === "sales")}
+              cards={objectiveRows.filter((c) => c.performanceGoal === "sales")}
               objective="sales"
               platformFilter={platformFilter}
               primaryManagerNameByClient={primaryManagerNameByClient}
             />
             <ClientObjectiveTable
-              cards={sortedCards.filter((c) => !c.performanceGoal)}
+              cards={objectiveRows.filter((c) => !c.performanceGoal)}
               objective={null}
               platformFilter={platformFilter}
               primaryManagerNameByClient={primaryManagerNameByClient}

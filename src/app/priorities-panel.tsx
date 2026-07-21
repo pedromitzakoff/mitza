@@ -1,52 +1,51 @@
 import Link from "next/link";
-import type { AccountHealth } from "@/lib/attention-alerts";
-import type { ClientPriorityItem } from "@/lib/client-priority";
+import type { HealthStatus } from "@/lib/account-health-engine";
+import { bandFromHealthStatus } from "@/lib/operation-triage";
+import type { OverviewPriorityItem } from "./overview-client-view";
 import { Button } from "@/components/workspace/button";
 import { SectionHeader } from "@/components/workspace/section-header";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { StatusDot, type StatusTone } from "@/components/workspace/status-dot";
-import { ACCOUNT_HEALTH_REGISTRY } from "@/lib/status-registry";
+import { OPERATION_TRIAGE_BAND_REGISTRY } from "@/lib/status-registry";
 
-/** Deriva do Status Registry (`@/lib/status-registry`), ver Platform
- * Integrity Wave 1 — `atencao` agora é "Conta em atenção" (qualificado: o
- * mesmo valor de enum também existe, com outro significado, em
- * `OperationalActivityStatus`). */
-const SEVERITY_LABEL: Record<AccountHealth, string> = {
-  critico: ACCOUNT_HEALTH_REGISTRY["account_health.critico"].label,
-  atencao: ACCOUNT_HEALTH_REGISTRY["account_health.atencao"].label,
-  saudavel: ACCOUNT_HEALTH_REGISTRY["account_health.saudavel"].label,
+/** `StatusTone` do registry central inclui "info", que as bandas da
+ * Operação nunca usam — mesmo mapeamento já usado em
+ * `operation-client-card.tsx`. */
+function toWorkspaceTone(tone: StatusTone | "info"): StatusTone {
+  if (tone === "info") return "neutral";
+  return tone;
+}
+
+/** Rótulo/tom do estado do cliente — reaproveita o MESMO registry que a
+ * Operação já usa pra `healthStatus` (`OPERATION_TRIAGE_BAND_REGISTRY`, via
+ * `bandFromHealthStatus`), nunca um vocabulário próprio inventado pra esta
+ * tela (Etapa "Consolidação da Arquitetura — Fase B", Prioridade 1). */
+function bandBadge(healthStatus: HealthStatus): { label: string; tone: StatusTone } {
+  const entry = OPERATION_TRIAGE_BAND_REGISTRY[`operation_triage.${bandFromHealthStatus(healthStatus)}`];
+  return { label: entry.label, tone: toWorkspaceTone(entry.tone) };
+}
+
+const SEVERITY_TEXT_CLASSES: Record<StatusTone, string> = {
+  danger: "text-overview-danger",
+  warning: "text-overview-warning",
+  neutral: "text-overview-text-muted",
+  success: "text-overview-success",
+  brand: "text-brand",
 };
 
-const SEVERITY_TONE: Record<AccountHealth, StatusTone> = {
-  critico: "danger",
-  atencao: "warning",
-  saudavel: "success",
-};
-
-/** Cor do desvio percentual dentro de `priority.title` (ex.: "42%" em "CPL
- * 42% acima da meta") — o único número que de fato reduz o esforço de
- * leitura da linha (o quão fora do esperado a conta está). Reaproveita o
- * mesmo tom de `SEVERITY_TONE`/`StatusDot`: a cor já significa a mesma coisa
- * na mesma linha, só reforçada exatamente onde o olho precisa parar. */
-const SEVERITY_TEXT_CLASSES: Record<AccountHealth, string> = {
-  critico: "text-overview-danger",
-  atencao: "text-overview-warning",
-  saudavel: "text-overview-success",
-};
-
-/** Destaca só o desvio percentual dentro do título ("CPL 42% acima da
+/** Destaca só o desvio percentual dentro do motivo ("CPL 42% acima da
  * meta"/"Investimento 38% acima do ritmo") — nunca a frase inteira. O resto
- * do título continua com o mesmo peso de sempre. */
-function emphasizeDeviation(title: string, severity: AccountHealth) {
-  const match = title.match(/\d+%/);
-  if (!match || match.index === undefined) return title;
+ * do texto continua com o mesmo peso de sempre. */
+function emphasizeDeviation(reason: string, tone: StatusTone) {
+  const match = reason.match(/\d+%/);
+  if (!match || match.index === undefined) return reason;
   const start = match.index;
   const end = start + match[0].length;
   return (
     <>
-      {title.slice(0, start)}
-      <span className={`font-semibold ${SEVERITY_TEXT_CLASSES[severity]}`}>{match[0]}</span>
-      {title.slice(end)}
+      {reason.slice(0, start)}
+      <span className={`font-semibold ${SEVERITY_TEXT_CLASSES[tone]}`}>{match[0]}</span>
+      {reason.slice(end)}
     </>
   );
 }
@@ -55,9 +54,10 @@ function PriorityRow({
   priority,
   managerName,
 }: {
-  priority: ClientPriorityItem;
+  priority: OverviewPriorityItem;
   managerName: string | null;
 }) {
+  const badge = bandBadge(priority.healthStatus);
   return (
     <li className="flex min-h-[44px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3.5 py-1.5 transition-colors duration-150 hover:bg-overview-surface-hover">
       <div className="min-w-0 flex-1">
@@ -65,27 +65,27 @@ function PriorityRow({
           <Link href={`/clients/${priority.clientId}`} className="truncate text-sm font-semibold text-overview-text-primary hover:underline">
             {priority.clientName}
           </Link>
-          <StatusDot tone={SEVERITY_TONE[priority.severity]} label={SEVERITY_LABEL[priority.severity]} emphasize />
+          <StatusDot tone={badge.tone} label={badge.label} emphasize />
         </div>
         <p className="mt-0.5 truncate text-xs text-overview-text-secondary">
-          {emphasizeDeviation(priority.title, priority.severity)}
-          <span className="text-overview-text-muted"> · {priority.description}</span>
+          {emphasizeDeviation(priority.primaryReason, badge.tone)}
           {managerName ? <span className="text-overview-text-muted"> · {managerName}</span> : null}
         </p>
       </div>
       <Button href={priority.actionHref} variant="secondary" size="sm">
-        {priority.actionLabel}
+        Abrir cliente
       </Button>
     </li>
   );
 }
 
 /**
- * "Prioridades de hoje" — MVP "Reformular Prioridades na Visão Geral": lista
- * plana de itens acionáveis (custo acima da meta / ritmo fora do esperado),
- * um cliente pode aparecer mais de uma vez (uma linha por problema, nunca
- * "escondendo" um atrás do outro). Já ordenada por `sortClientPriorityItems`
- * (severidade → desvio → nome).
+ * "Prioridades de hoje" (Etapa "Consolidação da Arquitetura — Fase B") —
+ * lista de clientes com `healthStatus !== "saudavel"`, uma linha por
+ * CLIENTE (não mais por problema — o Motor de Saúde já resume tudo num
+ * único motivo principal por conta), ordenada pelo sorter canônico
+ * (`sortClientOperationalStates`, aplicado por quem monta `priorities`
+ * antes de passar pra este componente).
  */
 export function PrioritiesPanel({
   priorities,
@@ -93,7 +93,7 @@ export function PrioritiesPanel({
   totalCount,
   viewAllHref,
 }: {
-  priorities: ClientPriorityItem[];
+  priorities: OverviewPriorityItem[];
   managerNameByClient: Map<string, string | null>;
   totalCount: number;
   viewAllHref: string;
@@ -112,18 +112,14 @@ export function PrioritiesPanel({
       {priorities.length > 0 ? (
         <ul className="divide-y divide-overview-border border-t border-overview-border">
           {priorities.map((priority) => (
-            <PriorityRow
-              key={`${priority.clientId}-${priority.kind}`}
-              priority={priority}
-              managerName={managerNameByClient.get(priority.clientId) ?? null}
-            />
+            <PriorityRow key={priority.clientId} priority={priority} managerName={managerNameByClient.get(priority.clientId) ?? null} />
           ))}
         </ul>
       ) : (
         <div className="border-t border-overview-border">
           <EmptyState
             title="Nenhuma prioridade hoje."
-            description="Nenhuma conta com custo por resultado acima da meta ou ritmo financeiro fora do esperado."
+            description="Nenhuma conta com sinal de atenção no Motor de Saúde."
           />
         </div>
       )}
@@ -131,10 +127,11 @@ export function PrioritiesPanel({
   );
 }
 
-const SEVERITY_FILTER_OPTIONS: { value: AccountHealth | "todos"; label: string }[] = [
+const SEVERITY_FILTER_OPTIONS: { value: HealthStatus | "todos"; label: string }[] = [
   { value: "todos", label: "Todas" },
-  { value: "critico", label: "Críticas" },
-  { value: "atencao", label: "Atenção" },
+  { value: "acao_necessaria", label: bandBadge("acao_necessaria").label },
+  { value: "em_risco", label: bandBadge("em_risco").label },
+  { value: "em_acompanhamento", label: bandBadge("em_acompanhamento").label },
 ];
 
 /** "Ver todas" — mesmo padrão de drawer já usado no sistema (link
@@ -146,13 +143,13 @@ export function PrioritiesDrawer({
   closeHref,
   buildSeverityHref,
 }: {
-  priorities: ClientPriorityItem[];
+  priorities: OverviewPriorityItem[];
   managerNameByClient: Map<string, string | null>;
-  severity: AccountHealth | "todos";
+  severity: HealthStatus | "todos";
   closeHref: string;
-  buildSeverityHref: (severity: AccountHealth | "todos") => string;
+  buildSeverityHref: (severity: HealthStatus | "todos") => string;
 }) {
-  const filtered = severity === "todos" ? priorities : priorities.filter((p) => p.severity === severity);
+  const filtered = severity === "todos" ? priorities : priorities.filter((p) => p.healthStatus === severity);
 
   return (
     <>
@@ -176,11 +173,7 @@ export function PrioritiesDrawer({
         {filtered.length > 0 ? (
           <ul className="mt-3 divide-y divide-overview-border">
             {filtered.map((priority) => (
-              <PriorityRow
-                key={`${priority.clientId}-${priority.kind}`}
-                priority={priority}
-                managerName={managerNameByClient.get(priority.clientId) ?? null}
-              />
+              <PriorityRow key={priority.clientId} priority={priority} managerName={managerNameByClient.get(priority.clientId) ?? null} />
             ))}
           </ul>
         ) : (

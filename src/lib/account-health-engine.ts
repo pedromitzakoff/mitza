@@ -246,6 +246,21 @@ export interface AccountHealthInput {
    * (`is_active = false`) — dimensão não avaliada, decisão deliberada do
    * time de não exigir revisão regular deste cliente. */
   reviewMaxBusinessDays: number | null;
+
+  /** Recorte em que esta avaliação está sendo feita (Etapa "Consolidação da
+   * Arquitetura — Fase B", Prioridade 1) — `"consolidated"` (padrão, omitir
+   * o campo produz exatamente o comportamento de sempre pra todo chamador
+   * existente, ex.: a Operação nunca define este campo) ou `"channel"`
+   * (avaliação por Meta/Google isolado). Neste modelo de dados não existe
+   * plano de investimento nem meta de resultado por canal — só no
+   * Consolidado (mesma decisão já registrada em `client-priority.ts`:
+   * "ritmo financeiro continua uma exclusividade do Consolidado"). Em
+   * `"channel"`, `evaluateDataQuality` sabe que `investmentPlanned`/
+   * `resultPlanned` virem `null` é esperado (não é lacuna de dado), nunca
+   * gera a issue de qualidade correspondente. Aditivo por construção — nunca
+   * um segundo motor, a mesma `evaluateAccountHealth` com um contexto a
+   * mais. */
+  evaluationScope?: "consolidated" | "channel";
 }
 
 function evaluateInvestment(input: AccountHealthInput): InvestmentDimension {
@@ -391,8 +406,15 @@ function evaluateReview(input: AccountHealthInput): ReviewDimension {
  */
 function evaluateDataQuality(input: AccountHealthInput, hasCostTarget: boolean): DataQualityDimension {
   const issues: string[] = [];
+  // Em recorte por canal, ausência de plano/meta é esperada (só existem no
+  // Consolidado neste modelo de dados) — nunca uma lacuna de qualidade.
+  const isChannelScope = input.evaluationScope === "channel";
 
-  if (input.investmentPlanned === null) {
+  if (isChannelScope) {
+    if (!input.investmentHasSyncedData) {
+      issues.push("Sem sincronização de investimento este mês");
+    }
+  } else if (input.investmentPlanned === null) {
     issues.push("Planejamento mensal não definido");
   } else if (!input.investmentHasSyncedData) {
     issues.push("Sem sincronização de investimento este mês");
@@ -401,7 +423,7 @@ function evaluateDataQuality(input: AccountHealthInput, hasCostTarget: boolean):
   if (!input.performanceGoalConfigured) {
     issues.push("Objetivo de performance não configurado");
   } else {
-    if (input.resultPlanned === null) issues.push("Meta de resultado não definida");
+    if (!isChannelScope && input.resultPlanned === null) issues.push("Meta de resultado não definida");
     if (!input.hasPerformanceData) issues.push("Sem dados de performance registrados este mês");
     if (!hasCostTarget) issues.push("Meta de custo não definida");
   }
