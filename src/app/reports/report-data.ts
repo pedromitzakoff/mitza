@@ -113,13 +113,6 @@ export interface ReportActionItemRow {
   sentToTaskId: string | null;
 }
 
-export interface ReportCommentRow {
-  id: string;
-  content: string;
-  authorName: string | null;
-  createdAt: string;
-}
-
 export interface ReportViewData {
   clientId: string;
   clientName: string;
@@ -137,7 +130,6 @@ export interface ReportViewData {
   execution: AgencyExecutionSummary;
   sprintBehavior: SprintBehaviorRow[];
   timelineEvents: ReportTimelineEventRow[];
-  comments: ReportCommentRow[];
   analysisWhatWorked: string | null;
   analysisWhatDidntWork: string | null;
   analysisProblems: string | null;
@@ -202,7 +194,6 @@ export async function buildReportViewData(
       execution: snap.execution as AgencyExecutionSummary,
       sprintBehavior: (snap.sprintBehavior as SprintBehaviorRow[]) ?? [],
       timelineEvents: snap.timelineEvents as ReportTimelineEventRow[],
-      comments: snap.comments as ReportCommentRow[],
       analysisWhatWorked: report.analysis_what_worked,
       analysisWhatDidntWork: report.analysis_what_didnt_work,
       analysisProblems: report.analysis_problems,
@@ -328,7 +319,6 @@ export async function buildReportViewData(
       execution,
       sprintBehavior,
       timelineEvents: [],
-      comments: [],
       analysisWhatWorked: null,
       analysisWhatDidntWork: null,
       analysisProblems: null,
@@ -343,7 +333,7 @@ export async function buildReportViewData(
   }
 
   const previousMonthParam = shiftMonthParam(monthRange, -1);
-  const [kpiDefinitions, kpiValues, previousReport, timelineEvents, commentSelections, actionItems] =
+  const [kpiDefinitions, kpiValues, previousReport, timelineEvents, actionItems] =
     await Promise.all([
       requireQuery(
         supabase
@@ -377,13 +367,6 @@ export async function buildReportViewData(
           .eq("report_id", report.id)
           .order("event_date", { ascending: false }),
         "report_timeline_events",
-      ),
-      requireQuery(
-        supabase
-          .from("report_comment_selections")
-          .select("id, comment:comments(id, content, created_at, author:team_members!comments_author_id_fkey(name))")
-          .eq("report_id", report.id),
-        "report_comment_selections",
       ),
       requireQuery(
         supabase
@@ -441,14 +424,6 @@ export async function buildReportViewData(
       description: e.description,
       responsibleName: e.responsible?.name ?? null,
     })),
-    comments: (commentSelections ?? [])
-      .filter((s) => s.comment)
-      .map((s) => ({
-        id: s.comment!.id,
-        content: s.comment!.content,
-        authorName: s.comment!.author?.name ?? null,
-        createdAt: s.comment!.created_at,
-      })),
     analysisWhatWorked: report.analysis_what_worked,
     analysisWhatDidntWork: report.analysis_what_didnt_work,
     analysisProblems: report.analysis_problems,

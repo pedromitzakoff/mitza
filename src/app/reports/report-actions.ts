@@ -348,7 +348,6 @@ export async function finalizeReportAction(clientId: string, monthStart: string)
     execution: view.execution,
     sprintBehavior: view.sprintBehavior,
     timelineEvents: view.timelineEvents,
-    comments: view.comments,
     actionItems: view.actionItems,
   };
 

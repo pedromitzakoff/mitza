@@ -3,7 +3,8 @@ import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { formatCurrency } from "@/lib/format";
 import { MIN_RELIABLE_RESULT_COUNT } from "@/lib/operation-health-thresholds";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
-import { formatDataFreshnessLabel, type OperationClientCard as OperationClientCardData } from "@/lib/operation-triage";
+import { formatDataFreshnessLabel } from "@/lib/operation-triage";
+import type { ClientOperationalState } from "@/lib/client-operational-state";
 
 const countFormatter = new Intl.NumberFormat("pt-BR");
 
@@ -39,7 +40,7 @@ function Stat({ label, value, title }: { label: string; value: string; title?: s
  * continua vindo dele — só que a UI não narra mais desvio/severidade dos
  * três números, apenas o valor bruto atual.
  */
-export function OperationClientCard({ card, todayStr }: { card: OperationClientCardData; todayStr: string }) {
+export function OperationClientCard({ card, todayStr }: { card: ClientOperationalState; todayStr: string }) {
   const { evaluation } = card;
   const freshnessLabel = formatDataFreshnessLabel(card.lastDataSyncAt, todayStr);
   const goalConfig = card.performanceGoal ? PERFORMANCE_GOALS[card.performanceGoal] : null;

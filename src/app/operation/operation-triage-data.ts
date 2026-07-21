@@ -11,8 +11,9 @@ import {
   type MonthlyPlanChange,
 } from "@/lib/monthly-budget";
 import { evaluateAccountHealth, type AccountHealthInput } from "@/lib/account-health-engine";
+import { sortClientOperationalStates, type ClientOperationalState } from "@/lib/client-operational-state";
 import { DEFAULT_REVIEW_MAX_BUSINESS_DAYS } from "@/lib/operation-health-thresholds";
-import { monthRangeFromOperationParam, sortOperationClientCards, type OperationClientCard } from "@/lib/operation-triage";
+import { monthRangeFromOperationParam } from "@/lib/operation-triage";
 
 /**
  * Pipeline de dados PRÓPRIO da Operação — nenhuma query aqui importa de
@@ -38,7 +39,7 @@ import { monthRangeFromOperationParam, sortOperationClientCards, type OperationC
  * sozinho.
  */
 
-export async function loadOperationTriageClients(monthParam: string): Promise<OperationClientCard[]> {
+export async function loadOperationTriageClients(monthParam: string): Promise<ClientOperationalState[]> {
   const supabase = await createSupabaseClient();
   const today = todayUTC();
   const todayStr = todayDateString();
@@ -53,7 +54,7 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
         supabase
           .from("clients")
           .select(
-            "id, name, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(name)",
+            "id, name, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
           )
           .is("deleted_at", null)
           .order("name"),
@@ -184,7 +185,8 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
 
   const reviewCadenceByClient = new Map((reviewCadences ?? []).map((row) => [row.client_id, row]));
 
-  const cards: OperationClientCard[] = (clients ?? []).map((client) => {
+  const cards: ClientOperationalState[] = (clients ?? []).map((client) => {
+    const managerId = client.primary_manager?.id ?? null;
     const managerName = client.primary_manager?.name ?? null;
 
     const clientSprints: SprintSpendSource[] = (sprintsByClient.get(client.id) ?? []).map((sprint) => ({
@@ -255,6 +257,7 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
     return {
       clientId: client.id,
       clientName: client.name,
+      managerId,
       managerName,
       // Sem infraestrutura de avatar ainda (PR 3, exclusivo pra isso) — a
       // Operação já consome `ClientAvatar`/`avatarUrl` no contrato, mas
@@ -268,5 +271,5 @@ export async function loadOperationTriageClients(monthParam: string): Promise<Op
     };
   });
 
-  return sortOperationClientCards(cards);
+  return sortClientOperationalStates(cards);
 }

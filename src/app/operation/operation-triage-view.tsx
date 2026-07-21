@@ -3,11 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { formatMonthLabel } from "@/lib/format";
-import {
-  shiftOperationMonth,
-  type OperationClientCard as OperationClientCardData,
-  type OperationTriageSummary,
-} from "@/lib/operation-triage";
+import { shiftOperationMonth, type OperationTriageSummary } from "@/lib/operation-triage";
+import type { ClientOperationalState } from "@/lib/client-operational-state";
 import { OperationClientCard } from "./operation-client-card";
 import { OperationFilterBar, type OperationQuickFilter } from "./operation-filter-bar";
 
@@ -15,9 +12,9 @@ import { OperationFilterBar, type OperationQuickFilter } from "./operation-filte
  * Centro de Triagem da Operação (Etapa "Fila de Prioridades 1.0") — não é
  * um dashboard, é uma FILA DE TRABALHO. Um dashboard tenta mostrar tudo;
  * esta tela mostra primeiro quem exige ação (ordenação já resolvida pela
- * camada de domínio — `sortOperationClientCards`, nunca recalculada aqui)
- * e só depois o estado atual da conta (investimento, resultado, custo).
- * Nenhuma comparação planejado-vs-realizado, tendência ou selo de
+ * camada de domínio — `sortClientOperationalStates`, nunca recalculada
+ * aqui) e só depois o estado atual da conta (investimento, resultado,
+ * custo). Nenhuma comparação planejado-vs-realizado, tendência ou selo de
  * severidade aparece mais nesta tela — isso continua existindo na página
  * do cliente, que é onde a análise detalhada acontece.
  */
@@ -28,7 +25,7 @@ export function OperationTriageView({
   summary,
   todayStr,
 }: {
-  clients: OperationClientCardData[];
+  clients: ClientOperationalState[];
   monthParam: string;
   monthLastUpdatedLabel: string;
   summary: OperationTriageSummary;
