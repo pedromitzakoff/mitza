@@ -1,7 +1,7 @@
 import { Search } from "lucide-react";
 import type { OperationTriageSummary } from "@/lib/operation-triage";
 
-export type OperationQuickFilter = "todos" | "pendencias" | "revisoes" | "sem_sincronizacao";
+export type OperationQuickFilter = "todos" | "pendencias" | "revisoes" | "sem_sincronizacao" | "relatorio_pendente";
 
 function CounterTile({
   count,
@@ -76,6 +76,17 @@ export function OperationFilterBar({
           label="Sem sincronização"
           active={quickFilter === "sem_sincronizacao"}
           onClick={() => onQuickFilterChange(quickFilter === "sem_sincronizacao" ? "todos" : "sem_sincronizacao")}
+        />
+        {/* Etapa "MITZA 2.0 — Fase G": relatório pendente é a mesma
+            pergunta operacional das outras 3 ("precisa da minha atenção
+            agora?") — a lista de Relatórios deixou de ser um pilar de
+            navegação, mas a visibilidade de pendência continua existindo,
+            só que aqui, como mais um filtro rápido da mesma fila. */}
+        <CounterTile
+          count={summary.withPendingReport}
+          label="Relatório pendente"
+          active={quickFilter === "relatorio_pendente"}
+          onClick={() => onQuickFilterChange(quickFilter === "relatorio_pendente" ? "todos" : "relatorio_pendente")}
         />
       </div>
 

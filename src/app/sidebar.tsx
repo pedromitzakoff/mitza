@@ -6,7 +6,6 @@ import { Suspense, useSyncExternalStore } from "react";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
   Clock,
-  FileText,
   LayoutGrid,
   ListChecks,
   LogOut,
@@ -132,7 +131,15 @@ interface NavItem {
  * a árvore "Contas da Agência" (busca + estrutura por gestor) e a Operação
  * (quando o cliente tem um desvio) já cobrem qualquer acesso operacional a
  * uma conta. `/clients` continua existindo (mesmo padrão acima) — cadastro
- * administrativo agora vive em Configurações > Clientes. */
+ * administrativo agora vive em Configurações > Clientes.
+ *
+ * Etapa "MITZA 2.0 — Fase G": "Relatórios" também sai da navegação
+ * principal — o relatório individual agora é a aba "Relatórios" do Cliente
+ * (`/clients/[id]?area=relatorios`) e a visibilidade de pendência migrou pro
+ * filtro rápido "Relatório pendente" da Operação. `/reports` continua
+ * existindo (mesmo padrão acima), só sem porta de entrada aqui. A
+ * constituição do produto (Painel Geral → Operação → Cliente) não deixa
+ * espaço pra um quarto pilar de navegação. */
 const NAV_ITEMS: NavItem[] = [
   { label: "Visão Geral", href: "/", icon: LayoutGrid, isActive: (p) => p === "/", group: "principal" },
   {
@@ -140,13 +147,6 @@ const NAV_ITEMS: NavItem[] = [
     href: "/operation",
     icon: ListChecks,
     isActive: (p) => p === "/operation",
-    group: "principal",
-  },
-  {
-    label: "Relatórios",
-    href: "/reports",
-    icon: FileText,
-    isActive: (p) => p.startsWith("/reports"),
     group: "principal",
   },
   { label: "Equipe", href: "/team", icon: Users, isActive: (p) => p.startsWith("/team"), group: "moderado" },

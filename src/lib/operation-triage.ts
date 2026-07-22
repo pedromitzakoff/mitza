@@ -61,26 +61,42 @@ export interface OperationTriageSummary {
   needingReview: number;
   /** Clientes sem nenhum dado de investimento sincronizado neste mês. */
   withoutSync: number;
+  /** Clientes cujo relatório mensal ainda não foi finalizado (Etapa "MITZA
+   * 2.0 — Fase G"). Um relatório pendente é, por definição, algo que exige
+   * atenção do gestor — a mesma pergunta que a Operação já responde pras
+   * outras 3 contagens, nunca uma tela própria (a lista de Relatórios saiu
+   * da navegação principal nesta fase). */
+  withPendingReport: number;
 }
 
 /**
  * Contadores operacionais do cabeçalho da Operação (Etapa "Fila de
  * Prioridades 1.0") — substitui os antigos contadores por banda de saúde/
  * dimensão de desvio, que exigiam entender o vocabulário do Motor de Saúde
- * pra fazer sentido. Estes quatro só respondem perguntas operacionais
- * diretas ("quantos clientes têm pendência?"), sem nenhuma banda/severidade
+ * pra fazer sentido. Estes só respondem perguntas operacionais diretas
+ * ("quantos clientes têm pendência?"), sem nenhuma banda/severidade
  * envolvida.
+ *
+ * `pendingReportClientIds` (Etapa "MITZA 2.0 — Fase G") vem de fora — status
+ * de relatório mensal não é uma dimensão do Motor de Saúde, é um dado
+ * próprio de `monthly_reports`, resolvido por quem chama (`operation/page.tsx`),
+ * nunca recalculado aqui.
  */
-export function summarizeOperationTriage(cards: ClientOperationalState[]): OperationTriageSummary {
+export function summarizeOperationTriage(
+  cards: ClientOperationalState[],
+  pendingReportClientIds: ReadonlySet<string>,
+): OperationTriageSummary {
   let withPendingTasks = 0;
   let needingReview = 0;
   let withoutSync = 0;
+  let withPendingReport = 0;
   for (const card of cards) {
     if (card.overdueTasksCount > 0) withPendingTasks++;
     if (needsReview(card)) needingReview++;
     if (!card.evaluation.dimensions.investment.hasSyncedData) withoutSync++;
+    if (pendingReportClientIds.has(card.clientId)) withPendingReport++;
   }
-  return { totalClients: cards.length, withPendingTasks, needingReview, withoutSync };
+  return { totalClients: cards.length, withPendingTasks, needingReview, withoutSync, withPendingReport };
 }
 
 const freshnessDayFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TIMEZONE });

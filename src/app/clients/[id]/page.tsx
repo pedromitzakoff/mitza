@@ -61,6 +61,8 @@ import { AVAILABLE_TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
 import { PerformanceSummarySection } from "../performance-summary";
 import type { SprintPerformanceProps } from "../sprint-card";
 import { SprintFocusBar } from "../sprint-focus-bar";
+import { buildReportViewData } from "../../reports/report-data";
+import { ClientReportView } from "../../reports/report-view";
 
 function groupAccountReviewsBySprintId(
   reviews: (AccountReviewSummaryItem & { sprintId: string })[],
@@ -176,6 +178,22 @@ export default async function ClientPage({
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
   const supabase = await createSupabaseClient();
+
+  // Etapa "MITZA 2.0 — Fase F/G": qual área do prontuário está ativa —
+  // calculado cedo (só depende de `areaParam`) pra decidir, mais abaixo, se
+  // vale a pena buscar os dados do relatório (só quando a aba Relatórios
+  // está aberta, nunca em toda visita à página).
+  type ClientArea = "visao-geral" | "performance" | "execucao" | "financeiro" | "relatorios" | "timeline";
+  const AREA_TABS: { key: ClientArea; label: string }[] = [
+    { key: "visao-geral", label: "Visão geral" },
+    { key: "performance", label: "Performance" },
+    { key: "execucao", label: "Execução" },
+    { key: "financeiro", label: "Financeiro" },
+    { key: "relatorios", label: "Relatórios" },
+    { key: "timeline", label: "Timeline" },
+  ];
+  const activeArea = (AREA_TABS.some((t) => t.key === areaParam) ? areaParam : "visao-geral") as ClientArea;
+  const buildAreaHref = (area: ClientArea) => `/clients/${id}?area=${area}${monthQueryParam ? `&month=${monthQueryParam}` : ""}`;
 
   // RLS já garante que um gestor só recebe o cliente se estiver em
   // client_managers; para quem não tem acesso o select simplesmente não
@@ -717,7 +735,10 @@ export default async function ClientPage({
   // (subheader sticky compartilhado por toda /clients/[id]/**, removido).
   // Status já aparece como badge ao lado do nome, por isso não se repete
   // na linha secundária abaixo.
-  const reportHref = `/reports/${client.id}?month=${monthParam}`;
+  // Etapa "MITZA 2.0 — Fase G": "Ver relatório" agora abre a aba Relatórios
+  // desta mesma página (o relatório deixou de ser uma rota própria) —
+  // nunca mais `/reports/${client.id}`.
+  const reportHref = `/clients/${client.id}?area=relatorios${monthQueryParam ? `&month=${monthQueryParam}` : ""}`;
   const gestorLabel = client.primary_manager ? `Gestor: ${client.primary_manager.name}` : "Sem gestor atribuído";
   const relationshipLabel = formatRelationshipDuration(client.contract_start_date, today);
   const identitySecondaryLine = [
@@ -728,23 +749,17 @@ export default async function ClientPage({
     .filter(Boolean)
     .join(" · ");
 
-  // Etapa "MITZA 2.0 — Fase F": Cliente como Prontuário — as áreas antes
-  // empilhadas numa rolagem única viram abas (mesmo padrão já usado em
-  // Sprints: Link + role="tab"/"tablist", nenhum componente de aba novo).
-  // `month` é o único parâmetro preservado ao trocar de aba — é o contexto
-  // temporal de toda a página (Etapa 62), nunca reiniciado por navegação
-  // interna.
-  type ClientArea = "visao-geral" | "performance" | "execucao" | "financeiro" | "relatorios" | "timeline";
-  const AREA_TABS: { key: ClientArea; label: string }[] = [
-    { key: "visao-geral", label: "Visão geral" },
-    { key: "performance", label: "Performance" },
-    { key: "execucao", label: "Execução" },
-    { key: "financeiro", label: "Financeiro" },
-    { key: "relatorios", label: "Relatórios" },
-    { key: "timeline", label: "Timeline" },
-  ];
-  const activeArea = (AREA_TABS.some((t) => t.key === areaParam) ? areaParam : "visao-geral") as ClientArea;
-  const buildAreaHref = (area: ClientArea) => `/clients/${id}?area=${area}${monthQueryParam ? `&month=${monthQueryParam}` : ""}`;
+  // Etapa "MITZA 2.0 — Fase G": relatório mensal só é buscado quando a aba
+  // Relatórios está aberta (nenhuma query extra nas outras 5 abas) —
+  // `buildReportViewData`/`client_managers` são exatamente a mesma busca
+  // que `/reports/[clientId]/page.tsx` já fazia, nenhuma regra nova.
+  const reportData = activeArea === "relatorios" ? await buildReportViewData(supabase, id, monthQueryParam, today, formatMonthLabel) : null;
+  const reportResponsibleOptions =
+    activeArea === "relatorios"
+      ? (await supabase.from("client_managers").select("team_members(id, name)").eq("client_id", id)).data?.flatMap((m) =>
+          m.team_members ? [m.team_members] : [],
+        ) ?? []
+      : [];
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-5">
@@ -1045,16 +1060,27 @@ export default async function ClientPage({
         </div>
       )}
 
+      {/* Etapa "MITZA 2.0 — Fase G": o relatório individual (antes só em
+          `/reports/[clientId]`) é renderizado aqui — mesmo componente
+          (`ClientReportView`, extraído da própria página de relatório),
+          mesmos Server Actions, nenhuma regra nova. A rota `/reports/[clientId]`
+          continua existindo (os Server Actions redirecionam pra ela em caso
+          de erro, nunca alterados nesta fase), só deixou de ser o único
+          lugar onde o relatório aparece. */}
       {activeArea === "relatorios" && (
-        <div className="mt-3 rounded-md border border-border bg-card p-4 text-sm">
-          {/* Etapa "MITZA 2.0 — Fase G" (pendente): o relatório individual
-              (hoje `/reports/[clientId]`) passa a ser renderizado aqui
-              mesmo. Nesta fase (F), a aba só aponta pra rota que já existe —
-              nenhum conteúdo de relatório foi movido ainda. */}
-          <p className="text-foreground">O relatório mensal deste cliente ainda vive em sua própria página.</p>
-          <Link href={reportHref} className="mt-1 inline-block text-sm font-medium text-brand hover:underline">
-            Ver relatório de {monthLabel} →
-          </Link>
+        <div className="mt-3">
+          {reportData ? (
+            <ClientReportView
+              clientId={id}
+              month={monthQueryParam}
+              data={reportData}
+              isAdmin={isAdmin}
+              responsibleOptions={reportResponsibleOptions}
+              today={today}
+            />
+          ) : (
+            <EmptyState>Não foi possível carregar o relatório deste cliente.</EmptyState>
+          )}
         </div>
       )}
 

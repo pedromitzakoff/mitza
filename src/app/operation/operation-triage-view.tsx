@@ -24,15 +24,21 @@ export function OperationTriageView({
   monthLastUpdatedLabel,
   summary,
   todayStr,
+  pendingReportClientIds,
 }: {
   clients: ClientOperationalState[];
   monthParam: string;
   monthLastUpdatedLabel: string;
   summary: OperationTriageSummary;
   todayStr: string;
+  /** Clientes com relatório mensal ainda não finalizado (Etapa "MITZA 2.0 —
+   * Fase G") — array (não Set) porque cruza a fronteira Server→Client
+   * Component; convertido pra Set aqui só pra consulta O(1). */
+  pendingReportClientIds: string[];
 }) {
   const [quickFilter, setQuickFilter] = useState<OperationQuickFilter>("todos");
   const [query, setQuery] = useState("");
+  const pendingReportSet = useMemo(() => new Set(pendingReportClientIds), [pendingReportClientIds]);
 
   const filteredClients = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -43,6 +49,7 @@ export function OperationTriageView({
         if (!(review.enabled && review.status !== "nenhum")) return false;
       }
       if (quickFilter === "sem_sincronizacao" && card.evaluation.dimensions.investment.hasSyncedData) return false;
+      if (quickFilter === "relatorio_pendente" && !pendingReportSet.has(card.clientId)) return false;
       if (normalizedQuery) {
         const matchesName = card.clientName.toLowerCase().includes(normalizedQuery);
         const matchesManager = (card.managerName ?? "").toLowerCase().includes(normalizedQuery);
@@ -50,7 +57,7 @@ export function OperationTriageView({
       }
       return true;
     });
-  }, [clients, quickFilter, query]);
+  }, [clients, quickFilter, query, pendingReportSet]);
 
   const prevMonthHref = `/operation?month=${shiftOperationMonth(monthParam, -1)}`;
   const nextMonthHref = `/operation?month=${shiftOperationMonth(monthParam, 1)}`;
