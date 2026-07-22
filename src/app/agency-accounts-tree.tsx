@@ -37,5 +37,5 @@ export async function AgencyAccountsTree() {
 
   const tree = buildAgencyAccountsTree(clients, managers);
 
-  return <AgencyAccountsTreeView tree={tree} isAdmin={profile.role === "admin"} />;
+  return <AgencyAccountsTreeView tree={tree} />;
 }

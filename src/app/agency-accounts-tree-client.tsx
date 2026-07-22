@@ -228,8 +228,9 @@ function ManagerFolder({
  * que encontra cliente OU gestor em qualquer pasta (item aprovado:
  * "busca deve filtrar a árvore inteira"), com expansão temporária das
  * pastas relevantes — nunca escreve em `expanded`, então limpar a busca
- * restaura exatamente o estado anterior. Admin também pode arrastar um
- * cliente (`@dnd-kit`) pra reordenar dentro da mesma pasta (persistido em
+ * restaura exatamente o estado anterior. Qualquer usuário ativo (admin ou
+ * gestor — Etapa "Habilitar Gestores 2.0") pode arrastar um cliente
+ * (`@dnd-kit`) pra reordenar dentro da mesma pasta (persistido em
  * `clients.wallet_position`, sem diálogo) ou pra outra pasta (troca de
  * `primary_manager_id`, com a mesma confirmação de transferência de
  * atividades já validada antes) — ambos os fluxos passam por
@@ -239,10 +240,8 @@ function ManagerFolder({
  */
 export function AgencyAccountsTreeView({
   tree,
-  isAdmin,
 }: {
   tree: AgencyTree;
-  isAdmin: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -555,7 +554,11 @@ export function AgencyAccountsTreeView({
     }
   }
 
-  const dragDisabled = !isAdmin || isBusy || searchActive;
+  // Habilitar Gestores 2.0: arrastar clientes entre pastas deixou de ser
+  // admin-only — qualquer gestor ativo pode, igual ao admin (ver
+  // moveClientAction/getOpenTaskCountForManagerAction em
+  // agency-accounts-tree-actions.ts).
+  const dragDisabled = isBusy || searchActive;
   const activeContainerKey = activeId ? findContainerKey(containers, activeId) : null;
 
   const managerFolders = tree.managers.map((manager) => ({ key: manager.id, name: manager.name }));

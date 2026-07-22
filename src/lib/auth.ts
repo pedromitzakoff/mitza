@@ -176,6 +176,20 @@ export async function requireAdmin(): Promise<CurrentProfile> {
   return profile;
 }
 
+/** Redireciona para a home se não houver ninguém logado — sem checar
+ * papel (admin ou gestor, ambos passam). Usado por ações que qualquer
+ * membro ativo da equipe pode executar, sem distinção de carteira/cliente
+ * (ex.: mover cliente entre pastas na árvore "Contas da Agência"). */
+export async function requireActiveProfile(): Promise<CurrentProfile> {
+  const profile = await getCurrentProfile();
+
+  if (!profile) {
+    redirect("/");
+  }
+
+  return profile;
+}
+
 /**
  * Garante permissão de ESCRITA sobre um cliente específico — admin sempre
  * tem; gestor quando está em `client_managers` ("Gestores de apoio") OU é o

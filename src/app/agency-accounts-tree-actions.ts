@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireActiveProfile } from "@/lib/auth";
 import { OperationalEventType } from "@/lib/operational-events";
 import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
 import { toUserFacingError } from "@/lib/user-facing-error";
@@ -19,12 +19,17 @@ const OPEN_TASK_STATUSES: TaskStatus[] = ["pendente", "atrasado"];
  * atividades". Só considera `assignee_id` (fonte única de atribuição de
  * tarefa/atividade — nunca existiu tabela separada pra isso) e os dois
  * status não-terminais (`feito`/`nao_realizado` nunca entram aqui).
+ *
+ * Habilitar Gestores 2.0: qualquer gestor ativo pode arrastar clientes na
+ * árvore, igual ao admin — sem restrição por carteira (é literalmente o
+ * que a árvore serve pra fazer: mover cliente PRA uma pasta que ainda não
+ * é a dele). `requireAdmin()` virou `requireActiveProfile()`.
  */
 export async function getOpenTaskCountForManagerAction(
   clientId: string,
   managerId: string,
 ): Promise<{ count: number } | { error: string }> {
-  await requireAdmin();
+  await requireActiveProfile();
   const supabase = await createSupabaseClient();
 
   const { count, error } = await supabase
@@ -129,6 +134,15 @@ async function resolveInsertPosition(
  * `primary_manager_id` e `wallet_position` são sempre escritos num único
  * `update` — nunca existe estado intermediário em que um já mudou e o
  * outro não.
+ *
+ * Habilitar Gestores 2.0: qualquer gestor ativo pode mover qualquer
+ * cliente, pra qualquer pasta, exatamente como o admin já fazia — sem
+ * restrição por carteira. RLS (`clients_update`, ver
+ * supabase/manager-move-clients-tree.sql) só libera as colunas
+ * `primary_manager_id`/`wallet_position`; um trigger barra qualquer outra
+ * alteração em `clients` fora de uma sessão admin, então esta ação
+ * continua sem poder tocar dados cadastrais/contratuais do cliente mesmo
+ * pra quem não é admin.
  */
 export async function moveClientAction(
   clientId: string,
@@ -138,7 +152,7 @@ export async function moveClientAction(
   nextSiblingId: string | null,
   mode: ClientTransferMode = "account_only",
 ): Promise<{ error?: string }> {
-  const profile = await requireAdmin();
+  const profile = await requireActiveProfile();
   const supabase = await createSupabaseClient();
 
   const positionResult = await resolveInsertPosition(supabase, clientId, newManagerId, previousSiblingId, nextSiblingId);
