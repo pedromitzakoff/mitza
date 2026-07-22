@@ -150,6 +150,7 @@ export default async function ClientPage({
     scheduleOccurrence?: string;
     scheduleTaskId?: string;
     historyPage?: string;
+    area?: string;
   }>;
 }) {
   const { id } = await params;
@@ -170,6 +171,7 @@ export default async function ClientPage({
     scheduleOccurrence,
     scheduleTaskId,
     historyPage: historyPageParam,
+    area: areaParam,
   } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
@@ -726,6 +728,24 @@ export default async function ClientPage({
     .filter(Boolean)
     .join(" · ");
 
+  // Etapa "MITZA 2.0 — Fase F": Cliente como Prontuário — as áreas antes
+  // empilhadas numa rolagem única viram abas (mesmo padrão já usado em
+  // Sprints: Link + role="tab"/"tablist", nenhum componente de aba novo).
+  // `month` é o único parâmetro preservado ao trocar de aba — é o contexto
+  // temporal de toda a página (Etapa 62), nunca reiniciado por navegação
+  // interna.
+  type ClientArea = "visao-geral" | "performance" | "execucao" | "financeiro" | "relatorios" | "timeline";
+  const AREA_TABS: { key: ClientArea; label: string }[] = [
+    { key: "visao-geral", label: "Visão geral" },
+    { key: "performance", label: "Performance" },
+    { key: "execucao", label: "Execução" },
+    { key: "financeiro", label: "Financeiro" },
+    { key: "relatorios", label: "Relatórios" },
+    { key: "timeline", label: "Timeline" },
+  ];
+  const activeArea = (AREA_TABS.some((t) => t.key === areaParam) ? areaParam : "visao-geral") as ClientArea;
+  const buildAreaHref = (area: ClientArea) => `/clients/${id}?area=${area}${monthQueryParam ? `&month=${monthQueryParam}` : ""}`;
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-5">
       <ScrollRestoreOnMount />
@@ -829,7 +849,8 @@ export default async function ClientPage({
           Relatórios/Visão Geral/Sprints (`?month=YYYY-MM` + shiftMonthParam),
           nenhum componente novo de seletor. Etapa 75: removido o texto
           "Período em análise" — o próprio seletor já comunica o período,
-          sem precisar de rótulo. */}
+          sem precisar de rótulo. Fica fora das abas — é contexto de toda a
+          página, não de uma área específica. */}
       <div className="mt-3 flex items-center justify-end gap-2">
         <div className="flex items-center gap-0.5 rounded-md border border-border bg-card px-1 py-1 text-sm">
           <Link
@@ -850,156 +871,207 @@ export default async function ClientPage({
         </div>
       </div>
 
-      {/* 2.5. Foco agora (Etapa "MITZA Operational Workspace 1.0") — antes de
-          qualquer bloco de consulta: ritmo financeiro do mês + Próxima Ação
-          da sprint atual, sem precisar rolar a página nem expandir nada. Só
-          existe quando há sprint atual (mesmo mês selecionado que já
-          controla o resto da página) — num mês passado/futuro não existe
-          "próxima ação" por definição, igual ao critério já usado dentro do
-          card da sprint. */}
-      {currentSprint && nextAction && (
-        <SprintFocusBar
-          spendStatus={monthStatus}
-          nextActionText={nextAction.text}
-          ctaHref={nextActionCtaHref}
-          ctaLabel={nextActionCtaLabel}
-        />
+      {/* Etapa "MITZA 2.0 — Fase F": Cliente como Prontuário — abas (mesmo
+          padrão visual/estrutural já usado em Sprints: Link + role="tab",
+          nenhum componente de aba novo). Cada área abaixo é um bloco já
+          existente, só reorganizado — nenhum cálculo, prop ou comportamento
+          interno de componente foi alterado. */}
+      <div role="tablist" className="mt-3 flex items-center gap-4 overflow-x-auto border-b border-border text-sm">
+        {AREA_TABS.map((tab) => (
+          <Link
+            key={tab.key}
+            href={buildAreaHref(tab.key)}
+            scroll={false}
+            role="tab"
+            aria-selected={tab.key === activeArea}
+            className={`-mb-px shrink-0 border-b-2 pb-1.5 font-medium transition-colors ${
+              tab.key === activeArea
+                ? "border-brand text-brand"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </Link>
+        ))}
+      </div>
+
+      {activeArea === "visao-geral" && (
+        <>
+          {/* Foco agora (Etapa "MITZA Operational Workspace 1.0") movido pra
+              Execução (Fase F) — é sobre a próxima ação da sprint atual, não
+              sobre o resumo geral da conta. */}
+
+          {/* Acompanhamento da conta — resumo do mês, última otimização,
+              tracking operacional e histórico recente. */}
+          <div className="mt-3">
+            <AccountFollowUpPanel
+              monthLabel={monthLabel}
+              isCurrentMonth={isCurrentMonth}
+              monthActual={monthActual}
+              performanceGoal={performanceGoal}
+              performanceSummary={monthPerformanceSummary}
+              configureObjectiveHref={`/clients/${client.id}/edit`}
+              lastOptimization={lastOptimization}
+              tracking={operationalTracking}
+              monthlySummary={monthlyOccurrenceSummary}
+              historyRows={recentHistoryRows}
+              hasMoreHistory={hasMoreHistory}
+              historyHref={reviewsHistoryHref}
+              buildReviewDetailHref={buildReviewDetailHref}
+              clientId={client.id}
+              returnTo={returnTo}
+            />
+          </div>
+
+          {/* Dados estruturais do cliente (briefing) — informação de
+              referência sobre a conta, mesmo lugar conceitual de "visão
+              geral" (não muda por mês selecionado). */}
+          <div className="mt-3">
+            <EssentialInfoPanel
+              mainObjective={client.main_objective}
+              mainProductOrService={client.main_product_or_service}
+              operationRegion={client.operation_region}
+              primaryAudience={client.primary_audience}
+              clientDifferentials={client.client_differentials}
+              clientRestrictions={client.client_restrictions}
+              importantSeasonalDates={client.important_seasonal_dates}
+              operationalSummary={client.operational_summary}
+              importantNotes={client.important_notes}
+              isAdmin={isAdmin}
+              editHref={`/clients/${client.id}/edit`}
+            />
+          </div>
+        </>
       )}
 
-      {/* 3. Acompanhamento da conta — depois do foco operacional imediato: a
-          próxima pergunta é "essa conta está sendo acompanhada corretamente
-          e o que foi feito recentemente?" */}
-      <div className="mt-3">
-        <AccountFollowUpPanel
-          monthLabel={monthLabel}
-          isCurrentMonth={isCurrentMonth}
-          monthActual={monthActual}
-          performanceGoal={performanceGoal}
-          performanceSummary={monthPerformanceSummary}
-          configureObjectiveHref={`/clients/${client.id}/edit`}
-          lastOptimization={lastOptimization}
-          tracking={operationalTracking}
-          monthlySummary={monthlyOccurrenceSummary}
-          historyRows={recentHistoryRows}
-          hasMoreHistory={hasMoreHistory}
-          historyHref={reviewsHistoryHref}
-          buildReviewDetailHref={buildReviewDetailHref}
-          clientId={client.id}
-          returnTo={returnTo}
-        />
-      </div>
-
-      {/* 4. Investimento do mês — resumo financeiro central + edição/histórico
-          de orçamento, tudo num único bloco (Etapa 58: antes eram 2 cards
-          separados repetindo o mesmo valor planejado). Nenhuma regra de
-          cálculo, integração Meta ou fallback manual foi alterada — só a
-          posição (agora depois de Acompanhamento da Conta). */}
-      <div className="mt-3">
-        <MonthInvestmentSummary
-          planned={monthPlanned}
-          actual={monthActual}
-          expectedToDate={monthExpectedToDate}
-          status={monthStatus}
-          clientId={client.id}
-          monthParam={monthParam}
-          monthLabel={monthLabel}
-          sprints={budgetSprints}
-          monthRange={{ firstDay, lastDay }}
-          effectiveDate={effectiveDate}
-          isAdmin={isAdmin}
-          isClosedMonth={isClosedMonth}
-          isFutureMonth={isFutureMonth}
-          lastChange={lastChange}
-          historyHref={historyDrawerHref}
-          performanceGoal={performanceGoal}
-          targetResultCount={targetResultCount}
-          targetCostPerResult={targetCostPerResult}
-        />
-      </div>
-
-      {/* Performance do mês — só o SECUNDÁRIO (meta/comparação/canal); o
-          resultado principal e o custo por resultado já apareceram em
-          "Principais KPIs do mês", dentro do Acompanhamento da Conta (Etapa
-          72) — nunca duplicados aqui. Retorna `null` quando não há nada
-          secundário a mostrar. */}
-      <PerformanceSummarySection
-        goal={performanceGoal}
-        targetCostPerResult={targetCostPerResult}
-        summary={monthPerformanceSummary}
-        channelBreakdown={monthPerformanceChannelBreakdown}
-      />
-
-      {/* 5. Sprints — uma única sequência cronológica (start_date ASC),
-          sem separar "sprint atual" de "histórico": misturar concluídas e
-          futuras sob "Histórico do mês" dava a impressão de que a atual
-          acontecia antes das demais. A sprint atual continua destacada
-          (borda azul + badge) e aberta por padrão — SprintCard já decide
-          isso sozinho (`defaultOpen ?? isCurrent`) quando `defaultOpen` não
-          é passado, por isso nenhuma sprint aqui recebe a prop. */}
-      {/* Etapa 73: removido o tooltip "Como funciona?" desta seção — a
-          redistribuição financeira semanal deixou de ser apresentada
-          (nenhuma orientação de planejamento por sprint na interface, ver
-          `sprint-card.tsx`); o componente `Section` em si é compartilhado e
-          continua intacto para as demais telas. */}
-      <Section title={`Sprints de ${monthLabel}`}>
-        <div className="flex flex-col gap-2">
-          {sortedSprints.length > 0 ? (
-            sortedSprints.map((sprint) => (
-              <SprintCard
-                key={sprint.sprintId}
-                sprint={sprint}
-                comments={sprintCommentsById.get(sprint.sprintId) ?? []}
-                clientId={client.id}
-                isAdmin={isAdmin}
-                tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
-                executionLabel={sprint.temporalStatus === "atual" ? sprintExecutionLabel : null}
-                executionSeverity={
-                  sprint.temporalStatus === "atual" && sprintExecutionAlert?.severity !== "informativo"
-                    ? (sprintExecutionAlert?.severity ?? null)
-                    : null
-                }
-                accountReviews={accountReviewsBySprintId.get(sprint.sprintId) ?? []}
-                newReviewHref={newReviewHref}
-                buildReviewDetailHref={buildReviewDetailHref}
-                manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
-                metaSyncedAt={lastSync?.synced_at ?? null}
-                taskManagers={managers ?? []}
-                defaultAssigneeName={client.primary_manager?.name ?? null}
-                performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
-                returnTo={returnTo}
-                hideNextAction={sprint.temporalStatus === "atual"}
-              />
-            ))
-          ) : (
-            <EmptyState>
-              Nenhuma sprint encontrada para este período — verifique se as sprints do mês já foram geradas.
-            </EmptyState>
-          )}
+      {activeArea === "performance" && (
+        <div className="mt-3">
+          <PerformanceSummarySection
+            goal={performanceGoal}
+            targetCostPerResult={targetCostPerResult}
+            summary={monthPerformanceSummary}
+            channelBreakdown={monthPerformanceChannelBreakdown}
+          />
         </div>
-      </Section>
+      )}
 
-      <Section title="Outras tarefas">
-        <p className="mb-3 text-xs text-zinc-500">
-          Tarefas sem sprint vinculada — as de cada sprint aparecem no card dela, acima.
-        </p>
-        <TaskList tasks={unlinkedTasks} clientId={client.id} managers={managers ?? []} />
-      </Section>
+      {activeArea === "execucao" && (
+        <>
+          {/* Foco agora — próxima ação da sprint atual, primeiro conteúdo
+              da área de Execução (mesmo critério de sempre, só realocado). */}
+          {currentSprint && nextAction && (
+            <div className="mt-3">
+              <SprintFocusBar
+                spendStatus={monthStatus}
+                nextActionText={nextAction.text}
+                ctaHref={nextActionCtaHref}
+                ctaLabel={nextActionCtaLabel}
+              />
+            </div>
+          )}
 
-      <div className="mt-3">
-        <EssentialInfoPanel
-          mainObjective={client.main_objective}
-          mainProductOrService={client.main_product_or_service}
-          operationRegion={client.operation_region}
-          primaryAudience={client.primary_audience}
-          clientDifferentials={client.client_differentials}
-          clientRestrictions={client.client_restrictions}
-          importantSeasonalDates={client.important_seasonal_dates}
-          operationalSummary={client.operational_summary}
-          importantNotes={client.important_notes}
-          isAdmin={isAdmin}
-          editHref={`/clients/${client.id}/edit`}
-        />
-      </div>
+          <div className="mt-3">
+            <Section title={`Sprints de ${monthLabel}`}>
+              <div className="flex flex-col gap-2">
+                {sortedSprints.length > 0 ? (
+                  sortedSprints.map((sprint) => (
+                    <SprintCard
+                      key={sprint.sprintId}
+                      sprint={sprint}
+                      comments={sprintCommentsById.get(sprint.sprintId) ?? []}
+                      clientId={client.id}
+                      isAdmin={isAdmin}
+                      tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
+                      executionLabel={sprint.temporalStatus === "atual" ? sprintExecutionLabel : null}
+                      executionSeverity={
+                        sprint.temporalStatus === "atual" && sprintExecutionAlert?.severity !== "informativo"
+                          ? (sprintExecutionAlert?.severity ?? null)
+                          : null
+                      }
+                      accountReviews={accountReviewsBySprintId.get(sprint.sprintId) ?? []}
+                      newReviewHref={newReviewHref}
+                      buildReviewDetailHref={buildReviewDetailHref}
+                      manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
+                      metaSyncedAt={lastSync?.synced_at ?? null}
+                      taskManagers={managers ?? []}
+                      defaultAssigneeName={client.primary_manager?.name ?? null}
+                      performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
+                      returnTo={returnTo}
+                      hideNextAction={sprint.temporalStatus === "atual"}
+                    />
+                  ))
+                ) : (
+                  <EmptyState>
+                    Nenhuma sprint encontrada para este período — verifique se as sprints do mês já foram geradas.
+                  </EmptyState>
+                )}
+              </div>
+            </Section>
+          </div>
+
+          <div className="mt-3">
+            <Section title="Outras tarefas">
+              <p className="mb-3 text-xs text-zinc-500">
+                Tarefas sem sprint vinculada — as de cada sprint aparecem no card dela, acima.
+              </p>
+              <TaskList tasks={unlinkedTasks} clientId={client.id} managers={managers ?? []} />
+            </Section>
+          </div>
+        </>
+      )}
+
+      {activeArea === "financeiro" && (
+        <div className="mt-3">
+          <MonthInvestmentSummary
+            planned={monthPlanned}
+            actual={monthActual}
+            expectedToDate={monthExpectedToDate}
+            status={monthStatus}
+            clientId={client.id}
+            monthParam={monthParam}
+            monthLabel={monthLabel}
+            sprints={budgetSprints}
+            monthRange={{ firstDay, lastDay }}
+            effectiveDate={effectiveDate}
+            isAdmin={isAdmin}
+            isClosedMonth={isClosedMonth}
+            isFutureMonth={isFutureMonth}
+            lastChange={lastChange}
+            historyHref={historyDrawerHref}
+            performanceGoal={performanceGoal}
+            targetResultCount={targetResultCount}
+            targetCostPerResult={targetCostPerResult}
+          />
+        </div>
+      )}
+
+      {activeArea === "relatorios" && (
+        <div className="mt-3 rounded-md border border-border bg-card p-4 text-sm">
+          {/* Etapa "MITZA 2.0 — Fase G" (pendente): o relatório individual
+              (hoje `/reports/[clientId]`) passa a ser renderizado aqui
+              mesmo. Nesta fase (F), a aba só aponta pra rota que já existe —
+              nenhum conteúdo de relatório foi movido ainda. */}
+          <p className="text-foreground">O relatório mensal deste cliente ainda vive em sua própria página.</p>
+          <Link href={reportHref} className="mt-1 inline-block text-sm font-medium text-brand hover:underline">
+            Ver relatório de {monthLabel} →
+          </Link>
+        </div>
+      )}
+
+      {activeArea === "timeline" && (
+        <div className="mt-3 rounded-md border border-border bg-card p-4 text-sm">
+          {/* Bloqueio registrado no relatório da Fase F: unificar histórico
+              operacional + comentários + atualizações numa única Timeline
+              exigiria alterar `AccountFollowUpPanel`/`ClientOperationalHistoryDrawer`
+              (extrair a seção de histórico deles) — fora do escopo desta
+              fase ("não altere componentes"). Por ora, esta aba só abre o
+              mesmo histórico completo que já existia (drawer inalterado). */}
+          <p className="text-foreground">Histórico de análises, otimizações e reuniões/entregas deste cliente.</p>
+          <Link href={reviewsHistoryHref} className="mt-1 inline-block text-sm font-medium text-brand hover:underline">
+            Ver histórico completo →
+          </Link>
+        </div>
+      )}
 
       {openTask && (
         <TaskDrawerPanel
