@@ -221,6 +221,20 @@ export async function createClientAction(formData: FormData) {
   redirect(`/clients/${client.id}`);
 }
 
+/** Next.js sinaliza `redirect()`/`notFound()` lançando um erro especial com
+ * `digest` prefixado assim — precisa ser relançado sem tocar, senão o
+ * catch-all de `updateClientAction` intercepta a navegação esperada e a
+ * transforma num "erro inesperado". */
+function isNextControlFlowError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    typeof (error as { digest?: unknown }).digest === "string" &&
+    /^NEXT_(REDIRECT|NOT_FOUND)/.test((error as { digest: string }).digest)
+  );
+}
+
 export async function updateClientAction(clientId: string, returnTo: string, formData: FormData) {
   // Habilitar Gestores 3.0: editar o Cadastro do Cliente deixou de ser
   // admin-only — o gestor responsável (principal ou de apoio) também
@@ -230,72 +244,85 @@ export async function updateClientAction(clientId: string, returnTo: string, for
   const { name, meta_ad_account_id, managerIds, ...structural } = readClientFields(formData);
   const supabase = await createSupabaseClient();
 
-  const { data: previous } = await supabase
-    .from("clients")
-    .select("primary_manager_id")
-    .eq("id", clientId)
-    .single();
-  const { data: previousManagers } = await supabase
-    .from("client_managers")
-    .select("user_id")
-    .eq("client_id", clientId);
-  const previousManagerIds = new Set((previousManagers ?? []).map((m) => m.user_id));
-
-  const photoResult = await uploadClientPhotoIfProvided(supabase, clientId, formData);
-  if (photoResult.error) {
-    console.error("[updateClientAction] falha ao salvar foto do cliente:", photoResult.error);
-  }
-
-  const { error } = await supabase
-    .from("clients")
-    .update({
-      name,
-      meta_ad_account_id,
-      ...structural,
-      ...(photoResult.avatarUrl ? { avatar_url: photoResult.avatarUrl } : {}),
-    })
-    .eq("id", clientId);
-
-  if (error) {
-    redirect(`/clients/${clientId}/edit?error=${encodeURIComponent(toUserFacingError(error, "Não foi possível salvar as alterações do cliente."))}`);
-  }
-
-  await supabase.from("client_managers").delete().eq("client_id", clientId);
-
-  if (managerIds.length > 0) {
-    await supabase
+  // Ponto real de crash em produção pra um gestor não-admin (visto em
+  // 22/07): sem este catch, qualquer falha inesperada aqui virava uma
+  // tela de erro genérica em vez de voltar pro Cadastro com uma mensagem —
+  // e o log real do servidor ficava sem contexto nenhum de qual ação
+  // falhou.
+  try {
+    const { data: previous } = await supabase
+      .from("clients")
+      .select("primary_manager_id")
+      .eq("id", clientId)
+      .single();
+    const { data: previousManagers } = await supabase
       .from("client_managers")
-      .insert(managerIds.map((user_id) => ({ client_id: clientId, user_id })));
-  }
+      .select("user_id")
+      .eq("client_id", clientId);
+    const previousManagerIds = new Set((previousManagers ?? []).map((m) => m.user_id));
 
-  const actor = actorFromProfile(profile);
+    const photoResult = await uploadClientPhotoIfProvided(supabase, clientId, formData);
+    if (photoResult.error) {
+      console.error("[updateClientAction] falha ao salvar foto do cliente:", photoResult.error);
+    }
 
-  if (structural.primary_manager_id !== (previous?.primary_manager_id ?? null)) {
-    await recordOperationalEvent(supabase, actor, {
-      eventType: OperationalEventType.CLIENT_MANAGER_CHANGED,
-      entityType: "client",
-      entityId: clientId,
-      clientId,
-      source: "web",
-      metadata: {
-        role: "primary",
-        previous_manager_team_member_id: previous?.primary_manager_id ?? null,
-        new_manager_team_member_id: structural.primary_manager_id,
-      },
-    });
-  }
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        name,
+        meta_ad_account_id,
+        ...structural,
+        ...(photoResult.avatarUrl ? { avatar_url: photoResult.avatarUrl } : {}),
+      })
+      .eq("id", clientId);
 
-  for (const managerId of managerIds) {
-    if (!previousManagerIds.has(managerId)) {
+    if (error) {
+      redirect(`/clients/${clientId}/edit?error=${encodeURIComponent(toUserFacingError(error, "Não foi possível salvar as alterações do cliente."))}`);
+    }
+
+    await supabase.from("client_managers").delete().eq("client_id", clientId);
+
+    if (managerIds.length > 0) {
+      await supabase
+        .from("client_managers")
+        .insert(managerIds.map((user_id) => ({ client_id: clientId, user_id })));
+    }
+
+    const actor = actorFromProfile(profile);
+
+    if (structural.primary_manager_id !== (previous?.primary_manager_id ?? null)) {
       await recordOperationalEvent(supabase, actor, {
-        eventType: OperationalEventType.CLIENT_MANAGER_ASSIGNED,
+        eventType: OperationalEventType.CLIENT_MANAGER_CHANGED,
         entityType: "client",
         entityId: clientId,
         clientId,
         source: "web",
-        metadata: { role: "support", manager_team_member_id: managerId },
+        metadata: {
+          role: "primary",
+          previous_manager_team_member_id: previous?.primary_manager_id ?? null,
+          new_manager_team_member_id: structural.primary_manager_id,
+        },
       });
     }
+
+    for (const managerId of managerIds) {
+      if (!previousManagerIds.has(managerId)) {
+        await recordOperationalEvent(supabase, actor, {
+          eventType: OperationalEventType.CLIENT_MANAGER_ASSIGNED,
+          entityType: "client",
+          entityId: clientId,
+          clientId,
+          source: "web",
+          metadata: { role: "support", manager_team_member_id: managerId },
+        });
+      }
+    }
+  } catch (error) {
+    if (isNextControlFlowError(error)) throw error;
+    console.error("[updateClientAction] falha inesperada ao salvar cliente:", error);
+    redirect(
+      `/clients/${clientId}/edit?error=${encodeURIComponent("Não foi possível salvar as alterações. Tente novamente ou avise o time responsável.")}`,
+    );
   }
 
   revalidatePath("/");
