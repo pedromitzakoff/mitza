@@ -6,7 +6,6 @@ import type {
   TeamInvitationStatus,
   TeamMemberStatus,
 } from "@/lib/supabase/database.types";
-import type { AccountHealth } from "@/lib/attention-alerts";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import type { SpendStatus } from "@/lib/spend-status";
 import type { KpiTargetStatus } from "@/lib/monthly-reports";
@@ -95,14 +94,6 @@ export const OPERATIONAL_ACTIVITY_STATUS_REGISTRY: Record<`operational_activity.
   "operational_activity.inativo": { label: "Inativo", badgeClassName: DANGER, tone: "danger", order: 2 },
 };
 
-export const ACCOUNT_HEALTH_REGISTRY: Record<`account_health.${AccountHealth}`, StatusEntry> = {
-  "account_health.saudavel": { label: "Normal", badgeClassName: SUCCESS, tone: "success", order: 0 },
-  // Qualificado — colidia em texto com operational_activity.atencao
-  // (achado original da auditoria).
-  "account_health.atencao": { label: "Conta em atenção", badgeClassName: WARNING, tone: "warning", order: 1 },
-  "account_health.critico": { label: "Crítico", badgeClassName: DANGER, tone: "danger", order: 2 },
-};
-
 export const TEAM_MEMBER_STATUS_REGISTRY: Record<`team_member.${TeamMemberStatus}`, StatusEntry> = {
   "team_member.ativo": { label: "Ativo", badgeClassName: SUCCESS, tone: "success", order: 0 },
   "team_member.inativo": { label: "Inativo", badgeClassName: NEUTRAL_MUTED, tone: "neutral", order: 1 },
@@ -162,7 +153,6 @@ export const STATUS_REGISTRIES = {
   client_contract: CLIENT_CONTRACT_STATUS_REGISTRY,
   spend: SPEND_STATUS_REGISTRY,
   operational_activity: OPERATIONAL_ACTIVITY_STATUS_REGISTRY,
-  account_health: ACCOUNT_HEALTH_REGISTRY,
   team_member: TEAM_MEMBER_STATUS_REGISTRY,
   team_invitation: TEAM_INVITATION_STATUS_REGISTRY,
   monthly_report: MONTHLY_REPORT_STATUS_REGISTRY,

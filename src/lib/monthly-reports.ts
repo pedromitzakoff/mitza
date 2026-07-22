@@ -94,23 +94,6 @@ export function computeKpiVariationPct(current: number | null, previous: number 
   return ((current - previous) / Math.abs(previous)) * 100;
 }
 
-/** "Hoje"/"Ontem"/"Há N dias"/"Nunca" — dias corridos (não úteis, diferente
- * de `formatLastActivityLabel`) porque é assim que o pedido da Visão Geral
- * (coluna "Última otimização") descreveu o rótulo. Nunca colore em
- * vermelho automaticamente (seção 19): sem uma regra de cadência de
- * otimização definida além do lookback de 14 dias já usado em
- * `buildAttentionAlerts`, este rótulo fica neutro — a urgência de "otimização
- * vencida" já aparece separadamente em `getClientPriority`. */
-export function formatLastOptimizationLabel(lastOptimizationAt: string | null, today: Date): string {
-  if (!lastOptimizationAt) return "Nunca";
-  const diffDays = Math.floor(
-    (today.getTime() - new Date(`${lastOptimizationAt}T00:00:00Z`).getTime()) / 86_400_000,
-  );
-  if (diffDays <= 0) return "Hoje";
-  if (diffDays === 1) return "Ontem";
-  return `Há ${diffDays} dias`;
-}
-
 export interface AgencyExecutionSummary {
   optimizationsDone: number;
   meetingsDone: number;

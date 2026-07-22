@@ -1,50 +1,6 @@
 import type { OperationClientCard } from "@/app/operation/operation-data";
 
 /**
- * Etapa "Executive Dashboard 1.0" — resultado consolidado da agência (leads/
- * vendas/CPL/CPA), pra complementar os indicadores operacionais com uma
- * dimensão de resultado. Cada cliente tem UM objetivo (`performanceGoal`:
- * "leads" OU "sales", nunca os dois — ver `lib/performance-goals.ts`), por
- * isso a soma nunca mistura os dois tipos. Só entram na soma clientes com
- * `hasAnyRecord` (dado de performance já lançado no mês) — cliente sem
- * nenhum registro não contribui `0` fabricado nem ao numerador nem ao
- * denominador. Custo médio é SEMPRE investimento somado ÷ resultado somado
- * (nunca média dos custos já calculados por cliente — mesmo princípio de
- * `computePerformanceSummary`/`aggregatePerformanceResults`, que proíbe
- * combinar custos já derivados). Receita e ROAS não entram aqui: nenhuma
- * tabela da plataforma guarda valor monetário de resultado hoje (só
- * contagem, `performance_records.result_count`) — ver relatório da etapa.
- */
-export interface AgencyResultsMetric {
-  count: number;
-  clientsWithData: number;
-  costPerResult: number | null;
-}
-
-export interface AgencyResultsSummary {
-  leads: AgencyResultsMetric;
-  sales: AgencyResultsMetric;
-}
-
-function summarizeGoal(cards: OperationClientCard[], goal: "leads" | "sales"): AgencyResultsMetric {
-  const withData = cards.filter((c) => c.performanceGoal === goal && c.monthPerformanceSummary?.hasAnyRecord);
-  const count = withData.reduce((sum, c) => sum + (c.monthPerformanceSummary?.resultCount ?? 0), 0);
-  const spend = withData.reduce((sum, c) => sum + (c.monthPerformanceSummary?.actualSpend ?? 0), 0);
-  return {
-    count,
-    clientsWithData: withData.length,
-    costPerResult: count > 0 ? spend / count : null,
-  };
-}
-
-export function computeAgencyResultsSummary(cards: OperationClientCard[]): AgencyResultsSummary {
-  return {
-    leads: summarizeGoal(cards, "leads"),
-    sales: summarizeGoal(cards, "sales"),
-  };
-}
-
-/**
  * Agregações do dashboard da agência — tudo derivado dos cards já montados
  * por `buildOperationClientCard` (nenhuma regra nova, só soma/contagem).
  */
