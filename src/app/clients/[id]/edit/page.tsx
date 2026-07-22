@@ -4,9 +4,8 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { deleteClientAction, updateClientAction } from "../../actions";
-import { ClientForm } from "../../client-form";
+import { Block, ClientForm } from "../../client-form";
 import { DeleteClientButton } from "../../delete-client-button";
-import { Section } from "../../section";
 import { addClientKpiAction, deleteClientKpiAction } from "@/app/reports/report-actions";
 import { KPI_DIRECTION_LABEL, KPI_UNIT_LABEL, formatKpiValue } from "@/lib/monthly-reports";
 import { updateAccountReviewCadenceAction } from "../../account-review-actions";
@@ -53,14 +52,18 @@ export default async function EditClientPage({
   if (!client) notFound();
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-12">
+    <div className="mx-auto max-w-3xl px-6 py-12">
       <Link href={returnTo} className="text-sm text-zinc-500 hover:underline">
         &larr; Voltar
       </Link>
 
       <h1 className="mt-4 text-2xl font-semibold text-foreground">
-        Editar cliente
+        Cadastro do Cliente
       </h1>
+      <p className="mt-1 text-sm text-zinc-500">
+        Ficha administrativa deste cliente — identidade, configurações operacionais, integrações
+        e situação contratual. O trabalho do dia a dia acontece no Prontuário.
+      </p>
 
       <ClientForm
         action={updateClientAction.bind(null, id, returnTo)}
@@ -74,11 +77,16 @@ export default async function EditClientPage({
         cancelHref={returnTo}
       />
 
-      <Section title="KPIs do Relatório Mensal">
-        <p className="mb-3 text-xs text-zinc-500">
-          Controla quais KPIs aparecem no Bloco 2 (Performance) do Relatório Mensal deste cliente. &ldquo;Menor é
-          melhor&rdquo; serve pra métricas de custo (CPL, CPA); &ldquo;Maior é melhor&rdquo; pra Leads, ROAS, Vendas etc.
-        </p>
+      <Block
+        title="Configurações Operacionais"
+        description="KPIs do Relatório Mensal e cadência de revisões — ficam aqui à parte por serem salvos separadamente do restante do cadastro."
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">KPIs do Relatório Mensal</p>
+          <p className="text-xs text-zinc-500">
+            Controla quais KPIs aparecem no Bloco 2 (Performance) do Relatório Mensal deste cliente. &ldquo;Menor é
+            melhor&rdquo; serve pra métricas de custo (CPL, CPA); &ldquo;Maior é melhor&rdquo; pra Leads, ROAS, Vendas etc.
+          </p>
 
         {(kpis ?? []).length > 0 && (
           <ul className="mb-3 flex flex-col gap-1.5">
@@ -147,13 +155,14 @@ export default async function EditClientPage({
             Adicionar KPI
           </button>
         </form>
-      </Section>
+        </div>
 
-      <Section title="Cadência de Revisões de conta">
-        <p className="mb-3 text-xs text-zinc-500">
-          Meta de frequência semanal e intervalo máximo tolerado sem revisão — nunca uma data fixa, só uma
-          referência pra &ldquo;Revisões de conta&rdquo; na página do cliente.
-        </p>
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Cadência de Revisões de conta</p>
+          <p className="text-xs text-zinc-500">
+            Meta de frequência semanal e intervalo máximo tolerado sem revisão — nunca uma data fixa, só uma
+            referência pra &ldquo;Revisões de conta&rdquo; na página do cliente.
+          </p>
         <form
           action={updateAccountReviewCadenceAction.bind(null, id, returnTo)}
           className="flex flex-wrap items-end gap-3"
@@ -191,16 +200,19 @@ export default async function EditClientPage({
             Salvar cadência
           </button>
         </form>
-      </Section>
+        </div>
+      </Block>
 
-      <Section title="Excluir cliente">
-        <p className="mb-3 text-xs text-zinc-500">
-          O cliente some das listagens e para de sincronizar com o Meta, mas sprints, tarefas e
-          comentários ficam preservados. Dá pra restaurar depois em Configurações &gt; Clientes
-          excluídos.
-        </p>
-        <DeleteClientButton action={deleteClientAction.bind(null, id)} />
-      </Section>
+      <Block title="Administração" description="Ações administrativas sobre este cliente.">
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-zinc-500">
+            O cliente some das listagens e para de sincronizar com o Meta, mas sprints, tarefas e
+            comentários ficam preservados. Dá pra restaurar depois em Configurações &gt; Clientes
+            excluídos.
+          </p>
+          <DeleteClientButton action={deleteClientAction.bind(null, id)} />
+        </div>
+      </Block>
     </div>
   );
 }

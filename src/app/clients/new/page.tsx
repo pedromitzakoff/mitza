@@ -19,7 +19,7 @@ export default async function NewClientPage({
     .order("name");
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-12">
+    <div className="mx-auto max-w-3xl px-6 py-12">
       <h1 className="text-2xl font-semibold text-foreground">
         Novo cliente
       </h1>
