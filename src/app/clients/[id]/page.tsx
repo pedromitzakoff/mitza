@@ -240,7 +240,11 @@ export default async function ClientPage({
             .maybeSingle()
         ).data,
       );
-  const canEditPerformance = isAdmin || isAssignedManager;
+  // Habilitar Gestores 3.0: mesmo critério passa a valer pro Cadastro do
+  // Cliente inteiro (editar dados cadastrais) — daí o nome mais genérico;
+  // continua sendo repassado como `canEditPerformance` pro SprintCard, que
+  // é o nome específico que aquele componente já usa.
+  const canManageClient = isAdmin || isAssignedManager;
 
   // Etapa 53: "hoje" tinha que ser SEMPRE todayUTC() (meia-noite UTC do dia
   // civil no fuso America/Sao_Paulo) — usar `new Date()` puro aqui fazia a
@@ -873,7 +877,7 @@ export default async function ClientPage({
           >
             Ver relatório
           </Link>
-          {isAdmin && (
+          {canManageClient && (
             <Link
               href={`/clients/${client.id}/edit`}
               className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
@@ -1087,7 +1091,7 @@ export default async function ClientPage({
                       comments={sprintCommentsById.get(sprint.sprintId) ?? []}
                       clientId={client.id}
                       isAdmin={isAdmin}
-                      canEditPerformance={canEditPerformance}
+                      canEditPerformance={canManageClient}
                       tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
                       executionLabel={sprint.temporalStatus === "atual" ? sprintExecutionLabel : null}
                       executionSeverity={

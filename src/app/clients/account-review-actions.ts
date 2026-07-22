@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { getCurrentProfile, requireAdmin } from "@/lib/auth";
+import { getCurrentProfile, requireClientManagerAccess } from "@/lib/auth";
 import {
   ACCOUNT_REVIEW_REASONS,
   ACCOUNT_REVIEW_OUTCOMES,
@@ -121,11 +121,14 @@ export async function recordAccountReviewAction(clientId: string, returnTo: stri
   redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}reviewSaved=${data.reviewId}`);
 }
 
-/** Configuração de cadência (Etapa 57, seção 25) — admin-only, mesmo padrão
- * de orçamento/KPIs. Nunca cria data fixa de otimização, só a meta de
- * frequência semanal e o intervalo máximo tolerado em dias úteis. */
+/** Configuração de cadência (Etapa 57, seção 25) — deixou de ser
+ * admin-only na Etapa "Habilitar Gestores 3.0": o gestor responsável pelo
+ * cliente (RLS de `account_review_cadences_write`, atualizada junto) também
+ * pode editar, já que faz parte do Cadastro do Cliente. Nunca cria data
+ * fixa de otimização, só a meta de frequência semanal e o intervalo máximo
+ * tolerado em dias úteis. */
 export async function updateAccountReviewCadenceAction(clientId: string, returnTo: string, formData: FormData) {
-  await requireAdmin();
+  await requireClientManagerAccess(clientId);
   const supabase = await createSupabaseClient();
 
   const reviewsPerWeek = Math.max(1, Math.trunc(Number(formData.get("reviews_per_week") ?? 3)) || 3);

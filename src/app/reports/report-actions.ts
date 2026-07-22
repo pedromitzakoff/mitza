@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { getCurrentProfile, requireAdmin } from "@/lib/auth";
+import { getCurrentProfile, requireAdmin, requireClientManagerAccess } from "@/lib/auth";
 import { todayUTC, todayDateString } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
 import { getOrCreateReport, buildReportViewData } from "./report-data";
@@ -415,7 +415,11 @@ export async function reopenReportAction(clientId: string, monthStart: string) {
 // ---------------------------------------------------------------------------
 
 export async function addClientKpiAction(clientId: string, formData: FormData) {
-  await requireAdmin();
+  // Habilitar Gestores 3.0: KPIs do Relatório Mensal fazem parte do
+  // Cadastro do Cliente, que o gestor responsável também pode editar
+  // agora — RLS de `client_kpi_definitions` já aceitava is_client_manager()
+  // desde a Etapa 45, só a checagem aqui na action estava mais restrita.
+  await requireClientManagerAccess(clientId);
   const supabase = await createSupabaseClient();
 
   const name = String(formData.get("name") ?? "").trim();
@@ -451,7 +455,7 @@ export async function addClientKpiAction(clientId: string, formData: FormData) {
 }
 
 export async function deleteClientKpiAction(kpiId: string, clientId: string) {
-  await requireAdmin();
+  await requireClientManagerAccess(clientId);
   const supabase = await createSupabaseClient();
 
   await supabase.from("client_kpi_definitions").delete().eq("id", kpiId);

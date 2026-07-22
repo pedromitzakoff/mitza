@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireAdmin } from "@/lib/auth";
+import { requireClientManagerAccess } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { deleteClientAction, updateClientAction } from "../../actions";
@@ -17,8 +17,13 @@ export default async function EditClientPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string; return_to?: string }>;
 }) {
-  await requireAdmin();
   const { id } = await params;
+  // Habilitar Gestores 3.0: Cadastro do Cliente deixou de ser admin-only —
+  // o gestor responsável (principal ou de apoio, mesmo critério de
+  // `is_client_manager()` no RLS) também pode editar. "Excluir cliente",
+  // abaixo, continua restrito a admin (ação destrutiva, fora do pedido).
+  const profile = await requireClientManagerAccess(id);
+  const isAdmin = profile.role === "admin";
   const { error, return_to } = await searchParams;
   const returnTo = return_to && return_to.startsWith("/") ? return_to : `/clients/${id}`;
 
@@ -203,16 +208,18 @@ export default async function EditClientPage({
         </div>
       </Block>
 
-      <Block title="Administração" description="Ações administrativas sobre este cliente.">
-        <div className="flex flex-col gap-3">
-          <p className="text-xs text-zinc-500">
-            O cliente some das listagens e para de sincronizar com o Meta, mas sprints, tarefas e
-            comentários ficam preservados. Dá pra restaurar depois em Configurações &gt; Clientes
-            excluídos.
-          </p>
-          <DeleteClientButton action={deleteClientAction.bind(null, id)} />
-        </div>
-      </Block>
+      {isAdmin && (
+        <Block title="Administração" description="Ações administrativas sobre este cliente.">
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-zinc-500">
+              O cliente some das listagens e para de sincronizar com o Meta, mas sprints, tarefas e
+              comentários ficam preservados. Dá pra restaurar depois em Configurações &gt; Clientes
+              excluídos.
+            </p>
+            <DeleteClientButton action={deleteClientAction.bind(null, id)} />
+          </div>
+        </Block>
+      )}
     </div>
   );
 }

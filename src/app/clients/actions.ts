@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireClientManagerAccess } from "@/lib/auth";
 import { normalizeCnpj } from "@/lib/cnpj";
 import { OperationalEventType } from "@/lib/operational-events";
 import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
@@ -222,7 +222,11 @@ export async function createClientAction(formData: FormData) {
 }
 
 export async function updateClientAction(clientId: string, returnTo: string, formData: FormData) {
-  const profile = await requireAdmin();
+  // Habilitar Gestores 3.0: editar o Cadastro do Cliente deixou de ser
+  // admin-only — o gestor responsável (principal ou de apoio) também
+  // pode. `createClientAction`/`deleteClientAction` continuam admin-only
+  // (criar/excluir cliente é mais estrutural, fora do pedido).
+  const profile = await requireClientManagerAccess(clientId);
   const { name, meta_ad_account_id, managerIds, ...structural } = readClientFields(formData);
   const supabase = await createSupabaseClient();
 
