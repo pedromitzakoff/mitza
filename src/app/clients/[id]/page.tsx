@@ -15,7 +15,7 @@ import {
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
-import { classifySpendStatus } from "@/lib/spend-status";
+import { classifySpendStatus, SPEND_STATUS_BADGE_CLASSES, SPEND_STATUS_LABEL } from "@/lib/spend-status";
 import { computeNextAction } from "@/lib/next-action";
 import { buildSprintExecutionAlert, formatSprintExecutionLabel } from "@/lib/sprint-execution";
 import {
@@ -26,10 +26,11 @@ import {
 } from "@/lib/monthly-budget";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatMonthLabel, formatRelationshipDuration } from "@/lib/format";
+import { formatCurrency, formatMonthLabel, formatRelationshipDuration } from "@/lib/format";
 import { computeOperationalTracking, computeMonthlyOccurrenceSummary } from "@/lib/operational-tracking";
 import { fetchClientOperationalHistory } from "@/lib/client-operational-history";
 import { computeClientUpdateStatus } from "@/lib/client-updates";
+import { effectiveTaskStatus } from "@/lib/task-status";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
 import { syncClientMetaAction } from "../meta-actions";
 import { ClientIdentitySticky } from "../client-identity-sticky";
@@ -56,6 +57,7 @@ import {
   buildEditableChannelValues,
   buildSprintPerformanceView,
   computePerformanceSummary,
+  deriveMonthlyKpiTexts,
 } from "@/lib/performance";
 import { AVAILABLE_TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
 import { PerformanceSummarySection } from "../performance-summary";
@@ -63,6 +65,7 @@ import type { SprintPerformanceProps } from "../sprint-card";
 import { SprintFocusBar } from "../sprint-focus-bar";
 import { buildReportViewData } from "../../reports/report-data";
 import { ClientReportView } from "../../reports/report-view";
+import { ClientHistoryList } from "../client-history-list";
 
 function groupAccountReviewsBySprintId(
   reviews: (AccountReviewSummaryItem & { sprintId: string })[],
@@ -179,16 +182,19 @@ export default async function ClientPage({
   const isAdmin = profile?.role === "admin";
   const supabase = await createSupabaseClient();
 
-  // Etapa "MITZA 2.0 — Fase F/G": qual área do prontuário está ativa —
-  // calculado cedo (só depende de `areaParam`) pra decidir, mais abaixo, se
-  // vale a pena buscar os dados do relatório (só quando a aba Relatórios
-  // está aberta, nunca em toda visita à página).
-  type ClientArea = "visao-geral" | "performance" | "execucao" | "financeiro" | "relatorios" | "timeline";
+  // Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente": o prontuário
+  // deixou de ser recortado por FLUXO DE TRABALHO (Performance/Execução/
+  // Financeiro eram o mesmo trabalho diário, só fatiado em telas
+  // diferentes) — agora só existem 3 áreas, cada uma um CONTEXTO real e
+  // distinto: Visão Geral (a folha de trabalho contínua do dia a dia),
+  // Relatórios (momento de gerar/revisar o relatório do cliente) e Timeline
+  // (consulta ao histórico). Calculado cedo (só depende de `areaParam`) pra
+  // decidir, mais abaixo, se vale a pena buscar os dados do relatório/
+  // histórico completo (só na aba correspondente, nunca em toda visita à
+  // página).
+  type ClientArea = "visao-geral" | "relatorios" | "timeline";
   const AREA_TABS: { key: ClientArea; label: string }[] = [
     { key: "visao-geral", label: "Visão geral" },
-    { key: "performance", label: "Performance" },
-    { key: "execucao", label: "Execução" },
-    { key: "financeiro", label: "Financeiro" },
     { key: "relatorios", label: "Relatórios" },
     { key: "timeline", label: "Timeline" },
   ];
@@ -605,10 +611,15 @@ export default async function ClientPage({
   // (ver lib/client-operational-history.ts). O card mostra só as 5 mais
   // recentes; "Ver todos de {mês}" abre a mesma consulta paginada (15 por
   // página, mesmo padrão de `fetchTeamMemberTimeline`).
+  // Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente": a aba
+  // Timeline agora é o próprio conteúdo (não mais um link redirecionando
+  // pro drawer) — a busca paginada completa passa a rodar também quando ela
+  // está ativa, não só quando o drawer "Ver todos de {mês}" está aberto.
   const historyPage = Math.max(0, Number(historyPageParam) || 0);
+  const shouldLoadFullHistory = Boolean(reviewsHistory) || activeArea === "timeline";
   const [{ rows: recentHistoryRows, hasMore: hasMoreHistory }, fullHistory] = await Promise.all([
     fetchClientOperationalHistory(supabase, id, { firstDay, lastDay }, 0, 5),
-    reviewsHistory
+    shouldLoadFullHistory
       ? fetchClientOperationalHistory(supabase, id, { firstDay, lastDay }, historyPage)
       : Promise.resolve({ rows: [], hasMore: false }),
   ]);
@@ -673,6 +684,10 @@ export default async function ClientPage({
   const reviewsHistoryHref = withParam(returnTo, "reviewsHistory=1");
   const buildHistoryPageHref = (page: number) => withParam(withParam(returnTo, "reviewsHistory=1"), `historyPage=${page}`);
   const buildReviewDetailHref = (reviewId: string) => withParam(returnTo, `reviewDetail=${reviewId}`);
+  // Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente": paginação da
+  // Timeline preserva a área/mês ativos (`buildAreaHref`), nunca o parâmetro
+  // `reviewsHistory` do drawer (fluxos diferentes, mesma consulta paginada).
+  const buildTimelineHistoryPageHref = (page: number) => withParam(buildAreaHref("timeline"), `historyPage=${page}`);
   const openTaskRow = openTaskId ? (tasks ?? []).find((t) => t.id === openTaskId) ?? null : null;
   const openTask: OperationTaskItem | null = openTaskRow
     ? {
@@ -750,7 +765,7 @@ export default async function ClientPage({
     .join(" · ");
 
   // Etapa "MITZA 2.0 — Fase G": relatório mensal só é buscado quando a aba
-  // Relatórios está aberta (nenhuma query extra nas outras 5 abas) —
+  // Relatórios está aberta (nenhuma query extra nas outras abas) —
   // `buildReportViewData`/`client_managers` são exatamente a mesma busca
   // que `/reports/[clientId]/page.tsx` já fazia, nenhuma regra nova.
   const reportData = activeArea === "relatorios" ? await buildReportViewData(supabase, id, monthQueryParam, today, formatMonthLabel) : null;
@@ -760,6 +775,16 @@ export default async function ClientPage({
           m.team_members ? [m.team_members] : [],
         ) ?? []
       : [];
+
+  // Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente" — "Resumo
+  // consolidado do mês": nenhum dado novo, só uma leitura de fechamento
+  // reunindo números já calculados acima (investimento, performance,
+  // tarefas do mês inteiro — sprints + soltas), como se fosse "mais uma
+  // sprint", representando o mês inteiro.
+  const monthKpiTexts = deriveMonthlyKpiTexts(performanceGoal, monthPerformanceSummary, formatCurrency);
+  const monthTaskRows = [...sortedSprints.flatMap((sprint) => tasksBySprintId.get(sprint.sprintId) ?? []), ...unlinkedTasks];
+  const monthTasksTotal = monthTaskRows.length;
+  const monthTasksDone = monthTaskRows.filter((task) => effectiveTaskStatus(task, today) === "feito").length;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-5">
@@ -910,14 +935,22 @@ export default async function ClientPage({
         ))}
       </div>
 
+      {/* Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente": a Visão
+          Geral deixou de ser uma aba entre outras e passou a ser o
+          prontuário completo — uma única leitura contínua, na ordem em que
+          o trabalho de fato acontece (indicadores → financeiro → execução
+          → sprints → fechamento do mês → próximas ações). Nenhum
+          componente, cálculo ou prop mudou — só deixaram de estar
+          espalhados em abas próprias (Performance/Execução/Financeiro
+          foram o mesmo trabalho diário fatiado em telas diferentes, o que
+          a Fase F já tinha identificado como fragmentação). */}
       {activeArea === "visao-geral" && (
         <>
-          {/* Foco agora (Etapa "MITZA Operational Workspace 1.0") movido pra
-              Execução (Fase F) — é sobre a próxima ação da sprint atual, não
-              sobre o resumo geral da conta. */}
-
-          {/* Acompanhamento da conta — resumo do mês, última otimização,
-              tracking operacional e histórico recente. */}
+          {/* Indicadores do mês — investimento, resultados, custo por
+              resultado, última otimização e tracking operacional.
+              A meta do mês (antes numa aba própria) vem logo abaixo, como
+              mais uma leitura destes mesmos indicadores, nunca um fluxo
+              separado. */}
           <div className="mt-3">
             <AccountFollowUpPanel
               monthLabel={monthLabel}
@@ -938,42 +971,42 @@ export default async function ClientPage({
             />
           </div>
 
-          {/* Dados estruturais do cliente (briefing) — informação de
-              referência sobre a conta, mesmo lugar conceitual de "visão
-              geral" (não muda por mês selecionado). */}
-          <div className="mt-3">
-            <EssentialInfoPanel
-              mainObjective={client.main_objective}
-              mainProductOrService={client.main_product_or_service}
-              operationRegion={client.operation_region}
-              primaryAudience={client.primary_audience}
-              clientDifferentials={client.client_differentials}
-              clientRestrictions={client.client_restrictions}
-              importantSeasonalDates={client.important_seasonal_dates}
-              operationalSummary={client.operational_summary}
-              importantNotes={client.important_notes}
-              isAdmin={isAdmin}
-              editHref={`/clients/${client.id}/edit`}
-            />
-          </div>
-        </>
-      )}
-
-      {activeArea === "performance" && (
-        <div className="mt-3">
           <PerformanceSummarySection
             goal={performanceGoal}
             targetCostPerResult={targetCostPerResult}
             summary={monthPerformanceSummary}
             channelBreakdown={monthPerformanceChannelBreakdown}
           />
-        </div>
-      )}
 
-      {activeArea === "execucao" && (
-        <>
-          {/* Foco agora — próxima ação da sprint atual, primeiro conteúdo
-              da área de Execução (mesmo critério de sempre, só realocado). */}
+          {/* Financeiro — informação de contexto (orçamento vigente,
+              ritmo, edição de orçamento), não um fluxo de trabalho à
+              parte. */}
+          <div className="mt-3">
+            <MonthInvestmentSummary
+              planned={monthPlanned}
+              actual={monthActual}
+              expectedToDate={monthExpectedToDate}
+              status={monthStatus}
+              clientId={client.id}
+              monthParam={monthParam}
+              monthLabel={monthLabel}
+              sprints={budgetSprints}
+              monthRange={{ firstDay, lastDay }}
+              effectiveDate={effectiveDate}
+              isAdmin={isAdmin}
+              isClosedMonth={isClosedMonth}
+              isFutureMonth={isFutureMonth}
+              lastChange={lastChange}
+              historyHref={historyDrawerHref}
+              performanceGoal={performanceGoal}
+              targetResultCount={targetResultCount}
+              targetCostPerResult={targetCostPerResult}
+            />
+          </div>
+
+          {/* Execução — foco agora, sprints do mês e fechamento do
+              período. Continua sendo o mesmo trabalho de sempre, só sem
+              exigir uma troca de aba pra chegar até ele. */}
           {currentSprint && nextAction && (
             <div className="mt-3">
               <SprintFocusBar
@@ -1024,6 +1057,53 @@ export default async function ClientPage({
             </Section>
           </div>
 
+          {/* Resumo consolidado do mês — como se fosse "mais uma sprint",
+              só que representando o fechamento do período inteiro. Nenhum
+              dado novo: mesmos números de investimento/performance/tarefas
+              já calculados acima, só lidos juntos como fechamento. */}
+          <div className="mt-3">
+            <Section title={`Fechamento de ${monthLabel}`}>
+              <div className="rounded-lg border border-border bg-card p-3">
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[monthStatus]}`}
+                  >
+                    {SPEND_STATUS_LABEL[monthStatus]}
+                  </span>
+
+                  <span className="text-border" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="text-muted-foreground">Investido:</span>
+                  <span className="font-semibold text-foreground">{formatCurrency(monthActual)}</span>
+                  <span className="text-muted-foreground">de {formatCurrency(monthPlanned)} planejados</span>
+
+                  <span className="text-border" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="text-muted-foreground">Resultados:</span>
+                  <span className="font-semibold text-foreground">{monthKpiTexts.resultsValue}</span>
+
+                  <span className="text-border" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="text-muted-foreground">Custo por resultado:</span>
+                  <span className="font-semibold text-foreground">{monthKpiTexts.costValue}</span>
+
+                  <span className="text-border" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="text-muted-foreground">Tarefas do mês:</span>
+                  <span className="font-semibold text-foreground">
+                    {monthTasksDone}/{monthTasksTotal}
+                  </span>
+                </div>
+              </div>
+            </Section>
+          </div>
+
+          {/* Próximas ações — tarefas sem sprint vinculada, último passo da
+              leitura contínua antes das informações de referência. */}
           <div className="mt-3">
             <Section title="Outras tarefas">
               <p className="mb-3 text-xs text-zinc-500">
@@ -1032,32 +1112,27 @@ export default async function ClientPage({
               <TaskList tasks={unlinkedTasks} clientId={client.id} managers={managers ?? []} />
             </Section>
           </div>
-        </>
-      )}
 
-      {activeArea === "financeiro" && (
-        <div className="mt-3">
-          <MonthInvestmentSummary
-            planned={monthPlanned}
-            actual={monthActual}
-            expectedToDate={monthExpectedToDate}
-            status={monthStatus}
-            clientId={client.id}
-            monthParam={monthParam}
-            monthLabel={monthLabel}
-            sprints={budgetSprints}
-            monthRange={{ firstDay, lastDay }}
-            effectiveDate={effectiveDate}
-            isAdmin={isAdmin}
-            isClosedMonth={isClosedMonth}
-            isFutureMonth={isFutureMonth}
-            lastChange={lastChange}
-            historyHref={historyDrawerHref}
-            performanceGoal={performanceGoal}
-            targetResultCount={targetResultCount}
-            targetCostPerResult={targetCostPerResult}
-          />
-        </div>
+          {/* Dados estruturais do cliente (briefing) — informação de
+              referência sobre a conta, não faz parte do fluxo diário de
+              trabalho (não muda por mês selecionado), por isso fica no
+              fim, depois de toda a operação. */}
+          <div className="mt-3">
+            <EssentialInfoPanel
+              mainObjective={client.main_objective}
+              mainProductOrService={client.main_product_or_service}
+              operationRegion={client.operation_region}
+              primaryAudience={client.primary_audience}
+              clientDifferentials={client.client_differentials}
+              clientRestrictions={client.client_restrictions}
+              importantSeasonalDates={client.important_seasonal_dates}
+              operationalSummary={client.operational_summary}
+              importantNotes={client.important_notes}
+              isAdmin={isAdmin}
+              editHref={`/clients/${client.id}/edit`}
+            />
+          </div>
+        </>
       )}
 
       {/* Etapa "MITZA 2.0 — Fase G": o relatório individual (antes só em
@@ -1084,18 +1159,48 @@ export default async function ClientPage({
         </div>
       )}
 
+      {/* Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente": a
+          Timeline deixou de ser um link redirecionando pro mesmo drawer
+          "Ver todos de {mês}" da Visão Geral — agora é o conteúdo real da
+          aba, mostrando o histórico completo direto, sem overlay e sem
+          voltar pra Visão Geral. Reaproveita a mesma consulta paginada
+          (`fetchClientOperationalHistory`) e a mesma lista de eventos
+          (`ClientHistoryList`, extraída do drawer) — nenhuma fonte de dado
+          ou lógica nova. */}
       {activeArea === "timeline" && (
-        <div className="mt-3 rounded-md border border-border bg-card p-4 text-sm">
-          {/* Bloqueio registrado no relatório da Fase F: unificar histórico
-              operacional + comentários + atualizações numa única Timeline
-              exigiria alterar `AccountFollowUpPanel`/`ClientOperationalHistoryDrawer`
-              (extrair a seção de histórico deles) — fora do escopo desta
-              fase ("não altere componentes"). Por ora, esta aba só abre o
-              mesmo histórico completo que já existia (drawer inalterado). */}
-          <p className="text-foreground">Histórico de análises, otimizações e reuniões/entregas deste cliente.</p>
-          <Link href={reviewsHistoryHref} className="mt-1 inline-block text-sm font-medium text-brand hover:underline">
-            Ver histórico completo →
-          </Link>
+        <div className="mt-3">
+          <Section title={`Histórico de ${monthLabel}`}>
+            <ClientHistoryList
+              rows={fullHistory.rows}
+              buildReviewDetailHref={buildReviewDetailHref}
+              emptyLabel={`Nenhum evento registrado em ${monthLabel}.`}
+            />
+
+            {(historyPage > 0 || fullHistory.hasMore) && (
+              <div className="mt-3 flex items-center justify-between border-t border-border pt-2 text-xs">
+                {historyPage > 0 ? (
+                  <Link
+                    href={buildTimelineHistoryPageHref(historyPage - 1)}
+                    scroll={false}
+                    className="font-medium text-brand hover:underline"
+                  >
+                    &larr; Mais recentes
+                  </Link>
+                ) : (
+                  <span />
+                )}
+                {fullHistory.hasMore && (
+                  <Link
+                    href={buildTimelineHistoryPageHref(historyPage + 1)}
+                    scroll={false}
+                    className="font-medium text-brand hover:underline"
+                  >
+                    Mais antigos &rarr;
+                  </Link>
+                )}
+              </div>
+            )}
+          </Section>
         </div>
       )}
 
