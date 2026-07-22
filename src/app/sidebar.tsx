@@ -111,10 +111,12 @@ interface NavItem {
   icon: LucideIcon;
   adminOnly?: boolean;
   isActive?: (pathname: string, mode: string | null) => boolean;
-  /** principal: Visão Geral/Clientes/Sprints. moderado: itens secundários
-   * (Equipe). flexivel: empurrado pro fim da nav via spacer
-   * (Configurações), ficando logo acima do rodapé fixo. */
-  group: "principal" | "moderado" | "flexivel";
+  /** principal: os únicos dois níveis operacionais da constituição do
+   * produto (Painel Geral, Operação). flexivel: Administração (Equipe,
+   * Configurações) — infraestrutura, empurrada pro fim da nav via spacer,
+   * nunca competindo visualmente com os níveis operacionais (Etapa "MITZA
+   * 2.0 — Fase H"). */
+  group: "principal" | "flexivel";
 }
 
 /** Etapa "Sprint Workspace Polish 2.0" (Parte 8): posição antes de
@@ -149,7 +151,7 @@ const NAV_ITEMS: NavItem[] = [
     isActive: (p) => p === "/operation",
     group: "principal",
   },
-  { label: "Equipe", href: "/team", icon: Users, isActive: (p) => p.startsWith("/team"), group: "moderado" },
+  { label: "Equipe", href: "/team", icon: Users, isActive: (p) => p.startsWith("/team"), group: "flexivel" },
   {
     label: "Configurações",
     href: "/settings",
@@ -228,7 +230,6 @@ function SidebarContent({
   const isAdmin = profile.role === "admin";
   const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
   const principal = items.filter((item) => item.group === "principal");
-  const moderado = items.filter((item) => item.group === "moderado");
   const flexivel = items.filter((item) => item.group === "flexivel");
   const initial = profile.name.trim().charAt(0).toUpperCase() || "?";
 
@@ -272,14 +273,6 @@ function SidebarContent({
           ))}
         </nav>
 
-        {moderado.length > 0 && (
-          <nav className="mt-2 flex flex-col gap-0.5 px-2.5">
-            {moderado.map((item) => (
-              <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
-            ))}
-          </nav>
-        )}
-
         {/* Recolhida (só desktop): não tenta mostrar a árvore no modo
          * compacto, mesmo comportamento das demais seções da nav. */}
         <div className={collapsed ? "md:hidden" : ""}>{agencyTree}</div>
@@ -287,25 +280,36 @@ function SidebarContent({
         <div className="flex-1" />
 
         {(flexivel.length > 0 || isAdmin) && (
-          <div className="flex items-center gap-1 px-2.5 pb-2">
-            <nav className="flex flex-1 flex-col gap-0.5">
-              {flexivel.map((item) => (
-                <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
-              ))}
-            </nav>
-            {isAdmin && (
-              <form action={syncAllMetaAction}>
-                <Tooltip label="Atualizar Meta (todos)">
-                  <button
-                    type="submit"
-                    aria-label="Atualizar Meta (todos)"
-                    className="mitza-pressable shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-                  >
-                    <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  </button>
-                </Tooltip>
-              </form>
+          <div className="flex flex-col gap-0.5 px-2.5 pb-2">
+            {/* Etapa "MITZA 2.0 — Fase H": rótulo visual só pra deixar
+             * explícito que Equipe/Configurações são Administração —
+             * infraestrutura fora da hierarquia operacional, nunca um
+             * terceiro nível ao lado de Painel Geral/Operação. */}
+            {flexivel.length > 0 && (
+              <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 ${collapsed ? "md:hidden" : ""}`}>
+                Administração
+              </span>
             )}
+            <div className="flex items-center gap-1">
+              <nav className="flex flex-1 flex-col gap-0.5">
+                {flexivel.map((item) => (
+                  <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
+                ))}
+              </nav>
+              {isAdmin && (
+                <form action={syncAllMetaAction}>
+                  <Tooltip label="Atualizar Meta (todos)">
+                    <button
+                      type="submit"
+                      aria-label="Atualizar Meta (todos)"
+                      className="mitza-pressable shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                    >
+                      <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    </button>
+                  </Tooltip>
+                </form>
+              )}
+            </div>
           </div>
         )}
       </div>
