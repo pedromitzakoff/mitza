@@ -175,3 +175,38 @@ export async function requireAdmin(): Promise<CurrentProfile> {
 
   return profile;
 }
+
+/**
+ * Garante permissão de ESCRITA sobre um cliente específico — admin sempre
+ * tem; gestor só quando está em `client_managers` (fonte de autorização de
+ * escrita — distinta de `clients.primary_manager_id`, que é só exibição,
+ * ver Etapa 62). Mesmo critério usado por `is_client_manager()` no RLS —
+ * esta função só existe pra dar um redirect amigável ANTES da escrita
+ * chegar ao banco, nunca substitui a policy correspondente. Hoje usada só
+ * por `updateSprintPerformanceAction` ("Atualizar performance" da sprint).
+ */
+export async function requireClientManagerAccess(clientId: string): Promise<CurrentProfile> {
+  const profile = await getCurrentProfile();
+
+  if (!profile) {
+    redirect("/");
+  }
+
+  if (profile.role === "admin") {
+    return profile;
+  }
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("client_managers")
+    .select("client_id")
+    .eq("client_id", clientId)
+    .eq("user_id", profile.id)
+    .maybeSingle();
+
+  if (!data) {
+    redirect("/");
+  }
+
+  return profile;
+}

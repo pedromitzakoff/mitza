@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireClientManagerAccess } from "@/lib/auth";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import type { PerformanceGoalDb } from "@/lib/supabase/database.types";
 import type { PerformanceGoal } from "@/lib/performance-goals";
@@ -23,6 +23,14 @@ function withError(returnTo: string, message: string): string {
  * resultado que o gestor só não quis tocar agora). CPL/CPA continuam 100%
  * derivados — nenhum campo aqui os aceita diretamente.
  *
+ * Permissão: admin ou o gestor responsável por este cliente
+ * (`requireClientManagerAccess`) — sem isso o gestor não conseguia
+ * registrar a própria execução. RLS (`sprints_update`/`performance_records_write`,
+ * ver supabase/manager-write-sprint-performance.sql) aplica exatamente a
+ * mesma regra no banco, com um trigger extra travando qualquer coluna de
+ * planejamento da sprint (planned_spend/datas/snapshots) — só admin altera
+ * isso, mesmo que a checagem daqui seja contornada.
+ *
  * `returnTo` (Etapa MVP 1.3) — quem chama decide pra onde volta depois de
  * salvar (página do cliente ou tela Sprints, preservando o contexto de
  * onde a edição começou) — nunca mais um redirect fixo pra `/clients/{id}`.
@@ -33,7 +41,7 @@ export async function updateSprintPerformanceAction(
   returnTo: string,
   formData: FormData,
 ) {
-  await requireAdmin();
+  await requireClientManagerAccess(clientId);
 
   const actualSpend = Number(formData.get("actual_spend"));
   if (!Number.isFinite(actualSpend) || actualSpend < 0) {

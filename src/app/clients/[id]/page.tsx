@@ -215,6 +215,27 @@ export default async function ClientPage({
 
   if (!client) notFound();
 
+  // Habilitar Gestores 1.0: "Atualizar performance" (investimento realizado
+  // + resultados da sprint) deixou de ser admin-only — o gestor responsável
+  // por este cliente também pode, senão não consegue registrar a própria
+  // execução do dia a dia. `client_managers` é a fonte de autorização de
+  // escrita (distinta de `clients.primary_manager_id`, que é só exibição —
+  // Etapa 62), mesma tabela que a policy `is_client_manager()` do RLS
+  // consulta (ver supabase/manager-write-sprint-performance.sql).
+  const isAssignedManager = isAdmin
+    ? false
+    : Boolean(
+        (
+          await supabase
+            .from("client_managers")
+            .select("client_id")
+            .eq("client_id", id)
+            .eq("user_id", profile?.id ?? "")
+            .maybeSingle()
+        ).data,
+      );
+  const canEditPerformance = isAdmin || isAssignedManager;
+
   // Etapa 53: "hoje" tinha que ser SEMPRE todayUTC() (meia-noite UTC do dia
   // civil no fuso America/Sao_Paulo) — usar `new Date()` puro aqui fazia a
   // sprint atual virar errada bem à noite no Brasil (21h–23h59), quando o
@@ -1029,6 +1050,7 @@ export default async function ClientPage({
                       comments={sprintCommentsById.get(sprint.sprintId) ?? []}
                       clientId={client.id}
                       isAdmin={isAdmin}
+                      canEditPerformance={canEditPerformance}
                       tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
                       executionLabel={sprint.temporalStatus === "atual" ? sprintExecutionLabel : null}
                       executionSeverity={

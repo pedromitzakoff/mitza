@@ -154,6 +154,7 @@ function SprintPerformanceSection({
   performance,
   clientId,
   isAdmin,
+  canEditPerformance,
   sourceTimestampText,
   isManualSource,
   revertSourceToggleId,
@@ -165,6 +166,12 @@ function SprintPerformanceSection({
   performance?: SprintPerformanceProps;
   clientId: string;
   isAdmin: boolean;
+  /** Permissão de "Atualizar performance" (investimento + resultados) —
+   * admin sempre tem; o gestor responsável por este cliente também, desde
+   * o Habilitar Gestores 1.0 (RLS em supabase/manager-write-sprint-performance.sql).
+   * Separada de `isAdmin` porque o resto desta seção (config. de objetivo)
+   * continua exclusivamente admin. */
+  canEditPerformance: boolean;
   sourceTimestampText: string | null;
   isManualSource: boolean;
   revertSourceToggleId: string;
@@ -193,7 +200,7 @@ function SprintPerformanceSection({
   // existir qualquer dado lançado (`not_started`/`no_data`) — e cai pro
   // rótulo genérico só quando não há objetivo pra saber qual dos dois é.
   const costLabel = performanceGoal ? PERFORMANCE_GOALS[performanceGoal].costMetricShortLabel : "Custo por resultado";
-  const canEditResults = isAdmin && (view.kind === "has_data" || view.kind === "no_data") && editableChannels.length > 0;
+  const canEditResults = canEditPerformance && (view.kind === "has_data" || view.kind === "no_data") && editableChannels.length > 0;
   const investmentSourceText = sourceTimestampText ?? (isManualSource ? "Manual" : "Meta");
   const performanceSourceText =
     view.kind === "has_data" ? getLatestPerformanceUpdateText(view.summary.latestSource, view.summary.latestUpdatedAt, formatShortDateTime) : null;
@@ -239,7 +246,7 @@ function SprintPerformanceSection({
           os <label> que os acionam continuam dentro da linha, referenciando
           por `htmlFor` (isso não exige irmandade). */}
       {isManualSource && <input type="checkbox" id={revertSourceToggleId} className="peer/revert hidden" />}
-      {isAdmin && <input type="checkbox" id={editToggleId} className="peer hidden" />}
+      {canEditPerformance && <input type="checkbox" id={editToggleId} className="peer hidden" />}
 
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
         {/* Etapa "Painel Operacional 1.0" (item 5 do pedido): removido o
@@ -301,14 +308,14 @@ function SprintPerformanceSection({
           </>
         )}
 
-        {(newReviewHref || isAdmin) && (
+        {(newReviewHref || canEditPerformance) && (
           <span className="ml-auto flex shrink-0 items-center gap-1.5">
             {newReviewHref && (
               <Link href={newReviewHref} scroll={false} className={SECONDARY_ACTION_BUTTON_CLASSES}>
                 + Registrar revisão
               </Link>
             )}
-            {isAdmin && (
+            {canEditPerformance && (
               <label
                 htmlFor={editToggleId}
                 className="mitza-pressable shrink-0 cursor-pointer rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand peer-checked:hidden"
@@ -337,7 +344,7 @@ function SprintPerformanceSection({
         </div>
       )}
 
-      {isAdmin && (
+      {canEditPerformance && (
         <form
           action={updateSprintPerformanceAction.bind(null, sprint.sprintId, clientId, returnTo)}
           className="mt-1.5 hidden flex-col gap-1.5 peer-checked:flex"
@@ -403,6 +410,7 @@ export function SprintCardBody({
   comments,
   clientId,
   isAdmin,
+  canEditPerformance,
   tasks,
   executionLabel,
   executionSeverity,
@@ -423,6 +431,11 @@ export function SprintCardBody({
   comments: CommentItem[];
   clientId: string;
   isAdmin: boolean;
+  /** Permissão de "Atualizar performance" (Habilitar Gestores 1.0) —
+   * `undefined` (só o painel Sprints, congelado, não passa esta prop) cai
+   * de volta pra `isAdmin`, preservando o comportamento de sempre lá. A
+   * página do cliente passa o valor real (admin OU gestor responsável). */
+  canEditPerformance?: boolean;
   tasks: TaskListItem[];
   executionLabel?: string | null;
   executionSeverity?: "atencao" | "critico" | null;
@@ -476,6 +489,10 @@ export function SprintCardBody({
   const revertSourceToggleId = `revert-source-${sprint.sprintId}`;
   const editToggleId = `edit-performance-${sprint.sprintId}`;
   const isManualSource = sprint.spendSource === "manual";
+  // Habilitar Gestores 1.0: `undefined` (painel Sprints, congelado, não
+  // passa a prop) cai de volta pra `isAdmin` — mesmo comportamento de
+  // sempre lá; a página do cliente passa o valor real.
+  const resolvedCanEditPerformance = canEditPerformance ?? isAdmin;
 
   // Etapa "Instant Action & Context Memory 1.0" (hoje em `ActivitySection`,
   // que absorveu o que antes era `SprintTaskList`): Client Component
@@ -551,7 +568,7 @@ export function SprintCardBody({
                     Abrir tarefa
                   </Link>
                 </>
-              ) : nextAction.kind === "update_performance" && isAdmin ? (
+              ) : nextAction.kind === "update_performance" && resolvedCanEditPerformance ? (
                 <label htmlFor={editToggleId} className={`${SECONDARY_ACTION_BUTTON_CLASSES} cursor-pointer`}>
                   {nextAction.text}
                 </label>
@@ -631,6 +648,7 @@ export function SprintCardBody({
               performance={performance}
               clientId={clientId}
               isAdmin={isAdmin}
+              canEditPerformance={resolvedCanEditPerformance}
               sourceTimestampText={sourceTimestampText}
               isManualSource={isManualSource}
               returnTo={returnTo}
@@ -715,6 +733,7 @@ export function SprintCard({
   comments,
   clientId,
   isAdmin,
+  canEditPerformance,
   tasks,
   executionLabel,
   executionSeverity,
@@ -738,6 +757,8 @@ export function SprintCard({
   comments: CommentItem[];
   clientId: string;
   isAdmin: boolean;
+  /** Permissão de "Atualizar performance" — ver doc de `SprintCardBody`. */
+  canEditPerformance?: boolean;
   tasks: TaskListItem[];
   executionLabel?: string | null;
   executionSeverity?: "atencao" | "critico" | null;
@@ -952,6 +973,7 @@ export function SprintCard({
               comments={comments}
               clientId={clientId}
               isAdmin={isAdmin}
+              canEditPerformance={canEditPerformance}
               tasks={tasks}
               executionLabel={executionLabel}
               executionSeverity={executionSeverity}
@@ -976,6 +998,7 @@ export function SprintCard({
           comments={comments}
           clientId={clientId}
           isAdmin={isAdmin}
+          canEditPerformance={canEditPerformance}
           tasks={tasks}
           executionLabel={executionLabel}
           executionSeverity={executionSeverity}
