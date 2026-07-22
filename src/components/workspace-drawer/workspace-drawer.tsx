@@ -11,6 +11,7 @@ import {
   updateWorkspaceNoteAction,
 } from "@/app/workspace/actions";
 import { applyInlineWrap, applyLinePrefix, type WorkspaceNote } from "@/lib/workspace-notes";
+import { formatRelativeDateTime } from "@/lib/format";
 import { useWorkspace } from "./workspace-provider";
 
 const AUTOSAVE_DELAY_MS = 700;
@@ -308,11 +309,18 @@ function NoteListItem({
   onTogglePin: (note: WorkspaceNote) => void;
 }) {
   const preview = note.content.trim().split("\n")[0]?.slice(0, 80) ?? "";
+  // "Hoje, 14:03" / "Ontem, 09:10" / "12/07, 09:10" — mesmo formato usado no
+  // histórico de conta e revisões da plataforma, igual ao pedido de sempre
+  // mostrar a data (como no ClickUp).
+  const date = formatRelativeDateTime(note.updated_at, new Date());
 
   return (
     <div className="group flex items-start gap-1 rounded-md px-2 py-2 hover:bg-zinc-100 dark:hover:bg-zinc-900">
       <button type="button" onClick={() => onSelect(note.id)} className="min-w-0 flex-1 text-left">
-        <p className="truncate text-sm font-medium text-foreground">{note.title.trim() || "Nota sem título"}</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="truncate text-sm font-medium text-foreground">{note.title.trim() || "Nota sem título"}</p>
+          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{date}</span>
+        </div>
         {preview && <p className="mt-0.5 truncate text-xs text-muted-foreground">{preview}</p>}
       </button>
       <button
@@ -388,11 +396,17 @@ function NoteEditor({
           placeholder="Título"
           className="w-full border-none bg-transparent text-base font-semibold text-foreground outline-none placeholder:text-zinc-400"
         />
-        {note.context_label && note.context_path && (
-          <Link href={note.context_path} onClick={onClose} className="text-xs text-muted-foreground hover:underline">
-            Criada em: <span className="text-foreground">{note.context_label}</span>
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+          <span className="tabular-nums">{formatRelativeDateTime(note.updated_at, new Date())}</span>
+          {note.context_label && note.context_path && (
+            <>
+              <span>·</span>
+              <Link href={note.context_path} onClick={onClose} className="hover:underline">
+                Criada em: <span className="text-foreground">{note.context_label}</span>
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="mt-2 flex items-center gap-1 border-b border-border px-4 py-2">
