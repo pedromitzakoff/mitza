@@ -2,15 +2,18 @@ import Link from "next/link";
 import type { StatusTone } from "@/components/workspace/status-dot";
 import { Tooltip } from "@/components/ui/tooltip";
 
-/** Etapa "Refinamento de Densidade..." (Parte 5): Planejado/Realizado
- * dominavam demais a tela (30px, bem acima de tudo ao redor). Reduzido pra
- * 24px/20px — ainda maior que SecondaryInvestmentMetric (19px), preservando
- * a hierarquia (lg > md > OperationMetric > SecondaryInvestmentMetric), mas
- * com um salto bem menor entre os níveis, pra ficar tudo comparável num
- * único olhar. */
+/** Refinamento Visual da Visão Geral (Painel Financeiro/Operacional):
+ * Planejado/Realizado/Orçamento utilizado dividem a mesma linha de
+ * "Investimento em mídia" e por isso precisam do mesmo tamanho de big
+ * number — 24px/20px fazia "Orçamento utilizado" ficar visivelmente menor
+ * que seus vizinhos na mesma grade. Unificado nos 22px já usados por
+ * `OperationMetric` (Resultados/Indicadores), pra todo big number da página
+ * ficar alinhado horizontalmente no mesmo tamanho. `size` continua existindo
+ * só pra preservar a assinatura do componente (nenhum call-site precisou
+ * mudar). */
 const PRIMARY_VALUE_SIZE: Record<"lg" | "md", string> = {
-  lg: "text-[24px]",
-  md: "text-[20px]",
+  lg: "text-[22px]",
+  md: "text-[22px]",
 };
 
 const TONE_TEXT_CLASSES: Record<StatusTone, string> = {
@@ -40,7 +43,10 @@ export function PrimaryInvestmentMetric({
   return (
     <div>
       <p className="text-[13px] text-overview-text-secondary">{label}</p>
-      <p className={`mt-1 ${PRIMARY_VALUE_SIZE[size]} font-semibold leading-none tracking-tight text-overview-text-primary tabular-nums`}>
+      {/* font-semibold → font-medium (~10% mais leve), mesmo tratamento
+          aplicado a `OperationMetric` — big numbers mais equilibrados sem
+          perder destaque. */}
+      <p className={`mt-1 ${PRIMARY_VALUE_SIZE[size]} font-medium leading-none tracking-tight text-overview-text-primary tabular-nums`}>
         {value}
       </p>
     </div>
@@ -71,7 +77,12 @@ export function SecondaryInvestmentMetric({
   const metric = (
     <div>
       <p className="text-[12px] text-overview-text-muted">{label}</p>
-      <p className={`mt-0.5 text-[19px] font-medium leading-tight tabular-nums ${TONE_TEXT_CLASSES[tone]}`}>{value}</p>
+      {/* Refinamento Visual da Visão Geral: mt-0.5 → mt-1 e leading-tight →
+          leading-none — mesmo ritmo título→número e mesma altura de linha
+          de `OperationMetric`/`PrimaryInvestmentMetric`, só o tamanho/peso
+          continuam menores (esta camada segue deliberadamente mais discreta
+          que Planejado/Realizado/Orçamento utilizado). */}
+      <p className={`mt-1 text-[19px] font-medium leading-none tabular-nums ${TONE_TEXT_CLASSES[tone]}`}>{value}</p>
     </div>
   );
   const content = title ? <Tooltip label={title}>{metric}</Tooltip> : metric;

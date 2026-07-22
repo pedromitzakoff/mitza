@@ -784,43 +784,15 @@ export default async function Home({
           />
         </div>
 
-        {/* MITZA Operational Workspace 2.0 (Partes 2/4): Prioridade sobe pra
-            logo depois dos filtros, antes de qualquer consulta agregada —
-            "o que exige minha atenção?" responde primeiro; "como estão os
-            números da agência?" (bloco financeiro/operacional logo abaixo,
-            agora recolhível) é consulta, não decisão. Nenhum dado, cálculo
-            ou link mudou, só a ordem e o destaque. */}
-        <div className="mt-3">
-          <PrioritiesPanel
-            priorities={prioritiesTop}
-            managerNameByClient={primaryManagerNameByClient}
-            totalCount={priorityQueue.length}
-            viewAllHref={openPrioritiesHref}
-          />
-        </div>
-
-        {prioritiesOpen && (
-          <PrioritiesDrawer
-            priorities={priorityQueue}
-            managerNameByClient={primaryManagerNameByClient}
-            severity={prioritySeverity}
-            closeHref={closePrioritiesHref}
-            buildSeverityHref={prioritiesSeverityHref}
-          />
-        )}
-
-        {/* Refinamento de Densidade, Hierarquia e Contexto Operacional
-            (Parte 4) — nova ordem interna: Resultados (o que estamos
-            gerando) → Investimento (quanto e como) → Operação (como está a
-            execução). Nenhum cálculo mudou, só a hierarquia visual — as 3
-            seções continuam compartilhando a mesma superfície contínua
-            (Etapa 69), só a ordem das divisórias mudou pra acompanhar.
-            MITZA Operational Workspace 2.0: todo o bloco virou uma
-            consulta recolhível — Prioridade (acima) já responde "o que
-            exige atenção", este painel responde "como estão os números",
-            uma pergunta de consulta, não de decisão (mesmo tratamento já
-            dado à "Ver análises adicionais", logo abaixo). */}
-        <details className="mt-2.5 overflow-hidden rounded-lg border border-overview-border bg-overview-surface [&_summary]:cursor-pointer [&_summary]:list-none">
+        {/* Refinamento Visual da Visão Geral: o Painel financeiro e
+            operacional volta a vir ANTES de Prioridades — o dashboard
+            apresenta primeiro a saúde geral da agência (Resultados →
+            Investimento → Indicadores) e só depois a fila operacional do
+            dia. Por isso passa a abrir expandido por padrão (`open`): o
+            que vem primeiro na leitura precisa estar visível sem clique.
+            Nenhum dado, cálculo ou link mudou, só a ordem e o estado
+            inicial. */}
+        <details open className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface [&_summary]:cursor-pointer [&_summary]:list-none">
           <summary className="flex items-center justify-between px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted hover:text-brand sm:px-6">
             Painel financeiro e operacional da agência
             <span className="text-sm">▾</span>
@@ -894,8 +866,11 @@ export default async function Home({
                   />
                 </div>
 
-                {/* Camada 2 — contexto de ritmo, deliberadamente mais discreto. */}
-                <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+                {/* Camada 2 — contexto de ritmo, deliberadamente mais discreto.
+                    gap-x-8 → gap-x-10 (Refinamento Visual da Visão Geral):
+                    mesmo respiro horizontal das demais grades de 4 colunas
+                    da página (Resultados/Indicadores). */}
+                <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
                   <SecondaryInvestmentMetric
                     label="Esperado hoje"
                     value={formatPercent(investmentExpectedPct)}
@@ -993,6 +968,29 @@ export default async function Home({
             </div>
           </div>
         </details>
+
+        {/* Refinamento Visual da Visão Geral: Prioridades passa a vir
+            DEPOIS do panorama geral da agência (acima) — primeiro "como
+            está a saúde da agência", só então "o que exige atenção agora".
+            Nenhum dado, cálculo ou link mudou, só a posição na página. */}
+        <div className="mt-3">
+          <PrioritiesPanel
+            priorities={prioritiesTop}
+            managerNameByClient={primaryManagerNameByClient}
+            totalCount={priorityQueue.length}
+            viewAllHref={openPrioritiesHref}
+          />
+        </div>
+
+        {prioritiesOpen && (
+          <PrioritiesDrawer
+            priorities={priorityQueue}
+            managerNameByClient={primaryManagerNameByClient}
+            severity={prioritySeverity}
+            closeHref={closePrioritiesHref}
+            buildSeverityHref={prioritiesSeverityHref}
+          />
+        )}
 
         {/* Análises secundárias — fora do primeiro viewport de propósito */}
         <details className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface [&_summary]:cursor-pointer [&_summary]:list-none">

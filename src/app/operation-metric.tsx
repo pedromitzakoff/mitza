@@ -21,9 +21,11 @@ export function OperationMetric({
   const content = (
     <div title={title}>
       <p className="text-[13px] text-overview-text-secondary">{label}</p>
-      {/* MVP Etapa "Indicadores operacionais e refinamento visual": 26→22px
-          (~15% menor) — mesma hierarquia, só menos dominante. */}
-      <p className="mt-1 text-[22px] font-semibold leading-none tracking-tight text-overview-text-primary tabular-nums">
+      {/* Refinamento Visual da Visão Geral (Painel Financeiro/Operacional):
+          font-semibold → font-medium (~10% mais leve) — mesmo tamanho e
+          hierarquia, só um traço menos pesado pra equilibrar o conjunto com
+          as demais métricas da página. */}
+      <p className="mt-1 text-[22px] font-medium leading-none tracking-tight text-overview-text-primary tabular-nums">
         {value}
       </p>
       {context && <p className="mt-1.5 text-[13px] text-overview-text-muted">{context}</p>}
