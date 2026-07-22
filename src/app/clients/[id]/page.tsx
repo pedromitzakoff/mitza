@@ -35,6 +35,7 @@ import { effectiveTaskStatus } from "@/lib/task-status";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
 import { syncClientMetaAction } from "../meta-actions";
 import { ClientIdentitySticky } from "../client-identity-sticky";
+import { ClientWorkspaceContext } from "../client-workspace-context";
 import { MonthInvestmentSummary } from "../month-investment-summary";
 import { SprintCard } from "../sprint-card";
 import { TaskList } from "../task-list";
@@ -829,6 +830,7 @@ export default async function ClientPage({
           cadastro, abrem em nova aba, só aparecem quando configurados)
           passam a fazer parte desta mesma identificação — nenhum botão
           solto em outro lugar da página. */}
+      <ClientWorkspaceContext name={client.name} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <ClientAvatar name={client.name} imageUrl={client.avatar_url} size="lg" />

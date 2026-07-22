@@ -1736,6 +1736,50 @@ export interface Database {
           },
         ];
       };
+      workspace_notes: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          content: string;
+          is_pinned: boolean;
+          context_path: string | null;
+          context_label: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title?: string;
+          content?: string;
+          is_pinned?: boolean;
+          context_path?: string | null;
+          context_label?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          title?: string;
+          content?: string;
+          is_pinned?: boolean;
+          context_path?: string | null;
+          context_label?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_notes_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       client_last_operational_activity: {

@@ -3,6 +3,9 @@
 import { useState } from "react";
 import type { UserRole } from "@/lib/supabase/database.types";
 import { Sidebar } from "./sidebar";
+import { WorkspaceProvider } from "@/components/workspace-drawer/workspace-provider";
+import { WorkspaceTrigger } from "@/components/workspace-drawer/workspace-trigger";
+import { WorkspaceDrawer } from "@/components/workspace-drawer/workspace-drawer";
 
 /**
  * Dono do estado do menu mobile, compartilhado entre o gatilho flutuante e
@@ -20,6 +23,12 @@ import { Sidebar } from "./sidebar";
  * A página continua rolando normalmente (sem trocar pra um shell de altura
  * fixa) — Sidebar e ClientContextBar usam `position: sticky`, que preserva
  * âncoras (`#sprint-...`) e o comportamento nativo de scroll.
+ *
+ * MITZA 2.0 — Workspace Pessoal: `WorkspaceProvider` envolve tudo (persiste
+ * entre navegações, já que este componente não desmonta ao trocar de rota)
+ * e o gatilho + drawer ficam como irmãos da árvore Sidebar/MainArea, nunca
+ * dentro dela — de propósito, pra nunca virarem parte da navegação
+ * principal.
  */
 export function AppShell({
   profile,
@@ -33,15 +42,19 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex min-h-dvh md:items-start">
-      <Sidebar
-        profile={profile}
-        agencyTree={agencyTree}
-        mobileOpen={mobileOpen}
-        onOpen={() => setMobileOpen(true)}
-        onClose={() => setMobileOpen(false)}
-      />
-      <main className="min-w-0 flex-1">{children}</main>
-    </div>
+    <WorkspaceProvider>
+      <div className="flex min-h-dvh md:items-start">
+        <Sidebar
+          profile={profile}
+          agencyTree={agencyTree}
+          mobileOpen={mobileOpen}
+          onOpen={() => setMobileOpen(true)}
+          onClose={() => setMobileOpen(false)}
+        />
+        <main className="min-w-0 flex-1">{children}</main>
+      </div>
+      <WorkspaceTrigger />
+      <WorkspaceDrawer />
+    </WorkspaceProvider>
   );
 }
