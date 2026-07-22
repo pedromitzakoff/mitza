@@ -207,7 +207,7 @@ export default async function ClientPage({
   const { data: client } = await supabase
     .from("clients")
     .select(
-      "id, name, meta_ad_account_id, status, contract_start_date, primary_manager:team_members!clients_primary_manager_id_fkey(name), main_objective, main_product_or_service, operation_region, primary_audience, client_differentials, client_restrictions, important_seasonal_dates, operational_summary, important_notes, performance_goal, target_cost_per_result",
+      "id, name, meta_ad_account_id, status, contract_start_date, primary_manager_id, primary_manager:team_members!clients_primary_manager_id_fkey(name), main_objective, main_product_or_service, operation_region, primary_audience, client_differentials, client_restrictions, important_seasonal_dates, operational_summary, important_notes, performance_goal, target_cost_per_result",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -218,13 +218,17 @@ export default async function ClientPage({
   // Habilitar Gestores 1.0: "Atualizar performance" (investimento realizado
   // + resultados da sprint) deixou de ser admin-only — o gestor responsável
   // por este cliente também pode, senão não consegue registrar a própria
-  // execução do dia a dia. `client_managers` é a fonte de autorização de
-  // escrita (distinta de `clients.primary_manager_id`, que é só exibição —
-  // Etapa 62), mesma tabela que a policy `is_client_manager()` do RLS
-  // consulta (ver supabase/manager-write-sprint-performance.sql).
+  // execução do dia a dia. "Responsável" cobre as duas formas de
+  // atribuição que existem no cadastro do cliente: estar em
+  // `client_managers` ("Gestores de apoio") OU ser o `primary_manager_id`
+  // ("Gestor principal", o que aparece no cabeçalho da página) — achado
+  // real em produção: um gestor só-principal não tinha nenhuma das duas
+  // permissões antes desta correção. Mesmo critério de `is_client_manager()`
+  // no RLS (ver supabase/is-client-manager-include-primary.sql).
   const isAssignedManager = isAdmin
     ? false
-    : Boolean(
+    : client.primary_manager_id === profile?.id ||
+      Boolean(
         (
           await supabase
             .from("client_managers")

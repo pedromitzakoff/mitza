@@ -178,12 +178,16 @@ export async function requireAdmin(): Promise<CurrentProfile> {
 
 /**
  * Garante permissão de ESCRITA sobre um cliente específico — admin sempre
- * tem; gestor só quando está em `client_managers` (fonte de autorização de
- * escrita — distinta de `clients.primary_manager_id`, que é só exibição,
- * ver Etapa 62). Mesmo critério usado por `is_client_manager()` no RLS —
- * esta função só existe pra dar um redirect amigável ANTES da escrita
- * chegar ao banco, nunca substitui a policy correspondente. Hoje usada só
- * por `updateSprintPerformanceAction` ("Atualizar performance" da sprint).
+ * tem; gestor quando está em `client_managers` ("Gestores de apoio") OU é o
+ * `clients.primary_manager_id` ("Gestor principal") — as duas formas de ser
+ * responsável por um cliente na plataforma. Corrigido depois de um caso
+ * real em produção: um gestor definido só como principal (nunca marcado
+ * manualmente também em "Gestores de apoio") não conseguia escrever nada
+ * que dependesse desta checagem. Mesmo critério usado por `is_client_manager()`
+ * no RLS (ver supabase/is-client-manager-include-primary.sql) — esta função
+ * só existe pra dar um redirect amigável ANTES da escrita chegar ao banco,
+ * nunca substitui a policy correspondente. Hoje usada só por
+ * `updateSprintPerformanceAction` ("Atualizar performance" da sprint).
  */
 export async function requireClientManagerAccess(clientId: string): Promise<CurrentProfile> {
   const profile = await getCurrentProfile();
@@ -197,14 +201,12 @@ export async function requireClientManagerAccess(clientId: string): Promise<Curr
   }
 
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("client_managers")
-    .select("client_id")
-    .eq("client_id", clientId)
-    .eq("user_id", profile.id)
-    .maybeSingle();
+  const [{ data: managerRow }, { data: client }] = await Promise.all([
+    supabase.from("client_managers").select("client_id").eq("client_id", clientId).eq("user_id", profile.id).maybeSingle(),
+    supabase.from("clients").select("primary_manager_id").eq("id", clientId).maybeSingle(),
+  ]);
 
-  if (!data) {
+  if (!managerRow && client?.primary_manager_id !== profile.id) {
     redirect("/");
   }
 
