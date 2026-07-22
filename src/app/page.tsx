@@ -26,7 +26,7 @@ import { computeHealthResultsSummary } from "@/lib/agency-health-aggregation";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
 import { evaluateClientChannelHealth, sortClientOperationalStates, type ClientOperationalState } from "@/lib/client-operational-state";
 import { resolveClientChannelBreakdown, type ClientChannelState } from "@/lib/client-channel-breakdown";
-import { buildClientObjectiveRow, buildOverviewPriorityItem, type ClientObjectiveTableRow } from "./overview-client-view";
+import { buildOverviewPriorityItem } from "./overview-client-view";
 import type { HealthStatus } from "@/lib/account-health-engine";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { computeOperationIndicators } from "@/lib/operation-indicators";
@@ -34,7 +34,7 @@ import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
 import { PrioritiesDrawer, PrioritiesPanel } from "./priorities-panel";
 import { OperationMetric } from "./operation-metric";
 import { PrimaryInvestmentMetric, SecondaryInvestmentMetric } from "./investment-metric";
-import { ClientObjectiveTable, ClientObjectiveTablesEmptyState, PLATFORM_LABEL } from "./client-objective-table";
+import { PLATFORM_LABEL } from "./client-objective-table";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { Button, IconButton } from "@/components/workspace/button";
 import { ProgressBar } from "@/components/workspace/progress-bar";
@@ -78,7 +78,6 @@ export default async function Home({
     sprintBucket?: string;
     sync?: string;
     meta?: string;
-    sort?: string;
     prioridades?: string;
     prioridadeSeveridade?: string;
     platform?: string;
@@ -116,7 +115,6 @@ export default async function Home({
   const platformFilter = (params.platform ?? "consolidado") as PlatformFilter;
   const syncFilter = params.sync;
   const metaFilter = params.meta;
-  const sort = params.sort ?? "prioridade";
 
   const supabase = await createSupabaseClient();
 
@@ -435,13 +433,12 @@ export default async function Home({
     (clients ?? []).map((c) => [c.id, c.primary_manager?.name ?? null]),
   );
 
-  // Etapa "Consolidação da Arquitetura — Fase B": `ClientOperationalState`
-  // por cliente (Prioridade 1/2) + o recorte por canal (Prioridade 5,
-  // `client-channel-breakdown.ts`) — reaproveita os mesmos dados brutos já
-  // buscados acima (`sprintsByClient`/`dailySpendChannelByClient`/
+  // Etapa "Consolidação da Arquitetura — Fase B" (Prioridade 5): recorte por
+  // canal (`client-channel-breakdown.ts`) — reaproveita os mesmos dados
+  // brutos já buscados acima (`sprintsByClient`/`dailySpendChannelByClient`/
   // `channelOverridesByClient`/`performanceRecordsByClient`), nenhuma query
-  // nova só pra canal.
-  const operationalStateByClient = new Map(clientOperationalStates.map((state) => [state.clientId, state]));
+  // nova só pra canal. Usado hoje pela avaliação de saúde por canal de
+  // "Prioridades de hoje" (`evaluateClientChannelHealth`, abaixo).
   const channelBreakdownByClient = new Map<string, ClientChannelState[]>(
     (clients ?? []).map((client) => {
       const clientSprintsForChannel = (sprintsByClient.get(client.id) ?? []).map((s) => ({
@@ -645,38 +642,6 @@ export default async function Home({
   const prioritiesOpen = params.prioridades === "1";
   const prioritySeverity = (params.prioridadeSeveridade ?? "todos") as HealthStatus | "todos";
 
-  // Etapa "Consolidação da Arquitetura — Fase B": ordenação padrão da tabela
-  // (Prioridade 2/Ponto 3 da revisão) — `sortCardsByPriority` (legado) foi
-  // removida daqui porque não era só um reordenamento de shape: recalculava
-  // desvio de custo/ritmo por conta própria (`buildClientPriorityItems`),
-  // um segundo conceito de prioridade paralelo ao Motor de Saúde. A ordem
-  // padrão agora vem do sorter canônico (`sortClientOperationalStates`, via
-  // `clientOperationalStates`, sempre Consolidado — a Prioridade 2 não pediu
-  // recorte por canal na ordenação da tabela, só nos valores exibidos por
-  // célula, já cobertos por `channelBreakdownByClient`/`objectiveRows`).
-  const canonicalRankByClient = new Map(clientOperationalStates.map((state, index) => [state.clientId, index]));
-  const sortedCards =
-    sort === "nome"
-      ? [...cards].sort((a, b) => a.clientName.localeCompare(b.clientName))
-      : [...cards].sort(
-          (a, b) =>
-            (canonicalRankByClient.get(a.clientId) ?? Number.MAX_SAFE_INTEGER) -
-            (canonicalRankByClient.get(b.clientId) ?? Number.MAX_SAFE_INTEGER),
-        );
-
-  // Etapa "Consolidação da Arquitetura — Fase B" (Prioridade 2): cada linha
-  // das tabelas por objetivo passa a ser derivada de `ClientOperationalState`
-  // (investimento/resultado/custo/meta) + o recorte por canal — a mesma
-  // ordem/filtro de `sortedCards` (motor legado) é preservada, só o SHAPE de
-  // cada linha muda de fonte. `monthStatus` (Ritmo financeiro, Prioridade 4)
-  // e `sprintPeriodLabel` ("Sprint atual", sem equivalente neste domínio)
-  // continuam vindo do card legado — nunca recalculados, só repassados.
-  const objectiveRows: ClientObjectiveTableRow[] = sortedCards.flatMap((card) => {
-    const state = operationalStateByClient.get(card.clientId);
-    if (!state) return [];
-    return [buildClientObjectiveRow(state, card.monthStatus, card.sprintPeriodLabel, channelBreakdownByClient.get(card.clientId) ?? [])];
-  });
-
   const spendRhythm = computeSpendRhythmCounts(cards);
   const outOfRhythmCount = spendRhythm.abaixo + spendRhythm.acima;
   const financial = computeFinancialSummary(cards);
@@ -726,7 +691,6 @@ export default async function Home({
     if (sprintBucketFilter) next.set("sprintBucket", sprintBucketFilter);
     if (syncFilter) next.set("sync", syncFilter);
     if (metaFilter) next.set("meta", metaFilter);
-    if (sort !== "prioridade") next.set("sort", sort);
     if (platformFilter !== "consolidado") next.set("platform", platformFilter);
 
     for (const [key, value] of Object.entries(overrides)) {
@@ -739,7 +703,7 @@ export default async function Home({
 
   // Drill-down "de uma casa só": zera os filtros de recorte (mantendo só
   // mês, gestor e plataforma) e aplica exatamente o filtro clicado — usado
-  // pelos indicadores de "Controle de investimento" (os "Indicadores da
+  // pelos indicadores de "Investimento em mídia dos clientes" (os "Indicadores da
   // operação" não têm drill-down de propósito, ver comentário acima do
   // bloco).
   const drillDownUrl = (overrides: Record<string, string>) => {
@@ -816,7 +780,6 @@ export default async function Home({
               sprintBucket: sprintBucketFilter,
               sync: syncFilter,
               meta: metaFilter,
-              sort: sort !== "prioridade" ? sort : undefined,
             }}
           />
         </div>
@@ -911,7 +874,11 @@ export default async function Home({
 
           <div className="border-t border-overview-border px-5 py-3.5 sm:px-6 sm:py-4">
             <SectionHeader
-              title={platformFilter === "consolidado" ? "Controle de investimento" : `Investimento · ${PLATFORM_LABEL[platformFilter]}`}
+              title={
+                platformFilter === "consolidado"
+                  ? "Investimento em mídia dos clientes"
+                  : `Investimento em mídia · ${PLATFORM_LABEL[platformFilter]}`
+              }
             />
 
             {platformFilter === "consolidado" ? (
@@ -1027,50 +994,6 @@ export default async function Home({
           </div>
         </details>
 
-        {/* MVP "Reformular a tabela de clientes": a tabela única (Etapa 49)
-            vira 2 tabelas por objetivo da conta — "Clientes de leads" e
-            "Clientes de vendas", mesmo componente parametrizado
-            (`ClientObjectiveTable`), cada uma só aparece se tiver cliente.
-            Um 3º grupo (sem objetivo configurado) preserva clientes legados
-            sem `performance_goal` — nenhum cliente do recorte pode sumir da
-            tela. A ordenação ("Ordenar por prioridade"/nome) é uma única
-            control acima das 3 tabelas — ordena `sortedCards` inteiro antes
-            de dividir por objetivo, nunca uma ordem própria por tabela. */}
-        <div className="mt-3 flex items-center justify-between px-0.5">
-          <span className="text-xs text-overview-text-muted">
-            {sortedCards.length} cliente{sortedCards.length !== 1 ? "s" : ""} no recorte
-            {platformFilter !== "consolidado" ? ` · ${PLATFORM_LABEL[platformFilter]}` : ""}
-          </span>
-          <Button href={buildUrl({ sort: sort === "nome" ? "prioridade" : "nome" })} variant="ghost" size="sm">
-            Ordenar por {sort === "nome" ? "prioridade" : "nome"}
-          </Button>
-        </div>
-
-        {objectiveRows.length > 0 ? (
-          <>
-            <ClientObjectiveTable
-              cards={objectiveRows.filter((c) => c.performanceGoal === "leads")}
-              objective="leads"
-              platformFilter={platformFilter}
-              primaryManagerNameByClient={primaryManagerNameByClient}
-            />
-            <ClientObjectiveTable
-              cards={objectiveRows.filter((c) => c.performanceGoal === "sales")}
-              objective="sales"
-              platformFilter={platformFilter}
-              primaryManagerNameByClient={primaryManagerNameByClient}
-            />
-            <ClientObjectiveTable
-              cards={objectiveRows.filter((c) => !c.performanceGoal)}
-              objective={null}
-              platformFilter={platformFilter}
-              primaryManagerNameByClient={primaryManagerNameByClient}
-            />
-          </>
-        ) : (
-          <ClientObjectiveTablesEmptyState />
-        )}
-
         {/* Análises secundárias — fora do primeiro viewport de propósito */}
         <details className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface [&_summary]:cursor-pointer [&_summary]:list-none">
           <summary className="flex items-center justify-between px-3.5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted hover:text-brand">
@@ -1082,54 +1005,41 @@ export default async function Home({
             <h3 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">
               {isAdmin ? "Operação por gestor" : "Minha operação"}
             </h3>
-          {managerSummary.length > 0 ? (
-            <div className="mt-2 overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm">
-                <thead>
-                  <tr className="border-b border-overview-border text-left text-[11px] uppercase tracking-wide text-overview-text-muted">
-                    <th className="py-1.5 px-3">Gestor</th>
-                    <th className="py-1.5 px-3">Clientes</th>
-                    <th className="py-1.5 px-3">Saudáveis</th>
-                    <th className="py-1.5 px-3">Atenção</th>
-                    <th className="py-1.5 px-3">Críticos</th>
-                    <th className="py-1.5 px-3">Inativos</th>
-                    <th className="py-1.5 px-3">Sem execução</th>
-                    <th className="py-1.5 px-3">Atrasadas</th>
-                    <th className="py-1.5 px-3">Hoje</th>
-                    <th className="py-1.5 px-3">Execução</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {managerSummary.map((row) => (
-                    <tr key={row.id} className="border-b border-overview-border/70 last:border-0">
-                      <td className="py-1.5 px-3 font-medium text-overview-text-primary">
-                        {isAdmin ? (
-                          <Button href={drillDownUrl({ manager: row.id })} variant="ghost" size="sm" className="h-auto px-0 py-0 font-medium">
-                            {row.name}
-                          </Button>
-                        ) : (
-                          row.name
-                        )}
-                      </td>
-                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.totalClients}</td>
-                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.portfolio.saudaveis}</td>
-                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.portfolio.atencao}</td>
-                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.portfolio.criticos}</td>
-                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.portfolio.inativos}</td>
-                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.semExecucao}</td>
-                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.atrasadas}</td>
-                      <td className="py-1.5 px-3 text-overview-text-secondary">{row.paraHoje}</td>
-                      <td className="py-1.5 px-3 text-overview-text-secondary">
-                        {row.taxaExecucao !== null ? `${Math.round(row.taxaExecucao)}%` : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <EmptyState title="Nenhum gestor encontrado." className="mt-2" />
-          )}
+            {/* Etapa "MITZA 2.0 — Fase E": resumo compacto por gestor (cards),
+                substitui a tabela de 10 colunas — mesmos dados de sempre
+                (`computeManagerSummary`), nenhum cálculo novo, só o formato. */}
+            {managerSummary.length > 0 ? (
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {managerSummary.map((row) => (
+                  <div key={row.id} className="rounded-md border border-overview-border px-3 py-2.5">
+                    <div className="font-medium text-overview-text-primary">
+                      {isAdmin ? (
+                        <Button href={drillDownUrl({ manager: row.id })} variant="ghost" size="sm" className="h-auto px-0 py-0 font-medium">
+                          {row.name}
+                        </Button>
+                      ) : (
+                        row.name
+                      )}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-overview-text-secondary">
+                      <span>{row.totalClients} cliente{row.totalClients !== 1 ? "s" : ""}</span>
+                      <span>{row.portfolio.saudaveis} saudáve{row.portfolio.saudaveis !== 1 ? "is" : "l"}</span>
+                      <span>{row.portfolio.atencao} atenção</span>
+                      <span>{row.portfolio.criticos} crítico{row.portfolio.criticos !== 1 ? "s" : ""}</span>
+                      <span>{row.portfolio.inativos} inativo{row.portfolio.inativos !== 1 ? "s" : ""}</span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-overview-text-muted">
+                      <span>{row.semExecucao} sem execução</span>
+                      <span>{row.atrasadas} atrasada{row.atrasadas !== 1 ? "s" : ""}</span>
+                      <span>{row.paraHoje} hoje</span>
+                      <span>Execução: {row.taxaExecucao !== null ? `${Math.round(row.taxaExecucao)}%` : "—"}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="Nenhum gestor encontrado." className="mt-2" />
+            )}
           </div>
         </details>
       </div>
