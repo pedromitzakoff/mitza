@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
@@ -207,7 +208,7 @@ export default async function ClientPage({
   const { data: client } = await supabase
     .from("clients")
     .select(
-      "id, name, meta_ad_account_id, status, contract_start_date, primary_manager_id, primary_manager:team_members!clients_primary_manager_id_fkey(name), main_objective, main_product_or_service, operation_region, primary_audience, client_differentials, client_restrictions, important_seasonal_dates, operational_summary, important_notes, performance_goal, target_cost_per_result",
+      "id, name, meta_ad_account_id, status, contract_start_date, primary_manager_id, primary_manager:team_members!clients_primary_manager_id_fkey(name), main_objective, main_product_or_service, operation_region, primary_audience, client_differentials, client_restrictions, important_seasonal_dates, operational_summary, important_notes, performance_goal, target_cost_per_result, avatar_url, dashboard_url, balance_url",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -817,24 +818,53 @@ export default async function ClientPage({
 
       {/* 1. Identificação do cliente — substitui o antigo ClientContextBar
           (subheader sticky compartilhado por toda /clients/[id]/**).
-          Hierarquia inspirada no Relatório: nome em destaque + badge de
-          status na mesma linha, contexto secundário (gestor/conta Meta/
-          tempo de relacionamento) abaixo, ações agrupadas à direita.
-          Nenhuma "Semana atual" aqui — já aparece no seletor de período,
-          logo abaixo. */}
+          Hierarquia inspirada no Relatório: avatar + nome em destaque +
+          badge de status na mesma linha, contexto secundário (gestor/
+          conta Meta/tempo de relacionamento) abaixo, ações agrupadas à
+          direita. Nenhuma "Semana atual" aqui — já aparece no seletor de
+          período, logo abaixo.
+          Etapa "MITZA 2.0 — Refinamento da Identidade do Cliente": o
+          avatar (foto ou iniciais, ClientAvatar já usado na Operação) e os
+          atalhos "Dashboard"/"Saldo" (links externos configuráveis no
+          cadastro, abrem em nova aba, só aparecem quando configurados)
+          passam a fazer parte desta mesma identificação — nenhum botão
+          solto em outro lugar da página. */}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold text-foreground">{client.name}</h1>
-            <span
-              className={`rounded-full px-2.5 py-1 text-xs font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}
-            >
-              {CLIENT_STATUS_LABEL[client.status]}
-            </span>
+        <div className="flex min-w-0 items-center gap-3">
+          <ClientAvatar name={client.name} imageUrl={client.avatar_url} size="lg" />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold text-foreground">{client.name}</h1>
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}
+              >
+                {CLIENT_STATUS_LABEL[client.status]}
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">{identitySecondaryLine}</p>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">{identitySecondaryLine}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {client.dashboard_url && (
+            <a
+              href={client.dashboard_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Dashboard
+            </a>
+          )}
+          {client.balance_url && (
+            <a
+              href={client.balance_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Saldo
+            </a>
+          )}
           <Link
             href={reportHref}
             className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
@@ -860,10 +890,11 @@ export default async function ClientPage({
         </div>
       </div>
 
-      {/* Identificação mínima durante a rolagem — só nome + status, some
-          sozinha ao voltar pro topo (ver client-identity-sticky.tsx). */}
+      {/* Identificação mínima durante a rolagem — avatar + nome + status,
+          some sozinha ao voltar pro topo (ver client-identity-sticky.tsx). */}
       <ClientIdentitySticky
         clientName={client.name}
+        avatarUrl={client.avatar_url}
         statusLabel={CLIENT_STATUS_LABEL[client.status]}
         statusBadgeClass={CLIENT_STATUS_BADGE_CLASSES[client.status]}
       />

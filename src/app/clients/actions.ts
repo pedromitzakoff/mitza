@@ -27,6 +27,39 @@ function optionalInt(formData: FormData, name: string): number | null {
   return value === null ? null : Math.trunc(value);
 }
 
+/**
+ * MITZA 2.0 — Refinamento da Identidade do Cliente: sobe a foto (campo
+ * "photo" do formulário, opcional) pro bucket público `client-photos`
+ * (ver supabase/client-identity.sql), sempre no mesmo caminho por cliente
+ * (`upsert: true` — substitui a anterior). `?v=timestamp` na URL salva é
+ * cache-busting: sem isso, trocar a foto no mesmo caminho poderia
+ * continuar servindo a versão antiga em cache do navegador/CDN. Retorna
+ * `{}` quando nenhum arquivo foi enviado (edição sem trocar a foto) — quem
+ * chama nunca sobrescreve `avatar_url` nesse caso. Falha de upload nunca
+ * derruba a criação/edição do cliente inteira, só fica sem a foto nova.
+ */
+async function uploadClientPhotoIfProvided(
+  supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
+  clientId: string,
+  formData: FormData,
+): Promise<{ avatarUrl?: string; error?: string }> {
+  const photo = formData.get("photo");
+  if (!(photo instanceof File) || photo.size === 0) return {};
+
+  const ext = photo.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `${clientId}/photo.${ext}`;
+  const { error } = await supabase.storage
+    .from("client-photos")
+    .upload(path, photo, { upsert: true, contentType: photo.type || undefined });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  const { data } = supabase.storage.from("client-photos").getPublicUrl(path);
+  return { avatarUrl: `${data.publicUrl}?v=${Date.now()}` };
+}
+
 /** Campos estruturais (Etapa 27) — todos opcionais, lidos e persistidos
  * juntos tanto na criação quanto na edição. Nenhum deles substitui
  * `planned_spend` da sprint, que continua sendo a fonte operacional semanal. */
@@ -50,6 +83,8 @@ function readStructuralFields(formData: FormData) {
     website_url: optionalText(formData, "website_url"),
     facebook_url: optionalText(formData, "facebook_url"),
     commercial_whatsapp: optionalText(formData, "commercial_whatsapp"),
+    dashboard_url: optionalText(formData, "dashboard_url"),
+    balance_url: optionalText(formData, "balance_url"),
     meta_ad_account_name: optionalText(formData, "meta_ad_account_name"),
     main_objective: optionalText(formData, "main_objective") as ClientMainObjective | null,
     monthly_planned_spend: optionalNumber(formData, "monthly_planned_spend"),
@@ -133,6 +168,16 @@ export async function createClientAction(formData: FormData) {
     redirect(`/clients/new?error=${encodeURIComponent(resolveClientCreationErrorMessage(error))}`);
   }
 
+  // MITZA 2.0 — Refinamento da Identidade do Cliente: a foto só pode subir
+  // depois do insert (o caminho no Storage é `${clientId}/photo.ext`) —
+  // por isso é sempre um update separado, nunca no mesmo insert acima.
+  const photoResult = await uploadClientPhotoIfProvided(supabase, client.id, formData);
+  if (photoResult.avatarUrl) {
+    await supabase.from("clients").update({ avatar_url: photoResult.avatarUrl }).eq("id", client.id);
+  } else if (photoResult.error) {
+    console.error("[createClientAction] falha ao salvar foto do cliente:", photoResult.error);
+  }
+
   if (managerIds.length > 0) {
     await supabase
       .from("client_managers")
@@ -192,9 +237,19 @@ export async function updateClientAction(clientId: string, returnTo: string, for
     .eq("client_id", clientId);
   const previousManagerIds = new Set((previousManagers ?? []).map((m) => m.user_id));
 
+  const photoResult = await uploadClientPhotoIfProvided(supabase, clientId, formData);
+  if (photoResult.error) {
+    console.error("[updateClientAction] falha ao salvar foto do cliente:", photoResult.error);
+  }
+
   const { error } = await supabase
     .from("clients")
-    .update({ name, meta_ad_account_id, ...structural })
+    .update({
+      name,
+      meta_ad_account_id,
+      ...structural,
+      ...(photoResult.avatarUrl ? { avatar_url: photoResult.avatarUrl } : {}),
+    })
     .eq("id", clientId);
 
   if (error) {

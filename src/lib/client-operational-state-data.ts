@@ -42,7 +42,7 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
         supabase
           .from("clients")
           .select(
-            "id, name, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
+            "id, name, avatar_url, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
           )
           .is("deleted_at", null)
           .order("name"),
@@ -229,7 +229,7 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
       clientName: client.name,
       managerId,
       managerName,
-      avatarUrl: null,
+      avatarUrl: client.avatar_url,
       performanceGoal: client.performance_goal,
       evaluation: evaluateAccountHealth(input),
       overdueTasksCount: overdueCountByClient.get(client.id) ?? 0,

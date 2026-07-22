@@ -21,6 +21,7 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { type AgencyTree, type AgencyTreeClient } from "@/lib/agency-accounts-tree";
+import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { useToast } from "@/app/toast-provider";
 import { getOpenTaskCountForManagerAction, moveClientAction, type ClientTransferMode } from "./agency-accounts-tree-actions";
 import { AgencyTransferDialog } from "./agency-accounts-tree-transfer-dialog";
@@ -122,7 +123,7 @@ function ClientLeaf({
         title={client.name}
         {...attributes}
         {...listeners}
-        className={`flex items-center justify-between gap-2 rounded-md py-1 pl-7 pr-2 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
+        className={`flex items-center gap-1.5 rounded-md py-1 pl-7 pr-2 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
           disabled ? "" : "cursor-grab touch-none active:cursor-grabbing"
         } ${
           isActive
@@ -132,6 +133,7 @@ function ClientLeaf({
               : "font-normal text-zinc-300 hover:bg-white/10"
         } ${isDragging ? "opacity-30" : ""}`}
       >
+        <ClientAvatar name={client.name} imageUrl={client.avatarUrl} size="xs" />
         <span className="min-w-0 truncate">{client.name}</span>
       </Link>
     </li>

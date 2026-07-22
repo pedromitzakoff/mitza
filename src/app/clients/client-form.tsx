@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ClientAvatar } from "@/components/workspace/client-avatar";
 import type { Database } from "@/lib/supabase/database.types";
 import { CONTRACTED_SERVICE_OPTIONS } from "@/lib/client-fields";
 import { formatCnpj } from "@/lib/cnpj";
@@ -67,6 +68,11 @@ export function ClientForm({
   const assigned = new Set(assignedIds);
   const contractedServices = new Set(defaults?.contracted_services ?? []);
   const [dirty, setDirty] = useState(false);
+  // MITZA 2.0 — Refinamento da Identidade do Cliente: preview local do
+  // arquivo escolhido (nunca enviado ao servidor até o submit) — `null`
+  // até o usuário escolher uma nova foto, caso em que mostra a foto já
+  // salva (`defaults?.avatar_url`) ou as iniciais (`ClientAvatar`).
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   // `defaults` só é `undefined` na criação de um cliente novo (ver
   // src/app/clients/new/page.tsx vs. .../[id]/edit/page.tsx) — objetivo de
@@ -107,6 +113,29 @@ export function ClientForm({
         <label className={labelClasses}>
           Nome <span className="text-red-500">*</span>
           <input name="name" required defaultValue={defaultName} className={inputClasses} />
+        </label>
+
+        <label className={labelClasses}>
+          Foto do cliente <span className="text-xs text-zinc-400">(opcional)</span>
+          <div className="flex items-center gap-3">
+            {photoPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={photoPreview} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" />
+            ) : (
+              <ClientAvatar name={defaultName || "Cliente"} imageUrl={defaults?.avatar_url ?? null} size="lg" />
+            )}
+            <input
+              type="file"
+              name="photo"
+              accept="image/*"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                setPhotoPreview(file ? URL.createObjectURL(file) : null);
+              }}
+              className="text-sm text-zinc-600 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-black hover:file:bg-zinc-200 dark:text-zinc-400 dark:file:bg-zinc-800 dark:file:text-zinc-50 dark:hover:file:bg-zinc-700"
+            />
+          </div>
+          <span className="text-xs text-zinc-400">Sem foto, mostramos as iniciais do cliente.</span>
         </label>
 
         <label className={labelClasses}>
@@ -317,6 +346,28 @@ export function ClientForm({
               defaultValue={defaults?.commercial_whatsapp ?? ""}
               className={inputClasses}
             />
+          </label>
+          <label className={labelClasses}>
+            Link do Dashboard (Looker Studio)
+            <input
+              type="url"
+              name="dashboard_url"
+              placeholder="https://lookerstudio.google.com/..."
+              defaultValue={defaults?.dashboard_url ?? ""}
+              className={inputClasses}
+            />
+            <span className="text-xs text-zinc-400">Usado só pelo atalho &ldquo;Dashboard&rdquo; no prontuário do cliente.</span>
+          </label>
+          <label className={labelClasses}>
+            Link da página de Saldo
+            <input
+              type="url"
+              name="balance_url"
+              placeholder="https://..."
+              defaultValue={defaults?.balance_url ?? ""}
+              className={inputClasses}
+            />
+            <span className="text-xs text-zinc-400">Usado só pelo atalho &ldquo;Saldo&rdquo; no prontuário do cliente.</span>
           </label>
         </div>
       </FormSection>

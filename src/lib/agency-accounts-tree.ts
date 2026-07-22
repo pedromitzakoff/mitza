@@ -29,6 +29,10 @@
 export interface AgencyTreeClient {
   id: string;
   name: string;
+  /** MITZA 2.0 — Refinamento da Identidade do Cliente: reforça
+   * reconhecimento visual também na árvore, mesmo componente
+   * `ClientAvatar` já usado na Operação. */
+  avatarUrl: string | null;
 }
 
 export interface AgencyTreeManager {
@@ -46,6 +50,7 @@ interface RawAgencyTreeClient {
   id: string;
   name: string;
   wallet_position: number | null;
+  avatar_url: string | null;
   primary_manager: { id: string; name: string } | null;
 }
 
@@ -57,7 +62,7 @@ function sortByWalletPosition(clients: RawAgencyTreeClient[]): AgencyTreeClient[
       if (b.wallet_position !== null) return 1;
       return a.name.localeCompare(b.name);
     })
-    .map((client) => ({ id: client.id, name: client.name }));
+    .map((client) => ({ id: client.id, name: client.name, avatarUrl: client.avatar_url }));
 }
 
 export function buildAgencyAccountsTree(

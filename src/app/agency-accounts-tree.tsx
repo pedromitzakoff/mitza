@@ -26,7 +26,9 @@ export async function AgencyAccountsTree() {
     requireQuery(
       supabase
         .from("clients")
-        .select("id, name, wallet_position, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)")
+        .select(
+          "id, name, wallet_position, avatar_url, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
+        )
         .is("deleted_at", null)
         .order("wallet_position", { ascending: true, nullsFirst: false })
         .order("name"),

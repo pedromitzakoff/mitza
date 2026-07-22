@@ -277,6 +277,9 @@ export interface Database {
           performance_goal: PerformanceGoalDb | null;
           target_cost_per_result: number | null;
           wallet_position: number | null;
+          avatar_url: string | null;
+          dashboard_url: string | null;
+          balance_url: string | null;
         };
         Insert: {
           id?: string;
@@ -322,6 +325,9 @@ export interface Database {
           performance_goal?: PerformanceGoalDb | null;
           target_cost_per_result?: number | null;
           wallet_position?: number | null;
+          avatar_url?: string | null;
+          dashboard_url?: string | null;
+          balance_url?: string | null;
         };
         Update: {
           id?: string;
@@ -367,6 +373,9 @@ export interface Database {
           performance_goal?: PerformanceGoalDb | null;
           target_cost_per_result?: number | null;
           wallet_position?: number | null;
+          avatar_url?: string | null;
+          dashboard_url?: string | null;
+          balance_url?: string | null;
         };
         Relationships: [
           {
