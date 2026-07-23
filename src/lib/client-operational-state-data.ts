@@ -37,12 +37,13 @@ type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 export async function loadClientOperationalStates(supabase: Supabase, monthParam: string): Promise<ClientOperationalState[]> {
   const today = todayUTC();
   const todayStr = todayDateString();
+  const now = new Date();
 
   const monthRange = monthRangeFromOperationParam(monthParam);
   const { firstDay: monthStart, lastDay: monthEnd } = monthRange;
   const monthExpectedPct = computeMonthlyExpectedPct(monthRange, todayStr);
 
-  const [clients, sprints, dailySpendRows, latestReviews, openTasks, planChanges, reviewCadences] =
+  const [clients, sprints, dailySpendRows, latestReviews, lastActivityRows, openTasks, planChanges, reviewCadences] =
     await Promise.all([
       requireQuery(
         supabase
@@ -73,6 +74,15 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
       requireQuery(
         supabase.from("account_reviews").select("client_id, reviewed_at").order("reviewed_at", { ascending: false }),
         "account_reviews",
+      ),
+      // Fonte real de Atividade (task criada/editada/concluída/comentada,
+      // comentário de sprint) — `operational_activities`/view agregada já
+      // existiam (Etapa 15) pra outro propósito; aqui viram, junto com
+      // `account_reviews` acima, os dois insumos legítimos de "alguém agiu
+      // nesta conta", nunca um valor fabricado.
+      requireQuery(
+        supabase.from("client_last_operational_activity").select("client_id, last_activity_at"),
+        "client_last_operational_activity",
       ),
       requireQuery(
         supabase
@@ -141,6 +151,11 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
   const latestReviewByClient = new Map<string, string>();
   for (const row of latestReviews ?? []) {
     if (!latestReviewByClient.has(row.client_id)) latestReviewByClient.set(row.client_id, row.reviewed_at);
+  }
+
+  const lastTaskActivityByClient = new Map<string, string>();
+  for (const row of lastActivityRows ?? []) {
+    if (row.client_id && row.last_activity_at) lastTaskActivityByClient.set(row.client_id, row.last_activity_at);
   }
 
   const overdueCountByClient = new Map<string, number>();
@@ -237,24 +252,33 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
     // `expectedToDate` só é calculável quando existe planejamento mensal
     // (`plan.investmentPlanned`) — sem plano, o eixo Investimento fica sem
     // base de comparação (`expected: null`), nunca um "0 esperado"
-    // fabricado. Acompanhamento reaproveita a MESMA fonte de
-    // revisão/cadência que já alimentava a dimensão "review" do motor
-    // antigo — placeholder deliberado até a estrutura real de Otimizações
-    // (ainda não implementada) virar a fonte oficial.
+    // fabricado.
     const investmentExpectedToDate =
       plan.investmentPlanned !== null
         ? computeMonthlyExpectedToDateByCalendar(plan.investmentPlanned, monthRange, todayStr).expectedToDate
         : null;
 
+    // Atividade: "alguém agiu nesta conta" — o mais recente entre uma
+    // otimização (`account_reviews`, placeholder até a estrutura real de
+    // Otimizações existir) e qualquer atividade operacional real já
+    // logada (`client_last_operational_activity`: tarefa criada/editada/
+    // concluída/comentada, comentário de sprint). Nunca um só dos dois:
+    // uma conta pode estar sendo bem cuidada só com tarefas em dia, sem
+    // nenhuma otimização registrada ainda, e vice-versa.
+    const lastTaskActivityAt = lastTaskActivityByClient.get(client.id) ?? null;
+    const lastActivityAt =
+      !lastReviewAt || !lastTaskActivityAt
+        ? (lastReviewAt ?? lastTaskActivityAt)
+        : new Date(lastReviewAt).getTime() >= new Date(lastTaskActivityAt).getTime()
+          ? lastReviewAt
+          : lastTaskActivityAt;
+    const hoursSinceLastActivity = lastActivityAt ? (now.getTime() - new Date(lastActivityAt).getTime()) / 3_600_000 : null;
+
     const diagnostics = evaluateClientDiagnostics({
       cpa: { costPerResult: costActual, targetCostPerResult: plan.targetCostPerResult },
       investment: { actualSpend: spend.actual, expectedToDate: investmentExpectedToDate },
       pendencias: { openTasksCount: openCountByClient.get(client.id) ?? 0 },
-      acompanhamento: {
-        lastOptimizationAt: lastReviewAt,
-        daysSinceLastOptimization: reviewBusinessDaysAgo,
-        maxDaysAllowed: reviewMaxBusinessDays,
-      },
+      atividade: { lastActivityAt, hoursSinceLastActivity },
     });
 
     const lastDataSyncAt =

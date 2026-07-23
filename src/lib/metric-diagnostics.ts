@@ -1,24 +1,32 @@
-import { PERFORMANCE_STATUS_MARGIN } from "./performance";
-import { SPEND_STATUS_MARGIN } from "./spend-status";
-
 /**
  * MITZA 2.0 — Motor de Diagnóstico Único. Antes desta etapa, quatro
  * sistemas de threshold coexistiam sem se conhecer (SPEND_STATUS_MARGIN
  * ±20% pro ritmo financeiro, o Motor de Saúde 15/30/50% pra investimento e
- * 10/30/50% pra custo, PERFORMANCE_STATUS_MARGIN ±10% pra eficiência) —
- * nenhum foi descartado aqui (cada tolerância continua vindo de quem já a
- * possuía, nunca duplicada como número mágico novo), mas a partir de agora
- * só ESTE módulo decide, dado um valor/esperado/regra, três coisas que
- * antes eram decididas soltas em cada tela: a DIREÇÃO da variação (só
- * aritmética), o TOM/cor (sempre pela regra do indicador, nunca pela
- * seta) e se aquilo conta como "fora do esperado" pra fins de
- * filtro/badge. Telas nunca devem reimplementar essa decisão — só
+ * 10/30/50% pra custo, PERFORMANCE_STATUS_MARGIN ±10% pra eficiência), e
+ * cada indicador ainda decidia cor por regra própria (CPA "menor é
+ * melhor", Investimento "qualquer desvio é ruim"). Etapa "Regra Única de
+ * Desvio": os dois foram unificados numa única leitura, a mesma pra
+ * qualquer indicador — só a MAGNITUDE do desvio (nunca a direção) decide
+ * severidade:
+ *
+ *   até 10%      → normal   (sem seta, sem cor, só o valor)
+ *   10% até 20%  → atenção  (amarelo)
+ *   acima de 20% → crítico  (vermelho)
+ *
+ * O gestor aprende UMA linguagem visual, não uma por métrica. Direção
+ * (seta ↑/↓) continua sendo calculada — é só aritmética, nunca decide cor
+ * — mas fica visualmente ausente no estado normal (não há nada de
+ * relevante a apontar). Telas nunca devem reimplementar essa decisão — só
  * consomem o resultado.
  */
 
-export type MetricRule = "lower_is_better" | "higher_is_better" | "any_deviation_is_bad";
 export type MetricDirection = "up" | "down" | "flat";
-export type MetricTone = "positive" | "negative" | "neutral";
+export type MetricTone = "normal" | "attention" | "critical";
+
+/** Desvio absoluto até este valor é normal — não mostra seta/cor. */
+export const METRIC_DEVIATION_ATTENTION_THRESHOLD = 0.1;
+/** Acima deste valor é crítico; entre o limite de atenção e este é atenção. */
+export const METRIC_DEVIATION_CRITICAL_THRESHOLD = 0.2;
 
 export interface MetricDiagnostic {
   value: number;
@@ -29,95 +37,59 @@ export interface MetricDiagnostic {
   deviationPct: number | null;
   /** Só a direção matemática — nunca decide cor sozinha. */
   direction: MetricDirection;
-  /** A cor de verdade — sempre resolvida pela regra do indicador
-   * (`MetricRuleConfig.rule`), nunca pela direção isolada. */
+  /** A cor de verdade — sempre pela MESMA régua de magnitude (10%/20%),
+   * igual pra qualquer indicador, nunca pela direção isolada. */
   tone: MetricTone;
-  /** Desvio absoluto maior que a tolerância do indicador — critério único
-   * pra "este indicador deve aparecer num filtro/badge de diagnóstico".
-   * Nunca o mesmo que `tone !== "neutral"` só por coincidência: é a MESMA
-   * regra, calculada uma vez só, aqui. */
+  /** `tone !== "normal"` — critério único pra "este indicador deve
+   * aparecer num filtro/badge de diagnóstico". */
   isOutOfRange: boolean;
 }
 
-interface MetricRuleConfig {
-  rule: MetricRule;
-  /** Desvio absoluto até este valor ainda conta como "dentro" — cada
-   * indicador injeta a própria tolerância (nunca uma constante genérica
-   * compartilhada entre indicadores diferentes). */
-  tolerance: number;
-}
-
-/** Núcleo puro — qualquer indicador futuro (não só CPA/Investimento) deve
- * passar por aqui, nunca reimplementar a decisão de direção/cor por conta
- * própria. */
-export function evaluateMetricDiagnostic(
-  value: number,
-  expected: number | null,
-  config: MetricRuleConfig,
-): MetricDiagnostic {
+/** Núcleo puro — qualquer indicador com valor/esperado (não só CPA/
+ * Investimento) deve passar por aqui, nunca reimplementar a régua de
+ * magnitude por conta própria. */
+export function evaluateMetricDiagnostic(value: number, expected: number | null): MetricDiagnostic {
   if (expected === null || expected <= 0) {
-    return { value, expected, deviationPct: null, direction: "flat", tone: "neutral", isOutOfRange: false };
+    return { value, expected, deviationPct: null, direction: "flat", tone: "normal", isOutOfRange: false };
   }
 
   const deviationPct = (value - expected) / expected;
   const direction: MetricDirection = deviationPct > 0 ? "up" : deviationPct < 0 ? "down" : "flat";
-  const isOutOfRange = Math.abs(deviationPct) > config.tolerance;
+  const absDeviation = Math.abs(deviationPct);
 
-  const tone: MetricTone = !isOutOfRange
-    ? "neutral"
-    : config.rule === "any_deviation_is_bad"
-      ? "negative"
-      : config.rule === "lower_is_better"
-        ? direction === "up"
-          ? "negative"
-          : "positive"
-        : direction === "up"
-          ? "positive"
-          : "negative";
+  const tone: MetricTone =
+    absDeviation <= METRIC_DEVIATION_ATTENTION_THRESHOLD
+      ? "normal"
+      : absDeviation <= METRIC_DEVIATION_CRITICAL_THRESHOLD
+        ? "attention"
+        : "critical";
 
-  return { value, expected, deviationPct, direction, tone, isOutOfRange };
+  return { value, expected, deviationPct, direction, tone, isOutOfRange: tone !== "normal" };
 }
 
-/**
- * CPA/CPL — "menor é melhor": custo acima da meta é sempre ruim (vermelho),
- * abaixo é sempre bom (verde). Tolerância reaproveitada de
- * `PERFORMANCE_STATUS_MARGIN` (performance.ts, ±10%) — a mesma margem que
- * já classifica "dentro da meta" em `getPerformanceStatus`, nunca uma
- * segunda ±X% inventada aqui.
- */
+/** CPA/CPL — mesma régua universal de magnitude (nunca mais "menor é
+ * melhor" tratado diferente de "qualquer desvio é ruim"). */
 export function evaluateCpaDiagnostic(
   costPerResult: number | null,
   targetCostPerResult: number | null,
 ): MetricDiagnostic | null {
   if (costPerResult === null) return null;
-  return evaluateMetricDiagnostic(costPerResult, targetCostPerResult, {
-    rule: "lower_is_better",
-    tolerance: PERFORMANCE_STATUS_MARGIN,
-  });
+  return evaluateMetricDiagnostic(costPerResult, targetCostPerResult);
 }
 
-/**
- * Investimento — "qualquer desvio é ruim": diferente de CPA, aqui a
- * direção nunca decide se é bom ou ruim (gastar rápido demais ou devagar
- * demais são os dois um problema de ritmo). Tolerância reaproveitada de
- * `SPEND_STATUS_MARGIN` (spend-status.ts, ±20%) — a mesma margem que já
- * classifica "dentro"/"acima"/"abaixo" em `classifySpendStatus`.
- */
+/** Investimento — mesma régua universal de magnitude. */
 export function evaluateInvestmentDiagnostic(actualSpend: number, expectedToDate: number | null): MetricDiagnostic {
-  return evaluateMetricDiagnostic(actualSpend, expectedToDate, {
-    rule: "any_deviation_is_bad",
-    tolerance: SPEND_STATUS_MARGIN,
-  });
+  return evaluateMetricDiagnostic(actualSpend, expectedToDate);
 }
 
 // ---------------------------------------------------------------------------
 // Pendências — não é um desvio (não tem "valor atual vs. esperado"), é uma
 // contagem de obrigações operacionais em aberto (tarefas como checar
-// saldo, enviar report etc.). Deliberadamente NÃO inclui revisão/otimização
-// atrasada — essa é uma dimensão independente (ver Acompanhamento, abaixo):
-// uma conta pode não ter nenhuma pendência e ainda estar dias sem
-// otimização registrada, e vice-versa. O hook (`PendenciaType`) existe pra
-// caber qualquer obrigação futura além de tarefa sem precisar reabrir este
+// saldo, enviar report etc.). Deliberadamente NÃO inclui atividade —
+// essa é uma dimensão independente (ver Atividade, abaixo): uma conta pode
+// não ter nenhuma pendência e ainda estar dias sem nenhuma atividade
+// registrada, e vice-versa. O hook (`PendenciaType`) existe pra caber
+// qualquer obrigação futura além de tarefa sem precisar reabrir este
 // arquivo.
 // ---------------------------------------------------------------------------
 
@@ -153,79 +125,77 @@ export function evaluatePendencias(input: { openTasksCount: number }): Pendencia
 }
 
 // ---------------------------------------------------------------------------
-// Acompanhamento — eixo independente de Pendências: não é "o que falta
-// fazer", é "há quanto tempo o gestor está de fato atuando nesta conta"
-// (última otimização registrada, dias desde então, em dia ou atrasado
-// frente à cadência configurada). A descoberta desta etapa: Performance
-// (CPA/Investimento), Pendências e Acompanhamento são três eixos
-// independentes entre si — uma conta pode estar com Acompanhamento
-// atrasado sem ter nenhuma Pendência aberta, e o inverso também é
-// possível. Motor já nasce preparado pra responder isto mesmo que nenhuma
-// tela ainda exponha o resultado.
+// Atividade — eixo independente de Pendências: não é "o que falta fazer",
+// é "há quanto tempo alguém age de fato nesta conta" (otimização, tarefa
+// concluída, ou qualquer outra ação registrada como atividade
+// operacional). Performance (CPA/Investimento), Pendências e Atividade são
+// três eixos independentes entre si — uma conta pode estar sem atividade
+// recente sem ter nenhuma Pendência aberta, e o inverso também é possível.
+//
+// Diferente de Pendências/Performance, aqui só existe UM estado de alerta
+// (sem gradiente atenção/crítico): abaixo de 48h sem atividade a conta
+// fica visualmente limpa (nenhuma mensagem); a partir de 48h aparece em
+// vermelho. O objetivo é que só a exceção chame atenção — contas com
+// atividade recente não precisam de nenhum selo "tudo bem".
 // ---------------------------------------------------------------------------
 
-export interface AcompanhamentoDiagnostic {
-  lastOptimizationAt: string | null;
-  daysSinceLastOptimization: number | null;
-  /** `null` quando não há como avaliar (sem cadência ativa configurada, ou
-   * nenhuma otimização registrada ainda) — nunca um "em dia" fabricado sem
-   * base de comparação. */
-  isOverdue: boolean | null;
-  maxDaysAllowed: number | null;
+export const ATIVIDADE_OVERDUE_HOURS = 48;
+
+export interface AtividadeDiagnostic {
+  lastActivityAt: string | null;
+  hoursSinceLastActivity: number | null;
+  /** `hoursSinceLastActivity === null` (nunca houve atividade) também
+   * conta como atrasado — nunca um "em dia" fabricado sem nenhum registro. */
+  isOverdue: boolean;
 }
 
-export function evaluateAcompanhamento(input: {
-  lastOptimizationAt: string | null;
-  daysSinceLastOptimization: number | null;
-  maxDaysAllowed: number | null;
-}): AcompanhamentoDiagnostic {
-  const isOverdue =
-    input.maxDaysAllowed !== null && input.daysSinceLastOptimization !== null
-      ? input.daysSinceLastOptimization > input.maxDaysAllowed
-      : null;
+export function evaluateAtividade(input: {
+  lastActivityAt: string | null;
+  hoursSinceLastActivity: number | null;
+}): AtividadeDiagnostic {
+  const isOverdue = input.hoursSinceLastActivity === null || input.hoursSinceLastActivity >= ATIVIDADE_OVERDUE_HOURS;
 
   return {
-    lastOptimizationAt: input.lastOptimizationAt,
-    daysSinceLastOptimization: input.daysSinceLastOptimization,
+    lastActivityAt: input.lastActivityAt,
+    hoursSinceLastActivity: input.hoursSinceLastActivity,
     isOverdue,
-    maxDaysAllowed: input.maxDaysAllowed,
   };
 }
 
-/** "Última otimização hoje" / "...ontem" / "...há N dias" / "Sem
- * otimizações há N dias" (quando já ultrapassou a cadência — frase mais
- * urgente de propósito, mesmo dado, fraseado diferente) / "Sem
- * otimizações registradas" (nunca houve nenhuma, sem base pra contar
- * dias). Único lugar que traduz `AcompanhamentoDiagnostic` pra texto —
- * qualquer tela que precise deste rótulo usa esta função, nunca monta a
- * frase sozinha. */
-export function formatAcompanhamentoLabel(diagnostic: AcompanhamentoDiagnostic): string {
-  const { daysSinceLastOptimization, isOverdue } = diagnostic;
-  if (daysSinceLastOptimization === null) return "Sem otimizações registradas";
-  if (isOverdue) return `Sem otimizações há ${daysSinceLastOptimization} dias`;
-  if (daysSinceLastOptimization === 0) return "Última otimização hoje";
-  if (daysSinceLastOptimization === 1) return "Última otimização ontem";
-  return `Última otimização há ${daysSinceLastOptimization} dias`;
+/** `null` enquanto a conta está em dia (< 48h de atividade) — o card
+ * simplesmente não mostra nada, de propósito (ruído zero em contas
+ * saudáveis). A partir de 48h: "Sem atividade há 48 horas" / "...há 3
+ * dias" / "...há 7 dias" (sempre em vermelho). Único lugar que traduz
+ * `AtividadeDiagnostic` pra texto — qualquer tela que precise deste rótulo
+ * usa esta função, nunca monta a frase sozinha. */
+export function formatAtividadeLabel(diagnostic: AtividadeDiagnostic): string | null {
+  const { hoursSinceLastActivity } = diagnostic;
+  if (hoursSinceLastActivity === null) return "Sem atividade registrada";
+  if (hoursSinceLastActivity < ATIVIDADE_OVERDUE_HOURS) return null;
+
+  const days = Math.floor(hoursSinceLastActivity / 24);
+  if (days < 3) return `Sem atividade há ${ATIVIDADE_OVERDUE_HOURS} horas`;
+  return `Sem atividade há ${days} dias`;
 }
 
 // ---------------------------------------------------------------------------
 // Agregado por cliente — o formato único que qualquer tela (Operação,
-// Dashboard, Prontuário) deve consumir dese agora em diante, em vez de
-// montar sua própria combinação de CPA/Investimento/Pendências.
+// Dashboard, Prontuário) deve consumir desde agora em diante, em vez de
+// montar sua própria combinação de CPA/Investimento/Pendências/Atividade.
 // ---------------------------------------------------------------------------
 
 export interface ClientDiagnosticsInput {
   cpa: { costPerResult: number | null; targetCostPerResult: number | null };
   investment: { actualSpend: number; expectedToDate: number | null };
   pendencias: { openTasksCount: number };
-  acompanhamento: { lastOptimizationAt: string | null; daysSinceLastOptimization: number | null; maxDaysAllowed: number | null };
+  atividade: { lastActivityAt: string | null; hoursSinceLastActivity: number | null };
 }
 
 export interface ClientDiagnostics {
   cpa: MetricDiagnostic | null;
   investment: MetricDiagnostic;
   pendencias: PendenciasDiagnostic;
-  acompanhamento: AcompanhamentoDiagnostic;
+  atividade: AtividadeDiagnostic;
 }
 
 export function evaluateClientDiagnostics(input: ClientDiagnosticsInput): ClientDiagnostics {
@@ -233,7 +203,7 @@ export function evaluateClientDiagnostics(input: ClientDiagnosticsInput): Client
     cpa: evaluateCpaDiagnostic(input.cpa.costPerResult, input.cpa.targetCostPerResult),
     investment: evaluateInvestmentDiagnostic(input.investment.actualSpend, input.investment.expectedToDate),
     pendencias: evaluatePendencias(input.pendencias),
-    acompanhamento: evaluateAcompanhamento(input.acompanhamento),
+    atividade: evaluateAtividade(input.atividade),
   };
 }
 
@@ -241,15 +211,15 @@ export function evaluateClientDiagnostics(input: ClientDiagnosticsInput): Client
  * Monitoramento Operacional") — nunca "Saudável"/"Atenção"/"Crítico"
  * genéricos: cada filtro responde por um fato objetivo específico. Uma
  * tela de filtro consome só isto, nunca reimplementa os limites acima.
- * `acompanhamento` já está pronto no motor, mesmo que nenhuma tela ainda o
- * use como filtro. */
-export type ClientDiagnosticFilter = "cpa" | "investimento" | "pendencias" | "acompanhamento";
+ * `atividade` já está pronto no motor, mesmo que nenhuma tela ainda o use
+ * como filtro. */
+export type ClientDiagnosticFilter = "cpa" | "investimento" | "pendencias" | "atividade";
 
 export function getActiveDiagnosticFilters(diagnostics: ClientDiagnostics): ClientDiagnosticFilter[] {
   const active: ClientDiagnosticFilter[] = [];
   if (diagnostics.cpa?.isOutOfRange) active.push("cpa");
   if (diagnostics.investment.isOutOfRange) active.push("investimento");
   if (diagnostics.pendencias.hasPendencias) active.push("pendencias");
-  if (diagnostics.acompanhamento.isOverdue) active.push("acompanhamento");
+  if (diagnostics.atividade.isOverdue) active.push("atividade");
   return active;
 }

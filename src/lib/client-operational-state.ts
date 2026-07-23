@@ -43,13 +43,14 @@ export interface ClientOperationalState {
    * alimenta o indicador "Atualizado hoje/ontem/há N dias". `null` = nunca
    * sincronizado. */
   lastDataSyncAt: string | null;
-  /** Etapa "Novo Conceito de Monitoramento Operacional" — os três eixos do
-   * Motor de Diagnóstico Único (CPA, Investimento, Pendências,
-   * Acompanhamento), computados uma única vez aqui e consumidos por
-   * qualquer tela (nunca recalculados no componente). `acompanhamento` é
-   * alimentado hoje pela mesma fonte de `account_reviews`/cadência que já
-   * existia (ver client-operational-state-data.ts) — placeholder
-   * deliberado até a estrutura real de Otimizações substituir essa fonte. */
+  /** Etapa "Novo Conceito de Monitoramento Operacional" — os eixos do
+   * Motor de Diagnóstico Único (CPA, Investimento, Pendências, Atividade),
+   * computados uma única vez aqui e consumidos por qualquer tela (nunca
+   * recalculados no componente). `atividade` combina a atividade
+   * operacional real (`client_last_operational_activity`) com
+   * `account_reviews` (ver client-operational-state-data.ts) — a parte de
+   * `account_reviews` é um placeholder deliberado até a estrutura real de
+   * Otimizações substituir essa fonte. */
   diagnostics: ClientDiagnostics;
 }
 
