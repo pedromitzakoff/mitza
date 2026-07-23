@@ -2,7 +2,9 @@ import type { ClientHistoryRow } from "@/lib/client-operational-history";
 import type { AccountReviewOutcome, OptimizationType } from "@/lib/supabase/database.types";
 import type { PerformanceSummary } from "@/lib/performance";
 import type { PerformanceGoal } from "@/lib/performance-goals";
+import type { TrafficChannel } from "@/lib/traffic-channels";
 import { MonthlyKpiSummary } from "./monthly-kpi-summary";
+import { ResultsByChannel } from "./results-by-channel";
 import { CollapsibleAccountHistory } from "./collapsible-account-history";
 
 /**
@@ -38,17 +40,22 @@ export interface LastOptimizationInfo {
  * (nenhuma tabela nova, ver `lib/client-operational-history.ts`).
  *
  * Refinamento visual (Etapa 75): sem título/subtítulo — o card começa
- * direto pelas métricas (investimento/resultados/custo por resultado),
- * seguido do histórico do mês, recolhido por padrão. Nenhum cálculo
- * financeiro ou de performance mudou — os 3 KPIs só consomem
- * `monthActual`/`monthPerformanceSummary` já calculados pela página; nunca
- * recomputados aqui (`MonthlyKpiSummary` é puramente apresentacional).
+ * direto pelas métricas (investimento/resultados/custo por resultado/meta),
+ * seguido do diagnóstico, de "Resultados por canal" (Etapa "Meta entra no
+ * card principal": substitui o antigo card "Performance do mês", removido —
+ * meta/comparação migraram pro card principal via `MonthlyKpiSummary`,
+ * detalhamento por canal virou este bloco de responsabilidade única) e do
+ * histórico do mês, recolhido por padrão. Nenhum cálculo financeiro ou de
+ * performance muda — os 4 KPIs e o diagnóstico só consomem valores já
+ * calculados pela página; nunca recomputados aqui.
  */
 export function AccountFollowUpPanel({
   monthLabel,
   monthActual,
   performanceGoal,
   performanceSummary,
+  targetCostPerResult,
+  channelBreakdown,
   configureObjectiveHref,
   historyRows,
   hasMoreHistory,
@@ -61,6 +68,11 @@ export function AccountFollowUpPanel({
   monthActual: number;
   performanceGoal: PerformanceGoal | null;
   performanceSummary: PerformanceSummary | null;
+  /** Meta de custo por resultado vigente — `null` quando não configurada. */
+  targetCostPerResult: number | null;
+  /** Resultado por canal do mês, só os canais com pelo menos 1 registro —
+   * `ResultsByChannel` só renderiza algo com dado em mais de 1 canal. */
+  channelBreakdown: { channel: TrafficChannel; resultCount: number }[];
   configureObjectiveHref: string;
   historyRows: ClientHistoryRow[];
   hasMoreHistory: boolean;
@@ -73,8 +85,11 @@ export function AccountFollowUpPanel({
         monthActual={monthActual}
         performanceGoal={performanceGoal}
         performanceSummary={performanceSummary}
+        targetCostPerResult={targetCostPerResult}
         configureObjectiveHref={configureObjectiveHref}
       />
+
+      {performanceGoal && <ResultsByChannel goal={performanceGoal} channelBreakdown={channelBreakdown} />}
 
       <CollapsibleAccountHistory
         monthLabel={monthLabel}

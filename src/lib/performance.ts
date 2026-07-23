@@ -202,20 +202,6 @@ export function isCostAboveTargetPriority(
   return variation > COST_PRIORITY_DEVIATION_THRESHOLD;
 }
 
-/** Texto pronto da comparação ("25% acima da meta" / "16,7% melhor que a
- * meta" / "Dentro da meta" / null quando não há meta ou custo disponível)
- * — Etapa 71, seção 17, mesmos exemplos do pedido original. */
-export function formatPerformanceComparisonText(
-  comparison: CostComparison,
-  formatPercentValue: (value: number) => string,
-): string | null {
-  if (comparison.status === "not_available" || comparison.variation === null) return null;
-  if (comparison.status === "on_target") return "Dentro da meta";
-  const absVariationPct = Math.abs(comparison.variation) * 100;
-  if (comparison.status === "worse") return `${formatPercentValue(absVariationPct)} acima da meta`;
-  return `${formatPercentValue(absVariationPct)} melhor que a meta`;
-}
-
 /** Escopo de investimento pra um cálculo de custo por resultado — Etapa 71,
  * seção 15: as funções já nasceram preparadas pra `channelScope`. Desde a
  * Etapa 2/3 (MVP plataformas) já existe uma fonte real de investimento por

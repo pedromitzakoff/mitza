@@ -61,7 +61,6 @@ import {
   deriveMonthlyKpiTexts,
 } from "@/lib/performance";
 import { AVAILABLE_TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
-import { PerformanceSummarySection } from "../performance-summary";
 import type { SprintPerformanceProps } from "../sprint-card";
 import { SprintFocusBar } from "../sprint-focus-bar";
 import { buildReportViewData } from "../../reports/report-data";
@@ -1047,9 +1046,11 @@ export default async function ClientPage({
       {activeArea === "visao-geral" && (
         <>
           {/* Indicadores do mês — investimento, resultados, custo por
-              resultado, última otimização e tracking operacional.
-              A meta do mês (antes numa aba própria) vem logo abaixo, como
-              mais uma leitura destes mesmos indicadores, nunca um fluxo
+              resultado e meta (as 4 métricas principais, mesmo peso
+              visual), diagnóstico de meta, resultados por canal, última
+              otimização e tracking operacional. A meta do mês (antes numa
+              aba própria, depois um card "Performance do mês" à parte)
+              agora é só mais uma destas métricas — nunca um fluxo
               separado. */}
           <div className="mt-3">
             <AccountFollowUpPanel
@@ -1057,6 +1058,8 @@ export default async function ClientPage({
               monthActual={monthActual}
               performanceGoal={performanceGoal}
               performanceSummary={monthPerformanceSummary}
+              targetCostPerResult={targetCostPerResult}
+              channelBreakdown={monthPerformanceChannelBreakdown}
               configureObjectiveHref={`/clients/${client.id}/edit`}
               historyRows={recentHistoryRows}
               hasMoreHistory={hasMoreHistory}
@@ -1064,13 +1067,6 @@ export default async function ClientPage({
               buildReviewDetailHref={buildReviewDetailHref}
             />
           </div>
-
-          <PerformanceSummarySection
-            goal={performanceGoal}
-            targetCostPerResult={targetCostPerResult}
-            summary={monthPerformanceSummary}
-            channelBreakdown={monthPerformanceChannelBreakdown}
-          />
 
           {/* Financeiro — informação de contexto (orçamento vigente,
               ritmo, edição de orçamento), não um fluxo de trabalho à
