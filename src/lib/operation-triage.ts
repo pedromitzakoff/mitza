@@ -45,6 +45,10 @@ export function bandFromHealthStatus(status: HealthStatus): OperationTriageBand 
 
 export interface OperationTriageSummary {
   totalClients: number;
+  /** Clientes sem as configurações mínimas pro motor conseguir avaliá-los
+   * (meta de CPA/CPL e/ou plano mensal de investimento) — problema
+   * ESTRUTURAL, diferente dos quatro abaixo (que são operacionais). */
+  withPlanejamentoIncompleto: number;
   /** Clientes com CPA fora da meta (Motor de Diagnóstico Único). */
   withCpaOff: number;
   /** Clientes com investimento fora do ritmo esperado (qualquer direção). */
@@ -57,22 +61,24 @@ export interface OperationTriageSummary {
  * Contadores operacionais do cabeçalho da Operação (Etapa "Novo Conceito de
  * Monitoramento Operacional") — substitui os antigos contadores
  * (pendências/revisões/sem sincronização/relatório pendente, que
- * misturavam critérios de naturezas diferentes) pelos três diagnósticos
- * objetivos do Motor Único: CPA, Investimento, Pendências. Nunca reimplementa
- * o critério de "fora do esperado" aqui — sempre via
- * `getActiveDiagnosticFilters` (metric-diagnostics.ts).
+ * misturavam critérios de naturezas diferentes) pelos diagnósticos
+ * objetivos do Motor Único: Planejamento, CPA, Investimento, Pendências.
+ * Nunca reimplementa o critério de "fora do esperado"/"incompleto" aqui —
+ * sempre via `getActiveDiagnosticFilters` (metric-diagnostics.ts).
  */
 export function summarizeOperationTriage(cards: ClientOperationalState[]): OperationTriageSummary {
+  let withPlanejamentoIncompleto = 0;
   let withCpaOff = 0;
   let withInvestmentOff = 0;
   let withPendencias = 0;
   for (const card of cards) {
     const active = getActiveDiagnosticFilters(card.diagnostics);
+    if (active.includes("planejamento")) withPlanejamentoIncompleto++;
     if (active.includes("cpa")) withCpaOff++;
     if (active.includes("investimento")) withInvestmentOff++;
     if (active.includes("pendencias")) withPendencias++;
   }
-  return { totalClients: cards.length, withCpaOff, withInvestmentOff, withPendencias };
+  return { totalClients: cards.length, withPlanejamentoIncompleto, withCpaOff, withInvestmentOff, withPendencias };
 }
 
 /** Desloca um parâmetro de mês (`YYYY-MM-01`) em N meses — helper local e

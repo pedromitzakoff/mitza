@@ -99,6 +99,58 @@ export function evaluateInvestmentDiagnostic(actualSpend: number, expectedToDate
 }
 
 // ---------------------------------------------------------------------------
+// Planejamento — não é um problema OPERACIONAL (CPA, Investimento,
+// Pendências, Atividade), é um problema ESTRUTURAL: a conta ainda não tem
+// as configurações mínimas pro motor conseguir diagnosticá-la de verdade.
+// Deliberadamente separado dos outros eixos: sem meta de custo ou sem
+// plano mensal de investimento, `evaluateCpaDiagnostic`/
+// `evaluateInvestmentDiagnostic` voltam `tone: "normal"` (nenhuma base de
+// comparação, nunca um "0 esperado" fabricado) — o que tornaria o
+// silêncio da interface ENGANOSO sem este eixo avisando que aquela conta
+// simplesmente não foi avaliada, não que foi avaliada e aprovada.
+// "Nenhum alerta = nenhuma ação necessária" só é verdade quando
+// Planejamento também está limpo — por isso ele nunca fica silencioso: se
+// incompleto, sempre entra no filtro, mesmo que os outros quatro eixos
+// não tenham nada a dizer (porque, tecnicamente, não conseguiram dizer
+// nada).
+// ---------------------------------------------------------------------------
+
+export type PlanejamentoIssueType = "meta_custo_nao_configurada" | "plano_investimento_nao_configurado";
+
+export interface PlanejamentoItem {
+  type: PlanejamentoIssueType;
+  label: string;
+}
+
+export interface PlanejamentoDiagnostic {
+  items: PlanejamentoItem[];
+  isIncomplete: boolean;
+}
+
+export function evaluatePlanejamento(input: {
+  /** `false` = sem `performance_goal` (leads/vendas) configurado — sem
+   * isso não existe CPA/CPL possível de definir, então conta como meta de
+   * custo ausente. */
+  hasPerformanceGoal: boolean;
+  targetCostPerResult: number | null;
+  investmentPlanned: number | null;
+}): PlanejamentoDiagnostic {
+  const items: PlanejamentoItem[] = [];
+
+  if (!input.hasPerformanceGoal || input.targetCostPerResult === null) {
+    items.push({ type: "meta_custo_nao_configurada", label: "Meta de CPA/CPL não configurada" });
+  }
+  if (input.investmentPlanned === null) {
+    items.push({
+      type: "plano_investimento_nao_configurado",
+      label: "Planejamento mensal de investimento não configurado",
+    });
+  }
+
+  return { items, isIncomplete: items.length > 0 };
+}
+
+// ---------------------------------------------------------------------------
 // Pendências — não é um desvio (não tem "valor atual vs. esperado"), é uma
 // contagem de obrigações operacionais em aberto (tarefas como checar
 // saldo, enviar report etc.). Deliberadamente NÃO inclui atividade —
@@ -201,6 +253,7 @@ export function formatAtividadeLabel(diagnostic: AtividadeDiagnostic): string | 
 // ---------------------------------------------------------------------------
 
 export interface ClientDiagnosticsInput {
+  planejamento: { hasPerformanceGoal: boolean; targetCostPerResult: number | null; investmentPlanned: number | null };
   cpa: { costPerResult: number | null; targetCostPerResult: number | null };
   investment: { actualSpend: number; expectedToDate: number | null };
   pendencias: { openTasksCount: number };
@@ -208,6 +261,7 @@ export interface ClientDiagnosticsInput {
 }
 
 export interface ClientDiagnostics {
+  planejamento: PlanejamentoDiagnostic;
   cpa: MetricDiagnostic | null;
   investment: MetricDiagnostic;
   pendencias: PendenciasDiagnostic;
@@ -216,6 +270,7 @@ export interface ClientDiagnostics {
 
 export function evaluateClientDiagnostics(input: ClientDiagnosticsInput): ClientDiagnostics {
   return {
+    planejamento: evaluatePlanejamento(input.planejamento),
     cpa: evaluateCpaDiagnostic(input.cpa.costPerResult, input.cpa.targetCostPerResult),
     investment: evaluateInvestmentDiagnostic(input.investment.actualSpend, input.investment.expectedToDate),
     pendencias: evaluatePendencias(input.pendencias),
@@ -225,14 +280,17 @@ export function evaluateClientDiagnostics(input: ClientDiagnosticsInput): Client
 
 /** Os motivos de atenção da Operação (Etapa "Novo Conceito de
  * Monitoramento Operacional") — nunca "Saudável"/"Atenção"/"Crítico"
- * genéricos: cada filtro responde por um fato objetivo específico. Uma
- * tela de filtro consome só isto, nunca reimplementa os limites acima.
- * `atividade` já está pronto no motor, mesmo que nenhuma tela ainda o use
- * como filtro. */
-export type ClientDiagnosticFilter = "cpa" | "investimento" | "pendencias" | "atividade";
+ * genéricos: cada filtro responde por um fato objetivo específico.
+ * `planejamento` é conceitualmente diferente dos outros quatro: não é um
+ * problema operacional, é um problema estrutural (a conta ainda não pode
+ * ser avaliada) — por isso vem primeiro na ordem de prioridade/leitura.
+ * Uma tela de filtro consome só isto, nunca reimplementa os limites
+ * acima. */
+export type ClientDiagnosticFilter = "planejamento" | "cpa" | "investimento" | "pendencias" | "atividade";
 
 export function getActiveDiagnosticFilters(diagnostics: ClientDiagnostics): ClientDiagnosticFilter[] {
   const active: ClientDiagnosticFilter[] = [];
+  if (diagnostics.planejamento.isIncomplete) active.push("planejamento");
   if (diagnostics.cpa?.isOutOfRange) active.push("cpa");
   if (diagnostics.investment.isOutOfRange) active.push("investimento");
   if (diagnostics.pendencias.hasPendencias) active.push("pendencias");

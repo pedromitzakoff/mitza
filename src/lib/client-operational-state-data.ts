@@ -275,6 +275,11 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
     const hoursSinceLastActivity = lastActivityAt ? (now.getTime() - new Date(lastActivityAt).getTime()) / 3_600_000 : null;
 
     const diagnostics = evaluateClientDiagnostics({
+      planejamento: {
+        hasPerformanceGoal: client.performance_goal !== null,
+        targetCostPerResult: plan.targetCostPerResult,
+        investmentPlanned: plan.investmentPlanned,
+      },
       cpa: { costPerResult: costActual, targetCostPerResult: plan.targetCostPerResult },
       investment: { actualSpend: spend.actual, expectedToDate: investmentExpectedToDate },
       pendencias: { openTasksCount: openCountByClient.get(client.id) ?? 0 },

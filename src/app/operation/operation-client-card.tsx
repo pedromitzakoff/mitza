@@ -31,10 +31,20 @@ function formatWholeCurrency(value: number): string {
  * existindo como eixo/filtro da Operação — ver
  * `metric-diagnostics.ts`/`operation-filter-bar.tsx` — só deixou de ser
  * uma métrica principal aqui). O rodapé (antes "Última atualização",
- * baseado em sincronização de dados; depois "Acompanhamento") agora mostra
+ * baseado em sincronização de dados; depois "Acompanhamento") mostra
  * Atividade — só aparece quando a conta está sem qualquer atividade há
  * 48h ou mais, em vermelho; abaixo disso o card fica limpo de propósito,
  * porque só a exceção deve chamar atenção.
+ *
+ * Planejamento tem prioridade sobre Atividade nesse mesmo rodapé: se a
+ * conta ainda não tem meta de CPA/CPL ou plano mensal configurado, o
+ * motivo aparece ali em amarelo ("Meta de CPA/CPL não configurada" /
+ * "Planejamento mensal de investimento não configurado") — o gestor não
+ * precisa adivinhar por que o cliente está no filtro Planejamento. Isso
+ * nunca é um estado manual: `evaluatePlanejamento` recalcula a cada
+ * carregamento a partir dos dados atuais, então assim que a meta/plano é
+ * preenchido o cliente sai do filtro e volta a mostrar Atividade sozinho,
+ * sem nenhuma ação de "concluir planejamento".
  *
  * ⚠️ PARCIALMENTE PROVISÓRIO: `diagnostics.atividade` combina duas
  * fontes — `client_last_operational_activity` (tarefa criada/editada/
@@ -79,7 +89,10 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
       ? "Meta de custo não configurada"
       : undefined;
 
+  const planejamentoLabel = diagnostics.planejamento.items.map((item) => item.label).join(" · ") || null;
   const atividadeLabel = formatAtividadeLabel(diagnostics.atividade);
+  const footerLabel = planejamentoLabel ?? atividadeLabel;
+  const footerClass = planejamentoLabel ? "text-overview-warning" : "text-overview-danger";
 
   return (
     <Link
@@ -90,7 +103,7 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
 
       <div className="flex w-64 min-w-0 shrink-0 flex-col">
         <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
-        <p className="text-[11px] text-overview-danger">{atividadeLabel ?? ""}</p>
+        <p className={`text-[11px] ${footerClass}`}>{footerLabel ?? ""}</p>
       </div>
 
       <div className="grid flex-1 grid-cols-4 gap-10">

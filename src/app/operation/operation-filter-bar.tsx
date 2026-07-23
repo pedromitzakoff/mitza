@@ -1,7 +1,7 @@
 import { Search } from "lucide-react";
 import type { OperationTriageSummary } from "@/lib/operation-triage";
 
-export type OperationQuickFilter = "todos" | "cpa" | "investimento" | "pendencias";
+export type OperationQuickFilter = "todos" | "planejamento" | "cpa" | "investimento" | "pendencias";
 
 function CounterTile({
   count,
@@ -31,12 +31,20 @@ function CounterTile({
 /**
  * Cabeçalho da Operação (Etapa "Novo Conceito de Monitoramento
  * Operacional") — substitui os filtros por dimensão do Motor de Saúde
- * (pendências/revisões/sem sincronização/relatório pendente) pelos três
- * diagnósticos objetivos do Motor Único: CPA acima da meta, Investimento
- * fora do ritmo, Pendências em aberto. "Revisão" deixou de existir como
+ * (pendências/revisões/sem sincronização/relatório pendente) pelos
+ * diagnósticos objetivos do Motor Único. "Revisão" deixou de existir como
  * filtro independente — vira só um tipo de Pendência (ver
  * metric-diagnostics.ts). Cada contador funciona como filtro rápido
  * (clique alterna, um único ativo por vez).
+ *
+ * Ordem deliberada (Etapa "Planejamento como eixo estrutural"): Planejamento
+ * vem logo depois de Todos porque é um problema de outra NATUREZA — a
+ * conta ainda não tem configuração mínima (meta de CPA/CPL, plano mensal
+ * de investimento) pro motor conseguir avaliá-la — não um problema
+ * operacional como os três seguintes (Investimento, CPA/CPL, Pendências).
+ * Só depois que uma conta sai da fila de Planejamento ela é de fato
+ * "acompanhada" pelos outros quatro eixos (o quinto, Atividade, ainda não
+ * tem filtro nesta tela).
  */
 export function OperationFilterBar({
   summary,
@@ -61,16 +69,22 @@ export function OperationFilterBar({
           onClick={() => onQuickFilterChange("todos")}
         />
         <CounterTile
-          count={summary.withCpaOff}
-          label="CPA"
-          active={quickFilter === "cpa"}
-          onClick={() => onQuickFilterChange(quickFilter === "cpa" ? "todos" : "cpa")}
+          count={summary.withPlanejamentoIncompleto}
+          label="Planejamento"
+          active={quickFilter === "planejamento"}
+          onClick={() => onQuickFilterChange(quickFilter === "planejamento" ? "todos" : "planejamento")}
         />
         <CounterTile
           count={summary.withInvestmentOff}
           label="Investimento"
           active={quickFilter === "investimento"}
           onClick={() => onQuickFilterChange(quickFilter === "investimento" ? "todos" : "investimento")}
+        />
+        <CounterTile
+          count={summary.withCpaOff}
+          label="CPA"
+          active={quickFilter === "cpa"}
+          onClick={() => onQuickFilterChange(quickFilter === "cpa" ? "todos" : "cpa")}
         />
         <CounterTile
           count={summary.withPendencias}
