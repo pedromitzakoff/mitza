@@ -2,26 +2,34 @@
  * MITZA 2.0 — Motor de Diagnóstico Único. Antes desta etapa, quatro
  * sistemas de threshold coexistiam sem se conhecer (SPEND_STATUS_MARGIN
  * ±20% pro ritmo financeiro, o Motor de Saúde 15/30/50% pra investimento e
- * 10/30/50% pra custo, PERFORMANCE_STATUS_MARGIN ±10% pra eficiência), e
- * cada indicador ainda decidia cor por regra própria (CPA "menor é
- * melhor", Investimento "qualquer desvio é ruim"). Etapa "Regra Única de
- * Desvio": os dois foram unificados numa única leitura, a mesma pra
- * qualquer indicador — só a MAGNITUDE do desvio (nunca a direção) decide
- * severidade:
+ * 10/30/50% pra custo, PERFORMANCE_STATUS_MARGIN ±10% pra eficiência).
+ * Etapa "Regra Única de Desvio": a SEVERIDADE (o quão longe do esperado)
+ * virou uma única régua de magnitude, igual pra qualquer indicador:
  *
  *   até 10%      → normal   (sem seta, sem cor, só o valor)
  *   10% até 20%  → atenção  (amarelo)
  *   acima de 20% → crítico  (vermelho)
  *
- * O gestor aprende UMA linguagem visual, não uma por métrica. Direção
- * (seta ↑/↓) continua sendo calculada — é só aritmética, nunca decide cor
- * — mas fica visualmente ausente no estado normal (não há nada de
- * relevante a apontar). Telas nunca devem reimplementar essa decisão — só
- * consomem o resultado.
+ * O gestor aprende UMA linguagem visual de severidade, não uma por
+ * métrica. O que continua variando por indicador — porque é um fato do
+ * próprio indicador, não uma escolha de estilo — é QUAL direção conta
+ * como desvio: Investimento é "qualquer direção" (gastar rápido demais ou
+ * devagar demais são os dois problema de ritmo); CPA/CPL é "só acima da
+ * meta" (custo abaixo da meta é sempre melhora de performance, nunca
+ * alerta, não importa a magnitude — R$7 numa meta de R$10 é normal, não
+ * "40% de melhora destacada"). Na direção que não conta como desvio pro
+ * indicador, o resultado é sempre normal: sem seta, sem cor, sem
+ * percentual, fora de qualquer filtro. Telas nunca devem reimplementar
+ * essa decisão — só consomem o resultado.
  */
 
 export type MetricDirection = "up" | "down" | "flat";
 export type MetricTone = "normal" | "attention" | "critical";
+/** Qual direção do desvio conta como "fora do esperado" pro indicador —
+ * `"any"` (Investimento) ou `"increase"` (CPA/CPL: só valor ACIMA do
+ * esperado). Nunca um terceiro valor "decrease" foi necessário até hoje —
+ * adicionar quando/se aparecer um indicador assim. */
+export type MetricDeviationSensitivity = "any" | "increase";
 
 /** Desvio absoluto até este valor é normal — não mostra seta/cor. */
 export const METRIC_DEVIATION_ATTENTION_THRESHOLD = 0.1;
@@ -37,8 +45,9 @@ export interface MetricDiagnostic {
   deviationPct: number | null;
   /** Só a direção matemática — nunca decide cor sozinha. */
   direction: MetricDirection;
-  /** A cor de verdade — sempre pela MESMA régua de magnitude (10%/20%),
-   * igual pra qualquer indicador, nunca pela direção isolada. */
+  /** A cor de verdade — pela régua de magnitude (10%/20%) quando a
+   * direção conta como desvio pro indicador (`MetricDeviationSensitivity`);
+   * `"normal"` sempre que não conta, não importa a magnitude. */
   tone: MetricTone;
   /** `tone !== "normal"` — critério único pra "este indicador deve
    * aparecer num filtro/badge de diagnóstico". */
@@ -48,38 +57,45 @@ export interface MetricDiagnostic {
 /** Núcleo puro — qualquer indicador com valor/esperado (não só CPA/
  * Investimento) deve passar por aqui, nunca reimplementar a régua de
  * magnitude por conta própria. */
-export function evaluateMetricDiagnostic(value: number, expected: number | null): MetricDiagnostic {
+export function evaluateMetricDiagnostic(
+  value: number,
+  expected: number | null,
+  sensitivity: MetricDeviationSensitivity = "any",
+): MetricDiagnostic {
   if (expected === null || expected <= 0) {
     return { value, expected, deviationPct: null, direction: "flat", tone: "normal", isOutOfRange: false };
   }
 
   const deviationPct = (value - expected) / expected;
   const direction: MetricDirection = deviationPct > 0 ? "up" : deviationPct < 0 ? "down" : "flat";
-  const absDeviation = Math.abs(deviationPct);
+  const countsAsDeviation = sensitivity === "any" || direction === "up";
 
-  const tone: MetricTone =
-    absDeviation <= METRIC_DEVIATION_ATTENTION_THRESHOLD
+  const tone: MetricTone = !countsAsDeviation
+    ? "normal"
+    : Math.abs(deviationPct) <= METRIC_DEVIATION_ATTENTION_THRESHOLD
       ? "normal"
-      : absDeviation <= METRIC_DEVIATION_CRITICAL_THRESHOLD
+      : Math.abs(deviationPct) <= METRIC_DEVIATION_CRITICAL_THRESHOLD
         ? "attention"
         : "critical";
 
   return { value, expected, deviationPct, direction, tone, isOutOfRange: tone !== "normal" };
 }
 
-/** CPA/CPL — mesma régua universal de magnitude (nunca mais "menor é
- * melhor" tratado diferente de "qualquer desvio é ruim"). */
+/** CPA/CPL — só desvio ACIMA da meta conta (custo abaixo da meta é sempre
+ * melhora, nunca alerta). Régua de magnitude (10%/20%) igual à de
+ * qualquer outro indicador quando o desvio conta. */
 export function evaluateCpaDiagnostic(
   costPerResult: number | null,
   targetCostPerResult: number | null,
 ): MetricDiagnostic | null {
   if (costPerResult === null) return null;
-  return evaluateMetricDiagnostic(costPerResult, targetCostPerResult);
+  return evaluateMetricDiagnostic(costPerResult, targetCostPerResult, "increase");
 }
 
-/** Investimento — mesma régua universal de magnitude. */
+/** Investimento — qualquer direção conta como desvio (ritmo rápido demais
+ * ou devagar demais são os dois problema). Mesma régua de magnitude. */
 export function evaluateInvestmentDiagnostic(actualSpend: number, expectedToDate: number | null): MetricDiagnostic {
-  return evaluateMetricDiagnostic(actualSpend, expectedToDate);
+  return evaluateMetricDiagnostic(actualSpend, expectedToDate, "any");
 }
 
 // ---------------------------------------------------------------------------
