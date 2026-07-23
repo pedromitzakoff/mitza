@@ -297,3 +297,42 @@ export function getActiveDiagnosticFilters(diagnostics: ClientDiagnostics): Clie
   if (diagnostics.atividade.isOverdue) active.push("atividade");
   return active;
 }
+
+/** Severidade de um `MetricTone` isolado — crítico é sempre mais severo que
+ * atenção, que é sempre mais severo que normal. Núcleo puro reaproveitado por
+ * qualquer comparação de severidade entre diagnósticos (nunca reimplementado
+ * como `tone === "critical" ? 0 : ...` solto numa tela). */
+export function metricToneSeverityRank(tone: MetricTone): number {
+  return tone === "critical" ? 0 : tone === "attention" ? 1 : 2;
+}
+
+/**
+ * Prioridade de leitura ÚNICA entre diagnósticos ativos de um cliente —
+ * fonte central de qual eixo "vence" quando mais de um está fora do
+ * esperado ao mesmo tempo. Direção: Planejamento primeiro (problema
+ * ESTRUTURAL, a conta nem pôde ser avaliada de verdade — mesma prioridade
+ * já usada em `operation-filter-bar.tsx`), depois o mais severo entre
+ * Investimento/CPA (crítico antes de atenção, pela régua de magnitude
+ * acima), por último Pendências sozinha. `4` (nenhum diagnóstico ativo)
+ * nunca deveria ser comparado — quem chama já filtrou por
+ * `getActiveDiagnosticFilters(...).length > 0`.
+ *
+ * Qualquer tela que precise resumir múltiplos diagnósticos num só motivo/
+ * numa fila ordenada (hoje: "Prioridades de hoje" da Visão Geral) usa esta
+ * função — nunca reimplementa a ordem por conta própria. Mudar a prioridade
+ * de negócio (ex.: inverter CPA e Investimento, ou mover Pendências antes
+ * de CPA) é sempre uma mudança AQUI, nunca replicada em outro arquivo.
+ */
+export function getDiagnosticPriorityRank(diagnostics: ClientDiagnostics): number {
+  if (diagnostics.planejamento.isIncomplete) return 0;
+
+  const activeMetricTones = [
+    diagnostics.investment.isOutOfRange ? diagnostics.investment.tone : null,
+    diagnostics.cpa?.isOutOfRange ? diagnostics.cpa.tone : null,
+  ].filter((tone): tone is MetricTone => tone !== null);
+
+  if (activeMetricTones.some((tone) => tone === "critical")) return 1;
+  if (activeMetricTones.length > 0) return 2;
+  if (diagnostics.pendencias.hasPendencias) return 3;
+  return 4;
+}

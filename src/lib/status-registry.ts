@@ -9,7 +9,6 @@ import type {
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import type { SpendStatus } from "@/lib/spend-status";
 import type { KpiTargetStatus } from "@/lib/monthly-reports";
-import type { OperationTriageBand } from "@/lib/operation-triage";
 
 /**
  * Etapa "MITZA Platform Constitution 1.0" (Wave 1 — Representação),
@@ -128,23 +127,6 @@ export const KPI_TARGET_STATUS_REGISTRY: Record<`kpi_target.${KpiTargetStatus}`,
   "kpi_target.sem_meta": { label: "Sem meta", badgeClassName: NEUTRAL_MUTED, tone: "neutral", order: 2 },
 };
 
-/** Banda de triagem da tela Operação (`lib/operation-triage.ts`) — dimensão
- * própria, distinta de `account_health` (3 níveis, usado na página do
- * Cliente): a Operação precisa de uma banda intermediária a mais pra
- * refletir "vale acompanhar, mas não é urgente" sem forçá-la pra dentro de
- * "atenção" nem de "saudável". `em_acompanhamento` usa `neutral` (não
- * inventa um 4º tom de cor) — é deliberadamente mais discreta que
- * `warning`, pra não competir visualmente com o que precisa de ação agora. */
-export const OPERATION_TRIAGE_BAND_REGISTRY: Record<`operation_triage.${OperationTriageBand}`, StatusEntry> = {
-  // Rótulo "Ação necessária" (Etapa "Redesenho da Operação") — só o texto
-  // exibido mudou; a chave interna `precisa_atencao` é mantida (usada em
-  // filtros/URLs e no mapeamento `bandFromHealthStatus`).
-  "operation_triage.precisa_atencao": { label: "Ação necessária", badgeClassName: DANGER, tone: "danger", order: 0 },
-  "operation_triage.em_risco": { label: "Em risco", badgeClassName: WARNING, tone: "warning", order: 1 },
-  "operation_triage.em_acompanhamento": { label: "Em acompanhamento", badgeClassName: NEUTRAL_MUTED, tone: "neutral", order: 2 },
-  "operation_triage.saudavel": { label: "Saudável", badgeClassName: SUCCESS, tone: "success", order: 3 },
-};
-
 /** Todos os registries num só objeto, só pra quem precisar iterar sobre
  * todos os domínios de uma vez (ex.: uma futura tela de auditoria viva) —
  * consumo normal continua sendo direto pelo registry do próprio domínio. */
@@ -158,5 +140,4 @@ export const STATUS_REGISTRIES = {
   monthly_report: MONTHLY_REPORT_STATUS_REGISTRY,
   report_action_item: REPORT_ACTION_ITEM_STATUS_REGISTRY,
   kpi_target: KPI_TARGET_STATUS_REGISTRY,
-  operation_triage: OPERATION_TRIAGE_BAND_REGISTRY,
 } as const;

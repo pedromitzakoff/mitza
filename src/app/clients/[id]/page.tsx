@@ -27,8 +27,8 @@ import {
 } from "@/lib/monthly-budget";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatCurrency, formatMonthLabel, formatRelationshipDuration } from "@/lib/format";
-import { computeOperationalTracking, computeMonthlyOccurrenceSummary } from "@/lib/operational-tracking";
+import { formatCurrency, formatMonthLabel, formatRelationshipDuration, formatRelativeDateTime } from "@/lib/format";
+import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
 import { fetchClientOperationalHistory } from "@/lib/client-operational-history";
 import { computeClientUpdateStatus } from "@/lib/client-updates";
 import { effectiveTaskStatus } from "@/lib/task-status";
@@ -42,7 +42,6 @@ import { TaskList } from "../task-list";
 import { Section } from "../section";
 import { AccountFollowUpPanel, type LastOptimizationInfo } from "../account-follow-up-panel";
 import { ClientOperationalHistoryDrawer } from "../client-operational-history-drawer";
-import { ScheduleOccurrenceDrawer } from "../schedule-occurrence-drawer";
 import { EssentialInfoPanel } from "../essential-info-panel";
 import type { CommentItem } from "../comment-thread";
 import type { TaskListItem } from "../task-row";
@@ -154,8 +153,6 @@ export default async function ClientPage({
     reviewSaved?: string;
     clientUpdateError?: string;
     month?: string;
-    scheduleOccurrence?: string;
-    scheduleTaskId?: string;
     historyPage?: string;
     area?: string;
   }>;
@@ -175,8 +172,6 @@ export default async function ClientPage({
     reviewSaved,
     clientUpdateError,
     month: monthQueryParam,
-    scheduleOccurrence,
-    scheduleTaskId,
     historyPage: historyPageParam,
     area: areaParam,
   } = await searchParams;
@@ -637,12 +632,6 @@ export default async function ClientPage({
   // sprint só aparece se pertencer ao mês selecionado); só a lista solta
   // (sem sprint) precisava do filtro explícito aqui.
   const unlinkedTasks = unlinkedTasksAllTime.filter((task) => task.due_date >= firstDay && task.due_date <= lastDay);
-  // "Próxima reunião/entrega" (Etapa 7) precisa olhar TODAS as tarefas do
-  // cliente, não só as do mês selecionado — a próxima ocorrência pode estar
-  // num mês futuro diferente do que está sendo visualizado.
-  const operationalTracking = computeOperationalTracking(tasks ?? [], today);
-  // "Reuniões/entregas de {mês}" (Etapa 8) já nasce escopado ao mês.
-  const monthlyOccurrenceSummary = computeMonthlyOccurrenceSummary(tasks ?? [], { firstDay, lastDay }, today);
 
   // Etapa 62, seção 9 — histórico unificado do mês (análises + otimizações
   // + reuniões/entregas com desfecho), reaproveitando 100% operational_events
@@ -808,6 +797,26 @@ export default async function ClientPage({
     .filter(Boolean)
     .join(" · ");
 
+  // "Última revisão" no cabeçalho da conta (antes vivia em
+  // AccountActivitySummary, junto de "Próxima reunião"/"Próxima entrega" —
+  // removidas por não fazerem mais parte do fluxo operacional). Mesmo dado
+  // de sempre (lastOptimization, calculado acima), só reposicionado.
+  const lastOptimizationLabel = isCurrentMonth ? "Última revisão" : `Última revisão em ${monthLabel}`;
+  const lastOptimizationValue = lastOptimization
+    ? formatRelativeDateTime(lastOptimization.reviewedAt, today)
+    : "Sem revisão registrada";
+  const lastOptimizationDetail = lastOptimization
+    ? lastOptimization.outcome === "OPTIMIZATION_PERFORMED"
+      ? lastOptimization.optimizationTypes.length === 1
+        ? OPTIMIZATION_TYPE_LABEL[lastOptimization.optimizationTypes[0]]
+        : lastOptimization.optimizationTypes.length > 1
+          ? `${lastOptimization.optimizationTypes.length} alterações`
+          : null
+      : lastOptimization.outcome === "ISSUE_IDENTIFIED"
+        ? lastOptimization.issueDescription
+        : null
+    : null;
+
   // Etapa "MITZA 2.0 — Fase G": relatório mensal só é buscado quando a aba
   // Relatórios está aberta (nenhuma query extra nas outras abas) —
   // `buildReportViewData`/`client_managers` são exatamente a mesma busca
@@ -862,6 +871,18 @@ export default async function ClientPage({
             </div>
             <p className="mt-1 text-sm text-muted-foreground">{identitySecondaryLine}</p>
           </div>
+        </div>
+        <div className="flex flex-col items-start gap-0.5 sm:items-end sm:text-right">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {lastOptimizationLabel}
+          </p>
+          <p className="text-sm text-foreground">{lastOptimizationValue}</p>
+          {lastOptimization && (
+            <p className="text-xs text-muted-foreground">
+              {ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}
+              {lastOptimizationDetail ? ` · ${lastOptimizationDetail}` : ""}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {client.dashboard_url && (
@@ -1033,20 +1054,14 @@ export default async function ClientPage({
           <div className="mt-3">
             <AccountFollowUpPanel
               monthLabel={monthLabel}
-              isCurrentMonth={isCurrentMonth}
               monthActual={monthActual}
               performanceGoal={performanceGoal}
               performanceSummary={monthPerformanceSummary}
               configureObjectiveHref={`/clients/${client.id}/edit`}
-              lastOptimization={lastOptimization}
-              tracking={operationalTracking}
-              monthlySummary={monthlyOccurrenceSummary}
               historyRows={recentHistoryRows}
               hasMoreHistory={hasMoreHistory}
               historyHref={reviewsHistoryHref}
               buildReviewDetailHref={buildReviewDetailHref}
-              clientId={client.id}
-              returnTo={returnTo}
             />
           </div>
 
@@ -1329,25 +1344,6 @@ export default async function ClientPage({
           buildPageHref={buildHistoryPageHref}
           buildReviewDetailHref={buildReviewDetailHref}
           closeHref={returnTo}
-        />
-      )}
-
-      {/* Etapas 4/5 — agendar/editar/reagendar reunião ou entrega sem sair
-          da página do cliente (drawer compacto sobre a própria URL). */}
-      {(scheduleOccurrence === "reuniao" || scheduleOccurrence === "entrega_criativo") && (
-        <ScheduleOccurrenceDrawer
-          occurrenceType={scheduleOccurrence}
-          clientId={client.id}
-          returnTo={returnTo}
-          closeHref={returnTo}
-          editingTask={
-            scheduleTaskId
-              ? (() => {
-                  const task = (tasks ?? []).find((t) => t.id === scheduleTaskId);
-                  return task ? { id: task.id, dueDate: task.due_date, dueTime: task.due_time, notes: task.notes } : null;
-                })()
-              : null
-          }
         />
       )}
 

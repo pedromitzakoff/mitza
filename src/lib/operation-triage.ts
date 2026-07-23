@@ -1,4 +1,3 @@
-import type { HealthStatus } from "@/lib/account-health-engine";
 import type { ClientOperationalState } from "@/lib/client-operational-state";
 import { getActiveDiagnosticFilters } from "@/lib/metric-diagnostics";
 
@@ -21,27 +20,9 @@ import { getActiveDiagnosticFilters } from "@/lib/metric-diagnostics";
  * (Etapa "Consolidação da Arquitetura — Fase A") pra `lib/client-operational-state.ts`
  * — domínio neutro, não mais exclusivo da Operação, pronto pra a Visão
  * Geral/Relatórios migrarem numa PR futura. Este arquivo continua com o que
- * é genuinamente específico da Operação: a tradução pra "banda" (vocabulário
- * da tela), os contadores do cabeçalho e a navegação de mês.
+ * é genuinamente específico da Operação: os contadores do cabeçalho e a
+ * navegação de mês.
  */
-
-export type OperationTriageBand = "precisa_atencao" | "em_risco" | "em_acompanhamento" | "saudavel";
-
-const BAND_BY_HEALTH_STATUS: Record<HealthStatus, OperationTriageBand> = {
-  acao_necessaria: "precisa_atencao",
-  em_risco: "em_risco",
-  em_acompanhamento: "em_acompanhamento",
-  saudavel: "saudavel",
-};
-
-/** `healthStatus` (vocabulário do motor) → banda (vocabulário da tela) —
- * único lugar que faz essa tradução; a chave interna `precisa_atencao`
- * nunca muda mesmo que o rótulo exibido vire "Ação necessária"
- * (`status-registry.ts`), preservando compatibilidade de quem já persiste/
- * lê esse valor (filtro na URL, por exemplo). */
-export function bandFromHealthStatus(status: HealthStatus): OperationTriageBand {
-  return BAND_BY_HEALTH_STATUS[status];
-}
 
 export interface OperationTriageSummary {
   totalClients: number;

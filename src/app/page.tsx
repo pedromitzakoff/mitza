@@ -18,16 +18,21 @@ import {
   type OperationClientRawData,
   type SprintFilterBucket,
 } from "@/app/operation/operation-data";
-import type { AccountHealth } from "@/lib/attention-alerts";
 import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { computeFinancialSummary, computeManagerSummary, computeSpendRhythmCounts } from "@/lib/agency-metrics";
 import { computeHealthResultsSummary } from "@/lib/agency-health-aggregation";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
-import { evaluateClientChannelHealth, sortClientOperationalStates, type ClientOperationalState } from "@/lib/client-operational-state";
+import { evaluateClientChannelDiagnostics } from "@/lib/client-operational-state";
 import { resolveClientChannelBreakdown, type ClientChannelState } from "@/lib/client-channel-breakdown";
-import { buildOverviewPriorityItem } from "./overview-client-view";
-import type { HealthStatus } from "@/lib/account-health-engine";
+import {
+  buildOverviewPriorityItem,
+  hasActiveOverviewDiagnostic,
+  type OverviewPriorityFilter,
+  type OverviewPriorityItem,
+} from "./overview-client-view";
+import { getActiveDiagnosticFilters, getDiagnosticPriorityRank } from "@/lib/metric-diagnostics";
+import { summarizeOperationTriage } from "@/lib/operation-triage";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
@@ -72,7 +77,7 @@ export default async function Home({
     month?: string;
     manager?: string;
     client?: string;
-    health?: string;
+    diagnostico?: string;
     activity?: string;
     ritmo?: string;
     tasks?: string;
@@ -108,7 +113,7 @@ export default async function Home({
 
   const managerFilter: ManagerFilter = params.manager ?? (isAdmin ? "all" : "me");
   const clientParam = params.client;
-  const healthFilter = (params.health ?? "todos") as AccountHealth | "todos";
+  const diagnosticFilter = (params.diagnostico ?? "todos") as OverviewPriorityFilter | "todos";
   const activityFilter = (params.activity ?? "todos") as OperationalActivityStatus | "todos";
   const ritmoFilter = (params.ritmo ?? "todos") as RitmoFilter;
   const tasksFilter = (params.tasks ?? "todas") as TasksFilter;
@@ -439,8 +444,9 @@ export default async function Home({
   // canal (`client-channel-breakdown.ts`) — reaproveita os mesmos dados
   // brutos já buscados acima (`sprintsByClient`/`dailySpendChannelByClient`/
   // `channelOverridesByClient`/`performanceRecordsByClient`), nenhuma query
-  // nova só pra canal. Usado hoje pela avaliação de saúde por canal de
-  // "Prioridades de hoje" (`evaluateClientChannelHealth`, abaixo).
+  // nova só pra canal. Usado hoje pelo diagnóstico do Core recortado por
+  // canal de "Prioridades de hoje" (`evaluateClientChannelDiagnostics`,
+  // abaixo).
   const channelBreakdownByClient = new Map<string, ClientChannelState[]>(
     (clients ?? []).map((client) => {
       const clientSprintsForChannel = (sprintsByClient.get(client.id) ?? []).map((s) => ({
@@ -505,13 +511,22 @@ export default async function Home({
     .map((card) => ({ id: card.clientId, name: card.clientName }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // Diagnósticos do Motor Único (Core), por cliente — mesmo dado que
+  // `clientOperationalStates` já carrega pra Operação, só reaproveitado
+  // aqui (nenhum recálculo). Alimenta o filtro "Diagnóstico" abaixo, que
+  // substitui o antigo filtro de saúde da conta (Sistema B).
+  const diagnosticsByClient = new Map(clientOperationalStates.map((state) => [state.clientId, state.diagnostics]));
+
   // Filtros que respeitam tudo, exceto gestor — permite comparar gestores
   // no bloco "Resumo por Gestor" com o mesmo recorte de status/atividade
   // aplicado no resto do dashboard.
   let filteredBase = allCards;
 
-  if (healthFilter !== "todos") {
-    filteredBase = filteredBase.filter((card) => card.accountHealth === healthFilter);
+  if (diagnosticFilter !== "todos") {
+    filteredBase = filteredBase.filter((card) => {
+      const diagnostics = diagnosticsByClient.get(card.clientId);
+      return diagnostics ? getActiveDiagnosticFilters(diagnostics).includes(diagnosticFilter) : false;
+    });
   }
   if (activityFilter !== "todos") {
     filteredBase = filteredBase.filter((card) => card.activityStatus === activityFilter);
@@ -607,42 +622,46 @@ export default async function Home({
   }
   const agencyResults = computeHealthResultsSummary(indicatorStates);
 
-  // Etapa "Consolidação da Arquitetura — Fase B" (Prioridade 1): "Prioridades
-  // de hoje" migrou pra `ClientOperationalState` — uma linha por CLIENTE
-  // (não mais por problema), motivo sempre `evaluation.primaryReason` (nunca
-  // reconstruído aqui). Recorte: mesmo conjunto de clientes de `cards`
-  // (todos os filtros de recorte já aplicados), restrito a quem tem algum
-  // sinal (`healthStatus !== "saudavel"` — "saudável" nunca gera prioridade,
-  // mesmo espírito do antigo "sem problema não gera item").
+  // Etapa "Visão Geral + Reports no Core": "Prioridades de hoje" passa a vir
+  // do Motor de Diagnóstico Único (`metric-diagnostics.ts`) — uma linha por
+  // CLIENTE, restrito a quem tem ao menos 1 diagnóstico ativo (Planejamento/
+  // Investimento/CPA/Pendências; "nenhum diagnóstico" nunca gera prioridade,
+  // mesmo espírito do antigo "sem problema não gera item"). Recorte: mesmo
+  // conjunto de clientes de `cards` (todos os filtros de recorte já
+  // aplicados).
   //
-  // Correção (revisão do relatório original): fora do Consolidado, o
-  // veredito não pode continuar sendo o CONSOLIDADO disfarçado de "recorte
-  // por canal" — cada estado é reavaliado com `evaluateClientChannelHealth`
-  // (`client-operational-state.ts`, MESMA `evaluateAccountHealth`, nunca um
-  // segundo motor), usando o investimento/resultado/custo do canal
-  // selecionado (`channelBreakdownByClient`, Prioridade 5). Um cliente que
-  // não usa o canal selecionado simplesmente não entra (mesma regra que já
-  // filtra `cards` pra fora do Consolidado). A ordenação continua vindo do
-  // sorter canônico (`sortClientOperationalStates`) — reaplicado aqui porque
-  // trocar a avaliação de alguns clientes pode mudar sua posição relativa
-  // (a ordem pronta de `clientOperationalStates` só é válida pro recorte
-  // Consolidado).
+  // Fora do Consolidado, o diagnóstico não pode continuar sendo o
+  // CONSOLIDADO disfarçado de "recorte por canal" — Investimento/CPA são
+  // reavaliados com `evaluateClientChannelDiagnostics` (mesmas funções do
+  // Core, `evaluateInvestmentDiagnostic`/`evaluateCpaDiagnostic`, nunca uma
+  // regra nova), usando o investimento/resultado/custo do canal selecionado
+  // (`channelBreakdownByClient`, Prioridade 5 da Fase B). Um cliente que não
+  // usa o canal selecionado simplesmente não entra (mesma regra que já
+  // filtra `cards` pra fora do Consolidado). Planejamento/Pendências são
+  // fatos de conta, não de canal — vêm de `state.diagnostics` sem
+  // reavaliação em ambos os casos.
   const cardsClientIds = new Set(cards.map((card) => card.clientId));
-  const priorityStates: ClientOperationalState[] = clientOperationalStates
+  const priorityCandidates = clientOperationalStates
     .filter((state) => cardsClientIds.has(state.clientId))
     .flatMap((state) => {
-      if (platformFilter === "consolidado") {
-        return state.evaluation.healthStatus !== "saudavel" ? [state] : [];
-      }
+      if (platformFilter === "consolidado") return [{ state, diagnostics: state.diagnostics }];
       const channelState = (channelBreakdownByClient.get(state.clientId) ?? []).find((c) => c.channel === platformFilter);
       if (!channelState) return [];
-      const evaluation = evaluateClientChannelHealth(state, channelState);
-      return evaluation.healthStatus !== "saudavel" ? [{ ...state, evaluation }] : [];
-    });
-  const priorityQueue = sortClientOperationalStates(priorityStates).map(buildOverviewPriorityItem);
+      const diagnostics = evaluateClientChannelDiagnostics(state, channelState, resolvedTargetCostByClient.get(state.clientId) ?? null);
+      return [{ state, diagnostics }];
+    })
+    .filter(({ diagnostics }) => hasActiveOverviewDiagnostic(diagnostics))
+    .sort(
+      (a, b) =>
+        getDiagnosticPriorityRank(a.diagnostics) - getDiagnosticPriorityRank(b.diagnostics) ||
+        a.state.clientName.localeCompare(b.state.clientName),
+    );
+  const priorityQueue = priorityCandidates
+    .map(({ state, diagnostics }) => buildOverviewPriorityItem(state, diagnostics))
+    .filter((item): item is OverviewPriorityItem => item !== null);
   const prioritiesTop = priorityQueue.slice(0, 6);
   const prioritiesOpen = params.prioridades === "1";
-  const prioritySeverity = (params.prioridadeSeveridade ?? "todos") as HealthStatus | "todos";
+  const prioritySeverity = (params.prioridadeSeveridade ?? "todos") as OverviewPriorityFilter | "todos";
 
   const spendRhythm = computeSpendRhythmCounts(cards);
   const outOfRhythmCount = spendRhythm.abaixo + spendRhythm.acima;
@@ -655,6 +674,20 @@ export default async function Home({
 
   const managersForSummary = isAdmin ? gestores ?? [] : [{ id: profile.id, name: profile.name }];
   const managerSummary = computeManagerSummary(managersForSummary, filteredBase, todayStr);
+  // Etapa "Visão Geral + Reports no Core": contadores de diagnóstico do
+  // "Resumo por Gestor" migram pro Core — mesmo recorte de `filteredBase`
+  // (todos os filtros de recorte já aplicados), só que sobre
+  // `ClientOperationalState[]` (que carrega `.diagnostics`) em vez do card
+  // legado. Reaproveita `summarizeOperationTriage` (a mesma função que
+  // alimenta os contadores da Operação), nunca uma contagem nova.
+  const filteredBaseClientIds = new Set(filteredBase.map((card) => card.clientId));
+  const diagnosticStatesForSummary = clientOperationalStates.filter((state) => filteredBaseClientIds.has(state.clientId));
+  const managerDiagnosticSummaryById = new Map(
+    managersForSummary.map((manager) => [
+      manager.id,
+      summarizeOperationTriage(diagnosticStatesForSummary.filter((state) => state.managerId === manager.id)),
+    ]),
+  );
 
   const investmentDiff = financial.actual - financial.expectedToDate;
   const investmentRitmoStatus =
@@ -686,7 +719,7 @@ export default async function Home({
     if (params.month) next.set("month", params.month);
     next.set("manager", managerFilter);
     if (clientFilter) next.set("client", clientFilter);
-    if (healthFilter !== "todos") next.set("health", healthFilter);
+    if (diagnosticFilter !== "todos") next.set("diagnostico", diagnosticFilter);
     if (activityFilter !== "todos") next.set("activity", activityFilter);
     if (ritmoFilter !== "todos") next.set("ritmo", ritmoFilter);
     if (tasksFilter !== "todas") next.set("tasks", tasksFilter);
@@ -727,7 +760,7 @@ export default async function Home({
     buildUrl({ prioridades: overrides.prioridades ?? "", prioridadeSeveridade: overrides.prioridadeSeveridade ?? "" });
   const openPrioritiesHref = prioritiesUrl({ prioridades: "1" });
   const closePrioritiesHref = prioritiesUrl({});
-  const prioritiesSeverityHref = (severity: HealthStatus | "todos") =>
+  const prioritiesSeverityHref = (severity: OverviewPriorityFilter | "todos") =>
     prioritiesUrl({ prioridades: "1", prioridadeSeveridade: severity === "todos" ? "" : severity });
 
   const monthLabel = formatMonthLabel(monthRange.firstDay);
@@ -772,7 +805,7 @@ export default async function Home({
             manager={managerFilter}
             clients={clientOptions}
             selectedClientId={clientFilter}
-            health={healthFilter}
+            diagnostico={diagnosticFilter}
             activity={activityFilter}
             ritmo={ritmoFilter === "fora_do_ritmo" ? "todos" : ritmoFilter}
             tasks={tasksFilter}
@@ -1007,35 +1040,46 @@ export default async function Home({
             </h3>
             {/* Etapa "MITZA 2.0 — Fase E": resumo compacto por gestor (cards),
                 substitui a tabela de 10 colunas — mesmos dados de sempre
-                (`computeManagerSummary`), nenhum cálculo novo, só o formato. */}
+                (`computeManagerSummary`), nenhum cálculo novo, só o formato.
+                Etapa "Visão Geral + Reports no Core": a linha de diagnóstico
+                (antes Saudável/Atenção/Crítico, Sistema B) passa a vir do
+                Core (`summarizeOperationTriage`, `managerDiagnosticSummaryById`
+                acima) — "inativo" continua vindo de `computeManagerSummary`
+                sem alteração: é `activityStatus` (dias úteis sem atividade,
+                `operational-activity.ts`), um eixo independente que nunca
+                fez parte do modelo de saúde legado. */}
             {managerSummary.length > 0 ? (
               <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {managerSummary.map((row) => (
-                  <div key={row.id} className="rounded-md border border-overview-border px-3 py-2.5">
-                    <div className="font-medium text-overview-text-primary">
-                      {isAdmin ? (
-                        <Button href={drillDownUrl({ manager: row.id })} variant="ghost" size="sm" className="h-auto px-0 py-0 font-medium">
-                          {row.name}
-                        </Button>
-                      ) : (
-                        row.name
-                      )}
+                {managerSummary.map((row) => {
+                  const diagSummary = managerDiagnosticSummaryById.get(row.id);
+                  return (
+                    <div key={row.id} className="rounded-md border border-overview-border px-3 py-2.5">
+                      <div className="font-medium text-overview-text-primary">
+                        {isAdmin ? (
+                          <Button href={drillDownUrl({ manager: row.id })} variant="ghost" size="sm" className="h-auto px-0 py-0 font-medium">
+                            {row.name}
+                          </Button>
+                        ) : (
+                          row.name
+                        )}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-overview-text-secondary">
+                        <span>{row.totalClients} cliente{row.totalClients !== 1 ? "s" : ""}</span>
+                        <span>{diagSummary?.withPlanejamentoIncompleto ?? 0} planejamento</span>
+                        <span>{diagSummary?.withInvestmentOff ?? 0} investimento</span>
+                        <span>{diagSummary?.withCpaOff ?? 0} CPA</span>
+                        <span>{diagSummary?.withPendencias ?? 0} pendências</span>
+                        <span>{row.portfolio.inativos} inativo{row.portfolio.inativos !== 1 ? "s" : ""}</span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-overview-text-muted">
+                        <span>{row.semExecucao} sem execução</span>
+                        <span>{row.atrasadas} atrasada{row.atrasadas !== 1 ? "s" : ""}</span>
+                        <span>{row.paraHoje} hoje</span>
+                        <span>Execução: {row.taxaExecucao !== null ? `${Math.round(row.taxaExecucao)}%` : "—"}</span>
+                      </div>
                     </div>
-                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-overview-text-secondary">
-                      <span>{row.totalClients} cliente{row.totalClients !== 1 ? "s" : ""}</span>
-                      <span>{row.portfolio.saudaveis} saudáve{row.portfolio.saudaveis !== 1 ? "is" : "l"}</span>
-                      <span>{row.portfolio.atencao} atenção</span>
-                      <span>{row.portfolio.criticos} crítico{row.portfolio.criticos !== 1 ? "s" : ""}</span>
-                      <span>{row.portfolio.inativos} inativo{row.portfolio.inativos !== 1 ? "s" : ""}</span>
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-overview-text-muted">
-                      <span>{row.semExecucao} sem execução</span>
-                      <span>{row.atrasadas} atrasada{row.atrasadas !== 1 ? "s" : ""}</span>
-                      <span>{row.paraHoje} hoje</span>
-                      <span>Execução: {row.taxaExecucao !== null ? `${Math.round(row.taxaExecucao)}%` : "—"}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <EmptyState title="Nenhum gestor encontrado." className="mt-2" />

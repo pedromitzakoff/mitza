@@ -11,13 +11,19 @@ import { Button } from "@/components/workspace/button";
 export type AgencyClientOption = ClientComboboxOption;
 
 /**
- * Toolbar de filtros da Visão Geral (visual reformulado na Etapa 47 — só
- * classes/componentes novos, nenhuma mudança de lógica/params) — sempre
- * visíveis: carteira (gestor), cliente específico (combobox pesquisável,
- * `client-combobox.tsx`, ainda não migrado pro novo Design System — ver
- * nota de dívida técnica no README) e o botão "Filtros" (status da conta/
- * atividade/ritmo/tarefas, escondidos num popover até o usuário pedir).
- * Nada de botão "Filtrar": toda mudança navega na hora.
+ * Toolbar de filtros da Visão Geral — sempre visíveis: carteira (gestor),
+ * cliente específico (combobox pesquisável, `client-combobox.tsx`, ainda não
+ * migrado pro novo Design System — ver nota de dívida técnica no README) e o
+ * botão "Filtros" (diagnóstico/atividade/ritmo/tarefas, escondidos num
+ * popover até o usuário pedir). Nada de botão "Filtrar": toda mudança navega
+ * na hora.
+ *
+ * Etapa "Visão Geral + Reports no Core": o filtro "Status da conta"
+ * (Saudável/Atenção/Crítico, Sistema B) virou "Diagnóstico" — as mesmas 4
+ * categorias do Motor de Diagnóstico Único que a Operação já usa
+ * (Planejamento/Investimento/CPA/Pendências). "Atividade" (ativo/atenção/
+ * inativo) não muda: é um eixo independente, de dias úteis sem atividade
+ * (`operational-activity.ts`), nunca fez parte do modelo de saúde legado.
  *
  * "Carteira" (gestor) e "Cliente" são dois filtros independentes — carteira
  * decide de quem são os clientes mostrados, cliente escolhe um específico
@@ -29,7 +35,7 @@ export function AgencyFilters({
   manager,
   clients,
   selectedClientId,
-  health,
+  diagnostico,
   activity,
   ritmo,
   tasks,
@@ -41,7 +47,7 @@ export function AgencyFilters({
   manager: string;
   clients: AgencyClientOption[];
   selectedClientId: string | undefined;
-  health: string;
+  diagnostico: string;
   activity: string;
   ritmo: string;
   tasks: string;
@@ -61,7 +67,7 @@ export function AgencyFilters({
     if (preserved.month) next.set("month", preserved.month);
     next.set("manager", manager);
     if (selectedClientId) next.set("client", selectedClientId);
-    if (health !== "todos") next.set("health", health);
+    if (diagnostico !== "todos") next.set("diagnostico", diagnostico);
     if (activity !== "todos") next.set("activity", activity);
     if (ritmo !== "todos") next.set("ritmo", ritmo);
     if (tasks !== "todas") next.set("tasks", tasks);
@@ -85,7 +91,7 @@ export function AgencyFilters({
     router.push(buildUrl({ platform: value === "consolidado" ? "" : value, ritmo: value === "consolidado" ? ritmo : "" }));
   }
 
-  const secondaryCount = [health !== "todos", activity !== "todos", ritmo !== "todos", tasks !== "todas"].filter(
+  const secondaryCount = [diagnostico !== "todos", activity !== "todos", ritmo !== "todos", tasks !== "todas"].filter(
     Boolean,
   ).length;
 
@@ -156,11 +162,12 @@ export function AgencyFilters({
             />
             <div className="mitza-menu-in absolute right-0 z-50 mt-2 w-72 rounded-lg border border-overview-border bg-overview-surface p-3 shadow-[var(--shadow-float)]">
               <div className="flex flex-col gap-2">
-                <Select value={health} onChange={(e) => router.push(buildUrl({ health: e.target.value }))} className="w-full">
-                  <option value="todos">Status da conta: todos</option>
-                  <option value="saudavel">Saudável</option>
-                  <option value="atencao">Atenção</option>
-                  <option value="critico">Crítico</option>
+                <Select value={diagnostico} onChange={(e) => router.push(buildUrl({ diagnostico: e.target.value }))} className="w-full">
+                  <option value="todos">Diagnóstico: todos</option>
+                  <option value="planejamento">Planejamento</option>
+                  <option value="investimento">Investimento</option>
+                  <option value="cpa">CPA</option>
+                  <option value="pendencias">Pendências</option>
                 </Select>
 
                 <Select value={activity} onChange={(e) => router.push(buildUrl({ activity: e.target.value }))} className="w-full">

@@ -1,15 +1,13 @@
 import {
   DIMENSION_PRIORITY_ORDER,
   DIMENSION_SEVERITY_RANK,
-  evaluateAccountHealth,
   type AccountHealthEvaluation,
-  type AccountHealthInput,
   type DimensionSeverity,
   type HealthStatus,
 } from "@/lib/account-health-engine";
 import type { ClientChannelState } from "@/lib/client-channel-breakdown";
 import type { PerformanceGoal } from "@/lib/performance-goals";
-import type { ClientDiagnostics } from "@/lib/metric-diagnostics";
+import { evaluateCpaDiagnostic, evaluateInvestmentDiagnostic, type ClientDiagnostics } from "@/lib/metric-diagnostics";
 
 /**
  * Domínio neutro do estado operacional do cliente (Etapa "Consolidação da
@@ -109,47 +107,33 @@ export function sortClientOperationalStates(cards: ClientOperationalState[]): Cl
 }
 
 /**
- * Avaliação de saúde recortada por canal (Etapa "Consolidação da
- * Arquitetura — Fase B", Prioridade 1) — reusa a MESMA `evaluateAccountHealth`
- * (nunca um segundo motor), reconstruindo o `AccountHealthInput` bruto a
- * partir das dimensões já calculadas em `state.evaluation` (revisão, meta de
- * custo, sincronização) e trocando só o que de fato varia por canal
- * (investimento realizado, resultado/custo do canal — `ClientChannelState`,
- * `client-channel-breakdown.ts`).
+ * Diagnóstico do Motor Único recortado por canal (Etapa "Visão Geral + Reports
+ * no Core") — mesmo espírito de `evaluateClientChannelHealth` (que este
+ * substitui na Visão Geral), mas chamando `evaluateInvestmentDiagnostic`/
+ * `evaluateCpaDiagnostic` em vez de reimplementar qualquer regra: nenhuma
+ * severidade nova, só os mesmos dois cálculos do Core com os valores do
+ * canal (`ClientChannelState`, `client-channel-breakdown.ts`) no lugar dos
+ * valores consolidados. Planejamento e Pendências são fatos de nível de
+ * CONTA, não de canal — vêm de `state.diagnostics` sem reavaliação.
  *
- * Investimento e resultado PLANEJADOS não existem por canal neste modelo de
- * dados (só no Consolidado — mesma decisão já registrada em
- * `client-priority.ts`: "ritmo financeiro continua uma exclusividade do
- * Consolidado") — por isso os dois entram como `null`, e `evaluationScope:
- * "channel"` avisa `evaluateDataQuality` que essa ausência é esperada, não
- * uma lacuna de qualidade de dados. Revisão e meta de custo (`costPlanned`)
- * são fatos de nível de conta, não de canal — continuam os mesmos,
- * independente do canal selecionado.
+ * Investimento esperado (prorrateado) não existe por canal neste modelo de
+ * dados (só o Consolidado tem orçamento planejado — mesma decisão já
+ * registrada em `evaluateClientChannelHealth`) — por isso `expectedToDate`
+ * entra sempre `null`, e o Core já trata isso como "sem base de comparação"
+ * (`tone: "normal"`), nunca um "0 esperado" fabricado. Meta de custo
+ * (`targetCostPerResult`) é fato de conta, não de canal — o chamador deve
+ * passar o mesmo valor vigente já resolvido pro cliente.
  */
-export function evaluateClientChannelHealth(
+export function evaluateClientChannelDiagnostics(
   state: ClientOperationalState,
   channelState: ClientChannelState,
-): AccountHealthEvaluation {
-  const { investment, review, cost } = state.evaluation.dimensions;
-
-  const input: AccountHealthInput = {
-    investmentActual: channelState.investmentActual,
-    investmentPlanned: null,
-    investmentHasSyncedData: investment.hasSyncedData,
-    resultActual: channelState.performanceSummary?.resultCount ?? 0,
-    resultPlanned: null,
-    hasPerformanceData: channelState.performanceSummary?.hasAnyRecord ?? false,
-    performanceGoalConfigured: state.performanceGoal !== null,
-    costActual: channelState.performanceSummary?.costPerResult ?? null,
-    costPlanned: cost.planned,
-    // Inerte aqui: só usado pra prorratear investimento/resultado
-    // ESPERADO, e os dois ficam `null` acima (evaluateInvestment/
-    // evaluateResults retornam antes de ler este campo).
-    monthExpectedPct: 0,
-    reviewBusinessDaysAgo: review.actual,
-    reviewMaxBusinessDays: review.enabled ? review.planned : null,
-    evaluationScope: "channel",
+  targetCostPerResult: number | null,
+): ClientDiagnostics {
+  return {
+    planejamento: state.diagnostics.planejamento,
+    pendencias: state.diagnostics.pendencias,
+    atividade: state.diagnostics.atividade,
+    investment: evaluateInvestmentDiagnostic(channelState.investmentActual, null),
+    cpa: evaluateCpaDiagnostic(channelState.performanceSummary?.costPerResult ?? null, targetCostPerResult),
   };
-
-  return evaluateAccountHealth(input);
 }

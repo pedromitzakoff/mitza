@@ -7,6 +7,7 @@ import { todayUTC } from "@/lib/today";
 import { monthRangeFromParam, shiftMonthParam } from "@/lib/sprint-financials";
 import { formatCurrency, formatMonthLabel } from "@/lib/format";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
+import { getActiveDiagnosticFilters } from "@/lib/metric-diagnostics";
 import { classifySpendStatus, SPEND_STATUS_BADGE_CLASSES, type SpendStatus } from "@/lib/spend-status";
 import { MONTHLY_REPORT_STATUS_BADGE_CLASSES, MONTHLY_REPORT_STATUS_LABEL } from "@/lib/monthly-reports";
 import type { MonthlyReportStatus } from "@/lib/supabase/database.types";
@@ -95,7 +96,13 @@ export default async function ReportsPage({
 
   const completeCount = states.filter((s) => reportStatusFor(s.clientId) === "finalizado").length;
   const pendingCount = states.length - completeCount;
-  const attentionCount = states.filter((s) => s.evaluation.healthStatus !== "saudavel").length;
+  // Etapa "Visão Geral + Reports no Core": "N contas exigem atenção" passa a
+  // vir do Motor de Diagnóstico Único (Planejamento/Investimento/CPA/
+  // Pendências — nunca Atividade, que não é um dos 4 diagnósticos do
+  // Workspace) em vez do Sistema A (`evaluation.healthStatus`) — a frase
+  // exibida nunca usou vocabulário Saudável/Atenção/Crítico, só o critério
+  // de contagem mudou de fonte.
+  const attentionCount = states.filter((s) => getActiveDiagnosticFilters(s.diagnostics).some((f) => f !== "atividade")).length;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
