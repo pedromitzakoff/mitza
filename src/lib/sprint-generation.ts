@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 
 export interface EnsureSprintsResult {
   clientId: string;
@@ -17,7 +18,11 @@ export interface EnsureSprintsResult {
  */
 export async function ensureAllClientsSprints(): Promise<EnsureSprintsResult[]> {
   const supabase = createAdminClient();
-  const { data: clients, error } = await supabase.from("clients").select("id").is("deleted_at", null);
+  const { data: clients, error } = await supabase
+    .from("clients")
+    .select("id")
+    .is("deleted_at", null)
+    .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS);
 
   if (error) {
     throw new Error(error.message);

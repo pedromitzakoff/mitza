@@ -12,6 +12,7 @@ import {
 } from "@/lib/spend-status";
 import { formatCurrency } from "@/lib/format";
 import { resolveMonthlyBudget } from "@/lib/monthly-budget";
+import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 
 export default async function PainelMensalPage() {
   await requireAdmin();
@@ -20,7 +21,15 @@ export default async function PainelMensalPage() {
   const { firstDay, lastDay } = currentMonthRange();
 
   const [clients, plannedAllocations, dailySpend, budgetChanges] = await Promise.all([
-    requireQuery(supabase.from("clients").select("id, name").is("deleted_at", null).order("name"), "clients"),
+    requireQuery(
+      supabase
+        .from("clients")
+        .select("id, name")
+        .is("deleted_at", null)
+        .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS)
+        .order("name"),
+      "clients",
+    ),
     // Soma direta das alocações diárias no intervalo do mês (Etapa 50) —
     // usada só como fallback do orçamento vigente (ver resolveMonthlyBudget).
     requireQuery(

@@ -12,6 +12,7 @@ import { todayDateString } from "@/lib/today";
 import { withOriginalDueDate } from "@/lib/task-creation";
 import { toUserFacingError } from "@/lib/user-facing-error";
 import { queryOrError } from "@/lib/require-query";
+import { checkWorkspaceClientAction } from "@/lib/require-workspace-client";
 import type { TaskRecurrence, TaskType } from "@/lib/supabase/database.types";
 
 function resolveReturnTo(formData: FormData, fallback: string): string {
@@ -58,6 +59,9 @@ async function performCreateTask(
   fields: TaskActionFields,
 ): Promise<{ error: string } | { taskId: string }> {
   const supabase = await createSupabaseClient();
+
+  const blocked = await checkWorkspaceClientAction(supabase, clientId);
+  if (blocked) return { error: blocked };
 
   const { data: created, error } = await supabase
     .from("tasks")
@@ -202,6 +206,9 @@ async function performUpdateTask(
   fields: TaskUpdateFields,
 ): Promise<{ error: string } | { title: string }> {
   const supabase = await createSupabaseClient();
+
+  const blocked = await checkWorkspaceClientAction(supabase, clientId);
+  if (blocked) return { error: blocked };
 
   // Lê o estado anterior ANTES de sobrescrever — necessário pra detectar
   // reatribuição/alteração de prazo, preservar original_due_date e (achado
@@ -355,6 +362,9 @@ export async function updateTaskInlineAction(
 export async function completeTaskAction(taskId: string, clientId: string): Promise<{ error?: string }> {
   const supabase = await createSupabaseClient();
 
+  const blocked = await checkWorkspaceClientAction(supabase, clientId);
+  if (blocked) return { error: blocked };
+
   const { data: task, error: fetchError } = await supabase
     .from("tasks")
     .select("id, client_id, sprint_id, title, type, assignee_id, due_date, recurrence, notes")
@@ -443,6 +453,10 @@ export async function completeTaskAction(taskId: string, clientId: string): Prom
  */
 export async function markTaskNotDoneAction(taskId: string, clientId: string): Promise<{ error?: string }> {
   const supabase = await createSupabaseClient();
+
+  const blocked = await checkWorkspaceClientAction(supabase, clientId);
+  if (blocked) return { error: blocked };
+
   const profile = await getCurrentProfile();
 
   if (!profile) {

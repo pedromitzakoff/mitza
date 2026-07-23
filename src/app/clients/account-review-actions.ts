@@ -10,6 +10,7 @@ import {
   OPTIMIZATION_TYPES,
   OPTIMIZATION_ACTIONS_BY_TYPE,
 } from "@/lib/account-reviews";
+import { checkWorkspaceClientAction } from "@/lib/require-workspace-client";
 import type { AccountReviewOutcome, AccountReviewReason, OptimizationType } from "@/lib/supabase/database.types";
 
 interface OptimizationInput {
@@ -64,6 +65,9 @@ export async function recordAccountReviewAction(clientId: string, returnTo: stri
   }
 
   const supabase = await createSupabaseClient();
+
+  const blocked = await checkWorkspaceClientAction(supabase, clientId);
+  if (blocked) fail(blocked);
 
   const reason = String(formData.get("reason") ?? "") as AccountReviewReason;
   const reasonOtherDescription = String(formData.get("reason_other_description") ?? "").trim() || null;

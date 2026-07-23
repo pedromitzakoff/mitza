@@ -4,6 +4,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { todayDateString } from "@/lib/today";
+import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { TeamTable, type TeamTableRow } from "./team-table";
 import { EditTeamMemberDrawer, NewTeamMemberDrawer } from "./team-member-drawer";
 import { computeTeamMemberActivity, fetchTeamMemberTimeline, type ActivityPeriodKey } from "@/lib/team-member-activity";
@@ -45,7 +46,18 @@ export default async function TeamPage({
         .order("name"),
       "team_members",
     ),
-    requireQuery(supabase.from("clients").select("id, primary_manager_id").is("deleted_at", null), "clients"),
+    // Princípio "Workspace = só cliente ativo": carga operacional
+    // (`assignedClientsCount`) só conta cliente com contrato ativo — um
+    // cliente pausado/encerrado não deveria contar como carga de trabalho
+    // corrente do gestor.
+    requireQuery(
+      supabase
+        .from("clients")
+        .select("id, primary_manager_id")
+        .is("deleted_at", null)
+        .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS),
+      "clients",
+    ),
     requireQuery(supabase.from("client_managers").select("client_id, user_id"), "client_managers"),
     requireQuery(supabase.from("tasks").select("assignee_id, status, type, due_date"), "tasks"),
   ]);

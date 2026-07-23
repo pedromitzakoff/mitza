@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchDailySpend } from "@/lib/meta";
 import { todayDateString } from "@/lib/today";
+import { WORKSPACE_ACTIVE_CONTRACT_STATUS, isWorkspaceClient } from "@/lib/client-fields";
 
 export interface SyncResult {
   clientId: string;
@@ -20,7 +21,7 @@ export async function syncClientMetaSpend(clientId: string): Promise<SyncResult>
 
   const { data: client, error: clientError } = await supabase
     .from("clients")
-    .select("id, meta_ad_account_id, deleted_at")
+    .select("id, meta_ad_account_id, deleted_at, status")
     .eq("id", clientId)
     .single();
 
@@ -30,6 +31,13 @@ export async function syncClientMetaSpend(clientId: string): Promise<SyncResult>
 
   if (client.deleted_at) {
     throw new Error(`Cliente ${clientId} foi excluído`);
+  }
+
+  // Princípio "Workspace = só cliente ativo": pausado/encerrado não
+  // recebe sincronização automática nem manual — evita gastar cota da
+  // API do Meta e criar dado novo numa conta sem contrato ativo.
+  if (!isWorkspaceClient(client)) {
+    throw new Error(`Cliente ${clientId} está com status "${client.status}" — sincronização automática pausada.`);
   }
 
   const currentDate = todayDateString();
@@ -68,13 +76,16 @@ export async function syncClientMetaSpend(clientId: string): Promise<SyncResult>
   return { clientId, daysSynced: dailySpend.length };
 }
 
-/** Roda a sync acima para todos os clientes cadastrados. */
+/** Roda a sync acima só pros clientes ativos (Workspace) — pausado/
+ * encerrado nem entra no loop, pra não gerar erro/log por tentativa
+ * bloqueada pelo guard de `syncClientMetaSpend` acima. */
 export async function syncAllClientsMetaSpend(): Promise<SyncResult[]> {
   const supabase = createAdminClient();
   const { data: clients, error } = await supabase
     .from("clients")
     .select("id")
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS);
 
   if (error) {
     throw new Error(error.message);

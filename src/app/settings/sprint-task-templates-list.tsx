@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { TASK_TYPE_LABEL } from "@/app/clients/task-labels";
 import { WEEKDAY_LABEL } from "@/app/clients/weekday-labels";
-import type { TaskType } from "@/lib/supabase/database.types";
+import type { TaskType, ClientContractStatus } from "@/lib/supabase/database.types";
+import { CLIENT_STATUS_LABEL, CLIENT_STATUS_BADGE_CLASSES, isWorkspaceClient } from "@/lib/client-fields";
 import {
   createGlobalTemplateAction,
   deleteGlobalTemplateAction,
@@ -40,7 +41,7 @@ function TemplateFields({
 }: {
   template?: GlobalTemplateItem;
   managers: { id: string; name: string }[];
-  clients: { id: string; name: string }[];
+  clients: { id: string; name: string; status: ClientContractStatus }[];
 }) {
   const [type, setType] = useState<TaskType>(template?.type ?? "verificacao_saldo");
 
@@ -107,7 +108,7 @@ function ClientScopePicker({
   clients,
 }: {
   template?: GlobalTemplateItem;
-  clients: { id: string; name: string }[];
+  clients: { id: string; name: string; status: ClientContractStatus }[];
 }) {
   return (
     <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
@@ -131,7 +132,10 @@ function ClientScopePicker({
           </summary>
           <div className="mt-2 grid max-h-40 grid-cols-2 gap-x-3 gap-y-1 overflow-y-auto">
             {clients.map((client) => (
-              <label key={client.id} className="flex items-center gap-1.5">
+              <label
+                key={client.id}
+                className={`flex items-center gap-1.5 ${isWorkspaceClient(client) ? "" : "text-zinc-400 dark:text-zinc-600"}`}
+              >
                 <input
                   type="checkbox"
                   name="client_ids"
@@ -139,6 +143,11 @@ function ClientScopePicker({
                   defaultChecked={template?.selectedClientIds.includes(client.id) ?? false}
                 />
                 {client.name}
+                {!isWorkspaceClient(client) && (
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}>
+                    {CLIENT_STATUS_LABEL[client.status]}
+                  </span>
+                )}
               </label>
             ))}
           </div>
@@ -155,7 +164,7 @@ export function SprintTaskTemplatesList({
 }: {
   templates: GlobalTemplateItem[];
   managers: { id: string; name: string }[];
-  clients: { id: string; name: string }[];
+  clients: { id: string; name: string; status: ClientContractStatus }[];
 }) {
   return (
     <div className="flex flex-col gap-3">

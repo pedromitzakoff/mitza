@@ -70,6 +70,7 @@ export function ActivitySection({
   isAdmin,
   reviews,
   reviewHrefPrefix,
+  canOperate = true,
 }: {
   tasks: TaskListItem[];
   clientId: string;
@@ -96,6 +97,12 @@ export function ActivitySection({
    * `taskHrefPrefix`/doc em `SprintCardBody`), concatenado com
    * `review.id` pra formar o href completo do drawer de detalhe. */
   reviewHrefPrefix?: string;
+  /** Princípio "Workspace = só cliente ativo" — `false` quando o cliente
+   * está pausado/encerrado: esconde o `ActivityComposer` (criação de
+   * tarefa) e desabilita "Marcar como feito" em cada `TaskRow` (leitura
+   * da fila continua intacta). Omitir preserva o comportamento de sempre
+   * (`true`). */
+  canOperate?: boolean;
 }) {
   const [optimisticTasks, dispatchOptimisticTask] = useOptimisticTasks(tasks);
   const tasksDone = optimisticTasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
@@ -131,15 +138,17 @@ export function ActivitySection({
         </div>
       )}
 
-      <div className="mt-1.5">
-        <ActivityComposer
-          clientId={clientId}
-          sprintId={sprintId}
-          managers={managers ?? []}
-          defaultAssigneeName={defaultAssigneeName}
-          onCreated={(task) => dispatchOptimisticTask({ type: "create", task })}
-        />
-      </div>
+      {canOperate && (
+        <div className="mt-1.5">
+          <ActivityComposer
+            clientId={clientId}
+            sprintId={sprintId}
+            managers={managers ?? []}
+            defaultAssigneeName={defaultAssigneeName}
+            onCreated={(task) => dispatchOptimisticTask({ type: "create", task })}
+          />
+        </div>
+      )}
 
       <div className="mt-1.5 overflow-hidden rounded-lg border border-border">
         <div className="flex items-center gap-2.5 border-b border-border bg-zinc-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground dark:bg-zinc-900/40">
@@ -164,12 +173,15 @@ export function ActivitySection({
                   }
                   isAdmin={isAdmin}
                   typeLabel="Tarefa"
+                  canOperate={canOperate}
                   onOptimisticComplete={() => dispatchOptimisticTask({ type: "complete", taskId: item.task.id })}
                   onOptimisticDelete={() => dispatchOptimisticTask({ type: "delete", taskId: item.task.id })}
                   managers={managers}
-                  isExpanded={expandedTaskId === item.task.id}
-                  onToggleExpand={() =>
-                    setExpandedTaskId((current) => (current === item.task.id ? null : item.task.id))
+                  isExpanded={canOperate ? expandedTaskId === item.task.id : false}
+                  onToggleExpand={
+                    canOperate
+                      ? () => setExpandedTaskId((current) => (current === item.task.id ? null : item.task.id))
+                      : undefined
                   }
                 />
               ) : (

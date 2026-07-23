@@ -18,6 +18,7 @@ import {
   type SprintBehaviorRow,
 } from "@/lib/monthly-reports";
 import type {
+  ClientContractStatus,
   KpiDirection,
   KpiUnit,
   MonthlyReportStatus,
@@ -116,6 +117,10 @@ export interface ReportActionItemRow {
 export interface ReportViewData {
   clientId: string;
   clientName: string;
+  /** Status contratual do cliente — página continua acessível em modo de
+   * consulta mesmo quando pausado/encerrado (nunca filtrado aqui), só
+   * exibe um banner (ver `report-view.tsx`). */
+  clientContractStatus: ClientContractStatus;
   managerName: string | null;
   monthLabel: string;
   monthStart: string;
@@ -158,7 +163,7 @@ export async function buildReportViewData(
 
   const { data: client } = await supabase
     .from("clients")
-    .select("id, name, primary_manager:team_members!clients_primary_manager_id_fkey(name)")
+    .select("id, name, status, primary_manager:team_members!clients_primary_manager_id_fkey(name)")
     .eq("id", clientId)
     .is("deleted_at", null)
     .single();
@@ -180,6 +185,7 @@ export async function buildReportViewData(
     return {
       clientId,
       clientName: client.name,
+      clientContractStatus: client.status,
       managerName,
       monthLabel,
       monthStart: monthRange.firstDay,
@@ -305,6 +311,7 @@ export async function buildReportViewData(
     return {
       clientId,
       clientName: client.name,
+      clientContractStatus: client.status,
       managerName,
       monthLabel,
       monthStart: monthRange.firstDay,
@@ -404,6 +411,7 @@ export async function buildReportViewData(
   return {
     clientId,
     clientName: client.name,
+    clientContractStatus: client.status,
     managerName,
     monthLabel,
     monthStart: monthRange.firstDay,

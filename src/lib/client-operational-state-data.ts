@@ -16,6 +16,7 @@ import { DEFAULT_REVIEW_MAX_BUSINESS_DAYS } from "@/lib/operation-health-thresho
 import { monthRangeFromOperationParam } from "@/lib/operation-triage";
 import { sortClientOperationalStates, type ClientOperationalState } from "@/lib/client-operational-state";
 import { evaluateClientDiagnostics } from "@/lib/metric-diagnostics";
+import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -33,6 +34,11 @@ type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
  * (`lib/account-health-engine.ts`); este arquivo nunca decide severidade
  * sozinho. Investimento resolve pela mesma fonte oficial que a página do
  * Cliente usa (`sumEffectiveSpendForMonth`, `lib/effective-spend.ts`).
+ *
+ * Princípio "Workspace = só cliente ativo": a query de `clients` já
+ * filtra por `WORKSPACE_ACTIVE_CONTRACT_STATUS` (`lib/client-fields.ts`)
+ * — cliente pausado/encerrado nunca chega a este pipeline, então nenhum
+ * consumidor (Operação, Relatórios, Dashboard) precisa filtrar de novo.
  */
 export async function loadClientOperationalStates(supabase: Supabase, monthParam: string): Promise<ClientOperationalState[]> {
   const today = todayUTC();
@@ -52,6 +58,7 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
             "id, name, avatar_url, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
           )
           .is("deleted_at", null)
+          .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS)
           .order("name"),
         "clients",
       ),

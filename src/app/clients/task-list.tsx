@@ -26,25 +26,33 @@ export function TaskList({
   clientId,
   managers,
   isAdmin,
+  canOperate = true,
 }: {
   tasks: TaskListItem[];
   clientId: string;
   managers: InlineTaskManagerOption[];
   isAdmin?: boolean;
+  /** Princípio "Workspace = só cliente ativo" — `false` quando o cliente
+   * está pausado/encerrado: esconde a criação de tarefa e desabilita
+   * "Marcar como feito" em cada linha (histórico continua visível).
+   * Omitir preserva o comportamento de sempre (`true`). */
+  canOperate?: boolean;
 }) {
   const [optimisticTasks, dispatchOptimisticTask] = useOptimisticTasks(tasks);
   const ordered = orderTasks(optimisticTasks);
 
   return (
     <div>
-      <div className="flex justify-end">
-        <InlineCreateTaskForm
-          clientId={clientId}
-          sprintId={null}
-          managers={managers}
-          onCreated={(task) => dispatchOptimisticTask({ type: "create", task })}
-        />
-      </div>
+      {canOperate && (
+        <div className="flex justify-end">
+          <InlineCreateTaskForm
+            clientId={clientId}
+            sprintId={null}
+            managers={managers}
+            onCreated={(task) => dispatchOptimisticTask({ type: "create", task })}
+          />
+        </div>
+      )}
 
       {ordered.length > 0 ? (
         <ul className="mt-1.5 rounded-lg border border-border [&>li:first-child]:rounded-t-lg [&>li:last-child]:rounded-b-lg">
@@ -55,6 +63,7 @@ export function TaskList({
               clientId={clientId}
               detailsHref={`/clients/${clientId}?task=${task.id}`}
               isAdmin={isAdmin}
+              canOperate={canOperate}
               onOptimisticComplete={() => dispatchOptimisticTask({ type: "complete", taskId: task.id })}
               onOptimisticDelete={() => dispatchOptimisticTask({ type: "delete", taskId: task.id })}
             />

@@ -426,6 +426,7 @@ export function SprintCardBody({
   taskManagers,
   defaultAssigneeName,
   hideNextAction,
+  canOperate = true,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -436,6 +437,11 @@ export function SprintCardBody({
    * de volta pra `isAdmin`, preservando o comportamento de sempre lá. A
    * página do cliente passa o valor real (admin OU gestor responsável). */
   canEditPerformance?: boolean;
+  /** Princípio "Workspace = só cliente ativo" — `false` quando o cliente
+   * está pausado/encerrado: repassado pra `ActivitySection`, que esconde
+   * a criação de tarefa e desabilita "Marcar como feito" em cada linha.
+   * Omitir preserva o comportamento de sempre (`true`). */
+  canOperate?: boolean;
   tasks: TaskListItem[];
   executionLabel?: string | null;
   executionSeverity?: "atencao" | "critico" | null;
@@ -625,6 +631,7 @@ export function SprintCardBody({
             isAdmin={isAdmin}
             reviews={accountReviews}
             reviewHrefPrefix={reviewHrefPrefix}
+            canOperate={canOperate}
           />
         </div>
 
@@ -685,6 +692,7 @@ export function SprintCardBody({
               commentableType="sprint"
               commentableId={sprint.sprintId}
               clientId={clientId}
+              canOperate={canOperate}
             />
           </div>
         </details>
@@ -752,6 +760,7 @@ export function SprintCard({
   flat,
   accordionRowsPrototype,
   hideNextAction,
+  canOperate = true,
 }: {
   sprint: SprintFinancials;
   comments: CommentItem[];
@@ -759,6 +768,8 @@ export function SprintCard({
   isAdmin: boolean;
   /** Permissão de "Atualizar performance" — ver doc de `SprintCardBody`. */
   canEditPerformance?: boolean;
+  /** Princípio "Workspace = só cliente ativo" — ver doc de `SprintCardBody`. */
+  canOperate?: boolean;
   tasks: TaskListItem[];
   executionLabel?: string | null;
   executionSeverity?: "atencao" | "critico" | null;
@@ -989,6 +1000,7 @@ export function SprintCard({
               performance={performance}
               returnTo={returnTo}
               hideNextAction={hideNextAction}
+              canOperate={canOperate}
             />
           </div>
         </div>
@@ -1014,6 +1026,7 @@ export function SprintCard({
           performance={performance}
           returnTo={returnTo}
           hideNextAction={hideNextAction}
+          canOperate={canOperate}
         />
       )}
     </details>

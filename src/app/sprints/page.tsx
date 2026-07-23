@@ -14,6 +14,7 @@ import {
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
 import { formatMonthLabel } from "@/lib/format";
+import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { getMonthTemporalStatus, resolveMonthlyBudget } from "@/lib/monthly-budget";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import type { SprintClosedSnapshot } from "@/lib/sprint-recommendation";
@@ -141,6 +142,7 @@ export default async function SprintsPage({
           "id, name, meta_ad_account_id, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
         )
         .is("deleted_at", null)
+        .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS)
         .order("name"),
       "clients",
     ),

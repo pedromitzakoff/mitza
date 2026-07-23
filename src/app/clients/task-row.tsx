@@ -316,6 +316,7 @@ export function TaskRow({
   isExpanded,
   onToggleExpand,
   managers,
+  canOperate = true,
 }: {
   task: TaskListItem;
   clientId: string;
@@ -356,6 +357,10 @@ export function TaskRow({
   /** Gestores ativos — só usado quando a linha é expansível (assignee do
    * formulário de edição inline). */
   managers?: InlineTaskManagerOption[];
+  /** Princípio "Workspace = só cliente ativo" — `false` quando o cliente
+   * está pausado/encerrado: desabilita "Marcar como feito" (a linha vira
+   * só consulta). Omitir preserva o comportamento de sempre (`true`). */
+  canOperate?: boolean;
 }) {
   const effectiveStatus = effectiveTaskStatus(task);
   const [localOptimisticDone, setLocalOptimisticDone] = useOptimistic(effectiveStatus === "feito");
@@ -441,12 +446,15 @@ export function TaskRow({
               </span>
             </Tooltip>
           ) : (
-            <Tooltip label="Marcar como feito">
+            <Tooltip label={canOperate ? "Marcar como feito" : "Cliente pausado/encerrado — ação bloqueada"}>
               <button
                 type="button"
-                onClick={handleComplete}
+                onClick={canOperate ? handleComplete : undefined}
+                disabled={!canOperate}
                 aria-label="Marcar como feito"
-                className={`relative z-10 block h-4 w-4 shrink-0 rounded-full border-2 transition-colors hover:border-brand hover:bg-brand/10 ${
+                className={`relative z-10 block h-4 w-4 shrink-0 rounded-full border-2 transition-colors ${
+                  canOperate ? "hover:border-brand hover:bg-brand/10" : "cursor-not-allowed opacity-40"
+                } ${
                   isOverdue
                     ? "border-red-400 dark:border-red-700"
                     : isToday

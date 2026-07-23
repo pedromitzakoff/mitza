@@ -32,6 +32,7 @@ export function TaskDrawerPanel({
   returnTo,
   isAdmin,
   managers,
+  canOperate = true,
 }: {
   task: OperationTaskItem;
   clientId: string;
@@ -45,6 +46,12 @@ export function TaskDrawerPanel({
    * todo chamador agora passa a lista de gestores ativos, pra "Editar
    * tarefa" nunca mais precisar navegar pra fora do drawer. */
   managers: InlineTaskManagerOption[];
+  /** Princípio "Workspace = só cliente ativo" — `false` quando o cliente
+   * está pausado/encerrado: esconde "Marcar como feito", o formulário de
+   * edição e o composer de comentário (histórico continua 100% visível).
+   * Omitir preserva o comportamento de sempre (`true`) — a Operação nunca
+   * passa esta prop porque já só mostra cliente ativo. */
+  canOperate?: boolean;
 }) {
   const status = effectiveTaskStatus(task);
   const router = useRouter();
@@ -177,7 +184,7 @@ export function TaskDrawerPanel({
         )}
 
         <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-          {status !== "feito" && (
+          {status !== "feito" && canOperate && (
             <button
               type="button"
               disabled={isCompletePending}
@@ -189,27 +196,31 @@ export function TaskDrawerPanel({
           )}
           {/* Etapa "MITZA Workspace-First Tasks 1.0" (Parte 5): "Editar
               tarefa" nunca mais navega pra `/tasks/{id}/edit` — o drawer é
-              a única superfície de edição, em qualquer tela de origem. */}
-          <InlineEditTaskForm
-            taskId={task.id}
-            clientId={clientId}
-            managers={managers}
-            defaultTitle={task.title}
-            defaultType={task.type}
-            // Limitação conhecida: `OperationTaskItem.assignee` só carrega
-            // nome/status (nunca o id — o modelo de dados compartilhado
-            // com Visão Geral/Relatórios nunca precisou disso até agora),
-            // então o valor pré-selecionado é resolvido por nome dentro da
-            // lista de gestores ativos. Em nomes duplicados (raro numa
-            // agência pequena) o pré-preenchimento pode escolher o gestor
-            // errado — trocar manualmente no select ainda funciona
-            // corretamente, só o valor DEFAULT que pode ficar impreciso.
-            defaultAssigneeId={
-              task.assignee ? (managers.find((m) => m.name === task.assignee?.name)?.id ?? null) : null
-            }
-            defaultDueDate={task.due_date}
-            defaultNotes={task.notes}
-          />
+              a única superfície de edição, em qualquer tela de origem.
+              Workspace = só cliente ativo: cliente pausado/encerrado não
+              vê o formulário de edição — só consulta os dados acima. */}
+          {canOperate && (
+            <InlineEditTaskForm
+              taskId={task.id}
+              clientId={clientId}
+              managers={managers}
+              defaultTitle={task.title}
+              defaultType={task.type}
+              // Limitação conhecida: `OperationTaskItem.assignee` só carrega
+              // nome/status (nunca o id — o modelo de dados compartilhado
+              // com Visão Geral/Relatórios nunca precisou disso até agora),
+              // então o valor pré-selecionado é resolvido por nome dentro da
+              // lista de gestores ativos. Em nomes duplicados (raro numa
+              // agência pequena) o pré-preenchimento pode escolher o gestor
+              // errado — trocar manualmente no select ainda funciona
+              // corretamente, só o valor DEFAULT que pode ficar impreciso.
+              defaultAssigneeId={
+                task.assignee ? (managers.find((m) => m.name === task.assignee?.name)?.id ?? null) : null
+              }
+              defaultDueDate={task.due_date}
+              defaultNotes={task.notes}
+            />
+          )}
           {isAdmin && (
             <DeleteTaskButton
               action={(formData) => deleteTaskAction(task.id, clientId, formData)}
@@ -235,22 +246,24 @@ export function TaskDrawerPanel({
             </ul>
           )}
 
-          <form ref={commentFormRef} onSubmit={handleCommentSubmit} className="mt-2 flex gap-2">
-            <input
-              name="content"
-              placeholder="Comentar..."
-              required
-              disabled={isCommentPending}
-              className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none transition-colors focus:border-zinc-500 disabled:opacity-60"
-            />
-            <button
-              type="submit"
-              disabled={isCommentPending}
-              className="mitza-pressable shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900"
-            >
-              {isCommentPending ? "Enviando..." : "Enviar"}
-            </button>
-          </form>
+          {canOperate && (
+            <form ref={commentFormRef} onSubmit={handleCommentSubmit} className="mt-2 flex gap-2">
+              <input
+                name="content"
+                placeholder="Comentar..."
+                required
+                disabled={isCommentPending}
+                className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none transition-colors focus:border-zinc-500 disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                disabled={isCommentPending}
+                className="mitza-pressable shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900"
+              >
+                {isCommentPending ? "Enviando..." : "Enviar"}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </>

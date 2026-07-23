@@ -30,6 +30,7 @@ import { buildOverviewPriorityItem } from "./overview-client-view";
 import type { HealthStatus } from "@/lib/account-health-engine";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { computeOperationIndicators } from "@/lib/operation-indicators";
+import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
 import { PrioritiesDrawer, PrioritiesPanel } from "./priorities-panel";
 import { OperationMetric } from "./operation-metric";
@@ -155,6 +156,7 @@ export default async function Home({
           "id, name, meta_ad_account_id, status, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
         )
         .is("deleted_at", null)
+        .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS)
         .order("name"),
       "clients",
     ),

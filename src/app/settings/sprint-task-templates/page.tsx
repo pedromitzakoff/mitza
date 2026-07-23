@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
+import { CLIENT_CONTRACT_STATUS_REGISTRY } from "@/lib/status-registry";
 import { SprintTaskTemplatesList, type GlobalTemplateItem } from "../sprint-task-templates-list";
 import { BackfillButton } from "./backfill-button";
 
@@ -26,10 +27,24 @@ export default async function SprintTaskTemplatesPage({
       supabase.from("sprint_task_template_clients").select("template_id, client_id"),
       "sprint_task_template_clients",
     ),
-    requireQuery(supabase.from("clients").select("id, name").is("deleted_at", null).order("name"), "clients"),
+    requireQuery(
+      supabase.from("clients").select("id, name, status").is("deleted_at", null).order("name"),
+      "clients",
+    ),
     requireQuery(supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"), "team_members"),
     requireQuery(supabase.from("tasks").select("template_id").not("template_id", "is", null), "tasks:template_id"),
   ]);
+
+  // Área administrativa: continua mostrando clientes pausados/encerrados
+  // (nunca trata este vínculo de template como parte da operação
+  // corrente), mas prioriza ativos na ordenação — badge de status entra
+  // em `sprint-task-templates-list.tsx`.
+  const sortedClients = [...clients].sort((a, b) => {
+    const rankDiff =
+      CLIENT_CONTRACT_STATUS_REGISTRY[`client_contract.${a.status}`].order -
+      CLIENT_CONTRACT_STATUS_REGISTRY[`client_contract.${b.status}`].order;
+    return rankDiff !== 0 ? rankDiff : a.name.localeCompare(b.name);
+  });
 
   const clientIdsByTemplate = new Map<string, string[]>();
   for (const row of templateClients) {
@@ -71,7 +86,7 @@ export default async function SprintTaskTemplatesPage({
         <SprintTaskTemplatesList
           templates={templateItems}
           managers={managers ?? []}
-          clients={clients ?? []}
+          clients={sortedClients}
         />
       </div>
     </div>

@@ -14,6 +14,7 @@ import {
   formatKpiValue,
 } from "@/lib/monthly-reports";
 import { REPORT_ACTION_ITEM_STATUS_REGISTRY } from "@/lib/status-registry";
+import { contractStatusBannerText } from "@/lib/client-fields";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
 import { SubmitButton } from "@/app/submit-button";
 import type { ReportViewData } from "./report-data";
@@ -113,9 +114,15 @@ export function ClientReportView({
   const financialStatus = classifySpendStatus(data.financial.actual, data.financial.expectedToDate, data.financial.planned);
   const pct = data.financial.planned > 0 ? Math.round((data.financial.actual / data.financial.planned) * 100) : null;
   const monthTemporalStatus = getMonthTemporalStatus(monthRange, today.toISOString().slice(0, 10));
+  const contractBannerText = contractStatusBannerText(data.clientContractStatus);
 
   return (
     <>
+      {contractBannerText && (
+        <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+          {contractBannerText} A página continua acessível apenas para consulta de histórico.
+        </p>
+      )}
       {error && <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{error}</p>}
 
       {data.status === "finalizado" && (

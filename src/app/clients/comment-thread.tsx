@@ -33,12 +33,17 @@ export function CommentThread({
   commentableId,
   clientId,
   returnTo,
+  canOperate = true,
 }: {
   comments: CommentItem[];
   commentableType: CommentableType;
   commentableId: string;
   clientId: string;
   returnTo?: string;
+  /** Princípio "Workspace = só cliente ativo" — `false` quando o cliente
+   * está pausado/encerrado: esconde o composer (histórico continua
+   * visível). Omitir preserva o comportamento de sempre (`true`). */
+  canOperate?: boolean;
 }) {
   const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -96,23 +101,25 @@ export function CommentThread({
         </ul>
       )}
 
-      <form ref={formRef} onSubmit={handleSubmit} className="mt-1.5 flex gap-2">
-        {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
-        <input
-          name="content"
-          placeholder="Comentar..."
-          required
-          disabled={isPending}
-          className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none focus:border-zinc-500 disabled:opacity-60"
-        />
-        <button
-          type="submit"
-          disabled={isPending}
-          className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 disabled:opacity-60 dark:hover:bg-zinc-900"
-        >
-          Enviar
-        </button>
-      </form>
+      {canOperate && (
+        <form ref={formRef} onSubmit={handleSubmit} className="mt-1.5 flex gap-2">
+          {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
+          <input
+            name="content"
+            placeholder="Comentar..."
+            required
+            disabled={isPending}
+            className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none focus:border-zinc-500 disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={isPending}
+            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 disabled:opacity-60 dark:hover:bg-zinc-900"
+          >
+            Enviar
+          </button>
+        </form>
+      )}
     </div>
   );
 }

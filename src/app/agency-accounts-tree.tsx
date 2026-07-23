@@ -2,6 +2,7 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { buildAgencyAccountsTree } from "@/lib/agency-accounts-tree";
 import { requireQuery } from "@/lib/require-query";
+import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { AgencyAccountsTreeView } from "./agency-accounts-tree-client";
 
 /**
@@ -23,6 +24,12 @@ export async function AgencyAccountsTree() {
 
   const supabase = await createSupabaseClient();
   const [clients, managers] = await Promise.all([
+    // Princípio "Workspace = só cliente ativo", sem exceção: esta árvore
+    // também é usada pra realocar cliente entre gestores (drag and drop,
+    // ver agency-accounts-tree-actions.ts), mas continua fazendo parte da
+    // Sidebar/Workspace — cliente pausado/encerrado não aparece aqui.
+    // Realocar um cliente pausado/encerrado fica, por ora, só possível via
+    // Configurações > Clientes.
     requireQuery(
       supabase
         .from("clients")
@@ -30,6 +37,7 @@ export async function AgencyAccountsTree() {
           "id, name, wallet_position, avatar_url, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
         )
         .is("deleted_at", null)
+        .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS)
         .order("wallet_position", { ascending: true, nullsFirst: false })
         .order("name"),
       "clients",

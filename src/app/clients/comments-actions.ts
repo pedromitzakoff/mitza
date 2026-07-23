@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { logOperationalActivity } from "@/lib/operational-activity-log";
+import { checkWorkspaceClientAction } from "@/lib/require-workspace-client";
 import type { CommentableType } from "@/lib/supabase/database.types";
 
 export async function createCommentAction(
@@ -23,6 +24,9 @@ export async function createCommentAction(
     // Action: redirect só quando o destino é genuinamente outra tela).
     redirect("/login");
   }
+
+  const blocked = await checkWorkspaceClientAction(supabase, clientId);
+  if (blocked) return { error: blocked };
 
   const content = String(formData.get("content") ?? "").trim();
 

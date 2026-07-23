@@ -32,7 +32,7 @@ import { computeOperationalTracking, computeMonthlyOccurrenceSummary } from "@/l
 import { fetchClientOperationalHistory } from "@/lib/client-operational-history";
 import { computeClientUpdateStatus } from "@/lib/client-updates";
 import { effectiveTaskStatus } from "@/lib/task-status";
-import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
+import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL, contractStatusBannerText, isWorkspaceClient } from "@/lib/client-fields";
 import { syncClientMetaAction } from "../meta-actions";
 import { ClientIdentitySticky } from "../client-identity-sticky";
 import { ClientWorkspaceContext } from "../client-workspace-context";
@@ -216,6 +216,13 @@ export default async function ClientPage({
     .single();
 
   if (!client) notFound();
+
+  // Princípio "Workspace = só cliente ativo": estado único derivado de
+  // `client.status`, passado adiante (nunca recalculado em cada botão)
+  // pra decidir o que a página oferece como ação nova — pausado/encerrado
+  // continua em modo de consulta (histórico, tarefas, sprints visíveis),
+  // só não cria nada novo (tarefa, comentário, otimização).
+  const canOperate = isWorkspaceClient(client);
 
   // Habilitar Gestores 1.0: "Atualizar performance" (investimento realizado
   // + resultados da sprint) deixou de ser admin-only — o gestor responsável
@@ -665,14 +672,20 @@ export default async function ClientPage({
     ? formatSprintExecutionLabel(sprintLastActivityDate, currentSprint.startDate, today)
     : null;
 
+  const contractBannerText = contractStatusBannerText(client.status);
+
   const banners = [
+    contractBannerText && {
+      tone: "amber",
+      text: `${contractBannerText} A página continua acessível apenas para consulta de histórico.`,
+    },
     error && { tone: "red", text: error },
     taskError && { tone: "red", text: taskError },
     reviewError && { tone: "red", text: reviewError },
     clientUpdateError && { tone: "red", text: clientUpdateError },
     synced && { tone: "green", text: `${synced} dia(s) de spend sincronizado(s) com o Meta.` },
     saved && { tone: "green", text: "Dados do cliente atualizados." },
-  ].filter((banner): banner is { tone: "red" | "green"; text: string } => Boolean(banner));
+  ].filter((banner): banner is { tone: "red" | "green" | "amber"; text: string } => Boolean(banner));
 
   const returnTo = `/clients/${client.id}${monthQuery}`;
   const openReviewDetail = openReviewDetailId ? accountReviews.find((r) => r.id === openReviewDetailId) ?? null : null;
@@ -761,7 +774,7 @@ export default async function ClientPage({
         canConfigureObjective: isAdmin,
       })
     : null;
-  const newReviewHref = withParam(returnTo, "review=new");
+  const newReviewHref = canOperate ? withParam(returnTo, "review=new") : undefined;
   let nextActionCtaHref: string | null = null;
   let nextActionCtaLabel: string | null = null;
   if (nextAction && currentSprint) {
@@ -772,7 +785,7 @@ export default async function ClientPage({
       nextActionCtaHref = `#sprint-${currentSprint.sprintId}`;
       nextActionCtaLabel = "Ir para a sprint";
     } else if (nextAction.kind === "register_optimization") {
-      nextActionCtaHref = newReviewHref;
+      nextActionCtaHref = newReviewHref ?? null;
       nextActionCtaLabel = "Registrar otimização";
     }
   }
@@ -885,14 +898,16 @@ export default async function ClientPage({
               Editar
             </Link>
           )}
-          <form action={syncClientMetaAction.bind(null, client.id)}>
-            <button
-              type="submit"
-              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            >
-              Atualizar Meta
-            </button>
-          </form>
+          {canOperate && (
+            <form action={syncClientMetaAction.bind(null, client.id)}>
+              <button
+                type="submit"
+                className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              >
+                Atualizar Meta
+              </button>
+            </form>
+          )}
         </div>
       </div>
 
@@ -913,7 +928,9 @@ export default async function ClientPage({
               className={
                 banner.tone === "red"
                   ? "rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300"
-                  : "rounded-md bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950 dark:text-green-300"
+                  : banner.tone === "amber"
+                    ? "rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                    : "rounded-md bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950 dark:text-green-300"
               }
             >
               {banner.text}
@@ -1109,6 +1126,7 @@ export default async function ClientPage({
                       performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
                       returnTo={returnTo}
                       hideNextAction={sprint.temporalStatus === "atual"}
+                      canOperate={canOperate}
                     />
                   ))
                 ) : (
@@ -1172,7 +1190,7 @@ export default async function ClientPage({
               <p className="mb-3 text-xs text-zinc-500">
                 Tarefas sem sprint vinculada — as de cada sprint aparecem no card dela, acima.
               </p>
-              <TaskList tasks={unlinkedTasks} clientId={client.id} managers={managers ?? []} />
+              <TaskList tasks={unlinkedTasks} clientId={client.id} managers={managers ?? []} canOperate={canOperate} />
             </Section>
           </div>
 
@@ -1278,6 +1296,7 @@ export default async function ClientPage({
           returnTo={returnTo}
           isAdmin={isAdmin}
           managers={managers ?? []}
+          canOperate={canOperate}
         />
       )}
 
