@@ -5,11 +5,17 @@ import { businessDaysSince } from "@/lib/business-days";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { aggregatePerformanceResults, computeCostPerResult, type PerformanceRecordRow } from "@/lib/performance";
 import { sumEffectiveSpendForMonth, type SprintSpendSource, type DailySpendRow } from "@/lib/effective-spend";
-import { computeMonthlyExpectedPct, resolveMonthlyPlanSnapshot, type MonthlyPlanChange } from "@/lib/monthly-budget";
+import {
+  computeMonthlyExpectedPct,
+  computeMonthlyExpectedToDateByCalendar,
+  resolveMonthlyPlanSnapshot,
+  type MonthlyPlanChange,
+} from "@/lib/monthly-budget";
 import { evaluateAccountHealth, type AccountHealthInput } from "@/lib/account-health-engine";
 import { DEFAULT_REVIEW_MAX_BUSINESS_DAYS } from "@/lib/operation-health-thresholds";
 import { monthRangeFromOperationParam } from "@/lib/operation-triage";
 import { sortClientOperationalStates, type ClientOperationalState } from "@/lib/client-operational-state";
+import { evaluateClientDiagnostics } from "@/lib/metric-diagnostics";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -138,7 +144,15 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
   }
 
   const overdueCountByClient = new Map<string, number>();
+  // Etapa "Novo Conceito de Monitoramento Operacional": Pendências conta
+  // qualquer tarefa ABERTA (pendente OU atrasada), não só a atrasada — a
+  // query já filtra pra `status in ('pendente', 'atrasado')`, então basta
+  // contar cada linha, sem o filtro extra de `effectiveTaskStatus` (esse
+  // continua existindo só pra `overdueCountByClient`, usado por telas que
+  // ainda não migraram pro novo motor de diagnóstico).
+  const openCountByClient = new Map<string, number>();
   for (const task of openTasks ?? []) {
+    openCountByClient.set(task.client_id, (openCountByClient.get(task.client_id) ?? 0) + 1);
     if (effectiveTaskStatus(task, today) !== "atrasado") continue;
     overdueCountByClient.set(task.client_id, (overdueCountByClient.get(task.client_id) ?? 0) + 1);
   }
@@ -217,6 +231,32 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
       reviewMaxBusinessDays,
     };
 
+    // Etapa "Novo Conceito de Monitoramento Operacional": mesmos números
+    // já resolvidos acima (spend/plan/costActual), só reempacotados pro
+    // Motor de Diagnóstico Único em vez do Motor de Saúde de 5 dimensões.
+    // `expectedToDate` só é calculável quando existe planejamento mensal
+    // (`plan.investmentPlanned`) — sem plano, o eixo Investimento fica sem
+    // base de comparação (`expected: null`), nunca um "0 esperado"
+    // fabricado. Acompanhamento reaproveita a MESMA fonte de
+    // revisão/cadência que já alimentava a dimensão "review" do motor
+    // antigo — placeholder deliberado até a estrutura real de Otimizações
+    // (ainda não implementada) virar a fonte oficial.
+    const investmentExpectedToDate =
+      plan.investmentPlanned !== null
+        ? computeMonthlyExpectedToDateByCalendar(plan.investmentPlanned, monthRange, todayStr).expectedToDate
+        : null;
+
+    const diagnostics = evaluateClientDiagnostics({
+      cpa: { costPerResult: costActual, targetCostPerResult: plan.targetCostPerResult },
+      investment: { actualSpend: spend.actual, expectedToDate: investmentExpectedToDate },
+      pendencias: { openTasksCount: openCountByClient.get(client.id) ?? 0 },
+      acompanhamento: {
+        lastOptimizationAt: lastReviewAt,
+        daysSinceLastOptimization: reviewBusinessDaysAgo,
+        maxDaysAllowed: reviewMaxBusinessDays,
+      },
+    });
+
     const lastDataSyncAt =
       spend.lastUpdatedAt && performanceResult.latestUpdatedAt
         ? spend.lastUpdatedAt > performanceResult.latestUpdatedAt
@@ -233,7 +273,9 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
       performanceGoal: client.performance_goal,
       evaluation: evaluateAccountHealth(input),
       overdueTasksCount: overdueCountByClient.get(client.id) ?? 0,
+      openTasksCount: openCountByClient.get(client.id) ?? 0,
       lastDataSyncAt,
+      diagnostics,
     };
   });
 

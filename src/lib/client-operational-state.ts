@@ -9,6 +9,7 @@ import {
 } from "@/lib/account-health-engine";
 import type { ClientChannelState } from "@/lib/client-channel-breakdown";
 import type { PerformanceGoal } from "@/lib/performance-goals";
+import type { ClientDiagnostics } from "@/lib/metric-diagnostics";
 
 /**
  * Domínio neutro do estado operacional do cliente (Etapa "Consolidação da
@@ -34,10 +35,22 @@ export interface ClientOperationalState {
   performanceGoal: PerformanceGoal | null;
   evaluation: AccountHealthEvaluation;
   overdueTasksCount: number;
+  /** Nº de tarefas ABERTAS (pendente + atrasado, não só atrasado) —
+   * diferente de `overdueTasksCount` (só atrasado). Alimenta
+   * `diagnostics.pendencias`, ver metric-diagnostics.ts. */
+  openTasksCount: number;
   /** `daily_spend.synced_at` mais recente do cliente (qualquer canal) —
    * alimenta o indicador "Atualizado hoje/ontem/há N dias". `null` = nunca
    * sincronizado. */
   lastDataSyncAt: string | null;
+  /** Etapa "Novo Conceito de Monitoramento Operacional" — os três eixos do
+   * Motor de Diagnóstico Único (CPA, Investimento, Pendências,
+   * Acompanhamento), computados uma única vez aqui e consumidos por
+   * qualquer tela (nunca recalculados no componente). `acompanhamento` é
+   * alimentado hoje pela mesma fonte de `account_reviews`/cadência que já
+   * existia (ver client-operational-state-data.ts) — placeholder
+   * deliberado até a estrutura real de Otimizações substituir essa fonte. */
+  diagnostics: ClientDiagnostics;
 }
 
 const DIMENSION_PRIORITY_RANK: Record<keyof AccountHealthEvaluation["dimensions"], number> = Object.fromEntries(

@@ -192,6 +192,22 @@ export function evaluateAcompanhamento(input: {
   };
 }
 
+/** "Última otimização hoje" / "...ontem" / "...há N dias" / "Sem
+ * otimizações há N dias" (quando já ultrapassou a cadência — frase mais
+ * urgente de propósito, mesmo dado, fraseado diferente) / "Sem
+ * otimizações registradas" (nunca houve nenhuma, sem base pra contar
+ * dias). Único lugar que traduz `AcompanhamentoDiagnostic` pra texto —
+ * qualquer tela que precise deste rótulo usa esta função, nunca monta a
+ * frase sozinha. */
+export function formatAcompanhamentoLabel(diagnostic: AcompanhamentoDiagnostic): string {
+  const { daysSinceLastOptimization, isOverdue } = diagnostic;
+  if (daysSinceLastOptimization === null) return "Sem otimizações registradas";
+  if (isOverdue) return `Sem otimizações há ${daysSinceLastOptimization} dias`;
+  if (daysSinceLastOptimization === 0) return "Última otimização hoje";
+  if (daysSinceLastOptimization === 1) return "Última otimização ontem";
+  return `Última otimização há ${daysSinceLastOptimization} dias`;
+}
+
 // ---------------------------------------------------------------------------
 // Agregado por cliente — o formato único que qualquer tela (Operação,
 // Dashboard, Prontuário) deve consumir dese agora em diante, em vez de

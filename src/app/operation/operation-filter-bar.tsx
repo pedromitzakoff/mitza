@@ -1,7 +1,7 @@
 import { Search } from "lucide-react";
 import type { OperationTriageSummary } from "@/lib/operation-triage";
 
-export type OperationQuickFilter = "todos" | "pendencias" | "revisoes" | "sem_sincronizacao" | "relatorio_pendente";
+export type OperationQuickFilter = "todos" | "cpa" | "investimento" | "pendencias";
 
 function CounterTile({
   count,
@@ -29,13 +29,14 @@ function CounterTile({
 }
 
 /**
- * Cabeçalho da Operação (Etapa "Fila de Prioridades 1.0") — substitui os
- * contadores por banda de saúde/dimensão de desvio (exigiam conhecer o
- * vocabulário do Motor de Saúde) por quatro perguntas operacionais diretas:
- * quantos clientes, quantos com pendência, quantos precisando de revisão,
- * quantos sem sincronização. Cada contador funciona como filtro rápido
- * (clique alterna, um único ativo por vez) — a busca por nome continua
- * disponível pra localizar um cliente específico.
+ * Cabeçalho da Operação (Etapa "Novo Conceito de Monitoramento
+ * Operacional") — substitui os filtros por dimensão do Motor de Saúde
+ * (pendências/revisões/sem sincronização/relatório pendente) pelos três
+ * diagnósticos objetivos do Motor Único: CPA acima da meta, Investimento
+ * fora do ritmo, Pendências em aberto. "Revisão" deixou de existir como
+ * filtro independente — vira só um tipo de Pendência (ver
+ * metric-diagnostics.ts). Cada contador funciona como filtro rápido
+ * (clique alterna, um único ativo por vez).
  */
 export function OperationFilterBar({
   summary,
@@ -55,38 +56,27 @@ export function OperationFilterBar({
       <div className="flex flex-wrap gap-2">
         <CounterTile
           count={summary.totalClients}
-          label="Clientes"
+          label="Todos"
           active={quickFilter === "todos"}
           onClick={() => onQuickFilterChange("todos")}
         />
         <CounterTile
-          count={summary.withPendingTasks}
+          count={summary.withCpaOff}
+          label="CPA"
+          active={quickFilter === "cpa"}
+          onClick={() => onQuickFilterChange(quickFilter === "cpa" ? "todos" : "cpa")}
+        />
+        <CounterTile
+          count={summary.withInvestmentOff}
+          label="Investimento"
+          active={quickFilter === "investimento"}
+          onClick={() => onQuickFilterChange(quickFilter === "investimento" ? "todos" : "investimento")}
+        />
+        <CounterTile
+          count={summary.withPendencias}
           label="Pendências"
           active={quickFilter === "pendencias"}
           onClick={() => onQuickFilterChange(quickFilter === "pendencias" ? "todos" : "pendencias")}
-        />
-        <CounterTile
-          count={summary.needingReview}
-          label="Revisões"
-          active={quickFilter === "revisoes"}
-          onClick={() => onQuickFilterChange(quickFilter === "revisoes" ? "todos" : "revisoes")}
-        />
-        <CounterTile
-          count={summary.withoutSync}
-          label="Sem sincronização"
-          active={quickFilter === "sem_sincronizacao"}
-          onClick={() => onQuickFilterChange(quickFilter === "sem_sincronizacao" ? "todos" : "sem_sincronizacao")}
-        />
-        {/* Etapa "MITZA 2.0 — Fase G": relatório pendente é a mesma
-            pergunta operacional das outras 3 ("precisa da minha atenção
-            agora?") — a lista de Relatórios deixou de ser um pilar de
-            navegação, mas a visibilidade de pendência continua existindo,
-            só que aqui, como mais um filtro rápido da mesma fila. */}
-        <CounterTile
-          count={summary.withPendingReport}
-          label="Relatório pendente"
-          active={quickFilter === "relatorio_pendente"}
-          onClick={() => onQuickFilterChange(quickFilter === "relatorio_pendente" ? "todos" : "relatorio_pendente")}
         />
       </div>
 

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
+import { MetricDeviation } from "@/components/workspace/metric-deviation";
 import { formatCurrency } from "@/lib/format";
 import { MIN_RELIABLE_RESULT_COUNT } from "@/lib/operation-health-thresholds";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
-import { formatDataFreshnessLabel } from "@/lib/operation-triage";
+import { formatAcompanhamentoLabel } from "@/lib/metric-diagnostics";
 import type { ClientOperationalState } from "@/lib/client-operational-state";
 
 const countFormatter = new Intl.NumberFormat("pt-BR");
@@ -16,38 +17,33 @@ function formatWholeCurrency(value: number): string {
   return `R$ ${Math.round(value).toLocaleString("pt-BR")}`;
 }
 
-function Stat({ label, value, title }: { label: string; value: string; title?: string }) {
-  return (
-    <div className="min-w-0 flex-1" title={title}>
-      <p className="truncate text-[11px] text-muted-foreground">{label}</p>
-      <p className="truncate text-xl font-semibold tabular-nums text-foreground">{value}</p>
-    </div>
-  );
-}
-
 /**
- * Card da Operação (Etapa "Fila de Prioridades 1.0") — a tela deixou de
- * comparar planejado vs. realizado, mostrar tendência ou qualquer selo de
- * severidade: só os três números do estado atual da conta (investimento,
- * resultado principal, custo por resultado), grandes o bastante pra ler em
- * poucos segundos, e a metadata mínima (última atualização + pendências).
- * `evaluation.primaryReason` volta a aparecer (uma linha, sem quebrar) logo
- * abaixo do nome — é o contexto mínimo pra responder "por que este cliente
- * está na fila?" sem reintroduzir nenhuma comparação longa. O motivo
- * SECUNDÁRIO continua fora do card (`collectAccountHealthReasons` nunca é
- * chamado aqui). `evaluation` (Motor de Saúde) continua sendo a única
- * fonte dos valores — a ordenação da fila (fora deste componente) também
- * continua vindo dele — só que a UI não narra mais desvio/severidade dos
- * três números, apenas o valor bruto atual.
+ * Card da Operação (Etapa "Novo Conceito de Monitoramento Operacional") —
+ * o diagnóstico deixou de ser uma frase abaixo do nome
+ * (`evaluation.primaryReason`) e passa a acontecer diretamente em cada
+ * métrica, através do componente único de desvio (`MetricDeviation`):
+ * valor + desvio % + seta + cor, sempre pela regra do próprio indicador
+ * (Motor de Diagnóstico Único, `lib/metric-diagnostics.ts`). Resultado e
+ * Pendências ainda não têm uma regra de desvio própria no motor — aparecem
+ * como valor simples, sem seta/cor, até essa etapa acontecer. O rodapé
+ * (antes "Última atualização", baseado em sincronização de dados) agora
+ * mostra Acompanhamento — há quanto tempo o gestor registrou a última
+ * otimização, o eixo que faz o card responder não só "como está a conta"
+ * mas "alguém está cuidando dela".
+ *
+ * ⚠️ PROVISÓRIO: `diagnostics.acompanhamento` hoje é alimentado por
+ * `account_reviews`/`account_review_cadences` (a fonte de "revisão de
+ * conta" que já existia), NUNCA pela estrutura real de Otimizações — essa
+ * ainda não foi implementada (congelada pra uma etapa futura). Quando ela
+ * existir, só `client-operational-state-data.ts` precisa trocar de fonte;
+ * este componente e o motor (`metric-diagnostics.ts`) não mudam.
  */
-export function OperationClientCard({ card, todayStr }: { card: ClientOperationalState; todayStr: string }) {
-  const { evaluation } = card;
-  const freshnessLabel = formatDataFreshnessLabel(card.lastDataSyncAt, todayStr);
+export function OperationClientCard({ card }: { card: ClientOperationalState }) {
+  const { diagnostics, evaluation } = card;
   const goalConfig = card.performanceGoal ? PERFORMANCE_GOALS[card.performanceGoal] : null;
 
   const investment = evaluation.dimensions.investment;
   const results = evaluation.dimensions.results;
-  const cost = evaluation.dimensions.cost;
 
   const investmentValue = investment.hasSyncedData ? formatWholeCurrency(investment.actual) : "—";
   const investmentTitle = investment.hasSyncedData ? undefined : "Sem dados de investimento";
@@ -59,12 +55,18 @@ export function OperationClientCard({ card, todayStr }: { card: ClientOperationa
       ? "Sem resultados registrados"
       : undefined;
 
-  const costValue = !cost.hasReliableSample || cost.actual === null ? "—" : formatCurrency(cost.actual);
-  const costTitle = !cost.hasReliableSample
-    ? `Aguardando amostra suficiente — ${cost.sampleSize} de ${MIN_RELIABLE_RESULT_COUNT}`
-    : cost.actual === null
-      ? "Sem dados de custo"
+  const costValue = diagnostics.cpa === null ? "—" : formatCurrency(diagnostics.cpa.value);
+  const costTitle =
+    diagnostics.cpa === null
+      ? results.hasPerformanceData
+        ? `Aguardando amostra suficiente — mínimo de ${MIN_RELIABLE_RESULT_COUNT} resultados`
+        : "Sem dados de custo"
       : undefined;
+
+  const pendenciasTitle = diagnostics.pendencias.items.map((item) => item.label).join(", ") || undefined;
+
+  const acompanhamentoLabel = formatAcompanhamentoLabel(diagnostics.acompanhamento);
+  const acompanhamentoClass = diagnostics.acompanhamento.isOverdue ? "text-overview-danger" : "text-muted-foreground";
 
   return (
     <Link
@@ -75,19 +77,34 @@ export function OperationClientCard({ card, todayStr }: { card: ClientOperationa
 
       <div className="flex w-64 min-w-0 shrink-0 flex-col">
         <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
-        <p className="text-xs text-muted-foreground">{evaluation.primaryReason}</p>
-        <p className="text-[11px] text-muted-foreground/80">
-          {freshnessLabel}
-          {card.overdueTasksCount > 0
-            ? ` · ${card.overdueTasksCount} tarefa${card.overdueTasksCount > 1 ? "s" : ""} pendente${card.overdueTasksCount > 1 ? "s" : ""}`
-            : ""}
-        </p>
+        <p className={`text-[11px] ${acompanhamentoClass}`}>{acompanhamentoLabel}</p>
       </div>
 
       <div className="flex flex-1 items-center gap-6">
-        <Stat label="Investimento" value={investmentValue} title={investmentTitle} />
-        <Stat label={goalConfig?.resultMetricLabel ?? "Resultado"} value={resultValue} title={resultTitle} />
-        <Stat label={goalConfig?.costMetricShortLabel ?? "Custo"} value={costValue} title={costTitle} />
+        <MetricDeviation
+          label="Investimento"
+          value={investmentValue}
+          diagnostic={investment.hasSyncedData ? diagnostics.investment : null}
+          title={investmentTitle}
+        />
+        <MetricDeviation
+          label={goalConfig?.resultMetricLabel ?? "Resultado"}
+          value={resultValue}
+          diagnostic={null}
+          title={resultTitle}
+        />
+        <MetricDeviation
+          label={goalConfig?.costMetricShortLabel ?? "Custo"}
+          value={costValue}
+          diagnostic={diagnostics.cpa}
+          title={costTitle}
+        />
+        <MetricDeviation
+          label="Pendências"
+          value={String(diagnostics.pendencias.count)}
+          diagnostic={null}
+          title={pendenciasTitle}
+        />
       </div>
     </Link>
   );

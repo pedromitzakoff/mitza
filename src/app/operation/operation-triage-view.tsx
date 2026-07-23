@@ -4,52 +4,38 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { formatMonthLabel } from "@/lib/format";
 import { shiftOperationMonth, type OperationTriageSummary } from "@/lib/operation-triage";
+import { getActiveDiagnosticFilters } from "@/lib/metric-diagnostics";
 import type { ClientOperationalState } from "@/lib/client-operational-state";
 import { OperationClientCard } from "./operation-client-card";
 import { OperationFilterBar, type OperationQuickFilter } from "./operation-filter-bar";
 
 /**
- * Centro de Triagem da Operação (Etapa "Fila de Prioridades 1.0") — não é
- * um dashboard, é uma FILA DE TRABALHO. Um dashboard tenta mostrar tudo;
- * esta tela mostra primeiro quem exige ação (ordenação já resolvida pela
- * camada de domínio — `sortClientOperationalStates`, nunca recalculada
- * aqui) e só depois o estado atual da conta (investimento, resultado,
- * custo). Nenhuma comparação planejado-vs-realizado, tendência ou selo de
- * severidade aparece mais nesta tela — isso continua existindo na página
- * do cliente, que é onde a análise detalhada acontece.
+ * Centro de Triagem da Operação (Etapa "Novo Conceito de Monitoramento
+ * Operacional") — a pergunta que a tela responde: "quais clientes
+ * precisam da minha atenção agora, e por quê?". Filtros e diagnósticos por
+ * cliente vêm todos do Motor de Diagnóstico Único (`metric-diagnostics.ts`)
+ * — nunca de um vocabulário subjetivo (Saudável/Atenção/Crítico). Ordenação
+ * da fila continua vindo de `sortClientOperationalStates` (fora deste
+ * componente), sem mudança nesta etapa.
  */
 export function OperationTriageView({
   clients,
   monthParam,
   monthLastUpdatedLabel,
   summary,
-  todayStr,
-  pendingReportClientIds,
 }: {
   clients: ClientOperationalState[];
   monthParam: string;
   monthLastUpdatedLabel: string;
   summary: OperationTriageSummary;
-  todayStr: string;
-  /** Clientes com relatório mensal ainda não finalizado (Etapa "MITZA 2.0 —
-   * Fase G") — array (não Set) porque cruza a fronteira Server→Client
-   * Component; convertido pra Set aqui só pra consulta O(1). */
-  pendingReportClientIds: string[];
 }) {
   const [quickFilter, setQuickFilter] = useState<OperationQuickFilter>("todos");
   const [query, setQuery] = useState("");
-  const pendingReportSet = useMemo(() => new Set(pendingReportClientIds), [pendingReportClientIds]);
 
   const filteredClients = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return clients.filter((card) => {
-      if (quickFilter === "pendencias" && card.overdueTasksCount === 0) return false;
-      if (quickFilter === "revisoes") {
-        const review = card.evaluation.dimensions.review;
-        if (!(review.enabled && review.status !== "nenhum")) return false;
-      }
-      if (quickFilter === "sem_sincronizacao" && card.evaluation.dimensions.investment.hasSyncedData) return false;
-      if (quickFilter === "relatorio_pendente" && !pendingReportSet.has(card.clientId)) return false;
+      if (quickFilter !== "todos" && !getActiveDiagnosticFilters(card.diagnostics).includes(quickFilter)) return false;
       if (normalizedQuery) {
         const matchesName = card.clientName.toLowerCase().includes(normalizedQuery);
         const matchesManager = (card.managerName ?? "").toLowerCase().includes(normalizedQuery);
@@ -57,7 +43,7 @@ export function OperationTriageView({
       }
       return true;
     });
-  }, [clients, quickFilter, query, pendingReportSet]);
+  }, [clients, quickFilter, query]);
 
   const prevMonthHref = `/operation?month=${shiftOperationMonth(monthParam, -1)}`;
   const nextMonthHref = `/operation?month=${shiftOperationMonth(monthParam, 1)}`;
@@ -103,7 +89,7 @@ export function OperationTriageView({
         <ul className="flex flex-col gap-1">
           {filteredClients.map((card) => (
             <li key={card.clientId}>
-              <OperationClientCard card={card} todayStr={todayStr} />
+              <OperationClientCard card={card} />
             </li>
           ))}
         </ul>

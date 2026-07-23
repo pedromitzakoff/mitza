@@ -1,7 +1,6 @@
-import { formatAgencyDateTime } from "@/lib/format";
-import { APP_TIMEZONE } from "@/lib/today";
 import type { HealthStatus } from "@/lib/account-health-engine";
 import type { ClientOperationalState } from "@/lib/client-operational-state";
+import { getActiveDiagnosticFilters } from "@/lib/metric-diagnostics";
 
 /**
  * Suporte da tela Operação (fila de triagem, ordenação/contagem/navegação
@@ -44,88 +43,36 @@ export function bandFromHealthStatus(status: HealthStatus): OperationTriageBand 
   return BAND_BY_HEALTH_STATUS[status];
 }
 
-/** Um cliente conta como "precisa de revisão" quando a cadência está ativa
- * (`enabled`) e já ultrapassou o prazo (`status !== "nenhum"`) — mesmo
- * critério que já decidia a severidade da dimensão de revisão no motor,
- * nunca recalculado aqui. */
-function needsReview(card: ClientOperationalState): boolean {
-  const review = card.evaluation.dimensions.review;
-  return review.enabled && review.status !== "nenhum";
-}
-
 export interface OperationTriageSummary {
   totalClients: number;
-  /** Clientes com ao menos 1 tarefa pendente/atrasada. */
-  withPendingTasks: number;
-  /** Clientes com revisão de conta em atraso. */
-  needingReview: number;
-  /** Clientes sem nenhum dado de investimento sincronizado neste mês. */
-  withoutSync: number;
-  /** Clientes cujo relatório mensal ainda não foi finalizado (Etapa "MITZA
-   * 2.0 — Fase G"). Um relatório pendente é, por definição, algo que exige
-   * atenção do gestor — a mesma pergunta que a Operação já responde pras
-   * outras 3 contagens, nunca uma tela própria (a lista de Relatórios saiu
-   * da navegação principal nesta fase). */
-  withPendingReport: number;
+  /** Clientes com CPA fora da meta (Motor de Diagnóstico Único). */
+  withCpaOff: number;
+  /** Clientes com investimento fora do ritmo esperado (qualquer direção). */
+  withInvestmentOff: number;
+  /** Clientes com ao menos 1 pendência operacional (tarefa aberta). */
+  withPendencias: number;
 }
 
 /**
- * Contadores operacionais do cabeçalho da Operação (Etapa "Fila de
- * Prioridades 1.0") — substitui os antigos contadores por banda de saúde/
- * dimensão de desvio, que exigiam entender o vocabulário do Motor de Saúde
- * pra fazer sentido. Estes só respondem perguntas operacionais diretas
- * ("quantos clientes têm pendência?"), sem nenhuma banda/severidade
- * envolvida.
- *
- * `pendingReportClientIds` (Etapa "MITZA 2.0 — Fase G") vem de fora — status
- * de relatório mensal não é uma dimensão do Motor de Saúde, é um dado
- * próprio de `monthly_reports`, resolvido por quem chama (`operation/page.tsx`),
- * nunca recalculado aqui.
+ * Contadores operacionais do cabeçalho da Operação (Etapa "Novo Conceito de
+ * Monitoramento Operacional") — substitui os antigos contadores
+ * (pendências/revisões/sem sincronização/relatório pendente, que
+ * misturavam critérios de naturezas diferentes) pelos três diagnósticos
+ * objetivos do Motor Único: CPA, Investimento, Pendências. Nunca reimplementa
+ * o critério de "fora do esperado" aqui — sempre via
+ * `getActiveDiagnosticFilters` (metric-diagnostics.ts).
  */
-export function summarizeOperationTriage(
-  cards: ClientOperationalState[],
-  pendingReportClientIds: ReadonlySet<string>,
-): OperationTriageSummary {
-  let withPendingTasks = 0;
-  let needingReview = 0;
-  let withoutSync = 0;
-  let withPendingReport = 0;
+export function summarizeOperationTriage(cards: ClientOperationalState[]): OperationTriageSummary {
+  let withCpaOff = 0;
+  let withInvestmentOff = 0;
+  let withPendencias = 0;
   for (const card of cards) {
-    if (card.overdueTasksCount > 0) withPendingTasks++;
-    if (needsReview(card)) needingReview++;
-    if (!card.evaluation.dimensions.investment.hasSyncedData) withoutSync++;
-    if (pendingReportClientIds.has(card.clientId)) withPendingReport++;
+    const active = getActiveDiagnosticFilters(card.diagnostics);
+    if (active.includes("cpa")) withCpaOff++;
+    if (active.includes("investimento")) withInvestmentOff++;
+    if (active.includes("pendencias")) withPendencias++;
   }
-  return { totalClients: cards.length, withPendingTasks, needingReview, withoutSync, withPendingReport };
-}
-
-const freshnessDayFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TIMEZONE });
-
-function daysBetweenDateStrings(earlier: string, later: string): number {
-  const a = new Date(`${earlier}T00:00:00Z`);
-  const b = new Date(`${later}T00:00:00Z`);
-  return Math.round((b.getTime() - a.getTime()) / 86_400_000);
-}
-
-/**
- * "Atualizado hoje às 09:32" / "Atualizado ontem às 18:04" / "Sem
- * atualização há N dias" — indicador de confiança nos números exibidos
- * (aumenta a confiança do gestor de que o card reflete a realidade, não um
- * cache velho). A partir do `lastDataSyncAt` (`daily_spend.synced_at` mais
- * recente do cliente). O horário só aparece pra hoje/ontem (onde é preciso
- * o bastante pra ser útil); atualizações mais antigas mostram só a
- * contagem de dias. Datas comparadas no fuso da agência (`APP_TIMEZONE`),
- * nunca UTC cru — mesma régua de `todayDateString`.
- */
-export function formatDataFreshnessLabel(lastSyncedAt: string | null, todayStr: string): string {
-  if (!lastSyncedAt) return "Sem dados sincronizados";
-  const syncedDate = new Date(lastSyncedAt);
-  const syncedDateStr = freshnessDayFormatter.format(syncedDate);
-  const daysAgo = daysBetweenDateStrings(syncedDateStr, todayStr);
-  const time = formatAgencyDateTime(syncedDate).time;
-  if (daysAgo <= 0) return `Atualizado hoje às ${time}`;
-  if (daysAgo === 1) return `Atualizado ontem às ${time}`;
-  return `Sem atualização há ${daysAgo} dias`;
+  return { totalClients: cards.length, withCpaOff, withInvestmentOff, withPendencias };
 }
 
 /** Desloca um parâmetro de mês (`YYYY-MM-01`) em N meses — helper local e
