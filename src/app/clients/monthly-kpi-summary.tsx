@@ -1,9 +1,9 @@
 import Link from "next/link";
 import type { PerformanceSummary } from "@/lib/performance";
-import { deriveMonthlyKpiTexts, getLatestPerformanceUpdateText } from "@/lib/performance";
+import { deriveMonthlyKpiTexts } from "@/lib/performance";
 import { evaluateCpaDiagnostic, METRIC_DEVIATION_ATTENTION_THRESHOLD } from "@/lib/metric-diagnostics";
 import type { PerformanceGoal } from "@/lib/performance-goals";
-import { formatCurrency, formatPercent, formatShortDateTime } from "@/lib/format";
+import { formatCurrency, formatPercent } from "@/lib/format";
 
 function Kpi({ label, value, auxiliary }: { label: string; value: string; auxiliary?: string | null }) {
   return (
@@ -43,6 +43,11 @@ function Kpi({ label, value, auxiliary }: { label: string; value: string; auxili
  * pra filtros/alertas em outras telas, continuam ignorando essa direção —
  * nenhuma tela de priorização passa a contar "abaixo da meta" como
  * pendência por causa desta linha).
+ *
+ * Etapa "Dois relógios no cabeçalho": o texto de proveniência/sincronização
+ * (`getLatestPerformanceUpdateText`, "Meta · Sincronizado em...") saiu
+ * daqui — mesmo dado agora vive só no cabeçalho da página do cliente
+ * ("Última atualização da performance"), nunca duplicado nos dois lugares.
  */
 export function MonthlyKpiSummary({
   monthActual,
@@ -64,10 +69,6 @@ export function MonthlyKpiSummary({
     performanceSummary,
     formatCurrency,
   );
-  const updateText =
-    performanceGoal && performanceSummary
-      ? getLatestPerformanceUpdateText(performanceSummary.latestSource, performanceSummary.latestUpdatedAt, formatShortDateTime)
-      : null;
 
   const metaValue = targetCostPerResult !== null ? formatCurrency(targetCostPerResult) : "—";
   const costDiagnostic = evaluateCpaDiagnostic(performanceSummary?.costPerResult ?? null, targetCostPerResult);
@@ -106,7 +107,6 @@ export function MonthlyKpiSummary({
           Configurar objetivo
         </Link>
       )}
-      {updateText && <p className="mt-1.5 text-[11px] text-muted-foreground">{updateText}</p>}
     </div>
   );
 }

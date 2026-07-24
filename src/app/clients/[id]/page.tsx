@@ -27,7 +27,7 @@ import {
 } from "@/lib/monthly-budget";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatCurrency, formatMonthLabel, formatRelationshipDuration, formatRelativeDateTime } from "@/lib/format";
+import { formatCurrency, formatMonthLabel, formatRelationshipDuration, formatShortDateTime } from "@/lib/format";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
 import { fetchClientOperationalHistory } from "@/lib/client-operational-history";
 import { computeClientUpdateStatus } from "@/lib/client-updates";
@@ -796,14 +796,25 @@ export default async function ClientPage({
     .filter(Boolean)
     .join(" · ");
 
-  // "Última revisão" no cabeçalho da conta (antes vivia em
-  // AccountActivitySummary, junto de "Próxima reunião"/"Próxima entrega" —
-  // removidas por não fazerem mais parte do fluxo operacional). Mesmo dado
-  // de sempre (lastOptimization, calculado acima), só reposicionado.
-  const lastOptimizationLabel = isCurrentMonth ? "Última revisão" : `Última revisão em ${monthLabel}`;
+  // Cabeçalho da conta — dois indicadores independentes (Etapa "Dois
+  // relógios no cabeçalho"): "Última otimização" responde "a operação está
+  // sendo acompanhada?" (evento do GESTOR, mesma fonte de sempre,
+  // `lastOptimization`/`account_reviews.reviewed_at`, calculado acima — só
+  // reposicionado, antes vivia em AccountActivitySummary junto de "Próxima
+  // reunião"/"Próxima entrega", removidas por não fazerem mais parte do
+  // fluxo operacional). "Última atualização da performance" responde "os
+  // números que estou vendo estão atualizados?" (evento da SINCRONIZAÇÃO de
+  // dados, `performance_records.source_updated_at`, já resolvido por
+  // `monthPerformanceSummary.latestUpdatedAt`/`latestSource` — o mesmo dado
+  // que antes alimentava o rodapé discreto do card de KPIs, ver
+  // `monthly-kpi-summary.tsx`: nunca duplicar a mesma informação em dois
+  // lugares da página, por isso saiu de lá). Nunca confundir os dois: um
+  // cliente pode estar sendo otimizado ativamente com dados de performance
+  // desatualizados, e vice-versa.
+  const lastOptimizationLabel = isCurrentMonth ? "Última otimização" : `Última otimização em ${monthLabel}`;
   const lastOptimizationValue = lastOptimization
-    ? formatRelativeDateTime(lastOptimization.reviewedAt, today)
-    : "Sem revisão registrada";
+    ? formatShortDateTime(lastOptimization.reviewedAt).replace(" às ", " · ")
+    : "Sem otimização registrada";
   const lastOptimizationDetail = lastOptimization
     ? lastOptimization.outcome === "OPTIMIZATION_PERFORMED"
       ? lastOptimization.optimizationTypes.length === 1
@@ -815,6 +826,21 @@ export default async function ClientPage({
         ? lastOptimization.issueDescription
         : null
     : null;
+
+  const lastPerformanceUpdateLabel = isCurrentMonth
+    ? "Última atualização da performance"
+    : `Atualização da performance em ${monthLabel}`;
+  const lastPerformanceUpdateValue = monthPerformanceSummary?.latestUpdatedAt
+    ? formatShortDateTime(monthPerformanceSummary.latestUpdatedAt).replace(" às ", " · ")
+    : "Sem sincronização registrada";
+  const lastPerformanceUpdateSourceLabel =
+    monthPerformanceSummary?.latestSource === "manual"
+      ? "Manual"
+      : monthPerformanceSummary?.latestSource === "meta"
+        ? "Meta"
+        : monthPerformanceSummary?.latestSource === "google"
+          ? "Google"
+          : null;
 
   // Etapa "MITZA 2.0 — Fase G": relatório mensal só é buscado quando a aba
   // Relatórios está aberta (nenhuma query extra nas outras abas) —
@@ -871,17 +897,28 @@ export default async function ClientPage({
             <p className="mt-1 text-sm text-muted-foreground">{identitySecondaryLine}</p>
           </div>
         </div>
-        <div className="flex flex-col items-start gap-0.5 sm:items-end sm:text-right">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            {lastOptimizationLabel}
-          </p>
-          <p className="text-sm text-foreground">{lastOptimizationValue}</p>
-          {lastOptimization && (
-            <p className="text-xs text-muted-foreground">
-              {ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}
-              {lastOptimizationDetail ? ` · ${lastOptimizationDetail}` : ""}
+        <div className="flex flex-wrap items-start gap-4 sm:items-end">
+          <div className="flex flex-col items-start gap-0.5 sm:items-end sm:text-right">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {lastOptimizationLabel}
             </p>
-          )}
+            <p className="text-sm text-foreground">{lastOptimizationValue}</p>
+            {lastOptimization && (
+              <p className="text-xs text-muted-foreground">
+                {ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}
+                {lastOptimizationDetail ? ` · ${lastOptimizationDetail}` : ""}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col items-start gap-0.5 sm:items-end sm:text-right">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {lastPerformanceUpdateLabel}
+            </p>
+            <p className="text-sm text-foreground">{lastPerformanceUpdateValue}</p>
+            {lastPerformanceUpdateSourceLabel && (
+              <p className="text-xs text-muted-foreground">{lastPerformanceUpdateSourceLabel}</p>
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {client.dashboard_url && (
