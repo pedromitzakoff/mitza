@@ -28,7 +28,7 @@ import {
 } from "@/lib/monthly-budget";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatCurrency, formatMonthLabel, formatRelationshipDuration, formatRelativeDateTime } from "@/lib/format";
+import { formatCurrency, formatMonthLabel, formatRelativeDateTime } from "@/lib/format";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
 import { fetchClientOperationalHistory } from "@/lib/client-operational-history";
 import { computeClientUpdateStatus } from "@/lib/client-updates";
@@ -787,15 +787,15 @@ export default async function ClientPage({
   // desta mesma página (o relatório deixou de ser uma rota própria) —
   // nunca mais `/reports/${client.id}`.
   const reportHref = `/clients/${client.id}?area=relatorios${monthQueryParam ? `&month=${monthQueryParam}` : ""}`;
-  const gestorLabel = client.primary_manager ? `Gestor: ${client.primary_manager.name}` : "Sem gestor atribuído";
-  const relationshipLabel = formatRelationshipDuration(client.contract_start_date, today);
-  const identitySecondaryLine = [
-    gestorLabel,
-    client.meta_ad_account_id ? `Conta Meta: ${client.meta_ad_account_id}` : null,
-    relationshipLabel,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  // Etapa "Cabeçalho enxuto": a segunda linha do cabeçalho responde só
+  // "quem é o responsável?" — conta Meta (`meta_ad_account_id`) e tempo de
+  // relacionamento (`contract_start_date`) são dados técnicos/administrativos
+  // que deixam de aparecer aqui (nenhum dado removido do banco, nenhuma
+  // query alterada — só a renderização no cabeçalho principal). Continuam
+  // disponíveis pra uma futura tela de Configurações/Editar.
+  const identitySecondaryLine = client.primary_manager
+    ? `Gestor: ${client.primary_manager.name}`
+    : "Sem gestor atribuído";
 
   // Cabeçalho da conta — dois indicadores independentes (Etapa "Dois
   // relógios no cabeçalho"): "Última otimização" responde "a operação está
