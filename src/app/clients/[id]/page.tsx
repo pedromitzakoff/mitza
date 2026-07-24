@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ClipboardCheck, BarChart3 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { getCurrentProfile } from "@/lib/auth";
@@ -27,7 +28,7 @@ import {
 } from "@/lib/monthly-budget";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatCurrency, formatMonthLabel, formatRelationshipDuration, formatShortDateTime } from "@/lib/format";
+import { formatCurrency, formatMonthLabel, formatRelationshipDuration, formatRelativeDateTime } from "@/lib/format";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
 import { fetchClientOperationalHistory } from "@/lib/client-operational-history";
 import { computeClientUpdateStatus } from "@/lib/client-updates";
@@ -813,8 +814,8 @@ export default async function ClientPage({
   // desatualizados, e vice-versa.
   const lastOptimizationLabel = isCurrentMonth ? "Última otimização" : `Última otimização em ${monthLabel}`;
   const lastOptimizationValue = lastOptimization
-    ? formatShortDateTime(lastOptimization.reviewedAt).replace(" às ", " · ")
-    : "Sem otimização registrada";
+    ? formatRelativeDateTime(lastOptimization.reviewedAt, today)
+    : "Nenhuma otimização registrada";
   const lastOptimizationDetail = lastOptimization
     ? lastOptimization.outcome === "OPTIMIZATION_PERFORMED"
       ? lastOptimization.optimizationTypes.length === 1
@@ -831,7 +832,7 @@ export default async function ClientPage({
     ? "Última atualização da performance"
     : `Atualização da performance em ${monthLabel}`;
   const lastPerformanceUpdateValue = monthPerformanceSummary?.latestUpdatedAt
-    ? formatShortDateTime(monthPerformanceSummary.latestUpdatedAt).replace(" às ", " · ")
+    ? formatRelativeDateTime(monthPerformanceSummary.latestUpdatedAt, today)
     : "Sem sincronização registrada";
   const lastPerformanceUpdateSourceLabel =
     monthPerformanceSummary?.latestSource === "manual"
@@ -897,26 +898,28 @@ export default async function ClientPage({
             <p className="mt-1 text-sm text-muted-foreground">{identitySecondaryLine}</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-start gap-4 sm:items-end">
-          <div className="flex flex-col items-start gap-0.5 sm:items-end sm:text-right">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="flex flex-col items-start gap-0.5">
+            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <ClipboardCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
               {lastOptimizationLabel}
             </p>
-            <p className="text-sm text-foreground">{lastOptimizationValue}</p>
+            <p className="text-base font-semibold text-foreground">{lastOptimizationValue}</p>
             {lastOptimization && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[11px] text-muted-foreground">
                 {ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}
                 {lastOptimizationDetail ? ` · ${lastOptimizationDetail}` : ""}
               </p>
             )}
           </div>
-          <div className="flex flex-col items-start gap-0.5 sm:items-end sm:text-right">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="flex flex-col items-start gap-0.5">
+            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <BarChart3 className="h-3 w-3 shrink-0" aria-hidden="true" />
               {lastPerformanceUpdateLabel}
             </p>
-            <p className="text-sm text-foreground">{lastPerformanceUpdateValue}</p>
+            <p className="text-base font-semibold text-foreground">{lastPerformanceUpdateValue}</p>
             {lastPerformanceUpdateSourceLabel && (
-              <p className="text-xs text-muted-foreground">{lastPerformanceUpdateSourceLabel}</p>
+              <p className="text-[11px] text-muted-foreground">Origem: {lastPerformanceUpdateSourceLabel}</p>
             )}
           </div>
         </div>
