@@ -8,6 +8,7 @@ import { todayDateString } from "@/lib/today";
 import { computeNextAction } from "@/lib/next-action";
 import { CommentThread, type CommentItem } from "./comment-thread";
 import { ActivitySection } from "./activity-section";
+import { SprintReviewsSection } from "./sprint-reviews-section";
 import type { TaskListItem } from "./task-row";
 import { resetSprintSpendSourceAction } from "./sprint-actions";
 import { updateSprintPerformanceAction } from "./performance-actions";
@@ -426,6 +427,7 @@ export function SprintCardBody({
   taskManagers,
   defaultAssigneeName,
   hideNextAction,
+  hideTaskList,
   canOperate = true,
 }: {
   sprint: SprintFinancials;
@@ -485,6 +487,17 @@ export function SprintCardBody({
    * só a renderização deste bloco é omitida; o painel Sprints não passa
    * esta prop, então continua exatamente como antes. */
   hideNextAction?: boolean;
+  /** Etapa "Tarefas e Sprints separadas": a página do cliente passa `true`
+   * pra que a sprint pare de exibir a tabela de tarefas — a gestão de
+   * tarefas do mês inteiro migrou pro módulo `MonthTasksPanel` (fora da
+   * sprint), então repeti-la aqui seria a mesma tarefa em dois lugares. A
+   * lista de otimizações continua aparecendo normalmente (`SprintReviewsSection`
+   * no lugar de `ActivitySection`) — só a metade "tarefa" da fila unificada
+   * sai. `tasks` continua obrigatório mesmo assim: os contadores do
+   * `<summary>` (tarefas concluídas/total) nunca dependeram de renderizar a
+   * lista, só do array. Omitir preserva o comportamento de sempre — só a
+   * tela Sprints (`/sprints`) não passa esta prop. */
+  hideTaskList?: boolean;
 }) {
   const sourceTimestampText = describeSpendSourceTimestamp(
     sprint.spendSource,
@@ -621,18 +634,22 @@ export function SprintCardBody({
             próprios) — é o motivo real pelo qual alguém abre uma Sprint,
             por isso continua sempre visível, nunca atrás de disclosure. */}
         <div className="mt-1.5">
-          <ActivitySection
-            tasks={tasks}
-            clientId={clientId}
-            sprintId={sprint.sprintId}
-            taskHrefPrefix={taskHrefPrefix}
-            managers={taskManagers}
-            defaultAssigneeName={defaultAssigneeName}
-            isAdmin={isAdmin}
-            reviews={accountReviews}
-            reviewHrefPrefix={reviewHrefPrefix}
-            canOperate={canOperate}
-          />
+          {hideTaskList ? (
+            <SprintReviewsSection reviews={accountReviews ?? []} reviewHrefPrefix={reviewHrefPrefix} />
+          ) : (
+            <ActivitySection
+              tasks={tasks}
+              clientId={clientId}
+              sprintId={sprint.sprintId}
+              taskHrefPrefix={taskHrefPrefix}
+              managers={taskManagers}
+              defaultAssigneeName={defaultAssigneeName}
+              isAdmin={isAdmin}
+              reviews={accountReviews}
+              reviewHrefPrefix={reviewHrefPrefix}
+              canOperate={canOperate}
+            />
+          )}
         </div>
 
         {/* MITZA Operational Card Architecture 2.0: Performance virou um
@@ -760,6 +777,7 @@ export function SprintCard({
   flat,
   accordionRowsPrototype,
   hideNextAction,
+  hideTaskList,
   canOperate = true,
 }: {
   sprint: SprintFinancials;
@@ -808,6 +826,8 @@ export function SprintCard({
   flat?: boolean;
   /** Etapa "MITZA Operational Workspace 1.0" — ver doc de `SprintCardBody`. */
   hideNextAction?: boolean;
+  /** Etapa "Tarefas e Sprints separadas" — ver doc de `SprintCardBody`. */
+  hideTaskList?: boolean;
 }) {
   const tasksDone = tasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
   const isCurrent = sprint.temporalStatus === "atual";
@@ -1000,6 +1020,7 @@ export function SprintCard({
               performance={performance}
               returnTo={returnTo}
               hideNextAction={hideNextAction}
+              hideTaskList={hideTaskList}
               canOperate={canOperate}
             />
           </div>
@@ -1026,6 +1047,7 @@ export function SprintCard({
           performance={performance}
           returnTo={returnTo}
           hideNextAction={hideNextAction}
+          hideTaskList={hideTaskList}
           canOperate={canOperate}
         />
       )}
