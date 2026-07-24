@@ -19,6 +19,7 @@ import {
   ACTIVITY_COL_ACTIONS,
   ACTIVITY_COL_ASSIGNEE,
   ACTIVITY_COL_DATE,
+  ACTIVITY_COL_SELECT,
   ACTIVITY_COL_SPRINT,
   ACTIVITY_COL_STATUS,
   ACTIVITY_COL_TYPE,
@@ -320,6 +321,8 @@ export function TaskRow({
   canOperate = true,
   sprintLabel,
   description,
+  selected,
+  onToggleSelect,
 }: {
   task: TaskListItem;
   clientId: string;
@@ -377,6 +380,12 @@ export function TaskRow({
    * "Tarefas de {mês}" passa isto (é a única lista que expõe descrição sem
    * precisar expandir/abrir a tarefa). */
   description?: string | null;
+  /** Etapa "Seleção em massa e recolhimento" — presença de `onToggleSelect`
+   * (não `selected` sozinho) decide se a coluna de checkbox existe: mesmo
+   * padrão de `onToggleExpand`/`isExpanded` acima. Só `MonthTasksPanel`
+   * passa isto. */
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const effectiveStatus = effectiveTaskStatus(task);
   const [localOptimisticDone, setLocalOptimisticDone] = useOptimistic(effectiveStatus === "feito");
@@ -447,6 +456,17 @@ export function TaskRow({
         />
       )}
       <div className={`flex items-center gap-2.5 transition-opacity duration-150 ${rowOpacityClass}`}>
+        {onToggleSelect && (
+          <span className={ACTIVITY_COL_SELECT}>
+            <input
+              type="checkbox"
+              checked={selected ?? false}
+              onChange={onToggleSelect}
+              aria-label={`Selecionar "${task.title}"`}
+              className="relative z-10 h-3.5 w-3.5 shrink-0 cursor-pointer accent-brand"
+            />
+          </span>
+        )}
         <span className={ACTIVITY_COL_STATUS}>
           {isDone ? (
             <span className="mitza-check-in flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] leading-none text-green-700 dark:bg-green-950 dark:text-green-300">

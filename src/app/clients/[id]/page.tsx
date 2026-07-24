@@ -1119,11 +1119,13 @@ export default async function ClientPage({
               `MonthTasksPanel`. */}
           <div className="mt-3">
             <MonthTasksPanel
+              key={monthParam}
               monthLabel={monthLabel}
               tasks={monthTaskRows}
               taskSprintLabels={taskSprintLabels}
               clientId={client.id}
               managers={managers ?? []}
+              isAdmin={isAdmin}
               canOperate={canOperate}
             />
           </div>
