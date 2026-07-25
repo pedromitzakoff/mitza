@@ -826,19 +826,6 @@ export default async function ClientPage({
   const monthTaskRows = [...sortedSprints.flatMap((sprint) => tasksBySprintId.get(sprint.sprintId) ?? []), ...unlinkedTasks];
   const monthTasksTotal = monthTaskRows.length;
   const monthTasksDone = monthTaskRows.filter((task) => effectiveTaskStatus(task, today) === "feito").length;
-  // Etapa "Tarefas e Sprints separadas": `MonthTasksPanel` mostra a sprint
-  // de cada tarefa só como referência (nunca agrupamento) — este mapa
-  // resolve `taskId -> período da sprint` pra ele, reaproveitando
-  // exatamente os mesmos `sortedSprints`/`tasksBySprintId` de sempre.
-  // Tarefa ausente daqui (soltas, incluindo as criadas pelo próprio painel)
-  // é tratada como "Sem sprint".
-  const taskSprintLabels: Record<string, string> = {};
-  for (const sprint of sortedSprints) {
-    const period = formatSprintPeriodLabel(sprint.startDate, sprint.endDate);
-    for (const task of tasksBySprintId.get(sprint.sprintId) ?? []) {
-      taskSprintLabels[task.id] = period;
-    }
-  }
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-5">
@@ -1122,7 +1109,6 @@ export default async function ClientPage({
               key={monthParam}
               monthLabel={monthLabel}
               tasks={monthTaskRows}
-              taskSprintLabels={taskSprintLabels}
               clientId={client.id}
               managers={managers ?? []}
               isAdmin={isAdmin}

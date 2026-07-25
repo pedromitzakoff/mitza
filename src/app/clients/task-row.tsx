@@ -19,8 +19,8 @@ import {
   ACTIVITY_COL_ACTIONS,
   ACTIVITY_COL_ASSIGNEE,
   ACTIVITY_COL_DATE,
+  ACTIVITY_COL_DATE_COMPACT,
   ACTIVITY_COL_SELECT,
-  ACTIVITY_COL_SPRINT,
   ACTIVITY_COL_STATUS,
   ACTIVITY_COL_TYPE,
 } from "./activity-columns";
@@ -319,8 +319,8 @@ export function TaskRow({
   onToggleExpand,
   managers,
   canOperate = true,
-  sprintLabel,
-  description,
+  hideAssignee,
+  compactDate,
   selected,
   onToggleSelect,
 }: {
@@ -367,19 +367,18 @@ export function TaskRow({
    * está pausado/encerrado: desabilita "Marcar como feito" (a linha vira
    * só consulta). Omitir preserva o comportamento de sempre (`true`). */
   canOperate?: boolean;
-  /** Etapa "Tarefas e Sprints separadas" — período da sprint à qual a
-   * tarefa pertence, só pra REFERÊNCIA visual (nunca agrupamento/filtro).
-   * `null` = tarefa solta ("Sem sprint"). Omitir (não o mesmo que `null`)
-   * esconde a coluna inteira — só o módulo "Tarefas de {mês}", que mistura
-   * tarefas de várias sprints numa lista só, passa esta prop; nos demais
-   * lugares (Atividades da Sprint, Outras tarefas) a sprint já é implícita
-   * pelo contexto, então a coluna nem existe ali. */
-  sprintLabel?: string | null;
-  /** Idem — segunda linha discreta sob o título com a descrição da tarefa
-   * (`task.notes`). Omitir preserva a linha única de sempre; só o módulo
-   * "Tarefas de {mês}" passa isto (é a única lista que expõe descrição sem
-   * precisar expandir/abrir a tarefa). */
-  description?: string | null;
+  /** Etapa "Simplificar tabela de Tarefas do mês" — esconde a coluna de
+   * responsável inteira (nem "Sem responsável" aparece), diferente de
+   * `hideAssigneeIfName` (que só esconde quando o nome bate com um
+   * específico). Só `MonthTasksPanel` passa isto: nessa visão o
+   * responsável já é implícito pelo gestor dono do cliente, então repetir
+   * em cada linha é ruído. Omitir preserva a coluna de sempre. */
+  hideAssignee?: boolean;
+  /** Idem — largura reduzida da coluna de data (`ACTIVITY_COL_DATE_COMPACT`
+   * em vez de `ACTIVITY_COL_DATE`), mesmo formato de texto. Só
+   * `MonthTasksPanel` passa isto; os demais consumidores mantêm a largura
+   * padrão de sempre. */
+  compactDate?: boolean;
   /** Etapa "Seleção em massa e recolhimento" — presença de `onToggleSelect`
    * (não `selected` sozinho) decide se a coluna de checkbox existe: mesmo
    * padrão de `onToggleExpand`/`isExpanded` acima. Só `MonthTasksPanel`
@@ -502,26 +501,21 @@ export function TaskRow({
           )}
         </span>
 
-        <span className={`${ACTIVITY_COL_DATE} ${dateClasses}`}>{dueDate}</span>
+        <span className={`${compactDate ? ACTIVITY_COL_DATE_COMPACT : ACTIVITY_COL_DATE} ${dateClasses}`}>{dueDate}</span>
 
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-foreground">{task.title}</span>
-          {description && <span className="block truncate text-xs text-muted-foreground">{description}</span>}
+          <span className="block truncate text-sm font-medium text-foreground" title={task.title}>
+            {task.title}
+          </span>
         </span>
 
-        {(!hideAssigneeIfName || task.assignee?.name !== hideAssigneeIfName) && (
+        {!hideAssignee && (!hideAssigneeIfName || task.assignee?.name !== hideAssigneeIfName) && (
           <span className={ACTIVITY_COL_ASSIGNEE}>
             <User className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="min-w-0 truncate text-xs text-muted-foreground">
               {task.assignee?.name ?? "Sem responsável"}
               {task.assignee?.status === "inativo" && " (inativo)"}
             </span>
-          </span>
-        )}
-
-        {sprintLabel !== undefined && (
-          <span className={`${ACTIVITY_COL_SPRINT} truncate text-xs text-muted-foreground`}>
-            {sprintLabel ?? "Sem sprint"}
           </span>
         )}
 

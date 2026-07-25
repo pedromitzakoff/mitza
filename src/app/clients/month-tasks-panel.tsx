@@ -12,10 +12,8 @@ import { InlineCreateTaskForm, type InlineTaskManagerOption } from "./inline-tas
 import { deleteTaskAction } from "./tasks-actions";
 import {
   ACTIVITY_COL_ACTIONS,
-  ACTIVITY_COL_ASSIGNEE,
-  ACTIVITY_COL_DATE,
+  ACTIVITY_COL_DATE_COMPACT,
   ACTIVITY_COL_SELECT,
-  ACTIVITY_COL_SPRINT,
   ACTIVITY_COL_STATUS,
 } from "./activity-columns";
 
@@ -113,9 +111,10 @@ function BulkDeleteConfirmDialog({
  * soltas, absorvidas aqui). Reúne numa lista só TODAS as tarefas do mês —
  * das sprints do período + soltas — em vez de cada sprint gerenciar sua
  * própria fila (`Cliente → Sprint → Tarefas` virou `Cliente → Tarefas →
- * Sprint [referência]`). A sprint de cada tarefa é só uma coluna de
- * contexto (`sprintLabel` em `TaskRow`), nunca agrupamento — mesma lista,
- * mesma ordem cronológica (`orderTasks`) pra qualquer filtro.
+ * Sprint [referência]`). A relação com a sprint continua existindo nos
+ * dados (`sprint_id`), só não aparece mais nesta tabela (Etapa "Simplificar
+ * tabela de Tarefas do mês" — ver `hideAssignee`/`compactDate` em
+ * `TaskRow`).
  *
  * Reaproveita 100% da infraestrutura de `TaskList` (`useOptimisticTasks`,
  * `InlineCreateTaskForm`, `TaskRow`) — nenhuma tarefa, ação ou regra nova,
@@ -124,6 +123,13 @@ function BulkDeleteConfirmDialog({
  * sprint específica na criação fica para uma etapa futura, quando a
  * relação Tarefas/Sprints for revisada conceitualmente (ver nota do
  * pedido: esta é a primeira reorganização visual).
+ *
+ * Etapa "Simplificar tabela de Tarefas do mês": colunas fixas
+ * [seleção][status][prazo][tarefa][ações] em toda linha, sem responsável
+ * nem sprint (ruído nesta visão — o responsável já é implícito pelo gestor
+ * dono do cliente) e sem subtítulo sob o título (a tarefa é o único
+ * conteúdo com peso visual da linha). `orderTasks` continua ordenando por
+ * `due_date`, nunca por status.
  *
  * Etapa "Seleção em massa e recolhimento": quem chama passa `key={monthLabel}`
  * (ver `[id]/page.tsx`) — trocar de mês remonta o componente do zero, o que
@@ -141,7 +147,6 @@ function BulkDeleteConfirmDialog({
 export function MonthTasksPanel({
   monthLabel,
   tasks,
-  taskSprintLabels,
   clientId,
   managers,
   isAdmin,
@@ -149,8 +154,6 @@ export function MonthTasksPanel({
 }: {
   monthLabel: string;
   tasks: TaskListItem[];
-  /** `taskId -> período da sprint` ("20-26 jul") — ausente = tarefa solta. */
-  taskSprintLabels: Record<string, string>;
   clientId: string;
   managers: InlineTaskManagerOption[];
   /** Seleção em massa e exclusão só aparecem pra admin — mesma permissão de
@@ -368,10 +371,8 @@ export function MonthTasksPanel({
                   </span>
                 )}
                 <span className={`${ACTIVITY_COL_STATUS} truncate`} aria-hidden="true" />
-                <span className={ACTIVITY_COL_DATE}>Prazo</span>
+                <span className={ACTIVITY_COL_DATE_COMPACT}>Prazo</span>
                 <span className="min-w-0 flex-1">Tarefa</span>
-                <span className={ACTIVITY_COL_ASSIGNEE}>Responsável</span>
-                <span className={ACTIVITY_COL_SPRINT}>Sprint</span>
                 <span className={ACTIVITY_COL_ACTIONS} aria-hidden="true" />
               </div>
               <ul className="[&>li:last-child]:border-0">
@@ -383,8 +384,8 @@ export function MonthTasksPanel({
                     detailsHref={`/clients/${clientId}?task=${task.id}`}
                     isAdmin={isAdmin}
                     canOperate={canOperate}
-                    sprintLabel={taskSprintLabels[task.id] ?? null}
-                    description={task.notes}
+                    hideAssignee
+                    compactDate
                     selected={showSelectionUi ? selected.has(task.id) : undefined}
                     onToggleSelect={showSelectionUi ? () => toggleSelectOne(task.id) : undefined}
                     onOptimisticComplete={() => dispatchOptimisticTask({ type: "complete", taskId: task.id })}
