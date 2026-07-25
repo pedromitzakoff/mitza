@@ -311,6 +311,8 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
       overdueTasksCount: overdueCountByClient.get(client.id) ?? 0,
       openTasksCount: openCountByClient.get(client.id) ?? 0,
       lastDataSyncAt,
+      performanceLatestSource: performanceResult.latestSource,
+      performanceLastUpdatedAt: performanceResult.latestUpdatedAt,
       diagnostics,
     };
   });

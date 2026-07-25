@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { MetricDeviation } from "@/components/workspace/metric-deviation";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatShortDateTime } from "@/lib/format";
 import { MIN_RELIABLE_RESULT_COUNT } from "@/lib/operation-health-thresholds";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
+import { getLatestPerformanceUpdateText } from "@/lib/performance";
 import { formatAtividadeLabel } from "@/lib/metric-diagnostics";
 import type { ClientOperationalState } from "@/lib/client-operational-state";
 
@@ -94,6 +95,19 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
   const footerLabel = planejamentoLabel ?? atividadeLabel;
   const footerClass = planejamentoLabel ? "text-overview-warning" : "text-overview-danger";
 
+  // Etapa "Data de atualização da performance por cliente": de quando são
+  // os números de Resultado/Custo deste card especificamente — nunca a
+  // hora em que a página foi carregada (isso não diz nada sobre os dados
+  // em si). Reaproveita `getLatestPerformanceUpdateText`, a mesma função já
+  // usada no card fechado da Sprint/cabeçalho da página do cliente ("Manual
+  // · Atualizado em..."/"Meta · Sincronizado em..."/"Sem atualização
+  // registrada") — nenhum cálculo novo, só exibida aqui também. Só
+  // relevante quando o cliente tem objetivo de performance configurado
+  // (sem isso, o rodapé já explica "Objetivo não configurado").
+  const performanceUpdateText = goalConfig
+    ? getLatestPerformanceUpdateText(card.performanceLatestSource, card.performanceLastUpdatedAt, formatShortDateTime)
+    : null;
+
   return (
     <Link
       href={`/clients/${card.clientId}`}
@@ -139,6 +153,8 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
           />
           <MetricDeviation label={metaLabel} value={metaValue} diagnostic={null} title={metaTitle} />
         </div>
+
+        {performanceUpdateText && <p className="text-[11px] text-muted-foreground">Performance: {performanceUpdateText}</p>}
       </div>
 
       <div className="hidden items-center gap-4 sm:flex">

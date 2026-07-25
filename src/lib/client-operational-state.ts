@@ -7,6 +7,7 @@ import {
 } from "@/lib/account-health-engine";
 import type { ClientChannelState } from "@/lib/client-channel-breakdown";
 import type { PerformanceGoal } from "@/lib/performance-goals";
+import type { PerformanceSource } from "@/lib/performance";
 import { evaluateCpaDiagnostic, evaluateInvestmentDiagnostic, type ClientDiagnostics } from "@/lib/metric-diagnostics";
 
 /**
@@ -41,6 +42,17 @@ export interface ClientOperationalState {
    * alimenta o indicador "Atualizado hoje/ontem/há N dias". `null` = nunca
    * sincronizado. */
   lastDataSyncAt: string | null;
+  /** Etapa "Data de atualização da performance por cliente": fonte e
+   * timestamp do registro de `performance_records` mais recente do cliente
+   * (`aggregatePerformanceResults`, o mesmo cálculo que já alimentava
+   * `lastDataSyncAt` — só deixou de ser descartado depois do merge). Ao
+   * contrário de `lastDataSyncAt` (investimento OU performance, o que for
+   * mais recente), este par é SÓ sobre performance (leads/vendas/
+   * seguidores) — o dado que costuma ser lançado manualmente e pode ficar
+   * desatualizado independente do investimento (sincronizado à parte via
+   * Meta). `null` = nenhum registro de performance ainda. */
+  performanceLatestSource: PerformanceSource | null;
+  performanceLastUpdatedAt: string | null;
   /** Etapa "Novo Conceito de Monitoramento Operacional" — os eixos do
    * Motor de Diagnóstico Único (CPA, Investimento, Pendências, Atividade),
    * computados uma única vez aqui e consumidos por qualquer tela (nunca
