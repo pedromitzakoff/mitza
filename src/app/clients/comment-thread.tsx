@@ -105,6 +105,7 @@ export function CommentThread({
         <form ref={formRef} onSubmit={handleSubmit} className="mt-1.5 flex gap-2">
           {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
           <input
+            id={`comment-content-${commentableId}`}
             name="content"
             placeholder="Comentar..."
             required
