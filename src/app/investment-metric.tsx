@@ -16,7 +16,7 @@ const PRIMARY_VALUE_SIZE: Record<"lg" | "md", string> = {
   md: "text-[22px]",
 };
 
-const TONE_TEXT_CLASSES: Record<StatusTone, string> = {
+export const TONE_TEXT_CLASSES: Record<StatusTone, string> = {
   success: "text-overview-success",
   warning: "text-overview-warning",
   danger: "text-overview-danger",

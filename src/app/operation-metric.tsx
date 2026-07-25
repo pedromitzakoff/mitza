@@ -1,9 +1,18 @@
+import Link from "next/link";
+import type { StatusTone } from "@/components/workspace/status-dot";
+import { TONE_TEXT_CLASSES } from "./investment-metric";
+
 /**
  * Um indicador da área "Indicadores da operação" (Etapa 69 — refinamento
  * visual da Visão Geral) — label discreto, valor principal com peso mas sem
  * exagero, e uma linha de contexto opcional (quantidade + percentual, ou uma
  * segunda métrica relacionada). Só apresentação: recebe tudo já formatado,
  * nunca calcula nada (nenhuma lógica de negócio aqui).
+ *
+ * Facelift "Painel financeiro e operacional": ganhou `tone` (cor semântica do
+ * valor, mesma paleta de `SecondaryInvestmentMetric`) e `linkHref`/`linkLabel`
+ * — um link curto abaixo do contexto (ex.: "Ver contas"), pra indicadores que
+ * levam a uma lista filtrada sem precisar tornar o card inteiro clicável.
  */
 export function OperationMetric({
   label,
@@ -11,12 +20,18 @@ export function OperationMetric({
   context,
   href,
   title,
+  tone = "neutral",
+  linkHref,
+  linkLabel,
 }: {
   label: string;
   value: string;
   context?: string;
   href?: string;
   title?: string;
+  tone?: StatusTone;
+  linkHref?: string;
+  linkLabel?: string;
 }) {
   const content = (
     <div title={title}>
@@ -25,10 +40,18 @@ export function OperationMetric({
           font-semibold → font-medium (~10% mais leve) — mesmo tamanho e
           hierarquia, só um traço menos pesado pra equilibrar o conjunto com
           as demais métricas da página. */}
-      <p className="mt-1 text-[22px] font-medium leading-none tracking-tight text-overview-text-primary tabular-nums">
+      <p className={`mt-1 text-[22px] font-medium leading-none tracking-tight tabular-nums ${TONE_TEXT_CLASSES[tone]}`}>
         {value}
       </p>
       {context && <p className="mt-1.5 text-[13px] text-overview-text-muted">{context}</p>}
+      {linkHref && linkLabel && (
+        <Link
+          href={linkHref}
+          className="mt-1.5 inline-block text-[13px] text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary"
+        >
+          {linkLabel}
+        </Link>
+      )}
     </div>
   );
 
@@ -41,5 +64,31 @@ export function OperationMetric({
     >
       {content}
     </a>
+  );
+}
+
+/**
+ * Faixa compacta de "Operação" (Facelift "Painel financeiro e operacional"):
+ * label pequeno + valor de destaque intermediário — deliberadamente menor
+ * que `OperationMetric`/`PrimaryInvestmentMetric` (esses indicadores não
+ * disputam atenção com os KPIs de Resultados/Ritmo, só descrevem a execução
+ * operacional). `context` é sempre secundário (ex.: o % de execução abaixo
+ * da contagem bruta de tarefas), nunca outro número do mesmo peso.
+ */
+export function OperationMiniKpi({
+  label,
+  value,
+  context,
+}: {
+  label: string;
+  value: string;
+  context?: string;
+}) {
+  return (
+    <div>
+      <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">{label}</p>
+      <p className="mt-0.5 text-base font-semibold leading-none text-overview-text-primary tabular-nums">{value}</p>
+      {context && <p className="mt-1 text-[11px] text-overview-text-muted">{context}</p>}
+    </div>
   );
 }
