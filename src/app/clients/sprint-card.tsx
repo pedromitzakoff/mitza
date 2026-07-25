@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RefreshCw } from "lucide-react";
 import type { SprintFinancials } from "@/lib/sprint-financials";
 import { describeSpendSourceTimestamp } from "@/lib/sprint-financials";
 import { formatCurrency, formatShortDateTime } from "@/lib/format";
@@ -490,21 +491,33 @@ function SprintPerformanceReportSection({
   // de novo seria o "segundo dashboard de performance" que este ajuste
   // pede pra evitar.
   const sourceText = sourceTimestampText ?? (isManualSource ? "Manual" : "Meta");
+  // Etapa "Facelift da faixa Fonte dos dados": split só de apresentação —
+  // `describeSpendSourceTimestamp` continua devolvendo a mesma string
+  // única de sempre ("Origem · Verbo em DD/MM às HH:mm"), nunca alterada;
+  // aqui só divide em duas linhas (origem em destaque, timestamp
+  // secundário) pra melhorar a leitura, sem tocar no dado.
+  const [sourceOrigin, sourceDetail] = sourceText.split(" · ");
 
   return (
     <div>
       {canEditPerformance && <input type="checkbox" id={editToggleId} className="peer hidden" />}
 
-      <p className="text-xs text-foreground">{sourceText}</p>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-foreground">{sourceOrigin}</p>
+          {sourceDetail && <p className="text-[11px] text-muted-foreground">{sourceDetail}</p>}
+        </div>
 
-      {canEditPerformance && (
-        <label
-          htmlFor={editToggleId}
-          className="mitza-pressable mt-2 inline-flex w-fit cursor-pointer rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand peer-checked:hidden"
-        >
-          Atualizar performance
-        </label>
-      )}
+        {canEditPerformance && (
+          <label
+            htmlFor={editToggleId}
+            className="mitza-pressable inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand peer-checked:hidden"
+          >
+            <RefreshCw className="h-3 w-3" aria-hidden="true" />
+            Atualizar performance
+          </label>
+        )}
+      </div>
 
       {canEditPerformance && (
         <form
@@ -742,9 +755,9 @@ export function SprintCardBody({
           />
         </div>
 
-        <div className="mt-3 border-t border-border pt-2">
+        <div className="mt-2 border-t border-border pt-1.5">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Fonte dos dados</p>
-          <div className="mt-1.5">
+          <div className="mt-1">
             <SprintPerformanceReportSection
               sprint={sprint}
               performance={performance}
@@ -766,16 +779,18 @@ export function SprintCardBody({
             sendo exatamente o `CommentThread` de sempre
             (`commentableType="sprint"`, mesma tabela/Server Action
             `createCommentAction`) — só lista + campo + "Enviar", nada além
-            disso. */}
-        <div className="mt-3 border-t border-border pt-2">
-          <CommentThread
-            comments={comments}
-            commentableType="sprint"
-            commentableId={sprint.sprintId}
-            clientId={clientId}
-            canOperate={canOperate}
-          />
-        </div>
+            disso. Sem `<div>` própria aqui (Etapa "Facelift da faixa Fonte
+            dos dados"): `CommentThread` já vem com seu próprio
+            `mt-2 border-t border-border pt-2` — envolver de novo criava
+            DUAS divisórias/espaços empilhados entre "Fonte dos dados" e o
+            campo de registro. */}
+        <CommentThread
+          comments={comments}
+          commentableType="sprint"
+          commentableId={sprint.sprintId}
+          clientId={clientId}
+          canOperate={canOperate}
+        />
       </div>
     );
   }
