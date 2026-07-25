@@ -3,7 +3,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import type { SpendStatus } from "@/lib/spend-status";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
-import { computeExpectedPct, resolveMonthPeriodSummary } from "@/lib/financial-period";
+import { computeExpectedPct, formatDeviationCurrencyText, resolveMonthPeriodSummary } from "@/lib/financial-period";
 import { computeMonthlyBudgetPlan, computeUtilizedPct, type MonthlyBudgetPlanSprintInput } from "@/lib/monthly-budget";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { MonthlyBudgetEditor } from "./monthly-budget-editor";
@@ -125,117 +125,123 @@ export function MonthInvestmentSummary({
   // só reagrupados numa única área recolhível em vez de sempre visíveis).
   const hasDetails = planned > 0;
 
+  // Etapa "Facelift do card de Investimento Mensal": o diagnóstico principal
+  // (mês corrente, em andamento) reaproveita `formatDeviationCurrencyText` —
+  // a MESMA frase central que a barra já produzia e ficava suprimida via
+  // `showLegend={false}` — só promovida de dentro da barra pra virar o
+  // destaque principal do card, nunca uma segunda lógica de diagnóstico.
+  // Cor por tom reaproveita exatamente a mesma paleta já usada abaixo em
+  // "Diferença para o ritmo" (dentro/acima/abaixo — mesmo `status` central
+  // de `classifySpendStatus`).
+  const diagnosisText = !isFutureMonth && !isClosedMonth ? formatDeviationCurrencyText(summary, formatCurrency) : null;
+  const diagnosisToneClass =
+    status === "acima"
+      ? "text-red-600 dark:text-red-400"
+      : status === "abaixo"
+        ? "text-amber-600 dark:text-amber-400"
+        : status === "dentro"
+          ? "text-green-600 dark:text-green-400"
+          : "text-foreground";
+
   return (
     <div className="rounded-lg border border-border bg-card p-3">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        {/* Etapa "Remover marcador residual": este espaço era o "●" de
-            orçamento alterado, que ficava ao lado do título "Investimento
-            do mês" — o título saiu numa etapa anterior e o marcador ficou
-            sozinho, sem nenhum texto ao lado, parecendo um bullet perdido.
-            A div vazia continua aqui só como espaçador do
-            justify-between da linha acima (mantém as ações do lado
-            direito exatamente onde estavam). */}
-        <div className="flex items-center gap-1.5" />
-        <div className="flex shrink-0 items-center gap-2">
-          {isAdmin &&
-            (isClosedMonth ? (
-              <span className="text-[11px] text-muted-foreground">Mês encerrado</span>
-            ) : (
-              effectiveDate && (
-                <MonthlyBudgetEditor
-                  clientId={clientId}
-                  monthParam={monthParam}
-                  monthLabel={monthLabel}
-                  sprints={sprints}
-                  monthRange={monthRange}
-                  effectiveDate={effectiveDate}
-                  currentMonthlyBudget={planned}
-                  monthActual={actual}
-                  performanceGoal={performanceGoal}
-                  currentTargetResultCount={targetResultCount}
-                  currentTargetCostPerResult={targetCostPerResult}
-                />
-              )
-            ))}
-        </div>
-      </div>
+      {/* Cabeçalho (Etapa "Facelift do card de Investimento Mensal"): rótulo
+          pequeno + valor grande + contexto secundário, mesmo padrão de
+          label/valor já usado nos KPIs de `MonthlyKpiSummary`/`SprintKpiCell`
+          — nenhum dado novo, só separa em linhas o que antes era uma frase
+          só ("R$X realizados de R$Y planejados"), pra escanear mais rápido. */}
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Investimento do mês</p>
 
       {planned <= 0 ? (
         <EmptyState className="mt-1">Sem planejamento configurado para este mês.</EmptyState>
       ) : isFutureMonth ? (
         <>
-          <p className="mt-1 text-sm text-foreground">
-            {formatCurrency(planned)} planejados para {monthLabel}
-          </p>
+          <p className="mt-0.5 text-xl font-semibold tracking-tight text-foreground">{formatCurrency(planned)}</p>
+          <p className="text-xs text-muted-foreground">planejados para {monthLabel}</p>
           <div className="mt-1.5">
             <AgencyInvestmentBar summary={summary} monthTemporalStatus="futuro" showLegend={false} />
           </div>
           {plan && (
-            <p className="mt-1 text-sm font-semibold text-brand">
-              Investimento diário planejado: {formatCurrency(plan.recommendedDaily)}/dia
-            </p>
+            <div className="mt-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Ritmo planejado inicial</p>
+              <p className="text-sm font-semibold text-brand">{formatCurrency(plan.recommendedDaily)}/dia</p>
+            </div>
           )}
         </>
       ) : isClosedMonth ? (
         <>
-          <p className="mt-1 text-sm text-foreground">
-            {formatCurrency(actual)} realizados de {formatCurrency(planned)} planejados
-          </p>
+          <p className="mt-0.5 text-xl font-semibold tracking-tight text-foreground">{formatCurrency(actual)}</p>
+          <p className="text-xs text-muted-foreground">de {formatCurrency(planned)} planejados</p>
           <div className="mt-1.5">
             <AgencyInvestmentBar summary={summary} monthTemporalStatus="passado" showLegend={false} />
           </div>
         </>
       ) : (
         <>
-          <p className="mt-1 text-sm text-foreground">
-            {formatCurrency(actual)} realizados de {formatCurrency(planned)} planejados
-          </p>
+          <p className="mt-0.5 text-xl font-semibold tracking-tight text-foreground">{formatCurrency(actual)}</p>
+          <p className="text-xs text-muted-foreground">de {formatCurrency(planned)} planejados</p>
           <div className="mt-1.5">
             <AgencyInvestmentBar summary={summary} showLegend={false} />
           </div>
 
-          {/* AÇÃO — quanto ainda precisa ser investido daqui pra frente
-              (`computeMonthlyBudgetPlan`, nunca a mesma fórmula do ritmo
-              acima). Único texto sempre visível além do resumo/barra. */}
+          {/* DIAGNÓSTICO — o principal destaque do card (Etapa "Facelift"):
+              responde "estamos no ritmo certo?" antes de qualquer número
+              novo, reaproveitando a mesma frase/tom que a barra já calculava. */}
+          {diagnosisText && (
+            <p className={`mt-2 flex items-center gap-1.5 text-sm font-semibold ${diagnosisToneClass}`}>
+              <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-current" aria-hidden="true" />
+              {diagnosisText}
+            </p>
+          )}
+
+          {/* RECOMENDAÇÃO — quanto ainda precisa ser investido daqui pra
+              frente (`computeMonthlyBudgetPlan`, nunca a mesma fórmula do
+              ritmo acima), agora no mesmo padrão label/valor do cabeçalho —
+              lê como uma recomendação do sistema, não só um cálculo solto. */}
           {plan?.isBudgetReached ? (
-            <>
-              <p className="mt-2 text-sm font-medium text-foreground">Orçamento mensal atingido</p>
+            <div className="mt-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Orçamento mensal atingido</p>
+              <p className="text-sm font-semibold text-brand">{formatCurrency(0)}/dia</p>
               {plan.overageAmount > 0 && (
                 <p className="mt-0.5 text-[11px] text-red-600 dark:text-red-400">
                   {formatCurrency(plan.overageAmount)} acima do orçamento planejado
                 </p>
               )}
-              <p className="mt-1 text-sm font-semibold text-brand">Investimento diário recomendado: {formatCurrency(0)}/dia</p>
-            </>
+            </div>
           ) : plan && plan.eligibleDaysCount === 1 ? (
-            <>
-              <p className="mt-2 text-[11px] text-muted-foreground">
+            <div className="mt-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Recomendado para hoje</p>
+              <p className="text-sm font-semibold text-brand">{formatCurrency(plan.remainingBudget)}</p>
+              {/* RESTANTE — auxiliar, nunca competindo com o diagnóstico/
+                  recomendação acima (texto pequeno, sem peso/cor de destaque). */}
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
                 Restam {formatCurrency(plan.remainingBudget)} para 1 dia, incluindo hoje
               </p>
-              <p className="mt-1 text-sm font-semibold text-brand">
-                Investimento recomendado hoje: {formatCurrency(plan.remainingBudget)}
-              </p>
-            </>
+            </div>
           ) : plan ? (
-            <>
-              <p className="mt-2 text-[11px] text-muted-foreground">
+            <div className="mt-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Ritmo recomendado</p>
+              <p className="text-sm font-semibold text-brand">{formatCurrency(plan.recommendedDaily)}/dia</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
                 Restam {formatCurrency(plan.remainingBudget)} para {plan.eligibleDaysCount} dias, incluindo hoje
               </p>
-              <p className="mt-1 text-sm font-semibold text-brand">
-                Investimento diário recomendado: {formatCurrency(plan.recommendedDaily)}/dia
-              </p>
-            </>
+            </div>
           ) : null}
         </>
       )}
 
-      {hasDetails && (
-        <details className="group/details mt-2 border-t border-border pt-1.5 [&_summary::-webkit-details-marker]:hidden">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm text-[11px] font-medium text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-brand">
-            <span className="mitza-chevron text-xs group-open/details:rotate-90">▸</span>
-            <span className="group-open/details:hidden">Ver detalhes do investimento</span>
-            <span className="hidden group-open/details:inline">Ocultar detalhes do investimento</span>
-          </summary>
+      {/* Rodapé (Etapa "Facelift"): "Ver detalhes"/edição do planejamento
+          reorganizados numa única faixa, alinhados nas pontas — antes o
+          editor/"Mês encerrado" viviam soltos no topo do card, competindo
+          com o valor principal antes mesmo de o gestor ler o diagnóstico. */}
+      <div className="mt-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5 border-t border-border pt-2">
+        {hasDetails ? (
+          <details className="group/details min-w-0 flex-1 [&_summary::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm text-[11px] font-medium text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-brand">
+              <span className="mitza-chevron text-xs group-open/details:rotate-90">▸</span>
+              <span className="group-open/details:hidden">Ver detalhes do investimento</span>
+              <span className="hidden group-open/details:inline">Ocultar detalhes do investimento</span>
+            </summary>
 
           <div className="mt-2 flex flex-col gap-3">
             {!isFutureMonth && !isClosedMonth && (
@@ -321,8 +327,34 @@ export function MonthInvestmentSummary({
               </div>
             )}
           </div>
-        </details>
-      )}
+          </details>
+        ) : (
+          <span />
+        )}
+
+        <div className="flex shrink-0 items-center gap-2">
+          {isAdmin &&
+            (isClosedMonth ? (
+              <span className="text-[11px] text-muted-foreground">Mês encerrado</span>
+            ) : (
+              effectiveDate && (
+                <MonthlyBudgetEditor
+                  clientId={clientId}
+                  monthParam={monthParam}
+                  monthLabel={monthLabel}
+                  sprints={sprints}
+                  monthRange={monthRange}
+                  effectiveDate={effectiveDate}
+                  currentMonthlyBudget={planned}
+                  monthActual={actual}
+                  performanceGoal={performanceGoal}
+                  currentTargetResultCount={targetResultCount}
+                  currentTargetCostPerResult={targetCostPerResult}
+                />
+              )
+            ))}
+        </div>
+      </div>
 
       {isAdmin && lastChange && lastChange.changeCountThisMonth > 1 && (
         <div className="mt-1 flex items-center justify-end text-xs text-muted-foreground">
