@@ -129,7 +129,6 @@ export function MonthInvestmentSummary({
     <div className="rounded-lg border border-border bg-card p-3">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <div className="flex items-center gap-1.5">
-          <h2 className="text-sm font-medium text-foreground">Investimento do mês</h2>
           {lastChange && (
             <span
               tabIndex={0}

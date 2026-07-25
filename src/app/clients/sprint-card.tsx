@@ -435,11 +435,11 @@ function SprintKpiStrip({
 
   return (
     <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-      <SprintKpiCell
-        label="Investido"
-        value={formatCurrency(sprint.actualSpend)}
-        aux={`de ${formatCurrency(sprint.plannedSpend)} planejados`}
-      />
+      {/* Etapa "KPIs da Sprint extremamente limpos": sem aux — o planejado
+          DESTA sprint não ajuda a decisão do gestor aqui (ele já vê o
+          planejamento do mês inteiro no card "Investimento do mês", logo
+          acima); mostrar de novo, num recorte menor, era só ruído. */}
+      <SprintKpiCell label="Investido" value={formatCurrency(sprint.actualSpend)} />
       <SprintKpiCell label="Resultados" value={cells.resultsValue} aux={cells.resultsAux} />
       <SprintKpiCell label={costLabel} value={cells.costValue} aux={cells.costAux?.text ?? null} tone={cells.costAux?.tone ?? null} />
       <SprintKpiCell label="Meta" value={targetCostPerResult !== null ? formatCurrency(targetCostPerResult) : "—"} />
