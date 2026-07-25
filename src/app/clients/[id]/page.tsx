@@ -18,7 +18,6 @@ import {
 } from "@/lib/sprint-financials";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus, SPEND_STATUS_BADGE_CLASSES, SPEND_STATUS_LABEL } from "@/lib/spend-status";
-import { computeNextAction } from "@/lib/next-action";
 import { buildSprintExecutionAlert, formatSprintExecutionLabel } from "@/lib/sprint-execution";
 import {
   resolveBudgetEffectiveDate,
@@ -39,7 +38,7 @@ import { ClientIdentitySticky } from "../client-identity-sticky";
 import { ClientWorkspaceContext } from "../client-workspace-context";
 import { MonthInvestmentSummary } from "../month-investment-summary";
 import { SprintCard } from "../sprint-card";
-import { TaskList } from "../task-list";
+import { MonthTasksPanel } from "../month-tasks-panel";
 import { Section } from "../section";
 import { AccountFollowUpPanel, type LastOptimizationInfo } from "../account-follow-up-panel";
 import { ClientOperationalHistoryDrawer } from "../client-operational-history-drawer";
@@ -63,7 +62,6 @@ import {
 } from "@/lib/performance";
 import { AVAILABLE_TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
 import type { SprintPerformanceProps } from "../sprint-card";
-import { SprintFocusBar } from "../sprint-focus-bar";
 import { buildReportViewData } from "../../reports/report-data";
 import { ClientReportView } from "../../reports/report-view";
 import { ClientHistoryList } from "../client-history-list";
@@ -741,43 +739,7 @@ export default async function ClientPage({
     ? formatSprintPeriodLabel(openTaskSprint.startDate, openTaskSprint.endDate)
     : null;
 
-  // "Foco agora" (Etapa "MITZA Operational Workspace 1.0") — mesma
-  // `computeNextAction` que já roda dentro do card da sprint atual, só
-  // promovida pra fora dela: nenhum critério, tabela ou cálculo novo, apenas
-  // avaliada aqui mais cedo pra alimentar `SprintFocusBar` (primeiro
-  // conteúdo operacional da página, antes de qualquer bloco de consulta).
-  const currentSprintTasksForFocus = currentSprint ? (tasksBySprintId.get(currentSprint.sprintId) ?? []) : [];
-  const currentSprintOptimizationCountForFocus = currentSprint
-    ? (accountReviewsBySprintId.get(currentSprint.sprintId) ?? []).length
-    : null;
-  const currentSprintPerformanceKindForFocus = currentSprint
-    ? (sprintPerformanceBySprintId.get(currentSprint.sprintId)?.view.kind ?? null)
-    : null;
-  const nextAction = currentSprint
-    ? computeNextAction({
-        tasks: currentSprintTasksForFocus,
-        today: todayStr,
-        performanceViewKind: currentSprintPerformanceKindForFocus,
-        performanceGoal,
-        optimizationCount: currentSprintOptimizationCountForFocus,
-        canConfigureObjective: isAdmin,
-      })
-    : null;
   const newReviewHref = canOperate ? withParam(returnTo, "review=new") : undefined;
-  let nextActionCtaHref: string | null = null;
-  let nextActionCtaLabel: string | null = null;
-  if (nextAction && currentSprint) {
-    if (nextAction.taskId) {
-      nextActionCtaHref = withParam(returnTo, `task=${nextAction.taskId}`);
-      nextActionCtaLabel = "Abrir tarefa";
-    } else if (nextAction.kind === "update_performance" || nextAction.kind === "configure_objective") {
-      nextActionCtaHref = `#sprint-${currentSprint.sprintId}`;
-      nextActionCtaLabel = "Ir para a sprint";
-    } else if (nextAction.kind === "register_optimization") {
-      nextActionCtaHref = newReviewHref ?? null;
-      nextActionCtaLabel = "Registrar otimização";
-    }
-  }
 
   // Identificação do cliente (Etapa 74) — substitui o antigo ClientContextBar
   // (subheader sticky compartilhado por toda /clients/[id]/**, removido).
@@ -864,6 +826,19 @@ export default async function ClientPage({
   const monthTaskRows = [...sortedSprints.flatMap((sprint) => tasksBySprintId.get(sprint.sprintId) ?? []), ...unlinkedTasks];
   const monthTasksTotal = monthTaskRows.length;
   const monthTasksDone = monthTaskRows.filter((task) => effectiveTaskStatus(task, today) === "feito").length;
+  // Etapa "Tarefas e Sprints separadas": `MonthTasksPanel` mostra a sprint
+  // de cada tarefa só como referência (nunca agrupamento) — este mapa
+  // resolve `taskId -> período da sprint` pra ele, reaproveitando
+  // exatamente os mesmos `sortedSprints`/`tasksBySprintId` de sempre.
+  // Tarefa ausente daqui (soltas, incluindo as criadas pelo próprio painel)
+  // é tratada como "Sem sprint".
+  const taskSprintLabels: Record<string, string> = {};
+  for (const sprint of sortedSprints) {
+    const period = formatSprintPeriodLabel(sprint.startDate, sprint.endDate);
+    for (const task of tasksBySprintId.get(sprint.sprintId) ?? []) {
+      taskSprintLabels[task.id] = period;
+    }
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-5">
@@ -1134,20 +1109,36 @@ export default async function ClientPage({
             />
           </div>
 
-          {/* Execução — foco agora, sprints do mês e fechamento do
-              período. Continua sendo o mesmo trabalho de sempre, só sem
-              exigir uma troca de aba pra chegar até ele. */}
-          {currentSprint && nextAction && (
-            <div className="mt-3">
-              <SprintFocusBar
-                spendStatus={monthStatus}
-                nextActionText={nextAction.text}
-                ctaHref={nextActionCtaHref}
-                ctaLabel={nextActionCtaLabel}
-              />
-            </div>
-          )}
+          {/* Tarefas do mês (Etapa "Tarefas e Sprints separadas") — novo
+              módulo principal: substitui "Foco agora" (`SprintFocusBar`,
+              removida sem substituto — a responsabilidade de indicar a
+              próxima atividade agora é deste módulo) e absorve "Outras
+              tarefas" (tarefas soltas). Reúne as tarefas de TODAS as
+              sprints do mês + as soltas numa lista só, com a sprint de
+              cada uma como referência (nunca agrupamento) — ver doc de
+              `MonthTasksPanel`. */}
+          <div className="mt-3">
+            <MonthTasksPanel
+              key={monthParam}
+              monthLabel={monthLabel}
+              tasks={monthTaskRows}
+              taskSprintLabels={taskSprintLabels}
+              clientId={client.id}
+              managers={managers ?? []}
+              isAdmin={isAdmin}
+              canOperate={canOperate}
+            />
+          </div>
 
+          {/* Sprints do mês — Etapa "Tarefas e Sprints separadas": deixou
+              de ser onde o gestor gerencia tarefas (migrou pra
+              `MonthTasksPanel` acima) e virou resumo/histórico do ciclo —
+              `hideTaskList`/`hideNextAction` escondem a tabela de tarefas e
+              a recomendação "Próxima ação" só aqui (a tela Sprints, que usa
+              o mesmo `SprintCard`, continua exatamente como antes). Período,
+              status, investimento, performance, contagem de tarefas e de
+              otimizações continuam no `<summary>` de sempre, e a lista de
+              otimizações continua completa dentro do card. */}
           <div className="mt-3">
             <Section title={`Sprints de ${monthLabel}`}>
               <div className="flex flex-col gap-2">
@@ -1176,7 +1167,8 @@ export default async function ClientPage({
                       defaultAssigneeName={client.primary_manager?.name ?? null}
                       performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
                       returnTo={returnTo}
-                      hideNextAction={sprint.temporalStatus === "atual"}
+                      hideNextAction
+                      hideTaskList
                       canOperate={canOperate}
                     />
                   ))
@@ -1231,17 +1223,6 @@ export default async function ClientPage({
                   </span>
                 </div>
               </div>
-            </Section>
-          </div>
-
-          {/* Próximas ações — tarefas sem sprint vinculada, último passo da
-              leitura contínua antes das informações de referência. */}
-          <div className="mt-3">
-            <Section title="Outras tarefas">
-              <p className="mb-3 text-xs text-zinc-500">
-                Tarefas sem sprint vinculada — as de cada sprint aparecem no card dela, acima.
-              </p>
-              <TaskList tasks={unlinkedTasks} clientId={client.id} managers={managers ?? []} canOperate={canOperate} />
             </Section>
           </div>
 
