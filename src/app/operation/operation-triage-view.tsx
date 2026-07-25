@@ -85,6 +85,16 @@ export function OperationTriageView({
         onQueryChange={setQuery}
       />
 
+      {/* Disclaimer de atualização no mobile: o mesmo texto já existe no
+          cabeçalho (linha do mês), mas some de vista assim que a lista é
+          rolada — numa lista longa de clientes, não há como saber de
+          quando são os números sem voltar ao topo da página. Repete o
+          mesmo valor (`monthLastUpdatedLabel`, nenhum dado novo) logo
+          acima da lista, só no mobile; desktop não muda. */}
+      <p className="rounded-md border border-border bg-zinc-50 px-3 py-1.5 text-[11px] text-muted-foreground dark:bg-zinc-900/40 sm:hidden">
+        {monthLastUpdatedLabel}
+      </p>
+
       {filteredClients.length > 0 ? (
         <ul className="flex flex-col gap-1">
           {filteredClients.map((card) => (
