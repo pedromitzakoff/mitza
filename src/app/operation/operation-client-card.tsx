@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { MetricDeviation } from "@/components/workspace/metric-deviation";
-import { formatCurrency, formatShortDateTime } from "@/lib/format";
+import { formatCurrency, formatRelativeShortDateTime } from "@/lib/format";
 import { MIN_RELIABLE_RESULT_COUNT } from "@/lib/operation-health-thresholds";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { getLatestPerformanceUpdateText } from "@/lib/performance";
@@ -104,8 +104,15 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
   // registrada") — nenhum cálculo novo, só exibida aqui também. Só
   // relevante quando o cliente tem objetivo de performance configurado
   // (sem isso, o rodapé já explica "Objetivo não configurado").
+  //
+  // Etapa "Ajuste hoje/ontem": aqui (só aqui — Sprint/página do cliente
+  // continuam com `formatShortDateTime`, sem "Hoje"/"Ontem") o formatter
+  // passado é `formatRelativeShortDateTime`: hoje fala "Hoje", ontem fala
+  // "Ontem", depois disso mostra a data real — sempre com o horário.
   const performanceUpdateText = goalConfig
-    ? getLatestPerformanceUpdateText(card.performanceLatestSource, card.performanceLastUpdatedAt, formatShortDateTime)
+    ? getLatestPerformanceUpdateText(card.performanceLatestSource, card.performanceLastUpdatedAt, (value) =>
+        formatRelativeShortDateTime(value, new Date()),
+      )
     : null;
 
   return (

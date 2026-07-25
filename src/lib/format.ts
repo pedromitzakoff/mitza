@@ -137,6 +137,26 @@ export function formatRelativeDateTime(value: string, today: Date): string {
   return `${formatDateTime(value)}`;
 }
 
+/** "Hoje, 14:03" / "Ontem, 09:10" / "12/07 às 09:10" — mesma regra de dia
+ * relativo de `formatRelativeDateTime`, mas SEM o estágio intermediário
+ * "Há N dias": a partir de anteontem já mostra a data real (Etapa "Ajuste
+ * hoje/ontem no card da Operação" — o gestor quer saber a data exata, não
+ * uma contagem relativa, sempre com o horário junto). Só este formatter
+ * muda; `formatRelativeDateTime` continua igual em todo o resto da
+ * plataforma (Última análise/Última atualização da performance na página
+ * do cliente, notas do Workspace). */
+export function formatRelativeShortDateTime(value: string, today: Date): string {
+  const date = new Date(value);
+  const diffDays = Math.floor(
+    (Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) -
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())) /
+      86_400_000,
+  );
+  if (diffDays <= 0) return `Hoje, ${timeOnlyFormatter.format(date)}`;
+  if (diffDays === 1) return `Ontem, ${timeOnlyFormatter.format(date)}`;
+  return formatDateTime(value);
+}
+
 const dateTimeWithYearFormatter = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
