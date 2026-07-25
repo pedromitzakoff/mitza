@@ -18,7 +18,6 @@ import {
 } from "@/lib/sprint-financials";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus, SPEND_STATUS_BADGE_CLASSES, SPEND_STATUS_LABEL } from "@/lib/spend-status";
-import { buildSprintExecutionAlert, formatSprintExecutionLabel } from "@/lib/sprint-execution";
 import {
   resolveBudgetEffectiveDate,
   resolveMonthlyBudget,
@@ -30,7 +29,6 @@ import { todayDateString, todayUTC } from "@/lib/today";
 import { formatCurrency, formatMonthLabel, formatRelativeDateTime } from "@/lib/format";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
 import { fetchClientOperationalHistory } from "@/lib/client-operational-history";
-import { computeClientUpdateStatus } from "@/lib/client-updates";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL, contractStatusBannerText, isWorkspaceClient } from "@/lib/client-fields";
 import { syncClientMetaAction } from "../meta-actions";
@@ -45,7 +43,6 @@ import { ClientOperationalHistoryDrawer } from "../client-operational-history-dr
 import { EssentialInfoPanel } from "../essential-info-panel";
 import type { CommentItem } from "../comment-thread";
 import type { TaskListItem } from "../task-row";
-import type { AccountReviewSummaryItem } from "../account-reviews-section";
 import { RecordAccountReviewDrawer } from "../record-account-review-drawer";
 import { AccountReviewDetailDrawer, type AccountReviewDetail } from "../account-review-detail-drawer";
 import { generateClientUpdateAction } from "../client-update-actions";
@@ -65,18 +62,6 @@ import type { SprintPerformanceProps } from "../sprint-card";
 import { buildReportViewData } from "../../reports/report-data";
 import { ClientReportView } from "../../reports/report-view";
 import { ClientHistoryList } from "../client-history-list";
-
-function groupAccountReviewsBySprintId(
-  reviews: (AccountReviewSummaryItem & { sprintId: string })[],
-): Map<string, AccountReviewSummaryItem[]> {
-  const map = new Map<string, AccountReviewSummaryItem[]>();
-  for (const { sprintId, ...review } of reviews) {
-    const list = map.get(sprintId) ?? [];
-    list.push(review);
-    map.set(sprintId, list);
-  }
-  return map;
-}
 
 async function fetchCommentsByType(
   supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
@@ -425,7 +410,6 @@ export default async function ClientPage({
   // antes do mês acabar (mesma regra agora usada em toda a Visão Geral/
   // Sprints — ver operation-data.ts).
   const monthStatus = classifySpendStatus(monthActual, monthExpectedToDate, monthPlanned);
-  const currentSprint = sprintFinancials.find((sprint) => sprint.temporalStatus === "atual") ?? null;
   // Etapa 61: única lista "Sprints de {mês}" (ver render abaixo) — mesma
   // ordem cronológica crescente por data de início já usada em todo o
   // resto do sistema, aqui explícita em vez de depender da ordem da query.
@@ -508,17 +492,6 @@ export default async function ClientPage({
       }
     : null;
 
-  const sprintActivity = currentSprint
-    ? await requireQuery<{ last_activity_at: string | null } | null>(
-        supabase
-          .from("sprint_last_operational_activity")
-          .select("last_activity_at")
-          .eq("sprint_id", currentSprint.sprintId)
-          .maybeSingle(),
-        "sprint_last_operational_activity",
-      )
-    : null;
-
   const tasks = await requireQuery(
     supabase
       .from("tasks")
@@ -568,24 +541,6 @@ export default async function ClientPage({
   const clientUpdatesByReviewId = new Map(clientUpdateRows.map((row) => [row.account_review_id, row]));
 
   const accountReviews = accountReviewRows;
-  const accountReviewSummaries = accountReviews.map((review) => {
-    const update = clientUpdatesByReviewId.get(review.id) ?? null;
-    return {
-      id: review.id,
-      sprintId: review.sprint_id,
-      reviewedAt: review.reviewed_at,
-      reason: review.reason,
-      reasonOtherDescription: review.reason_other_description,
-      outcome: review.outcome,
-      managerName: review.team_member?.name ?? "Membro removido",
-      optimizationCount: review.optimizations.length,
-      issueDescription: review.issue_description,
-      updateStatus: computeClientUpdateStatus(
-        update ? { copiedAt: update.copied_at, sentAt: update.sent_at } : null,
-      ),
-    };
-  });
-  const accountReviewsBySprintId = groupAccountReviewsBySprintId(accountReviewSummaries);
 
   // Etapa 74 — "Última otimização": no mês atual é sempre o dado GLOBAL mais
   // recente (accountReviews já vem ordenado desc, então é só o primeiro
@@ -648,16 +603,6 @@ export default async function ClientPage({
       ? fetchClientOperationalHistory(supabase, id, { firstDay, lastDay }, historyPage)
       : Promise.resolve({ rows: [], hasMore: false }),
   ]);
-
-  const sprintLastActivityDate = sprintActivity?.last_activity_at
-    ? new Date(sprintActivity.last_activity_at)
-    : null;
-  const sprintExecutionAlert = currentSprint
-    ? buildSprintExecutionAlert(currentSprint, sprintLastActivityDate, today)
-    : null;
-  const sprintExecutionLabel = currentSprint
-    ? formatSprintExecutionLabel(sprintLastActivityDate, currentSprint.startDate, today)
-    : null;
 
   const contractBannerText = contractStatusBannerText(client.status);
 
@@ -738,8 +683,6 @@ export default async function ClientPage({
   const openTaskSprintPeriodLabel = openTaskSprint
     ? formatSprintPeriodLabel(openTaskSprint.startDate, openTaskSprint.endDate)
     : null;
-
-  const newReviewHref = canOperate ? withParam(returnTo, "review=new") : undefined;
 
   // Identificação do cliente (Etapa 74) — substitui o antigo ClientContextBar
   // (subheader sticky compartilhado por toda /clients/[id]/**, removido).
@@ -1116,15 +1059,15 @@ export default async function ClientPage({
             />
           </div>
 
-          {/* Sprints do mês — Etapa "Tarefas e Sprints separadas": deixou
-              de ser onde o gestor gerencia tarefas (migrou pra
-              `MonthTasksPanel` acima) e virou resumo/histórico do ciclo —
-              `hideTaskList`/`hideNextAction` escondem a tabela de tarefas e
-              a recomendação "Próxima ação" só aqui (a tela Sprints, que usa
-              o mesmo `SprintCard`, continua exatamente como antes). Período,
-              status, investimento, performance, contagem de tarefas e de
-              otimizações continuam no `<summary>` de sempre, e a lista de
-              otimizações continua completa dentro do card. */}
+          {/* Sprints do mês — Etapa "Sprint como relatório semanal": cada
+              card virou um pequeno relatório da semana (KPIs → Performance
+              → Registro), não mais área de execução — `hideTaskList`/
+              `hideNextAction` trocam o corpo inteiro (a tela Sprints, que
+              usa o mesmo `SprintCard`, continua exatamente como antes,
+              sem essas props). Sem "Última execução" (sinal operacional,
+              sem sentido num relatório) e sem otimizações (migraram pra
+              a aba de Tarefas) — nem no resumo fechado nem dentro do
+              card. */}
           <div className="mt-3">
             <Section title={`Sprints de ${monthLabel}`}>
               <div className="flex flex-col gap-2">
@@ -1138,20 +1081,12 @@ export default async function ClientPage({
                       isAdmin={isAdmin}
                       canEditPerformance={canManageClient}
                       tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
-                      executionLabel={sprint.temporalStatus === "atual" ? sprintExecutionLabel : null}
-                      executionSeverity={
-                        sprint.temporalStatus === "atual" && sprintExecutionAlert?.severity !== "informativo"
-                          ? (sprintExecutionAlert?.severity ?? null)
-                          : null
-                      }
-                      accountReviews={accountReviewsBySprintId.get(sprint.sprintId) ?? []}
-                      newReviewHref={newReviewHref}
-                      buildReviewDetailHref={buildReviewDetailHref}
                       manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
                       metaSyncedAt={lastSync?.synced_at ?? null}
                       taskManagers={managers ?? []}
                       defaultAssigneeName={client.primary_manager?.name ?? null}
                       performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
+                      targetCostPerResult={targetCostPerResult}
                       returnTo={returnTo}
                       hideNextAction
                       hideTaskList

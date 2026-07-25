@@ -8,7 +8,6 @@ import { todayDateString } from "@/lib/today";
 import { computeNextAction } from "@/lib/next-action";
 import { CommentThread, type CommentItem } from "./comment-thread";
 import { ActivitySection } from "./activity-section";
-import { SprintReviewsSection } from "./sprint-reviews-section";
 import type { TaskListItem } from "./task-row";
 import { resetSprintSpendSourceAction } from "./sprint-actions";
 import { updateSprintPerformanceAction } from "./performance-actions";
@@ -388,6 +387,217 @@ function SprintPerformanceSection({
   );
 }
 
+function SprintKpiCell({
+  label,
+  value,
+  aux,
+  tone,
+}: {
+  label: string;
+  value: string;
+  aux?: string | null;
+  tone?: "better" | "worse" | null;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-lg font-semibold tracking-tight text-foreground">{value}</p>
+      {aux && <p className={`text-xs ${tone ? PERFORMANCE_STATUS_TEXT_CLASSES[tone] : "text-muted-foreground"}`}>{aux}</p>}
+    </div>
+  );
+}
+
+/**
+ * "Resumo executivo" da Sprint (Etapa "Sprint como relatório semanal") —
+ * os mesmos 4 números que já existiam na linha compacta de
+ * `SprintPerformanceSection` (`derivePerformanceCellTexts`, nenhum cálculo
+ * novo), agora como a PRIMEIRA coisa visível ao abrir a Sprint, no mesmo
+ * padrão visual do `Kpi` de `monthly-kpi-summary.tsx` — "abre e entende
+ * rapidamente quanto investiu, quantos resultados gerou, qual foi o custo
+ * por resultado, qual era a meta", sem precisar ler a seção Performance.
+ * `targetCostPerResult` é o valor configurado do CLIENTE (não muda por
+ * sprint) — mesma variável já usada por `MonthlyKpiSummary`, só threaded
+ * um nível mais fundo; nenhuma query nova.
+ */
+function SprintKpiStrip({
+  sprint,
+  view,
+  performanceGoal,
+  targetCostPerResult,
+}: {
+  sprint: SprintFinancials;
+  view: SprintPerformanceView;
+  performanceGoal: PerformanceGoal | null;
+  targetCostPerResult: number | null;
+}) {
+  const cells = derivePerformanceCellTexts(view);
+  const costLabel = performanceGoal ? PERFORMANCE_GOALS[performanceGoal].costMetricShortLabel : "Custo por resultado";
+
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+      <SprintKpiCell
+        label="Investido"
+        value={formatCurrency(sprint.actualSpend)}
+        aux={`de ${formatCurrency(sprint.plannedSpend)} planejados`}
+      />
+      <SprintKpiCell label="Resultados" value={cells.resultsValue} aux={cells.resultsAux} />
+      <SprintKpiCell label={costLabel} value={cells.costValue} aux={cells.costAux?.text ?? null} tone={cells.costAux?.tone ?? null} />
+      <SprintKpiCell label="Meta" value={targetCostPerResult !== null ? formatCurrency(targetCostPerResult) : "—"} />
+    </div>
+  );
+}
+
+/**
+ * "Performance" da Sprint no modo relatório (Etapa "Sprint como relatório
+ * semanal") — deliberadamente NÃO repete Investido/Resultados/Custo/Meta
+ * (já cobertos por `SprintKpiStrip`, logo acima); contém só o que a faixa
+ * de KPIs não mostra: origem/proveniência do dado, distribuição por canal
+ * (quando existe mais de um canal configurado — mesmo `editableChannels`
+ * já buscado pra pré-preencher o formulário, nenhuma query nova) e a ação
+ * de editar. "Objetivo" saiu daqui: já existe um lugar dedicado pra
+ * configurar (`/clients/{id}/edit`, link "Configurar objetivo" do card de
+ * KPIs mensal) — repetir o editor aqui duplicava a mesma configuração em
+ * dois lugares. "Registrar revisão" também saiu — revisão de conta agora é
+ * só uma coisa da aba Tarefas, nunca mais criada a partir da Sprint. Nada
+ * disso mexe em `updateSprintPerformanceAction`/schema — só a apresentação.
+ */
+function SprintPerformanceReportSection({
+  sprint,
+  performance,
+  clientId,
+  canEditPerformance,
+  sourceTimestampText,
+  isManualSource,
+  revertSourceToggleId,
+  editToggleId,
+  returnTo,
+}: {
+  sprint: SprintFinancials;
+  performance?: SprintPerformanceProps;
+  clientId: string;
+  canEditPerformance: boolean;
+  sourceTimestampText: string | null;
+  isManualSource: boolean;
+  revertSourceToggleId: string;
+  editToggleId: string;
+  returnTo: string;
+}) {
+  const view = performance?.view ?? { kind: "not_configured" as const };
+  const editableChannels = performance?.editableChannels ?? [];
+  const performanceGoal = performance?.performanceGoal ?? null;
+  const canEditResults = canEditPerformance && (view.kind === "has_data" || view.kind === "no_data") && editableChannels.length > 0;
+  const investmentSourceText = sourceTimestampText ?? (isManualSource ? "Manual" : "Meta");
+  const performanceSourceText =
+    view.kind === "has_data" ? getLatestPerformanceUpdateText(view.summary.latestSource, view.summary.latestUpdatedAt, formatShortDateTime) : null;
+  const showChannelBreakdown = performanceGoal !== null && editableChannels.length > 1;
+
+  return (
+    <div>
+      {/* Mesmo hack de checkbox/peer de `SprintPerformanceSection` — ver doc lá. */}
+      {isManualSource && <input type="checkbox" id={revertSourceToggleId} className="peer/revert hidden" />}
+      {canEditPerformance && <input type="checkbox" id={editToggleId} className="peer hidden" />}
+
+      <div className="flex flex-col gap-1 text-xs">
+        <p>
+          <span className="text-muted-foreground">Origem do investimento: </span>
+          <span className="text-foreground">{investmentSourceText}</span>
+        </p>
+        <p>
+          <span className="text-muted-foreground">Última atualização dos resultados: </span>
+          <span className="text-foreground">{performanceSourceText ?? "Sem atualização registrada"}</span>
+        </p>
+        {showChannelBreakdown && (
+          <p>
+            <span className="text-muted-foreground">Por canal: </span>
+            <span className="text-foreground">
+              {editableChannels
+                .map(
+                  ({ channel, existingCount }) =>
+                    `${TRAFFIC_CHANNELS[channel].shortLabel}: ${formatPerformanceResult(existingCount ?? 0, performanceGoal!)}`,
+                )
+                .join(" · ")}
+            </span>
+          </p>
+        )}
+        {isManualSource && (
+          <label
+            htmlFor={revertSourceToggleId}
+            className="w-fit cursor-pointer text-muted-foreground hover:underline peer-checked/revert:hidden"
+          >
+            Usar dado do Meta
+          </label>
+        )}
+      </div>
+
+      {isManualSource && (
+        <div className="mt-1.5 hidden items-center gap-1.5 text-xs peer-checked/revert:flex">
+          <span className="text-muted-foreground">Substituir valor manual pelo do Meta?</span>
+          <form action={resetSprintSpendSourceAction.bind(null, sprint.sprintId, clientId, returnTo)}>
+            <SubmitButton
+              className="rounded font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              pendingChildren="Confirmando..."
+            >
+              Confirmar
+            </SubmitButton>
+          </form>
+          <label htmlFor={revertSourceToggleId} className="cursor-pointer text-muted-foreground hover:underline">
+            Cancelar
+          </label>
+        </div>
+      )}
+
+      {canEditPerformance && (
+        <label
+          htmlFor={editToggleId}
+          className="mitza-pressable mt-2 inline-flex w-fit cursor-pointer rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand peer-checked:hidden"
+        >
+          Atualizar performance
+        </label>
+      )}
+
+      {canEditPerformance && (
+        <form
+          action={updateSprintPerformanceAction.bind(null, sprint.sprintId, clientId, returnTo)}
+          className="mt-1.5 hidden flex-col gap-1.5 peer-checked:flex"
+        >
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="w-28 shrink-0 text-[11px] text-muted-foreground">Investimento</span>
+            <MoneyInput name="actual_spend" defaultValue={sprint.actualSpend} autoFocus />
+          </div>
+          {canEditResults &&
+            editableChannels.map(({ channel, existingCount }) => (
+              <div key={channel} className="flex flex-wrap items-center gap-1.5">
+                <span className="w-28 shrink-0 text-[11px] text-muted-foreground">
+                  Resultado · {TRAFFIC_CHANNELS[channel].shortLabel}
+                </span>
+                <input
+                  type="number"
+                  name={`result_${channel}`}
+                  min={0}
+                  step={1}
+                  defaultValue={existingCount ?? ""}
+                  placeholder="0"
+                  className="w-20 rounded-md border border-border bg-transparent px-2 py-1 text-[11px] text-foreground outline-none focus:border-brand"
+                />
+              </div>
+            ))}
+          <div className="flex items-center gap-1.5">
+            <SubmitButton
+              className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              pendingChildren="Salvando..."
+            >
+              Salvar
+            </SubmitButton>
+            <label htmlFor={editToggleId} className="cursor-pointer text-[11px] text-muted-foreground hover:underline">
+              Cancelar
+            </label>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
 /**
  * Conteúdo investigativo de uma sprint (Etapa 44: "card aberto = investigação
  * e execução") — "Performance da sprint" (investimento + resultado + custo,
@@ -423,6 +633,7 @@ export function SprintCardBody({
   manualSpendUpdatedAt,
   metaSyncedAt,
   performance,
+  targetCostPerResult,
   returnTo,
   taskManagers,
   defaultAssigneeName,
@@ -471,6 +682,12 @@ export function SprintCardBody({
   /** Dados de performance desta sprint (Etapa 71) — opcional, mesmo padrão
    * de `accountReviews`. */
   performance?: SprintPerformanceProps;
+  /** Etapa "Sprint como relatório semanal" — meta de custo por resultado
+   * CONFIGURADA DO CLIENTE (não muda por sprint; mesma variável que já
+   * alimenta `MonthlyKpiSummary`, só um nível mais fundo). Só a página do
+   * cliente passa isto, pra `SprintKpiStrip` — `/sprints` não usa essa
+   * faixa de KPIs, então nunca precisa buscar/passar. */
+  targetCostPerResult?: number | null;
   /** MITZA Unified Activities — Task Inline Editing: gestores ativos,
    * repassados pra `ActivitySection` (select de responsável na expansão
    * inline de cada linha de tarefa e no composer de criação). */
@@ -487,15 +704,16 @@ export function SprintCardBody({
    * só a renderização deste bloco é omitida; o painel Sprints não passa
    * esta prop, então continua exatamente como antes. */
   hideNextAction?: boolean;
-  /** Etapa "Tarefas e Sprints separadas": a página do cliente passa `true`
-   * pra que a sprint pare de exibir a tabela de tarefas — a gestão de
-   * tarefas do mês inteiro migrou pro módulo `MonthTasksPanel` (fora da
-   * sprint), então repeti-la aqui seria a mesma tarefa em dois lugares. A
-   * lista de otimizações continua aparecendo normalmente (`SprintReviewsSection`
-   * no lugar de `ActivitySection`) — só a metade "tarefa" da fila unificada
-   * sai. `tasks` continua obrigatório mesmo assim: os contadores do
-   * `<summary>` (tarefas concluídas/total) nunca dependeram de renderizar a
-   * lista, só do array. Omitir preserva o comportamento de sempre — só a
+  /** Etapa "Tarefas e Sprints separadas" / "Sprint como relatório semanal":
+   * a página do cliente passa `true` pra trocar TODO o corpo expandido —
+   * `ActivitySection` (tarefas + otimizações) e os `<details>` de
+   * Performance/Comentários dão lugar a `SprintKpiStrip` +
+   * `SprintPerformanceReportSection` + "Registro da semana" sempre visível
+   * (ver corpo da função). A Sprint deixou de ser onde o gestor gerencia
+   * tarefas E de exibir otimizações (migraram pra `MonthTasksPanel`/aba de
+   * Tarefas) — vira um relatório semanal (KPIs → Performance → Registro).
+   * `tasks` continua obrigatório mesmo assim: usado só pra contagem, nunca
+   * pra renderizar lista. Omitir preserva o comportamento de sempre — só a
    * tela Sprints (`/sprints`) não passa esta prop. */
   hideTaskList?: boolean;
 }) {
@@ -550,6 +768,70 @@ export function SprintCardBody({
         canConfigureObjective: isAdmin,
       })
     : null;
+
+  if (hideTaskList) {
+    // Etapa "Sprint como relatório semanal" — corpo exclusivo da página do
+    // cliente: KPIs (resumo executivo) → Performance (origem/canal/edição,
+    // sem repetir os 4 números) → Registro da semana (sempre visível,
+    // nunca mais um accordion). Sem "Próxima ação" (a Sprint deixou de ser
+    // área de execução), sem "Última execução" (sinal operacional — segue
+    // existindo nos diagnósticos gerais/`/operation`, só não aqui), sem
+    // Atividades/otimizações (migraram pra `MonthTasksPanel`/aba Tarefas).
+    const view = performance?.view ?? { kind: "not_configured" as const };
+    const performanceGoal = performance?.performanceGoal ?? null;
+
+    return (
+      <div className="border-t border-border p-1.5">
+        <div>
+          <SprintKpiStrip
+            sprint={sprint}
+            view={view}
+            performanceGoal={performanceGoal}
+            targetCostPerResult={targetCostPerResult ?? null}
+          />
+        </div>
+
+        <div className="mt-3 border-t border-border pt-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Performance</p>
+          <div className="mt-1.5">
+            <SprintPerformanceReportSection
+              sprint={sprint}
+              performance={performance}
+              clientId={clientId}
+              canEditPerformance={resolvedCanEditPerformance}
+              sourceTimestampText={sourceTimestampText}
+              isManualSource={isManualSource}
+              revertSourceToggleId={revertSourceToggleId}
+              editToggleId={editToggleId}
+              returnTo={returnTo}
+            />
+          </div>
+        </div>
+
+        {/* "Registro da semana" — comentários da SPRINT (nunca de tarefa,
+            `commentableType="sprint"` já era assim antes desta etapa),
+            reenquadrados como o contexto por trás dos números: decisões,
+            aprendizados, hipóteses, observações pra próxima semana. Sempre
+            visível (deixou de ser `<details>`) — é conteúdo do relatório,
+            não um extra escondido. Mesmo `CommentThread`/mesma tabela. */}
+        <div className="mt-3 border-t border-border pt-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Registro da semana</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Decisões, aprendizados, hipóteses e observações para a próxima sprint.
+          </p>
+          <div className="mt-1.5">
+            <CommentThread
+              comments={comments}
+              commentableType="sprint"
+              commentableId={sprint.sprintId}
+              clientId={clientId}
+              canOperate={canOperate}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="border-t border-border p-1.5">
@@ -634,22 +916,18 @@ export function SprintCardBody({
             próprios) — é o motivo real pelo qual alguém abre uma Sprint,
             por isso continua sempre visível, nunca atrás de disclosure. */}
         <div className="mt-1.5">
-          {hideTaskList ? (
-            <SprintReviewsSection reviews={accountReviews ?? []} reviewHrefPrefix={reviewHrefPrefix} />
-          ) : (
-            <ActivitySection
-              tasks={tasks}
-              clientId={clientId}
-              sprintId={sprint.sprintId}
-              taskHrefPrefix={taskHrefPrefix}
-              managers={taskManagers}
-              defaultAssigneeName={defaultAssigneeName}
-              isAdmin={isAdmin}
-              reviews={accountReviews}
-              reviewHrefPrefix={reviewHrefPrefix}
-              canOperate={canOperate}
-            />
-          )}
+          <ActivitySection
+            tasks={tasks}
+            clientId={clientId}
+            sprintId={sprint.sprintId}
+            taskHrefPrefix={taskHrefPrefix}
+            managers={taskManagers}
+            defaultAssigneeName={defaultAssigneeName}
+            isAdmin={isAdmin}
+            reviews={accountReviews}
+            reviewHrefPrefix={reviewHrefPrefix}
+            canOperate={canOperate}
+          />
         </div>
 
         {/* MITZA Operational Card Architecture 2.0: Performance virou um
@@ -771,6 +1049,7 @@ export function SprintCard({
   manualSpendUpdatedAt,
   metaSyncedAt,
   performance,
+  targetCostPerResult,
   returnTo,
   taskManagers,
   defaultAssigneeName,
@@ -800,6 +1079,8 @@ export function SprintCard({
   manualSpendUpdatedAt?: string | null;
   metaSyncedAt?: string | null;
   performance?: SprintPerformanceProps;
+  /** Etapa "Sprint como relatório semanal" — ver doc de `SprintCardBody`. */
+  targetCostPerResult?: number | null;
   /** Pra onde voltar depois de salvar investimento/performance (Etapa MVP
    * 1.3) — ver doc de `SprintCardBody`. */
   returnTo: string;
@@ -972,25 +1253,26 @@ export function SprintCard({
             {TEMPORAL_LABEL[sprint.temporalStatus]}
           </span>
 
-          <span className="ml-auto flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {/* Sprint futura sem nenhum gasto ainda: "R$0 investidos" é só
-                ruído (seção 8 do pedido) — a própria performance já mostra
-                "Performance ainda não iniciada" logo em seguida. */}
+          {/* Etapa "Sprint como relatório semanal" — resumo fechado compacto
+              e comparável entre sprints: só o desempenho da semana (mesmo
+              texto de "R$X investidos"/`formatCompactPerformanceText` de
+              sempre, sem cálculo novo). Tarefas/otimizações saíram daqui —
+              migraram pra `MonthTasksPanel`/aba de Tarefas, repeti-las era
+              a mesma informação em dois lugares. Meta e comparação com a
+              sprint anterior ficam só na Sprint aberta (KPIs), não aqui. */}
+          <span className="ml-auto flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
             {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) && (
               <span className="tabular-nums">{formatCurrency(sprint.actualSpend)} investidos</span>
             )}
             {performance && performance.view.kind !== "not_configured" && (
-              <span className="hidden tabular-nums sm:inline">{formatCompactPerformanceText(performance.view)}</span>
-            )}
-            {!(sprint.temporalStatus === "futura" && tasks.length === 0) && (
-              <span className="hidden sm:inline">
-                {tasksDone}/{tasks.length} tarefas
-              </span>
-            )}
-            {accountReviews && (
-              <span className="hidden sm:inline">
-                {accountReviews.length} {accountReviews.length === 1 ? "otimização" : "otimizações"}
-              </span>
+              <>
+                {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) && (
+                  <span className="text-border" aria-hidden="true">
+                    ·
+                  </span>
+                )}
+                <span className="tabular-nums">{formatCompactPerformanceText(performance.view)}</span>
+              </>
             )}
           </span>
         </summary>
@@ -1018,6 +1300,7 @@ export function SprintCard({
               taskManagers={taskManagers}
               defaultAssigneeName={defaultAssigneeName}
               performance={performance}
+              targetCostPerResult={targetCostPerResult}
               returnTo={returnTo}
               hideNextAction={hideNextAction}
               hideTaskList={hideTaskList}
@@ -1045,6 +1328,7 @@ export function SprintCard({
           taskManagers={taskManagers}
           defaultAssigneeName={defaultAssigneeName}
           performance={performance}
+          targetCostPerResult={targetCostPerResult}
           returnTo={returnTo}
           hideNextAction={hideNextAction}
           hideTaskList={hideTaskList}
