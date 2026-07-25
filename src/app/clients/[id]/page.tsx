@@ -788,91 +788,103 @@ export default async function ClientPage({
           passam a fazer parte desta mesma identificação — nenhum botão
           solto em outro lugar da página. */}
       <ClientWorkspaceContext name={client.name} />
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <ClientAvatar name={client.name} imageUrl={client.avatar_url} size="lg" />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold text-foreground">{client.name}</h1>
-              <span
-                className={`rounded-full px-2.5 py-1 text-xs font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}
-              >
-                {CLIENT_STATUS_LABEL[client.status]}
-              </span>
+      {/* Etapa "Cabeçalho: hierarquia visual" — três blocos claramente
+          separados (identidade → estado operacional → atualização da
+          performance), reproduzindo a distribuição do mockup aprovado:
+          identidade + ações à esquerda, dois cards compactos à direita.
+          Nenhum dado novo: os dois cards só reempacotam as variáveis
+          lastOptimization e lastPerformanceUpdate (já calculadas acima)
+          num cartão com a mesma borda/cantos/fundo (border-border +
+          rounded-lg + bg-card) usada no resto da plataforma (ver
+          AccountFollowUpPanel), em vez de texto solto no cabeçalho. */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <ClientAvatar name={client.name} imageUrl={client.avatar_url} size="lg" />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-bold text-foreground">{client.name}</h1>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}
+                >
+                  {CLIENT_STATUS_LABEL[client.status]}
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">{identitySecondaryLine}</p>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">{identitySecondaryLine}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {client.dashboard_url && (
+              <a
+                href={client.dashboard_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              >
+                Dashboard
+              </a>
+            )}
+            {client.balance_url && (
+              <a
+                href={client.balance_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              >
+                Saldo
+              </a>
+            )}
+            <Link
+              href={reportHref}
+              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Ver relatório
+            </Link>
+            {canManageClient && (
+              <Link
+                href={`/clients/${client.id}/edit`}
+                className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              >
+                Editar
+              </Link>
+            )}
+            {canOperate && (
+              <form action={syncClientMetaAction.bind(null, client.id)}>
+                <button
+                  type="submit"
+                  className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                >
+                  Atualizar Meta
+                </button>
+              </form>
+            )}
           </div>
         </div>
-        <div className="flex flex-wrap items-start gap-3">
-          <div className="flex flex-col items-start gap-0.5">
+
+        <div className="flex flex-wrap gap-3">
+          <div className="w-full rounded-lg border border-border bg-card p-3 sm:w-56">
             <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               <ClipboardCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
               {lastOptimizationLabel}
             </p>
-            <p className="text-base font-semibold text-foreground">{lastOptimizationValue}</p>
+            <p className="mt-1 text-base font-semibold text-foreground">{lastOptimizationValue}</p>
             {lastOptimization && (
-              <p className="text-[11px] text-muted-foreground">
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
                 {ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}
                 {lastOptimizationDetail ? ` · ${lastOptimizationDetail}` : ""}
               </p>
             )}
           </div>
-          <div className="flex flex-col items-start gap-0.5">
+          <div className="w-full rounded-lg border border-border bg-card p-3 sm:w-56">
             <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               <BarChart3 className="h-3 w-3 shrink-0" aria-hidden="true" />
               {lastPerformanceUpdateLabel}
             </p>
-            <p className="text-base font-semibold text-foreground">{lastPerformanceUpdateValue}</p>
+            <p className="mt-1 text-base font-semibold text-foreground">{lastPerformanceUpdateValue}</p>
             {lastPerformanceUpdateSourceLabel && (
-              <p className="text-[11px] text-muted-foreground">Origem: {lastPerformanceUpdateSourceLabel}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">Origem: {lastPerformanceUpdateSourceLabel}</p>
             )}
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {client.dashboard_url && (
-            <a
-              href={client.dashboard_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            >
-              Dashboard
-            </a>
-          )}
-          {client.balance_url && (
-            <a
-              href={client.balance_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            >
-              Saldo
-            </a>
-          )}
-          <Link
-            href={reportHref}
-            className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-          >
-            Ver relatório
-          </Link>
-          {canManageClient && (
-            <Link
-              href={`/clients/${client.id}/edit`}
-              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            >
-              Editar
-            </Link>
-          )}
-          {canOperate && (
-            <form action={syncClientMetaAction.bind(null, client.id)}>
-              <button
-                type="submit"
-                className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              >
-                Atualizar Meta
-              </button>
-            </form>
-          )}
         </div>
       </div>
 
