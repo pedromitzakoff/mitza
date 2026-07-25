@@ -3,8 +3,18 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import type { SpendStatus } from "@/lib/spend-status";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
-import { computeExpectedPct, formatDeviationCurrencyText, resolveMonthPeriodSummary } from "@/lib/financial-period";
-import { computeMonthlyBudgetPlan, computeUtilizedPct, type MonthlyBudgetPlanSprintInput } from "@/lib/monthly-budget";
+import {
+  computeExpectedPct,
+  formatDeviationCurrencyText,
+  resolveMonthPeriodSummary,
+  type FinancialPeriodSummary,
+} from "@/lib/financial-period";
+import {
+  computeMonthlyBudgetPlan,
+  computeUtilizedPct,
+  type MonthlyBudgetPlanSprintInput,
+  type MonthTemporalStatus,
+} from "@/lib/monthly-budget";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { MonthlyBudgetEditor } from "./monthly-budget-editor";
 
@@ -13,6 +23,54 @@ export interface MonthlyBudgetChangeSummary {
   lastPreviousAmount: number;
   lastNewAmount: number;
   changeCountThisMonth: number;
+}
+
+/** Diferença em pontos percentuais com sinal explícito ("+2,10 p.p."/
+ * "-4,25 p.p.") — só formatação, nunca uma conta nova: sempre aplicado a
+ * `pctRealizado - expectedPct`, os dois já calculados por quem chama. */
+const percentagePointsFormatter = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  signDisplay: "exceptZero",
+});
+
+/**
+ * Barra "autoexplicativa" (Etapa "Card de ritmo do orçamento"): a barra em
+ * si e o marcador continuam exatamente `AgencyInvestmentBar`, sem nenhuma
+ * alteração — este wrapper só soma um tooltip por cima (hover E foco de
+ * teclado via `tabIndex`/CSS `group-hover`+`group-focus`, sem JS), com o
+ * mesmo texto que já aparecia em "Ver detalhes do investimento". Vive só
+ * neste arquivo (nunca em `agency-investment-bar.tsx`) de propósito: a
+ * barra é compartilhada por Visão Geral/Sprints/Relatório, e esta etapa
+ * pediu explicitamente pra não alterar essas telas.
+ */
+function InvestmentBarWithTooltip({
+  summary,
+  monthTemporalStatus,
+  tooltipText,
+}: {
+  summary: FinancialPeriodSummary;
+  monthTemporalStatus?: MonthTemporalStatus;
+  tooltipText: string;
+}) {
+  return (
+    <div
+      className="group/investmentbar relative mt-1.5 focus:outline-none focus-visible:ring-1 focus-visible:ring-brand"
+      tabIndex={0}
+      aria-label={tooltipText}
+    >
+      <AgencyInvestmentBar summary={summary} monthTemporalStatus={monthTemporalStatus} showLegend={false} />
+      {/* Só visual — o nome acessível já vem do aria-label no wrapper acima,
+          então este bloco fica fora da árvore de acessibilidade pra não
+          duplicar o anúncio pra leitor de tela. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-0 top-full z-10 mt-1.5 w-60 whitespace-pre-line rounded-md border border-border bg-card p-2 text-[11px] text-foreground opacity-0 shadow-lg transition-opacity duration-150 group-hover/investmentbar:opacity-100 group-focus/investmentbar:opacity-100"
+      >
+        {tooltipText}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -143,24 +201,31 @@ export function MonthInvestmentSummary({
           ? "text-green-600 dark:text-green-400"
           : "text-foreground";
 
+  // Etapa "Card de ritmo do orçamento": tooltip da barra — mesmas 5 linhas
+  // que já viviam em "Ver detalhes do investimento" (Realizado/Esperado
+  // hoje/Diferença), mais Investido/Planejado (já disponíveis como props),
+  // nenhum valor novo.
+  const diffPP = pctRealizado !== null ? pctRealizado - expectedPct : null;
+  const barTooltipText = [
+    `Investido: ${formatCurrency(actual)}`,
+    `Planejado: ${formatCurrency(planned)}`,
+    `Realizado: ${pctRealizado !== null ? formatPercent(pctRealizado) : "—"}`,
+    `Esperado hoje: ${formatPercent(expectedPct)}`,
+    `Diferença: ${diffPP !== null ? `${percentagePointsFormatter.format(diffPP)} p.p.` : "—"}`,
+  ].join("\n");
+
   return (
     <div className="rounded-lg border border-border bg-card p-3">
-      {/* Cabeçalho (Etapa "Facelift do card de Investimento Mensal"): rótulo
-          pequeno + valor grande + contexto secundário, mesmo padrão de
-          label/valor já usado nos KPIs de `MonthlyKpiSummary`/`SprintKpiCell`
-          — nenhum dado novo, só separa em linhas o que antes era uma frase
-          só ("R$X realizados de R$Y planejados"), pra escanear mais rápido. */}
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Investimento do mês</p>
-
+      {/* Etapa "Card de ritmo do orçamento": o valor investido/planejado
+          saiu daqui — o resumo superior (`MonthlyKpiSummary`) já mostra
+          esse mesmo número, e repeti-lo aqui era a duplicação que esta
+          etapa pediu pra remover. Este card agora é só ritmo: barra
+          (com tooltip) → diagnóstico → recomendação → restante → rodapé. */}
       {planned <= 0 ? (
-        <EmptyState className="mt-1">Sem planejamento configurado para este mês.</EmptyState>
+        <EmptyState>Sem planejamento configurado para este mês.</EmptyState>
       ) : isFutureMonth ? (
         <>
-          <p className="mt-0.5 text-xl font-semibold tracking-tight text-foreground">{formatCurrency(planned)}</p>
-          <p className="text-xs text-muted-foreground">planejados para {monthLabel}</p>
-          <div className="mt-1.5">
-            <AgencyInvestmentBar summary={summary} monthTemporalStatus="futuro" showLegend={false} />
-          </div>
+          <InvestmentBarWithTooltip summary={summary} monthTemporalStatus="futuro" tooltipText={barTooltipText} />
           {plan && (
             <div className="mt-2">
               <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Ritmo planejado inicial</p>
@@ -169,20 +234,10 @@ export function MonthInvestmentSummary({
           )}
         </>
       ) : isClosedMonth ? (
-        <>
-          <p className="mt-0.5 text-xl font-semibold tracking-tight text-foreground">{formatCurrency(actual)}</p>
-          <p className="text-xs text-muted-foreground">de {formatCurrency(planned)} planejados</p>
-          <div className="mt-1.5">
-            <AgencyInvestmentBar summary={summary} monthTemporalStatus="passado" showLegend={false} />
-          </div>
-        </>
+        <InvestmentBarWithTooltip summary={summary} monthTemporalStatus="passado" tooltipText={barTooltipText} />
       ) : (
         <>
-          <p className="mt-0.5 text-xl font-semibold tracking-tight text-foreground">{formatCurrency(actual)}</p>
-          <p className="text-xs text-muted-foreground">de {formatCurrency(planned)} planejados</p>
-          <div className="mt-1.5">
-            <AgencyInvestmentBar summary={summary} showLegend={false} />
-          </div>
+          <InvestmentBarWithTooltip summary={summary} tooltipText={barTooltipText} />
 
           {/* DIAGNÓSTICO — o principal destaque do card (Etapa "Facelift"):
               responde "estamos no ritmo certo?" antes de qualquer número
