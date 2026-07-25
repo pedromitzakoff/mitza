@@ -1202,41 +1202,73 @@ export function SprintCard({
           </div>
         </summary>
       ) : (
-        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5">
-          <span className="mitza-chevron shrink-0 text-xs text-muted-foreground group-open:rotate-90">
-            ▸
-          </span>
-          <span className="shrink-0 text-sm font-semibold text-foreground">
-            {formatSprintPeriodLabel(sprint.startDate, sprint.endDate)}
-          </span>
-          <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
-          >
-            {TEMPORAL_LABEL[sprint.temporalStatus]}
-          </span>
-
-          {/* Etapa "Sprint como relatório semanal" — resumo fechado compacto
-              e comparável entre sprints: só o desempenho da semana (mesmo
-              texto de "R$X investidos"/`formatCompactPerformanceText` de
-              sempre, sem cálculo novo). Tarefas/otimizações saíram daqui —
-              migraram pra `MonthTasksPanel`/aba de Tarefas, repeti-las era
-              a mesma informação em dois lugares. Meta e comparação com a
-              sprint anterior ficam só na Sprint aberta (KPIs), não aqui. */}
-          <span className="ml-auto flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+        <summary className="cursor-pointer list-none px-2.5 py-1.5">
+          {/* Facelift "Sprints no mobile": abaixo de `sm`, período/badge/
+              investido/performance disputavam a mesma linha flex-wrap
+              (mesmo problema já corrigido em "Fechamento do mês" — mais de 2
+              informações competindo no mesmo espaço horizontal estreito).
+              Vira 3 linhas verticais (cabeçalho · investido · performance),
+              mesmos dados e mesma `formatCompactPerformanceText` de sempre,
+              nenhum cálculo novo. Desktop (`sm:` e acima, abaixo) continua
+              exatamente a linha única de sempre. */}
+          <div className="flex flex-col gap-1 text-xs sm:hidden">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="mitza-chevron shrink-0 text-xs text-muted-foreground group-open:rotate-90">
+                ▸
+              </span>
+              <span className="font-semibold text-foreground">
+                {formatSprintPeriodLabel(sprint.startDate, sprint.endDate)}
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
+              >
+                {TEMPORAL_LABEL[sprint.temporalStatus]}
+              </span>
+            </div>
             {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) && (
-              <span className="tabular-nums">{formatCurrency(sprint.actualSpend)} investidos</span>
+              <span className="tabular-nums text-muted-foreground">{formatCurrency(sprint.actualSpend)} investidos</span>
             )}
             {performance && performance.view.kind !== "not_configured" && (
-              <>
-                {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) && (
-                  <span className="text-border" aria-hidden="true">
-                    ·
-                  </span>
-                )}
-                <span className="tabular-nums">{formatCompactPerformanceText(performance.view)}</span>
-              </>
+              <span className="tabular-nums text-muted-foreground">{formatCompactPerformanceText(performance.view)}</span>
             )}
-          </span>
+          </div>
+
+          <div className="hidden flex-wrap items-center gap-x-3 gap-y-1 sm:flex">
+            <span className="mitza-chevron shrink-0 text-xs text-muted-foreground group-open:rotate-90">
+              ▸
+            </span>
+            <span className="shrink-0 text-sm font-semibold text-foreground">
+              {formatSprintPeriodLabel(sprint.startDate, sprint.endDate)}
+            </span>
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
+            >
+              {TEMPORAL_LABEL[sprint.temporalStatus]}
+            </span>
+
+            {/* Etapa "Sprint como relatório semanal" — resumo fechado compacto
+                e comparável entre sprints: só o desempenho da semana (mesmo
+                texto de "R$X investidos"/`formatCompactPerformanceText` de
+                sempre, sem cálculo novo). Tarefas/otimizações saíram daqui —
+                migraram pra `MonthTasksPanel`/aba de Tarefas, repeti-las era
+                a mesma informação em dois lugares. Meta e comparação com a
+                sprint anterior ficam só na Sprint aberta (KPIs), não aqui. */}
+            <span className="ml-auto flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+              {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) && (
+                <span className="tabular-nums">{formatCurrency(sprint.actualSpend)} investidos</span>
+              )}
+              {performance && performance.view.kind !== "not_configured" && (
+                <>
+                  {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) && (
+                    <span className="text-border" aria-hidden="true">
+                      ·
+                    </span>
+                  )}
+                  <span className="tabular-nums">{formatCompactPerformanceText(performance.view)}</span>
+                </>
+              )}
+            </span>
+          </div>
         </summary>
       )}
 
