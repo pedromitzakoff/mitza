@@ -3,7 +3,8 @@
 import { redirect } from "next/navigation";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { sanitizeNoteHtml, type WorkspaceNote } from "@/lib/workspace-notes";
+import type { WorkspaceNote } from "@/lib/workspace-notes";
+import { sanitizeNoteHtml } from "@/lib/workspace-notes-sanitize";
 
 const NOTE_COLUMNS = "id, user_id, title, content, is_pinned, context_path, context_label, created_at, updated_at";
 

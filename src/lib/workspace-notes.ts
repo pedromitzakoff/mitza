@@ -1,5 +1,3 @@
-import DOMPurify from "isomorphic-dompurify";
-
 export interface WorkspaceNote {
   id: string;
   title: string;
@@ -33,26 +31,6 @@ const CONTEXT_LABEL_RULES: { test: (path: string) => boolean; label: string }[] 
 
 export function defaultWorkspaceContextLabel(path: string): string {
   return CONTEXT_LABEL_RULES.find((rule) => rule.test(path))?.label ?? "MITZA";
-}
-
-/**
- * Editor rico das notas (Etapa "Editor de notas rico") — negrito, itálico,
- * sublinhado, lista com marcadores, lista numerada e link. De propósito,
- * nada de tabela/imagem/embed/heading/bloco: escopo mínimo aprovado, pra
- * não crescer pro tamanho de um editor tipo Notion.
- */
-export const NOTE_ALLOWED_TAGS = ["p", "br", "strong", "em", "u", "ul", "ol", "li", "a"];
-export const NOTE_ALLOWED_ATTR = ["href", "target", "rel"];
-
-/**
- * Única fronteira de autorização real pro conteúdo salvo: o editor (Tiptap)
- * já restringe a estrutura pelo schema, mas a Server Action é um endpoint
- * de rede — alguém podendo chamá-la diretamente (fora da UI) poderia
- * mandar HTML arbitrário. Sanitiza sempre no servidor antes de gravar,
- * nunca só confiando no que o cliente mandou.
- */
-export function sanitizeNoteHtml(html: string): string {
-  return DOMPurify.sanitize(html, { ALLOWED_TAGS: NOTE_ALLOWED_TAGS, ALLOWED_ATTR: NOTE_ALLOWED_ATTR });
 }
 
 /** Notas criadas pelo editor novo sempre têm ao menos uma tag de bloco
