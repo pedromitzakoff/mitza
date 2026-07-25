@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatCurrency, formatDateWithYear, formatPercent } from "@/lib/format";
+import { formatCurrency, formatPercent } from "@/lib/format";
 import type { SpendStatus } from "@/lib/spend-status";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
 import { computeExpectedPct, resolveMonthPeriodSummary } from "@/lib/financial-period";
@@ -128,19 +128,14 @@ export function MonthInvestmentSummary({
   return (
     <div className="rounded-lg border border-border bg-card p-3">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <div className="flex items-center gap-1.5">
-          {lastChange && (
-            <span
-              tabIndex={0}
-              role="img"
-              aria-label={`Orçamento alterado em ${formatDateWithYear(lastChange.lastEffectiveDate)}`}
-              title={`Alterado em ${formatDateWithYear(lastChange.lastEffectiveDate)}\n${formatCurrency(lastChange.lastPreviousAmount)} → ${formatCurrency(lastChange.lastNewAmount)}`}
-              className="cursor-help text-[10px] text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand"
-            >
-              ●
-            </span>
-          )}
-        </div>
+        {/* Etapa "Remover marcador residual": este espaço era o "●" de
+            orçamento alterado, que ficava ao lado do título "Investimento
+            do mês" — o título saiu numa etapa anterior e o marcador ficou
+            sozinho, sem nenhum texto ao lado, parecendo um bullet perdido.
+            A div vazia continua aqui só como espaçador do
+            justify-between da linha acima (mantém as ações do lado
+            direito exatamente onde estavam). */}
+        <div className="flex items-center gap-1.5" />
         <div className="flex shrink-0 items-center gap-2">
           {isAdmin &&
             (isClosedMonth ? (
