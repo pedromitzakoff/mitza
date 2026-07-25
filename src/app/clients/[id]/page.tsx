@@ -1121,7 +1121,46 @@ export default async function ClientPage({
           <div className="mt-3">
             <Section title={`Fechamento de ${monthLabel}`}>
               <div className="rounded-lg border border-border bg-card p-3">
-                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+                {/* Facelift "Fechamento do mês no mobile": abaixo de `sm`, a
+                    mesma linha única (flex-wrap) espremia status/investido/
+                    planejado/resultados/custo/tarefas competindo pelo mesmo
+                    espaço horizontal. Mobile ganha uma segunda apresentação
+                    em blocos verticais (mesmos dados, mesmas variáveis,
+                    nenhum cálculo novo) — nunca mais de 2 informações
+                    importantes por linha. Desktop (`sm:` e acima) continua
+                    exatamente a linha única de sempre. */}
+                <div className="flex flex-col gap-2.5 text-xs sm:hidden">
+                  <span
+                    className={`inline-block w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[monthStatus]}`}
+                  >
+                    {SPEND_STATUS_LABEL[monthStatus]}
+                  </span>
+
+                  <div>
+                    <p className="text-muted-foreground">Investido</p>
+                    <p className="text-base font-semibold text-foreground">{formatCurrency(monthActual)}</p>
+                    <p className="text-muted-foreground">de {formatCurrency(monthPlanned)} planejados</p>
+                  </div>
+
+                  <div>
+                    <p className="text-muted-foreground">Resultados</p>
+                    <p className="font-semibold text-foreground">{monthKpiTexts.resultsValue}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-muted-foreground">Custo por resultado</p>
+                    <p className="font-semibold text-foreground">{monthKpiTexts.costValue}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-muted-foreground">Tarefas do mês</p>
+                    <p className="font-semibold text-foreground">
+                      {monthTasksDone}/{monthTasksTotal}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="hidden flex-wrap items-center gap-x-1.5 gap-y-1 text-xs sm:flex">
                   <span
                     className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[monthStatus]}`}
                   >
