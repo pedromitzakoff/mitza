@@ -468,7 +468,6 @@ function SprintPerformanceReportSection({
   canEditPerformance,
   sourceTimestampText,
   isManualSource,
-  revertSourceToggleId,
   editToggleId,
   returnTo,
 }: {
@@ -478,73 +477,25 @@ function SprintPerformanceReportSection({
   canEditPerformance: boolean;
   sourceTimestampText: string | null;
   isManualSource: boolean;
-  revertSourceToggleId: string;
   editToggleId: string;
   returnTo: string;
 }) {
   const view = performance?.view ?? { kind: "not_configured" as const };
   const editableChannels = performance?.editableChannels ?? [];
-  const performanceGoal = performance?.performanceGoal ?? null;
   const canEditResults = canEditPerformance && (view.kind === "has_data" || view.kind === "no_data") && editableChannels.length > 0;
-  const investmentSourceText = sourceTimestampText ?? (isManualSource ? "Manual" : "Meta");
-  const performanceSourceText =
-    view.kind === "has_data" ? getLatestPerformanceUpdateText(view.summary.latestSource, view.summary.latestUpdatedAt, formatShortDateTime) : null;
-  const showChannelBreakdown = performanceGoal !== null && editableChannels.length > 1;
+  // "Meta · Sincronizado em ..."/"Manual · Atualizado em ..." — já é a
+  // combinação origem+sincronização num texto só (`describeSpendSourceTimestamp`),
+  // exatamente o que esta seção mostra agora. Nenhuma linha de resultados
+  // nem "Por canal" aqui: essa informação já está nos KPIs do topo, mostrar
+  // de novo seria o "segundo dashboard de performance" que este ajuste
+  // pede pra evitar.
+  const sourceText = sourceTimestampText ?? (isManualSource ? "Manual" : "Meta");
 
   return (
     <div>
-      {/* Mesmo hack de checkbox/peer de `SprintPerformanceSection` — ver doc lá. */}
-      {isManualSource && <input type="checkbox" id={revertSourceToggleId} className="peer/revert hidden" />}
       {canEditPerformance && <input type="checkbox" id={editToggleId} className="peer hidden" />}
 
-      <div className="flex flex-col gap-1 text-xs">
-        <p>
-          <span className="text-muted-foreground">Origem do investimento: </span>
-          <span className="text-foreground">{investmentSourceText}</span>
-        </p>
-        <p>
-          <span className="text-muted-foreground">Última atualização dos resultados: </span>
-          <span className="text-foreground">{performanceSourceText ?? "Sem atualização registrada"}</span>
-        </p>
-        {showChannelBreakdown && (
-          <p>
-            <span className="text-muted-foreground">Por canal: </span>
-            <span className="text-foreground">
-              {editableChannels
-                .map(
-                  ({ channel, existingCount }) =>
-                    `${TRAFFIC_CHANNELS[channel].shortLabel}: ${formatPerformanceResult(existingCount ?? 0, performanceGoal!)}`,
-                )
-                .join(" · ")}
-            </span>
-          </p>
-        )}
-        {isManualSource && (
-          <label
-            htmlFor={revertSourceToggleId}
-            className="w-fit cursor-pointer text-muted-foreground hover:underline peer-checked/revert:hidden"
-          >
-            Usar dado do Meta
-          </label>
-        )}
-      </div>
-
-      {isManualSource && (
-        <div className="mt-1.5 hidden items-center gap-1.5 text-xs peer-checked/revert:flex">
-          <span className="text-muted-foreground">Substituir valor manual pelo do Meta?</span>
-          <form action={resetSprintSpendSourceAction.bind(null, sprint.sprintId, clientId, returnTo)}>
-            <SubmitButton
-              className="rounded font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-              pendingChildren="Confirmando..."
-            >
-              Confirmar
-            </SubmitButton>
-          </form>
-          <label htmlFor={revertSourceToggleId} className="cursor-pointer text-muted-foreground hover:underline">
-            Cancelar
-          </label>
-        </div>
-      )}
+      <p className="text-xs text-foreground">{sourceText}</p>
 
       {canEditPerformance && (
         <label
@@ -792,7 +743,7 @@ export function SprintCardBody({
         </div>
 
         <div className="mt-3 border-t border-border pt-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Performance</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Fonte dos dados</p>
           <div className="mt-1.5">
             <SprintPerformanceReportSection
               sprint={sprint}
@@ -801,7 +752,6 @@ export function SprintCardBody({
               canEditPerformance={resolvedCanEditPerformance}
               sourceTimestampText={sourceTimestampText}
               isManualSource={isManualSource}
-              revertSourceToggleId={revertSourceToggleId}
               editToggleId={editToggleId}
               returnTo={returnTo}
             />
