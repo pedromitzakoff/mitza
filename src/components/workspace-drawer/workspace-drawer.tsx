@@ -125,14 +125,20 @@ export function WorkspaceDrawer() {
   function handleTitleChange(value: string) {
     if (!activeNote) return;
     const next = { title: value, content: draftRef.current?.content ?? activeNote.content };
-    setNotes((prev) => prev.map((note) => (note.id === activeNote.id ? { ...note, title: value } : note)));
+    const editedAt = new Date().toISOString();
+    setNotes((prev) =>
+      prev.map((note) => (note.id === activeNote.id ? { ...note, title: value, updated_at: editedAt } : note)),
+    );
     scheduleSave(next);
   }
 
   function handleContentChange(value: string) {
     if (!activeNote) return;
     const next = { title: draftRef.current?.title ?? activeNote.title, content: value };
-    setNotes((prev) => prev.map((note) => (note.id === activeNote.id ? { ...note, content: value } : note)));
+    const editedAt = new Date().toISOString();
+    setNotes((prev) =>
+      prev.map((note) => (note.id === activeNote.id ? { ...note, content: value, updated_at: editedAt } : note)),
+    );
     scheduleSave(next);
   }
 
