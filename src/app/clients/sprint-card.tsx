@@ -758,42 +758,23 @@ export function SprintCardBody({
           </div>
         </div>
 
-        {/* "Registro da semana" — ÚNICO lugar de contexto da Sprint (Etapa
-            "Diário da sprint — unificar Registro e Revisão"): o conceito
-            antigo de "revisão operacional" não existe mais separado, tudo
-            vira uma entrada aqui. Continua sendo exatamente o `CommentThread`
-            de sempre (`commentableType="sprint"`, mesma tabela/Server Action
-            `createCommentAction`) — "+ Registrar" não é uma entidade nova,
-            só um atalho que foca o campo de texto que o próprio
-            `CommentThread` já renderiza (via `<label htmlFor>` apontando
-            pro `id` do input — foco nativo do navegador, sem JS extra).
-            Sempre visível (deixou de ser `<details>`) — é conteúdo do
-            relatório, não um extra escondido. */}
+        {/* Histórico da Sprint — ÚNICO lugar de contexto da semana (Etapa
+            "Reduzir altura do Registro da semana"): o título, o texto
+            explicativo e o botão "+ Registrar" saíram — não acrescentavam
+            informação, só altura. O próprio placeholder do campo (ver
+            `CommentThread`) já comunica o propósito da área. Continua
+            sendo exatamente o `CommentThread` de sempre
+            (`commentableType="sprint"`, mesma tabela/Server Action
+            `createCommentAction`) — só lista + campo + "Enviar", nada além
+            disso. */}
         <div className="mt-3 border-t border-border pt-2">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Registro da semana</p>
-            {canOperate && (
-              <label
-                htmlFor={`comment-content-${sprint.sprintId}`}
-                className="mitza-pressable cursor-pointer rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-              >
-                + Registrar
-              </label>
-            )}
-          </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Decisões, aprendizados, hipóteses, mudanças de estratégia, solicitações do cliente e observações para a
-            próxima sprint.
-          </p>
-          <div className="mt-1.5">
-            <CommentThread
-              comments={comments}
-              commentableType="sprint"
-              commentableId={sprint.sprintId}
-              clientId={clientId}
-              canOperate={canOperate}
-            />
-          </div>
+          <CommentThread
+            comments={comments}
+            commentableType="sprint"
+            commentableId={sprint.sprintId}
+            clientId={clientId}
+            canOperate={canOperate}
+          />
         </div>
       </div>
     );

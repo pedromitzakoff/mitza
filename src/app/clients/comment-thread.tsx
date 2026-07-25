@@ -107,7 +107,9 @@ export function CommentThread({
           <input
             id={`comment-content-${commentableId}`}
             name="content"
-            placeholder="Comentar..."
+            placeholder={
+              commentableType === "sprint" ? "Registrar decisão, aprendizado ou observação da sprint..." : "Comentar..."
+            }
             required
             disabled={isPending}
             className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none focus:border-zinc-500 disabled:opacity-60"
