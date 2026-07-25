@@ -97,35 +97,79 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
   return (
     <Link
       href={`/clients/${card.clientId}`}
-      className="mitza-pressable group flex items-center gap-4 rounded-lg border border-border px-4 py-3 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:border-zinc-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:border-zinc-700"
+      className="mitza-pressable group block rounded-lg border border-border px-4 py-3 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:border-zinc-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:border-zinc-700"
     >
-      <ClientAvatar name={card.clientName} imageUrl={card.avatarUrl} size="sm" />
+      {/* Facelift "Operação no mobile": o layout de desktop (nome com largura
+          fixa de 256px + grid de 4 colunas com gap de 40px) nunca foi pensado
+          pra caber numa tela estreita — abaixo de `sm` as 4 colunas do grid
+          colapsavam a quase zero de largura e os rótulos das métricas
+          ficavam sobrepostos uns aos outros (o "Investimeleatdas" ilegível
+          reportado). Mobile ganha uma segunda apresentação: avatar+nome no
+          topo, métricas num grid 2×2 (nunca mais de 2 por linha, mesmo
+          princípio já aplicado em Fechamento do mês/Sprint). Mesmos dados,
+          mesmo `MetricDeviation`, nenhum cálculo novo. Desktop (`sm:` e
+          acima) continua exatamente a linha única de sempre. */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        <div className="flex items-center gap-3">
+          <ClientAvatar name={card.clientName} imageUrl={card.avatarUrl} size="sm" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
+            <p className={`text-[11px] ${footerClass}`}>{footerLabel ?? ""}</p>
+          </div>
+        </div>
 
-      <div className="flex w-64 min-w-0 shrink-0 flex-col">
-        <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
-        <p className={`text-[11px] ${footerClass}`}>{footerLabel ?? ""}</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+          <MetricDeviation
+            label="Investimento"
+            value={investmentValue}
+            diagnostic={investment.hasSyncedData ? diagnostics.investment : null}
+            title={investmentTitle}
+          />
+          <MetricDeviation
+            label={goalConfig?.resultMetricLabel ?? "Resultado"}
+            value={resultValue}
+            diagnostic={null}
+            title={resultTitle}
+          />
+          <MetricDeviation
+            label={goalConfig?.costMetricShortLabel ?? "Custo"}
+            value={costValue}
+            diagnostic={diagnostics.cpa}
+            title={costTitle}
+          />
+          <MetricDeviation label={metaLabel} value={metaValue} diagnostic={null} title={metaTitle} />
+        </div>
       </div>
 
-      <div className="grid flex-1 grid-cols-4 gap-10">
-        <MetricDeviation
-          label="Investimento"
-          value={investmentValue}
-          diagnostic={investment.hasSyncedData ? diagnostics.investment : null}
-          title={investmentTitle}
-        />
-        <MetricDeviation
-          label={goalConfig?.resultMetricLabel ?? "Resultado"}
-          value={resultValue}
-          diagnostic={null}
-          title={resultTitle}
-        />
-        <MetricDeviation
-          label={goalConfig?.costMetricShortLabel ?? "Custo"}
-          value={costValue}
-          diagnostic={diagnostics.cpa}
-          title={costTitle}
-        />
-        <MetricDeviation label={metaLabel} value={metaValue} diagnostic={null} title={metaTitle} />
+      <div className="hidden items-center gap-4 sm:flex">
+        <ClientAvatar name={card.clientName} imageUrl={card.avatarUrl} size="sm" />
+
+        <div className="flex w-64 min-w-0 shrink-0 flex-col">
+          <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
+          <p className={`text-[11px] ${footerClass}`}>{footerLabel ?? ""}</p>
+        </div>
+
+        <div className="grid flex-1 grid-cols-4 gap-10">
+          <MetricDeviation
+            label="Investimento"
+            value={investmentValue}
+            diagnostic={investment.hasSyncedData ? diagnostics.investment : null}
+            title={investmentTitle}
+          />
+          <MetricDeviation
+            label={goalConfig?.resultMetricLabel ?? "Resultado"}
+            value={resultValue}
+            diagnostic={null}
+            title={resultTitle}
+          />
+          <MetricDeviation
+            label={goalConfig?.costMetricShortLabel ?? "Custo"}
+            value={costValue}
+            diagnostic={diagnostics.cpa}
+            title={costTitle}
+          />
+          <MetricDeviation label={metaLabel} value={metaValue} diagnostic={null} title={metaTitle} />
+        </div>
       </div>
     </Link>
   );
