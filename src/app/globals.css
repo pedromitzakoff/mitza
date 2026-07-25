@@ -27,6 +27,12 @@
      Etapa 47 (surface/border/text/success/warning/danger) continuam
      exatamente como estavam. */
   --overview-bg: var(--background);
+  /* --client-page-bg (teste visual "fundo branco"): token page-scoped só
+     pra /clients/[id], mesmo precedente do --overview-bg acima — troca só
+     o fundo estrutural desta página, nunca --background/body (que
+     continua regendo todas as outras rotas). Cards/bordas/divisórias já
+     usam --card/--border-default, que não mudam aqui. */
+  --client-page-bg: #ffffff;
   --navy: #0f1c42;
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
   --shadow-float: 0 4px 12px rgba(16, 24, 40, 0.10), 0 2px 6px rgba(16, 24, 40, 0.06);
@@ -80,6 +86,7 @@
   --color-brand: var(--brand);
   --color-brand-hover: var(--brand-hover);
   --color-overview-bg: var(--overview-bg);
+  --color-client-page-bg: var(--client-page-bg);
   --color-navy: var(--navy);
   --color-overview-surface: var(--overview-surface);
   --color-overview-surface-subtle: var(--overview-surface-subtle);
@@ -112,6 +119,7 @@
     --brand-hover: #5b78d6;
 
     --overview-bg: var(--background);
+    --client-page-bg: var(--background);
     --navy: #dde4fb;
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
     --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
@@ -398,6 +406,48 @@ details[open] > .mitza-accordion-rows {
 
 .mitza-accordion-rows-inner {
   overflow: hidden;
+}
+
+/* Editor de notas rico (Tiptap) — Tailwind reseta list-style/margin de
+ * ul/ol por padrão, então o conteúdo do ProseMirror precisa da própria
+ * folha de estilo mínima pra negrito/itálico/sublinhado/lista/link
+ * aparecerem formatados de verdade durante a edição (não só inseridos
+ * como marcador de texto, como no textarea antigo). Placeholder segue a
+ * receita oficial do Tiptap (`data-placeholder` + `::before`). */
+.mitza-note-editor .ProseMirror {
+  outline: none;
+  min-height: 100%;
+}
+
+.mitza-note-editor .ProseMirror p {
+  margin: 0.25rem 0;
+}
+
+.mitza-note-editor .ProseMirror ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+
+.mitza-note-editor .ProseMirror ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+}
+
+.mitza-note-editor .ProseMirror li {
+  margin: 0.125rem 0;
+}
+
+.mitza-note-editor .ProseMirror a {
+  color: var(--brand);
+  text-decoration: underline;
+}
+
+.mitza-note-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: #a1a1aa;
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

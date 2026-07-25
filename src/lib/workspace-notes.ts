@@ -1,6 +1,12 @@
+import DOMPurify from "isomorphic-dompurify";
+
 export interface WorkspaceNote {
   id: string;
   title: string;
+  /** HTML sanitizado (Etapa "Editor de notas rico") — notas criadas antes
+   * dessa etapa guardam texto puro (nenhuma migração automática rodou);
+   * ver `looksLikeRichContent`/`legacyPlainTextToHtml` pra exibir as duas
+   * gerações de nota do mesmo jeito no editor. */
   content: string;
   is_pinned: boolean;
   context_path: string | null;
@@ -29,43 +35,67 @@ export function defaultWorkspaceContextLabel(path: string): string {
   return CONTEXT_LABEL_RULES.find((rule) => rule.test(path))?.label ?? "MITZA";
 }
 
-interface TextSelectionResult {
-  value: string;
-  start: number;
-  end: number;
+/**
+ * Editor rico das notas (Etapa "Editor de notas rico") — negrito, itálico,
+ * sublinhado, lista com marcadores, lista numerada e link. De propósito,
+ * nada de tabela/imagem/embed/heading/bloco: escopo mínimo aprovado, pra
+ * não crescer pro tamanho de um editor tipo Notion.
+ */
+export const NOTE_ALLOWED_TAGS = ["p", "br", "strong", "em", "u", "ul", "ol", "li", "a"];
+export const NOTE_ALLOWED_ATTR = ["href", "target", "rel"];
+
+/**
+ * Única fronteira de autorização real pro conteúdo salvo: o editor (Tiptap)
+ * já restringe a estrutura pelo schema, mas a Server Action é um endpoint
+ * de rede — alguém podendo chamá-la diretamente (fora da UI) poderia
+ * mandar HTML arbitrário. Sanitiza sempre no servidor antes de gravar,
+ * nunca só confiando no que o cliente mandou.
+ */
+export function sanitizeNoteHtml(html: string): string {
+  return DOMPurify.sanitize(html, { ALLOWED_TAGS: NOTE_ALLOWED_TAGS, ALLOWED_ATTR: NOTE_ALLOWED_ATTR });
 }
 
-/** Envolve a seleção com `marker` dos dois lados (negrito `**`, itálico
- * `_`) — sem seleção, insere o par de marcadores e deixa o cursor entre
- * eles, pronto pra digitar. */
-export function applyInlineWrap(value: string, start: number, end: number, marker: string): TextSelectionResult {
-  const before = value.slice(0, start);
-  const selected = value.slice(start, end);
-  const after = value.slice(end);
-  const next = `${before}${marker}${selected}${marker}${after}`;
-
-  if (selected.length === 0) {
-    const caret = start + marker.length;
-    return { value: next, start: caret, end: caret };
-  }
-  return { value: next, start: start + marker.length, end: end + marker.length };
+/** Notas criadas pelo editor novo sempre têm ao menos uma tag de bloco
+ * (`<p>`/`<ul>`/`<ol>`); notas antigas (textarea + símbolos `**`/`_`/`- `)
+ * são sempre texto puro sem nenhuma tag. Heurística simples, mas
+ * suficiente pra nunca confundir as duas gerações sem precisar de coluna
+ * nova ou migração. */
+function looksLikeRichContent(content: string): boolean {
+  return /<[a-z][\s\S]*>/i.test(content);
 }
 
-/** Prefixa cada linha tocada pela seleção com `prefix` (lista `- `,
- * checklist `- [ ] `) — linhas que já têm o prefixo não são duplicadas. */
-export function applyLinePrefix(value: string, start: number, end: number, prefix: string): TextSelectionResult {
-  const lineStart = value.lastIndexOf("\n", start - 1) + 1;
-  const nextNewline = value.indexOf("\n", end);
-  const lineEnd = nextNewline === -1 ? value.length : nextNewline;
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
-  const before = value.slice(0, lineStart);
-  const block = value.slice(lineStart, lineEnd);
-  const after = value.slice(lineEnd);
-
-  const nextBlock = block
+/** Converte texto puro legado em HTML equivalente (cada linha vira um
+ * parágrafo, preservando a quebra de linha que o textarea antigo
+ * mostrava) — nunca interpreta os símbolos `**`/`_`/`- ` como formatação:
+ * pedido explícito é exibir notas antigas exatamente como texto simples,
+ * sem conversão automática. */
+export function legacyPlainTextToHtml(content: string): string {
+  if (content.trim() === "") return "";
+  return content
     .split("\n")
-    .map((line) => (line.startsWith(prefix) ? line : `${prefix}${line}`))
-    .join("\n");
+    .map((line) => `<p>${escapeHtml(line) || "<br>"}</p>`)
+    .join("");
+}
 
-  return { value: `${before}${nextBlock}${after}`, start: lineStart, end: lineStart + nextBlock.length };
+/** HTML pronto pra alimentar o editor (Tiptap `content`), cobrindo as
+ * duas gerações de nota com a mesma função. */
+export function noteContentToEditorHtml(content: string): string {
+  return looksLikeRichContent(content) ? content : legacyPlainTextToHtml(content);
+}
+
+/** Prévia em texto puro pra lista de notas (tira as tags, nunca renderiza
+ * HTML fora do editor). */
+export function htmlToPlainPreview(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
 }

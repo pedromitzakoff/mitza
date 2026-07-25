@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import type { WorkspaceNote } from "@/lib/workspace-notes";
+import { sanitizeNoteHtml, type WorkspaceNote } from "@/lib/workspace-notes";
 
 const NOTE_COLUMNS = "id, user_id, title, content, is_pinned, context_path, context_label, created_at, updated_at";
 
@@ -64,7 +64,7 @@ export async function updateWorkspaceNoteAction(
   const supabase = await createSupabaseClient();
   const { error } = await supabase
     .from("workspace_notes")
-    .update({ title: fields.title, content: fields.content })
+    .update({ title: fields.title, content: sanitizeNoteHtml(fields.content) })
     .eq("id", noteId);
 
   if (error) return { error: error.message };
@@ -83,10 +83,11 @@ export async function toggleWorkspaceNotePinAction(noteId: string, pinned: boole
 }
 
 /**
- * Não exposta como "excluir nota" na interface (o pedido não lista essa
- * ação entre as do painel) — usada só internamente pelo drawer pra
- * descartar uma nota em branco (nunca teve título nem conteúdo) quando o
- * usuário fecha ou sai dela, evitando acumular notas vazias.
+ * Reutilizada em dois fluxos do drawer: descartar uma nota em branco ao
+ * fechar (nunca teve título nem conteúdo) e a exclusão explícita pedida
+ * pelo usuário (com confirmação na UI) — mesma action, RLS já garante que
+ * só o dono da nota (`user_id = current_team_member_id()`) consegue
+ * apagá-la.
  */
 export async function deleteWorkspaceNoteAction(noteId: string): Promise<{ error?: string }> {
   const profile = await getCurrentProfile();
