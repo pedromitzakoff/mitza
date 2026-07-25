@@ -237,51 +237,51 @@ export function MonthInvestmentSummary({
         <InvestmentBarWithTooltip summary={summary} monthTemporalStatus="passado" tooltipText={barTooltipText} />
       ) : (
         <>
-          <InvestmentBarWithTooltip summary={summary} tooltipText={barTooltipText} />
-
-          {/* DIAGNÓSTICO — o principal destaque do card (Etapa "Facelift"):
-              responde "estamos no ritmo certo?" antes de qualquer número
-              novo, reaproveitando a mesma frase/tom que a barra já calculava. */}
+          {/* DIAGNÓSTICO — agora ANTES da barra (Etapa "Reordenar
+              diagnóstico"): o gestor quer a resposta primeiro, o gráfico é
+              o suporte visual dela, não o contrário. Mesma frase/tom de
+              sempre, só subiu de posição. */}
           {diagnosisText && (
-            <p className={`mt-2 flex items-center gap-1.5 text-sm font-semibold ${diagnosisToneClass}`}>
+            <p className={`flex items-center gap-1.5 text-sm font-semibold ${diagnosisToneClass}`}>
               <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-current" aria-hidden="true" />
               {diagnosisText}
             </p>
           )}
 
-          {/* RECOMENDAÇÃO — quanto ainda precisa ser investido daqui pra
-              frente (`computeMonthlyBudgetPlan`, nunca a mesma fórmula do
-              ritmo acima), agora no mesmo padrão label/valor do cabeçalho —
-              lê como uma recomendação do sistema, não só um cálculo solto. */}
-          {plan?.isBudgetReached ? (
+          <InvestmentBarWithTooltip summary={summary} tooltipText={barTooltipText} />
+
+          {/* RECOMENDAÇÃO — mesmos 3 números de sempre (`recommendedDaily`/
+              `remainingBudget`/`eligibleDaysCount`, computeMonthlyBudgetPlan,
+              nunca a fórmula do ritmo acima), agora como uma faixa de mini-
+              KPIs (Etapa "Ritmo recomendado vira mini-KPI") — mesmo padrão
+              label pequeno + valor de `MonthlyKpiSummary`, só mais compacto
+              e lado a lado, pra ler mais rápido que a frase longa de antes. */}
+          {plan && (
             <div className="mt-2">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Orçamento mensal atingido</p>
-              <p className="text-sm font-semibold text-brand">{formatCurrency(0)}/dia</p>
-              {plan.overageAmount > 0 && (
-                <p className="mt-0.5 text-[11px] text-red-600 dark:text-red-400">
+              {plan.isBudgetReached && (
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Orçamento mensal atingido</p>
+              )}
+              <div className={`grid grid-cols-3 gap-x-3 gap-y-1 ${plan.isBudgetReached ? "mt-1" : ""}`}>
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Ritmo</p>
+                  <p className="text-sm font-semibold text-brand">{formatCurrency(plan.recommendedDaily)}/dia</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Restam</p>
+                  <p className="text-sm font-semibold text-foreground">{formatCurrency(plan.remainingBudget)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Dias</p>
+                  <p className="text-sm font-semibold text-foreground">{plan.eligibleDaysCount}</p>
+                </div>
+              </div>
+              {plan.isBudgetReached && plan.overageAmount > 0 && (
+                <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">
                   {formatCurrency(plan.overageAmount)} acima do orçamento planejado
                 </p>
               )}
             </div>
-          ) : plan && plan.eligibleDaysCount === 1 ? (
-            <div className="mt-2">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Recomendado para hoje</p>
-              <p className="text-sm font-semibold text-brand">{formatCurrency(plan.remainingBudget)}</p>
-              {/* RESTANTE — auxiliar, nunca competindo com o diagnóstico/
-                  recomendação acima (texto pequeno, sem peso/cor de destaque). */}
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                Restam {formatCurrency(plan.remainingBudget)} para 1 dia, incluindo hoje
-              </p>
-            </div>
-          ) : plan ? (
-            <div className="mt-2">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Ritmo recomendado</p>
-              <p className="text-sm font-semibold text-brand">{formatCurrency(plan.recommendedDaily)}/dia</p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                Restam {formatCurrency(plan.remainingBudget)} para {plan.eligibleDaysCount} dias, incluindo hoje
-              </p>
-            </div>
-          ) : null}
+          )}
         </>
       )}
 
