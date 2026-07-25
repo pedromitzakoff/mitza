@@ -112,7 +112,12 @@ export function formatDateTime(value: string): string {
   return dateTimeFormatter.format(new Date(value));
 }
 
-const timeOnlyFormatter = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
+/** Sem `timeZone` explícito, o Intl.DateTimeFormat usa o fuso do ambiente
+ * de execução — em Server Components isso é o fuso do processo Node.js
+ * (UTC na Vercel), não o do usuário, o que exibia horários 3h adiantados
+ * em relação ao fuso da agência. `APP_TIMEZONE` é o mesmo token já usado
+ * pelos outros formatters de hora deste arquivo. */
+const timeOnlyFormatter = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: APP_TIMEZONE });
 
 /** "Hoje, 14:03" / "Ontem, 09:10" / "12/07, 09:10" — reaproveita a mesma
  * regra de dia relativo de `formatLastOptimizationLabel` (monthly-reports.ts),
