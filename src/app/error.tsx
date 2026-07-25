@@ -21,7 +21,12 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
   }, [error]);
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 px-6 py-16 text-center">
+    // Etapa "Fundo branco autenticado": bg-background fixo aqui — quando o
+    // erro acontece com o usuário autenticado, este componente renderiza
+    // dentro do <main> do AppShell (agora bg-authenticated-bg); pedido
+    // explícito de não alterar a página de erro, então ela sempre usa o
+    // fundo original independente de onde for montada.
+    <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 bg-background px-6 py-16 text-center">
       <h1 className="text-lg font-semibold text-foreground">Não foi possível carregar esta página</h1>
       <p className="text-sm text-muted-foreground">
         Tente novamente. Se o problema continuar, avise o time responsável.

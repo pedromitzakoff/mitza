@@ -16,23 +16,17 @@
   --brand: #4169e1;
   --brand-hover: #3151b8;
 
-  /* Tokens novos (Etapa 41) — usados só pela Visão Geral por enquanto, pra
-     não alterar o visual de nenhuma outra tela nesta rodada. Ficam aqui
-     (não espalhados por componente) pra já existirem prontos se um dia
-     alguma outra tela quiser o mesmo refinamento.
-     --overview-bg (Etapa 48): restaurado pro mesmo valor de --background —
-     o cinza-azulado frio introduzido na Etapa 41 não foi aprovado nesta
-     rodada. Referencia var(--background) em vez de repetir o hex, pra
-     nunca mais divergir por acidente. Todos os outros tokens novos da
-     Etapa 47 (surface/border/text/success/warning/danger) continuam
-     exatamente como estavam. */
-  --overview-bg: var(--background);
-  /* --client-page-bg (teste visual "fundo branco"): token page-scoped só
-     pra /clients/[id], mesmo precedente do --overview-bg acima — troca só
-     o fundo estrutural desta página, nunca --background/body (que
-     continua regendo todas as outras rotas). Cards/bordas/divisórias já
-     usam --card/--border-default, que não mudam aqui. */
-  --client-page-bg: #ffffff;
+  /* --authenticated-bg (Etapa "Fundo branco autenticado"): fundo estrutural
+     de toda a aplicação autenticada (aplicado em `<main>`, AppShell) — nunca
+     em --background/body, que continua regendo login/páginas públicas/erro
+     fora do shell autenticado. Hierarquia visual continua vindo de
+     borda/espaçamento/divisória (--card/--border-default, inalterados),
+     nunca de contraste de fundo. Promovido a partir de dois tokens
+     page-scoped que testaram essa mesma cor antes de virar padrão da
+     plataforma — --overview-bg (Visão Geral) e --client-page-bg (página do
+     cliente) — ambos retirados; as páginas voltam a consumir só este token
+     compartilhado, sem override próprio. */
+  --authenticated-bg: #ffffff;
   --navy: #0f1c42;
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
   --shadow-float: 0 4px 12px rgba(16, 24, 40, 0.10), 0 2px 6px rgba(16, 24, 40, 0.06);
@@ -85,8 +79,7 @@
   --color-border: var(--border-default);
   --color-brand: var(--brand);
   --color-brand-hover: var(--brand-hover);
-  --color-overview-bg: var(--overview-bg);
-  --color-client-page-bg: var(--client-page-bg);
+  --color-authenticated-bg: var(--authenticated-bg);
   --color-navy: var(--navy);
   --color-overview-surface: var(--overview-surface);
   --color-overview-surface-subtle: var(--overview-surface-subtle);
@@ -118,8 +111,7 @@
     --brand: #7b93e8;
     --brand-hover: #5b78d6;
 
-    --overview-bg: var(--background);
-    --client-page-bg: var(--background);
+    --authenticated-bg: var(--background);
     --navy: #dde4fb;
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
     --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);

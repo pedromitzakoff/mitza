@@ -51,7 +51,12 @@ export function AppShell({
           onOpen={() => setMobileOpen(true)}
           onClose={() => setMobileOpen(false)}
         />
-        <main className="min-w-0 flex-1">{children}</main>
+        {/* Etapa "Fundo branco autenticado": --authenticated-bg aplicado aqui,
+            no nível do shell — toda rota autenticada herda o mesmo fundo
+            branco sem precisar de override próprio. min-h-dvh garante que
+            o fundo cubra a viewport inteira mesmo em páginas curtas (o pai
+            usa md:items-start, que não estica o <main> no desktop). */}
+        <main className="min-h-dvh min-w-0 flex-1 bg-authenticated-bg">{children}</main>
       </div>
       <WorkspaceTrigger />
       <WorkspaceDrawer />

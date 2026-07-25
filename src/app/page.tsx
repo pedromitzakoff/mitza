@@ -766,7 +766,7 @@ export default async function Home({
   const monthLabel = formatMonthLabel(monthRange.firstDay);
 
   return (
-    <div className={`min-h-[calc(100dvh_-_3rem)] bg-overview-bg ${inter.variable}`} style={{ fontFamily: "var(--font-overview)" }}>
+    <div className={`min-h-[calc(100dvh_-_3rem)] ${inter.variable}`} style={{ fontFamily: "var(--font-overview)" }}>
       <div className="mx-auto max-w-7xl px-6 py-3">
         <PageHeader
           title="Visão Geral"

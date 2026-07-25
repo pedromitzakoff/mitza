@@ -771,8 +771,7 @@ export default async function ClientPage({
   const monthTasksDone = monthTaskRows.filter((task) => effectiveTaskStatus(task, today) === "feito").length;
 
   return (
-    <div className="min-h-dvh bg-client-page-bg">
-      <div className="mx-auto max-w-6xl px-6 py-5">
+    <div className="mx-auto max-w-6xl px-6 py-5">
       <ScrollRestoreOnMount />
 
       {/* 1. Identificação do cliente — substitui o antigo ClientContextBar
@@ -1310,7 +1309,6 @@ export default async function ClientPage({
       {reviewDetail && (
         <AccountReviewDetailDrawer review={reviewDetail} clientId={client.id} closeHref={returnTo} />
       )}
-      </div>
     </div>
   );
 }
