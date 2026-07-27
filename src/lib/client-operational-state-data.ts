@@ -4,6 +4,7 @@ import { todayUTC, todayDateString } from "@/lib/today";
 import { businessDaysSince } from "@/lib/business-days";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { aggregatePerformanceResults, computeCostPerResult, type PerformanceRecordRow } from "@/lib/performance";
+import { channelToPerformanceSource } from "@/lib/performance-queries";
 import { sumEffectiveSpendForMonth, type SprintSpendSource, type DailySpendRow } from "@/lib/effective-spend";
 import {
   computeMonthlyExpectedPct,
@@ -49,7 +50,7 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
   const { firstDay: monthStart, lastDay: monthEnd } = monthRange;
   const monthExpectedPct = computeMonthlyExpectedPct(monthRange, todayStr);
 
-  const [clients, sprints, dailySpendRows, latestReviews, lastActivityRows, openTasks, planChanges, reviewCadences] =
+  const [clients, sprints, dailySpendRows, latestReviews, lastActivityRows, openTasks, planChanges, reviewCadences, activeImportSources] =
     await Promise.all([
       requireQuery(
         supabase
@@ -109,6 +110,11 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
         supabase.from("account_review_cadences").select("client_id, max_business_days_without_review, is_active"),
         "account_review_cadences",
       ),
+      // Integração Stract (arquitetura aprovada — ver DECISIONS.md): cliente
+      // com uma import_source ativa lê performance de `daily_performance`,
+      // nunca de `performance_records` — nunca os dois somados. `enabled`
+      // é o único campo que decide isso (status é só observabilidade).
+      requireQuery(supabase.from("import_sources").select("client_id").eq("enabled", true), "import_sources:active"),
     ]);
 
   const sprintsByClient = new Map<string, typeof sprints>();
@@ -153,6 +159,41 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
       sourceUpdatedAt: row.source_updated_at,
     });
     performanceRowsByClient.set(clientId, list);
+  }
+
+  // Integração Stract (arquitetura aprovada — ver DECISIONS.md): cliente com
+  // import_source ativa lê performance de `daily_performance`, NUNCA de
+  // `performance_records` — por isso a entrada de `performanceRowsByClient`
+  // desse cliente é inteiramente substituída abaixo (nunca somada às linhas
+  // de `performance_records` já montadas acima).
+  const activeImportClientIds = new Set((activeImportSources ?? []).map((row) => row.client_id));
+  if (activeImportClientIds.size > 0) {
+    const dailyPerformanceRows = await requireQuery(
+      supabase
+        .from("daily_performance")
+        .select("client_id, channel, result_type, result_count, source_updated_at")
+        .in("client_id", Array.from(activeImportClientIds))
+        .gte("date", monthStart)
+        .lte("date", monthEnd),
+      "daily_performance",
+    );
+
+    const dailyPerformanceByClient = new Map<string, PerformanceRecordRow[]>();
+    for (const row of dailyPerformanceRows) {
+      const list = dailyPerformanceByClient.get(row.client_id) ?? [];
+      list.push({
+        channel: row.channel,
+        resultType: row.result_type,
+        resultCount: row.result_count,
+        source: channelToPerformanceSource(row.channel),
+        sourceUpdatedAt: row.source_updated_at,
+      });
+      dailyPerformanceByClient.set(row.client_id, list);
+    }
+
+    for (const clientId of activeImportClientIds) {
+      performanceRowsByClient.set(clientId, dailyPerformanceByClient.get(clientId) ?? []);
+    }
   }
 
   const latestReviewByClient = new Map<string, string>();

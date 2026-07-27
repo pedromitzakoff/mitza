@@ -4,6 +4,7 @@ import { perfNow, perfLog } from "@/lib/perf-log";
 import { EmptyState } from "@/components/ui/empty-state";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
+import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
 import { todayUTC, todayDateString } from "@/lib/today";
 import {
   currentMonthRange,
@@ -203,9 +204,9 @@ export default async function SprintsPage({
   // Etapa 71: só as sprints que de fato pertencem ao mês SELECIONADO (não a
   // janela união com o mês corrente) — igual à Visão Geral, pra nunca somar
   // no consolidado mensal um resultado de uma sprint de outro mês.
-  const monthSprintIdsForPerformance = sprints
-    .filter((s) => s.start_date <= monthRange.lastDay && s.end_date >= monthRange.firstDay)
-    .map((s) => s.id);
+  const monthSprintsForPerformance = sprints.filter(
+    (s) => s.start_date <= monthRange.lastDay && s.end_date >= monthRange.firstDay,
+  );
 
   // Comentários de TODAS as sprints visíveis, buscados em lote uma única vez
   // (não por card) — pra o mesmo SprintCard da página do cliente também
@@ -238,15 +239,14 @@ export default async function SprintsPage({
           "comments",
         )
       : Promise.resolve([]),
-    monthSprintIdsForPerformance.length > 0
-      ? requireQuery(
-          supabase
-            .from("performance_records")
-            .select("client_id, sprint_id, channel, result_type, result_count, source, source_updated_at")
-            .in("sprint_id", monthSprintIdsForPerformance),
-          "performance_records",
-        )
-      : Promise.resolve([]),
+    // Integração Stract (arquitetura aprovada — ver DECISIONS.md):
+    // `resolvePerformanceRowsForSprints` decide, por cliente, entre
+    // `performance_records` (manual) e `daily_performance` (Stract) — nunca
+    // as duas somadas. Mesmo formato de linha de antes.
+    resolvePerformanceRowsForSprints(
+      supabase,
+      monthSprintsForPerformance.map((s) => ({ id: s.id, client_id: s.client_id, start_date: s.start_date, end_date: s.end_date })),
+    ),
   ]);
   perfLog("sprints bloco 2 (atividade/comentários/performance)", __perfBlock2Start);
 

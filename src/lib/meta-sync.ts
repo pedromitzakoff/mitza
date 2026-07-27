@@ -40,6 +40,27 @@ export async function syncClientMetaSpend(clientId: string): Promise<SyncResult>
     throw new Error(`Cliente ${clientId} está com status "${client.status}" — sincronização automática pausada.`);
   }
 
+  // Integração Stract (arquitetura aprovada — ver DECISIONS.md, ponto 7):
+  // cliente com uma import_source ativa pro canal Meta nunca usa a sync
+  // nativa em paralelo — duas fontes automáticas escrevendo a mesma chave
+  // `(client_id, date, channel)` de daily_spend virariam uma corrida de
+  // "quem rodou por último". O Import Service (`lib/stract-sync.ts`) é a
+  // única fonte automática pra esse cliente a partir do momento em que a
+  // integração é ligada.
+  const { data: activeImportSource } = await supabase
+    .from("import_sources")
+    .select("id")
+    .eq("client_id", clientId)
+    .eq("channel", "meta")
+    .eq("enabled", true)
+    .maybeSingle();
+
+  if (activeImportSource) {
+    throw new Error(
+      `Cliente ${clientId} sincroniza o canal Meta via integração Stract — a sincronização nativa fica desativada enquanto essa integração estiver ativa.`,
+    );
+  }
+
   const currentDate = todayDateString();
 
   const { data: sprint, error: sprintError } = await supabase

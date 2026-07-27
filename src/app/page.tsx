@@ -23,6 +23,7 @@ import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { computeFinancialSummary, computeManagerSummary, computeSpendRhythmCounts } from "@/lib/agency-metrics";
 import { computeHealthResultsSummary } from "@/lib/agency-health-aggregation";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
+import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
 import { evaluateClientChannelDiagnostics } from "@/lib/client-operational-state";
 import { resolveClientChannelBreakdown, type ClientChannelState } from "@/lib/client-channel-breakdown";
 import {
@@ -268,9 +269,9 @@ export default async function Home({
   // Etapa 71: registros de performance são sempre por sprint — buscar por
   // sprint_id (não por período) evita depender de duplicar a lógica de
   // sobreposição de datas já usada acima pras sprints em si.
-  const monthSprintIdsForPerformance = (sprints ?? [])
-    .filter((s) => s.start_date <= monthRange.lastDay && s.end_date >= monthRange.firstDay)
-    .map((s) => s.id);
+  const monthSprintsForPerformance = (sprints ?? []).filter(
+    (s) => s.start_date <= monthRange.lastDay && s.end_date >= monthRange.firstDay,
+  );
 
   const __perfBlock2Start = perfNow();
   const [clientActivity, sprintActivity, performanceRecords, lastReviews] = await Promise.all([
@@ -289,15 +290,14 @@ export default async function Home({
           "sprint_last_operational_activity",
         )
       : Promise.resolve([]),
-    monthSprintIdsForPerformance.length > 0
-      ? requireQuery(
-          supabase
-            .from("performance_records")
-            .select("client_id, sprint_id, channel, result_type, result_count, source, source_updated_at")
-            .in("sprint_id", monthSprintIdsForPerformance),
-          "performance_records",
-        )
-      : Promise.resolve([]),
+    // Integração Stract (arquitetura aprovada — ver DECISIONS.md):
+    // `resolvePerformanceRowsForSprints` decide, por cliente, entre
+    // `performance_records` (manual) e `daily_performance` (Stract) — nunca
+    // as duas somadas. Mesmo formato de linha de antes.
+    resolvePerformanceRowsForSprints(
+      supabase,
+      monthSprintsForPerformance.map((s) => ({ id: s.id, client_id: s.client_id, start_date: s.start_date, end_date: s.end_date })),
+    ),
     // Etapa 74 — "Última otimização": sempre o dado GLOBAL mais recente por
     // cliente (independe do mês selecionado), por isso uma busca própria
     // sem filtro de data — mesma fonte usada no Acompanhamento da Conta.

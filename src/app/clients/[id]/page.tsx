@@ -6,6 +6,7 @@ import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
+import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
 import {
   assertSingleCurrentSprint,
   computeSprintEffectiveSpend,
@@ -328,17 +329,15 @@ export default async function ClientPage({
   // Etapa 71: registros de performance de todas as sprints do mês
   // selecionado — sempre por sprint (nenhum lançamento manual mensal
   // independente, ver migration), nunca uma query por sprint.
-  const monthSprintIds = sprints.map((s) => s.id);
-  const performanceRecordRows =
-    monthSprintIds.length > 0
-      ? await requireQuery(
-          supabase
-            .from("performance_records")
-            .select("sprint_id, channel, result_type, result_count, source, source_updated_at")
-            .in("sprint_id", monthSprintIds),
-          "performance_records",
-        )
-      : [];
+  // Integração Stract (arquitetura aprovada — ver DECISIONS.md):
+  // `resolvePerformanceRowsForSprints` decide, por cliente, entre
+  // `performance_records` (manual) e `daily_performance` (Stract) — nunca
+  // as duas somadas. Mesmo formato de linha de antes, então nada abaixo
+  // precisa mudar.
+  const performanceRecordRows = await resolvePerformanceRowsForSprints(
+    supabase,
+    sprints.map((s) => ({ id: s.id, client_id: id, start_date: s.start_date, end_date: s.end_date })),
+  );
   const performanceRecords: PerformanceRecordRawRow[] = performanceRecordRows.map((r) => ({
     sprintId: r.sprint_id,
     channel: r.channel,

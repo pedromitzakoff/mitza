@@ -18,6 +18,18 @@ export type PerformanceGoalDb = "leads" | "sales" | "followers";
 export type TrafficChannelDb = "meta" | "google" | "tiktok" | "linkedin" | "other";
 export type PerformanceSourceDb = "manual" | "meta" | "google";
 
+/** Integração Stract → Supabase → MITZA — provider é o único suportado
+ * nesta primeira versão (Google/TikTok/LinkedIn ficam preparados
+ * conceitualmente pelo `channel`, sem exigir nova migration quando chegarem). */
+export type ImportProviderDb = "stract";
+/** Saúde/configuração PERSISTENTE de uma import_source — distinto do status
+ * de UMA execução (`DataSyncRunStatusDb`). */
+export type ImportSourceStatusDb = "pending" | "active" | "error" | "disabled";
+export type DataSyncRunStatusDb = "running" | "success" | "partial" | "failed";
+/** "Como o dado chegou" em `daily_performance` — nunca confundir com canal
+ * (`TrafficChannelDb`) ou provedor (`ImportProviderDb`). */
+export type DailyPerformanceSourceDb = "manual" | "import";
+
 /** ISO: 1 = segunda ... 7 = domingo. */
 export type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -568,6 +580,203 @@ export interface Database {
             columns: ["client_id"];
             isOneToOne: false;
             referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      daily_performance: {
+        Row: {
+          id: string;
+          client_id: string;
+          date: string;
+          channel: TrafficChannelDb;
+          result_type: PerformanceGoalDb;
+          result_count: number;
+          source: DailyPerformanceSourceDb;
+          provider: ImportProviderDb | null;
+          source_updated_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          date: string;
+          channel: TrafficChannelDb;
+          result_type: PerformanceGoalDb;
+          result_count?: number;
+          source?: DailyPerformanceSourceDb;
+          provider?: ImportProviderDb | null;
+          source_updated_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          date?: string;
+          channel?: TrafficChannelDb;
+          result_type?: PerformanceGoalDb;
+          result_count?: number;
+          source?: DailyPerformanceSourceDb;
+          provider?: ImportProviderDb | null;
+          source_updated_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "daily_performance_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      import_sources: {
+        Row: {
+          id: string;
+          client_id: string;
+          provider: ImportProviderDb;
+          channel: TrafficChannelDb;
+          external_account_id: string;
+          table_name: string;
+          account_id_column: string;
+          date_column: string;
+          spend_column: string;
+          status: ImportSourceStatusDb;
+          enabled: boolean;
+          last_imported_date: string | null;
+          last_success_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          provider: ImportProviderDb;
+          channel: TrafficChannelDb;
+          external_account_id: string;
+          table_name: string;
+          account_id_column: string;
+          date_column: string;
+          spend_column: string;
+          status?: ImportSourceStatusDb;
+          enabled?: boolean;
+          last_imported_date?: string | null;
+          last_success_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          provider?: ImportProviderDb;
+          channel?: TrafficChannelDb;
+          external_account_id?: string;
+          table_name?: string;
+          account_id_column?: string;
+          date_column?: string;
+          spend_column?: string;
+          status?: ImportSourceStatusDb;
+          enabled?: boolean;
+          last_imported_date?: string | null;
+          last_success_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "import_sources_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      metric_mappings: {
+        Row: {
+          id: string;
+          import_source_id: string;
+          goal: PerformanceGoalDb;
+          result_column: string;
+          value_column: string | null;
+          active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          import_source_id: string;
+          goal: PerformanceGoalDb;
+          result_column: string;
+          value_column?: string | null;
+          active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          import_source_id?: string;
+          goal?: PerformanceGoalDb;
+          result_column?: string;
+          value_column?: string | null;
+          active?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "metric_mappings_import_source_id_fkey";
+            columns: ["import_source_id"];
+            isOneToOne: false;
+            referencedRelation: "import_sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      data_sync_runs: {
+        Row: {
+          id: string;
+          import_source_id: string;
+          started_at: string;
+          finished_at: string | null;
+          status: DataSyncRunStatusDb;
+          rows_read: number | null;
+          spend_rows_written: number | null;
+          performance_rows_written: number | null;
+          error_message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          import_source_id: string;
+          started_at?: string;
+          finished_at?: string | null;
+          status?: DataSyncRunStatusDb;
+          rows_read?: number | null;
+          spend_rows_written?: number | null;
+          performance_rows_written?: number | null;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          import_source_id?: string;
+          started_at?: string;
+          finished_at?: string | null;
+          status?: DataSyncRunStatusDb;
+          rows_read?: number | null;
+          spend_rows_written?: number | null;
+          performance_rows_written?: number | null;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "data_sync_runs_import_source_id_fkey";
+            columns: ["import_source_id"];
+            isOneToOne: false;
+            referencedRelation: "import_sources";
             referencedColumns: ["id"];
           },
         ];
