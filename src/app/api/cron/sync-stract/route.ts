@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
 import { runImportForAllEnabledSources } from "@/lib/stract-sync";
 
-// Integração Stract (arquitetura aprovada — ver DECISIONS.md). Estratégia de
-// rollout: só a conta de teste fica ativa (`import_sources.enabled`) até a
-// validação manual completa (investimento, performance, custo por resultado,
-// Dashboard, Sprint, reprocessamento, logs, idempotência, atualização
-// retroativa) ser confirmada — por isso esta rota NÃO está ligada em
-// `vercel.json` ainda, mesmo já existindo. Pra ativar depois da validação:
+// Integração Stract (arquitetura aprovada — ver DECISIONS.md /
+// docs/STRACT_INTEGRATION_ARCHITECTURE.md). Validação manual completa (2
+// clientes reais, investimento + performance + custo por resultado +
+// Dashboard + Sprint + idempotência + logs + bloqueio da sync nativa)
+// confirmada — cron ligado em `vercel.json`:
 //
-// {
-//   "crons": [{ "path": "/api/cron/sync-stract", "schedule": "0 8 * * *" }]
-// }
+// { "crons": [{ "path": "/api/cron/sync-stract", "schedule": "0 11 * * *" }] }
 //
-// (Sugestão: 8h, uma hora depois do horário em que o Stract já busca os
-// dados do Meta, garantindo que o Import Service sempre leia dado fresco.)
+// Vercel Cron sempre interpreta o schedule em UTC. `0 11 * * *` = 11h UTC =
+// 8h no fuso da agência (America/Sao_Paulo, UTC-3 o ano todo — Brasil não
+// tem mais horário de verão desde 2019, então essa conversão nunca muda).
+// Uma hora depois do horário em que o Stract já busca os dados do Meta (7h
+// local), garantindo que o Import Service sempre leia dado fresco.
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
 
