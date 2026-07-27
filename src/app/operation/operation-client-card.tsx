@@ -170,6 +170,16 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
         <div className="flex w-64 min-w-0 shrink-0 flex-col">
           <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
           <p className={`text-[11px] ${footerClass}`}>{footerLabel ?? ""}</p>
+          {/* Etapa "Data de atualização por cliente no desktop": mesma
+              regra/mesmo texto já usado no mobile (goalConfig +
+              performanceUpdateText, calculados uma vez só acima — nenhuma
+              lógica nova aqui, só a mesma informação também nesta
+              apresentação). */}
+          {performanceUpdateText && (
+            <p className="truncate text-[11px] text-muted-foreground" title={`Performance: ${performanceUpdateText}`}>
+              Performance: {performanceUpdateText}
+            </p>
+          )}
         </div>
 
         <div className="grid flex-1 grid-cols-4 gap-10">
