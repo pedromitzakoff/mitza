@@ -14,7 +14,7 @@ A MITZA organiza investimento e resultado por Sprint (ciclo semanal dentro de ca
 
 2. **Camada de configuração** (nunca hardcoded no código):
    - `import_sources` — identidade da integração: cliente, conta (`act_...`), tabela física do Stract, e colunas compartilhadas por toda a fonte (conta, data, investimento).
-   - `metric_mappings` — qual coluna representa cada objetivo (leads/vendas/seguidores), específico por objetivo já que o mesmo objetivo pode ter nomes de coluna diferentes conforme a extração configurada. Mudança de mapeamento desativa a linha antiga e cria uma nova (nunca `UPDATE` destrutivo — histórico preservado via `created_at`).
+   - `metric_mappings` — qual coluna representa cada objetivo (leads/vendas/seguidores), específico por objetivo já que o mesmo objetivo pode ter nomes de coluna diferentes conforme a extração configurada. Um objetivo pode ter **mais de uma** coluna ativa ao mesmo tempo (ex.: cliente de leads que roda campanha de formulário E campanha de WhatsApp/Messenger — métricas diferentes no Meta/Stract, mas o mesmo objetivo na MITZA) — o Import Service soma todas as colunas do mesmo objetivo por dia (`combineAggregatedDailyValues`) antes de gravar, nunca sobrescreve. Mudança de mapeamento desativa a linha antiga e cria uma nova (nunca `UPDATE` destrutivo — histórico preservado via `created_at`).
 
 3. **Tabelas de destino**:
    - `daily_spend` — investimento diário, já existia, sem alteração de schema.

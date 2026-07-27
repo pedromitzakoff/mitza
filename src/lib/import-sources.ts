@@ -134,6 +134,32 @@ export interface DailyPerformanceUpsertRow {
   source_updated_at: string;
 }
 
+/**
+ * Combina a agregação diária de VÁRIAS colunas de origem que alimentam o
+ * MESMO objetivo — ex.: um cliente de leads que roda campanha de formulário
+ * (`actions_lead`) e campanha de WhatsApp (`actions_onsite_conversion_
+ * messaging_conversation_started_7d`) ao mesmo tempo: no Meta/Stract são
+ * métricas diferentes, mas na MITZA é tudo lead, somado no mesmo dia.
+ * `invalidRowCount` também é somado — uma linha inválida em qualquer coluna
+ * ainda deve impedir que a execução seja reportada como sucesso pleno.
+ */
+export function combineAggregatedDailyValues(aggregates: AggregatedDailyValue[][]): AggregatedDailyValue[] {
+  const byDate = new Map<string, { value: number; invalidRowCount: number }>();
+
+  for (const aggregate of aggregates) {
+    for (const row of aggregate) {
+      const entry = byDate.get(row.date) ?? { value: 0, invalidRowCount: 0 };
+      entry.value += row.value;
+      entry.invalidRowCount += row.invalidRowCount;
+      byDate.set(row.date, entry);
+    }
+  }
+
+  return Array.from(byDate.entries())
+    .map(([date, { value, invalidRowCount }]) => ({ date, value, invalidRowCount }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 /** Monta as linhas prontas pro upsert em `daily_performance` —
  * `result_count` sempre inteiro (Postgres exige `integer`, resultado nunca
  * tem fração). */

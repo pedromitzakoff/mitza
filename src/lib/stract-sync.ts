@@ -4,6 +4,7 @@ import {
   aggregateDailyColumn,
   buildDailyPerformanceUpsertRows,
   buildDailySpendUpsertRows,
+  combineAggregatedDailyValues,
   validateAccountIdColumn,
   type RawSourceRow,
 } from "@/lib/import-sources";
@@ -150,17 +151,35 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
     }
   }
 
+  // Um objetivo pode ser alimentado por MAIS DE UMA coluna de origem (ex.:
+  // leads via formulário + leads via WhatsApp — métricas diferentes no
+  // Meta/Stract, mas o mesmo objetivo na MITZA) — por isso agrupamos por
+  // `goal` e somamos (`combineAggregatedDailyValues`) antes de gravar.
+  // Gravar cada mapeamento separadamente, na mesma chave de upsert
+  // `(client_id, date, channel, result_type)`, faria o último sobrescrever
+  // os anteriores em vez de somar.
+  const resultColumnsByGoal = new Map<PerformanceGoal, string[]>();
   for (const mapping of mappings ?? []) {
-    const resultAggregate = aggregateDailyColumn(rows, importSource.date_column, mapping.result_column);
-    hadInvalidRows = hadInvalidRows || resultAggregate.some((row) => row.invalidRowCount > 0);
+    const goal = mapping.goal as PerformanceGoal;
+    const list = resultColumnsByGoal.get(goal) ?? [];
+    list.push(mapping.result_column);
+    resultColumnsByGoal.set(goal, list);
+  }
 
-    if (resultAggregate.length === 0) continue;
+  for (const [goal, resultColumns] of resultColumnsByGoal) {
+    const columnAggregates = resultColumns.map((resultColumn) => aggregateDailyColumn(rows, importSource.date_column, resultColumn));
+    for (const columnAggregate of columnAggregates) {
+      hadInvalidRows = hadInvalidRows || columnAggregate.some((row) => row.invalidRowCount > 0);
+    }
+
+    const combinedAggregate = combineAggregatedDailyValues(columnAggregates);
+    if (combinedAggregate.length === 0) continue;
 
     const performanceUpsertRows = buildDailyPerformanceUpsertRows(
       importSource.client_id,
       importSource.channel,
-      mapping.goal as PerformanceGoal,
-      resultAggregate,
+      goal,
+      combinedAggregate,
       nowIso,
     );
     const { error: performanceUpsertError } = await supabase
@@ -168,7 +187,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
       .upsert(performanceUpsertRows, { onConflict: "client_id,date,channel,result_type" });
 
     if (performanceUpsertError) {
-      partialReasons.push(`resultado (${mapping.goal}) não gravado: ${performanceUpsertError.message}`);
+      partialReasons.push(`resultado (${goal}) não gravado: ${performanceUpsertError.message}`);
     } else {
       performanceRowsWritten += performanceUpsertRows.length;
     }
