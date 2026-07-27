@@ -892,24 +892,16 @@ export default async function Home({
             {platformFilter === "consolidado" ? (
               financial.planned > 0 ? (
                 <>
-                  {/* Facelift "Painel financeiro e operacional": Planejado/
-                      Realizado/Orçamento utilizado deixam de ser 3 números
-                      grandes lado a lado — o realizado (com o planejado como
-                      auxiliar) vira a única linha de destaque, a barra
-                      explica visualmente o ritmo, e a diferença pro esperado
-                      (já calculada em `investmentDiffLabel`/`investmentDiffTone`,
-                      nenhuma conta nova) passa a ser o diagnóstico principal
-                      da seção — mesmo princípio já aplicado ao card de
-                      investimento da página do cliente. */}
-                  <div className="mt-3">
-                    <p className="text-[22px] font-medium leading-none tracking-tight text-overview-text-primary tabular-nums">
-                      {formatCurrency(financial.actual)}{" "}
-                      <span className="text-[13px] font-normal text-overview-text-secondary">realizados</span>
-                    </p>
-                    <p className="mt-1 text-[13px] text-overview-text-secondary">de {formatCurrency(financial.planned)} planejados</p>
-                  </div>
-
-                  <div className="mt-4">
+                  {/* Etapa "Remover redundância do Ritmo de investimento": o
+                      par realizado/planejado em destaque saiu daqui — já
+                      aparece em "Resultados do mês" (Investimento realizado),
+                      logo acima. A seção passa a começar praticamente pela
+                      barra (só o espaço mínimo do título até ela), que já
+                      carrega o mesmo dado visualmente (preenchimento +
+                      marcador de esperado hoje); a diferença pro esperado
+                      (`investmentDiffLabel`/`investmentDiffTone`) continua o
+                      diagnóstico principal, agora logo abaixo da barra. */}
+                  <div className="mt-2">
                     <ProgressBar
                       planned={financial.planned}
                       actual={financial.actual}
@@ -919,7 +911,7 @@ export default async function Home({
                   </div>
 
                   <p
-                    className={`mt-2.5 text-[15px] font-semibold ${
+                    className={`mt-1.5 text-[15px] font-semibold ${
                       investmentDiffTone === "danger"
                         ? "text-overview-danger"
                         : investmentDiffTone === "warning"
