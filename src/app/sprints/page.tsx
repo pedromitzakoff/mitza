@@ -410,6 +410,7 @@ export default async function SprintsPage({
       channel: r.channel,
       resultType: r.result_type,
       resultCount: r.result_count,
+      revenue: r.revenue,
       source: r.source,
       sourceUpdatedAt: r.source_updated_at,
     });
