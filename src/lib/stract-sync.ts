@@ -318,15 +318,33 @@ function minDateValue(rows: RawSourceRow[], dateColumn: string): string | null {
  * MITZA, só `import_sources.table_name` sabe o nome dela em tempo de
  * execução). Credenciais são as mesmas de `createAdminClient` (mesmo
  * projeto Supabase, service role).
+ *
+ * Pagina via `.range()` até uma página vir com menos linhas que `pageSize`
+ * — o PostgREST limita `select("*")` sem paginação a um teto por requisição
+ * (achado real: uma conta com 2131 linhas trazia só as primeiras 707, sem
+ * erro nenhum, cortando silenciosamente os meses mais recentes). Sem isso,
+ * qualquer fonte que crescer além desse teto perderia histórico recente sem
+ * nenhum aviso.
  */
 async function readSourceTable(tableName: string): Promise<RawSourceRow[]> {
   const rawClient = createRawClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const { data, error } = await rawClient.from(tableName).select("*");
-  if (error) {
-    throw new Error(error.message);
+  const pageSize = 1000;
+  const rows: RawSourceRow[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await rawClient.from(tableName).select("*").range(from, from + pageSize - 1);
+    if (error) {
+      throw new Error(error.message);
+    }
+    const page = (data ?? []) as RawSourceRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    from += pageSize;
   }
-  return (data ?? []) as RawSourceRow[];
+
+  return rows;
 }
