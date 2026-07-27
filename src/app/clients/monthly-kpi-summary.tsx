@@ -64,6 +64,20 @@ export function MonthlyKpiSummary({
 
   const metaValue = targetCostPerResult !== null ? formatCurrency(targetCostPerResult) : "—";
 
+  // Faturamento/ROAS/Ticket Médio — Etapa "Receita, ROAS e Ticket Médio":
+  // linha auxiliar, nunca renderizada quando `revenue` é null (cliente sem
+  // objetivo de vendas, ou sem `value_column` configurado na integração)
+  // — nenhuma checagem de `performanceGoal === "sales"` aqui, a ausência de
+  // `revenue` já resolve isso sozinha (mesmo espírito do resto da camada de
+  // domínio: nunca inferir por objetivo, sempre pela presença do dado).
+  const revenue = performanceSummary?.revenue ?? null;
+  const roas = performanceSummary?.roas ?? null;
+  const averageTicket = performanceSummary?.averageTicket ?? null;
+  const hasRevenue = revenue !== null;
+  const revenueValue = revenue !== null ? formatCurrency(revenue) : "—";
+  const roasValue = roas !== null ? `${roas.toFixed(1)}x` : "—";
+  const averageTicketValue = averageTicket !== null ? formatCurrency(averageTicket) : "—";
+
   return (
     <div>
       <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-4">
@@ -72,6 +86,13 @@ export function MonthlyKpiSummary({
         <Kpi label="Custo por resultado" value={costValue} />
         <Kpi label="Meta" value={metaValue} />
       </div>
+      {hasRevenue && (
+        <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-2 border-t border-border pt-2 sm:grid-cols-3">
+          <Kpi label="Faturamento" value={revenueValue} />
+          <Kpi label="ROAS" value={roasValue} />
+          <Kpi label="Ticket médio" value={averageTicketValue} />
+        </div>
+      )}
       {!performanceGoal && (
         <Link href={configureObjectiveHref} className="mt-1 inline-block text-xs font-medium text-brand hover:underline">
           Configurar objetivo
