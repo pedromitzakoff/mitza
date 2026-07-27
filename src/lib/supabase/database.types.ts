@@ -648,6 +648,8 @@ export interface Database {
           account_id_column: string;
           date_column: string;
           spend_column: string;
+          campaign_name_column: string | null;
+          campaign_name_filter: string | null;
           status: ImportSourceStatusDb;
           enabled: boolean;
           last_imported_date: string | null;
@@ -665,6 +667,8 @@ export interface Database {
           account_id_column: string;
           date_column: string;
           spend_column: string;
+          campaign_name_column?: string | null;
+          campaign_name_filter?: string | null;
           status?: ImportSourceStatusDb;
           enabled?: boolean;
           last_imported_date?: string | null;
@@ -682,6 +686,8 @@ export interface Database {
           account_id_column?: string;
           date_column?: string;
           spend_column?: string;
+          campaign_name_column?: string | null;
+          campaign_name_filter?: string | null;
           status?: ImportSourceStatusDb;
           enabled?: boolean;
           last_imported_date?: string | null;

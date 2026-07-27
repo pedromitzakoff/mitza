@@ -103,6 +103,23 @@ export function validateAccountIdColumn(
   return { valid: mismatchCount === 0, mismatchCount, distinctValuesFound: Array.from(distinctValuesFound) };
 }
 
+/**
+ * Filtra linhas por um trecho (contém, case-insensitive) no nome da
+ * campanha — nunca depende do provedor externo (Stract) aplicar o filtro
+ * certo na extração; a MITZA garante isso por conta própria. Só é chamada
+ * quando `campaign_name_column`/`campaign_name_filter` estiverem
+ * configurados em `import_sources`; fonte sem os dois preenchidos lê todas
+ * as linhas da conta, exatamente como antes desta capacidade existir.
+ */
+export function filterRowsByCampaignName(rows: RawSourceRow[], campaignNameColumn: string, filterText: string): RawSourceRow[] {
+  const needle = filterText.toLowerCase();
+  return rows.filter((row) => {
+    const raw = row[campaignNameColumn];
+    const value = typeof raw === "string" ? raw : String(raw ?? "");
+    return value.toLowerCase().includes(needle);
+  });
+}
+
 export interface DailySpendUpsertRow {
   client_id: string;
   date: string;
