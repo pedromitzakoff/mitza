@@ -13,6 +13,10 @@ import { TONE_TEXT_CLASSES } from "./investment-metric";
  * valor, mesma paleta de `SecondaryInvestmentMetric`) e `linkHref`/`linkLabel`
  * — um link curto abaixo do contexto (ex.: "Ver contas"), pra indicadores que
  * levam a uma lista filtrada sem precisar tornar o card inteiro clicável.
+ *
+ * Etapa "Refinamento Visão Geral da Agência": `emphasis` dá um destaque a
+ * mais pro indicador financeiro principal (Investimento realizado) sem
+ * alterar os outros 3 — mesma família tipográfica, só maior/mais pesado.
  */
 export function OperationMetric({
   label,
@@ -23,6 +27,7 @@ export function OperationMetric({
   tone = "neutral",
   linkHref,
   linkLabel,
+  emphasis = false,
 }: {
   label: string;
   value: string;
@@ -32,6 +37,7 @@ export function OperationMetric({
   tone?: StatusTone;
   linkHref?: string;
   linkLabel?: string;
+  emphasis?: boolean;
 }) {
   const content = (
     <div title={title}>
@@ -40,7 +46,11 @@ export function OperationMetric({
           font-semibold → font-medium (~10% mais leve) — mesmo tamanho e
           hierarquia, só um traço menos pesado pra equilibrar o conjunto com
           as demais métricas da página. */}
-      <p className={`mt-1 text-[22px] font-medium leading-none tracking-tight tabular-nums ${TONE_TEXT_CLASSES[tone]}`}>
+      <p
+        className={`mt-1 leading-none tracking-tight tabular-nums ${
+          emphasis ? "text-[27px] font-semibold" : "text-[22px] font-medium"
+        } ${TONE_TEXT_CLASSES[tone]}`}
+      >
         {value}
       </p>
       {context && <p className="mt-1.5 text-[13px] text-overview-text-muted">{context}</p>}
@@ -86,8 +96,8 @@ export function OperationMiniKpi({
 }) {
   return (
     <div>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">{label}</p>
-      <p className="mt-0.5 text-base font-semibold leading-none text-overview-text-primary tabular-nums">{value}</p>
+      <p className="text-[10.5px] font-medium uppercase tracking-wide text-overview-text-muted">{label}</p>
+      <p className="mt-0.5 text-[13px] font-semibold leading-none text-overview-text-primary tabular-nums">{value}</p>
       {context && <p className="mt-1 text-[11px] text-overview-text-muted">{context}</p>}
     </div>
   );

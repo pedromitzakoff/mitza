@@ -40,7 +40,7 @@ import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
 import { PrioritiesDrawer, PrioritiesPanel } from "./priorities-panel";
 import { OperationMetric, OperationMiniKpi } from "./operation-metric";
-import { PrimaryInvestmentMetric, SecondaryInvestmentMetric } from "./investment-metric";
+import { PrimaryInvestmentMetric } from "./investment-metric";
 import { PLATFORM_LABEL } from "./client-objective-table";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { Button, IconButton } from "@/components/workspace/button";
@@ -695,14 +695,21 @@ export default async function Home({
     financial.planned > 0 ? classifySpendStatus(financial.actual, financial.expectedToDate, financial.planned) : "sem_meta";
   const investmentDiffTone: StatusTone =
     investmentRitmoStatus === "acima" ? "danger" : investmentRitmoStatus === "abaixo" ? "warning" : "neutral";
-  const investmentDiffLabel =
-    financial.planned > 0
-      ? investmentDiff < 0
-        ? `${formatCurrency(Math.abs(investmentDiff))} abaixo`
-        : investmentDiff > 0
-          ? `${formatCurrency(investmentDiff)} acima`
-          : "Dentro do esperado"
-      : "—";
+  // Etapa "Refinamento Visão Geral da Agência" (Ponto 4): o diagnóstico de
+  // ritmo vira uma frase de STATUS em destaque (`investmentStatusPhrase`),
+  // com o valor em reais como apoio secundário abaixo dela — antes o número
+  // isolado ("R$ X abaixo") era o único elemento, competindo em peso visual
+  // com o próprio status. Nenhum cálculo mudou (`investmentDiff`/
+  // `investmentRitmoStatus` intactos), só a apresentação.
+  const investmentStatusPhrase =
+    investmentRitmoStatus === "abaixo"
+      ? "Ritmo abaixo do esperado hoje"
+      : investmentRitmoStatus === "acima"
+        ? "Ritmo acima do esperado hoje"
+        : investmentRitmoStatus === "dentro"
+          ? "Dentro do ritmo esperado"
+          : "—";
+  const investmentDiffValueText = investmentDiff !== 0 ? formatCurrency(Math.abs(investmentDiff)) : null;
   const monthTemporalStatus = getMonthTemporalStatus(monthRange, todayStr);
 
   // Preserva TODOS os filtros ativos — usado na navegação de mês e na
@@ -838,11 +845,18 @@ export default async function Home({
               por linha em vez de um card à parte. Planejado aparece aqui só
               como auxiliar (nunca no mesmo destaque do realizado) — o
               detalhamento do orçamento vive inteiro em "Ritmo de
-              investimento", nunca duplicado com o mesmo peso visual. */}
-          <div className="px-5 py-3.5 sm:px-6 sm:py-4">
-            <SectionHeader title="Resultados do mês" />
-            <div className="mt-3 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+              investimento", nunca duplicado com o mesmo peso visual.
+              Etapa "Refinamento Visão Geral da Agência": o subtítulo
+              "Resultados do mês" saiu — a página já tem título próprio, o
+              título desta seção ("Painel financeiro e operacional da
+              agência") e o seletor de mês no topo; repetir "do mês" aqui não
+              acrescentava contexto novo. Investimento realizado ganhou
+              `emphasis` (maior/mais pesado) por ser o indicador financeiro
+              principal — os outros 3 continuam equilibrados entre si. */}
+          <div className="px-5 py-3 sm:px-6 sm:py-3.5">
+            <div className="grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
               <OperationMetric
+                emphasis
                 label="Investimento realizado"
                 value={formatCurrency(financial.actual)}
                 context={financial.planned > 0 ? `de ${formatCurrency(financial.planned)} planejados` : "Nenhum planejamento configurado"}
@@ -880,7 +894,7 @@ export default async function Home({
             </div>
           </div>
 
-          <div className="border-t border-overview-border px-5 py-3.5 sm:px-6 sm:py-4">
+          <div className="border-t border-overview-border px-5 py-2.5 sm:px-6 sm:py-3">
             <SectionHeader
               title={
                 platformFilter === "consolidado"
@@ -892,16 +906,18 @@ export default async function Home({
             {platformFilter === "consolidado" ? (
               financial.planned > 0 ? (
                 <>
-                  {/* Etapa "Remover redundância do Ritmo de investimento": o
-                      par realizado/planejado em destaque saiu daqui — já
-                      aparece em "Resultados do mês" (Investimento realizado),
-                      logo acima. A seção passa a começar praticamente pela
-                      barra (só o espaço mínimo do título até ela), que já
-                      carrega o mesmo dado visualmente (preenchimento +
-                      marcador de esperado hoje); a diferença pro esperado
-                      (`investmentDiffLabel`/`investmentDiffTone`) continua o
-                      diagnóstico principal, agora logo abaixo da barra. */}
-                  <div className="mt-2">
+                  {/* Etapa "Refinamento Visão Geral da Agência" (Pontos 3/4):
+                      "Esperado hoje" (valor)/"Orçamento utilizado"/"Sem
+                      planejamento" saíram — a barra já comunica visualmente
+                      o ritmo (preenchimento + marcador + legenda "Realizado"/
+                      "Esperado hoje", renderizados dentro de `ProgressBar`),
+                      então repetir os mesmos números embaixo era redundância
+                      pura. O que antes era só "R$ X abaixo" (um número
+                      isolado) virou uma frase de STATUS em destaque
+                      (`investmentStatusPhrase`) com o valor como apoio
+                      secundário logo abaixo — nenhum cálculo mudou
+                      (`investmentDiff`/`investmentRitmoStatus` intactos). */}
+                  <div className="mt-1.5">
                     <ProgressBar
                       planned={financial.planned}
                       actual={financial.actual}
@@ -910,29 +926,31 @@ export default async function Home({
                     />
                   </div>
 
-                  <p
-                    className={`mt-1.5 text-[15px] font-semibold ${
-                      investmentDiffTone === "danger"
-                        ? "text-overview-danger"
-                        : investmentDiffTone === "warning"
-                          ? "text-overview-warning"
-                          : "text-overview-text-primary"
-                    }`}
-                  >
-                    {investmentDiffLabel}
-                  </p>
-
-                  <div className="mt-3 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-3">
-                    <SecondaryInvestmentMetric label="Esperado hoje" value={formatCurrency(financial.expectedToDate)} />
-                    <SecondaryInvestmentMetric
-                      label="Orçamento utilizado"
-                      value={financial.pct !== null ? formatPercent(financial.pct) : "—"}
-                    />
-                    <SecondaryInvestmentMetric
-                      label="Sem planejamento"
-                      value={`${financial.semMeta} cliente${financial.semMeta !== 1 ? "s" : ""}`}
-                      href={financial.semMeta > 0 ? drillDownUrl({ meta: "sem" }) : undefined}
-                    />
+                  <div className="mt-2">
+                    <p
+                      className={`text-[14px] font-semibold ${
+                        investmentDiffTone === "danger"
+                          ? "text-overview-danger"
+                          : investmentDiffTone === "warning"
+                            ? "text-overview-warning"
+                            : "text-overview-text-primary"
+                      }`}
+                    >
+                      {investmentStatusPhrase}
+                    </p>
+                    {investmentDiffValueText && (
+                      <p
+                        className={`mt-0.5 text-[13px] tabular-nums ${
+                          investmentDiffTone === "danger"
+                            ? "text-overview-danger"
+                            : investmentDiffTone === "warning"
+                              ? "text-overview-warning"
+                              : "text-overview-text-muted"
+                        }`}
+                      >
+                        {investmentDiffValueText}
+                      </p>
+                    )}
                   </div>
                 </>
               ) : (
@@ -944,17 +962,17 @@ export default async function Home({
                     REALIZADO por plataforma — planejado/esperado/ritmo
                     dependem de um orçamento que ainda não é configurado por
                     canal (ver decisão registrada no relatório da etapa). */}
-                <div className="mt-3 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-3">
+                <div className="mt-2 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-3">
                   <PrimaryInvestmentMetric label={`Realizado · ${PLATFORM_LABEL[platformFilter]}`} value={formatCurrency(channelActualTotal ?? 0)} />
                 </div>
-                <p className="mt-2.5 text-[13px] text-overview-text-muted">
+                <p className="mt-1.5 text-[13px] text-overview-text-muted">
                   Planejado e ritmo financeiro disponíveis só no recorte Consolidado — ainda não há orçamento configurado por plataforma.
                 </p>
               </>
             )}
           </div>
 
-          <div className="border-t border-overview-border px-5 py-3.5 sm:px-6 sm:py-4">
+          <div className="border-t border-overview-border bg-overview-surface-subtle px-5 py-2 sm:px-6 sm:py-2.5">
             {/* Facelift "Painel financeiro e operacional": os 4 indicadores
                 deixam de ser big numbers (22px, mesmo peso de
                 Resultados/Ritmo) e viram uma faixa compacta de mini-KPIs —
@@ -963,9 +981,14 @@ export default async function Home({
                 (`operationIndicators`), só reagrupados: tarefas concluídas/
                 previstas juntas num único valor ("121/140"), com o % de
                 execução como texto secundário abaixo (nunca um KPI à
-                parte). */}
+                parte).
+                Etapa "Refinamento Visão Geral da Agência" (Ponto 6): fundo
+                sutilmente diferenciado + padding/gap reduzidos + tipografia
+                de `OperationMiniKpi` um pouco menor — reforça a leitura de
+                "rodapé da seção", nunca competindo com os KPIs financeiros
+                acima. Nenhum dado mudou. */}
             <SectionHeader title="Operação" />
-            <div className="mt-3 grid grid-cols-2 gap-x-10 gap-y-3 sm:grid-cols-4">
+            <div className="mt-2 grid grid-cols-2 gap-x-10 gap-y-2 sm:grid-cols-4">
               <OperationMiniKpi label="Clientes ativos" value={String(operationIndicators.activeClientsCount)} />
               {/* Rótulo fixo "Gestores vinculados" (em vez de
                   `operationIndicators.managersLabel`, que alterna com
