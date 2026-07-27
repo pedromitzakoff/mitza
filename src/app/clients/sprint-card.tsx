@@ -689,6 +689,11 @@ export function SprintCardBody({
   );
   const revertSourceToggleId = `revert-source-${sprint.sprintId}`;
   const editToggleId = `edit-performance-${sprint.sprintId}`;
+  // `sprint.spendSource` já é a fonte EFETIVAMENTE usada (resolvida em
+  // `resolveSprintEffectiveSpend`), nunca o campo bruto `sprints.spend_source`
+  // — uma sprint com override manual antigo mas dado sincronizado disponível
+  // já chega aqui como "meta_api", então "Usar dado do Meta" some sozinho
+  // (nada a reverter: o sincronizado já está sendo exibido).
   const isManualSource = sprint.spendSource === "manual";
   // Habilitar Gestores 1.0: `undefined` (painel Sprints, congelado, não
   // passa a prop) cai de volta pra `isAdmin` — mesmo comportamento de

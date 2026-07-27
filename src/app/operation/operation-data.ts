@@ -1,7 +1,7 @@
 import {
-  computeSprintEffectiveSpend,
   computeSprintFinancials,
   currentMonthRange,
+  resolveSprintEffectiveSpend,
   sumActualSpendForMonth,
   sumPlannedForMonth,
   type SprintFinancials,
@@ -273,8 +273,8 @@ export function buildOperationClientCard(
   let sprintTasks: OperationTaskItem[] = [];
 
   if (currentSprintRow) {
-    const actualSpend = computeSprintEffectiveSpend(currentSprintRow, client.dailySpend);
-    sprint = computeSprintFinancials(currentSprintRow, actualSpend, today, currentSprintRow.spend_source);
+    const { actual: actualSpend, effectiveSource } = resolveSprintEffectiveSpend(currentSprintRow, client.dailySpend);
+    sprint = computeSprintFinancials(currentSprintRow, actualSpend, today, effectiveSource);
     sprintPeriodLabel = formatSprintPeriodLabel(currentSprintRow.start_date, currentSprintRow.end_date);
     sprintTasks = client.tasks.filter((t) => t.sprint_id === currentSprintRow.id);
   }
@@ -304,8 +304,8 @@ export function buildOperationClientCard(
   // inteiro). `monthPlanned` como 3º argumento só detecta "sem meta".
   const monthStatus = classifySpendStatus(monthActual, monthExpectedToDate, monthPlanned);
   const monthSprints: SprintFinancials[] = monthSprintRows.map((row) => {
-    const actualSpend = computeSprintEffectiveSpend(row, client.dailySpend);
-    return computeSprintFinancials(row, actualSpend, today, row.spend_source);
+    const { actual: actualSpend, effectiveSource } = resolveSprintEffectiveSpend(row, client.dailySpend);
+    return computeSprintFinancials(row, actualSpend, today, effectiveSource);
   });
   // Etapa 66: mesmo planejamento restante por sprint mostrado na página do
   // cliente — `null` quando o mês está encerrado (sem "restante" possível).

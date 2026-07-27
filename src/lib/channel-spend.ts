@@ -1,11 +1,13 @@
+import { resolveEffectiveSpend } from "@/lib/effective-spend";
 import type { SpendSource } from "@/lib/sprint-financials";
 import type { TrafficChannel } from "@/lib/traffic-channels";
 
 /**
- * MVP Etapa 2/3 — fonte de verdade de INVESTIMENTO por plataforma. Espelha
- * exatamente as regras de `sprint-financials.ts` (`resolveSprintActualSpend`
- * / `computeSprintEffectiveSpend` / `sumEffectiveSpend`), só que resolvendo
+ * MVP Etapa 2/3 — fonte de verdade de INVESTIMENTO por plataforma, resolvendo
  * o gasto real de UM canal por vez em vez do valor consolidado da sprint.
+ * `resolveSprintChannelActualSpend` delega em `resolveEffectiveSpend`
+ * (`lib/effective-spend.ts`) — mesma regra do consolidado (sincronizado
+ * sempre que existir, manual só como fallback), nunca uma segunda cópia.
  *
  * Regra que nunca pode ser violada por quem consumir isto: o consolidado é
  * sempre a SOMA coerente dos canais (nunca um valor independente), e o
@@ -26,19 +28,24 @@ export interface SprintChannelSpendOverrideRow {
   manual_actual_spend: number | null;
 }
 
-/** Mesma decisão de `resolveSprintActualSpend`, mas pro override de UM
- * canal — `override` é `undefined` quando o canal nunca teve um override
- * salvo em `sprint_channel_spend` (equivale a "sempre meta_api" pra esse
- * canal). */
-export function resolveSprintChannelActualSpend(override: SprintChannelSpendOverrideRow | undefined, metaSpendSum: number): number {
-  if (override && override.spend_source === "manual" && override.manual_actual_spend !== null) {
-    return override.manual_actual_spend;
-  }
-  return metaSpendSum;
+/** Mesma decisão de `resolveEffectiveSpend` (`lib/effective-spend.ts`), mas
+ * pro override de UM canal — `override` é `undefined` quando o canal nunca
+ * teve um override salvo em `sprint_channel_spend` (equivale a "sempre
+ * meta_api" pra esse canal). `metaSpendSum` precisa ser `null` quando não
+ * existe NENHUMA linha de `daily_spend` pro canal/período (distinto de `0`,
+ * que é "sincronizou e o gasto real é zero") — só assim o manual continua
+ * servindo de fallback quando o canal genuinamente não tem sincronização
+ * ainda, sem nunca mascarar um dado sincronizado real. */
+export function resolveSprintChannelActualSpend(override: SprintChannelSpendOverrideRow | undefined, metaSpendSum: number | null): number {
+  return resolveEffectiveSpend({
+    spendSource: override?.spend_source ?? "meta_api",
+    manualActualSpend: override?.manual_actual_spend ?? null,
+    syncedSpend: metaSpendSum,
+  }).actual;
 }
 
 /** Soma o `daily_spend` de UM canal dentro do período de uma sprint e
- * resolve manual x meta_api pra esse canal — a versão "por canal" de
+ * resolve sincronizado x manual pra esse canal — a versão "por canal" de
  * `computeSprintEffectiveSpend`. */
 export function computeSprintChannelEffectiveSpend(
   sprint: { sprintId: string; start_date: string; end_date: string },
@@ -46,9 +53,8 @@ export function computeSprintChannelEffectiveSpend(
   dailySpend: { date: string; channel: TrafficChannel; spend: number }[],
   overrides: SprintChannelSpendOverrideRow[],
 ): number {
-  const metaSpendSum = dailySpend
-    .filter((d) => d.channel === channel && d.date >= sprint.start_date && d.date <= sprint.end_date)
-    .reduce((sum, d) => sum + d.spend, 0);
+  const matching = dailySpend.filter((d) => d.channel === channel && d.date >= sprint.start_date && d.date <= sprint.end_date);
+  const metaSpendSum = matching.length > 0 ? matching.reduce((sum, d) => sum + d.spend, 0) : null;
   const override = overrides.find((o) => o.sprintId === sprint.sprintId && o.channel === channel);
   return resolveSprintChannelActualSpend(override, metaSpendSum);
 }

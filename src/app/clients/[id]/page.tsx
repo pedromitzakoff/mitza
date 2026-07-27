@@ -9,10 +9,10 @@ import { requireQuery } from "@/lib/require-query";
 import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
 import {
   assertSingleCurrentSprint,
-  computeSprintEffectiveSpend,
   computeSprintFinancials,
   currentMonthRange,
   monthRangeFromParam,
+  resolveSprintEffectiveSpend,
   shiftMonthParam,
   sumActualSpendForMonth,
   sumPlannedForMonth,
@@ -350,8 +350,8 @@ export default async function ClientPage({
 
   assertSingleCurrentSprint(sprints, today);
   const sprintFinancials = sprints.map((sprint) => {
-    const actualSpend = computeSprintEffectiveSpend(sprint, dailySpend ?? []);
-    return computeSprintFinancials(sprint, actualSpend, today, sprint.spend_source);
+    const { actual: actualSpend, effectiveSource } = resolveSprintEffectiveSpend(sprint, dailySpend ?? []);
+    return computeSprintFinancials(sprint, actualSpend, today, effectiveSource);
   });
   // Etapa 65: última edição do gasto manual, por sprint — `SprintFinancials`
   // não carrega esse campo (não é usado por ninguém além do card expandido),

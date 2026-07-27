@@ -17,14 +17,19 @@
  *   recortado por um mês — a fonte da verdade do investimento mensal que
  *   toda tela consome.
  *
- * Regra oficial (corrigida nesta etapa — a versão anterior desta
- * plataforma tinha DUAS regras diferentes: `resolveSprintActualSpend`
- * caía pro sincronizado quando `manual_actual_spend` estava vazio, mas
- * `computeSprintMonthActualSpend`, usada pelo total mensal, retornava `0`
- * direto nesse mesmo caso, ignorando qualquer `daily_spend` existente —
- * a causa raiz do valor divergente encontrado entre Cliente e Operação):
- * 1. `spendSource === "manual"` e existe `manualActualSpend` → usa o manual.
- * 2. Senão, se existe `syncedSpend` → usa o sincronizado (fallback).
+ * Regra oficial (revisada — dado sincronizado agora tem prioridade sobre
+ * manual em qualquer cliente, qualquer fonte automática — Stract ou sync
+ * nativo do Meta. Decisão explícita: uma vez que existe `daily_spend` pro
+ * período, ele é sempre mais confiável que um valor manual, mesmo que
+ * `spend_source` ainda esteja marcado como `"manual"` — nenhum override
+ * manual antigo deve mascarar dado automático mais novo. O botão "Usar dado
+ * do Meta" continua existindo na UI só como ação explícita de limpeza
+ * (marca `spend_source: "meta_api"`), não como a única forma de o
+ * sincronizado prevalecer):
+ * 1. Existe `syncedSpend` (não-nulo) → usa o sincronizado, sempre.
+ * 2. Senão, se `spendSource === "manual"` e existe `manualActualSpend` →
+ *    usa o manual (única situação em que ele ainda é lido: nenhum dado
+ *    sincronizado pro período).
  * 3. Senão → ausência de dados (`hasData: false`), nunca `0` silencioso.
  */
 
@@ -52,11 +57,13 @@ export interface EffectiveSpend {
 }
 
 export function resolveEffectiveSpend(input: EffectiveSpendInput): EffectiveSpend {
+  if (input.syncedSpend !== null) {
+    return { actual: input.syncedSpend, hasData: true };
+  }
   if (input.spendSource === "manual" && input.manualActualSpend !== null) {
     return { actual: input.manualActualSpend, hasData: true };
   }
-  if (input.syncedSpend === null) return { actual: 0, hasData: false };
-  return { actual: input.syncedSpend, hasData: true };
+  return { actual: 0, hasData: false };
 }
 
 export interface SprintSpendSource {
@@ -146,10 +153,13 @@ export function sumEffectiveSpendForMonth(
     actual += resolved.actual;
     if (resolved.hasData) {
       hasData = true;
-      if (sprint.spendSource === "manual" && sprint.manualActualSpend !== null) {
-        considerTimestamp(sprint.manualSpendUpdatedAt);
-      } else {
+      // Reflete qual valor `resolveEffectiveSpendForDateRange` de fato usou
+      // (sincronizado sempre que existir) — nunca mais decidido só pelo
+      // `spendSource` bruto, que pode estar desatualizado.
+      if (resolved.matchingDailySpend.length > 0) {
         for (const row of resolved.matchingDailySpend) considerTimestamp(row.syncedAt);
+      } else if (sprint.spendSource === "manual" && sprint.manualActualSpend !== null) {
+        considerTimestamp(sprint.manualSpendUpdatedAt);
       }
     }
   }

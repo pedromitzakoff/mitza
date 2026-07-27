@@ -26,16 +26,21 @@ export interface SprintFinancials {
   status: SpendStatus;
   progressPct: number;
   temporalStatus: SprintTemporalStatus;
+  /** Fonte que efetivamente produziu `actualSpend` — nunca o campo bruto
+   * `sprints.spend_source` direto: quem monta este objeto deve resolver via
+   * `resolveSprintEffectiveSpend`, que devolve "meta_api" sempre que existir
+   * dado sincronizado pro período, mesmo com o campo do banco ainda marcado
+   * "manual". Telas que rotulam a origem (card da sprint) dependem disso
+   * pra nunca mostrar "Manual" quando o valor exibido já é o sincronizado. */
   spendSource: SpendSource;
 }
 
 /**
- * Decide qual valor de gasto real vale pra uma sprint: se a origem
- * configurada é "manual" e existe um valor manual salvo, esse valor manda;
- * senão cai pro sincronizado (`metaSpendSum`) — a sync do Meta continua
- * rodando e gravando em `daily_spend` normalmente mesmo em sprints
- * manuais, então "manual sem valor lançado ainda" nunca deve aparecer como
- * R$0 se já existe sincronização real.
+ * Decide qual valor de gasto real vale pra uma sprint: existindo dado
+ * sincronizado (`metaSpendSum`) pro período, ele sempre manda — mesmo numa
+ * sprint marcada `spend_source: "manual"`. Só cai pro valor manual quando
+ * NÃO existe nenhum sincronizado ainda pro período (fonte automática ainda
+ * não escreveu nada em `daily_spend`).
  *
  * Wrapper fino sobre `resolveEffectiveSpend` (`lib/effective-spend.ts`) —
  * a única implementação desta regra na plataforma; existe aqui só pra
@@ -77,6 +82,42 @@ export function computeSprintEffectiveSpend(
     { start: sprint.start_date, end: sprint.end_date },
     dailySpend,
   ).actual;
+}
+
+/** Qual fonte foi de fato usada pra resolver o gasto efetivo de UMA sprint
+ * ("meta_api" sempre que `daily_spend` tiver alguma linha no período dela,
+ * mesmo com `spend_source` gravado como "manual" — mesma regra de
+ * `resolveEffectiveSpend`) + o valor em si, num único cálculo — pra telas
+ * que precisam rotular a origem (Ex.: "Manual"/"Meta" no card da sprint)
+ * sem que o rótulo fique preso ao campo bruto do banco. */
+export interface SprintEffectiveSpendResolution {
+  actual: number;
+  effectiveSource: SpendSource;
+}
+
+export function resolveSprintEffectiveSpend(
+  sprint: {
+    start_date: string;
+    end_date: string;
+    spend_source: SpendSource;
+    manual_actual_spend: number | null;
+  },
+  dailySpend: { date: string; spend: number }[],
+): SprintEffectiveSpendResolution {
+  const resolved = resolveEffectiveSpendForDateRange(
+    {
+      startDate: sprint.start_date,
+      endDate: sprint.end_date,
+      spendSource: sprint.spend_source,
+      manualActualSpend: sprint.manual_actual_spend,
+    },
+    { start: sprint.start_date, end: sprint.end_date },
+    dailySpend,
+  );
+  return {
+    actual: resolved.actual,
+    effectiveSource: resolved.matchingDailySpend.length > 0 ? "meta_api" : sprint.spend_source,
+  };
 }
 
 /** Soma o gasto real efetivo de várias sprints — usado pra consolidar o
@@ -409,14 +450,11 @@ export function sumPlannedForMonth(
 
 /**
  * Gasto realizado de UMA sprint, pertencente a um mês — mesma decisão
- * manual×meta_api de `resolveSprintActualSpend`, recortada pelo mês: sprint
- * sincronizada soma só os dias de `daily_spend` dentro da interseção
- * sprint×mês (já granular por dia); sprint manual usa o valor de
- * `manual_actual_spend` quando existe, senão cai pro sincronizado (mesma
- * regra de `resolveEffectiveSpend` — antes esta função tinha uma segunda
- * cópia, incorreta, que retornava `0` direto nesse caso; corrigido nesta
- * etapa, já que "sem lançamento manual ainda" nunca deveria esconder um
- * gasto sincronizado real). Wrapper fino sobre `sumEffectiveSpendForMonth`
+ * sincronizado×manual de `resolveSprintActualSpend`, recortada pelo mês:
+ * soma os dias de `daily_spend` dentro da interseção sprint×mês sempre que
+ * existirem; só cai pro valor de `manual_actual_spend` quando não há
+ * nenhum dado sincronizado pro período, mesmo numa sprint marcada
+ * `spend_source: "manual"`. Wrapper fino sobre `sumEffectiveSpendForMonth`
  * pra uma única sprint.
  */
 export function computeSprintMonthActualSpend(
