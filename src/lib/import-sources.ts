@@ -129,6 +129,10 @@ export interface DailyPerformanceUpsertRow {
   channel: TrafficChannel;
   result_type: PerformanceGoal;
   result_count: number;
+  /** Faturamento do mesmo dia/objetivo — `null` quando não houver
+   * `value_column` configurado (leads/seguidores, ou vendas sem valor de
+   * conversão mapeado). Nunca fabricado. */
+  revenue: number | null;
   source: "import";
   provider: "stract";
   source_updated_at: string;
@@ -162,13 +166,16 @@ export function combineAggregatedDailyValues(aggregates: AggregatedDailyValue[][
 
 /** Monta as linhas prontas pro upsert em `daily_performance` —
  * `result_count` sempre inteiro (Postgres exige `integer`, resultado nunca
- * tem fração). */
+ * tem fração). `revenueByDate` é opcional (agregação separada de um
+ * `value_column`, quando configurado) — dia sem entrada no mapa vira
+ * `revenue: null`, nunca `0` fabricado. */
 export function buildDailyPerformanceUpsertRows(
   clientId: string,
   channel: TrafficChannel,
   goal: PerformanceGoal,
   aggregated: AggregatedDailyValue[],
   sourceUpdatedAt: string,
+  revenueByDate?: Map<string, number> | null,
 ): DailyPerformanceUpsertRow[] {
   return aggregated.map((row) => ({
     client_id: clientId,
@@ -176,6 +183,7 @@ export function buildDailyPerformanceUpsertRows(
     channel,
     result_type: goal,
     result_count: Math.round(row.value),
+    revenue: revenueByDate?.get(row.date) ?? null,
     source: "import",
     provider: "stract",
     source_updated_at: sourceUpdatedAt,

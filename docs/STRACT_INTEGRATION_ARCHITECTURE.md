@@ -65,11 +65,23 @@ O sistema de proteção de sessão da MITZA (`src/proxy.ts`) redirecionava, por 
 - Ativar o cron automático (`/api/cron/sync-stract`, hoje criado mas não ligado em `vercel.json`) somente após estabilidade comprovada.
 - Futuramente reutilizar a mesma arquitetura para Google Ads, TikTok Ads e outras integrações — o desenho já contempla isso (`provider`/`channel` como dimensões separadas), sem exigir mudança na lógica principal.
 
+## Evolução: Receita, ROAS e Ticket Médio
+
+Segunda evolução (depois da integração estável com 2 clientes reais): permitir calcular Receita/ROAS/Ticket Médio automaticamente, mantendo a mesma filosofia (só dados primários armazenados, tudo derivado calculado em tempo de leitura).
+
+**Decisão de modelagem (revisada e aprovada)**: descartada a ideia inicial de uma tabela irmã `daily_revenue`. Receita é o MESMO evento do resultado de vendas (uma compra), só medido em outra unidade — vem da mesma linha da fonte, mesmo dia/canal/objetivo. Em vez de uma tabela nova (que duplicaria a granularidade de `daily_performance` e exigiria `JOIN` em toda leitura de ROAS), `daily_performance` ganhou uma coluna `revenue` nullable. Nunca populada pra leads/seguidores (nenhum `metric_mapping` desses objetivos tem `value_column` configurado — reforçado por uma constraint no banco, `metric_mappings_value_column_only_for_sales`) — nenhum `if (goal === 'sales')` precisa existir em lugar nenhum do código.
+
+`metric_mappings.value_column` (existia desde o início, nunca usado até aqui) passa a alimentar essa coluna: o Import Service agrega `result_column` e `value_column` **separadamente** (unidades diferentes — contagem vs. dinheiro — nunca somadas juntas), e grava os dois na mesma linha de `daily_performance`.
+
+Na camada de domínio (`lib/performance.ts`): `safeDivide()` generalizado centraliza a divisão segura (nunca `NaN`/`Infinity`/`0` fabricado) usada por CPA, CPL, ROAS e Ticket Médio; `AggregatedPerformance`/`PerformanceSummary` já expõem `revenue`/`roas`/`averageTicket` calculados, prontos pra qualquer tela consumir.
+
+**Escopo desta etapa**: schema + Import Service + camada de domínio, validados via `tsc`/`eslint`/`build`. A exibição em Dashboard/Sprint/Relatórios fica pra uma rodada seguinte, depois de confirmar com dado real que os números saem certos no banco.
+
 ## Status
 
-**Status atual: ✅ Implementado e validado.**
+**Status atual: ✅ Implementado e validado (integração base). 🔜 Receita/ROAS/Ticket Médio: schema e cálculo prontos, exibição em UI pendente.**
 
 - Arquitetura implementada.
-- Validação concluída com um cliente real, incluindo histórico retroativo completo.
+- Validação concluída com dois clientes reais, incluindo histórico retroativo completo.
 - Cron automático ainda desabilitado por decisão de rollout.
 - Expansão para novos clientes pendente de alguns dias de observação.

@@ -61,7 +61,7 @@ export async function getDailyPerformanceForPeriod(
 ): Promise<PerformanceRecordRow[]> {
   const { data } = await supabase
     .from("daily_performance")
-    .select("channel, result_type, result_count, source_updated_at")
+    .select("channel, result_type, result_count, revenue, source_updated_at")
     .eq("client_id", clientId)
     .gte("date", period.firstDay)
     .lte("date", period.lastDay);
@@ -70,6 +70,7 @@ export async function getDailyPerformanceForPeriod(
     channel: r.channel,
     resultType: r.result_type,
     resultCount: r.result_count,
+    revenue: r.revenue,
     source: channelToPerformanceSource(r.channel),
     sourceUpdatedAt: r.source_updated_at,
   }));
@@ -130,6 +131,10 @@ export interface RawPerformanceRow {
   channel: TrafficChannelDb;
   result_type: PerformanceGoalDb;
   result_count: number;
+  /** `null` pra qualquer linha de `performance_records` (fluxo manual, sem
+   * essa coluna) — só populado quando vier de `daily_performance` de um
+   * cliente com `value_column` configurado. */
+  revenue: number | null;
   source: PerformanceSourceDb;
   source_updated_at: string;
 }
@@ -175,7 +180,7 @@ export async function resolvePerformanceRowsForSprints(
       ? requireQuery(
           supabase
             .from("daily_performance")
-            .select("client_id, date, channel, result_type, result_count, source_updated_at")
+            .select("client_id, date, channel, result_type, result_count, revenue, source_updated_at")
             .in("client_id", importClientIds)
             .gte(
               "date",
@@ -201,11 +206,16 @@ export async function resolvePerformanceRowsForSprints(
         channel: row.channel,
         result_type: row.result_type,
         result_count: row.result_count,
+        revenue: row.revenue,
         source: channelToPerformanceSource(row.channel),
         source_updated_at: row.source_updated_at,
       });
     }
   }
 
-  return [...manualRows, ...importRows];
+  // `performance_records` (manual) nunca tem receita — `revenue: null`
+  // sempre, nunca fabricado.
+  const manualRowsWithRevenue: RawPerformanceRow[] = manualRows.map((r) => ({ ...r, revenue: null }));
+
+  return [...manualRowsWithRevenue, ...importRows];
 }

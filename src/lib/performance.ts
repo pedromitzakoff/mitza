@@ -13,18 +13,31 @@ import type { TrafficChannel } from "./traffic-channels";
 
 export type PerformanceSource = "manual" | "meta" | "google";
 
-/** Uma linha de `performance_records` já buscada do banco — resultado de UM
- * canal, UM tipo, UM período. */
+/** Uma linha de `performance_records`/`daily_performance` já buscada do
+ * banco — resultado de UM canal, UM tipo, UM período. `revenue` só é
+ * populado quando a linha vier de `daily_performance` de um cliente com
+ * objetivo de vendas E `metric_mappings.value_column` configurado — `null`
+ * em qualquer outro caso (leads/seguidores, ou fluxo manual, que não tem
+ * essa coluna). */
 export interface PerformanceRecordRow {
   channel: TrafficChannel;
   resultType: PerformanceGoal;
   resultCount: number;
+  /** Opcional: omitido (nunca `undefined` explícito é exigido) por toda
+   * linha que não vem de `daily_performance` de um cliente com receita
+   * configurada — tratado exatamente igual a `null` por
+   * `aggregatePerformanceResults` (nenhuma contribuição de faturamento). */
+  revenue?: number | null;
   source: PerformanceSource;
   sourceUpdatedAt: string;
 }
 
 export interface AggregatedPerformance {
   resultCount: number;
+  /** Soma de `revenue` das linhas do escopo — `null` quando nenhuma linha
+   * relevante tiver `revenue` (nunca fabrica `0`: "sem faturamento
+   * registrado" é um estado diferente de "faturou zero"). */
+  revenue: number | null;
   /** `false` = nenhum registro de performance existe pro escopo pedido
    * (diferente de "existe registro, mas resultCount é 0" — Etapa 71, seção
    * 36/37: "sem dados" e "zero resultados registrados" são estados
@@ -54,13 +67,26 @@ export function aggregatePerformanceResults(
   const relevant = records.filter((r) => r.resultType === resultType && (channel === undefined || r.channel === channel));
 
   if (relevant.length === 0) {
-    return { resultCount: 0, hasAnyRecord: false, latestSource: null, latestUpdatedAt: null };
+    return { resultCount: 0, revenue: null, hasAnyRecord: false, latestSource: null, latestUpdatedAt: null };
   }
 
   const resultCount = relevant.reduce((sum, r) => sum + r.resultCount, 0);
+  const revenueRows = relevant.filter((r) => r.revenue !== null && r.revenue !== undefined);
+  const revenue = revenueRows.length > 0 ? revenueRows.reduce((sum, r) => sum + (r.revenue ?? 0), 0) : null;
   const latest = relevant.reduce((latest, r) => (!latest || r.sourceUpdatedAt > latest.sourceUpdatedAt ? r : latest));
 
-  return { resultCount, hasAnyRecord: true, latestSource: latest.source, latestUpdatedAt: latest.sourceUpdatedAt };
+  return { resultCount, revenue, hasAnyRecord: true, latestSource: latest.source, latestUpdatedAt: latest.sourceUpdatedAt };
+}
+
+/** Divisão seguindo a mesma régua de segurança usada por qualquer indicador
+ * derivado da MITZA (CPA, CPL, ROAS, Ticket Médio, e qualquer futuro): nunca
+ * `NaN`/`Infinity`, nunca divide por zero, `null` quando faltar qualquer um
+ * dos dois lados. Único lugar que decide "o que é uma divisão segura" —
+ * toda métrica derivada chama esta função em vez de reimplementar a mesma
+ * checagem. */
+export function safeDivide(numerator: number | null, denominator: number | null): number | null {
+  if (numerator === null || denominator === null || denominator === 0) return null;
+  return numerator / denominator;
 }
 
 /**
@@ -71,10 +97,11 @@ export function aggregatePerformanceResults(
  * que a divisão nunca produz `0`/`NaN`/`Infinity`:
  *
  * - `actualSpend === null` (investimento indisponível pro escopo, ex.:
- *   canal sem investimento separado ainda) → `null`.
+ *   canal sem investimento separado ainda) → `null` (via `safeDivide`).
  * - `!hasAnyRecord` (nenhum dado de performance registrado) → `null`.
  * - `resultCount === 0` (dado registrado, mas zero resultados) → `null`
- *   (nunca `0`/`Infinity` — "custo por zero resultados" não é um número).
+ *   (via `safeDivide` — nunca `0`/`Infinity`, "custo por zero resultados"
+ *   não é um número).
  * - Caso contrário → `actualSpend / resultCount`.
  */
 export function computeCostPerResult(
@@ -82,10 +109,22 @@ export function computeCostPerResult(
   resultCount: number,
   hasAnyRecord: boolean,
 ): number | null {
-  if (actualSpend === null) return null;
   if (!hasAnyRecord) return null;
-  if (resultCount === 0) return null;
-  return actualSpend / resultCount;
+  return safeDivide(actualSpend, resultCount);
+}
+
+/** ROAS (Return on Ad Spend) — receita ÷ investimento. `null` quando não há
+ * receita registrada pro escopo (objetivo não é vendas, ou sem
+ * `value_column` configurado) ou investimento indisponível — nunca `0`
+ * fabricado. */
+export function computeRoas(revenue: number | null, actualSpend: number | null): number | null {
+  return safeDivide(revenue, actualSpend);
+}
+
+/** Ticket médio — receita ÷ vendas. `null` quando não há receita ou zero
+ * vendas no escopo. */
+export function computeAverageTicket(revenue: number | null, resultCount: number): number | null {
+  return safeDivide(revenue, resultCount);
 }
 
 /** Por que `costPerResult` é `null` num escopo — pra interface escolher o
@@ -239,6 +278,15 @@ export interface PerformanceSummary {
   costUnavailableReason: CostPerResultUnavailableReason;
   targetCostPerResult: number | null;
   comparison: CostComparison;
+  /** Faturamento/ROAS/Ticket Médio — todos `null` quando o escopo não tem
+   * `revenue` registrado (objetivo não é vendas, ou sem `value_column`
+   * configurado no mapeamento) — nunca calculado a partir de um objetivo
+   * diferente de vendas, nunca precisa de checagem `goal === 'sales'`
+   * explícita em nenhum consumidor: a ausência de `revenue` já resolve isso
+   * sozinha. */
+  revenue: number | null;
+  roas: number | null;
+  averageTicket: number | null;
   latestSource: PerformanceSource | null;
   latestUpdatedAt: string | null;
 }
@@ -261,6 +309,8 @@ export function computePerformanceSummary(input: {
   const costPerResult = computeCostPerResult(actualSpend, aggregated.resultCount, aggregated.hasAnyRecord);
   const costUnavailableReason = getCostPerResultUnavailableReason(actualSpend, aggregated.resultCount, aggregated.hasAnyRecord);
   const comparison = compareCostToTarget(costPerResult, targetCostPerResult);
+  const roas = computeRoas(aggregated.revenue, actualSpend);
+  const averageTicket = computeAverageTicket(aggregated.revenue, aggregated.resultCount);
 
   return {
     scope,
@@ -272,6 +322,9 @@ export function computePerformanceSummary(input: {
     costUnavailableReason,
     targetCostPerResult,
     comparison,
+    revenue: aggregated.revenue,
+    roas,
+    averageTicket,
     latestSource: aggregated.latestSource,
     latestUpdatedAt: aggregated.latestUpdatedAt,
   };

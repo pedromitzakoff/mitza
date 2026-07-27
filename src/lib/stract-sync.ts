@@ -64,7 +64,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
 
   const { data: mappings, error: mappingsError } = await supabase
     .from("metric_mappings")
-    .select("goal, result_column")
+    .select("goal, result_column, value_column")
     .eq("import_source_id", importSourceId)
     .eq("active", true);
 
@@ -158,29 +158,46 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
   // Gravar cada mapeamento separadamente, na mesma chave de upsert
   // `(client_id, date, channel, result_type)`, faria o último sobrescrever
   // os anteriores em vez de somar.
-  const resultColumnsByGoal = new Map<PerformanceGoal, string[]>();
+  const mappingGroupsByGoal = new Map<PerformanceGoal, { resultColumns: string[]; valueColumns: string[] }>();
   for (const mapping of mappings ?? []) {
     const goal = mapping.goal as PerformanceGoal;
-    const list = resultColumnsByGoal.get(goal) ?? [];
-    list.push(mapping.result_column);
-    resultColumnsByGoal.set(goal, list);
+    const group = mappingGroupsByGoal.get(goal) ?? { resultColumns: [], valueColumns: [] };
+    group.resultColumns.push(mapping.result_column);
+    if (mapping.value_column) group.valueColumns.push(mapping.value_column);
+    mappingGroupsByGoal.set(goal, group);
   }
 
-  for (const [goal, resultColumns] of resultColumnsByGoal) {
-    const columnAggregates = resultColumns.map((resultColumn) => aggregateDailyColumn(rows, importSource.date_column, resultColumn));
-    for (const columnAggregate of columnAggregates) {
+  for (const [goal, { resultColumns, valueColumns }] of mappingGroupsByGoal) {
+    const resultColumnAggregates = resultColumns.map((resultColumn) => aggregateDailyColumn(rows, importSource.date_column, resultColumn));
+    for (const columnAggregate of resultColumnAggregates) {
       hadInvalidRows = hadInvalidRows || columnAggregate.some((row) => row.invalidRowCount > 0);
     }
 
-    const combinedAggregate = combineAggregatedDailyValues(columnAggregates);
-    if (combinedAggregate.length === 0) continue;
+    const combinedResultAggregate = combineAggregatedDailyValues(resultColumnAggregates);
+    if (combinedResultAggregate.length === 0) continue;
+
+    // Receita é uma agregação SEPARADA (unidade diferente de result_count —
+    // nunca somada junto via combineAggregatedDailyValues, que é pra somar
+    // colunas da MESMA unidade). Só roda quando o objetivo tiver
+    // value_column configurado (na prática, só vendas — reforçado também
+    // pela constraint metric_mappings_value_column_only_for_sales).
+    let revenueByDate: Map<string, number> | null = null;
+    if (valueColumns.length > 0) {
+      const valueColumnAggregates = valueColumns.map((valueColumn) => aggregateDailyColumn(rows, importSource.date_column, valueColumn));
+      for (const columnAggregate of valueColumnAggregates) {
+        hadInvalidRows = hadInvalidRows || columnAggregate.some((row) => row.invalidRowCount > 0);
+      }
+      const combinedValueAggregate = combineAggregatedDailyValues(valueColumnAggregates);
+      revenueByDate = new Map(combinedValueAggregate.map((row) => [row.date, row.value]));
+    }
 
     const performanceUpsertRows = buildDailyPerformanceUpsertRows(
       importSource.client_id,
       importSource.channel,
       goal,
-      combinedAggregate,
+      combinedResultAggregate,
       nowIso,
+      revenueByDate,
     );
     const { error: performanceUpsertError } = await supabase
       .from("daily_performance")

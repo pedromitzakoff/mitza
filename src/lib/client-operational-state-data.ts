@@ -171,7 +171,7 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
     const dailyPerformanceRows = await requireQuery(
       supabase
         .from("daily_performance")
-        .select("client_id, channel, result_type, result_count, source_updated_at")
+        .select("client_id, channel, result_type, result_count, revenue, source_updated_at")
         .in("client_id", Array.from(activeImportClientIds))
         .gte("date", monthStart)
         .lte("date", monthEnd),
@@ -185,6 +185,7 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
         channel: row.channel,
         resultType: row.result_type,
         resultCount: row.result_count,
+        revenue: row.revenue,
         source: channelToPerformanceSource(row.channel),
         sourceUpdatedAt: row.source_updated_at,
       });
@@ -255,7 +256,7 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
 
     const performanceResult = client.performance_goal
       ? aggregatePerformanceResults(performanceRowsByClient.get(client.id) ?? [], client.performance_goal)
-      : { resultCount: 0, hasAnyRecord: false, latestSource: null, latestUpdatedAt: null };
+      : { resultCount: 0, revenue: null, hasAnyRecord: false, latestSource: null, latestUpdatedAt: null };
 
     const costActual = computeCostPerResult(
       spend.hasData ? spend.actual : null,

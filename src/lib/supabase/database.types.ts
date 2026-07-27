@@ -592,6 +592,7 @@ export interface Database {
           channel: TrafficChannelDb;
           result_type: PerformanceGoalDb;
           result_count: number;
+          revenue: number | null;
           source: DailyPerformanceSourceDb;
           provider: ImportProviderDb | null;
           source_updated_at: string;
@@ -605,6 +606,7 @@ export interface Database {
           channel: TrafficChannelDb;
           result_type: PerformanceGoalDb;
           result_count?: number;
+          revenue?: number | null;
           source?: DailyPerformanceSourceDb;
           provider?: ImportProviderDb | null;
           source_updated_at?: string;
@@ -618,6 +620,7 @@ export interface Database {
           channel?: TrafficChannelDb;
           result_type?: PerformanceGoalDb;
           result_count?: number;
+          revenue?: number | null;
           source?: DailyPerformanceSourceDb;
           provider?: ImportProviderDb | null;
           source_updated_at?: string;
