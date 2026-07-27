@@ -131,6 +131,26 @@ export function filterRowsByCampaignName(rows: RawSourceRow[], campaignNameColum
   });
 }
 
+/**
+ * Exclui linhas por um trecho (contém, sem diferenciar maiúscula/minúscula
+ * nem acento) no nome da campanha — o inverso de `filterRowsByCampaignName`,
+ * pra quando a conta mistura campanhas de outra finalidade (ex.: RH/
+ * recrutamento) que não têm nenhum texto em comum com as campanhas
+ * legítimas, então "incluir só quem contém X" não serve; "excluir quem
+ * contém X" resolve. Independente do filtro de inclusão — uma fonte pode
+ * usar os dois, um só, ou nenhum. Só é chamada quando
+ * `campaign_name_column`/`campaign_name_exclude` estiverem configurados em
+ * `import_sources`.
+ */
+export function excludeRowsByCampaignName(rows: RawSourceRow[], campaignNameColumn: string, excludeText: string): RawSourceRow[] {
+  const needle = normalizeForCampaignMatch(excludeText);
+  return rows.filter((row) => {
+    const raw = row[campaignNameColumn];
+    const value = typeof raw === "string" ? raw : String(raw ?? "");
+    return !normalizeForCampaignMatch(value).includes(needle);
+  });
+}
+
 export interface DailySpendUpsertRow {
   client_id: string;
   date: string;

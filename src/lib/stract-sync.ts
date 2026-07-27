@@ -5,6 +5,7 @@ import {
   buildDailyPerformanceUpsertRows,
   buildDailySpendUpsertRows,
   combineAggregatedDailyValues,
+  excludeRowsByCampaignName,
   filterRowsByCampaignName,
   validateAccountIdColumn,
   type RawSourceRow,
@@ -54,7 +55,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
   const { data: importSource, error: importSourceError } = await supabase
     .from("import_sources")
     .select(
-      "id, client_id, provider, channel, external_account_id, table_name, account_id_column, date_column, spend_column, campaign_name_column, campaign_name_filter",
+      "id, client_id, provider, channel, external_account_id, table_name, account_id_column, date_column, spend_column, campaign_name_column, campaign_name_filter, campaign_name_exclude",
     )
     .eq("id", importSourceId)
     .single();
@@ -115,9 +116,13 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
   // Filtro de campanha (opcional): nunca depende do provedor externo aplicar
   // o filtro certo na extração — quando configurado, a MITZA garante isso
   // por conta própria, antes de qualquer agregação (investimento e
-  // resultado usam a mesma lista de linhas já filtrada).
+  // resultado usam a mesma lista de linhas já filtrada). Inclusão e exclusão
+  // são independentes — uma fonte pode usar as duas, uma só, ou nenhuma.
   if (importSource.campaign_name_column && importSource.campaign_name_filter) {
     rows = filterRowsByCampaignName(rows, importSource.campaign_name_column, importSource.campaign_name_filter);
+  }
+  if (importSource.campaign_name_column && importSource.campaign_name_exclude) {
+    rows = excludeRowsByCampaignName(rows, importSource.campaign_name_column, importSource.campaign_name_exclude);
   }
 
   let hadInvalidRows = false;
