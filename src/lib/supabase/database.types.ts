@@ -2047,6 +2047,14 @@ export interface Database {
         };
         Returns: void;
       };
+      ensure_client_sprints_for_range: {
+        Args: {
+          p_client_id: string;
+          p_start_date: string;
+          p_end_date: string;
+        };
+        Returns: void;
+      };
       complete_task_and_record_event: {
         Args: {
           p_task_id: string;

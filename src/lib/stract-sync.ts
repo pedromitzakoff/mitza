@@ -115,6 +115,25 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
   let performanceRowsWritten = 0;
   const partialReasons: string[] = [];
 
+  // Backfill automático de Sprints históricas (achado na validação: dado
+  // importado de um mês sem Sprint cadastrada não aparece em nenhuma tela).
+  // Cobre o intervalo de datas que a própria extração trouxe — assim,
+  // qualquer cliente novo já ganha o histórico inteiro visível, sem
+  // precisar de um script manual por cliente (ver
+  // supabase/stract-sprint-backfill.sql).
+  const minDate = minDateValue(rows, importSource.date_column);
+  const maxDate = maxDateValue(rows, importSource.date_column);
+  if (minDate && maxDate) {
+    const { error: sprintBackfillError } = await supabase.rpc("ensure_client_sprints_for_range", {
+      p_client_id: importSource.client_id,
+      p_start_date: minDate,
+      p_end_date: maxDate,
+    });
+    if (sprintBackfillError) {
+      partialReasons.push(`sprints históricas não criadas: ${sprintBackfillError.message}`);
+    }
+  }
+
   const spendAggregate = aggregateDailyColumn(rows, importSource.date_column, importSource.spend_column);
   hadInvalidRows = hadInvalidRows || spendAggregate.some((row) => row.invalidRowCount > 0);
 
@@ -236,6 +255,15 @@ function maxDateValue(rows: RawSourceRow[], dateColumn: string): string | null {
     if (typeof value === "string" && (max === null || value > max)) max = value;
   }
   return max;
+}
+
+function minDateValue(rows: RawSourceRow[], dateColumn: string): string | null {
+  let min: string | null = null;
+  for (const row of rows) {
+    const value = row[dateColumn];
+    if (typeof value === "string" && (min === null || value < min)) min = value;
+  }
+  return min;
 }
 
 /**
