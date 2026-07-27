@@ -10,10 +10,21 @@
  * (`main_objective`, já existente em `clients` — "leads"|"vendas"|"reservas"|
  * "reconhecimento"|"trafego"|"outro", um campo descritivo/textual de
  * contexto estratégico, sem estrutura de meta ou cálculo). `performance_goal`
- * é estruturado, só 2 valores, e alimenta cálculo de custo por resultado —
- * conceitos diferentes, nunca unificados nesta etapa.
+ * é estruturado, alimenta cálculo de custo por resultado — conceito
+ * diferente, nunca unificado com `main_objective`.
+ *
+ * Terceiro valor ("followers", Etapa "Objetivo Seguidores"): contas cujo KPI
+ * principal é crescimento de audiência. Deliberadamente NÃO introduz um
+ * conceito novo na interface (nunca "Growth"/"Branding"/"Awareness") — é só
+ * mais um objetivo estruturado, com a mesma forma dos outros dois
+ * (`resultMetricLabel`/`costMetricLabel`/`costMetricShortLabel`), consumido
+ * pelas MESMAS funções genéricas já existentes (`formatPerformanceResult`,
+ * `deriveMonthlyKpiTexts`, `computePerformanceSummary` etc.) — nenhuma delas
+ * faz `if (goal === "leads")`, todas leem de `PERFORMANCE_GOALS[goal]`, por
+ * isso um objetivo novo é uma entrada de configuração, nunca uma ramificação
+ * de código nova.
  */
-export type PerformanceGoal = "leads" | "sales";
+export type PerformanceGoal = "leads" | "sales" | "followers";
 
 export interface PerformanceGoalConfig {
   id: PerformanceGoal;
@@ -52,11 +63,24 @@ export const PERFORMANCE_GOALS: Record<PerformanceGoal, PerformanceGoalConfig> =
     costMetricLabel: "Custo por venda",
     costMetricShortLabel: "CPA",
   },
+  followers: {
+    id: "followers",
+    label: "Seguidores",
+    singularLabel: "Seguidor",
+    pluralLabel: "Seguidores",
+    resultMetricLabel: "Seguidores",
+    costMetricLabel: "Custo por seguidor",
+    // Sem abreviação (ao contrário de CPL/CPA): "CPS" não é reconhecido no
+    // mercado e "CPF" já significa Cadastro de Pessoa Física — por extenso
+    // em qualquer espaço, mesmo os compactos que usam `costMetricShortLabel`.
+    costMetricShortLabel: "Custo por seguidor",
+  },
 };
 
 export const PERFORMANCE_GOAL_OPTIONS: { value: PerformanceGoal; label: string }[] = [
   { value: "leads", label: "Geração de leads" },
   { value: "sales", label: "Vendas" },
+  { value: "followers", label: "Seguidores" },
 ];
 
 /** `null`/`undefined` = cliente sem objetivo configurado ainda (nunca

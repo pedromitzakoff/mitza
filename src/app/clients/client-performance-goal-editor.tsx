@@ -10,8 +10,8 @@ import { PERFORMANCE_GOALS, PERFORMANCE_GOAL_OPTIONS, type PerformanceGoal } fro
  * Etapa "Refinamento de Densidade..." (Parte 3) — configurar o objetivo de
  * performance direto na Sprint, sem navegar até a edição do cliente. Popover
  * compacto (mesmo padrão de `mitza-menu-in` já usado em outros menus
- * pequenos da plataforma) em vez de drawer — só 2 opções, não precisa de
- * mais estrutura que isso. Sem redirect: a Server Action só revalida as
+ * pequenos da plataforma) em vez de drawer — poucas opções (`PERFORMANCE_GOAL_OPTIONS`,
+ * hoje 3), não precisa de mais estrutura que isso. Sem redirect: a Server Action só revalida as
  * telas que mostram o objetivo; o popover fecha e o toast único da
  * plataforma confirma o sucesso, sem perder scroll nem o que está expandido.
  *

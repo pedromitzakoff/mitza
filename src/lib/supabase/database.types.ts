@@ -12,8 +12,9 @@ export type CommentableType = "sprint" | "task";
  * aquele é sobre execução da semana. */
 export type ClientContractStatus = "ativo" | "pausado" | "encerrado";
 export type ClientMainObjective = "leads" | "vendas" | "reservas" | "reconhecimento" | "trafego" | "outro";
-/** Objetivo estruturado de performance (Etapa 71) — distinto de `ClientMainObjective`. */
-export type PerformanceGoalDb = "leads" | "sales";
+/** Objetivo estruturado de performance (Etapa 71; "followers" adicionado na
+ * Etapa "Objetivo Seguidores") — distinto de `ClientMainObjective`. */
+export type PerformanceGoalDb = "leads" | "sales" | "followers";
 export type TrafficChannelDb = "meta" | "google" | "tiktok" | "linkedin" | "other";
 export type PerformanceSourceDb = "manual" | "meta" | "google";
 

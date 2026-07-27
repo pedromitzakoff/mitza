@@ -283,7 +283,7 @@ export function ClientForm({
               ))}
             </select>
             <span className="text-xs text-zinc-400">
-              Define se os resultados desta conta são acompanhados como leads ou vendas.
+              Define se os resultados desta conta são acompanhados como leads, vendas ou seguidores.
             </span>
           </label>
           <label className={labelClasses}>

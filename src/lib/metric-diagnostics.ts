@@ -128,17 +128,20 @@ export interface PlanejamentoDiagnostic {
 }
 
 export function evaluatePlanejamento(input: {
-  /** `false` = sem `performance_goal` (leads/vendas) configurado — sem
-   * isso não existe CPA/CPL possível de definir, então conta como meta de
-   * custo ausente. */
+  /** `false` = sem `performance_goal` (leads/vendas/seguidores) configurado
+   * — sem isso não existe custo por resultado possível de definir, então
+   * conta como meta de custo ausente. */
   hasPerformanceGoal: boolean;
   targetCostPerResult: number | null;
   investmentPlanned: number | null;
 }): PlanejamentoDiagnostic {
   const items: PlanejamentoItem[] = [];
 
+  // Rótulo goal-agnostic (Etapa "Objetivo Seguidores"): "CPA/CPL" assumia só
+  // 2 objetivos possíveis — com um 3º objetivo (Seguidores) o rótulo precisa
+  // valer pra qualquer um, sem enumerar as abreviações específicas.
   if (!input.hasPerformanceGoal || input.targetCostPerResult === null) {
-    items.push({ type: "meta_custo_nao_configurada", label: "Meta de CPA/CPL não configurada" });
+    items.push({ type: "meta_custo_nao_configurada", label: "Meta de custo por resultado não configurada" });
   }
   if (input.investmentPlanned === null) {
     items.push({
