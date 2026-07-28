@@ -61,6 +61,7 @@ export function SprintCurrentClientGroup({
   const operational = operationalSummary(card, "sprint");
   const reviews = accountReviews ?? [];
   const tasksDone = card.sprintTasks.filter((t) => effectiveTaskStatus(t) === "feito").length;
+  const sprintId = card.sprint.sprintId;
 
   return (
     <details
@@ -93,6 +94,9 @@ export function SprintCurrentClientGroup({
         returnTo={returnTo}
         accountReviews={reviews}
         recurringTasks={recurringTasks}
+        buildRecurringTaskHref={(recurringTaskId) =>
+          `${returnTo}&recurringTaskDetail=${recurringTaskId}&recurringTaskClient=${card.clientId}&recurringTaskSprint=${sprintId}`
+        }
         newReviewHref={`${returnTo}&review=new&reviewClient=${card.clientId}`}
         buildReviewDetailHref={(reviewId) => `${returnTo}&reviewDetail=${reviewId}`}
       />

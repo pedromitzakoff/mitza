@@ -35,7 +35,8 @@ import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-sec
 import { RecordAccountReviewDrawer } from "@/app/clients/record-account-review-drawer";
 import { AccountReviewDetailDrawer, type AccountReviewDetail } from "@/app/clients/account-review-detail-drawer";
 import { computeClientUpdateStatus } from "@/lib/client-updates";
-import { fetchRecurringTaskListsForSprints } from "@/lib/recurring-task-data";
+import { fetchRecurringTaskDetail, fetchRecurringTaskListsForSprints } from "@/lib/recurring-task-data";
+import { RecurringTaskDrawer } from "@/app/clients/recurring-task-drawer";
 import { SprintCurrentClientGroup } from "./current-client-group";
 import { SprintMonthlyBySprintsGroup } from "./monthly-sprints-group";
 import { SprintMonthlyConsolidatedGroup } from "./monthly-consolidated-group";
@@ -90,6 +91,10 @@ export default async function SprintsPage({
     reviewClient?: string;
     reviewDetail?: string;
     reviewError?: string;
+    recurringTaskDetail?: string;
+    recurringTaskClient?: string;
+    recurringTaskSprint?: string;
+    recurringTaskError?: string;
   }>;
 }) {
   // Instrumentação temporária (Navigation Performance & Perceived Speed 1.0)
@@ -675,6 +680,17 @@ export default async function SprintsPage({
       }
     : null;
 
+  // Fase "Drawer das recorrentes" — buscado sob demanda (só quando o drawer
+  // está aberto), ao contrário de `accountReviewsBySprintId` (que já vem
+  // pronto pra tela inteira): "Histórico" mostra TODO o passado do cliente
+  // pra essa recorrência, não só o que já está carregado pro mês/sprints
+  // visíveis nesta tela.
+  const recurringTaskSprint = params.recurringTaskSprint ? sprints.find((s) => s.id === params.recurringTaskSprint) ?? null : null;
+  const recurringTaskDetail =
+    params.recurringTaskDetail && params.recurringTaskClient && recurringTaskSprint
+      ? await fetchRecurringTaskDetail(supabase, params.recurringTaskDetail, params.recurringTaskClient, recurringTaskSprint)
+      : null;
+
   const activeTabKey =
     view === "current" ? "current" : grouping === "consolidated" ? "monthly-consolidated" : "monthly-sprints";
 
@@ -885,6 +901,10 @@ export default async function SprintsPage({
 
       {reviewDetail && openReviewDetailRow && (
         <AccountReviewDetailDrawer review={reviewDetail} clientId={openReviewDetailRow.client_id} closeHref={buildUrl({})} />
+      )}
+
+      {recurringTaskDetail && params.recurringTaskClient && (
+        <RecurringTaskDrawer detail={recurringTaskDetail} clientId={params.recurringTaskClient} closeHref={buildUrl({})} />
       )}
     </div>
   );

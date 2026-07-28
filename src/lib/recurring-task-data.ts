@@ -94,3 +94,93 @@ export async function fetchRecurringTaskListsForSprints(
 
   return result;
 }
+
+export interface RecurringTaskExecutionDetail {
+  id: string;
+  executedAt: string;
+  authorName: string;
+  notes: string | null;
+}
+
+export interface RecurringTaskDetail {
+  id: string;
+  title: string;
+  icon: string;
+  hasChecklist: boolean;
+  weekProgress: WeeklyExecutionProgress;
+  /** Execuções dentro do período da sprint em que o drawer foi aberto. */
+  weekExecutions: RecurringTaskExecutionDetail[];
+  /** Todo o histórico já registrado pra este cliente (capado, mais recente
+   * primeiro) — nunca zera entre sprints, é o ponto central da reforma. */
+  history: RecurringTaskExecutionDetail[];
+}
+
+const HISTORY_LIMIT = 50;
+
+/**
+ * Detalhe de UMA recorrência pra UM cliente, aberto sob demanda quando o
+ * gestor clica na linha (drawer) — nunca buscado em lote com o resto da
+ * tela, ao contrário de `fetchRecurringTaskListsForSprints` (aquele
+ * alimenta só o badge da lista, este alimenta o drawer com "Execuções desta
+ * semana" + "Histórico"). `sprint` é a sprint em que o drawer foi aberto —
+ * define tanto a meta congelada quanto o recorte de "desta semana".
+ */
+export async function fetchRecurringTaskDetail(
+  supabase: Supabase,
+  recurringTaskId: string,
+  clientId: string,
+  sprint: { start_date: string; end_date: string },
+): Promise<RecurringTaskDetail | null> {
+  const [taskRows, goalHistoryRows, executionRows] = await Promise.all([
+    requireQuery(supabase.from("recurring_tasks").select("id, title, icon, has_checklist").eq("id", recurringTaskId), "recurring_tasks:detail"),
+    requireQuery(
+      supabase.from("recurring_task_goal_history").select("weekly_goal, effective_from").eq("recurring_task_id", recurringTaskId),
+      "recurring_task_goal_history:detail",
+    ),
+    requireQuery(
+      supabase
+        .from("recurring_task_executions")
+        .select("id, executed_at, notes, team_member:team_members!recurring_task_executions_team_member_id_fkey(name)")
+        .eq("recurring_task_id", recurringTaskId)
+        .eq("client_id", clientId)
+        .order("executed_at", { ascending: false })
+        .limit(HISTORY_LIMIT),
+      "recurring_task_executions:detail",
+    ),
+  ]);
+
+  const task = taskRows[0];
+  if (!task) return null;
+
+  const history: RecurringTaskExecutionDetail[] = executionRows.map((row) => ({
+    id: row.id,
+    executedAt: row.executed_at,
+    authorName: row.team_member?.name ?? "Membro removido",
+    notes: row.notes,
+  }));
+
+  const weekExecutions = history.filter((execution) => {
+    const day = execution.executedAt.slice(0, 10);
+    return day >= sprint.start_date && day <= sprint.end_date;
+  });
+
+  const goal = resolveWeeklyGoalForSprint(
+    goalHistoryRows.map((row) => ({ weeklyGoal: row.weekly_goal, effectiveFrom: row.effective_from })),
+    sprint.start_date,
+  );
+  const weekProgress = computeWeeklyExecutionProgress(
+    weekExecutions.map((execution) => ({ executedAt: execution.executedAt })),
+    sprint,
+    goal,
+  );
+
+  return {
+    id: task.id,
+    title: task.title,
+    icon: task.icon,
+    hasChecklist: task.has_checklist,
+    weekProgress,
+    weekExecutions,
+    history,
+  };
+}

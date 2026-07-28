@@ -107,6 +107,9 @@ export function SprintMonthlyBySprintsGroup({
                   returnTo={returnTo}
                   accountReviews={accountReviewsBySprintId?.get(sprint.sprintId) ?? []}
                   recurringTasks={recurringTasksBySprintId?.get(sprint.sprintId)}
+                  buildRecurringTaskHref={(recurringTaskId) =>
+                    `${returnTo}&recurringTaskDetail=${recurringTaskId}&recurringTaskClient=${card.clientId}&recurringTaskSprint=${sprint.sprintId}`
+                  }
                   newReviewHref={newReviewHref}
                   buildReviewDetailHref={buildReviewDetailHref}
                   flat

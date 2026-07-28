@@ -1655,6 +1655,13 @@ export interface Database {
             referencedRelation: "account_reviews";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "recurring_task_executions_team_member_id_fkey";
+            columns: ["team_member_id"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
         ];
       };
       client_updates: {

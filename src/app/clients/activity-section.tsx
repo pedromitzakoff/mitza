@@ -73,6 +73,7 @@ export function ActivitySection({
   reviews,
   reviewHrefPrefix,
   recurringTasks,
+  recurringTaskHrefPrefix,
   canOperate = true,
 }: {
   tasks: TaskListItem[];
@@ -106,6 +107,9 @@ export function ActivitySection({
    * simplesmente não passa (a fila mostra só tarefas comuns/revisões, igual
    * hoje — hoje a tabela está sempre vazia até a migração final rodar). */
   recurringTasks?: RecurringTaskListItem[];
+  /** PREFIXO de string, mesmo motivo de `reviewHrefPrefix` — concatenado com
+   * `recurringTask.id` pra formar o href completo do drawer de recorrência. */
+  recurringTaskHrefPrefix?: string;
   /** Princípio "Workspace = só cliente ativo" — `false` quando o cliente
    * está pausado/encerrado: esconde o `ActivityComposer` (criação de
    * tarefa) e desabilita "Marcar como feito" em cada `TaskRow` (leitura
@@ -173,7 +177,18 @@ export function ActivitySection({
           {activities.length > 0 ? (
             activities.map((item) => {
               if (item.kind === "recurring_task") {
-                return <RecurringTaskRow key={`recurring-${item.recurringTask.id}`} item={item.recurringTask} typeLabel="Recorrência" />;
+                return (
+                  <RecurringTaskRow
+                    key={`recurring-${item.recurringTask.id}`}
+                    item={item.recurringTask}
+                    detailHref={
+                      recurringTaskHrefPrefix
+                        ? `${recurringTaskHrefPrefix}${item.recurringTask.id}`
+                        : `/clients/${clientId}?recurringTask=${item.recurringTask.id}`
+                    }
+                    typeLabel="Recorrência"
+                  />
+                );
               }
               if (item.kind === "account_review") {
                 return (

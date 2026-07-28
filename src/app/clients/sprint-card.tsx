@@ -596,6 +596,7 @@ export function SprintCardBody({
   newReviewHref,
   buildReviewDetailHref,
   recurringTasks,
+  buildRecurringTaskHref,
   manualSpendUpdatedAt,
   metaSyncedAt,
   performance,
@@ -641,6 +642,10 @@ export function SprintCardBody({
    * em `ActivitySection`. Repassado direto, mesmo padrão opcional de
    * `accountReviews`. */
   recurringTasks?: RecurringTaskListItem[];
+  /** Fase "Drawer das recorrentes" — mesmo motivo de `buildReviewDetailHref`
+   * (função, calculada aqui ainda no servidor pro prefixo de string
+   * atravessar a fronteira pra `ActivitySection`, Client Component). */
+  buildRecurringTaskHref?: (recurringTaskId: string) => string;
   /** Última edição do gasto manual desta sprint (`sprints.manual_spend_updated_at`)
    * — `undefined` (nunca buscado, ex.: painel Sprints) é diferente de `null`
    * (buscado, mas nunca editado manualmente); só a página do cliente busca
@@ -724,6 +729,9 @@ export function SprintCardBody({
   // receber `buildReviewDetailHref` como função — só o PREFIXO de string
   // equivalente, serializável. Nenhuma URL gerada muda.
   const reviewHrefPrefix = buildReviewDetailHref ? buildReviewDetailHref("") : undefined;
+
+  // Fase "Drawer das recorrentes" — mesmo motivo de `reviewHrefPrefix` acima.
+  const recurringTaskHrefPrefix = buildRecurringTaskHref ? buildRecurringTaskHref("") : undefined;
 
   // Etapa "Sprint Workspace MVP Finalization 2.0" (Parte 10): "Próxima
   // ação" só na sprint atual — é o ponto onde o gestor de fato começa o dia
@@ -900,6 +908,7 @@ export function SprintCardBody({
             reviews={accountReviews}
             reviewHrefPrefix={reviewHrefPrefix}
             recurringTasks={recurringTasks}
+            recurringTaskHrefPrefix={recurringTaskHrefPrefix}
             canOperate={canOperate}
           />
         </div>
@@ -1021,6 +1030,7 @@ export function SprintCard({
   newReviewHref,
   buildReviewDetailHref,
   recurringTasks,
+  buildRecurringTaskHref,
   manualSpendUpdatedAt,
   metaSyncedAt,
   performance,
@@ -1053,6 +1063,8 @@ export function SprintCard({
   buildReviewDetailHref?: (reviewId: string) => string;
   /** Reformulação do sistema de tarefas (28/07) — ver doc de `SprintCardBody`. */
   recurringTasks?: RecurringTaskListItem[];
+  /** Fase "Drawer das recorrentes" — ver doc de `SprintCardBody`. */
+  buildRecurringTaskHref?: (recurringTaskId: string) => string;
   manualSpendUpdatedAt?: string | null;
   metaSyncedAt?: string | null;
   performance?: SprintPerformanceProps;
@@ -1305,6 +1317,7 @@ export function SprintCard({
               newReviewHref={newReviewHref}
               buildReviewDetailHref={buildReviewDetailHref}
               recurringTasks={recurringTasks}
+              buildRecurringTaskHref={buildRecurringTaskHref}
               manualSpendUpdatedAt={manualSpendUpdatedAt}
               metaSyncedAt={metaSyncedAt}
               taskManagers={taskManagers}
@@ -1334,6 +1347,7 @@ export function SprintCard({
           newReviewHref={newReviewHref}
           buildReviewDetailHref={buildReviewDetailHref}
           recurringTasks={recurringTasks}
+          buildRecurringTaskHref={buildRecurringTaskHref}
           manualSpendUpdatedAt={manualSpendUpdatedAt}
           metaSyncedAt={metaSyncedAt}
           taskManagers={taskManagers}
