@@ -63,6 +63,8 @@ import type { SprintPerformanceProps } from "../sprint-card";
 import { buildReportViewData } from "../../reports/report-data";
 import { ClientReportView } from "../../reports/report-view";
 import { ClientHistoryList } from "../client-history-list";
+import { fetchRecurringTaskDetail, fetchRecurringTaskListsForSprints } from "@/lib/recurring-task-data";
+import { RecurringTaskDrawer } from "../recurring-task-drawer";
 
 async function fetchCommentsByType(
   supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
@@ -139,6 +141,9 @@ export default async function ClientPage({
     month?: string;
     historyPage?: string;
     area?: string;
+    recurringTaskDetail?: string;
+    recurringTaskSprint?: string;
+    recurringTaskError?: string;
   }>;
 }) {
   const { id } = await params;
@@ -158,6 +163,9 @@ export default async function ClientPage({
     month: monthQueryParam,
     historyPage: historyPageParam,
     area: areaParam,
+    recurringTaskDetail: openRecurringTaskId,
+    recurringTaskSprint: openRecurringTaskSprintId,
+    recurringTaskError,
   } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
@@ -614,12 +622,39 @@ export default async function ClientPage({
     error && { tone: "red", text: error },
     taskError && { tone: "red", text: taskError },
     reviewError && { tone: "red", text: reviewError },
+    recurringTaskError && { tone: "red", text: recurringTaskError },
     clientUpdateError && { tone: "red", text: clientUpdateError },
     synced && { tone: "green", text: `${synced} dia(s) de spend sincronizado(s) com o Meta.` },
     saved && { tone: "green", text: "Dados do cliente atualizados." },
   ].filter((banner): banner is { tone: "red" | "green" | "amber"; text: string } => Boolean(banner));
 
   const returnTo = `/clients/${client.id}${monthQuery}`;
+
+  // Reformulação do sistema de tarefas (28/07) — recorrências na aba
+  // "Tarefas de {mês}" (MonthTasksPanel): só reportadas quando o mês exibido
+  // é o CORRENTE (um mês passado/futuro não tem uma sprint "atual" óbvia pra
+  // reportar progresso semanal contra — o histórico completo dessas sprints
+  // continua disponível no drawer/em /sprints). `currentSprintForRecurring`
+  // é a mesma sprint que `assertSingleCurrentSprint` já garante ser única.
+  const currentSprintForRecurring = isCurrentMonth ? sprintFinancials.find((s) => s.temporalStatus === "atual") ?? null : null;
+  const recurringTasksForCurrentSprint = currentSprintForRecurring
+    ? (
+        await fetchRecurringTaskListsForSprints(supabase, [
+          {
+            id: currentSprintForRecurring.sprintId,
+            client_id: client.id,
+            start_date: currentSprintForRecurring.startDate,
+            end_date: currentSprintForRecurring.endDate,
+          },
+        ])
+      ).get(currentSprintForRecurring.sprintId) ?? []
+    : [];
+
+  const recurringTaskSprintForDrawer = openRecurringTaskSprintId ? sprints.find((s) => s.id === openRecurringTaskSprintId) ?? null : null;
+  const recurringTaskDetail =
+    openRecurringTaskId && recurringTaskSprintForDrawer
+      ? await fetchRecurringTaskDetail(supabase, openRecurringTaskId, client.id, recurringTaskSprintForDrawer)
+      : null;
   const openReviewDetail = openReviewDetailId ? accountReviews.find((r) => r.id === openReviewDetailId) ?? null : null;
   const reviewDetail: AccountReviewDetail | null = openReviewDetail
     ? {
@@ -1068,6 +1103,12 @@ export default async function ClientPage({
               managers={managers ?? []}
               isAdmin={isAdmin}
               canOperate={canOperate}
+              recurringTasks={recurringTasksForCurrentSprint}
+              recurringTaskHrefPrefix={
+                currentSprintForRecurring
+                  ? `${returnTo}${returnTo.includes("?") ? "&" : "?"}recurringTaskSprint=${currentSprintForRecurring.sprintId}&recurringTaskDetail=`
+                  : undefined
+              }
             />
           </div>
 
@@ -1348,6 +1389,8 @@ export default async function ClientPage({
       {reviewDetail && (
         <AccountReviewDetailDrawer review={reviewDetail} clientId={client.id} closeHref={returnTo} />
       )}
+
+      {recurringTaskDetail && <RecurringTaskDrawer detail={recurringTaskDetail} clientId={client.id} closeHref={returnTo} />}
     </div>
   );
 }

@@ -7,6 +7,8 @@ import { useOptimisticTasks } from "@/lib/optimistic-tasks";
 import { useToast } from "@/app/toast-provider";
 import { isRedirectSignal } from "@/lib/next-redirect";
 import { TaskRow, type TaskListItem } from "./task-row";
+import { RecurringTaskRow } from "./recurring-task-row";
+import type { RecurringTaskListItem } from "@/lib/recurring-task-data";
 import { orderTasks } from "./task-order";
 import { InlineCreateTaskForm, type InlineTaskManagerOption } from "./inline-task-form";
 import { deleteTaskAction } from "./tasks-actions";
@@ -151,6 +153,8 @@ export function MonthTasksPanel({
   managers,
   isAdmin,
   canOperate = true,
+  recurringTasks,
+  recurringTaskHrefPrefix,
 }: {
   monthLabel: string;
   tasks: TaskListItem[];
@@ -161,6 +165,15 @@ export function MonthTasksPanel({
    * admin); não faz sentido mostrar checkboxes a quem nunca vê "Excluir". */
   isAdmin?: boolean;
   canOperate?: boolean;
+  /** Reformulação do sistema de tarefas (28/07) — recorrências da sprint
+   * ATUAL do cliente (só quando o mês exibido é o corrente; um mês passado/
+   * futuro não tem uma única sprint óbvia pra reportar progresso, então
+   * quem chama simplesmente não passa nada). Sempre visíveis no topo,
+   * fora dos filtros Todas/Pendentes/Atrasadas/Concluídas (não fazem
+   * sentido pra uma recorrência — ela nunca "atrasa" nem "conclui") e fora
+   * da seleção em massa. */
+  recurringTasks?: RecurringTaskListItem[];
+  recurringTaskHrefPrefix?: string;
 }) {
   const [optimisticTasks, dispatchOptimisticTask] = useOptimisticTasks(tasks);
   const [filter, setFilter] = useState<TaskFilter>("todas");
@@ -180,6 +193,7 @@ export function MonthTasksPanel({
 
   const ordered = orderTasks(optimisticTasks);
   const filtered = ordered.filter((task) => matchesFilter(task, filter));
+  const recurringTasksList = recurringTasks ?? [];
 
   // Regra "sem seleção invisível": a contagem/indicadores e a exclusão em
   // massa NUNCA leem `selected` puro — sempre a interseção com `filtered`
@@ -353,7 +367,7 @@ export function MonthTasksPanel({
             </div>
           )}
 
-          {filtered.length > 0 ? (
+          {filtered.length > 0 || recurringTasksList.length > 0 ? (
             <div className="mt-2 overflow-hidden rounded-lg border border-border">
               <div className="flex items-center gap-2.5 border-b border-border bg-zinc-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground dark:bg-zinc-900/40">
                 {showSelectionUi && (
@@ -376,6 +390,18 @@ export function MonthTasksPanel({
                 <span className={ACTIVITY_COL_ACTIONS} aria-hidden="true" />
               </div>
               <ul className="[&>li:last-child]:border-0">
+                {recurringTasksList.map((item) => (
+                  <RecurringTaskRow
+                    key={`recurring-${item.id}`}
+                    item={item}
+                    detailHref={
+                      recurringTaskHrefPrefix ? `${recurringTaskHrefPrefix}${item.id}` : `/clients/${clientId}?recurringTask=${item.id}`
+                    }
+                    dateColClassName={ACTIVITY_COL_DATE_COMPACT}
+                    showAssigneeCol={false}
+                    selectColClassName={showSelectionUi ? ACTIVITY_COL_SELECT : undefined}
+                  />
+                ))}
                 {filtered.map((task) => (
                   <TaskRow
                     key={task.id}
