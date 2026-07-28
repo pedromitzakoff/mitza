@@ -100,6 +100,12 @@ export interface RecurringTaskExecutionDetail {
   executedAt: string;
   authorName: string;
   notes: string | null;
+  checklistSelectedKeys: string[] | null;
+}
+
+export interface RecurringTaskChecklistItem {
+  key: string;
+  label: string;
 }
 
 export interface RecurringTaskDetail {
@@ -107,6 +113,11 @@ export interface RecurringTaskDetail {
   title: string;
   icon: string;
   hasChecklist: boolean;
+  /** Itens do checklist desta recorrência, na ordem configurada — vazio
+   * quando `hasChecklist` é false. Dado, não código: a UI não sabe (nem
+   * precisa saber) se isso é a Otimização ou uma recorrência futura
+   * qualquer com checklist próprio. */
+  checklistItems: RecurringTaskChecklistItem[];
   weekProgress: WeeklyExecutionProgress;
   /** Execuções dentro do período da sprint em que o drawer foi aberto. */
   weekExecutions: RecurringTaskExecutionDetail[];
@@ -131,7 +142,7 @@ export async function fetchRecurringTaskDetail(
   clientId: string,
   sprint: { start_date: string; end_date: string },
 ): Promise<RecurringTaskDetail | null> {
-  const [taskRows, goalHistoryRows, executionRows] = await Promise.all([
+  const [taskRows, goalHistoryRows, executionRows, checklistItemRows] = await Promise.all([
     requireQuery(supabase.from("recurring_tasks").select("id, title, icon, has_checklist").eq("id", recurringTaskId), "recurring_tasks:detail"),
     requireQuery(
       supabase.from("recurring_task_goal_history").select("weekly_goal, effective_from").eq("recurring_task_id", recurringTaskId),
@@ -140,12 +151,20 @@ export async function fetchRecurringTaskDetail(
     requireQuery(
       supabase
         .from("recurring_task_executions")
-        .select("id, executed_at, notes, team_member:team_members!recurring_task_executions_team_member_id_fkey(name)")
+        .select("id, executed_at, notes, checklist_selected_keys, team_member:team_members!recurring_task_executions_team_member_id_fkey(name)")
         .eq("recurring_task_id", recurringTaskId)
         .eq("client_id", clientId)
         .order("executed_at", { ascending: false })
         .limit(HISTORY_LIMIT),
       "recurring_task_executions:detail",
+    ),
+    requireQuery(
+      supabase
+        .from("recurring_task_checklist_items")
+        .select("item_key, label")
+        .eq("recurring_task_id", recurringTaskId)
+        .order("sort_order"),
+      "recurring_task_checklist_items:detail",
     ),
   ]);
 
@@ -157,6 +176,7 @@ export async function fetchRecurringTaskDetail(
     executedAt: row.executed_at,
     authorName: row.team_member?.name ?? "Membro removido",
     notes: row.notes,
+    checklistSelectedKeys: row.checklist_selected_keys,
   }));
 
   const weekExecutions = history.filter((execution) => {
@@ -179,6 +199,7 @@ export async function fetchRecurringTaskDetail(
     title: task.title,
     icon: task.icon,
     hasChecklist: task.has_checklist,
+    checklistItems: checklistItemRows.map((row) => ({ key: row.item_key, label: row.label })),
     weekProgress,
     weekExecutions,
     history,

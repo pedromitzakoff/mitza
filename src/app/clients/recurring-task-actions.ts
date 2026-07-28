@@ -14,9 +14,9 @@ import { checkWorkspaceClientAction } from "@/lib/require-workspace-client";
  * `register_recurring_execution` (supabase/recurring-tasks.sql); esta action
  * só resolve o ator e traduz erros do banco em mensagens curtas.
  *
- * Fase "Drawer das recorrentes": ainda sem checklist (`p_checklist_selected_keys`
- * sempre null) — a etapa seguinte (drawer especial de Otimização) estende o
- * formulário com os checkboxes, sem mudar esta action.
+ * `checklist_items` (checkboxes marcados no drawer, presente só quando a
+ * recorrência tem `has_checklist=true`) vira `p_checklist_selected_keys` —
+ * a mesma action serve qualquer recorrência, com ou sem checklist.
  */
 export async function registerRecurringExecutionAction(recurringTaskId: string, clientId: string, returnTo: string, formData: FormData) {
   function fail(message: string): never {
@@ -32,6 +32,7 @@ export async function registerRecurringExecutionAction(recurringTaskId: string, 
   if (blocked) fail(blocked);
 
   const notes = String(formData.get("notes") ?? "").trim() || null;
+  const checklistSelectedKeys = formData.getAll("checklist_items").map(String);
 
   const { error } = await supabase.rpc("register_recurring_execution", {
     p_recurring_task_id: recurringTaskId,
@@ -39,7 +40,7 @@ export async function registerRecurringExecutionAction(recurringTaskId: string, 
     p_team_member_id: profile.id,
     p_auth_user_id: profile.authUserId,
     p_notes: notes,
-    p_checklist_selected_keys: null,
+    p_checklist_selected_keys: checklistSelectedKeys.length > 0 ? checklistSelectedKeys : null,
     p_source: "web",
   });
 

@@ -3,14 +3,16 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { formatDateTime } from "@/lib/format";
 import { SubmitButton } from "@/app/submit-button";
 import { registerRecurringExecutionAction } from "./recurring-task-actions";
-import type { RecurringTaskDetail } from "@/lib/recurring-task-data";
+import type { RecurringTaskDetail, RecurringTaskExecutionDetail } from "@/lib/recurring-task-data";
 
 /**
  * Drawer de UMA recorrência (Reformulação do sistema de tarefas, 28/07) —
  * "Execuções desta semana" + "Histórico" + "Registrar nova execução",
- * exatamente os 3 blocos pedidos. Ainda genérico (sem o checklist especial
- * de Otimização — próxima fase): registrar aqui é só uma observação livre,
- * o suficiente pra Checar saldo/Reportar cliente.
+ * exatamente os 3 blocos pedidos. Quando `hasChecklist` é true (hoje só
+ * Otimização — mas a UI não sabe disso, é dado, não código), o formulário
+ * de registro ganha os checkboxes configurados, além da observação; sem
+ * checklist (Checar saldo/Reportar cliente), é só a observação — mesmo
+ * formulário, mesma action (`registerRecurringExecutionAction`).
  */
 export function RecurringTaskDrawer({
   detail,
@@ -26,6 +28,33 @@ export function RecurringTaskDrawer({
     weekProgress.goal === null
       ? `${weekProgress.done} execuções nesta semana`
       : `${weekProgress.done}/${weekProgress.goal} execuções nesta semana`;
+
+  const checklistLabelByKey = new Map(detail.checklistItems.map((item) => [item.key, item.label]));
+
+  function renderExecutionRow(execution: RecurringTaskExecutionDetail, dense: boolean) {
+    const checkedLabels = (execution.checklistSelectedKeys ?? []).map((key) => checklistLabelByKey.get(key) ?? key);
+    return (
+      <li key={execution.id} className={dense ? "text-sm text-foreground" : "rounded-md border border-border p-2 text-sm"}>
+        <p className={dense ? undefined : "text-foreground"}>
+          <span className="font-medium">{formatDateTime(execution.executedAt)}</span>
+          <span className="text-muted-foreground"> · {execution.authorName}</span>
+        </p>
+        {checkedLabels.length > 0 && (
+          <p className="mt-0.5 flex flex-wrap gap-1">
+            {checkedLabels.map((label) => (
+              <span
+                key={label}
+                className="inline-flex items-center rounded-full bg-brand/10 px-1.5 py-0.5 text-[11px] font-medium text-brand"
+              >
+                ✓ {label}
+              </span>
+            ))}
+          </p>
+        )}
+        {execution.notes && <p className="mt-0.5 text-xs text-muted-foreground">{execution.notes}</p>}
+      </li>
+    );
+  }
 
   return (
     <>
@@ -50,6 +79,16 @@ export function RecurringTaskDrawer({
         <section className="mt-4 border-t border-border pt-4">
           <SectionHeader>Registrar nova execução</SectionHeader>
           <form action={registerRecurringExecutionAction.bind(null, detail.id, clientId, closeHref)} className="mt-2 flex flex-col gap-2">
+            {detail.checklistItems.length > 0 && (
+              <div className="flex flex-col gap-1">
+                {detail.checklistItems.map((item) => (
+                  <label key={item.key} className="flex items-center gap-2 text-sm text-foreground">
+                    <input type="checkbox" name="checklist_items" value={item.key} className="h-3.5 w-3.5 rounded border-border" />
+                    {item.label}
+                  </label>
+                ))}
+              </div>
+            )}
             <textarea
               name="notes"
               rows={2}
@@ -68,15 +107,7 @@ export function RecurringTaskDrawer({
         <section className="mt-4 border-t border-border pt-4">
           <SectionHeader>Execuções desta semana</SectionHeader>
           {detail.weekExecutions.length > 0 ? (
-            <ul className="mt-2 flex flex-col gap-1.5">
-              {detail.weekExecutions.map((execution) => (
-                <li key={execution.id} className="text-sm text-foreground">
-                  <span className="font-medium">{formatDateTime(execution.executedAt)}</span>
-                  <span className="text-muted-foreground"> · {execution.authorName}</span>
-                  {execution.notes && <p className="mt-0.5 text-xs text-muted-foreground">{execution.notes}</p>}
-                </li>
-              ))}
-            </ul>
+            <ul className="mt-2 flex flex-col gap-1.5">{detail.weekExecutions.map((execution) => renderExecutionRow(execution, true))}</ul>
           ) : (
             <p className="mt-2 text-sm text-muted-foreground">Nenhuma execução registrada nesta semana ainda.</p>
           )}
@@ -85,17 +116,7 @@ export function RecurringTaskDrawer({
         <section className="mt-4 border-t border-border pt-4">
           <SectionHeader>Histórico</SectionHeader>
           {detail.history.length > 0 ? (
-            <ul className="mt-2 flex flex-col gap-1.5">
-              {detail.history.map((execution) => (
-                <li key={execution.id} className="rounded-md border border-border p-2 text-sm">
-                  <p className="text-foreground">
-                    <span className="font-medium">{formatDateTime(execution.executedAt)}</span>
-                    <span className="text-muted-foreground"> · {execution.authorName}</span>
-                  </p>
-                  {execution.notes && <p className="mt-0.5 text-xs text-muted-foreground">{execution.notes}</p>}
-                </li>
-              ))}
-            </ul>
+            <ul className="mt-2 flex flex-col gap-1.5">{detail.history.map((execution) => renderExecutionRow(execution, false))}</ul>
           ) : (
             <p className="mt-2 text-sm text-muted-foreground">Nenhuma execução registrada ainda.</p>
           )}
