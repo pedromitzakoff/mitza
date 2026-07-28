@@ -7,6 +7,7 @@ import { useOptimisticTasks } from "@/lib/optimistic-tasks";
 import { buildActivityFeed } from "./activity";
 import { TaskRow, type TaskListItem } from "./task-row";
 import { RecurringTaskRow } from "./recurring-task-row";
+import { formatPreviousSprintPendingSummary } from "@/lib/recurring-tasks";
 import type { RecurringTaskListItem } from "@/lib/recurring-task-data";
 import { ActivityComposer } from "./activity-composer";
 import type { InlineTaskManagerOption } from "./inline-task-form";
@@ -122,6 +123,9 @@ export function ActivitySection({
   const progressPct = optimisticTasks.length > 0 ? (tasksDone / optimisticTasks.length) * 100 : 0;
   const reviewList = reviews ?? [];
   const activities = buildActivityFeed(optimisticTasks, reviewList, recurringTasks ?? []);
+  // Fase "Pendências da sprint anterior" — seção discreta, só chama atenção
+  // quando existe de fato uma pendência (nunca aparece "zerada").
+  const pendingRecurringTasks = (recurringTasks ?? []).filter((item) => item.previousSprintPending?.isPending);
   // Só uma tarefa expandida por vez em toda a fila.
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
@@ -160,6 +164,19 @@ export function ActivitySection({
             defaultAssigneeName={defaultAssigneeName}
             onCreated={(task) => dispatchOptimisticTask({ type: "create", task })}
           />
+        </div>
+      )}
+
+      {pendingRecurringTasks.length > 0 && (
+        <div className="mt-1.5 rounded-md border border-overview-danger/40 bg-overview-danger-subtle px-2.5 py-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-danger">⚠ Pendências da sprint anterior</p>
+          <ul className="mt-1 flex flex-col gap-0.5">
+            {pendingRecurringTasks.map((item) => (
+              <li key={item.id} className="text-xs text-foreground">
+                {formatPreviousSprintPendingSummary(item.title, item.previousSprintPending!)}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

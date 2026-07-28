@@ -134,3 +134,11 @@ export function formatRecurringTaskBadge(title: string, progress: WeeklyExecutio
 export function formatPreviousSprintPendingLabel(pending: PreviousSprintPending): string {
   return `🔴 Semana anterior incompleta — ${pending.done}/${pending.goal}`;
 }
+
+/** "Otimização — faltou 1 execução" / "Reportar cliente — não realizado" —
+ * usado na seção "Pendências da sprint anterior", acima da lista. Zero
+ * execuções vira "não realizado" (mais direto que "faltou 4 execuções"). */
+export function formatPreviousSprintPendingSummary(title: string, pending: PreviousSprintPending): string {
+  if (pending.done === 0) return `${title} — não realizado`;
+  return `${title} — faltou ${pending.missing} execuç${pending.missing === 1 ? "ão" : "ões"}`;
+}

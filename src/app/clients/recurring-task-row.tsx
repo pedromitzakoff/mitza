@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { RecurringTaskListItem } from "@/lib/recurring-task-data";
+import { formatPreviousSprintPendingLabel } from "@/lib/recurring-tasks";
 import { ACTIVITY_COL_ACTIONS, ACTIVITY_COL_ASSIGNEE, ACTIVITY_COL_DATE, ACTIVITY_COL_STATUS, ACTIVITY_COL_TYPE } from "./activity-columns";
 
 /**
@@ -36,6 +37,11 @@ export function RecurringTaskRow({ item, detailHref, typeLabel }: { item: Recurr
         <span className="min-w-0 flex-1 truncate text-sm">
           <span className="font-medium text-foreground">{item.title}</span>
           <span className="truncate text-xs text-muted-foreground"> · {countLabel}</span>
+          {item.previousSprintPending?.isPending && (
+            <span className="ml-1.5 truncate text-xs font-medium text-overview-danger">
+              {formatPreviousSprintPendingLabel(item.previousSprintPending)}
+            </span>
+          )}
         </span>
 
         <span className={ACTIVITY_COL_ASSIGNEE} aria-hidden="true" />

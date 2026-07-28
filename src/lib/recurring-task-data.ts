@@ -1,6 +1,13 @@
 import type { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
-import { computeWeeklyExecutionProgress, resolveWeeklyGoalForSprint, type WeeklyExecutionProgress } from "@/lib/recurring-tasks";
+import {
+  computePreviousSprintPending,
+  computeWeeklyExecutionProgress,
+  findPreviousSprint,
+  resolveWeeklyGoalForSprint,
+  type PreviousSprintPending,
+  type WeeklyExecutionProgress,
+} from "@/lib/recurring-tasks";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -10,6 +17,10 @@ export interface RecurringTaskListItem {
   icon: string;
   color: string;
   progress: WeeklyExecutionProgress;
+  /** Pendência da sprint ANTERIOR do mesmo cliente pra esta recorrência —
+   * `null` quando não há sprint anterior ou a recorrência não tinha meta
+   * configurada ainda naquela época (nunca é pendência sem meta). */
+  previousSprintPending: PreviousSprintPending | null;
 }
 
 /**
@@ -23,6 +34,14 @@ export interface RecurringTaskListItem {
  * `sprints/page.tsx`. Tabela de recorrências pequena (ativas da agência
  * inteira, hoje zero até a migração final rodar) — busca tudo e filtra
  * "aplica a este cliente?" em memória em vez de um `.or()` complexo.
+ *
+ * Fase "Pendências da sprint anterior": pra cada cliente, a sprint anterior
+ * à mais antiga já visível na tela pode estar fora da janela carregada
+ * (`sprints` só cobre o mês/sprints em exibição) — por isso uma busca extra
+ * (`previousSprintRows`, uma por cliente distinto, paralela) traz só essa
+ * sprint-fronteira. Sprints do mesmo cliente já são contíguas, então isso
+ * basta: qualquer outra sprint "anterior" já está dentro do próprio
+ * `sprints` recebido.
  */
 export async function fetchRecurringTaskListsForSprints(
   supabase: Supabase,
@@ -48,15 +67,38 @@ export async function fetchRecurringTaskListsForSprints(
     scopedClientIdsByTask.set(row.recurring_task_id, set);
   }
 
+  const earliestStartByClient = new Map<string, string>();
+  for (const sprint of sprints) {
+    const current = earliestStartByClient.get(sprint.client_id);
+    if (!current || sprint.start_date < current) earliestStartByClient.set(sprint.client_id, sprint.start_date);
+  }
+
+  const previousSprintRowsByClient = await Promise.all(
+    [...earliestStartByClient.entries()].map(([clientId, earliestStart]) =>
+      requireQuery(
+        supabase
+          .from("sprints")
+          .select("id, client_id, start_date, end_date")
+          .eq("client_id", clientId)
+          .lt("start_date", earliestStart)
+          .order("end_date", { ascending: false })
+          .limit(1),
+        `sprints:previous:${clientId}`,
+      ),
+    ),
+  );
+  const boundarySprints = previousSprintRowsByClient.flat();
+  const allSprintsForLookup = [...sprints, ...boundarySprints];
+
   const taskIds = activeTasks.map((task) => task.id);
-  const sprintIds = sprints.map((sprint) => sprint.id);
+  const allSprintIds = [...sprints.map((s) => s.id), ...boundarySprints.map((s) => s.id)];
   const [goalHistoryRows, executionRows] = await Promise.all([
     requireQuery(
       supabase.from("recurring_task_goal_history").select("recurring_task_id, weekly_goal, effective_from").in("recurring_task_id", taskIds),
       "recurring_task_goal_history",
     ),
     requireQuery(
-      supabase.from("recurring_task_executions").select("recurring_task_id, sprint_id, executed_at").in("sprint_id", sprintIds),
+      supabase.from("recurring_task_executions").select("recurring_task_id, sprint_id, executed_at").in("sprint_id", allSprintIds),
       "recurring_task_executions",
     ),
   ]);
@@ -80,12 +122,27 @@ export async function fetchRecurringTaskListsForSprints(
     const applicable = activeTasks.filter((task) => task.applies_to_all || scopedClientIdsByTask.get(task.id)?.has(sprint.client_id));
     if (applicable.length === 0) continue;
 
+    const previousSprint = findPreviousSprint(
+      allSprintsForLookup.filter((s) => s.client_id === sprint.client_id),
+      sprint,
+    );
+
     const items = applicable
       .map((task): RecurringTaskListItem => {
-        const goal = resolveWeeklyGoalForSprint(goalHistoryByTask.get(task.id) ?? [], sprint.start_date);
+        const history = goalHistoryByTask.get(task.id) ?? [];
+        const goal = resolveWeeklyGoalForSprint(history, sprint.start_date);
         const executions = executionsByTaskAndSprint.get(`${task.id}:${sprint.id}`) ?? [];
         const progress = computeWeeklyExecutionProgress(executions, sprint, goal);
-        return { id: task.id, title: task.title, icon: task.icon, color: task.color, progress };
+
+        let previousSprintPending: PreviousSprintPending | null = null;
+        if (previousSprint) {
+          const previousGoal = resolveWeeklyGoalForSprint(history, previousSprint.start_date);
+          const previousExecutions = executionsByTaskAndSprint.get(`${task.id}:${previousSprint.id}`) ?? [];
+          const previousProgress = computeWeeklyExecutionProgress(previousExecutions, previousSprint, previousGoal);
+          previousSprintPending = computePreviousSprintPending(previousProgress);
+        }
+
+        return { id: task.id, title: task.title, icon: task.icon, color: task.color, progress, previousSprintPending };
       })
       .sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
 
