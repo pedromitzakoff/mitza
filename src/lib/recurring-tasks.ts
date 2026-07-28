@@ -143,14 +143,30 @@ function isoWeekday(dateStr: string): number {
   return day === 0 ? 7 : day;
 }
 
-const BUSINESS_WEEKDAY_SHORT: Record<number, string> = { 1: "Segunda", 2: "Terça", 3: "Quarta", 4: "Quinta", 5: "Sexta" };
-const BUSINESS_WEEKDAY_LONG: Record<number, string> = {
+const WEEKDAY_SHORT: Record<number, string> = { 1: "Segunda", 2: "Terça", 3: "Quarta", 4: "Quinta", 5: "Sexta", 6: "Sábado", 7: "Domingo" };
+const WEEKDAY_LONG: Record<number, string> = {
   1: "Segunda-feira",
   2: "Terça-feira",
   3: "Quarta-feira",
   4: "Quinta-feira",
   5: "Sexta-feira",
+  6: "Sábado",
+  7: "Domingo",
 };
+
+/**
+ * Cadência operacional de uma recorrência (revisão da arquitetura, ver
+ * `supabase/recurring-task-cadence.sql`): cada PROCESSO da agência tem um
+ * ritmo padrão próprio — o sistema já nasce sabendo, não é algo que o
+ * gestor configura. `automatic` distribui a meta pelos 5 dias úteis (o
+ * comportamento original); `fixed_days` restringe o cálculo aos dias
+ * marcados (ex.: Checar saldo sempre segunda/quinta). Nunca exposto no
+ * formulário de `/settings/recurring-tasks` — é método operacional,
+ * provisionado via SQL junto com a recorrência (mesmo espírito de
+ * `uses_account_review`), pensado pra no futuro admitir um override por
+ * cliente sem mudar o modelo de novo.
+ */
+export type RecurringTaskCadence = { mode: "automatic" } | { mode: "fixed_days"; weekdays: number[] };
 
 export interface NextExecution {
   /** Data (YYYY-MM-DD) da próxima execução esperada — `null` quando a meta
@@ -163,29 +179,43 @@ export interface NextExecution {
 }
 
 /**
- * Calcula a próxima execução esperada distribuindo a meta semanal pelos 5
- * dias úteis da sprint (segunda a sexta): a n-ésima execução "ideal" cai no
- * dia útil `floor(n * 5 / meta)` — meta 1 → sexta; meta 2 → terça e sexta;
- * meta 3 → segunda, quarta e sexta. A próxima é sempre a fatia seguinte à
- * última já feita (`done`); se essa fatia já ficou pra trás (hoje é depois
- * dela) e ainda falta execução, empurra pra HOJE — nunca aponta uma data que
- * já passou.
+ * Calcula a próxima execução esperada. Em cadência `automatic`, distribui a
+ * meta semanal pelos 5 dias úteis da sprint (segunda a sexta): a n-ésima
+ * execução "ideal" cai no dia útil `floor(n * 5 / meta)` — meta 1 → sexta;
+ * meta 2 → terça e sexta; meta 3 → segunda, quarta e sexta. Em cadência
+ * `fixed_days`, a n-ésima execução cai no n-ésimo dia marcado, ciclando se a
+ * meta for maior que a quantidade de dias marcados (ex.: 3 dias marcados,
+ * meta 5 → o 4º slot volta pro 1º dia marcado, esperando uma segunda
+ * execução nele).
  *
- * Deliberadamente recalculada do zero a cada chamada (meta + `done`), nunca
- * armazenada — é isso que garante que a recorrência continua sendo UMA
- * tarefa só (decisão do usuário), nunca vira várias tarefas com prazo fixo.
+ * Em qualquer cadência, a próxima é sempre a fatia seguinte à última já
+ * feita (`done`); se essa fatia já ficou pra trás (hoje é depois dela) e
+ * ainda falta execução, empurra pra HOJE — nunca aponta uma data que já
+ * passou.
+ *
+ * Deliberadamente recalculada do zero a cada chamada (meta + `done` +
+ * cadência), nunca armazenada — é isso que garante que a recorrência
+ * continua sendo UMA tarefa só (decisão do usuário), nunca vira várias
+ * tarefas com prazo fixo.
  */
 export function computeNextExecutionDate(
   sprint: { start_date: string },
   weeklyGoal: number | null,
   done: number,
   today: string,
+  cadence: RecurringTaskCadence = { mode: "automatic" },
 ): NextExecution {
   if (weeklyGoal === null) return { date: null, metGoal: false };
   if (done >= weeklyGoal) return { date: null, metGoal: true };
 
   const slotIndex = done + 1;
-  const slotWeekday = Math.min(5, Math.max(1, Math.floor((slotIndex * 5) / weeklyGoal)));
+  let slotWeekday: number;
+  if (cadence.mode === "fixed_days" && cadence.weekdays.length > 0) {
+    const sortedWeekdays = [...cadence.weekdays].sort((a, b) => a - b);
+    slotWeekday = sortedWeekdays[(slotIndex - 1) % sortedWeekdays.length];
+  } else {
+    slotWeekday = Math.min(5, Math.max(1, Math.floor((slotIndex * 5) / weeklyGoal)));
+  }
   const slotDate = addDays(sprint.start_date, slotWeekday - 1);
 
   return { date: slotDate < today ? today : slotDate, metGoal: false };
@@ -197,7 +227,7 @@ export function formatNextExecutionLabel(nextExecution: NextExecution, today: st
   if (nextExecution.metGoal) return "Meta batida";
   if (nextExecution.date === null) return "—";
   if (nextExecution.date === today) return "Hoje";
-  return BUSINESS_WEEKDAY_SHORT[isoWeekday(nextExecution.date)] ?? "—";
+  return WEEKDAY_SHORT[isoWeekday(nextExecution.date)] ?? "—";
 }
 
 /** "Hoje" / "Quarta-feira" / "Meta batida" / "—" — versão por extenso pro
@@ -206,5 +236,5 @@ export function formatNextExecutionLabelLong(nextExecution: NextExecution, today
   if (nextExecution.metGoal) return "Meta batida";
   if (nextExecution.date === null) return "—";
   if (nextExecution.date === today) return "Hoje";
-  return BUSINESS_WEEKDAY_LONG[isoWeekday(nextExecution.date)] ?? "—";
+  return WEEKDAY_LONG[isoWeekday(nextExecution.date)] ?? "—";
 }

@@ -1453,6 +1453,8 @@ export interface Database {
           is_active: boolean;
           has_checklist: boolean;
           uses_account_review: boolean;
+          cadence_mode: "automatic" | "fixed_days";
+          fixed_weekdays: number[];
           created_at: string;
         };
         Insert: {
@@ -1465,6 +1467,8 @@ export interface Database {
           is_active?: boolean;
           has_checklist?: boolean;
           uses_account_review?: boolean;
+          cadence_mode?: "automatic" | "fixed_days";
+          fixed_weekdays?: number[];
           created_at?: string;
         };
         Update: {
@@ -1477,6 +1481,8 @@ export interface Database {
           is_active?: boolean;
           has_checklist?: boolean;
           uses_account_review?: boolean;
+          cadence_mode?: "automatic" | "fixed_days";
+          fixed_weekdays?: number[];
           created_at?: string;
         };
         Relationships: [

@@ -8,10 +8,19 @@ import {
   formatNextExecutionLabelLong,
   resolveWeeklyGoalForSprint,
   type PreviousSprintPending,
+  type RecurringTaskCadence,
   type WeeklyExecutionProgress,
 } from "@/lib/recurring-tasks";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
+
+/** Lê `cadence_mode`/`fixed_weekdays` (colunas cruas do banco) e monta o
+ * `RecurringTaskCadence` que a lógica pura espera. */
+function toCadence(row: { cadence_mode: string; fixed_weekdays: number[] }): RecurringTaskCadence {
+  return row.cadence_mode === "fixed_days" && row.fixed_weekdays.length > 0
+    ? { mode: "fixed_days", weekdays: row.fixed_weekdays }
+    : { mode: "automatic" };
+}
 
 export interface RecurringTaskListItem {
   id: string;
@@ -53,7 +62,7 @@ export async function fetchRecurringTaskListsForSprints(
 
   const [activeTasks, clientScopeRows] = await Promise.all([
     requireQuery(
-      supabase.from("recurring_tasks").select("id, title, icon, color, applies_to_all").eq("is_active", true),
+      supabase.from("recurring_tasks").select("id, title, icon, color, applies_to_all, cadence_mode, fixed_weekdays").eq("is_active", true),
       "recurring_tasks",
     ),
     requireQuery(supabase.from("recurring_task_clients").select("recurring_task_id, client_id"), "recurring_task_clients"),
@@ -106,7 +115,7 @@ export async function fetchRecurringTaskListsForSprints(
         const goal = resolveWeeklyGoalForSprint(history, sprint.start_date);
         const executions = executionsByTaskAndSprint.get(`${task.id}:${sprint.id}`) ?? [];
         const progress = computeWeeklyExecutionProgress(executions, sprint, goal);
-        const nextExecution = computeNextExecutionDate(sprint, goal, progress.done, today);
+        const nextExecution = computeNextExecutionDate(sprint, goal, progress.done, today, toCadence(task));
         const nextExecutionLabel = formatNextExecutionLabel(nextExecution, today);
 
         return { id: task.id, title: task.title, icon: task.icon, color: task.color, progress, nextExecutionLabel };
@@ -179,7 +188,10 @@ export async function fetchRecurringTaskDetail(
   today: string,
 ): Promise<RecurringTaskDetail | null> {
   const [taskRows, goalHistoryRows, executionRows, checklistItemRows, previousSprintRows] = await Promise.all([
-    requireQuery(supabase.from("recurring_tasks").select("id, title, icon, has_checklist").eq("id", recurringTaskId), "recurring_tasks:detail"),
+    requireQuery(
+      supabase.from("recurring_tasks").select("id, title, icon, has_checklist, cadence_mode, fixed_weekdays").eq("id", recurringTaskId),
+      "recurring_tasks:detail",
+    ),
     requireQuery(
       supabase.from("recurring_task_goal_history").select("weekly_goal, effective_from").eq("recurring_task_id", recurringTaskId),
       "recurring_task_goal_history:detail",
@@ -237,7 +249,10 @@ export async function fetchRecurringTaskDetail(
     sprint,
     goal,
   );
-  const nextExecutionLabel = formatNextExecutionLabelLong(computeNextExecutionDate(sprint, goal, weekProgress.done, today), today);
+  const nextExecutionLabel = formatNextExecutionLabelLong(
+    computeNextExecutionDate(sprint, goal, weekProgress.done, today, toCadence(task)),
+    today,
+  );
 
   const previousSprint = previousSprintRows[0] ?? null;
   let previousWeek: RecurringTaskDetail["previousWeek"] = null;
