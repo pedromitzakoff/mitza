@@ -1,20 +1,25 @@
 import Link from "next/link";
 import { SectionHeader } from "@/components/ui/section-header";
 import { formatDateTime } from "@/lib/format";
-import { formatPreviousWeekMissingLine } from "@/lib/recurring-tasks";
+import { formatPreviousWeekMissingLine, OPTIMIZATION_QUICK_GROUPS } from "@/lib/recurring-tasks";
 import { SubmitButton } from "@/app/submit-button";
 import { registerRecurringExecutionAction } from "./recurring-task-actions";
+import { OptimizationQuickPicker } from "./optimization-quick-picker";
 import type { RecurringTaskDetail, RecurringTaskExecutionDetail } from "@/lib/recurring-task-data";
+
+const QUICK_ACTION_BY_COMBO = new Map(
+  OPTIMIZATION_QUICK_GROUPS.flatMap((group) => group.actions.map((action) => [`${action.type}:${action.action}`, action])),
+);
 
 /**
  * Drawer de UMA recorrência (Reformulação do sistema de tarefas, 28/07) —
  * resumo operacional ("Esta semana"/"Próxima execução"/"Semana anterior") +
- * "Execuções desta semana" + "Histórico" + "Registrar nova execução". Quando
- * `hasChecklist` é true (hoje só Otimização — mas a UI não sabe disso, é
- * dado, não código), o formulário de registro ganha os checkboxes
- * configurados, além da observação; sem checklist (Checar saldo/Reportar
- * cliente), é só a observação — mesmo formulário, mesma action
- * (`registerRecurringExecutionAction`).
+ * "Execuções desta semana" + "Histórico" + "Registrar nova execução".
+ * `usesAccountReview=true` (hoje só Otimização) troca o checklist genérico
+ * pelo registro rápido por chips (`OptimizationQuickPicker`); com checklist
+ * genérico mas sem essa integração, mostra os checkboxes configurados; sem
+ * nenhum dos dois (Checar saldo/Reportar cliente), é só a observação —
+ * mesmo formulário, mesma action (`registerRecurringExecutionAction`).
  *
  * Etapa "Simplificar linha das recorrentes": o contexto histórico (pendência
  * da sprint anterior) que antes aparecia na própria linha, competindo com a
@@ -42,13 +47,18 @@ export function RecurringTaskDrawer({
 
   function renderExecutionRow(execution: RecurringTaskExecutionDetail, dense: boolean) {
     const checkedLabels = (execution.checklistSelectedKeys ?? []).map((key) => checklistLabelByKey.get(key) ?? key);
+    const optimizationChips = (execution.optimizationSelections ?? []).map((selection) => {
+      const quickAction = QUICK_ACTION_BY_COMBO.get(`${selection.type}:${selection.action}`);
+      const label = quickAction ? `${quickAction.icon} ${quickAction.label}` : `${selection.type} ${selection.action}`;
+      return selection.quantity > 1 ? `${label} ×${selection.quantity}` : label;
+    });
     return (
       <li key={execution.id} className={dense ? "text-sm text-foreground" : "rounded-md border border-border p-2 text-sm"}>
         <p className={dense ? undefined : "text-foreground"}>
           <span className="font-medium">{formatDateTime(execution.executedAt)}</span>
           <span className="text-muted-foreground"> · {execution.authorName}</span>
         </p>
-        {checkedLabels.length > 0 && (
+        {(checkedLabels.length > 0 || optimizationChips.length > 0) && (
           <p className="mt-0.5 flex flex-wrap gap-1">
             {checkedLabels.map((label) => (
               <span
@@ -56,6 +66,14 @@ export function RecurringTaskDrawer({
                 className="inline-flex items-center rounded-full bg-brand/10 px-1.5 py-0.5 text-[11px] font-medium text-brand"
               >
                 ✓ {label}
+              </span>
+            ))}
+            {optimizationChips.map((chip) => (
+              <span
+                key={chip}
+                className="inline-flex items-center rounded-full bg-brand/10 px-1.5 py-0.5 text-[11px] font-medium text-brand"
+              >
+                {chip}
               </span>
             ))}
           </p>
@@ -106,15 +124,19 @@ export function RecurringTaskDrawer({
         <section className="mt-4 border-t border-border pt-4">
           <SectionHeader>Registrar nova execução</SectionHeader>
           <form action={registerRecurringExecutionAction.bind(null, detail.id, clientId, closeHref)} className="mt-2 flex flex-col gap-2">
-            {detail.checklistItems.length > 0 && (
-              <div className="flex flex-col gap-1">
-                {detail.checklistItems.map((item) => (
-                  <label key={item.key} className="flex items-center gap-2 text-sm text-foreground">
-                    <input type="checkbox" name="checklist_items" value={item.key} className="h-3.5 w-3.5 rounded border-border" />
-                    {item.label}
-                  </label>
-                ))}
-              </div>
+            {detail.usesAccountReview ? (
+              <OptimizationQuickPicker />
+            ) : (
+              detail.checklistItems.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  {detail.checklistItems.map((item) => (
+                    <label key={item.key} className="flex items-center gap-2 text-sm text-foreground">
+                      <input type="checkbox" name="checklist_items" value={item.key} className="h-3.5 w-3.5 rounded border-border" />
+                      {item.label}
+                    </label>
+                  ))}
+                </div>
+              )
             )}
             <textarea
               name="notes"

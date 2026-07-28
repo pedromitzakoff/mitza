@@ -524,7 +524,7 @@ export default async function ClientPage({
       supabase
         .from("account_reviews")
         .select(
-          "id, sprint_id, reviewed_at, reason, reason_other_description, outcome, notes, issue_description, issue_category, seconds_since_previous_review, team_member:team_members!account_reviews_team_member_id_fkey(name), optimizations:account_optimizations(id, optimization_type, optimization_action, description, reason, expected_impact), issue_task:tasks!account_reviews_issue_task_id_fkey(title)",
+          "id, sprint_id, reviewed_at, reason, reason_other_description, outcome, notes, issue_description, issue_category, seconds_since_previous_review, team_member:team_members!account_reviews_team_member_id_fkey(name), optimizations:account_optimizations(id, optimization_type, optimization_action, description, reason, expected_impact, quantity), issue_task:tasks!account_reviews_issue_task_id_fkey(title)",
         )
         .eq("client_id", id)
         .order("reviewed_at", { ascending: false })
@@ -680,6 +680,7 @@ export default async function ClientPage({
           description: opt.description,
           reason: opt.reason,
           expectedImpact: opt.expected_impact,
+          quantity: opt.quantity,
         })),
         clientUpdate: (() => {
           const update = clientUpdatesByReviewId.get(openReviewDetail.id);

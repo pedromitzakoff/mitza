@@ -29,25 +29,66 @@ import type { OptimizationType } from "@/lib/supabase/database.types";
  */
 
 /**
- * Checklist padrão de Otimização (pedido explícito do usuário: só
- * checkboxes + observação, nada da complexidade de motivo/resultado/ação de
- * `account_reviews`/`account_optimizations`) — usado só pra semear os itens
- * da recorrência "Otimização" (a única com `uses_account_review = true`).
- * Cada `item_key` aqui PRECISA bater com um `OptimizationType` válido — é
- * assim que o backend sabe gravar em `account_optimizations`. Mapeia pros
- * tipos já existentes sempre que há equivalente direto — só "Remarketing"
- * não tinha um, por isso o tipo novo (`supabase/recurring-tasks.sql`). Toda
- * execução gravada por este checklist usa `optimization_action = 'OTHER'`
- * (o checklist não pergunta "qual ação", só "o que foi tocado").
+ * Registro rápido de Otimização (refatoração posterior, decisão do usuário:
+ * "o gestor não pensa em categorias, pensa nas decisões que tomou"). Nada de
+ * checklist de categorias genéricas com ação sempre "Outro" — cada chip já É
+ * a decisão (tipo + ação real), pensado pra registrar em menos de 10
+ * segundos. `type`/`action` PRECISAM bater com `OptimizationType`/
+ * `OPTIMIZATION_ACTIONS_BY_TYPE` (`@/lib/account-reviews`) — é assim que o
+ * backend grava em `account_optimizations` (mesma tabela e função da
+ * Análise da Conta manual, `record_account_review`; aqui só uma seleção
+ * curada de combinações, pensada pra ser rápida, não o formulário completo).
+ * Fixo no código de propósito (não é dado configurável em /settings) — é
+ * método operacional da agência, mesmo espírito da cadência das recorrências
+ * (ver `supabase/recurring-task-cadence.sql`).
  */
-export const OPTIMIZATION_CHECKLIST_ITEMS: { type: OptimizationType; label: string }[] = [
-  { type: "AUDIENCE", label: "Público" },
-  { type: "CREATIVE", label: "Criativo" },
-  { type: "CAMPAIGN", label: "Campanha" },
-  { type: "BUDGET", label: "Orçamento" },
-  { type: "PLACEMENT", label: "Posicionamento" },
-  { type: "TRACKING", label: "Conversão" },
-  { type: "REMARKETING", label: "Remarketing" },
+export interface OptimizationQuickAction {
+  type: OptimizationType;
+  action: string;
+  icon: string;
+  label: string;
+}
+
+export interface OptimizationQuickGroup {
+  type: OptimizationType;
+  groupLabel: string;
+  actions: OptimizationQuickAction[];
+}
+
+export const OPTIMIZATION_QUICK_GROUPS: OptimizationQuickGroup[] = [
+  {
+    type: "CAMPAIGN",
+    groupLabel: "Campanhas",
+    actions: [
+      { type: "CAMPAIGN", action: "ACTIVATED", icon: "▶", label: "Ativei" },
+      { type: "CAMPAIGN", action: "PAUSED", icon: "⏸", label: "Pausei" },
+    ],
+  },
+  {
+    type: "AUDIENCE",
+    groupLabel: "Públicos",
+    actions: [
+      { type: "AUDIENCE", action: "ACTIVATED", icon: "▶", label: "Ativei" },
+      { type: "AUDIENCE", action: "PAUSED", icon: "⏸", label: "Pausei" },
+    ],
+  },
+  {
+    type: "CREATIVE",
+    groupLabel: "Criativos",
+    actions: [
+      { type: "CREATIVE", action: "ADDED", icon: "➕", label: "Publiquei" },
+      { type: "CREATIVE", action: "PAUSED", icon: "⏸", label: "Pausei" },
+    ],
+  },
+  {
+    type: "BUDGET",
+    groupLabel: "Orçamento",
+    actions: [
+      { type: "BUDGET", action: "INCREASED", icon: "⬆", label: "Aumentei" },
+      { type: "BUDGET", action: "DECREASED", icon: "⬇", label: "Reduzi" },
+      { type: "BUDGET", action: "REDISTRIBUTED", icon: "⇄", label: "Redistribuí" },
+    ],
+  },
 ];
 
 export interface RecurringTaskGoalHistoryEntry {

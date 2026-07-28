@@ -27,6 +27,7 @@ export interface AccountOptimizationDetail {
   description: string | null;
   reason: string | null;
   expectedImpact: string | null;
+  quantity: number;
 }
 
 export interface AccountReviewDetail {
@@ -117,6 +118,7 @@ export function AccountReviewDetailDrawer({
                   <p className="mt-1 text-foreground">
                     <span className="text-muted-foreground">Ação: </span>
                     {OPTIMIZATION_ACTION_LABEL[opt.action] ?? opt.action}
+                    {opt.quantity > 1 && <span className="text-muted-foreground"> ×{opt.quantity}</span>}
                   </p>
                   {opt.description && (
                     <p className="mt-0.5 text-foreground">

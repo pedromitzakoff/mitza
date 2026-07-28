@@ -128,12 +128,37 @@ export async function fetchRecurringTaskListsForSprints(
   return result;
 }
 
+export interface OptimizationSelection {
+  type: string;
+  action: string;
+  quantity: number;
+}
+
+/** Valida a forma bruta de `optimization_selections` (jsonb, `unknown` no
+ * tipo do banco) — nunca confia cegamente no shape vindo do Postgres. */
+function parseOptimizationSelections(raw: unknown): OptimizationSelection[] | null {
+  if (!Array.isArray(raw)) return null;
+  const parsed = raw.filter(
+    (item): item is OptimizationSelection =>
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as Record<string, unknown>).type === "string" &&
+      typeof (item as Record<string, unknown>).action === "string" &&
+      typeof (item as Record<string, unknown>).quantity === "number",
+  );
+  return parsed.length > 0 ? parsed : null;
+}
+
 export interface RecurringTaskExecutionDetail {
   id: string;
   executedAt: string;
   authorName: string;
   notes: string | null;
   checklistSelectedKeys: string[] | null;
+  /** Seleções do registro rápido de Otimização (tipo + ação + quantidade) —
+   * `null` pra qualquer execução que não seja de uma recorrência com
+   * `uses_account_review=true`. */
+  optimizationSelections: OptimizationSelection[] | null;
 }
 
 export interface RecurringTaskChecklistItem {
@@ -146,10 +171,15 @@ export interface RecurringTaskDetail {
   title: string;
   icon: string;
   hasChecklist: boolean;
+  /** Integração de backend com account_reviews/account_optimizations (hoje
+   * só Otimização) — quando true, o drawer troca o checklist genérico pelo
+   * registro rápido por chips (`OPTIMIZATION_QUICK_GROUPS`), nunca os dois
+   * ao mesmo tempo. */
+  usesAccountReview: boolean;
   /** Itens do checklist desta recorrência, na ordem configurada — vazio
-   * quando `hasChecklist` é false. Dado, não código: a UI não sabe (nem
-   * precisa saber) se isso é a Otimização ou uma recorrência futura
-   * qualquer com checklist próprio. */
+   * quando `hasChecklist` é false. Ignorado quando `usesAccountReview` é
+   * true (ver acima). Dado, não código: a UI não sabe (nem precisa saber)
+   * qual recorrência futura vai usar isso. */
   checklistItems: RecurringTaskChecklistItem[];
   weekProgress: WeeklyExecutionProgress;
   /** "Hoje" / "Quarta-feira" / "Meta batida" / "—" — por extenso, pro
@@ -189,7 +219,10 @@ export async function fetchRecurringTaskDetail(
 ): Promise<RecurringTaskDetail | null> {
   const [taskRows, goalHistoryRows, executionRows, checklistItemRows, previousSprintRows] = await Promise.all([
     requireQuery(
-      supabase.from("recurring_tasks").select("id, title, icon, has_checklist, cadence_mode, fixed_weekdays").eq("id", recurringTaskId),
+      supabase
+        .from("recurring_tasks")
+        .select("id, title, icon, has_checklist, uses_account_review, cadence_mode, fixed_weekdays")
+        .eq("id", recurringTaskId),
       "recurring_tasks:detail",
     ),
     requireQuery(
@@ -199,7 +232,9 @@ export async function fetchRecurringTaskDetail(
     requireQuery(
       supabase
         .from("recurring_task_executions")
-        .select("id, executed_at, notes, checklist_selected_keys, team_member:team_members!recurring_task_executions_team_member_id_fkey(name)")
+        .select(
+          "id, executed_at, notes, checklist_selected_keys, optimization_selections, team_member:team_members!recurring_task_executions_team_member_id_fkey(name)",
+        )
         .eq("recurring_task_id", recurringTaskId)
         .eq("client_id", clientId)
         .order("executed_at", { ascending: false })
@@ -235,6 +270,7 @@ export async function fetchRecurringTaskDetail(
     authorName: row.team_member?.name ?? "Membro removido",
     notes: row.notes,
     checklistSelectedKeys: row.checklist_selected_keys,
+    optimizationSelections: parseOptimizationSelections(row.optimization_selections),
   }));
 
   const weekExecutions = history.filter((execution) => {
@@ -275,6 +311,7 @@ export async function fetchRecurringTaskDetail(
     title: task.title,
     icon: task.icon,
     hasChecklist: task.has_checklist,
+    usesAccountReview: task.uses_account_review,
     checklistItems: checklistItemRows.map((row) => ({ key: row.item_key, label: row.label })),
     weekProgress,
     nextExecutionLabel,

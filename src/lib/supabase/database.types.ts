@@ -1397,6 +1397,7 @@ export interface Database {
           description: string | null;
           reason: string | null;
           expected_impact: string | null;
+          quantity: number;
           created_at: string;
         };
         Insert: {
@@ -1410,6 +1411,7 @@ export interface Database {
           description?: string | null;
           reason?: string | null;
           expected_impact?: string | null;
+          quantity?: number;
           created_at?: string;
         };
         Update: {
@@ -1423,6 +1425,7 @@ export interface Database {
           description?: string | null;
           reason?: string | null;
           expected_impact?: string | null;
+          quantity?: number;
           created_at?: string;
         };
         Relationships: [
@@ -1603,6 +1606,7 @@ export interface Database {
           performed_by_auth_user_id: string | null;
           account_review_id: string | null;
           checklist_selected_keys: string[] | null;
+          optimization_selections: unknown | null;
           notes: string | null;
           created_at: string;
         };
@@ -1616,6 +1620,7 @@ export interface Database {
           performed_by_auth_user_id?: string | null;
           account_review_id?: string | null;
           checklist_selected_keys?: string[] | null;
+          optimization_selections?: unknown | null;
           notes?: string | null;
           created_at?: string;
         };
@@ -1629,6 +1634,7 @@ export interface Database {
           performed_by_auth_user_id?: string | null;
           account_review_id?: string | null;
           checklist_selected_keys?: string[] | null;
+          optimization_selections?: unknown | null;
           notes?: string | null;
           created_at?: string;
         };
@@ -2352,6 +2358,7 @@ export interface Database {
           p_auth_user_id: string | null;
           p_notes: string | null;
           p_checklist_selected_keys?: string[] | null;
+          p_optimization_selections?: unknown | null;
           p_source?: OperationalEventSource;
         };
         Returns: {
