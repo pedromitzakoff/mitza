@@ -39,6 +39,21 @@ export default async function SettingsPage() {
         </li>
         <li>
           <Link
+            href="/settings/recurring-tasks"
+            className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+          >
+            <div>
+              <p className="text-foreground">Recorrências</p>
+              <p className="text-xs text-zinc-500">
+                Checar saldo, Reportar cliente, Otimização e outras tarefas permanentes — meta semanal e histórico, nunca uma tarefa nova por
+                sprint.
+              </p>
+            </div>
+            <span className="text-zinc-400">&rarr;</span>
+          </Link>
+        </li>
+        <li>
+          <Link
             href="/settings/deleted-clients"
             className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900"
           >
