@@ -1,4 +1,4 @@
-import { APP_TIMEZONE } from "./today";
+import { APP_TIMEZONE, todayDateString } from "./today";
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -119,17 +119,28 @@ export function formatDateTime(value: string): string {
  * pelos outros formatters de hora deste arquivo. */
 const timeOnlyFormatter = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: APP_TIMEZONE });
 
+/** Diferença em dias civis no fuso da agência (`APP_TIMEZONE`) entre `value`
+ * e `today` — nunca `getUTCFullYear/Month/Date()` direto num timestamptz
+ * (achado real: um sync às 17:37 no fuso da agência, entre 21h e 23h59
+ * UTC-3... na verdade qualquer horário da noite BRT vira o dia seguinte em
+ * UTC, fazendo "hoje" aparecer como "ontem" — `date.getUTCDate()` lia o dia
+ * civil em UTC, não no fuso da agência). `todayDateString` converte os dois
+ * lados (eventos e a referência "hoje") pro mesmo dia civil antes de
+ * comparar, então funciona corretamente não importa a hora do dia nem se
+ * quem chama passou `todayUTC()` ou um `new Date()` cru. */
+function diffCalendarDaysInAppTimezone(value: string, today: Date): number {
+  const eventDay = todayDateString(new Date(value));
+  const referenceDay = todayDateString(today);
+  return Math.round((Date.parse(`${referenceDay}T00:00:00Z`) - Date.parse(`${eventDay}T00:00:00Z`)) / 86_400_000);
+}
+
 /** "Hoje, 14:03" / "Ontem, 09:10" / "12/07, 09:10" — reaproveita a mesma
  * regra de dia relativo de `formatLastOptimizationLabel` (monthly-reports.ts),
  * só que com o horário junto (Etapa 62, seção 3 do pedido: "Última análise"
  * precisa mostrar hora quando relevante, não só o dia). */
 export function formatRelativeDateTime(value: string, today: Date): string {
   const date = new Date(value);
-  const diffDays = Math.floor(
-    (Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) -
-      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())) /
-      86_400_000,
-  );
+  const diffDays = diffCalendarDaysInAppTimezone(value, today);
   const time = timeOnlyFormatter.format(date);
   if (diffDays <= 0) return `Hoje, ${time}`;
   if (diffDays === 1) return `Ontem, ${time}`;
@@ -147,11 +158,7 @@ export function formatRelativeDateTime(value: string, today: Date): string {
  * do cliente, notas do Workspace). */
 export function formatRelativeShortDateTime(value: string, today: Date): string {
   const date = new Date(value);
-  const diffDays = Math.floor(
-    (Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) -
-      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())) /
-      86_400_000,
-  );
+  const diffDays = diffCalendarDaysInAppTimezone(value, today);
   if (diffDays <= 0) return `Hoje, ${timeOnlyFormatter.format(date)}`;
   if (diffDays === 1) return `Ontem, ${timeOnlyFormatter.format(date)}`;
   return formatDateTime(value);

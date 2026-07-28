@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { MetricDeviation } from "@/components/workspace/metric-deviation";
 import { formatCurrency, formatRelativeShortDateTime } from "@/lib/format";
+import { todayUTC } from "@/lib/today";
 import { MIN_RELIABLE_RESULT_COUNT } from "@/lib/operation-health-thresholds";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { getLatestPerformanceUpdateText } from "@/lib/performance";
@@ -111,7 +112,7 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
   // "Ontem", depois disso mostra a data real — sempre com o horário.
   const performanceUpdateText = goalConfig
     ? getLatestPerformanceUpdateText(card.performanceLatestSource, card.performanceLastUpdatedAt, (value) =>
-        formatRelativeShortDateTime(value, new Date()),
+        formatRelativeShortDateTime(value, todayUTC()),
       )
     : null;
 
