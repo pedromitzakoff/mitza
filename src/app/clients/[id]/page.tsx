@@ -65,6 +65,10 @@ import { ClientReportView } from "../../reports/report-view";
 import { ClientHistoryList } from "../client-history-list";
 import { fetchRecurringTaskDetail, fetchRecurringTaskListsForSprints } from "@/lib/recurring-task-data";
 import { RecurringTaskDrawer } from "../recurring-task-drawer";
+import { defaultReportPeriod } from "@/lib/client-reports";
+import { fetchClientReportDetail, fetchClientReportHistory } from "../client-report-data";
+import { ClientReportsView } from "../client-reports-view";
+import { ClientReportWizard } from "../client-report-wizard";
 
 async function fetchCommentsByType(
   supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
@@ -144,6 +148,10 @@ export default async function ClientPage({
     recurringTaskDetail?: string;
     recurringTaskSprint?: string;
     recurringTaskError?: string;
+    clientReport?: string;
+    reportRecurringTaskId?: string;
+    reportPeriodStart?: string;
+    reportPeriodEnd?: string;
   }>;
 }) {
   const { id } = await params;
@@ -166,6 +174,10 @@ export default async function ClientPage({
     recurringTaskDetail: openRecurringTaskId,
     recurringTaskSprint: openRecurringTaskSprintId,
     recurringTaskError,
+    clientReport: clientReportParam,
+    reportRecurringTaskId,
+    reportPeriodStart: reportPeriodStartParam,
+    reportPeriodEnd: reportPeriodEndParam,
   } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
@@ -659,6 +671,12 @@ export default async function ClientPage({
     openRecurringTaskId && recurringTaskSprintForDrawer
       ? await fetchRecurringTaskDetail(supabase, openRecurringTaskId, client.id, recurringTaskSprintForDrawer, todayStr)
       : null;
+  // Etapa "Reports": href pronto pro CTA "Gerar report" dentro do drawer da
+  // recorrência "Reportar cliente" — período sugerido é sempre o da sprint
+  // em que o drawer foi aberto (editável no wizard, nunca imposto).
+  const recurringTaskReportHref = recurringTaskSprintForDrawer
+    ? `${returnTo}${returnTo.includes("?") ? "&" : "?"}clientReport=new&reportRecurringTaskId=${openRecurringTaskId}&reportPeriodStart=${recurringTaskSprintForDrawer.start_date}&reportPeriodEnd=${recurringTaskSprintForDrawer.end_date}`
+    : null;
   const openReviewDetail = openReviewDetailId ? accountReviews.find((r) => r.id === openReviewDetailId) ?? null : null;
   const reviewDetail: AccountReviewDetail | null = openReviewDetail
     ? {
@@ -799,6 +817,24 @@ export default async function ClientPage({
           m.team_members ? [m.team_members] : [],
         ) ?? []
       : [];
+
+  // Reports — módulo dentro da Visão Geral (nunca uma aba própria): histórico
+  // só é buscado quando essa área está ativa, mesmo princípio de `reportData`
+  // acima. O wizard (novo report ou reabertura de um existente) é
+  // independente da área ativa — pode ser aberto a partir do drawer da
+  // recorrência estando em qualquer área, por isso `clientReportParam` é
+  // lido fora desse `if` e o `closeHref` do wizard é sempre `returnTo` (nunca
+  // uma URL de área própria).
+  const clientReportHistory = activeArea === "visao-geral" ? await fetchClientReportHistory(supabase, id) : [];
+  const isNewClientReport = clientReportParam === "new";
+  const clientReportDetail =
+    clientReportParam && !isNewClientReport ? await fetchClientReportDetail(supabase, id, clientReportParam) : null;
+  const newReportHref = withParam(returnTo, "clientReport=new");
+  const buildClientReportDetailHref = (reportId: string) => withParam(returnTo, `clientReport=${reportId}`);
+  const suggestedReportPeriod =
+    reportPeriodStartParam && reportPeriodEndParam
+      ? { start: reportPeriodStartParam, end: reportPeriodEndParam }
+      : defaultReportPeriod(todayStr);
 
   // Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente" — "Resumo
   // consolidado do mês": nenhum dado novo, só uma leitura de fechamento
@@ -1117,6 +1153,17 @@ export default async function ClientPage({
             />
           </div>
 
+          {/* Reports — módulo dentro da gestão do cliente, logo depois das
+              tarefas (não uma aba própria da navegação): histórico oficial
+              da comunicação de resultados enviada ao cliente (mensagem de
+              WhatsApp), completamente distinto da aba "Relatórios" acima
+              (relatório de gestão INTERNO, sem geração de texto/cópia). O
+              período de cada report é escolhido livremente pelo gestor —
+              nunca preso ao mês selecionado nem a uma sprint. */}
+          <div className="mt-3">
+            <ClientReportsView history={clientReportHistory} newReportHref={newReportHref} buildReportHref={buildClientReportDetailHref} />
+          </div>
+
           {/* Sprints do mês — Etapa "Sprint como relatório semanal": cada
               card virou um pequeno relatório da semana (KPIs → Performance
               → Registro), não mais área de execução — `hideTaskList`/
@@ -1395,7 +1442,36 @@ export default async function ClientPage({
         <AccountReviewDetailDrawer review={reviewDetail} clientId={client.id} closeHref={returnTo} />
       )}
 
-      {recurringTaskDetail && <RecurringTaskDrawer detail={recurringTaskDetail} clientId={client.id} closeHref={returnTo} />}
+      {recurringTaskDetail && (
+        <RecurringTaskDrawer detail={recurringTaskDetail} clientId={client.id} closeHref={returnTo} reportHref={recurringTaskReportHref} />
+      )}
+
+      {isNewClientReport && (
+        <ClientReportWizard
+          clientId={client.id}
+          clientName={client.name}
+          closeHref={returnTo}
+          initialPeriodStart={suggestedReportPeriod.start}
+          initialPeriodEnd={suggestedReportPeriod.end}
+          recurringTaskId={reportRecurringTaskId ?? null}
+        />
+      )}
+
+      {clientReportDetail && (
+        <ClientReportWizard
+          clientId={client.id}
+          clientName={client.name}
+          closeHref={returnTo}
+          reportId={clientReportDetail.id}
+          initialPeriodStart={clientReportDetail.periodStart}
+          initialPeriodEnd={clientReportDetail.periodEnd}
+          initialMetrics={clientReportDetail.metrics}
+          initialObservations={clientReportDetail.observations}
+          initialStatus={clientReportDetail.status}
+          initialSentAt={clientReportDetail.sentAt}
+          initialSentByName={clientReportDetail.sentByName}
+        />
+      )}
     </div>
   );
 }

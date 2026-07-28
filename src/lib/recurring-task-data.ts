@@ -176,6 +176,12 @@ export interface RecurringTaskDetail {
    * registro rápido por chips (`OPTIMIZATION_QUICK_GROUPS`), nunca os dois
    * ao mesmo tempo. */
   usesAccountReview: boolean;
+  /** Integração de backend com client_reports (hoje só "Reportar cliente")
+   * — quando true, o drawer troca o formulário de registro pelo CTA "Gerar
+   * report", que abre o módulo de Reports com cliente e período já
+   * resolvidos; salvar o report registra a execução automaticamente. Nunca
+   * true ao mesmo tempo que `usesAccountReview` (constraint no banco). */
+  usesReport: boolean;
   /** Itens do checklist desta recorrência, na ordem configurada — vazio
    * quando `hasChecklist` é false. Ignorado quando `usesAccountReview` é
    * true (ver acima). Dado, não código: a UI não sabe (nem precisa saber)
@@ -221,7 +227,7 @@ export async function fetchRecurringTaskDetail(
     requireQuery(
       supabase
         .from("recurring_tasks")
-        .select("id, title, icon, has_checklist, uses_account_review, cadence_mode, fixed_weekdays")
+        .select("id, title, icon, has_checklist, uses_account_review, uses_report, cadence_mode, fixed_weekdays")
         .eq("id", recurringTaskId),
       "recurring_tasks:detail",
     ),
@@ -312,6 +318,7 @@ export async function fetchRecurringTaskDetail(
     icon: task.icon,
     hasChecklist: task.has_checklist,
     usesAccountReview: task.uses_account_review,
+    usesReport: task.uses_report,
     checklistItems: checklistItemRows.map((row) => ({ key: row.item_key, label: row.label })),
     weekProgress,
     nextExecutionLabel,

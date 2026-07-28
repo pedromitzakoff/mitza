@@ -74,6 +74,11 @@ export const OperationalEventType = {
   CLIENT_UPDATE_COPIED: "client_update_copied",
   CLIENT_UPDATE_MARKED_SENT: "client_update_marked_sent",
   CLIENT_UPDATE_MARKED_UNSENT: "client_update_marked_unsent",
+
+  // Etapa Reports — histórico oficial de comunicação de resultados.
+  CLIENT_REPORT_GENERATED: "client_report_generated",
+  CLIENT_REPORT_EDITED: "client_report_edited",
+  CLIENT_REPORT_SENT: "client_report_sent",
 } as const satisfies Record<string, OperationalEventTypeValue>;
 
 export type OperationalEventType = (typeof OperationalEventType)[keyof typeof OperationalEventType];
@@ -160,6 +165,9 @@ export const OPERATIONAL_EVENT_TYPE_LABEL: Record<OperationalEventType, string> 
   client_update_copied: "Copiou atualização para o cliente",
   client_update_marked_sent: "Marcou atualização como enviada",
   client_update_marked_unsent: "Marcou atualização como não enviada",
+  client_report_generated: "Gerou report para o cliente",
+  client_report_edited: "Editou report do cliente",
+  client_report_sent: "Marcou report como enviado",
 };
 
 /** Converte segundos de atraso pra um texto compacto (horas/dias) — usado

@@ -691,6 +691,14 @@ export default async function SprintsPage({
     params.recurringTaskDetail && params.recurringTaskClient && recurringTaskSprint
       ? await fetchRecurringTaskDetail(supabase, params.recurringTaskDetail, params.recurringTaskClient, recurringTaskSprint, todayStr)
       : null;
+  // Etapa "Reports": o módulo de geração só existe na página do cliente —
+  // o CTA "Gerar report" aberto a partir daqui sempre navega pra lá (nunca
+  // um wizard próprio nesta tela), com cliente/período/recorrência já
+  // resolvidos, igual ao mesmo CTA dentro de `/clients/[id]`.
+  const recurringTaskReportHref =
+    params.recurringTaskClient && recurringTaskSprint
+      ? `/clients/${params.recurringTaskClient}?clientReport=new&reportRecurringTaskId=${params.recurringTaskDetail}&reportPeriodStart=${recurringTaskSprint.start_date}&reportPeriodEnd=${recurringTaskSprint.end_date}`
+      : null;
 
   const activeTabKey =
     view === "current" ? "current" : grouping === "consolidated" ? "monthly-consolidated" : "monthly-sprints";
@@ -905,7 +913,12 @@ export default async function SprintsPage({
       )}
 
       {recurringTaskDetail && params.recurringTaskClient && (
-        <RecurringTaskDrawer detail={recurringTaskDetail} clientId={params.recurringTaskClient} closeHref={buildUrl({})} />
+        <RecurringTaskDrawer
+          detail={recurringTaskDetail}
+          clientId={params.recurringTaskClient}
+          closeHref={buildUrl({})}
+          reportHref={recurringTaskReportHref}
+        />
       )}
     </div>
   );

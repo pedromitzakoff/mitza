@@ -32,10 +32,15 @@ export function RecurringTaskDrawer({
   detail,
   clientId,
   closeHref,
+  reportHref,
 }: {
   detail: RecurringTaskDetail;
   clientId: string;
   closeHref: string;
+  /** Href pronto pra abrir o wizard de Reports com cliente e período
+   * (sprint em que o drawer foi aberto) já resolvidos — só relevante
+   * quando `detail.usesReport` é true (ver `page.tsx`). */
+  reportHref: string | null;
 }) {
   const { weekProgress, previousWeek } = detail;
   const weekCountLabel =
@@ -122,35 +127,53 @@ export function RecurringTaskDrawer({
         </div>
 
         <section className="mt-4 border-t border-border pt-4">
-          <SectionHeader>Registrar nova execução</SectionHeader>
-          <form action={registerRecurringExecutionAction.bind(null, detail.id, clientId, closeHref)} className="mt-2 flex flex-col gap-2">
-            {detail.usesAccountReview ? (
-              <OptimizationQuickPicker />
-            ) : (
-              detail.checklistItems.length > 0 && (
-                <div className="flex flex-col gap-1">
-                  {detail.checklistItems.map((item) => (
-                    <label key={item.key} className="flex items-center gap-2 text-sm text-foreground">
-                      <input type="checkbox" name="checklist_items" value={item.key} className="h-3.5 w-3.5 rounded border-border" />
-                      {item.label}
-                    </label>
-                  ))}
-                </div>
-              )
-            )}
-            <textarea
-              name="notes"
-              rows={2}
-              placeholder="Observações (opcional)"
-              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand"
-            />
-            <SubmitButton
-              pendingChildren="Registrando..."
-              className="self-start rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
-            >
-              Registrar execução
-            </SubmitButton>
-          </form>
+          <SectionHeader>{detail.usesReport ? "Gerar report" : "Registrar nova execução"}</SectionHeader>
+          {detail.usesReport ? (
+            <div className="mt-2 flex flex-col gap-2">
+              <p className="text-sm text-muted-foreground">
+                Esta recorrência é atendida gerando o report do cliente — salvar o report registra a execução
+                automaticamente, sem precisar de um passo separado.
+              </p>
+              {reportHref && (
+                <Link
+                  href={reportHref}
+                  scroll={false}
+                  className="mitza-pressable self-start rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
+                >
+                  Gerar report
+                </Link>
+              )}
+            </div>
+          ) : (
+            <form action={registerRecurringExecutionAction.bind(null, detail.id, clientId, closeHref)} className="mt-2 flex flex-col gap-2">
+              {detail.usesAccountReview ? (
+                <OptimizationQuickPicker />
+              ) : (
+                detail.checklistItems.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    {detail.checklistItems.map((item) => (
+                      <label key={item.key} className="flex items-center gap-2 text-sm text-foreground">
+                        <input type="checkbox" name="checklist_items" value={item.key} className="h-3.5 w-3.5 rounded border-border" />
+                        {item.label}
+                      </label>
+                    ))}
+                  </div>
+                )
+              )}
+              <textarea
+                name="notes"
+                rows={2}
+                placeholder="Observações (opcional)"
+                className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand"
+              />
+              <SubmitButton
+                pendingChildren="Registrando..."
+                className="self-start rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
+              >
+                Registrar execução
+              </SubmitButton>
+            </form>
+          )}
         </section>
 
         <section className="mt-4 border-t border-border pt-4">

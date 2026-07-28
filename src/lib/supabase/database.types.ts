@@ -15,6 +15,11 @@ export type ClientMainObjective = "leads" | "vendas" | "reservas" | "reconhecime
 /** Objetivo estruturado de performance (Etapa 71; "followers" adicionado na
  * Etapa "Objetivo Seguidores") — distinto de `ClientMainObjective`. */
 export type PerformanceGoalDb = "leads" | "sales" | "followers";
+
+/** Ciclo de vida de um `client_reports` — rótulos em `lib/client-reports.ts`
+ * (`CLIENT_REPORT_STATUS_LABEL`). "sent" só é gravado por
+ * `markClientReportSentAction`, nunca ao simplesmente salvar o conteúdo. */
+export type ClientReportStatusDb = "draft" | "sent";
 export type TrafficChannelDb = "meta" | "google" | "tiktok" | "linkedin" | "other";
 export type PerformanceSourceDb = "manual" | "meta" | "google";
 
@@ -111,7 +116,10 @@ export type OperationalEventType =
   | "client_update_edited"
   | "client_update_copied"
   | "client_update_marked_sent"
-  | "client_update_marked_unsent";
+  | "client_update_marked_unsent"
+  | "client_report_generated"
+  | "client_report_edited"
+  | "client_report_sent";
 
 export type OperationalEntityType =
   | "task"
@@ -121,7 +129,8 @@ export type OperationalEntityType =
   | "monthly_report"
   | "account_review"
   | "account_optimization"
-  | "client_update";
+  | "client_update"
+  | "client_report";
 export type OperationalEventSource = "web" | "server" | "system" | "integration" | "migration" | "automation";
 
 /** Etapa 57 — Análises da Conta e Otimizações (taxonomias). Rótulos em
@@ -1456,6 +1465,7 @@ export interface Database {
           is_active: boolean;
           has_checklist: boolean;
           uses_account_review: boolean;
+          uses_report: boolean;
           cadence_mode: "automatic" | "fixed_days";
           fixed_weekdays: number[];
           created_at: string;
@@ -1470,6 +1480,7 @@ export interface Database {
           is_active?: boolean;
           has_checklist?: boolean;
           uses_account_review?: boolean;
+          uses_report?: boolean;
           cadence_mode?: "automatic" | "fixed_days";
           fixed_weekdays?: number[];
           created_at?: string;
@@ -1484,6 +1495,7 @@ export interface Database {
           is_active?: boolean;
           has_checklist?: boolean;
           uses_account_review?: boolean;
+          uses_report?: boolean;
           cadence_mode?: "automatic" | "fixed_days";
           fixed_weekdays?: number[];
           created_at?: string;
@@ -1607,6 +1619,7 @@ export interface Database {
           account_review_id: string | null;
           checklist_selected_keys: string[] | null;
           optimization_selections: unknown | null;
+          client_report_id: string | null;
           notes: string | null;
           created_at: string;
         };
@@ -1621,6 +1634,7 @@ export interface Database {
           account_review_id?: string | null;
           checklist_selected_keys?: string[] | null;
           optimization_selections?: unknown | null;
+          client_report_id?: string | null;
           notes?: string | null;
           created_at?: string;
         };
@@ -1635,6 +1649,7 @@ export interface Database {
           account_review_id?: string | null;
           checklist_selected_keys?: string[] | null;
           optimization_selections?: unknown | null;
+          client_report_id?: string | null;
           notes?: string | null;
           created_at?: string;
         };
@@ -1756,6 +1771,82 @@ export interface Database {
           },
           {
             foreignKeyName: "client_updates_sent_by_fkey";
+            columns: ["sent_by"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      client_reports: {
+        Row: {
+          id: string;
+          organization_id: string;
+          client_id: string;
+          period_start: string;
+          period_end: string;
+          performance_goal: PerformanceGoalDb | null;
+          metrics: unknown;
+          observations: string | null;
+          final_text: string;
+          status: ClientReportStatusDb;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          sent_at: string | null;
+          sent_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          client_id: string;
+          period_start: string;
+          period_end: string;
+          performance_goal?: PerformanceGoalDb | null;
+          metrics?: unknown;
+          observations?: string | null;
+          final_text: string;
+          status?: ClientReportStatusDb;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          sent_at?: string | null;
+          sent_by?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          client_id?: string;
+          period_start?: string;
+          period_end?: string;
+          performance_goal?: PerformanceGoalDb | null;
+          metrics?: unknown;
+          observations?: string | null;
+          final_text?: string;
+          status?: ClientReportStatusDb;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          sent_at?: string | null;
+          sent_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_reports_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_reports_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_reports_sent_by_fkey";
             columns: ["sent_by"];
             isOneToOne: false;
             referencedRelation: "team_members";
@@ -2359,6 +2450,7 @@ export interface Database {
           p_notes: string | null;
           p_checklist_selected_keys?: string[] | null;
           p_optimization_selections?: unknown | null;
+          p_client_report_id?: string | null;
           p_source?: OperationalEventSource;
         };
         Returns: {
