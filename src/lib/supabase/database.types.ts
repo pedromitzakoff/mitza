@@ -144,7 +144,8 @@ export type OptimizationType =
   | "PLACEMENT"
   | "ACCOUNT_STRUCTURE"
   | "TRACKING"
-  | "OTHER";
+  | "OTHER"
+  | "REMARKETING";
 
 /** Etapa 59 — Atualização para o Cliente. Rótulos em lib/client-updates.ts. */
 export type ClientUpdateGenerationMethod = "template" | "ai";
@@ -1441,6 +1442,221 @@ export interface Database {
           },
         ];
       };
+      recurring_tasks: {
+        Row: {
+          id: string;
+          title: string;
+          icon: string;
+          color: string;
+          default_assignee_id: string | null;
+          applies_to_all: boolean;
+          is_active: boolean;
+          has_checklist: boolean;
+          uses_account_review: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          icon?: string;
+          color?: string;
+          default_assignee_id?: string | null;
+          applies_to_all?: boolean;
+          is_active?: boolean;
+          has_checklist?: boolean;
+          uses_account_review?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          icon?: string;
+          color?: string;
+          default_assignee_id?: string | null;
+          applies_to_all?: boolean;
+          is_active?: boolean;
+          has_checklist?: boolean;
+          uses_account_review?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "recurring_tasks_default_assignee_id_fkey";
+            columns: ["default_assignee_id"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      recurring_task_checklist_items: {
+        Row: {
+          id: string;
+          recurring_task_id: string;
+          item_key: string;
+          label: string;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          recurring_task_id: string;
+          item_key: string;
+          label: string;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          recurring_task_id?: string;
+          item_key?: string;
+          label?: string;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "recurring_task_checklist_items_recurring_task_id_fkey";
+            columns: ["recurring_task_id"];
+            isOneToOne: false;
+            referencedRelation: "recurring_tasks";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      recurring_task_clients: {
+        Row: {
+          recurring_task_id: string;
+          client_id: string;
+        };
+        Insert: {
+          recurring_task_id: string;
+          client_id: string;
+        };
+        Update: {
+          recurring_task_id?: string;
+          client_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "recurring_task_clients_recurring_task_id_fkey";
+            columns: ["recurring_task_id"];
+            isOneToOne: false;
+            referencedRelation: "recurring_tasks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "recurring_task_clients_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      recurring_task_goal_history: {
+        Row: {
+          id: string;
+          recurring_task_id: string;
+          weekly_goal: number;
+          effective_from: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          recurring_task_id: string;
+          weekly_goal: number;
+          effective_from?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          recurring_task_id?: string;
+          weekly_goal?: number;
+          effective_from?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "recurring_task_goal_history_recurring_task_id_fkey";
+            columns: ["recurring_task_id"];
+            isOneToOne: false;
+            referencedRelation: "recurring_tasks";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      recurring_task_executions: {
+        Row: {
+          id: string;
+          recurring_task_id: string;
+          client_id: string;
+          sprint_id: string;
+          executed_at: string;
+          team_member_id: string | null;
+          performed_by_auth_user_id: string | null;
+          account_review_id: string | null;
+          checklist_selected_keys: string[] | null;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          recurring_task_id: string;
+          client_id: string;
+          sprint_id: string;
+          executed_at?: string;
+          team_member_id?: string | null;
+          performed_by_auth_user_id?: string | null;
+          account_review_id?: string | null;
+          checklist_selected_keys?: string[] | null;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          recurring_task_id?: string;
+          client_id?: string;
+          sprint_id?: string;
+          executed_at?: string;
+          team_member_id?: string | null;
+          performed_by_auth_user_id?: string | null;
+          account_review_id?: string | null;
+          checklist_selected_keys?: string[] | null;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "recurring_task_executions_recurring_task_id_fkey";
+            columns: ["recurring_task_id"];
+            isOneToOne: false;
+            referencedRelation: "recurring_tasks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "recurring_task_executions_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "recurring_task_executions_sprint_id_fkey";
+            columns: ["sprint_id"];
+            isOneToOne: false;
+            referencedRelation: "sprints";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "recurring_task_executions_account_review_id_fkey";
+            columns: ["account_review_id"];
+            isOneToOne: false;
+            referencedRelation: "account_reviews";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       client_updates: {
         Row: {
           id: string;
@@ -2113,6 +2329,22 @@ export interface Database {
           reviewId: string;
           sprintId: string;
           taskId: string | null;
+        };
+      };
+      register_recurring_execution: {
+        Args: {
+          p_recurring_task_id: string;
+          p_client_id: string;
+          p_team_member_id: string;
+          p_auth_user_id: string | null;
+          p_notes: string | null;
+          p_checklist_selected_keys?: string[] | null;
+          p_source?: OperationalEventSource;
+        };
+        Returns: {
+          executionId: string;
+          sprintId: string;
+          accountReviewId: string | null;
         };
       };
     };

@@ -48,6 +48,7 @@ export const OPTIMIZATION_TYPES: OptimizationType[] = [
   "ACCOUNT_STRUCTURE",
   "TRACKING",
   "OTHER",
+  "REMARKETING",
 ];
 
 export const OPTIMIZATION_TYPE_LABEL: Record<OptimizationType, string> = {
@@ -61,6 +62,7 @@ export const OPTIMIZATION_TYPE_LABEL: Record<OptimizationType, string> = {
   ACCOUNT_STRUCTURE: "Estrutura da conta",
   TRACKING: "Tracking / Mensuração",
   OTHER: "Outro",
+  REMARKETING: "Remarketing",
 };
 
 /** Ações compatíveis por tipo — a UI só mostra as ações desta lista pro tipo
@@ -77,6 +79,7 @@ export const OPTIMIZATION_ACTIONS_BY_TYPE: Record<OptimizationType, string[]> = 
   ACCOUNT_STRUCTURE: ["REORGANIZED", "CONSOLIDATED", "SPLIT", "OTHER"],
   TRACKING: ["CONFIGURED", "CORRECTED", "VALIDATED", "OTHER"],
   OTHER: ["OTHER"],
+  REMARKETING: ["OTHER"],
 };
 
 export const OPTIMIZATION_ACTION_LABEL: Record<string, string> = {
