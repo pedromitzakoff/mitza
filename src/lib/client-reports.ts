@@ -105,9 +105,14 @@ export function defaultReportPeriod(today: string): { start: string; end: string
  * Monta o "texto final" do report (Etapa 5 — Pré-visualização, e o que
  * efetivamente fica gravado em `client_reports.final_text`) — só com dados
  * já preenchidos nas métricas + observações, nunca inventa seção nenhuma.
- * Observações somem por completo quando vazias (mesmo princípio de
- * `buildClientUpdateText`: uma seção sem conteúdo estruturado não aparece
- * vazia/genérica, ela simplesmente não existe no texto).
+ * Formato compacto pedido pelo usuário: nome do cliente em **negrito do
+ * WhatsApp** (`*Texto*`, sintaxe própria do WhatsApp — não é markdown), e
+ * cada métrica numa única linha "Label: valor" (sem linha em branco entre
+ * elas, diferente do espaçamento generoso entre as seções). Observações
+ * também vira uma única linha "Observações: texto" e some por completo
+ * quando vazia (mesmo princípio de `buildClientUpdateText`: uma seção sem
+ * conteúdo estruturado não aparece vazia/genérica, ela simplesmente não
+ * existe no texto).
  */
 export function buildClientReportText(input: {
   clientName: string;
@@ -116,16 +121,21 @@ export function buildClientReportText(input: {
   metrics: ClientReportMetric[];
   observations: string | null;
 }): string {
-  const lines: string[] = [input.clientName, "", `Resultados de ${formatShortDate(input.periodStart)} até ${formatShortDate(input.periodEnd)}`];
+  const lines: string[] = [
+    `*${input.clientName}*`,
+    "",
+    `Resultados de ${formatShortDate(input.periodStart)} até ${formatShortDate(input.periodEnd)}`,
+    "",
+  ];
 
   for (const metric of input.metrics) {
     if (!metric.label.trim()) continue;
-    lines.push("", metric.label, metric.value || "—");
+    lines.push(`${metric.label}: ${metric.value || "—"}`);
   }
 
   const observations = input.observations?.trim();
   if (observations) {
-    lines.push("", "Observações", observations);
+    lines.push("", `Observações: ${observations}`);
   }
 
   return lines.join("\n");
