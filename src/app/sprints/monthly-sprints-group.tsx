@@ -2,6 +2,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { buildSprintPerformanceProps, type OperationClientCard as OperationClientCardData } from "@/app/operation/operation-data";
 import type { CommentItem } from "@/app/clients/comment-thread";
 import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-section";
+import type { RecurringTaskListItem } from "@/lib/recurring-task-data";
 import { resolveMonthPeriodSummary } from "@/lib/financial-period";
 import { operationalSummary } from "@/lib/account-priority";
 import { effectiveTaskStatus } from "@/lib/task-status";
@@ -32,6 +33,7 @@ export function SprintMonthlyBySprintsGroup({
   returnTo,
   sprintCommentsById,
   accountReviewsBySprintId,
+  recurringTasksBySprintId,
   monthTemporalStatus,
   managers,
 }: {
@@ -45,6 +47,10 @@ export function SprintMonthlyBySprintsGroup({
   /** Otimizações (account_reviews) de todas as sprints do mês, por sprint —
    * Sprint UX 2.0. Opcional só por retrocompatibilidade de tipo. */
   accountReviewsBySprintId?: Map<string, AccountReviewSummaryItem[]>;
+  /** Reformulação do sistema de tarefas (28/07) — recorrências de todas as
+   * sprints do mês, por sprint. Ver doc de `recurringTasks` em
+   * `ActivitySection`. */
+  recurringTasksBySprintId?: Map<string, RecurringTaskListItem[]>;
   monthTemporalStatus?: MonthTemporalStatus;
   /** Gestores ativos — ver doc de `SprintCardBody` (expansão inline de
    * tarefa dentro de Atividades). */
@@ -100,6 +106,7 @@ export function SprintMonthlyBySprintsGroup({
                   performance={buildSprintPerformanceProps(card, sprint.sprintId)}
                   returnTo={returnTo}
                   accountReviews={accountReviewsBySprintId?.get(sprint.sprintId) ?? []}
+                  recurringTasks={recurringTasksBySprintId?.get(sprint.sprintId)}
                   newReviewHref={newReviewHref}
                   buildReviewDetailHref={buildReviewDetailHref}
                   flat

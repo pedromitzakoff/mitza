@@ -1,5 +1,6 @@
 import type { TaskListItem } from "./task-row";
 import type { AccountReviewSummaryItem } from "./account-reviews-section";
+import type { RecurringTaskListItem } from "@/lib/recurring-task-data";
 import { orderTasks } from "./task-order";
 
 /**
@@ -9,11 +10,18 @@ import { orderTasks } from "./task-order";
  * continuam entidades de domínio totalmente separadas (schemas, regras de
  * negócio, permissões e ações nunca mudaram nesta etapa). Esta união
  * discriminada existe apenas pra decidir, linha a linha, qual componente
- * oficial renderizar (`TaskRow` ou `AccountReviewRow`) — nunca pra fundir
- * dado ou lógica dos dois domínios.
+ * oficial renderizar (`TaskRow`, `RecurringTaskRow` ou `AccountReviewRow`)
+ * — nunca pra fundir dado ou lógica dos domínios.
+ *
+ * Reformulação do sistema de tarefas (28/07): `recurring_task` é o terceiro
+ * kind — domínio próprio (`recurring_tasks`/`recurring_task_executions`),
+ * mas convivendo na MESMA fila, nunca numa seção separada (princípio do
+ * usuário: "a recorrência é uma característica da tarefa, não um novo
+ * conceito da plataforma").
  */
 export type ActivityItem =
   | { kind: "task"; task: TaskListItem }
+  | { kind: "recurring_task"; recurringTask: RecurringTaskListItem }
   | { kind: "account_review"; review: AccountReviewSummaryItem };
 
 /**
@@ -40,8 +48,15 @@ export type ActivityItem =
 export function buildActivityFeed(
   tasks: TaskListItem[],
   reviews: AccountReviewSummaryItem[],
+  recurringTasks: RecurringTaskListItem[] = [],
 ): ActivityItem[] {
   return [
+    // Recorrências primeiro, sempre na mesma ordem estável (por título) —
+    // ao contrário de `orderTasks`, elas não têm due_date pra ordenar por
+    // cronologia (são "esta sprint inteira", não um alvo pontual), e
+    // representam um compromisso permanente do cliente, não um item que
+    // "chegou" nesta sprint — por isso ficam fixas no topo da fila.
+    ...recurringTasks.map((recurringTask): ActivityItem => ({ kind: "recurring_task", recurringTask })),
     ...orderTasks(tasks).map((task): ActivityItem => ({ kind: "task", task })),
     ...reviews.map((review): ActivityItem => ({ kind: "account_review", review })),
   ];

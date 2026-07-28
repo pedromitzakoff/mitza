@@ -6,6 +6,8 @@ import { effectiveTaskStatus } from "@/lib/task-status";
 import { useOptimisticTasks } from "@/lib/optimistic-tasks";
 import { buildActivityFeed } from "./activity";
 import { TaskRow, type TaskListItem } from "./task-row";
+import { RecurringTaskRow } from "./recurring-task-row";
+import type { RecurringTaskListItem } from "@/lib/recurring-task-data";
 import { ActivityComposer } from "./activity-composer";
 import type { InlineTaskManagerOption } from "./inline-task-form";
 import { AccountReviewRow, type AccountReviewSummaryItem } from "./account-reviews-section";
@@ -70,6 +72,7 @@ export function ActivitySection({
   isAdmin,
   reviews,
   reviewHrefPrefix,
+  recurringTasks,
   canOperate = true,
 }: {
   tasks: TaskListItem[];
@@ -97,6 +100,12 @@ export function ActivitySection({
    * `taskHrefPrefix`/doc em `SprintCardBody`), concatenado com
    * `review.id` pra formar o href completo do drawer de detalhe. */
   reviewHrefPrefix?: string;
+  /** Reformulação do sistema de tarefas (28/07) — recorrências ativas desta
+   * sprint, já com o progresso semanal resolvido (`fetchRecurringTaskListForSprint`).
+   * Opcional, mesmo padrão de `reviews`: quem ainda não busca `recurring_tasks`
+   * simplesmente não passa (a fila mostra só tarefas comuns/revisões, igual
+   * hoje — hoje a tabela está sempre vazia até a migração final rodar). */
+  recurringTasks?: RecurringTaskListItem[];
   /** Princípio "Workspace = só cliente ativo" — `false` quando o cliente
    * está pausado/encerrado: esconde o `ActivityComposer` (criação de
    * tarefa) e desabilita "Marcar como feito" em cada `TaskRow` (leitura
@@ -108,7 +117,7 @@ export function ActivitySection({
   const tasksDone = optimisticTasks.filter((task) => effectiveTaskStatus(task) === "feito").length;
   const progressPct = optimisticTasks.length > 0 ? (tasksDone / optimisticTasks.length) * 100 : 0;
   const reviewList = reviews ?? [];
-  const activities = buildActivityFeed(optimisticTasks, reviewList);
+  const activities = buildActivityFeed(optimisticTasks, reviewList, recurringTasks ?? []);
   // Só uma tarefa expandida por vez em toda a fila.
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
@@ -162,8 +171,21 @@ export function ActivitySection({
 
         <ul className="[&>li:last-child]:border-0">
           {activities.length > 0 ? (
-            activities.map((item) =>
-              item.kind === "task" ? (
+            activities.map((item) => {
+              if (item.kind === "recurring_task") {
+                return <RecurringTaskRow key={`recurring-${item.recurringTask.id}`} item={item.recurringTask} typeLabel="Recorrência" />;
+              }
+              if (item.kind === "account_review") {
+                return (
+                  <AccountReviewRow
+                    key={`review-${item.review.id}`}
+                    review={item.review}
+                    detailHref={`${reviewHrefPrefix}${item.review.id}`}
+                    typeLabel="Revisão de conta"
+                  />
+                );
+              }
+              return (
                 <TaskRow
                   key={`task-${item.task.id}`}
                   task={item.task}
@@ -184,15 +206,8 @@ export function ActivitySection({
                       : undefined
                   }
                 />
-              ) : (
-                <AccountReviewRow
-                  key={`review-${item.review.id}`}
-                  review={item.review}
-                  detailHref={`${reviewHrefPrefix}${item.review.id}`}
-                  typeLabel="Revisão de conta"
-                />
-              ),
-            )
+              );
+            })
           ) : (
             <li className="flex min-h-[28px] items-center px-2 py-1 text-xs text-muted-foreground">
               Nenhuma atividade nesta sprint.

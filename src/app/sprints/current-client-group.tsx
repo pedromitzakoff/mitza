@@ -2,6 +2,7 @@ import { buildSprintPerformanceProps, type OperationClientCard as OperationClien
 import type { CommentItem } from "@/app/clients/comment-thread";
 import { SprintCardBody } from "@/app/clients/sprint-card";
 import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-section";
+import type { RecurringTaskListItem } from "@/lib/recurring-task-data";
 import { resolveSprintPeriodSummary } from "@/lib/financial-period";
 import { operationalSummary } from "@/lib/account-priority";
 import { effectiveTaskStatus } from "@/lib/task-status";
@@ -26,6 +27,7 @@ export function SprintCurrentClientGroup({
   isAdmin,
   comments,
   accountReviews,
+  recurringTasks,
   managers,
 }: {
   card: OperationClientCardData;
@@ -36,6 +38,9 @@ export function SprintCurrentClientGroup({
   /** Otimizações (account_reviews) da sprint atual deste cliente — Sprint UX
    * 2.0. Vazio por padrão pra quem ainda não busca a query nova. */
   accountReviews?: AccountReviewSummaryItem[];
+  /** Reformulação do sistema de tarefas (28/07) — ver doc de `recurringTasks`
+   * em `ActivitySection`. Vazio por padrão, mesmo motivo de `accountReviews`. */
+  recurringTasks?: RecurringTaskListItem[];
   /** Gestores ativos — ver doc de `SprintCardBody` (expansão inline de
    * tarefa dentro de Atividades). */
   managers?: { id: string; name: string }[];
@@ -87,6 +92,7 @@ export function SprintCurrentClientGroup({
         performance={buildSprintPerformanceProps(card, card.sprint.sprintId)}
         returnTo={returnTo}
         accountReviews={reviews}
+        recurringTasks={recurringTasks}
         newReviewHref={`${returnTo}&review=new&reviewClient=${card.clientId}`}
         buildReviewDetailHref={(reviewId) => `${returnTo}&reviewDetail=${reviewId}`}
       />

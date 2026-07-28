@@ -35,6 +35,7 @@ import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-sec
 import { RecordAccountReviewDrawer } from "@/app/clients/record-account-review-drawer";
 import { AccountReviewDetailDrawer, type AccountReviewDetail } from "@/app/clients/account-review-detail-drawer";
 import { computeClientUpdateStatus } from "@/lib/client-updates";
+import { fetchRecurringTaskListsForSprints } from "@/lib/recurring-task-data";
 import { SprintCurrentClientGroup } from "./current-client-group";
 import { SprintMonthlyBySprintsGroup } from "./monthly-sprints-group";
 import { SprintMonthlyConsolidatedGroup } from "./monthly-consolidated-group";
@@ -257,7 +258,7 @@ export default async function SprintsPage({
   const allCommentIds = sprintComments.map((c) => c.id);
 
   const __perfBlock3Start = perfNow();
-  const [lastReviews, sprintReviewRows, reportSelections] = await Promise.all([
+  const [lastReviews, sprintReviewRows, reportSelections, recurringTasksBySprintId] = await Promise.all([
     // Etapa 74 — "Última otimização"/filtro "optimization": sempre o dado
     // GLOBAL mais recente por cliente (independe do mês selecionado), por
     // isso uma busca própria sem filtro de data — mesma fonte usada na Visão
@@ -294,6 +295,13 @@ export default async function SprintsPage({
           "report_comment_selections",
         )
       : Promise.resolve([]),
+    // Reformulação do sistema de tarefas (28/07) — recorrências (Checar
+    // saldo/Reportar cliente/Otimização) de todas as sprints visíveis nesta
+    // tela, batched (mesmo motivo de sprintReviewRows acima: nunca uma
+    // consulta por sprint). Hoje sempre retorna vazio (nenhuma linha em
+    // `recurring_tasks` até a migração final rodar) — zero mudança de
+    // comportamento em produção enquanto isso não acontece.
+    fetchRecurringTaskListsForSprints(supabase, sprints),
   ]);
   perfLog("sprints bloco 3 fundido (lastReviews/sprintReviewRows/reportSelections, antes eram 3 round-trips sequenciais)", __perfBlock3Start);
 
@@ -810,6 +818,7 @@ export default async function SprintsPage({
                 isAdmin={isAdmin}
                 comments={card.sprint ? sprintCommentsById.get(card.sprint.sprintId) ?? [] : []}
                 accountReviews={card.sprint ? accountReviewsBySprintId.get(card.sprint.sprintId) ?? [] : []}
+                recurringTasks={card.sprint ? recurringTasksBySprintId.get(card.sprint.sprintId) ?? [] : []}
                 managers={gestores ?? []}
               />
             ))
@@ -838,6 +847,7 @@ export default async function SprintsPage({
                 returnTo={buildUrl({})}
                 sprintCommentsById={sprintCommentsById}
                 accountReviewsBySprintId={accountReviewsBySprintId}
+                recurringTasksBySprintId={recurringTasksBySprintId}
                 monthTemporalStatus={monthTemporalStatus}
                 managers={gestores ?? []}
               />

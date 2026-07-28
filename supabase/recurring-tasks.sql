@@ -279,10 +279,13 @@ begin
 end;
 $$ language plpgsql;
 
--- ---------------------------------------------------------------------------
--- Desativa o modelo antigo pros 3 tipos oficiais de recorrência (otimizacao
--- já estava desativado desde a Etapa 57 — isto aqui cobre verificacao_saldo/
--- report também). Templates do tipo 'outro' (fora do escopo desta reforma,
--- se existirem) continuam funcionando exatamente como hoje.
--- ---------------------------------------------------------------------------
-update sprint_task_templates set is_active = false where type in ('otimizacao', 'verificacao_saldo', 'report');
+-- NADA neste arquivo desativa o modelo antigo (sprint_task_templates) —
+-- isso é a "ativação" do novo modelo (Passo 3 de
+-- supabase/cleanup-legacy-recurring-tasks.sql), deliberadamente adiada pro
+-- fim de todas as fases de interface (decisão do usuário, 28/07: "não quero
+-- um período em que os gestores fiquem sem visualizar as recorrências
+-- principais"). Rodar SÓ este arquivo é seguro a qualquer momento: cria
+-- tabelas/função novas (aditivo, `recurring_tasks` começa vazia), sem tocar
+-- em nenhum dado ou comportamento já existente — é o que permite a
+-- interface nova já ler essas tabelas (sempre vazias, por ora) sem quebrar
+-- nada em produção enquanto as fases de UI ainda estão sendo construídas.

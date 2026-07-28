@@ -14,6 +14,7 @@ import { resetSprintSpendSourceAction } from "./sprint-actions";
 import { updateSprintPerformanceAction } from "./performance-actions";
 import { MoneyInput } from "./money-input";
 import type { AccountReviewSummaryItem } from "./account-reviews-section";
+import type { RecurringTaskListItem } from "@/lib/recurring-task-data";
 import { getLatestPerformanceUpdateText, type SprintPerformanceView } from "@/lib/performance";
 import { formatPerformanceResult, PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { ClientPerformanceGoalEditor } from "./client-performance-goal-editor";
@@ -594,6 +595,7 @@ export function SprintCardBody({
   accountReviews,
   newReviewHref,
   buildReviewDetailHref,
+  recurringTasks,
   manualSpendUpdatedAt,
   metaSyncedAt,
   performance,
@@ -635,6 +637,10 @@ export function SprintCardBody({
   accountReviews?: AccountReviewSummaryItem[];
   newReviewHref?: string;
   buildReviewDetailHref?: (reviewId: string) => string;
+  /** Reformulação do sistema de tarefas (28/07) — ver doc de `recurringTasks`
+   * em `ActivitySection`. Repassado direto, mesmo padrão opcional de
+   * `accountReviews`. */
+  recurringTasks?: RecurringTaskListItem[];
   /** Última edição do gasto manual desta sprint (`sprints.manual_spend_updated_at`)
    * — `undefined` (nunca buscado, ex.: painel Sprints) é diferente de `null`
    * (buscado, mas nunca editado manualmente); só a página do cliente busca
@@ -893,6 +899,7 @@ export function SprintCardBody({
             isAdmin={isAdmin}
             reviews={accountReviews}
             reviewHrefPrefix={reviewHrefPrefix}
+            recurringTasks={recurringTasks}
             canOperate={canOperate}
           />
         </div>
@@ -1013,6 +1020,7 @@ export function SprintCard({
   accountReviews,
   newReviewHref,
   buildReviewDetailHref,
+  recurringTasks,
   manualSpendUpdatedAt,
   metaSyncedAt,
   performance,
@@ -1043,6 +1051,8 @@ export function SprintCard({
   accountReviews?: AccountReviewSummaryItem[];
   newReviewHref?: string;
   buildReviewDetailHref?: (reviewId: string) => string;
+  /** Reformulação do sistema de tarefas (28/07) — ver doc de `SprintCardBody`. */
+  recurringTasks?: RecurringTaskListItem[];
   manualSpendUpdatedAt?: string | null;
   metaSyncedAt?: string | null;
   performance?: SprintPerformanceProps;
@@ -1294,6 +1304,7 @@ export function SprintCard({
               accountReviews={accountReviews}
               newReviewHref={newReviewHref}
               buildReviewDetailHref={buildReviewDetailHref}
+              recurringTasks={recurringTasks}
               manualSpendUpdatedAt={manualSpendUpdatedAt}
               metaSyncedAt={metaSyncedAt}
               taskManagers={taskManagers}
@@ -1322,6 +1333,7 @@ export function SprintCard({
           accountReviews={accountReviews}
           newReviewHref={newReviewHref}
           buildReviewDetailHref={buildReviewDetailHref}
+          recurringTasks={recurringTasks}
           manualSpendUpdatedAt={manualSpendUpdatedAt}
           metaSyncedAt={metaSyncedAt}
           taskManagers={taskManagers}
