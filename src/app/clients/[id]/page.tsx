@@ -639,21 +639,25 @@ export default async function ClientPage({
   const currentSprintForRecurring = isCurrentMonth ? sprintFinancials.find((s) => s.temporalStatus === "atual") ?? null : null;
   const recurringTasksForCurrentSprint = currentSprintForRecurring
     ? (
-        await fetchRecurringTaskListsForSprints(supabase, [
-          {
-            id: currentSprintForRecurring.sprintId,
-            client_id: client.id,
-            start_date: currentSprintForRecurring.startDate,
-            end_date: currentSprintForRecurring.endDate,
-          },
-        ])
+        await fetchRecurringTaskListsForSprints(
+          supabase,
+          [
+            {
+              id: currentSprintForRecurring.sprintId,
+              client_id: client.id,
+              start_date: currentSprintForRecurring.startDate,
+              end_date: currentSprintForRecurring.endDate,
+            },
+          ],
+          todayStr,
+        )
       ).get(currentSprintForRecurring.sprintId) ?? []
     : [];
 
   const recurringTaskSprintForDrawer = openRecurringTaskSprintId ? sprints.find((s) => s.id === openRecurringTaskSprintId) ?? null : null;
   const recurringTaskDetail =
     openRecurringTaskId && recurringTaskSprintForDrawer
-      ? await fetchRecurringTaskDetail(supabase, openRecurringTaskId, client.id, recurringTaskSprintForDrawer)
+      ? await fetchRecurringTaskDetail(supabase, openRecurringTaskId, client.id, recurringTaskSprintForDrawer, todayStr)
       : null;
   const openReviewDetail = openReviewDetailId ? accountReviews.find((r) => r.id === openReviewDetailId) ?? null : null;
   const reviewDetail: AccountReviewDetail | null = openReviewDetail

@@ -306,7 +306,7 @@ export default async function SprintsPage({
     // consulta por sprint). Hoje sempre retorna vazio (nenhuma linha em
     // `recurring_tasks` até a migração final rodar) — zero mudança de
     // comportamento em produção enquanto isso não acontece.
-    fetchRecurringTaskListsForSprints(supabase, sprints),
+    fetchRecurringTaskListsForSprints(supabase, sprints, todayStr),
   ]);
   perfLog("sprints bloco 3 fundido (lastReviews/sprintReviewRows/reportSelections, antes eram 3 round-trips sequenciais)", __perfBlock3Start);
 
@@ -688,7 +688,7 @@ export default async function SprintsPage({
   const recurringTaskSprint = params.recurringTaskSprint ? sprints.find((s) => s.id === params.recurringTaskSprint) ?? null : null;
   const recurringTaskDetail =
     params.recurringTaskDetail && params.recurringTaskClient && recurringTaskSprint
-      ? await fetchRecurringTaskDetail(supabase, params.recurringTaskDetail, params.recurringTaskClient, recurringTaskSprint)
+      ? await fetchRecurringTaskDetail(supabase, params.recurringTaskDetail, params.recurringTaskClient, recurringTaskSprint, todayStr)
       : null;
 
   const activeTabKey =

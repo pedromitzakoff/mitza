@@ -1,9 +1,11 @@
 import type { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import {
+  computeNextExecutionDate,
   computePreviousSprintPending,
   computeWeeklyExecutionProgress,
-  findPreviousSprint,
+  formatNextExecutionLabel,
+  formatNextExecutionLabelLong,
   resolveWeeklyGoalForSprint,
   type PreviousSprintPending,
   type WeeklyExecutionProgress,
@@ -17,35 +19,34 @@ export interface RecurringTaskListItem {
   icon: string;
   color: string;
   progress: WeeklyExecutionProgress;
-  /** Pendência da sprint ANTERIOR do mesmo cliente pra esta recorrência —
-   * `null` quando não há sprint anterior ou a recorrência não tinha meta
-   * configurada ainda naquela época (nunca é pendência sem meta). */
-  previousSprintPending: PreviousSprintPending | null;
+  /** "Hoje" / "Quarta" / "Meta batida" / "—" — já formatado aqui (onde
+   * `today` está disponível), pra a linha não precisar de mais uma prop só
+   * pra isso. */
+  nextExecutionLabel: string;
 }
 
 /**
- * Recorrências aplicáveis a cada sprint, com o progresso já resolvido (meta
- * congelada da época + execuções dentro do período) — o dado que alimenta a
- * linha na fila única de Atividades (`ActivitySection`), hoje só usada em
- * `/sprints` (a página do cliente esconde a lista de tarefas, `hideTaskList`,
- * desde "Sprint como relatório semanal" — Fase F). Batched: uma única busca
- * pra todas as sprints da tela (várias, de vários clientes), nunca uma
- * consulta por sprint — mesmo padrão de `accountReviewsBySprintId` em
- * `sprints/page.tsx`. Tabela de recorrências pequena (ativas da agência
- * inteira, hoje zero até a migração final rodar) — busca tudo e filtra
+ * Recorrências aplicáveis a cada sprint, com o progresso e a próxima
+ * execução já resolvidos (meta congelada da época + execuções dentro do
+ * período) — o dado que alimenta a linha na fila única de Atividades
+ * (`ActivitySection`), hoje só usada em `/sprints` (a página do cliente
+ * esconde a lista de tarefas, `hideTaskList`, desde "Sprint como relatório
+ * semanal" — Fase F). Batched: uma única busca pra todas as sprints da tela
+ * (várias, de vários clientes), nunca uma consulta por sprint — mesmo
+ * padrão de `accountReviewsBySprintId` em `sprints/page.tsx`. Tabela de
+ * recorrências pequena (ativas da agência inteira) — busca tudo e filtra
  * "aplica a este cliente?" em memória em vez de um `.or()` complexo.
  *
- * Fase "Pendências da sprint anterior": pra cada cliente, a sprint anterior
- * à mais antiga já visível na tela pode estar fora da janela carregada
- * (`sprints` só cobre o mês/sprints em exibição) — por isso uma busca extra
- * (`previousSprintRows`, uma por cliente distinto, paralela) traz só essa
- * sprint-fronteira. Sprints do mesmo cliente já são contíguas, então isso
- * basta: qualquer outra sprint "anterior" já está dentro do próprio
- * `sprints` recebido.
+ * Etapa "Simplificar linha das recorrentes": a pendência da sprint anterior
+ * saiu daqui de propósito (era o motivo de buscar a sprint-fronteira de
+ * cada cliente) — esse dado agora só existe dentro do drawer
+ * (`fetchRecurringTaskDetail`, que busca a sprint anterior sob demanda, de
+ * UM cliente por vez), nunca na listagem principal.
  */
 export async function fetchRecurringTaskListsForSprints(
   supabase: Supabase,
   sprints: { id: string; client_id: string; start_date: string; end_date: string }[],
+  today: string,
 ): Promise<Map<string, RecurringTaskListItem[]>> {
   const result = new Map<string, RecurringTaskListItem[]>();
   if (sprints.length === 0) return result;
@@ -67,38 +68,15 @@ export async function fetchRecurringTaskListsForSprints(
     scopedClientIdsByTask.set(row.recurring_task_id, set);
   }
 
-  const earliestStartByClient = new Map<string, string>();
-  for (const sprint of sprints) {
-    const current = earliestStartByClient.get(sprint.client_id);
-    if (!current || sprint.start_date < current) earliestStartByClient.set(sprint.client_id, sprint.start_date);
-  }
-
-  const previousSprintRowsByClient = await Promise.all(
-    [...earliestStartByClient.entries()].map(([clientId, earliestStart]) =>
-      requireQuery(
-        supabase
-          .from("sprints")
-          .select("id, client_id, start_date, end_date")
-          .eq("client_id", clientId)
-          .lt("start_date", earliestStart)
-          .order("end_date", { ascending: false })
-          .limit(1),
-        `sprints:previous:${clientId}`,
-      ),
-    ),
-  );
-  const boundarySprints = previousSprintRowsByClient.flat();
-  const allSprintsForLookup = [...sprints, ...boundarySprints];
-
   const taskIds = activeTasks.map((task) => task.id);
-  const allSprintIds = [...sprints.map((s) => s.id), ...boundarySprints.map((s) => s.id)];
+  const sprintIds = sprints.map((s) => s.id);
   const [goalHistoryRows, executionRows] = await Promise.all([
     requireQuery(
       supabase.from("recurring_task_goal_history").select("recurring_task_id, weekly_goal, effective_from").in("recurring_task_id", taskIds),
       "recurring_task_goal_history",
     ),
     requireQuery(
-      supabase.from("recurring_task_executions").select("recurring_task_id, sprint_id, executed_at").in("sprint_id", allSprintIds),
+      supabase.from("recurring_task_executions").select("recurring_task_id, sprint_id, executed_at").in("sprint_id", sprintIds),
       "recurring_task_executions",
     ),
   ]);
@@ -122,27 +100,16 @@ export async function fetchRecurringTaskListsForSprints(
     const applicable = activeTasks.filter((task) => task.applies_to_all || scopedClientIdsByTask.get(task.id)?.has(sprint.client_id));
     if (applicable.length === 0) continue;
 
-    const previousSprint = findPreviousSprint(
-      allSprintsForLookup.filter((s) => s.client_id === sprint.client_id),
-      sprint,
-    );
-
     const items = applicable
       .map((task): RecurringTaskListItem => {
         const history = goalHistoryByTask.get(task.id) ?? [];
         const goal = resolveWeeklyGoalForSprint(history, sprint.start_date);
         const executions = executionsByTaskAndSprint.get(`${task.id}:${sprint.id}`) ?? [];
         const progress = computeWeeklyExecutionProgress(executions, sprint, goal);
+        const nextExecution = computeNextExecutionDate(sprint, goal, progress.done, today);
+        const nextExecutionLabel = formatNextExecutionLabel(nextExecution, today);
 
-        let previousSprintPending: PreviousSprintPending | null = null;
-        if (previousSprint) {
-          const previousGoal = resolveWeeklyGoalForSprint(history, previousSprint.start_date);
-          const previousExecutions = executionsByTaskAndSprint.get(`${task.id}:${previousSprint.id}`) ?? [];
-          const previousProgress = computeWeeklyExecutionProgress(previousExecutions, previousSprint, previousGoal);
-          previousSprintPending = computePreviousSprintPending(previousProgress);
-        }
-
-        return { id: task.id, title: task.title, icon: task.icon, color: task.color, progress, previousSprintPending };
+        return { id: task.id, title: task.title, icon: task.icon, color: task.color, progress, nextExecutionLabel };
       })
       .sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
 
@@ -176,11 +143,20 @@ export interface RecurringTaskDetail {
    * qualquer com checklist próprio. */
   checklistItems: RecurringTaskChecklistItem[];
   weekProgress: WeeklyExecutionProgress;
+  /** "Hoje" / "Quarta-feira" / "Meta batida" / "—" — por extenso, pro
+   * resumo operacional do drawer. */
+  nextExecutionLabel: string;
   /** Execuções dentro do período da sprint em que o drawer foi aberto. */
   weekExecutions: RecurringTaskExecutionDetail[];
   /** Todo o histórico já registrado pra este cliente (capado, mais recente
    * primeiro) — nunca zera entre sprints, é o ponto central da reforma. */
   history: RecurringTaskExecutionDetail[];
+  /** Progresso da sprint ANTERIOR do mesmo cliente — `null` quando não há
+   * sprint anterior ou a recorrência não tinha meta configurada ainda
+   * naquela época (nunca é pendência sem meta). Etapa "Simplificar linha das
+   * recorrentes": esse contexto histórico saiu da listagem principal e
+   * agora só existe aqui, dentro do drawer. */
+  previousWeek: { progress: WeeklyExecutionProgress; pending: PreviousSprintPending | null } | null;
 }
 
 const HISTORY_LIMIT = 50;
@@ -189,17 +165,20 @@ const HISTORY_LIMIT = 50;
  * Detalhe de UMA recorrência pra UM cliente, aberto sob demanda quando o
  * gestor clica na linha (drawer) — nunca buscado em lote com o resto da
  * tela, ao contrário de `fetchRecurringTaskListsForSprints` (aquele
- * alimenta só o badge da lista, este alimenta o drawer com "Execuções desta
- * semana" + "Histórico"). `sprint` é a sprint em que o drawer foi aberto —
- * define tanto a meta congelada quanto o recorte de "desta semana".
+ * alimenta só a linha da lista, este alimenta o drawer com "Execuções desta
+ * semana" + resumo operacional + "Histórico"). `sprint` é a sprint em que o
+ * drawer foi aberto — define tanto a meta congelada quanto o recorte de
+ * "desta semana". `today` só entra no cálculo de `nextExecution` (a sprint
+ * anterior nunca precisa de "hoje").
  */
 export async function fetchRecurringTaskDetail(
   supabase: Supabase,
   recurringTaskId: string,
   clientId: string,
   sprint: { start_date: string; end_date: string },
+  today: string,
 ): Promise<RecurringTaskDetail | null> {
-  const [taskRows, goalHistoryRows, executionRows, checklistItemRows] = await Promise.all([
+  const [taskRows, goalHistoryRows, executionRows, checklistItemRows, previousSprintRows] = await Promise.all([
     requireQuery(supabase.from("recurring_tasks").select("id, title, icon, has_checklist").eq("id", recurringTaskId), "recurring_tasks:detail"),
     requireQuery(
       supabase.from("recurring_task_goal_history").select("weekly_goal, effective_from").eq("recurring_task_id", recurringTaskId),
@@ -223,6 +202,16 @@ export async function fetchRecurringTaskDetail(
         .order("sort_order"),
       "recurring_task_checklist_items:detail",
     ),
+    requireQuery(
+      supabase
+        .from("sprints")
+        .select("id, start_date, end_date")
+        .eq("client_id", clientId)
+        .lt("start_date", sprint.start_date)
+        .order("end_date", { ascending: false })
+        .limit(1),
+      "sprints:detail:previous",
+    ),
   ]);
 
   const task = taskRows[0];
@@ -241,15 +230,30 @@ export async function fetchRecurringTaskDetail(
     return day >= sprint.start_date && day <= sprint.end_date;
   });
 
-  const goal = resolveWeeklyGoalForSprint(
-    goalHistoryRows.map((row) => ({ weeklyGoal: row.weekly_goal, effectiveFrom: row.effective_from })),
-    sprint.start_date,
-  );
+  const goalHistory = goalHistoryRows.map((row) => ({ weeklyGoal: row.weekly_goal, effectiveFrom: row.effective_from }));
+  const goal = resolveWeeklyGoalForSprint(goalHistory, sprint.start_date);
   const weekProgress = computeWeeklyExecutionProgress(
     weekExecutions.map((execution) => ({ executedAt: execution.executedAt })),
     sprint,
     goal,
   );
+  const nextExecutionLabel = formatNextExecutionLabelLong(computeNextExecutionDate(sprint, goal, weekProgress.done, today), today);
+
+  const previousSprint = previousSprintRows[0] ?? null;
+  let previousWeek: RecurringTaskDetail["previousWeek"] = null;
+  if (previousSprint) {
+    const previousGoal = resolveWeeklyGoalForSprint(goalHistory, previousSprint.start_date);
+    const previousExecutions = history.filter((execution) => {
+      const day = execution.executedAt.slice(0, 10);
+      return day >= previousSprint.start_date && day <= previousSprint.end_date;
+    });
+    const previousProgress = computeWeeklyExecutionProgress(
+      previousExecutions.map((execution) => ({ executedAt: execution.executedAt })),
+      previousSprint,
+      previousGoal,
+    );
+    previousWeek = { progress: previousProgress, pending: computePreviousSprintPending(previousProgress) };
+  }
 
   return {
     id: task.id,
@@ -258,7 +262,9 @@ export async function fetchRecurringTaskDetail(
     hasChecklist: task.has_checklist,
     checklistItems: checklistItemRows.map((row) => ({ key: row.item_key, label: row.label })),
     weekProgress,
+    nextExecutionLabel,
     weekExecutions,
     history,
+    previousWeek,
   };
 }

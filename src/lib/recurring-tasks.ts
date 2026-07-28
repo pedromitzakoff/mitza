@@ -95,18 +95,6 @@ export function computeWeeklyExecutionProgress(
   return { done, goal: weeklyGoal };
 }
 
-/** A sprint imediatamente anterior do mesmo cliente — a de maior `end_date`
- * dentre as que terminam antes da sprint atual começar. `null` se a sprint
- * atual for a primeira do cliente (nada a comparar). */
-export function findPreviousSprint<T extends { start_date: string; end_date: string }>(
-  sprintsForClient: T[],
-  currentSprint: { start_date: string },
-): T | null {
-  const before = sprintsForClient.filter((sprint) => sprint.end_date < currentSprint.start_date);
-  if (before.length === 0) return null;
-  return before.reduce((latest, sprint) => (sprint.end_date > latest.end_date ? sprint : latest));
-}
-
 export interface PreviousSprintPending {
   isPending: boolean;
   done: number;
@@ -129,16 +117,94 @@ export function formatRecurringTaskBadge(title: string, progress: WeeklyExecutio
   return `🔁 ${title} — ${count}`;
 }
 
-/** "🔴 Semana anterior incompleta — 3/4" — usado na própria linha da
- * recorrência quando a sprint anterior ficou pendente. */
-export function formatPreviousSprintPendingLabel(pending: PreviousSprintPending): string {
-  return `🔴 Semana anterior incompleta — ${pending.done}/${pending.goal}`;
+/** "2 execuções não realizadas" / "1 execução não realizada" — usado só
+ * dentro do drawer (bloco "Semana anterior"), nunca na listagem principal
+ * (decisão do usuário, "Simplificar linha das recorrentes": pendência da
+ * semana anterior deixou de competir com a próxima execução na linha).
+ * Chamar só quando `pending.isPending` for true — sem missing, não há o que
+ * mostrar. */
+export function formatPreviousWeekMissingLine(pending: PreviousSprintPending): string {
+  return `${pending.missing} execuç${pending.missing === 1 ? "ão não realizada" : "ões não realizadas"}`;
 }
 
-/** "Otimização — faltou 1 execução" / "Reportar cliente — não realizado" —
- * usado na seção "Pendências da sprint anterior", acima da lista. Zero
- * execuções vira "não realizado" (mais direto que "faltou 4 execuções"). */
-export function formatPreviousSprintPendingSummary(title: string, pending: PreviousSprintPending): string {
-  if (pending.done === 0) return `${title} — não realizado`;
-  return `${title} — faltou ${pending.missing} execuç${pending.missing === 1 ? "ão" : "ões"}`;
+function parseDateUTC(value: string): Date {
+  return new Date(`${value}T00:00:00Z`);
+}
+
+function addDays(dateStr: string, days: number): string {
+  const date = parseDateUTC(dateStr);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/** 1 (segunda) a 7 (domingo) — ISO weekday a partir de uma data YYYY-MM-DD. */
+function isoWeekday(dateStr: string): number {
+  const day = parseDateUTC(dateStr).getUTCDay(); // 0=domingo..6=sábado
+  return day === 0 ? 7 : day;
+}
+
+const BUSINESS_WEEKDAY_SHORT: Record<number, string> = { 1: "Segunda", 2: "Terça", 3: "Quarta", 4: "Quinta", 5: "Sexta" };
+const BUSINESS_WEEKDAY_LONG: Record<number, string> = {
+  1: "Segunda-feira",
+  2: "Terça-feira",
+  3: "Quarta-feira",
+  4: "Quinta-feira",
+  5: "Sexta-feira",
+};
+
+export interface NextExecution {
+  /** Data (YYYY-MM-DD) da próxima execução esperada — `null` quando a meta
+   * da semana já foi cumprida (`metGoal`) ou a recorrência ainda não tem
+   * meta semanal configurada (nada a calcular). */
+  date: string | null;
+  /** A meta desta semana já foi cumprida (`done >= goal`) — nesse caso
+   * `date` é sempre `null`, não há "próxima" a mostrar. */
+  metGoal: boolean;
+}
+
+/**
+ * Calcula a próxima execução esperada distribuindo a meta semanal pelos 5
+ * dias úteis da sprint (segunda a sexta): a n-ésima execução "ideal" cai no
+ * dia útil `floor(n * 5 / meta)` — meta 1 → sexta; meta 2 → terça e sexta;
+ * meta 3 → segunda, quarta e sexta. A próxima é sempre a fatia seguinte à
+ * última já feita (`done`); se essa fatia já ficou pra trás (hoje é depois
+ * dela) e ainda falta execução, empurra pra HOJE — nunca aponta uma data que
+ * já passou.
+ *
+ * Deliberadamente recalculada do zero a cada chamada (meta + `done`), nunca
+ * armazenada — é isso que garante que a recorrência continua sendo UMA
+ * tarefa só (decisão do usuário), nunca vira várias tarefas com prazo fixo.
+ */
+export function computeNextExecutionDate(
+  sprint: { start_date: string },
+  weeklyGoal: number | null,
+  done: number,
+  today: string,
+): NextExecution {
+  if (weeklyGoal === null) return { date: null, metGoal: false };
+  if (done >= weeklyGoal) return { date: null, metGoal: true };
+
+  const slotIndex = done + 1;
+  const slotWeekday = Math.min(5, Math.max(1, Math.floor((slotIndex * 5) / weeklyGoal)));
+  const slotDate = addDays(sprint.start_date, slotWeekday - 1);
+
+  return { date: slotDate < today ? today : slotDate, metGoal: false };
+}
+
+/** "Hoje" / "Quarta" / "Meta batida" / "—" — rótulo compacto pra coluna
+ * "Próxima execução" da listagem principal. */
+export function formatNextExecutionLabel(nextExecution: NextExecution, today: string): string {
+  if (nextExecution.metGoal) return "Meta batida";
+  if (nextExecution.date === null) return "—";
+  if (nextExecution.date === today) return "Hoje";
+  return BUSINESS_WEEKDAY_SHORT[isoWeekday(nextExecution.date)] ?? "—";
+}
+
+/** "Hoje" / "Quarta-feira" / "Meta batida" / "—" — versão por extenso pro
+ * resumo do drawer. */
+export function formatNextExecutionLabelLong(nextExecution: NextExecution, today: string): string {
+  if (nextExecution.metGoal) return "Meta batida";
+  if (nextExecution.date === null) return "—";
+  if (nextExecution.date === today) return "Hoje";
+  return BUSINESS_WEEKDAY_LONG[isoWeekday(nextExecution.date)] ?? "—";
 }

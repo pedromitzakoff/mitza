@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { RecurringTaskListItem } from "@/lib/recurring-task-data";
-import { formatPreviousSprintPendingLabel } from "@/lib/recurring-tasks";
 import { ACTIVITY_COL_ACTIONS, ACTIVITY_COL_ASSIGNEE, ACTIVITY_COL_DATE, ACTIVITY_COL_STATUS, ACTIVITY_COL_TYPE } from "./activity-columns";
 
 /**
@@ -9,19 +8,18 @@ import { ACTIVITY_COL_ACTIONS, ACTIVITY_COL_ASSIGNEE, ACTIVITY_COL_DATE, ACTIVIT
  * ligeiramente diferentes (a segunda não tem coluna de responsável, usa data
  * compacta e às vezes reserva uma coluna de seleção em massa) — por isso os
  * props de largura de coluna são configuráveis, com o padrão de
- * `activity-columns.ts` de `/sprints`. Reformulação do sistema de tarefas
- * (28/07): recorrência nunca "conclui" (sem checkbox/status acionável — a
- * coluna de status aqui só mostra o ícone configurado da recorrência) e não
- * tem uma data-alvo (é sempre "esta sprint inteira"), então a coluna de data
- * fica vazia. O conteúdo central é o progresso da semana ("2/4 execuções
- * nesta semana"), a própria característica que distingue essa linha de uma
- * tarefa comum — princípio do usuário: "a recorrência é uma característica
- * da tarefa, não um novo conceito", por isso ela convive na MESMA lista,
- * nunca numa seção à parte.
+ * `activity-columns.ts` de `/sprints`.
  *
- * Clica pra abrir o drawer (`RecurringTaskDrawer`) — mesmo padrão de
- * `AccountReviewRow` (link pra um `detailHref`, nunca expansão inline como
- * `TaskRow`, já que recorrência não tem campos rápidos pra editar na linha).
+ * Etapa "Simplificar linha das recorrentes": a linha responde só à pergunta
+ * "o que preciso fazer agora e quanto falta esta semana?" — próxima
+ * execução (coluna de data, antes vazia), nome, progresso compacto ("0/2") e
+ * a seta pro drawer. Contexto histórico (pendência da sprint anterior) saiu
+ * daqui de propósito — competia com a informação atual e agora só existe
+ * dentro do drawer (`RecurringTaskDrawer`).
+ *
+ * Clica pra abrir o drawer — mesmo padrão de `AccountReviewRow` (link pra um
+ * `detailHref`, nunca expansão inline como `TaskRow`, já que recorrência não
+ * tem campos rápidos pra editar na linha).
  */
 export function RecurringTaskRow({
   item,
@@ -46,8 +44,7 @@ export function RecurringTaskRow({
   selectColClassName?: string;
 }) {
   const { progress } = item;
-  const countLabel =
-    progress.goal === null ? `${progress.done} execuções nesta semana` : `${progress.done}/${progress.goal} execuções nesta semana`;
+  const progressLabel = progress.goal === null ? `${progress.done}` : `${progress.done}/${progress.goal}`;
 
   return (
     <li className="flex min-h-[28px] items-center border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
@@ -58,16 +55,11 @@ export function RecurringTaskRow({
           <span className="text-sm leading-none">{item.icon}</span>
         </span>
 
-        <span className={dateColClassName} aria-hidden="true" />
+        <span className={`${dateColClassName} truncate`}>{item.nextExecutionLabel}</span>
 
-        <span className="min-w-0 flex-1 truncate text-sm">
-          <span className="font-medium text-foreground">{item.title}</span>
-          <span className="truncate text-xs text-muted-foreground"> · {countLabel}</span>
-          {item.previousSprintPending?.isPending && (
-            <span className="ml-1.5 truncate text-xs font-medium text-overview-danger">
-              {formatPreviousSprintPendingLabel(item.previousSprintPending)}
-            </span>
-          )}
+        <span className="flex min-w-0 flex-1 items-center justify-between gap-2 text-sm">
+          <span className="truncate font-medium text-foreground">{item.title}</span>
+          <span className="shrink-0 tabular-nums text-xs text-muted-foreground">{progressLabel}</span>
         </span>
 
         {showAssigneeCol && <span className={ACTIVITY_COL_ASSIGNEE} aria-hidden="true" />}

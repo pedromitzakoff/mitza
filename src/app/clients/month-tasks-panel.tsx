@@ -385,7 +385,7 @@ export function MonthTasksPanel({
                   </span>
                 )}
                 <span className={`${ACTIVITY_COL_STATUS} truncate`} aria-hidden="true" />
-                <span className={ACTIVITY_COL_DATE_COMPACT}>Prazo</span>
+                <span className={ACTIVITY_COL_DATE_COMPACT}>Próxima execução</span>
                 <span className="min-w-0 flex-1">Tarefa</span>
                 <span className={ACTIVITY_COL_ACTIONS} aria-hidden="true" />
               </div>

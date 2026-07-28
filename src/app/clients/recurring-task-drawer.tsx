@@ -1,18 +1,27 @@
 import Link from "next/link";
 import { SectionHeader } from "@/components/ui/section-header";
 import { formatDateTime } from "@/lib/format";
+import { formatPreviousWeekMissingLine } from "@/lib/recurring-tasks";
 import { SubmitButton } from "@/app/submit-button";
 import { registerRecurringExecutionAction } from "./recurring-task-actions";
 import type { RecurringTaskDetail, RecurringTaskExecutionDetail } from "@/lib/recurring-task-data";
 
 /**
  * Drawer de UMA recorrência (Reformulação do sistema de tarefas, 28/07) —
- * "Execuções desta semana" + "Histórico" + "Registrar nova execução",
- * exatamente os 3 blocos pedidos. Quando `hasChecklist` é true (hoje só
- * Otimização — mas a UI não sabe disso, é dado, não código), o formulário
- * de registro ganha os checkboxes configurados, além da observação; sem
- * checklist (Checar saldo/Reportar cliente), é só a observação — mesmo
- * formulário, mesma action (`registerRecurringExecutionAction`).
+ * resumo operacional ("Esta semana"/"Próxima execução"/"Semana anterior") +
+ * "Execuções desta semana" + "Histórico" + "Registrar nova execução". Quando
+ * `hasChecklist` é true (hoje só Otimização — mas a UI não sabe disso, é
+ * dado, não código), o formulário de registro ganha os checkboxes
+ * configurados, além da observação; sem checklist (Checar saldo/Reportar
+ * cliente), é só a observação — mesmo formulário, mesma action
+ * (`registerRecurringExecutionAction`).
+ *
+ * Etapa "Simplificar linha das recorrentes": o contexto histórico (pendência
+ * da sprint anterior) que antes aparecia na própria linha, competindo com a
+ * informação de agora, mudou pra cá — é a única leitura de "Semana
+ * anterior" no produto. Sem alerta vermelho mesmo quando pendente: é
+ * contexto, não uma cobrança — a linha "X execução(ões) não realizada(s)"
+ * some sozinha quando a semana anterior foi cumprida.
  */
 export function RecurringTaskDrawer({
   detail,
@@ -23,11 +32,11 @@ export function RecurringTaskDrawer({
   clientId: string;
   closeHref: string;
 }) {
-  const { weekProgress } = detail;
-  const countLabel =
-    weekProgress.goal === null
-      ? `${weekProgress.done} execuções nesta semana`
-      : `${weekProgress.done}/${weekProgress.goal} execuções nesta semana`;
+  const { weekProgress, previousWeek } = detail;
+  const weekCountLabel =
+    weekProgress.goal === null ? `${weekProgress.done} execuções realizadas` : `${weekProgress.done}/${weekProgress.goal} execuções realizadas`;
+  const showPreviousWeek = previousWeek !== null && previousWeek.progress.goal !== null;
+  const previousWeekCountLabel = showPreviousWeek ? `${previousWeek!.progress.done}/${previousWeek!.progress.goal} execuções realizadas` : null;
 
   const checklistLabelByKey = new Map(detail.checklistItems.map((item) => [item.key, item.label]));
 
@@ -74,7 +83,25 @@ export function RecurringTaskDrawer({
           </Link>
         </div>
 
-        <p className="mt-1 text-sm text-muted-foreground">{countLabel}</p>
+        <div className="mt-3 grid grid-cols-1 gap-3 rounded-md border border-border bg-zinc-50 p-3 dark:bg-zinc-900/40 sm:grid-cols-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Esta semana</p>
+            <p className="mt-0.5 text-sm text-foreground">{weekCountLabel}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Próxima execução</p>
+            <p className="mt-0.5 text-sm text-foreground">{detail.nextExecutionLabel}</p>
+          </div>
+          {showPreviousWeek && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Semana anterior</p>
+              <p className="mt-0.5 text-sm text-foreground">{previousWeekCountLabel}</p>
+              {previousWeek!.pending?.isPending && (
+                <p className="mt-0.5 text-xs text-muted-foreground">{formatPreviousWeekMissingLine(previousWeek!.pending)}</p>
+              )}
+            </div>
+          )}
+        </div>
 
         <section className="mt-4 border-t border-border pt-4">
           <SectionHeader>Registrar nova execução</SectionHeader>
