@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { RestoreClientButton } from "./restore-client-button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { formatDateFromInstant } from "@/lib/format";
 
 export default async function DeletedClientsPage() {
   await requireAdmin();
@@ -34,7 +35,7 @@ export default async function DeletedClientsPage() {
                 <p className="truncate text-foreground">{client.name}</p>
                 <p className="text-xs text-zinc-500">
                   {client.meta_ad_account_id} · excluído em{" "}
-                  {new Date(client.deleted_at!).toLocaleDateString("pt-BR")}
+                  {formatDateFromInstant(client.deleted_at!)}
                 </p>
               </div>
               <RestoreClientButton clientId={client.id} clientName={client.name} />

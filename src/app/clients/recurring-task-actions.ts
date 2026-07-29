@@ -82,6 +82,14 @@ export async function registerRecurringExecutionAction(recurringTaskId: string, 
     p_notes: notes,
     p_checklist_selected_keys: checklistSelectedKeys.length > 0 ? checklistSelectedKeys : null,
     p_optimization_selections: optimizationSelections.length > 0 ? optimizationSelections : null,
+    // BUG CORRIGIDO ("não foi possível escolher a melhor função candidata"):
+    // omitir este parâmetro deixava a chamada ambígua entre a assinatura
+    // antiga de register_recurring_execution (sem p_client_report_id) e a
+    // atual (com ele, default null) — as duas eram candidatas válidas pro
+    // mesmo conjunto de argumentos nomeados. Passar `null` explicitamente
+    // nunca depende da resolução automática do Postgres (ver também a
+    // migration que remove as assinaturas antigas).
+    p_client_report_id: null,
     p_source: "web",
   });
 

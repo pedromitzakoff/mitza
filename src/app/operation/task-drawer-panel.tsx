@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { restoreFocusForReturn } from "@/lib/focus-restore";
+import { formatDateTime } from "@/lib/format";
 import { TASK_STATUS_BADGE_CLASSES, TASK_STATUS_LABEL, TASK_TYPE_LABEL } from "@/app/clients/task-labels";
 import { formatDueDate } from "@/app/clients/task-row";
 import { completeTaskAction, deleteTaskAction } from "@/app/clients/tasks-actions";
@@ -14,13 +15,6 @@ import { InlineEditTaskForm, type InlineTaskManagerOption } from "@/app/clients/
 import { useToast } from "@/app/toast-provider";
 import type { CommentItem } from "@/app/clients/comment-thread";
 import type { OperationTaskItem } from "./operation-data";
-
-const commentDateFormatter = new Intl.DateTimeFormat("pt-BR", {
-  day: "2-digit",
-  month: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 export function TaskDrawerPanel({
   task,
@@ -239,7 +233,7 @@ export function TaskDrawerPanel({
               {comments.map((comment) => (
                 <li key={comment.id} className="text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">{comment.author?.name ?? "Alguém"}</span>{" "}
-                  · {commentDateFormatter.format(new Date(comment.created_at))}
+                  · {formatDateTime(comment.created_at)}
                   <p className="text-foreground">{comment.content}</p>
                 </li>
               ))}

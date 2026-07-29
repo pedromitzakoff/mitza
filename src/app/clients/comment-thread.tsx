@@ -6,6 +6,7 @@ import { createCommentAction } from "./comments-actions";
 import { toggleCommentReportSelectionAction } from "@/app/reports/report-actions";
 import { useToast } from "@/app/toast-provider";
 import { isRedirectSignal } from "@/lib/next-redirect";
+import { formatDateTime } from "@/lib/format";
 
 export interface CommentItem {
   id: string;
@@ -19,13 +20,6 @@ export interface CommentItem {
    * em vez de arriscar mostrar um estado desatualizado. */
   includedInReport?: boolean;
 }
-
-const commentDateFormatter = new Intl.DateTimeFormat("pt-BR", {
-  day: "2-digit",
-  month: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 export function CommentThread({
   comments,
@@ -76,7 +70,7 @@ export function CommentThread({
           {comments.map((comment) => (
             <li key={comment.id} className="text-xs text-muted-foreground">
               <span className="font-medium text-foreground">{comment.author?.name ?? "Alguém"}</span>{" "}
-              · {commentDateFormatter.format(new Date(comment.created_at))}
+              · {formatDateTime(comment.created_at)}
               <p>{comment.content}</p>
               {commentableType === "sprint" && comment.includedInReport !== undefined && (
                 <form

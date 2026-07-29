@@ -101,13 +101,24 @@ export function formatFullDate(date: Date): string {
   return fullDateFormatter.format(date);
 }
 
+/** BUG CORRIGIDO (revisão de horários): faltava `timeZone` aqui — sem ele, o
+ * Intl.DateTimeFormat usa o fuso do processo Node.js (UTC na Vercel), não o
+ * fuso do usuário, fazendo qualquer timestamptz exibido por `formatDateTime`
+ * aparecer com o horário errado (ex.: um evento às 11:00 BRT virava 14:00 na
+ * tela). Mesmo bug que `timeOnlyFormatter`, abaixo, já corrigia — só não
+ * tinha sido replicado aqui. `APP_TIMEZONE` é o único fuso usado em toda a
+ * plataforma (todos os usuários são Brasil hoje). */
 const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: APP_TIMEZONE,
 });
 
+/** Data + hora no fuso do usuário (`APP_TIMEZONE`) — função utilitária única
+ * pra qualquer timestamptz exibido com hora (Reports, Timeline, Otimizações,
+ * Execuções recorrentes etc.). Nunca formatar hora manualmente fora daqui. */
 export function formatDateTime(value: string): string {
   return dateTimeFormatter.format(new Date(value));
 }
@@ -164,12 +175,14 @@ export function formatRelativeShortDateTime(value: string, today: Date): string 
   return formatDateTime(value);
 }
 
+/** Mesmo bug de `dateTimeFormatter` (faltava `timeZone`) — corrigido junto. */
 const dateTimeWithYearFormatter = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
   year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: APP_TIMEZONE,
 });
 
 /** Data + hora com ano, no formato "13/07/2026 às 14:32" — usado onde o
@@ -211,6 +224,23 @@ export function formatShortDateFromInstant(value: string): string {
   const parts = shortDateTimeFormatter.formatToParts(new Date(value));
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   return `${get("day")}/${get("month")}`;
+}
+
+const dateWithYearFromInstantFormatter = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  timeZone: APP_TIMEZONE,
+});
+
+/** "DD/MM/AAAA" no fuso do usuário, a partir de um INSTANTE real (timestamptz)
+ * — irmã de `formatShortDateFromInstant`, mas com ano (ex.: "excluído em").
+ * BUG CORRIGIDO (revisão de horários): substitui usos de
+ * `new Date(...).toLocaleDateString("pt-BR")` sem `timeZone`, que podia
+ * mostrar o dia civil errado perto da meia-noite (mesma classe de bug de
+ * `formatDateTime`, ver comentário acima). */
+export function formatDateFromInstant(value: string): string {
+  return dateWithYearFromInstantFormatter.format(new Date(value));
 }
 
 const monthYearFormatter = new Intl.DateTimeFormat("pt-BR", {
