@@ -76,6 +76,44 @@ export async function getDailyPerformanceForPeriod(
   }));
 }
 
+export interface DailyPerformanceRow {
+  date: string;
+  channel: TrafficChannelDb;
+  resultType: PerformanceGoalDb;
+  resultCount: number;
+  revenue: number | null;
+}
+
+/**
+ * Igual a `getDailyPerformanceForPeriod`, mas preservando `date` — usada
+ * pelo Analytics (Etapa Analytics MVP) pra construir o gráfico de evolução
+ * diária, que precisa da granularidade por dia (`getDailyPerformanceForPeriod`
+ * já agrega e descarta essa coluna, pensada só pra alimentar
+ * `computePerformanceSummary`). Mesma tabela, mesma fonte (só clientes com
+ * `import_sources.enabled = true`) — nunca uma segunda consulta concorrente
+ * a `daily_performance` pro mesmo período.
+ */
+export async function getDailyPerformanceRowsForPeriod(
+  supabase: Supabase,
+  clientId: string,
+  period: { firstDay: string; lastDay: string },
+): Promise<DailyPerformanceRow[]> {
+  const { data } = await supabase
+    .from("daily_performance")
+    .select("date, channel, result_type, result_count, revenue")
+    .eq("client_id", clientId)
+    .gte("date", period.firstDay)
+    .lte("date", period.lastDay);
+
+  return (data ?? []).map((r) => ({
+    date: r.date,
+    channel: r.channel,
+    resultType: r.result_type,
+    resultCount: r.result_count,
+    revenue: r.revenue,
+  }));
+}
+
 /** Clientes (dentre os passados) com integração automática ativa — usado
  * pra decidir, por cliente, se a leitura de performance vem de
  * `daily_performance` (Stract) ou `performance_records` (manual), nunca as

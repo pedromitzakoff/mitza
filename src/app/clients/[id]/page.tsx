@@ -69,6 +69,9 @@ import { defaultReportPeriod } from "@/lib/client-reports";
 import { fetchClientReportDetail, fetchClientReportHistory } from "../client-report-data";
 import { ClientReportsView } from "../client-reports-view";
 import { ClientReportWizard } from "../client-report-wizard";
+import { resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
+import { fetchClientAnalyticsData } from "../analytics-data";
+import { AnalyticsSection } from "../analytics-section";
 
 async function fetchCommentsByType(
   supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
@@ -152,6 +155,9 @@ export default async function ClientPage({
     reportRecurringTaskId?: string;
     reportPeriodStart?: string;
     reportPeriodEnd?: string;
+    analyticsPreset?: string;
+    analyticsStart?: string;
+    analyticsEnd?: string;
   }>;
 }) {
   const { id } = await params;
@@ -178,6 +184,9 @@ export default async function ClientPage({
     reportRecurringTaskId,
     reportPeriodStart: reportPeriodStartParam,
     reportPeriodEnd: reportPeriodEndParam,
+    analyticsPreset: analyticsPresetParam,
+    analyticsStart: analyticsStartParam,
+    analyticsEnd: analyticsEndParam,
   } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
@@ -193,9 +202,15 @@ export default async function ClientPage({
   // decidir, mais abaixo, se vale a pena buscar os dados do relatório/
   // histórico completo (só na aba correspondente, nunca em toda visita à
   // página).
-  type ClientArea = "visao-geral" | "relatorios" | "timeline";
+  // Etapa "Analytics MVP": nova aba exclusiva do cliente (nunca aparece na
+  // visão global da agência — /clients, /sprints, painel geral continuam
+  // intocados) — análise de resultados, distinta da Visão Geral (trabalho
+  // operacional do dia a dia) e da aba "Relatórios" (relatório de gestão
+  // interno).
+  type ClientArea = "visao-geral" | "analytics" | "relatorios" | "timeline";
   const AREA_TABS: { key: ClientArea; label: string }[] = [
     { key: "visao-geral", label: "Visão geral" },
+    { key: "analytics", label: "Analytics" },
     { key: "relatorios", label: "Relatórios" },
     { key: "timeline", label: "Timeline" },
   ];
@@ -836,6 +851,19 @@ export default async function ClientPage({
       ? { start: reportPeriodStartParam, end: reportPeriodEndParam }
       : defaultReportPeriod(todayStr);
 
+  // Analytics MVP — leitura pura dos dados já existentes (nenhuma tabela
+  // nova, nenhum snapshot salvo); período SEMPRE independente de sprint e
+  // do mês selecionado no resto da página, só buscado quando a aba está
+  // ativa (mesmo princípio de `reportData`/`clientReportHistory` acima).
+  const analyticsPreset = (analyticsPresetParam ?? "this_month") as AnalyticsPeriodPreset;
+  const analyticsPeriod = resolveAnalyticsPeriod(analyticsPresetParam, todayStr, {
+    start: analyticsStartParam,
+    end: analyticsEndParam,
+  });
+  const analyticsData =
+    activeArea === "analytics" ? await fetchClientAnalyticsData(supabase, id, analyticsPeriod) : null;
+  const analyticsBaseHref = buildAreaHref("analytics");
+
   // Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente" — "Resumo
   // consolidado do mês": nenhum dado novo, só uma leitura de fechamento
   // reunindo números já calculados acima (investimento, performance,
@@ -1311,6 +1339,25 @@ export default async function ClientPage({
             />
           </div>
         </>
+      )}
+
+      {/* Etapa "Analytics MVP": aba exclusiva do cliente (nunca aparece na
+          visão global da agência) — análise de resultados, reaproveitando
+          100% do núcleo de performance já existente. `analyticsData` só é
+          buscado quando esta área está ativa. */}
+      {activeArea === "analytics" && analyticsData && (
+        <div className="mt-3">
+          <AnalyticsSection
+            data={analyticsData}
+            baseHref={analyticsBaseHref}
+            activePreset={analyticsPreset}
+            periodStart={analyticsPeriod.start}
+            periodEnd={analyticsPeriod.end}
+            customStart={analyticsStartParam ?? analyticsPeriod.start}
+            customEnd={analyticsEndParam ?? analyticsPeriod.end}
+            configureObjectiveHref={`/clients/${client.id}/edit`}
+          />
+        </div>
       )}
 
       {/* Etapa "MITZA 2.0 — Fase G": o relatório individual (antes só em
