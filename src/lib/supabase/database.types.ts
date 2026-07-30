@@ -29,8 +29,8 @@ export type PerformanceSourceDb = "manual" | "meta" | "google";
 export type ImportProviderDb = "stract";
 /** Saúde/configuração PERSISTENTE de uma import_source — distinto do status
  * de UMA execução (`DataSyncRunStatusDb`). */
-export type ImportSourceStatusDb = "pending" | "active" | "error" | "disabled";
-export type DataSyncRunStatusDb = "running" | "success" | "partial" | "failed";
+export type ImportSourceStatusDb = "pending" | "active" | "error" | "disabled" | "no_data";
+export type DataSyncRunStatusDb = "running" | "success" | "partial" | "failed" | "empty";
 /** "Como o dado chegou" em `daily_performance` — nunca confundir com canal
  * (`TrafficChannelDb`) ou provedor (`ImportProviderDb`). */
 export type DailyPerformanceSourceDb = "manual" | "import";

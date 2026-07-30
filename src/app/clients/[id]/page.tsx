@@ -6,7 +6,7 @@ import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
-import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
+import { getImportSourceHealthIssue, resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
 import {
   assertSingleCurrentSprint,
   computeSprintFinancials,
@@ -651,11 +651,25 @@ export default async function ClientPage({
 
   const contractBannerText = contractStatusBannerText(client.status);
 
+  // "Se uma conexão do Stract falhar e não trouxer dados novos, quero que a
+  // plataforma sinalize isso" — antes, `import_sources.status` existia só no
+  // banco, sem nenhuma tela lendo o campo (ver `lib/stract-sync.ts`). Sempre
+  // buscado (não só na aba Analytics): o gestor precisa ver isso não importa
+  // em qual aba do cliente esteja.
+  const importSourceHealthIssue = await getImportSourceHealthIssue(supabase, id);
+  const importSourceHealthBannerText =
+    importSourceHealthIssue?.status === "error"
+      ? "A integração com o Stract falhou na última sincronização — os dados de performance podem estar desatualizados."
+      : importSourceHealthIssue?.status === "no_data"
+        ? "A última sincronização com o Stract não retornou nenhum dado — verifique se a conexão continua ativa."
+        : null;
+
   const banners = [
     contractBannerText && {
       tone: "amber",
       text: `${contractBannerText} A página continua acessível apenas para consulta de histórico.`,
     },
+    importSourceHealthBannerText && { tone: "red", text: importSourceHealthBannerText },
     error && { tone: "red", text: error },
     taskError && { tone: "red", text: taskError },
     reviewError && { tone: "red", text: reviewError },

@@ -20,7 +20,12 @@ export interface ImportDateRange {
 export interface ImportSourceRunResult {
   importSourceId: string;
   runId: string;
-  status: "success" | "partial" | "failed";
+  /** `"empty"` = a leitura da fonte não teve nenhum erro, mas voltou com
+   * ZERO linhas — só acontece numa releitura completa (nunca filtrada por
+   * data), então nunca é confundido com "um dia sem gasto" (haveria outras
+   * linhas históricas nesse caso). Sinal real de que a fonte pode ter
+   * parado de enviar dado — ver `import_sources.status = "no_data"` abaixo. */
+  status: "success" | "partial" | "failed" | "empty";
   rowsRead: number;
   spendRowsWritten: number;
   performanceRowsWritten: number;
@@ -224,20 +229,42 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
     }
   }
 
-  const status: ImportSourceRunResult["status"] = partialReasons.length > 0 ? "partial" : hadInvalidRows ? "partial" : "success";
-  const finalErrorMessage = partialReasons.length > 0 ? partialReasons.join(" | ") : hadInvalidRows ? "Uma ou mais linhas foram ignoradas por valor inválido (não numérico ou negativo)." : null;
+  const isEmpty = rows.length === 0;
+  const status: ImportSourceRunResult["status"] = partialReasons.length > 0 ? "partial" : hadInvalidRows ? "partial" : isEmpty ? "empty" : "success";
+  const finalErrorMessage = partialReasons.length > 0
+    ? partialReasons.join(" | ")
+    : hadInvalidRows
+      ? "Uma ou mais linhas foram ignoradas por valor inválido (não numérico ou negativo)."
+      : isEmpty
+        ? "A leitura da fonte não teve erro, mas voltou com zero linhas."
+        : null;
 
   await finishRun(supabase, run.id, { status, rowsRead: rows.length, spendRowsWritten, performanceRowsWritten, errorMessage: finalErrorMessage });
 
-  const lastImportedDate = rows.length > 0 ? maxDateValue(rows, importSource.date_column) : null;
-  await supabase
-    .from("import_sources")
-    .update({
-      status: "active",
-      last_imported_date: lastImportedDate,
-      last_success_at: nowIso,
-    })
-    .eq("id", importSourceId);
+  // Bug real encontrado em produção: antes, `import_sources.status`/
+  // `last_success_at` eram sempre bumpados pra "active"/agora, mesmo quando
+  // a fonte voltava com zero linhas — uma conexão que parou de trazer dado
+  // novo continuava parecendo "ativa e sincronizada agora" pra sempre.
+  //
+  // `!dateRange` = releitura completa (o cron nunca filtra por data — ver
+  // comentário da função). Só nesse caso zero linhas é um sinal real de
+  // problema (a tabela de origem inteira veio vazia); um gatilho manual com
+  // recorte de data que não achou nada NAQUELE recorte é normal (ex.:
+  // reprocessar só um dia sem gasto) e nunca deve mexer na saúde persistente
+  // da fonte. `last_success_at`/`last_imported_date` só avançam quando há
+  // dado real — continuam apontando pra última sincronização de verdade.
+  if (!isEmpty) {
+    await supabase
+      .from("import_sources")
+      .update({
+        status: "active",
+        last_imported_date: maxDateValue(rows, importSource.date_column),
+        last_success_at: nowIso,
+      })
+      .eq("id", importSourceId);
+  } else if (!dateRange) {
+    await supabase.from("import_sources").update({ status: "no_data" }).eq("id", importSourceId);
+  }
 
   return {
     importSourceId,

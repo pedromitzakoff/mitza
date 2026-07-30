@@ -156,6 +156,28 @@ export async function getClientIdsWithActiveImportSource(supabase: Supabase, cli
   return new Set((data ?? []).map((row) => row.client_id));
 }
 
+/** `"error"` = a última execução falhou de verdade (tabela de origem
+ * ilegível, `external_account_id` divergente etc.). `"no_data"` = a última
+ * releitura COMPLETA rodou sem erro, mas a fonte voltou com zero linhas —
+ * sinal de que a conexão pode ter parado de enviar dado (ver
+ * `lib/stract-sync.ts`). Só considera fontes `enabled = true` (uma fonte
+ * desligada deliberadamente nunca deve gerar aviso). */
+export async function getImportSourceHealthIssue(
+  supabase: Supabase,
+  clientId: string,
+): Promise<{ status: "error" | "no_data" } | null> {
+  const { data } = await supabase
+    .from("import_sources")
+    .select("status")
+    .eq("client_id", clientId)
+    .eq("enabled", true)
+    .in("status", ["error", "no_data"])
+    .limit(1)
+    .maybeSingle();
+
+  return data ? { status: data.status as "error" | "no_data" } : null;
+}
+
 /**
  * Registros de todas as sprints de UM cliente que se sobrepõem a um período
  * (mês, tipicamente) — resolve as sprints do período primeiro (mesma regra
