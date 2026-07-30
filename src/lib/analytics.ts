@@ -1,5 +1,12 @@
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
-import { aggregatePerformanceResults, computeCostPerResult, type PerformanceRecordRow, type PerformanceSummary } from "@/lib/performance";
+import {
+  aggregatePerformanceResults,
+  computeCostPerResult,
+  type PerformanceRecordRow,
+  type PerformanceStatus,
+  type PerformanceSummary,
+} from "@/lib/performance";
+import { computePercentChange } from "@/lib/period-comparison";
 import { TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 
 /**
@@ -77,15 +84,18 @@ export interface AnalyticsKpiCard {
   value: string;
 }
 
-const MAX_KPI_CARDS = 6;
-
 /**
- * Cards de KPI — a mesma estrutura visual pra qualquer objetivo; o que muda
- * é só QUANTOS cards existem, decidido pela presença real do dado no
- * `PerformanceSummary` (nunca por um `if (goal === ...)` solto). Investimento
- * aparece sempre (é o único KPI comum a todo objetivo); os demais só entram
- * quando `summary.hasAnyRecord` — sem registro nenhum, o card correspondente
- * simplesmente não existe (nunca "0" fabricado).
+ * Cards de KPI — Etapa "Analytics Instagramável": lista curta e EXPLÍCITA por
+ * objetivo (pedido direto do usuário — "poucas informações muito bem
+ * apresentadas", nunca uma dezena de cards). Investimento aparece sempre (é
+ * o único KPI comum a todo objetivo, sempre o primeiro); os demais são
+ * exatamente os indicadores que o usuário definiu como relevantes por
+ * objetivo — nunca um card a mais mostrando um dado que já está no Hero
+ * (por isso "Vendas"/contagem bruta não aparece aqui pra `sales`: ROAS +
+ * CPA + Receita já contam essa história, e a contagem em si já é o Hero
+ * quando não há receita configurada). Métrica indisponível vira "—", nunca
+ * um card removido (a ausência do dado é informação: mostra que existe uma
+ * lacuna, não esconde o card inteiro).
  */
 export function buildAnalyticsKpiCards(
   goal: PerformanceGoal | null,
@@ -93,20 +103,26 @@ export function buildAnalyticsKpiCards(
   summary: PerformanceSummary | null,
   formatCurrencyValue: (value: number) => string,
 ): AnalyticsKpiCard[] {
-  const cards: AnalyticsKpiCard[] = [{ key: "investment", label: "Investimento", value: formatCurrencyValue(actualSpend) }];
-  if (!goal || !summary || !summary.hasAnyRecord) return cards.slice(0, MAX_KPI_CARDS);
+  const investment: AnalyticsKpiCard = { key: "investment", label: "Investimento", value: formatCurrencyValue(actualSpend) };
+  if (!goal || !summary || !summary.hasAnyRecord) return [investment];
 
   const config = PERFORMANCE_GOALS[goal];
-  cards.push({ key: "result", label: config.resultMetricLabel, value: String(summary.resultCount) });
-  cards.push({
+  const cost: AnalyticsKpiCard = {
     key: "cost",
-    label: config.costMetricLabel,
+    label: config.costMetricShortLabel,
     value: summary.costPerResult !== null ? formatCurrencyValue(summary.costPerResult) : "—",
-  });
-  if (summary.revenue !== null) cards.push({ key: "revenue", label: "Faturamento", value: formatCurrencyValue(summary.revenue) });
-  if (summary.roas !== null) cards.push({ key: "roas", label: "ROAS", value: `${summary.roas.toFixed(2)}x` });
+  };
 
-  return cards.slice(0, MAX_KPI_CARDS);
+  if (goal === "sales") {
+    return [
+      investment,
+      { key: "roas", label: "ROAS", value: summary.roas !== null ? `${summary.roas.toFixed(2)}x` : "—" },
+      cost,
+      { key: "revenue", label: "Receita", value: summary.revenue !== null ? formatCurrencyValue(summary.revenue) : "—" },
+    ];
+  }
+
+  return [investment, { key: "result", label: config.resultMetricLabel, value: String(summary.resultCount) }, cost];
 }
 
 export interface AnalyticsChannelRow {
@@ -166,75 +182,105 @@ export function buildAnalyticsChannelRows(
     .sort((a, b) => b.resultCount - a.resultCount);
 }
 
-export interface AnalyticsInsight {
-  key: string;
-  title: string;
-  subject: string;
-  detail: string;
+export interface AnalyticsHero {
+  /** Já formatado ("438", "R$ 247.000") — nunca um número bruto. */
+  value: string;
+  label: string;
+  /** Variação vs. período anterior de mesma duração — `null` quando não há
+   * base anterior confiável pra comparar (sem dado no período anterior, ou
+   * período anterior zerado/negativo): nunca uma seta fabricada. */
+  percentChange: number | null;
 }
 
-const MAX_INSIGHTS = 4;
+/**
+ * Métrica principal do Hero — Etapa "Analytics Instagramável": UM número
+ * central por objetivo (pedido explícito: "a métrica principal deve
+ * depender do objetivo da conta", nunca uma lista). Pra `sales` com receita
+ * configurada, o destaque é o faturamento (o exemplo do usuário: "R$
+ * 247.000 em vendas"); sem receita mapeada, cai pra contagem de vendas —
+ * nunca finge ter receita que a integração não fornece.
+ */
+export function buildAnalyticsHero(input: {
+  goal: PerformanceGoal;
+  summary: PerformanceSummary;
+  /** Resumo do mesmo cálculo pro período anterior de mesma duração — `null`
+   * quando ainda não há essa consulta feita (nunca inventa comparação). */
+  previousSummary: PerformanceSummary | null;
+  formatCurrencyValue: (value: number) => string;
+}): AnalyticsHero {
+  const { goal, summary, previousSummary, formatCurrencyValue } = input;
+  const config = PERFORMANCE_GOALS[goal];
+
+  if (!summary.hasAnyRecord) {
+    return { value: "—", label: config.resultMetricLabel, percentChange: null };
+  }
+
+  const usesRevenue = goal === "sales" && summary.revenue !== null;
+  const currentValue = usesRevenue ? summary.revenue! : summary.resultCount;
+  const previousValue = !previousSummary ? null : usesRevenue ? previousSummary.revenue : previousSummary.resultCount;
+
+  return {
+    value: usesRevenue ? formatCurrencyValue(currentValue) : String(currentValue),
+    label: usesRevenue ? "em vendas" : config.resultMetricLabel,
+    percentChange: computePercentChange(currentValue, previousValue),
+  };
+}
 
 /**
- * Insights determinísticos, sem IA — mesmas 4 regras do pedido original,
- * só com "canal" no lugar de "campanha" (ver `buildAnalyticsChannelRows`
- * acima pro motivo). Só faz sentido com mais de 1 canal: com um único
- * canal, os KPIs do topo já contam toda a história, um insight repetiria a
- * mesma informação com outras palavras.
+ * Resumo Executivo — Etapa "Analytics Instagramável": mesmas regras
+ * determinísticas que antes alimentavam `AnalyticsInsight` (nenhum dado
+ * novo, nenhuma IA), reescritas como frases corridas em vez de um grid de
+ * mini-cards (pedido explícito do usuário: "parecer uma apresentação, não
+ * um dashboard técnico"). Cada frase só entra quando há uma base real pra
+ * afirmá-la — sem dado suficiente, a frase correspondente simplesmente não
+ * existe (nunca um texto genérico tipo "dados insuficientes" no lugar).
  */
-export function buildAnalyticsChannelInsights(
-  rows: AnalyticsChannelRow[],
-  goal: PerformanceGoal,
-  formatCurrencyValue: (value: number) => string,
-): AnalyticsInsight[] {
-  if (rows.length < 2) return [];
-
+export function buildExecutiveSummaryNarrative(input: {
+  goal: PerformanceGoal;
+  summary: PerformanceSummary;
+  channelRows: AnalyticsChannelRow[];
+  totalActualSpend: number;
+  heroPercentChange: number | null;
+}): string[] {
+  const { goal, summary, channelRows, totalActualSpend, heroPercentChange } = input;
   const config = PERFORMANCE_GOALS[goal];
-  const channelLabel = (c: TrafficChannel) => TRAFFIC_CHANNELS[c].label;
-  const insights: AnalyticsInsight[] = [];
+  const resultLabel = config.resultMetricLabel.toLowerCase();
+  const sentences: string[] = [];
 
-  const topVolume = [...rows].sort((a, b) => b.resultCount - a.resultCount)[0];
-  if (topVolume.resultCount > 0) {
-    insights.push({
-      key: "top_volume",
-      title: "Maior volume",
-      subject: channelLabel(topVolume.channel),
-      detail: `${topVolume.resultCount} ${config.resultMetricLabel.toLowerCase()} no período.`,
-    });
+  if (heroPercentChange !== null) {
+    const direction = heroPercentChange >= 0 ? "crescimento" : "queda";
+    sentences.push(
+      `O período apresentou ${direction} de ${Math.abs(heroPercentChange).toFixed(0)}% em ${resultLabel} em relação ao período anterior.`,
+    );
   }
 
-  const withResult = rows.filter((r) => r.resultCount > 0 && r.costPerResult !== null);
-  if (withResult.length > 0) {
-    const bestEfficiency = [...withResult].sort((a, b) => a.costPerResult! - b.costPerResult!)[0];
-    insights.push({
-      key: "best_efficiency",
-      title: "Melhor eficiência",
-      subject: channelLabel(bestEfficiency.channel),
-      detail: `${config.costMetricLabel} de ${formatCurrencyValue(bestEfficiency.costPerResult!)}.`,
-    });
+  if (channelRows.length >= 2 && totalActualSpend > 0) {
+    const topSpend = [...channelRows].sort((a, b) => b.spend - a.spend)[0];
+    const topVolume = [...channelRows].sort((a, b) => b.resultCount - a.resultCount)[0];
+    const share = Math.round((topSpend.spend / totalActualSpend) * 100);
+    const topSpendLabel = TRAFFIC_CHANNELS[topSpend.channel].label;
+
+    if (topSpend.channel === topVolume.channel && topVolume.resultCount > 0) {
+      sentences.push(`${topSpendLabel} concentrou ${share}% do investimento e foi responsável pelo maior volume de ${resultLabel}.`);
+    } else {
+      sentences.push(`${topSpendLabel} concentrou ${share}% do investimento no período.`);
+      if (topVolume.resultCount > 0) {
+        sentences.push(`${TRAFFIC_CHANNELS[topVolume.channel].label} foi responsável pelo maior volume de ${resultLabel}.`);
+      }
+    }
   }
 
-  const topSpend = [...rows].sort((a, b) => b.spend - a.spend)[0];
-  if (topSpend.spend > 0) {
-    insights.push({
-      key: "top_spend",
-      title: "Maior investimento",
-      subject: channelLabel(topSpend.channel),
-      detail: `${formatCurrencyValue(topSpend.spend)} investidos no período.`,
-    });
+  if (summary.costPerResult !== null && summary.targetCostPerResult !== null) {
+    const statusText: Partial<Record<PerformanceStatus, string>> = {
+      better: `${config.costMetricLabel} permaneceu abaixo da meta durante o período.`,
+      worse: `${config.costMetricLabel} ficou acima da meta durante o período.`,
+      on_target: `${config.costMetricLabel} ficou dentro da meta durante o período.`,
+    };
+    const sentence = statusText[summary.comparison.status];
+    if (sentence) sentences.push(sentence);
   }
 
-  const noResultDespiteSpend = rows.find((r) => r.spend > 0 && r.resultCount === 0);
-  if (noResultDespiteSpend) {
-    insights.push({
-      key: "attention_no_result",
-      title: "Atenção",
-      subject: channelLabel(noResultDespiteSpend.channel),
-      detail: `${formatCurrencyValue(noResultDespiteSpend.spend)} investidos sem nenhum resultado registrado no período.`,
-    });
-  }
-
-  return insights.slice(0, MAX_INSIGHTS);
+  return sentences;
 }
 
 export interface AnalyticsTrendSeries {

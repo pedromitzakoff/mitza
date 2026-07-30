@@ -1,22 +1,35 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatCurrency } from "@/lib/format";
-import { buildAnalyticsChannelInsights, buildAnalyticsKpiCards, type AnalyticsPeriodPreset } from "@/lib/analytics";
+import { formatCurrency, formatDateRange } from "@/lib/format";
+import { buildAnalyticsHero, buildAnalyticsKpiCards, buildExecutiveSummaryNarrative, type AnalyticsPeriodPreset } from "@/lib/analytics";
+import type { ClientHistoryRow } from "@/lib/client-operational-history";
 import type { ClientAnalyticsData } from "./analytics-data";
 import { AnalyticsHeader } from "./analytics-header";
+import { AnalyticsHeroSection } from "./analytics-hero";
 import { AnalyticsKpiGrid } from "./analytics-kpi-grid";
+import { AnalyticsExecutiveSummary } from "./analytics-executive-summary";
+import { AnalyticsScorePlaceholder } from "./analytics-score-placeholder";
 import { AnalyticsTrendChart } from "./analytics-trend-chart";
-import { AnalyticsChannelTable } from "./analytics-channel-table";
-import { AnalyticsInsights } from "./analytics-insights";
+import { AnalyticsChannelCards } from "./analytics-channel-cards";
+import { AnalyticsTopCreativesPlaceholder } from "./analytics-top-creatives-placeholder";
+import { ClientHistoryList } from "./client-history-list";
 import { Section } from "./section";
 
 /**
- * MVP da aba Analytics — módulo exclusivo do cliente (nunca aparece na
- * visão global da agência), UMA estrutura única que renderiza só o que os
- * dados disponíveis permitem (nunca um dashboard diferente por objetivo,
- * nunca uma métrica preenchida com zero quando o dado é indisponível).
- * Composição: cabeçalho de período → KPIs → evolução diária → detalhamento
- * por canal → insights — cada bloco decide sozinho se tem o que mostrar.
+ * Aba Analytics — Etapa "Analytics Instagramável": redesign completo pra ser
+ * "bonita, fácil de entender em poucos segundos, digna de reunião e de
+ * print pra Stories" (pedido explícito do usuário), sem virar mais
+ * complexa — poucas informações, muito bem apresentadas, nunca uma dezena
+ * de gráficos. Filosofia: como está → por que está assim → quais números
+ * explicam isso (Hero → KPIs/Resumo → Evolução/Canais/Timeline), nunca
+ * invertida.
+ *
+ * Composição (topo → base): cabeçalho de período → Hero (métrica principal +
+ * variação vs. período anterior) → KPIs → Resumo Executivo (narrativa
+ * determinística) → MITZA Score (placeholder puro) → Evolução diária →
+ * Canais (cards, nunca "Campanhas" — ver `analytics-channel-cards.tsx`) →
+ * Top Criativos (placeholder/skeleton, sem dado real ainda) → Timeline
+ * (últimos eventos operacionais, mesmo dado da aba Timeline/drawer).
  */
 export function AnalyticsSection({
   data,
@@ -27,6 +40,8 @@ export function AnalyticsSection({
   customStart,
   customEnd,
   configureObjectiveHref,
+  historyRows,
+  buildReviewDetailHref,
 }: {
   data: ClientAnalyticsData;
   baseHref: string;
@@ -36,6 +51,8 @@ export function AnalyticsSection({
   customStart: string;
   customEnd: string;
   configureObjectiveHref: string;
+  historyRows: ClientHistoryRow[];
+  buildReviewDetailHref: (reviewId: string) => string;
 }) {
   const header = (
     <AnalyticsHeader
@@ -74,15 +91,41 @@ export function AnalyticsSection({
     );
   }
 
+  const hero = buildAnalyticsHero({
+    goal: data.performanceGoal,
+    summary: data.summary!,
+    previousSummary: data.previousSummary,
+    formatCurrencyValue: formatCurrency,
+  });
   const kpiCards = buildAnalyticsKpiCards(data.performanceGoal, data.actualSpend, data.summary, formatCurrency);
-  const insights = buildAnalyticsChannelInsights(data.channelRows, data.performanceGoal, formatCurrency);
+  const executiveSummary = buildExecutiveSummaryNarrative({
+    goal: data.performanceGoal,
+    summary: data.summary!,
+    channelRows: data.channelRows,
+    totalActualSpend: data.actualSpend,
+    heroPercentChange: hero.percentChange,
+  });
 
   return (
     <div className="flex flex-col gap-3">
       {header}
 
+      <div className="border-b border-border">
+        <AnalyticsHeroSection hero={hero} periodLabel={formatDateRange(periodStart, periodEnd)} />
+      </div>
+
       <div className="rounded-lg border border-border bg-card p-3">
         <AnalyticsKpiGrid cards={kpiCards} />
+      </div>
+
+      <Section title="Resumo Executivo">
+        <div className="rounded-lg border border-border bg-card p-4">
+          <AnalyticsExecutiveSummary sentences={executiveSummary} />
+        </div>
+      </Section>
+
+      <div className="mt-6 max-w-xs">
+        <AnalyticsScorePlaceholder />
       </div>
 
       <Section title="Evolução diária">
@@ -96,18 +139,24 @@ export function AnalyticsSection({
       </Section>
 
       {data.channelRows.length >= 2 && (
-        <Section title="Detalhamento por canal">
-          <div className="rounded-lg border border-border bg-card p-3">
-            <AnalyticsChannelTable goal={data.performanceGoal} rows={data.channelRows} />
-          </div>
+        <Section title="Canais">
+          <AnalyticsChannelCards goal={data.performanceGoal} rows={data.channelRows} />
         </Section>
       )}
 
-      {insights.length > 0 && (
-        <Section title="Insights">
-          <AnalyticsInsights insights={insights} />
-        </Section>
-      )}
+      <Section title="Top Criativos">
+        <AnalyticsTopCreativesPlaceholder />
+      </Section>
+
+      <Section title="Timeline">
+        <div className="rounded-lg border border-border bg-card p-3">
+          <ClientHistoryList
+            rows={historyRows}
+            buildReviewDetailHref={buildReviewDetailHref}
+            emptyLabel="Nenhum evento registrado no período selecionado."
+          />
+        </div>
+      </Section>
     </div>
   );
 }

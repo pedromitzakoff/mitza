@@ -10,6 +10,7 @@ import {
   getPerformanceRecordsForPeriod,
 } from "@/lib/performance-queries";
 import { buildAnalyticsChannelRows, buildAnalyticsTrend, type AnalyticsChannelRow, type AnalyticsTrend } from "@/lib/analytics";
+import { previousEquivalentPeriod } from "@/lib/period-comparison";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import type { TrafficChannel } from "@/lib/traffic-channels";
 
@@ -28,6 +29,14 @@ export interface ClientAnalyticsData {
   /** `null` quando não há dias suficientes de investimento no período — a
    * seção de gráfico mostra a mensagem discreta nesse caso. */
   trend: AnalyticsTrend | null;
+  /** Mesmo cálculo de `summary`, mas pro período anterior de MESMA duração
+   * (`lib/period-comparison.ts`) — alimenta a variação do Hero (Etapa
+   * "Analytics Instagramável"). `null` só quando `performanceGoal` também é
+   * `null` (sem objetivo, nada a comparar) — nunca uma segunda consulta
+   * feita por quem consome este dado (a orquestração, `AnalyticsSection`,
+   * chama `buildAnalyticsHero`/`buildExecutiveSummaryNarrative` com isso já
+   * pronto, mesmo padrão de `summary`). */
+  previousSummary: PerformanceSummary | null;
 }
 
 /**
@@ -108,5 +117,48 @@ export async function fetchClientAnalyticsData(
 
   const trend = buildAnalyticsTrend(performanceGoal, dailySpendByDate, dailyResultByDate);
 
-  return { performanceGoal, actualSpend, summary, channelRows, trend };
+  // Etapa "Analytics Instagramável": comparação vs. período anterior de
+  // MESMA duração — só buscada quando existe objetivo configurado (sem
+  // objetivo, não há Hero pra alimentar, então nenhuma consulta extra).
+  // Reaproveita exatamente as mesmas funções de consulta já usadas acima
+  // pro período atual, nenhuma segunda fonte de dado.
+  let previousSummary: PerformanceSummary | null = null;
+  if (performanceGoal) {
+    const previousPeriod = previousEquivalentPeriod(period);
+    const previousDateRange = { firstDay: previousPeriod.start, lastDay: previousPeriod.end };
+
+    const [previousDailySpendRows, previousRecords] = await Promise.all([
+      getDailySpendRowsForPeriod(supabase, clientId, previousDateRange),
+      hasActiveIntegration
+        ? getDailyPerformanceRowsForPeriod(supabase, clientId, previousDateRange).then((rows) =>
+            rows.map(
+              (r): PerformanceRecordRow => ({
+                channel: r.channel,
+                resultType: r.resultType,
+                resultCount: r.resultCount,
+                revenue: r.revenue,
+                source: channelToPerformanceSource(r.channel),
+                sourceUpdatedAt: r.date,
+              }),
+            ),
+          )
+        : getPerformanceRecordsForPeriod(supabase, clientId, previousDateRange),
+    ]);
+
+    const previousActualSpend = previousDailySpendRows.reduce((sum, row) => sum + row.spend, 0);
+    const previousSpendByChannel: Partial<Record<TrafficChannel, number>> = {};
+    for (const row of previousDailySpendRows) {
+      previousSpendByChannel[row.channel] = (previousSpendByChannel[row.channel] ?? 0) + row.spend;
+    }
+
+    previousSummary = resolvePerformanceSummaryForGoal({
+      goal: performanceGoal,
+      records: previousRecords,
+      totalActualSpend: previousActualSpend,
+      spendByChannel: previousSpendByChannel,
+      targetCostPerResult,
+    });
+  }
+
+  return { performanceGoal, actualSpend, summary, channelRows, trend, previousSummary };
 }

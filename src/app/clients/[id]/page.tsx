@@ -863,6 +863,14 @@ export default async function ClientPage({
   const analyticsData =
     activeArea === "analytics" ? await fetchClientAnalyticsData(supabase, id, analyticsPeriod) : null;
   const analyticsBaseHref = buildAreaHref("analytics");
+  // Etapa "Analytics Instagramável" — bloco Timeline dentro da própria
+  // Analytics: reaproveita 100% `fetchClientOperationalHistory` (mesma
+  // consulta da aba Timeline/drawer), só com o período do Analytics em vez
+  // do mês selecionado — últimos 5 eventos, nenhuma paginação nova aqui.
+  const analyticsHistoryRows =
+    activeArea === "analytics"
+      ? (await fetchClientOperationalHistory(supabase, id, { firstDay: analyticsPeriod.start, lastDay: analyticsPeriod.end }, 0, 5)).rows
+      : [];
 
   // Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente" — "Resumo
   // consolidado do mês": nenhum dado novo, só uma leitura de fechamento
@@ -1356,6 +1364,8 @@ export default async function ClientPage({
             customStart={analyticsStartParam ?? analyticsPeriod.start}
             customEnd={analyticsEndParam ?? analyticsPeriod.end}
             configureObjectiveHref={`/clients/${client.id}/edit`}
+            historyRows={analyticsHistoryRows}
+            buildReviewDetailHref={buildReviewDetailHref}
           />
         </div>
       )}

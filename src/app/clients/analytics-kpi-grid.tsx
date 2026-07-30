@@ -1,18 +1,19 @@
 import type { AnalyticsKpiCard } from "@/lib/analytics";
 
 /**
- * Cards de KPI do Analytics — mesma linguagem visual de `MonthlyKpiSummary`
- * (label pequeno em maiúsculas + valor grande), nunca um componente visual
- * novo. Renderiza só os cards que `buildAnalyticsKpiCards` decidiu incluir
- * (nunca um card com "0" fabricado pra uma métrica sem dado).
+ * Cards de KPI do Analytics — Etapa "Analytics Instagramável": lista curta e
+ * explícita por objetivo (ver `buildAnalyticsKpiCards`, no máximo 4 cards
+ * hoje), tipografia maior pra manter a hierarquia "números grandes, títulos
+ * pequenos" pedida pro Hero também aqui, um degrau abaixo. Renderiza só os
+ * cards que `buildAnalyticsKpiCards` decidiu incluir.
  */
 export function AnalyticsKpiGrid({ cards }: { cards: AnalyticsKpiCard[] }) {
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+    <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-4">
       {cards.map((card) => (
-        <div key={card.key} className="flex flex-col gap-0.5">
+        <div key={card.key} className="flex flex-col gap-1">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{card.label}</p>
-          <p className="text-xl font-semibold tracking-tight text-foreground">{card.value}</p>
+          <p className="text-2xl font-semibold tracking-tight text-foreground">{card.value}</p>
         </div>
       ))}
     </div>
