@@ -6,7 +6,7 @@ import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
-import { getImportSourceHealthIssue, resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
+import { getEnabledImportSourceIdsForClient, getImportSourceHealthIssue, resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
 import {
   assertSingleCurrentSprint,
   computeSprintFinancials,
@@ -33,6 +33,7 @@ import { fetchClientOperationalHistory } from "@/lib/client-operational-history"
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL, contractStatusBannerText, isWorkspaceClient } from "@/lib/client-fields";
 import { syncClientMetaAction } from "../meta-actions";
+import { syncClientStractSourcesAction } from "../stract-sync-actions";
 import { ClientIdentitySticky } from "../client-identity-sticky";
 import { ClientWorkspaceContext } from "../client-workspace-context";
 import { MonthInvestmentSummary } from "../month-investment-summary";
@@ -135,6 +136,7 @@ export default async function ClientPage({
   searchParams: Promise<{
     error?: string;
     synced?: string;
+    stractSynced?: string;
     saved?: string;
     taskError?: string;
     task?: string;
@@ -164,6 +166,7 @@ export default async function ClientPage({
   const {
     error,
     synced,
+    stractSynced,
     saved,
     taskError,
     task: openTaskId,
@@ -237,6 +240,11 @@ export default async function ClientPage({
   // continua em modo de consulta (histórico, tarefas, sprints visíveis),
   // só não cria nada novo (tarefa, comentário, otimização).
   const canOperate = isWorkspaceClient(client);
+
+  // "Sincronizar agora" (Etapa "Sincronização manual via UI") — o botão só
+  // aparece quando o cliente tem pelo menos 1 fonte Stract ativa; a mesma
+  // lista de ids é o que a action dispara.
+  const stractImportSourceIds = await getEnabledImportSourceIdsForClient(supabase, id);
 
   // Habilitar Gestores 1.0: "Atualizar performance" (investimento realizado
   // + resultados da sprint) deixou de ser admin-only — o gestor responsável
@@ -676,6 +684,7 @@ export default async function ClientPage({
     recurringTaskError && { tone: "red", text: recurringTaskError },
     clientUpdateError && { tone: "red", text: clientUpdateError },
     synced && { tone: "green", text: `${synced} dia(s) de spend sincronizado(s) com o Meta.` },
+    stractSynced && { tone: "green", text: `${stractSynced} fonte(s) sincronizada(s) com sucesso.` },
     saved && { tone: "green", text: "Dados do cliente atualizados." },
   ].filter((banner): banner is { tone: "red" | "green" | "amber"; text: string } => Boolean(banner));
 
@@ -991,6 +1000,16 @@ export default async function ClientPage({
                   className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
                 >
                   Atualizar Meta
+                </button>
+              </form>
+            )}
+            {canOperate && stractImportSourceIds.length > 0 && (
+              <form action={syncClientStractSourcesAction.bind(null, client.id)}>
+                <button
+                  type="submit"
+                  className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                >
+                  Sincronizar agora
                 </button>
               </form>
             )}

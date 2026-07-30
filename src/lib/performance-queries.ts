@@ -156,6 +156,17 @@ export async function getClientIdsWithActiveImportSource(supabase: Supabase, cli
   return new Set((data ?? []).map((row) => row.client_id));
 }
 
+/** IDs de todas as fontes `enabled = true` de UM cliente — usado pelo botão
+ * "Sincronizar agora" da página do cliente (Etapa "Sincronização manual via
+ * UI"), pra saber quais `import_source_id`s passar pro Import Service sem o
+ * gestor precisar saber esse id de cor (antes só dava pra disparar via
+ * curl/Postman). Um cliente pode ter mais de uma fonte ativa (ex.: Meta Ads
+ * + Instagram) — o botão sincroniza todas de uma vez. */
+export async function getEnabledImportSourceIdsForClient(supabase: Supabase, clientId: string): Promise<string[]> {
+  const { data } = await supabase.from("import_sources").select("id").eq("client_id", clientId).eq("enabled", true);
+  return (data ?? []).map((row) => row.id);
+}
+
 /** `"error"` = a última execução falhou de verdade (tabela de origem
  * ilegível, `external_account_id` divergente etc.). `"no_data"` = a última
  * releitura COMPLETA rodou sem erro, mas a fonte voltou com zero linhas —
