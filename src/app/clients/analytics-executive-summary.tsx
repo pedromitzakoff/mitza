@@ -1,21 +1,19 @@
 import { EmptyState } from "@/components/ui/empty-state";
 
 /**
- * Resumo Executivo — Etapa "Analytics Instagramável" (facelift): as mesmas
- * frases determinísticas (`buildExecutiveSummaryNarrative`, sem IA) agora
- * lidas como UM parágrafo corrido, não uma lista de linhas separadas —
- * pedido explícito: "mais parecido com um relatório executivo do que com um
- * textarea". Tratamento editorial (borda de destaque à esquerda, tipografia
- * maior, leading generoso) em vez do card genérico anterior. Sem base
- * suficiente pra nenhuma frase, mostra só o estado vazio — a seção continua
- * existindo (nunca some da tela), só sem conteúdo ainda.
+ * Narrativa do Capítulo II ("O que explica esse resultado?") — Etapa
+ * "Analytics como Relatório": as mesmas frases determinísticas
+ * (`buildExecutiveSummaryNarrative`, sem IA) lidas como UM parágrafo
+ * corrido de prosa de verdade — serifa reta (não itálica: isto é o corpo
+ * do relatório, não uma citação de destaque), leading generoso, mesma
+ * família tipográfica da manchete/lide do Capítulo I. Sem base suficiente
+ * pra nenhuma frase, mostra só o estado vazio — o capítulo continua
+ * existindo, só sem conteúdo ainda.
  */
 export function AnalyticsExecutiveSummary({ sentences }: { sentences: string[] }) {
   if (sentences.length === 0) {
-    return <EmptyState>Ainda não há dados suficientes para um resumo executivo neste período.</EmptyState>;
+    return <EmptyState>Ainda não há dados suficientes para explicar o resultado neste período.</EmptyState>;
   }
 
-  return (
-    <p className="border-l-2 border-brand/40 pl-4 text-base leading-relaxed text-foreground sm:text-lg">{sentences.join(" ")}</p>
-  );
+  return <p className="max-w-2xl font-serif text-[1.0625rem] leading-[1.75] text-foreground">{sentences.join(" ")}</p>;
 }

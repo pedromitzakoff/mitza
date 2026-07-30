@@ -255,6 +255,22 @@ export function buildAnalyticsChannelRows(
     .sort((a, b) => b.resultCount - a.resultCount);
 }
 
+/**
+ * Nota de fechamento do Capítulo III ("Onde aconteceu?") — Etapa "Analytics
+ * como Relatório". Com 0 ou 1 canal, não existe comparação real a fazer
+ * entre canais (nunca finge uma disputa que não existe); com 2+, só a nota
+ * sobre criativos (mesma limitação de sempre: a MITZA não persiste
+ * identidade de criativo em nenhuma tabela hoje).
+ */
+export function buildWhereAside(channelCount: number): string {
+  const creativesNote =
+    "Em breve, este retrato também vai indicar qual criativo específico gerou cada resultado — a integração de criativos ainda não existe na plataforma.";
+  if (channelCount <= 1) {
+    return `Sem um segundo canal ativo no período, não há comparação a fazer — o capítulo existe pra confirmar isso, não pra inventar uma disputa entre canais. ${creativesNote}`;
+  }
+  return creativesNote;
+}
+
 export interface AnalyticsHero {
   /** Já formatado ("438", "R$ 247.000") — nunca um número bruto. */
   value: string;
@@ -297,6 +313,40 @@ export function buildAnalyticsHero(input: {
     label: usesRevenue ? "em vendas" : config.resultMetricLabel,
     percentChange: computePercentChange(currentValue, previousValue),
   };
+}
+
+/**
+ * Capítulo I do relatório ("Como foi o resultado?") — Etapa "Analytics como
+ * Relatório": manchete em prosa em vez de um número isolado. Sem base de
+ * comparação real (`hero.percentChange === null`) ou sem nenhum registro no
+ * período (`hasAnyRecord === false`), cai num enunciado neutro — nunca
+ * afirma "cresceu"/"caiu" sem uma base real por trás.
+ */
+export function buildResultHeadline(goal: PerformanceGoal, hero: AnalyticsHero, hasAnyRecord: boolean): string {
+  const config = PERFORMANCE_GOALS[goal];
+  if (!hasAnyRecord || hero.percentChange === null) return `${config.resultMetricLabel} no período`;
+  const direction = hero.percentChange >= 0 ? "cresceram" : "caíram";
+  return `${config.resultMetricLabel} ${direction} ${Math.abs(hero.percentChange).toFixed(0)}% no período`;
+}
+
+/** Lide do Capítulo I — a frase logo abaixo da manchete, com o número real
+ * embutido na prosa (nunca um número solto do lado de um rótulo). */
+export function buildResultLede(input: {
+  goal: PerformanceGoal;
+  hero: AnalyticsHero;
+  hasAnyRecord: boolean;
+  actualSpend: number;
+  formatCurrencyValue: (value: number) => string;
+}): string {
+  const { goal, hero, hasAnyRecord, actualSpend, formatCurrencyValue } = input;
+  if (!hasAnyRecord) {
+    return `Ainda não há ${PERFORMANCE_GOALS[goal].resultMetricLabel.toLowerCase()} registrados neste período.`;
+  }
+  const comparisonClause =
+    hero.percentChange !== null
+      ? ` (${hero.percentChange >= 0 ? "alta" : "queda"} de ${Math.abs(hero.percentChange).toFixed(0)}% vs. período anterior)`
+      : "";
+  return `O período fechou em ${hero.value} ${hero.label}${comparisonClause} — resultado de ${formatCurrencyValue(actualSpend)} investidos.`;
 }
 
 /**
@@ -400,4 +450,24 @@ export function buildAnalyticsTrend(
   };
 
   return { spend, result };
+}
+
+/**
+ * Legenda em prosa do Capítulo IV ("O que mudou?") — Etapa "Analytics como
+ * Relatório": aponta a direção observada na própria série diária do
+ * período atual (primeiro dia vs. último dia), DIFERENTE da comparação do
+ * Capítulo II (que compara PERÍODOS inteiros) — nunca o mesmo dado
+ * reaproveitado como se fosse uma segunda evidência. `null` sem pelo menos
+ * 2 pontos na série (nada a descrever).
+ */
+export function buildTrendCaption(trend: AnalyticsTrend): string | null {
+  const series = trend.result ?? trend.spend;
+  if (series.points.length < 2) return null;
+
+  const first = series.points[0].value;
+  const last = series.points[series.points.length - 1].value;
+  if (first === last) return `${series.label} se manteve estável ao longo do período.`;
+
+  const direction = last > first ? "cresceu" : "caiu";
+  return `${series.label} ${direction} entre o início e o fim do período.`;
 }
