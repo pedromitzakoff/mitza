@@ -148,7 +148,16 @@ function diffCalendarDaysInAppTimezone(value: string, today: Date): number {
 /** "Hoje, 14:03" / "Ontem, 09:10" / "12/07, 09:10" — reaproveita a mesma
  * regra de dia relativo de `formatLastOptimizationLabel` (monthly-reports.ts),
  * só que com o horário junto (Etapa 62, seção 3 do pedido: "Última análise"
- * precisa mostrar hora quando relevante, não só o dia). */
+ * precisa mostrar hora quando relevante, não só o dia).
+ *
+ * IMPORTANTE (bug real já encontrado em produção): `today` precisa ser um
+ * INSTANTE real — sempre `new Date()`, NUNCA `todayUTC()` (`lib/today.ts`).
+ * `todayUTC()` já é meia-noite civil truncada pelo fuso; `today` aqui passa
+ * de novo por `todayDateString`/`APP_TIMEZONE` dentro de
+ * `diffCalendarDaysInAppTimezone` — passar `todayUTC()` reconverte um valor
+ * já convertido, empurra a referência um dia pra trás, e faz uma
+ * sincronização de ONTEM aparecer rotulada como "Hoje" (parecendo, inclusive,
+ * estar no futuro em relação ao horário real). */
 export function formatRelativeDateTime(value: string, today: Date): string {
   const date = new Date(value);
   const diffDays = diffCalendarDaysInAppTimezone(value, today);
@@ -166,7 +175,10 @@ export function formatRelativeDateTime(value: string, today: Date): string {
  * uma contagem relativa, sempre com o horário junto). Só este formatter
  * muda; `formatRelativeDateTime` continua igual em todo o resto da
  * plataforma (Última análise/Última atualização da performance na página
- * do cliente, notas do Workspace). */
+ * do cliente, notas do Workspace).
+ *
+ * IMPORTANTE: mesma regra de `formatRelativeDateTime` acima — `today`
+ * precisa ser sempre `new Date()`, nunca `todayUTC()`. */
 export function formatRelativeShortDateTime(value: string, today: Date): string {
   const date = new Date(value);
   const diffDays = diffCalendarDaysInAppTimezone(value, today);

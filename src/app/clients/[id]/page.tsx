@@ -274,6 +274,16 @@ export default async function ClientPage({
   // era o dia anterior.
   const today = todayUTC();
   const todayStr = todayDateString();
+  // Bug real encontrado em produção: `today` (meia-noite UTC do dia civil,
+  // certo pra comparar com colunas `date` sem fuso) NUNCA deve alimentar
+  // `formatRelativeDateTime`/`formatRelativeShortDateTime` — essas funções
+  // esperam um INSTANTE real ("agora"), não uma meia-noite civil; passar
+  // `today` fazia `diffCalendarDaysInAppTimezone` reconverter esse valor já
+  // truncado pelo fuso de novo, empurrando a referência um dia pra trás e
+  // rotulando a sincronização de ONTEM como "Hoje" (o timestamp exibido
+  // parecia estar no futuro em relação ao horário real). `nowInstant` é o
+  // único valor correto pra essas duas chamadas.
+  const nowInstant = new Date();
   // Etapa 62 — contexto temporal global da página: `?month=YYYY-MM` decide
   // o período de TUDO que é temporal (sprints, investimento, tarefas do
   // período, análises/otimizações/reuniões/entregas do Acompanhamento da
@@ -792,7 +802,7 @@ export default async function ClientPage({
   // desatualizados, e vice-versa.
   const lastOptimizationLabel = isCurrentMonth ? "Última otimização" : `Última otimização em ${monthLabel}`;
   const lastOptimizationValue = lastOptimization
-    ? formatRelativeDateTime(lastOptimization.reviewedAt, today)
+    ? formatRelativeDateTime(lastOptimization.reviewedAt, nowInstant)
     : "Nenhuma otimização registrada";
   const lastOptimizationDetail = lastOptimization
     ? lastOptimization.outcome === "OPTIMIZATION_PERFORMED"
@@ -810,7 +820,7 @@ export default async function ClientPage({
     ? "Última atualização da performance"
     : `Atualização da performance em ${monthLabel}`;
   const lastPerformanceUpdateValue = monthPerformanceSummary?.latestUpdatedAt
-    ? formatRelativeDateTime(monthPerformanceSummary.latestUpdatedAt, today)
+    ? formatRelativeDateTime(monthPerformanceSummary.latestUpdatedAt, nowInstant)
     : "Sem sincronização registrada";
   const lastPerformanceUpdateSourceLabel =
     monthPerformanceSummary?.latestSource === "manual"

@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { MetricDeviation } from "@/components/workspace/metric-deviation";
 import { formatCurrency, formatRelativeShortDateTime } from "@/lib/format";
-import { todayUTC } from "@/lib/today";
 import { MIN_RELIABLE_RESULT_COUNT } from "@/lib/operation-health-thresholds";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { getLatestPerformanceUpdateText } from "@/lib/performance";
@@ -110,9 +109,15 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
   // continuam com `formatShortDateTime`, sem "Hoje"/"Ontem") o formatter
   // passado é `formatRelativeShortDateTime`: hoje fala "Hoje", ontem fala
   // "Ontem", depois disso mostra a data real — sempre com o horário.
+  // Bug real encontrado em produção: `formatRelativeShortDateTime` espera um
+  // INSTANTE real ("agora"), nunca `todayUTC()` (meia-noite civil truncada
+  // pro fuso) — passar `todayUTC()` fazia a comparação de dia reconverter
+  // esse valor pelo fuso de novo, empurrando a referência um dia pra trás e
+  // rotulando a sincronização de ONTEM como "Hoje" (ver `lib/format.ts`,
+  // `diffCalendarDaysInAppTimezone`). `new Date()` é o único valor correto.
   const performanceUpdateText = goalConfig
     ? getLatestPerformanceUpdateText(card.performanceLatestSource, card.performanceLastUpdatedAt, (value) =>
-        formatRelativeShortDateTime(value, todayUTC()),
+        formatRelativeShortDateTime(value, new Date()),
       )
     : null;
 
