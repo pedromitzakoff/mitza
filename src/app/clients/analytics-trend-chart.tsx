@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { formatShortDate } from "@/lib/format";
+import { formatCurrency, formatShortDate } from "@/lib/format";
 import type { AnalyticsTrend } from "@/lib/analytics";
 
 /**
@@ -90,11 +90,9 @@ function buildTickIndices(length: number): number[] {
 
 export function AnalyticsTrendChart({
   trend,
-  formatCurrencyValue,
   events = [],
 }: {
   trend: AnalyticsTrend;
-  formatCurrencyValue: (value: number) => string;
   events?: AnalyticsChartEvent[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -110,8 +108,8 @@ export function AnalyticsTrendChart({
   const primaryPoints = scalePoints(primary.points);
   const secondaryPoints = secondary ? scalePoints(secondary.points) : null;
 
-  const primaryValueLabel = (value: number) => (trend.result ? String(value) : formatCurrencyValue(value));
-  const secondaryValueLabel = (value: number) => formatCurrencyValue(value);
+  const primaryValueLabel = (value: number) => (trend.result ? String(value) : formatCurrency(value));
+  const secondaryValueLabel = (value: number) => formatCurrency(value);
 
   const tickIndices = buildTickIndices(primaryPoints.length);
   const eventPositions = events

@@ -142,7 +142,7 @@ export function AnalyticsSection({
       <AnalyticsChapter index={4} question="O que mudou?">
         {data.trend ? (
           <div>
-            <AnalyticsTrendChart trend={data.trend} formatCurrencyValue={formatCurrency} />
+            <AnalyticsTrendChart trend={data.trend} />
             {trendCaption && (
               <p className="mt-5 max-w-xl border-l-2 border-brand pl-3.5 text-sm leading-relaxed text-muted-foreground">{trendCaption}</p>
             )}
