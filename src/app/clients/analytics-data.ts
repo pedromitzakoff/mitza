@@ -1,10 +1,12 @@
 import type { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
-import { computePerformanceSummary, type PerformanceRecordRow, type PerformanceSummary } from "@/lib/performance";
+import type { PerformanceRecordRow, PerformanceSummary } from "@/lib/performance";
+import { resolvePerformanceSummaryForGoal } from "@/lib/instagram-metrics";
 import {
   channelToPerformanceSource,
   getClientIdsWithActiveImportSource,
   getDailyPerformanceRowsForPeriod,
+  getDailySpendRowsForPeriod,
   getPerformanceRecordsForPeriod,
 } from "@/lib/performance-queries";
 import { buildAnalyticsChannelRows, buildAnalyticsTrend, type AnalyticsChannelRow, type AnalyticsTrend } from "@/lib/analytics";
@@ -48,15 +50,7 @@ export async function fetchClientAnalyticsData(
       supabase.from("clients").select("performance_goal, target_cost_per_result").eq("id", clientId),
       "clients:analytics",
     ),
-    requireQuery(
-      supabase
-        .from("daily_spend")
-        .select("date, channel, spend")
-        .eq("client_id", clientId)
-        .gte("date", period.start)
-        .lte("date", period.end),
-      "daily_spend:analytics",
-    ),
+    getDailySpendRowsForPeriod(supabase, clientId, { firstDay: period.start, lastDay: period.end }),
     getClientIdsWithActiveImportSource(supabase, [clientId]),
   ]);
 
@@ -85,22 +79,21 @@ export async function fetchClientAnalyticsData(
       }))
     : await getPerformanceRecordsForPeriod(supabase, clientId, dateRange);
 
-  const summary = performanceGoal
-    ? computePerformanceSummary({
-        scope: "consolidated",
-        records,
-        resultType: performanceGoal,
-        consolidatedActualSpend: actualSpend,
-        targetCostPerResult,
-      })
-    : null;
-
   const spendByChannel: Partial<Record<TrafficChannel, number>> = {};
   const dailySpendByDate = new Map<string, number>();
   for (const row of dailySpendRows) {
     spendByChannel[row.channel] = (spendByChannel[row.channel] ?? 0) + row.spend;
     dailySpendByDate.set(row.date, (dailySpendByDate.get(row.date) ?? 0) + row.spend);
   }
+
+  // Etapa Integração Instagram: "followers" usa investimento só de Meta Ads
+  // (escopo por canal), nunca o consolidado de todos os canais — qualquer
+  // outro objetivo continua exatamente como antes (consolidado). Mesma
+  // função usada por Reports (`client-report-data.ts`), nunca uma segunda
+  // versão do cálculo.
+  const summary = performanceGoal
+    ? resolvePerformanceSummaryForGoal({ goal: performanceGoal, records, totalActualSpend: actualSpend, spendByChannel, targetCostPerResult })
+    : null;
 
   const channelRows = performanceGoal ? buildAnalyticsChannelRows(performanceGoal, records, spendByChannel) : [];
 

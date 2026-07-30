@@ -1,8 +1,13 @@
 import type { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { formatCurrency } from "@/lib/format";
-import { computePerformanceSummary } from "@/lib/performance";
-import { getClientIdsWithActiveImportSource, getDailyPerformanceForPeriod, getPerformanceRecordsForPeriod } from "@/lib/performance-queries";
+import { resolvePerformanceSummaryForGoal } from "@/lib/instagram-metrics";
+import {
+  getClientIdsWithActiveImportSource,
+  getDailyPerformanceForPeriod,
+  getDailySpendRowsForPeriod,
+  getPerformanceRecordsForPeriod,
+} from "@/lib/performance-queries";
 import {
   CLIENT_REPORT_INVESTMENT_METRIC,
   CLIENT_REPORT_METRICS_BY_GOAL,
@@ -10,6 +15,7 @@ import {
   type ClientReportStatus,
 } from "@/lib/client-reports";
 import type { PerformanceGoal } from "@/lib/performance-goals";
+import type { TrafficChannel } from "@/lib/traffic-channels";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -41,10 +47,7 @@ export async function fetchClientReportMetrics(
       supabase.from("clients").select("performance_goal, target_cost_per_result").eq("id", clientId),
       "clients:report-metrics",
     ),
-    requireQuery(
-      supabase.from("daily_spend").select("spend").eq("client_id", clientId).gte("date", period.start).lte("date", period.end),
-      "daily_spend:report-metrics",
-    ),
+    getDailySpendRowsForPeriod(supabase, clientId, { firstDay: period.start, lastDay: period.end }),
     getClientIdsWithActiveImportSource(supabase, [clientId]),
   ]);
 
@@ -58,16 +61,24 @@ export async function fetchClientReportMetrics(
 
   if (!performanceGoal) return { performanceGoal, metrics };
 
+  const spendByChannel: Partial<Record<TrafficChannel, number>> = {};
+  for (const row of dailySpendRows) {
+    spendByChannel[row.channel] = (spendByChannel[row.channel] ?? 0) + row.spend;
+  }
+
   const dateRange = { firstDay: period.start, lastDay: period.end };
   const records = activeImportClientIds.has(clientId)
     ? await getDailyPerformanceForPeriod(supabase, clientId, dateRange)
     : await getPerformanceRecordsForPeriod(supabase, clientId, dateRange);
 
-  const summary = computePerformanceSummary({
-    scope: "consolidated",
+  // Etapa Integração Instagram: mesma função usada por Analytics
+  // (`analytics-data.ts`) — "followers" cruza investimento só de Meta Ads,
+  // nunca uma segunda versão do cálculo neste módulo.
+  const summary = resolvePerformanceSummaryForGoal({
+    goal: performanceGoal,
     records,
-    resultType: performanceGoal,
-    consolidatedActualSpend: actualSpend,
+    totalActualSpend: actualSpend,
+    spendByChannel,
     targetCostPerResult,
   });
 

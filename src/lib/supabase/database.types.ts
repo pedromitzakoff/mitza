@@ -20,7 +20,7 @@ export type PerformanceGoalDb = "leads" | "sales" | "followers";
  * (`CLIENT_REPORT_STATUS_LABEL`). "sent" só é gravado por
  * `markClientReportSentAction`, nunca ao simplesmente salvar o conteúdo. */
 export type ClientReportStatusDb = "draft" | "sent";
-export type TrafficChannelDb = "meta" | "google" | "tiktok" | "linkedin" | "other";
+export type TrafficChannelDb = "meta" | "google" | "tiktok" | "linkedin" | "instagram" | "other";
 export type PerformanceSourceDb = "manual" | "meta" | "google";
 
 /** Integração Stract → Supabase → MITZA — provider é o único suportado
@@ -643,6 +643,69 @@ export interface Database {
             columns: ["client_id"];
             isOneToOne: false;
             referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      instagram_daily_metrics: {
+        Row: {
+          id: string;
+          client_id: string;
+          import_source_id: string;
+          date: string;
+          new_followers: number;
+          followers_total: number | null;
+          reach: number | null;
+          impressions: number | null;
+          profile_views: number | null;
+          accounts_engaged: number | null;
+          raw_data: unknown;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          import_source_id: string;
+          date: string;
+          new_followers: number;
+          followers_total?: number | null;
+          reach?: number | null;
+          impressions?: number | null;
+          profile_views?: number | null;
+          accounts_engaged?: number | null;
+          raw_data?: unknown;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          import_source_id?: string;
+          date?: string;
+          new_followers?: number;
+          followers_total?: number | null;
+          reach?: number | null;
+          impressions?: number | null;
+          profile_views?: number | null;
+          accounts_engaged?: number | null;
+          raw_data?: unknown;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "instagram_daily_metrics_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "instagram_daily_metrics_import_source_id_fkey";
+            columns: ["import_source_id"];
+            isOneToOne: false;
+            referencedRelation: "import_sources";
             referencedColumns: ["id"];
           },
         ];

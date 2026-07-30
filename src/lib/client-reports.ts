@@ -69,9 +69,14 @@ export const CLIENT_REPORT_METRICS_BY_GOAL: Record<PerformanceGoal, ClientReport
     { key: "roas", label: "ROAS" },
     { key: "revenue", label: "Faturamento" },
   ],
+  // Etapa Integração Instagram: rótulos deliberadamente "Novos seguidores"/
+  // "Custo por novo seguidor" (nunca "Seguidores totais" — essa não é uma
+  // métrica de análise nesta plataforma, decisão explícita do usuário).
+  // `key` continua "followers"/"cost_per_follower" (não muda — é lido por
+  // `fetchClientReportMetrics`), só o texto exibido mudou.
   followers: [
-    { key: "followers", label: "Seguidores" },
-    { key: "cost_per_follower", label: "Custo por seguidor" },
+    { key: "followers", label: "Novos seguidores" },
+    { key: "cost_per_follower", label: "Custo por novo seguidor" },
     { key: "reach", label: "Alcance", manualOnly: true },
     { key: "engagement", label: "Engajamento", manualOnly: true },
   ],

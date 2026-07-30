@@ -114,6 +114,36 @@ export async function getDailyPerformanceRowsForPeriod(
   }));
 }
 
+export interface DailySpendRow {
+  date: string;
+  channel: TrafficChannelDb;
+  spend: number;
+}
+
+/**
+ * Linhas de `daily_spend` de UM cliente num período arbitrário, COM canal —
+ * usada pra qualquer leitura que precise tanto do total investido quanto do
+ * investimento por canal no mesmo período (Etapa Integração Instagram:
+ * `resolvePerformanceSummaryForGoal` precisa do investimento só de Meta Ads
+ * pra "followers", separado do consolidado). Reaproveitada por
+ * Reports (`client-report-data.ts`) e Analytics (`analytics-data.ts`) —
+ * nenhuma das duas telas deve montar esta consulta por conta própria.
+ */
+export async function getDailySpendRowsForPeriod(
+  supabase: Supabase,
+  clientId: string,
+  period: { firstDay: string; lastDay: string },
+): Promise<DailySpendRow[]> {
+  const { data } = await supabase
+    .from("daily_spend")
+    .select("date, channel, spend")
+    .eq("client_id", clientId)
+    .gte("date", period.firstDay)
+    .lte("date", period.lastDay);
+
+  return data ?? [];
+}
+
 /** Clientes (dentre os passados) com integração automática ativa — usado
  * pra decidir, por cliente, se a leitura de performance vem de
  * `daily_performance` (Stract) ou `performance_records` (manual), nunca as

@@ -128,6 +128,15 @@ export interface AnalyticsChannelRow {
  * uma dimensão que o sistema não possui. Só inclui canais com pelo menos
  * investimento ou resultado real registrado no período (nunca uma linha
  * "zerada" por completo).
+ *
+ * `instagram` nunca entra aqui (Etapa Integração Instagram) — é uma fonte
+ * de RESULTADO orgânico, nunca um canal de investimento próprio; uma linha
+ * "Instagram: R$0,00 por seguidor" seria enganosa (o investimento real que
+ * cruza com esse resultado é de outro canal, Meta Ads — ver
+ * `resolvePerformanceSummaryForGoal`, `lib/instagram-metrics.ts`). O
+ * cruzamento cross-fonte aparece só nos cards de KPI do topo, nunca nesta
+ * tabela por canal (que assume implicitamente "mesmo canal investe e
+ * gera o resultado").
  */
 export function buildAnalyticsChannelRows(
   goal: PerformanceGoal,
@@ -136,10 +145,10 @@ export function buildAnalyticsChannelRows(
 ): AnalyticsChannelRow[] {
   const channelsWithData = new Set<TrafficChannel>();
   for (const record of records) {
-    if (record.resultType === goal) channelsWithData.add(record.channel);
+    if (record.resultType === goal && record.channel !== "instagram") channelsWithData.add(record.channel);
   }
   for (const channel of Object.keys(spendByChannel) as TrafficChannel[]) {
-    if ((spendByChannel[channel] ?? 0) > 0) channelsWithData.add(channel);
+    if (channel !== "instagram" && (spendByChannel[channel] ?? 0) > 0) channelsWithData.add(channel);
   }
 
   return Array.from(channelsWithData)

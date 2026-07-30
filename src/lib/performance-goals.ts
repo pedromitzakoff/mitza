@@ -66,14 +66,21 @@ export const PERFORMANCE_GOALS: Record<PerformanceGoal, PerformanceGoalConfig> =
   followers: {
     id: "followers",
     label: "Seguidores",
-    singularLabel: "Seguidor",
-    pluralLabel: "Seguidores",
-    resultMetricLabel: "Seguidores",
-    costMetricLabel: "Custo por seguidor",
+    // Etapa Integração Instagram: renomeado de "Seguidores"/"Custo por
+    // seguidor" pra deixar explícito que a métrica é sempre o LÍQUIDO
+    // ganho no período (nunca o total acumulado — "seguidores totais" não
+    // é uma métrica de análise nesta plataforma, decisão explícita do
+    // usuário). `resultCount` já era somado por período desde sempre (nunca
+    // fazia sentido como total acumulado, já que soma não é a operação
+    // certa pra um snapshot) — o rótulo só passou a refletir isso.
+    singularLabel: "Novo seguidor",
+    pluralLabel: "Novos seguidores",
+    resultMetricLabel: "Novos seguidores",
+    costMetricLabel: "Custo por novo seguidor",
     // Sem abreviação (ao contrário de CPL/CPA): "CPS" não é reconhecido no
     // mercado e "CPF" já significa Cadastro de Pessoa Física — por extenso
     // em qualquer espaço, mesmo os compactos que usam `costMetricShortLabel`.
-    costMetricShortLabel: "Custo por seguidor",
+    costMetricShortLabel: "Custo por novo seguidor",
   },
 };
 
