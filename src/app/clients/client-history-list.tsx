@@ -6,10 +6,15 @@ import type { ClientHistoryRow } from "@/lib/client-operational-history";
 /**
  * Lista de eventos do histórico operacional do cliente — extraída de
  * `ClientOperationalHistoryDrawer` (Etapa "MITZA 2.0 — Refinamento da
- * Experiência do Cliente") pra ser reaproveitada também pela aba Timeline,
- * que agora mostra a mesma lista como conteúdo principal da aba (sem
- * overlay). Nenhuma consulta, cálculo ou tipo novo — só a marcação da lista
- * em si, sem a moldura de drawer (backdrop/painel fixo/"Fechar").
+ * Experiência do Cliente") pra ser reaproveitada pela aba Timeline, pelo
+ * drawer, e agora também pela seção Timeline do Analytics (Etapa "Analytics
+ * Instagramável") — os 3 lugares que usam este componente ganham o mesmo
+ * upgrade visual de uma vez, nunca uma segunda lista. Nenhuma consulta,
+ * cálculo ou tipo novo — só a marcação.
+ *
+ * Facelift: era uma lista de `<li>` com bullet points de texto ("parece uma
+ * tabela" — pedido explícito do usuário); agora é um feed vertical de
+ * verdade, com marcador + linha conectando os eventos no tempo.
  */
 export function ClientHistoryList({
   rows,
@@ -26,30 +31,25 @@ export function ClientHistoryList({
 
   return (
     <ul className="mt-3 flex flex-col">
-      {rows.map((event) => (
-        <li
-          key={event.id}
-          className="flex items-start justify-between gap-2 border-t border-border py-2 first:border-t-0 first:pt-0"
-        >
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-              <span className="tabular-nums">{formatDateTime(event.occurredAt)}</span>
-              <span className="font-medium text-foreground">{event.label}</span>
-              {event.detail && <span>{event.detail}</span>}
+      {rows.map((event, index) => (
+        <li key={event.id} className="relative flex gap-3 pb-5 last:pb-0">
+          {index < rows.length - 1 && <span className="absolute left-[3px] top-3 h-full w-px bg-border" aria-hidden="true" />}
+          <span className="relative z-10 mt-1.5 h-[7px] w-[7px] shrink-0 rounded-full bg-brand" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium tabular-nums text-foreground">{formatDateTime(event.occurredAt)}</p>
+            <p className="mt-0.5 text-sm text-foreground">
+              {event.label}
+              {event.detail && <span className="text-muted-foreground"> · {event.detail}</span>}
+            </p>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+              {event.responsibleName && <span>{event.responsibleName}</span>}
+              {event.reviewId && (
+                <Link href={buildReviewDetailHref(event.reviewId)} scroll={false} className="font-medium text-brand hover:underline">
+                  Ver otimização
+                </Link>
+              )}
             </div>
-            {event.responsibleName && (
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">{event.responsibleName}</p>
-            )}
           </div>
-          {event.reviewId && (
-            <Link
-              href={buildReviewDetailHref(event.reviewId)}
-              scroll={false}
-              className="shrink-0 text-xs font-medium text-brand hover:underline"
-            >
-              Ver otimização
-            </Link>
-          )}
         </li>
       ))}
     </ul>

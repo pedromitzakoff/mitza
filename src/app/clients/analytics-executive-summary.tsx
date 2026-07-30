@@ -1,12 +1,14 @@
 import { EmptyState } from "@/components/ui/empty-state";
 
 /**
- * Resumo Executivo — Etapa "Analytics Instagramável": frases corridas
- * (`buildExecutiveSummaryNarrative`, 100% determinístico, sem IA), pensadas
- * pra "parecer uma apresentação, não um dashboard técnico" (pedido explícito
- * do usuário). Sem base suficiente pra nenhuma frase, mostra só o estado
- * vazio — a seção continua existindo (nunca some da tela), só sem conteúdo
- * ainda.
+ * Resumo Executivo — Etapa "Analytics Instagramável" (facelift): as mesmas
+ * frases determinísticas (`buildExecutiveSummaryNarrative`, sem IA) agora
+ * lidas como UM parágrafo corrido, não uma lista de linhas separadas —
+ * pedido explícito: "mais parecido com um relatório executivo do que com um
+ * textarea". Tratamento editorial (borda de destaque à esquerda, tipografia
+ * maior, leading generoso) em vez do card genérico anterior. Sem base
+ * suficiente pra nenhuma frase, mostra só o estado vazio — a seção continua
+ * existindo (nunca some da tela), só sem conteúdo ainda.
  */
 export function AnalyticsExecutiveSummary({ sentences }: { sentences: string[] }) {
   if (sentences.length === 0) {
@@ -14,12 +16,6 @@ export function AnalyticsExecutiveSummary({ sentences }: { sentences: string[] }
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      {sentences.map((sentence, index) => (
-        <p key={index} className="text-sm leading-relaxed text-foreground">
-          {sentence}
-        </p>
-      ))}
-    </div>
+    <p className="border-l-2 border-brand/40 pl-4 text-base leading-relaxed text-foreground sm:text-lg">{sentences.join(" ")}</p>
   );
 }

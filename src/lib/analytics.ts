@@ -78,10 +78,42 @@ export function resolveAnalyticsPeriod(
   }
 }
 
+export type AnalyticsKpiComparisonTone = "positive" | "negative" | "neutral";
+
+export interface AnalyticsKpiComparison {
+  text: string;
+  tone: AnalyticsKpiComparisonTone;
+}
+
 export interface AnalyticsKpiCard {
   key: string;
   label: string;
   value: string;
+  /** Linha auxiliar de contexto — variação vs. período anterior OU meta
+   * configurada (nunca as duas juntas no mesmo card). `null`/ausente = sem
+   * base de comparação real (nunca fabricada). */
+  comparison?: AnalyticsKpiComparison | null;
+}
+
+/** Constrói a linha "↑18% vs período anterior" — `direction` decide se um
+ * aumento é bom (`higher_is_better`, ex.: ROAS/resultado/receita), ruim
+ * (`lower_is_better`, ex.: custo por resultado) ou nem uma coisa nem outra
+ * (`neutral`, ex.: investimento — gastar mais/menos não é em si bom ou
+ * ruim). `null` sempre que não há período anterior comparável (mesma regra
+ * de `computePercentChange`: nunca uma variação fabricada). */
+function buildPercentChangeComparison(
+  current: number,
+  previous: number | null,
+  direction: "higher_is_better" | "lower_is_better" | "neutral",
+): AnalyticsKpiComparison | null {
+  const percentChange = computePercentChange(current, previous);
+  if (percentChange === null) return null;
+
+  const symbol = percentChange >= 0 ? "↑" : "↓";
+  const tone: AnalyticsKpiComparisonTone =
+    direction === "neutral" ? "neutral" : direction === "higher_is_better" ? (percentChange >= 0 ? "positive" : "negative") : percentChange <= 0 ? "positive" : "negative";
+
+  return { text: `${symbol}${Math.abs(percentChange).toFixed(0)}% vs período anterior`, tone };
 }
 
 /**
@@ -96,33 +128,74 @@ export interface AnalyticsKpiCard {
  * quando não há receita configurada). Métrica indisponível vira "—", nunca
  * um card removido (a ausência do dado é informação: mostra que existe uma
  * lacuna, não esconde o card inteiro).
+ *
+ * Facelift "Analytics Instagramável": cada card ganha uma linha de contexto
+ * (variação vs. período anterior, ou "Meta: R$X" quando configurada) —
+ * reaproveita 100% dado que já existe (`previousSummary`, já buscado pro
+ * Hero; `targetCostPerResult`, já dentro de `summary`), nenhuma consulta
+ * nova. Meta tem prioridade sobre variação pro card de custo — é a
+ * comparação mais acionável pro gestor quando existe.
  */
 export function buildAnalyticsKpiCards(
   goal: PerformanceGoal | null,
   actualSpend: number,
   summary: PerformanceSummary | null,
+  previousSummary: PerformanceSummary | null,
   formatCurrencyValue: (value: number) => string,
 ): AnalyticsKpiCard[] {
-  const investment: AnalyticsKpiCard = { key: "investment", label: "Investimento", value: formatCurrencyValue(actualSpend) };
+  const investment: AnalyticsKpiCard = {
+    key: "investment",
+    label: "Investimento",
+    value: formatCurrencyValue(actualSpend),
+    comparison: buildPercentChangeComparison(actualSpend, previousSummary?.actualSpend ?? null, "neutral"),
+  };
   if (!goal || !summary || !summary.hasAnyRecord) return [investment];
 
   const config = PERFORMANCE_GOALS[goal];
+
+  const costComparison: AnalyticsKpiComparison | null =
+    summary.targetCostPerResult !== null
+      ? { text: `Meta: ${formatCurrencyValue(summary.targetCostPerResult)}`, tone: "neutral" }
+      : summary.costPerResult !== null
+        ? buildPercentChangeComparison(summary.costPerResult, previousSummary?.costPerResult ?? null, "lower_is_better")
+        : null;
+
   const cost: AnalyticsKpiCard = {
     key: "cost",
     label: config.costMetricShortLabel,
     value: summary.costPerResult !== null ? formatCurrencyValue(summary.costPerResult) : "—",
+    comparison: costComparison,
   };
 
   if (goal === "sales") {
     return [
       investment,
-      { key: "roas", label: "ROAS", value: summary.roas !== null ? `${summary.roas.toFixed(2)}x` : "—" },
+      {
+        key: "roas",
+        label: "ROAS",
+        value: summary.roas !== null ? `${summary.roas.toFixed(2)}x` : "—",
+        comparison: summary.roas !== null ? buildPercentChangeComparison(summary.roas, previousSummary?.roas ?? null, "higher_is_better") : null,
+      },
       cost,
-      { key: "revenue", label: "Receita", value: summary.revenue !== null ? formatCurrencyValue(summary.revenue) : "—" },
+      {
+        key: "revenue",
+        label: "Receita",
+        value: summary.revenue !== null ? formatCurrencyValue(summary.revenue) : "—",
+        comparison: summary.revenue !== null ? buildPercentChangeComparison(summary.revenue, previousSummary?.revenue ?? null, "higher_is_better") : null,
+      },
     ];
   }
 
-  return [investment, { key: "result", label: config.resultMetricLabel, value: String(summary.resultCount) }, cost];
+  return [
+    investment,
+    {
+      key: "result",
+      label: config.resultMetricLabel,
+      value: String(summary.resultCount),
+      comparison: buildPercentChangeComparison(summary.resultCount, previousSummary?.resultCount ?? null, "higher_is_better"),
+    },
+    cost,
+  ];
 }
 
 export interface AnalyticsChannelRow {

@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatCurrency, formatDateRange } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { buildAnalyticsHero, buildAnalyticsKpiCards, buildExecutiveSummaryNarrative, type AnalyticsPeriodPreset } from "@/lib/analytics";
 import type { ClientHistoryRow } from "@/lib/client-operational-history";
 import type { ClientAnalyticsData } from "./analytics-data";
-import { AnalyticsHeader } from "./analytics-header";
+import { AnalyticsPeriodMenu } from "./analytics-period-menu";
 import { AnalyticsHeroSection } from "./analytics-hero";
 import { AnalyticsKpiGrid } from "./analytics-kpi-grid";
 import { AnalyticsExecutiveSummary } from "./analytics-executive-summary";
-import { AnalyticsScorePlaceholder } from "./analytics-score-placeholder";
 import { AnalyticsTrendChart } from "./analytics-trend-chart";
 import { AnalyticsChannelCards } from "./analytics-channel-cards";
 import { AnalyticsTopCreativesPlaceholder } from "./analytics-top-creatives-placeholder";
@@ -16,20 +15,20 @@ import { ClientHistoryList } from "./client-history-list";
 import { Section } from "./section";
 
 /**
- * Aba Analytics — Etapa "Analytics Instagramável": redesign completo pra ser
- * "bonita, fácil de entender em poucos segundos, digna de reunião e de
- * print pra Stories" (pedido explícito do usuário), sem virar mais
- * complexa — poucas informações, muito bem apresentadas, nunca uma dezena
- * de gráficos. Filosofia: como está → por que está assim → quais números
- * explicam isso (Hero → KPIs/Resumo → Evolução/Canais/Timeline), nunca
- * invertida.
+ * Aba Analytics — Etapa "Analytics Instagramável" (facelift de UX/UI, ver
+ * análise crítica apresentada antes da implementação): mesma arquitetura de
+ * dados/cálculos de sempre, só a apresentação muda. Filosofia inalterada:
+ * como está → por que está assim → quais números explicam isso (Hero → KPIs
+ * → Resumo Executivo → Evolução/Canais/Timeline).
  *
- * Composição (topo → base): cabeçalho de período → Hero (métrica principal +
- * variação vs. período anterior) → KPIs → Resumo Executivo (narrativa
- * determinística) → MITZA Score (placeholder puro) → Evolução diária →
- * Canais (cards, nunca "Campanhas" — ver `analytics-channel-cards.tsx`) →
- * Top Criativos (placeholder/skeleton, sem dado real ainda) → Timeline
- * (últimos eventos operacionais, mesmo dado da aba Timeline/drawer).
+ * Cabeçalho compacto (eyebrow "Analytics" + seletor de período em popover,
+ * `AnalyticsPeriodMenu` — nunca mais um formulário de 2 campos sempre
+ * visível). MITZA Score foi removido por completo (decisão explícita do
+ * usuário: nenhum placeholder pra recurso inexistente). Profundidade vem de
+ * variar deliberadamente o que tem moldura (Hero+KPIs, Evolução, Timeline —
+ * os blocos "primários") do que não tem (Resumo Executivo, Canais, Top
+ * Criativos — leem direto no fundo da página), em vez de tudo repetir a
+ * mesma receita branco+borda.
  */
 export function AnalyticsSection({
   data,
@@ -55,21 +54,24 @@ export function AnalyticsSection({
   buildReviewDetailHref: (reviewId: string) => string;
 }) {
   const header = (
-    <AnalyticsHeader
-      baseHref={baseHref}
-      activePreset={activePreset}
-      periodStart={periodStart}
-      periodEnd={periodEnd}
-      customStart={customStart}
-      customEnd={customEnd}
-    />
+    <div className="flex items-center justify-between gap-3">
+      <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Analytics</p>
+      <AnalyticsPeriodMenu
+        baseHref={baseHref}
+        activePreset={activePreset}
+        periodStart={periodStart}
+        periodEnd={periodEnd}
+        customStart={customStart}
+        customEnd={customEnd}
+      />
+    </div>
   );
 
   if (!data.performanceGoal) {
     return (
-      <div className="flex flex-col gap-3">
+      <div>
         {header}
-        <div className="rounded-lg border border-border bg-card p-3">
+        <div className="mt-6">
           <EmptyState>Este cliente ainda não tem um objetivo de performance configurado.</EmptyState>
           <Link href={configureObjectiveHref} className="mt-1 inline-block text-xs font-medium text-brand hover:underline">
             Configurar objetivo
@@ -82,9 +84,9 @@ export function AnalyticsSection({
   const hasAnyData = data.actualSpend > 0 || (data.summary?.hasAnyRecord ?? false);
   if (!hasAnyData) {
     return (
-      <div className="flex flex-col gap-3">
+      <div>
         {header}
-        <div className="rounded-lg border border-border bg-card p-3">
+        <div className="mt-6">
           <EmptyState>Não encontramos dados para o período selecionado.</EmptyState>
         </div>
       </div>
@@ -97,7 +99,7 @@ export function AnalyticsSection({
     previousSummary: data.previousSummary,
     formatCurrencyValue: formatCurrency,
   });
-  const kpiCards = buildAnalyticsKpiCards(data.performanceGoal, data.actualSpend, data.summary, formatCurrency);
+  const kpiCards = buildAnalyticsKpiCards(data.performanceGoal, data.actualSpend, data.summary, data.previousSummary, formatCurrency);
   const executiveSummary = buildExecutiveSummaryNarrative({
     goal: data.performanceGoal,
     summary: data.summary!,
@@ -107,29 +109,22 @@ export function AnalyticsSection({
   });
 
   return (
-    <div className="flex flex-col gap-3">
+    <div>
       {header}
 
-      <div className="border-b border-border">
-        <AnalyticsHeroSection hero={hero} periodLabel={formatDateRange(periodStart, periodEnd)} />
-      </div>
-
-      <div className="rounded-lg border border-border bg-card p-3">
-        <AnalyticsKpiGrid cards={kpiCards} />
+      <div className="mt-6 rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
+        <AnalyticsHeroSection hero={hero} />
+        <div className="mt-6 border-t border-border pt-5">
+          <AnalyticsKpiGrid cards={kpiCards} />
+        </div>
       </div>
 
       <Section title="Resumo Executivo">
-        <div className="rounded-lg border border-border bg-card p-4">
-          <AnalyticsExecutiveSummary sentences={executiveSummary} />
-        </div>
+        <AnalyticsExecutiveSummary sentences={executiveSummary} />
       </Section>
 
-      <div className="mt-6 max-w-xs">
-        <AnalyticsScorePlaceholder />
-      </div>
-
-      <Section title="Evolução diária">
-        <div className="rounded-lg border border-border bg-card p-3">
+      <Section title="Evolução">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
           {data.trend ? (
             <AnalyticsTrendChart trend={data.trend} formatCurrencyValue={formatCurrency} />
           ) : (
@@ -149,7 +144,7 @@ export function AnalyticsSection({
       </Section>
 
       <Section title="Timeline">
-        <div className="rounded-lg border border-border bg-card p-3">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
           <ClientHistoryList
             rows={historyRows}
             buildReviewDetailHref={buildReviewDetailHref}
