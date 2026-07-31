@@ -3,6 +3,7 @@ import { ArrowLeft, ExternalLink } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
+import { NO_CREATIVES_MESSAGE } from "@/lib/analytics-messages";
 import type { AnalyticsTrend } from "@/lib/analytics";
 import type { CreativeDetail, CreativeSummary } from "@/lib/creative-analytics";
 import { CreativeCard } from "./creative-card";
@@ -40,7 +41,7 @@ export function CreativeAnalyticsSection({
   }
 
   if (summaries.length === 0) {
-    return <EmptyState>Nenhum dado de criativo encontrado no período selecionado.</EmptyState>;
+    return <EmptyState>{NO_CREATIVES_MESSAGE}</EmptyState>;
   }
 
   return (

@@ -1,4 +1,5 @@
 import { EmptyState } from "@/components/ui/empty-state";
+import { NO_LEARNINGS_MESSAGE } from "@/lib/analytics-messages";
 
 /**
  * Narrativa do Capítulo III ("O que aprendemos?") — as mesmas frases
@@ -11,7 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state";
  */
 export function AnalyticsExecutiveSummary({ sentences }: { sentences: string[] }) {
   if (sentences.length === 0) {
-    return <EmptyState>Ainda não há dados suficientes para explicar o resultado neste período.</EmptyState>;
+    return <EmptyState>{NO_LEARNINGS_MESSAGE}</EmptyState>;
   }
 
   return <p className="max-w-2xl font-serif text-[1.0625rem] leading-[1.75] text-foreground">{sentences.join(" ")}</p>;

@@ -3,6 +3,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency } from "@/lib/format";
 import { buildAnalyticsHero, buildAnalyticsKpiCards, buildLearningsNarrative, buildResultHeadline, buildResultLede, buildTrendCaption } from "@/lib/analytics";
 import { buildPeriodHighlights } from "@/lib/period-highlights";
+import { NO_ANALYTICS_DATA_MESSAGE, NO_HIGHLIGHTS_MESSAGE, NO_PERFORMANCE_GOAL_MESSAGE } from "@/lib/analytics-messages";
 import type { CreativeSummary } from "@/lib/creative-analytics";
 import type { CampaignSummary } from "@/lib/campaign-analytics";
 import type { ClientAnalyticsData } from "./analytics-data";
@@ -53,7 +54,7 @@ export function AnalyticsSection({
   if (!data.performanceGoal) {
     return (
       <div className="mx-auto max-w-2xl">
-        <EmptyState>Este cliente ainda não tem um objetivo de performance configurado.</EmptyState>
+        <EmptyState>{NO_PERFORMANCE_GOAL_MESSAGE}</EmptyState>
         <Link href={configureObjectiveHref} className="mt-1 inline-block text-xs font-medium text-brand hover:underline">
           Configurar objetivo
         </Link>
@@ -65,7 +66,7 @@ export function AnalyticsSection({
   if (!hasAnyData) {
     return (
       <div className="mx-auto max-w-2xl">
-        <EmptyState>Não encontramos dados para o período selecionado.</EmptyState>
+        <EmptyState>{NO_ANALYTICS_DATA_MESSAGE}</EmptyState>
       </div>
     );
   }
@@ -111,7 +112,7 @@ export function AnalyticsSection({
 
       <AnalyticsChapter index={2} question="O que mais chamou atenção?">
         {highlights.length === 0 ? (
-          <EmptyState>Ainda não há destaques suficientes pra este período.</EmptyState>
+          <EmptyState>{NO_HIGHLIGHTS_MESSAGE}</EmptyState>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {highlights.map((highlight) => (

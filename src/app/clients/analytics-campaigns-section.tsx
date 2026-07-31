@@ -1,5 +1,6 @@
 import { EmptyState } from "@/components/ui/empty-state";
 import type { CampaignSummary } from "@/lib/campaign-analytics";
+import { NO_CAMPAIGNS_MESSAGE } from "@/lib/analytics-messages";
 import { CampaignCard } from "./campaign-card";
 
 /**
@@ -10,7 +11,7 @@ import { CampaignCard } from "./campaign-card";
  */
 export function AnalyticsCampaignsSection({ summaries }: { summaries: CampaignSummary[] }) {
   if (summaries.length === 0) {
-    return <EmptyState>Nenhum dado de campanha encontrado no período selecionado.</EmptyState>;
+    return <EmptyState>{NO_CAMPAIGNS_MESSAGE}</EmptyState>;
   }
 
   return (

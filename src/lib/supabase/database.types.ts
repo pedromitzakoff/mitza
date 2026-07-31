@@ -16,6 +16,11 @@ export type ClientMainObjective = "leads" | "vendas" | "reservas" | "reconhecime
  * Etapa "Objetivo Seguidores") — distinto de `ClientMainObjective`. */
 export type PerformanceGoalDb = "leads" | "sales" | "followers";
 
+/** Tema visual do AnalyticsReport (Fase 1) — pertence ao domínio do cliente,
+ * não é uma preferência de sessão. Sem UI de seleção ainda; hoje todo
+ * cliente nasce "mitza". */
+export type ReportThemeDb = "mitza" | "white_label";
+
 /** Ciclo de vida de um `client_reports` — rótulos em `lib/client-reports.ts`
  * (`CLIENT_REPORT_STATUS_LABEL`). "sent" só é gravado por
  * `markClientReportSentAction`, nunca ao simplesmente salvar o conteúdo. */
@@ -303,6 +308,7 @@ export interface Database {
           avatar_url: string | null;
           dashboard_url: string | null;
           balance_url: string | null;
+          report_theme: ReportThemeDb;
         };
         Insert: {
           id?: string;
@@ -351,6 +357,7 @@ export interface Database {
           avatar_url?: string | null;
           dashboard_url?: string | null;
           balance_url?: string | null;
+          report_theme?: ReportThemeDb;
         };
         Update: {
           id?: string;
@@ -399,6 +406,7 @@ export interface Database {
           avatar_url?: string | null;
           dashboard_url?: string | null;
           balance_url?: string | null;
+          report_theme?: ReportThemeDb;
         };
         Relationships: [
           {
