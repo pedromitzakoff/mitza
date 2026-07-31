@@ -719,7 +719,7 @@ export interface Database {
           campaign_name: string;
           creative_name: string;
           creative_permalink_url: string | null;
-          creative_thumbnail_url: string | null;
+          preview_image_url: string | null;
           spend: number;
           impressions: number | null;
           reach: number | null;
@@ -738,7 +738,7 @@ export interface Database {
           campaign_name: string;
           creative_name: string;
           creative_permalink_url?: string | null;
-          creative_thumbnail_url?: string | null;
+          preview_image_url?: string | null;
           spend?: number;
           impressions?: number | null;
           reach?: number | null;
@@ -757,7 +757,7 @@ export interface Database {
           campaign_name?: string;
           creative_name?: string;
           creative_permalink_url?: string | null;
-          creative_thumbnail_url?: string | null;
+          preview_image_url?: string | null;
           spend?: number;
           impressions?: number | null;
           reach?: number | null;

@@ -110,7 +110,7 @@ function CreativeDetailView({ detail, backHref }: { detail: CreativeDetail; back
 
         <div className="flex items-start gap-4">
           <div className="w-24 shrink-0">
-            <CreativeThumbnail url={summary.thumbnailUrl} alt={summary.creativeName} />
+            <CreativeThumbnail url={summary.previewImageUrl} alt={summary.creativeName} />
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-xl font-semibold text-foreground">{summary.creativeName}</h1>

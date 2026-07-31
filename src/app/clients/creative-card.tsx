@@ -24,7 +24,7 @@ function Stat({ label, value }: { label: string; value: string }) {
  * o módulo existe independente do objetivo).
  *
  * Ajuste "representação visual dos criativos": a MINIATURA (`CreativeThumbnail`,
- * hoje sempre placeholder — `creative_thumbnail_url` ainda não é preenchido
+ * hoje sempre placeholder — `preview_image_url` ainda não é preenchido
  * por nenhum mecanismo) é o elemento visual principal do card, nunca o
  * permalink. O permalink vira uma ação SECUNDÁRIA ("Abrir no Instagram"),
  * nunca a representação do criativo em si.
@@ -40,7 +40,7 @@ export function CreativeCard({ summary, detailHref }: { summary: CreativeSummary
     <div className="relative flex flex-col gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-brand/40 hover:bg-brand/[0.03]">
       <Link href={detailHref} className="absolute inset-0 rounded-lg" aria-label={`Ver detalhes de ${summary.creativeName}`} />
 
-      <CreativeThumbnail url={summary.thumbnailUrl} alt={summary.creativeName} />
+      <CreativeThumbnail url={summary.previewImageUrl} alt={summary.creativeName} />
 
       <div>
         <p className="truncate text-sm font-semibold text-foreground">{summary.creativeName}</p>

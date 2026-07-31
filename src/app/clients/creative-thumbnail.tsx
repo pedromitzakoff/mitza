@@ -5,11 +5,14 @@ import { ImageOff } from "lucide-react";
 
 /**
  * Miniatura do criativo — Módulo de Criativos (Creative Analytics), ajuste
- * "representação visual dos criativos": `url` (`creative_thumbnail_url`)
- * chega SEMPRE `null` hoje — nenhum mecanismo de preenchimento existe ainda
- * (sem scraping, sem download, sem cache de mídia, ver DECISIONS.md). Este
- * componente já nasce definitivo: quando `creative_thumbnail_url` passar a
- * ser populado por algum mecanismo futuro, a imagem aparece sozinha, sem
+ * "representação visual dos criativos": `url` (`preview_image_url`) chega
+ * SEMPRE `null` hoje — nenhum mecanismo de preenchimento existe ainda (sem
+ * scraping, sem download, sem cache de mídia, ver DECISIONS.md). Nome
+ * deliberadamente desacoplado de origem (nunca "creative_thumbnail_url"):
+ * amanhã a imagem pode vir do Instagram, da CDN do Meta, de upload manual,
+ * de cache próprio ou até ser gerada internamente — este componente já
+ * nasce definitivo: quando `preview_image_url` passar a ser populado, a
+ * imagem aparece sozinha, sem
  * nenhuma mudança estrutural aqui nem em quem consome este componente — só
  * o dado passa a existir.
  *
