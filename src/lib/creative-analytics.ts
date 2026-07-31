@@ -1,6 +1,31 @@
 import type { PerformanceGoal } from "./performance-goals";
 
 /**
+ * Por que a identidade do criativo é `creativeName`, e não um ID do Meta?
+ *
+ * Quem olhar isso vindo da API do Meta pode estranhar: por que não usar
+ * `creative_id`/`ad_id`/`video_id`, que já existem e parecem mais
+ * "corretos" como chave? A resposta é operacional, não técnica: na agência,
+ * o MESMO conceito de criativo é reaproveitado sob o MESMO nome sempre que
+ * ele volta a rodar — é essa disciplina de nomenclatura, mantida pelo time
+ * de mídia no próprio Meta Ads, que garante consistência ao longo do tempo.
+ *
+ * Os identificadores do Meta, ao contrário, mudam a cada duplicação de
+ * anúncio ou reupload de asset — nunca são estáveis o suficiente pra servir
+ * de identidade de um criativo que "existe" por meses ou anos. `ad_name`
+ * (nosso `creativeName`) é o único campo que a agência efetivamente controla
+ * e mantém estável.
+ *
+ * Por isso `creativeName` é a identidade canônica do Creative Analytics —
+ * nunca `ad_id`/`creative_id`/`video_id`/`image_hash`, nunca hash de
+ * imagem/vídeo, nunca nenhuma lógica de match/fuzzy/IA pra "descobrir" que
+ * dois anúncios são o mesmo criativo. Se um nome for digitado errado, a
+ * correção acontece no Meta (nunca editada internamente pela MITZA) e o
+ * próximo sync já traz o nome certo — a MITZA nunca renomeia nada por
+ * conta própria.
+ */
+
+/**
  * Núcleo puro do Módulo de Criativos (Creative Analytics — arquitetura
  * aprovada pelo usuário). Nunca conhece Supabase — só recebe linhas já
  * lidas de `ad_creative_daily_metrics` e devolve agregados prontos pra UI.
