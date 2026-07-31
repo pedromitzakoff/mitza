@@ -802,6 +802,7 @@ export interface Database {
           ad_name_column: string | null;
           creative_permalink_column: string | null;
           preview_image_column: string | null;
+          preview_image_fallback_column: string | null;
           impressions_column: string | null;
           reach_column: string | null;
           clicks_column: string | null;
@@ -828,6 +829,7 @@ export interface Database {
           ad_name_column?: string | null;
           creative_permalink_column?: string | null;
           preview_image_column?: string | null;
+          preview_image_fallback_column?: string | null;
           impressions_column?: string | null;
           reach_column?: string | null;
           clicks_column?: string | null;
@@ -854,6 +856,7 @@ export interface Database {
           ad_name_column?: string | null;
           creative_permalink_column?: string | null;
           preview_image_column?: string | null;
+          preview_image_fallback_column?: string | null;
           impressions_column?: string | null;
           reach_column?: string | null;
           clicks_column?: string | null;

@@ -265,6 +265,12 @@ export interface AggregateAdCreativeRowsColumns {
   creativeNameColumn: string;
   permalinkColumn?: string | null;
   previewImageColumn?: string | null;
+  /** Tentada SÓ quando `previewImageColumn` vier vazia/null naquela linha —
+   * nunca sobrescreve um valor que a coluna primária já trouxe. Existe pra
+   * fontes onde a imagem de capa vem em colunas diferentes conforme o tipo
+   * de criativo (ex.: imagem estática numa coluna, thumbnail de vídeo em
+   * outra, nunca as duas preenchidas na mesma linha). */
+  previewImageFallbackColumn?: string | null;
   spendColumn: string;
   impressionsColumn?: string | null;
   reachColumn?: string | null;
@@ -297,6 +303,7 @@ export function aggregateAdCreativeDailyRows(
     creativeNameColumn,
     permalinkColumn,
     previewImageColumn,
+    previewImageFallbackColumn,
     spendColumn,
     impressionsColumn,
     reachColumn,
@@ -335,10 +342,15 @@ export function aggregateAdCreativeDailyRows(
       }
     }
 
-    if (!group.previewImageUrl && previewImageColumn) {
-      const rawPreviewImage = row[previewImageColumn];
+    if (!group.previewImageUrl) {
+      const rawPreviewImage = previewImageColumn ? row[previewImageColumn] : undefined;
       if (typeof rawPreviewImage === "string" && rawPreviewImage.length > 0) {
         group.previewImageUrl = rawPreviewImage;
+      } else if (previewImageFallbackColumn) {
+        const rawFallback = row[previewImageFallbackColumn];
+        if (typeof rawFallback === "string" && rawFallback.length > 0) {
+          group.previewImageUrl = rawFallback;
+        }
       }
     }
 
