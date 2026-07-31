@@ -917,6 +917,10 @@ export default async function ClientPage({
   }`;
   const analyticsNavBaseHref = `${analyticsBaseHref}&${analyticsPeriodQuery}`;
   const analyticsHeaderBaseHref = `${analyticsBaseHref}&analyticsSection=${analyticsSection}`;
+  // AnalyticsReport (Fase 3) — mesmo período selecionado no hub, nunca um
+  // segundo seletor pro relatório; o download é um `<a>` normal, o
+  // navegador trata o `Content-Disposition: attachment` nativamente.
+  const exportHref = `/api/clients/${id}/analytics-report?${analyticsPeriodQuery}`;
 
   // Módulo de Criativos (Creative Analytics) — mesmo período único do hub
   // acima (antes tinha seletor próprio). Nunca gated por
@@ -1442,6 +1446,7 @@ export default async function ClientPage({
             periodEnd={analyticsPeriod.end}
             customStart={analyticsStartParam ?? analyticsPeriod.start}
             customEnd={analyticsEndParam ?? analyticsPeriod.end}
+            exportHref={exportHref}
           />
           <AnalyticsHubNav baseHref={analyticsNavBaseHref} activeSection={analyticsSection} />
 

@@ -12,10 +12,10 @@ import { AnalyticsPeriodMenu } from "./analytics-period-menu";
  * `client_reports` (WhatsApp) — pedido explícito do usuário: são dois
  * produtos diferentes agora. Report (`client_reports`) continua existindo
  * sem alteração nenhuma, só acessível de onde já era (drawer de recorrência
- * "Reportar cliente"); este botão aqui é reservado pra exportação em PDF do
- * Analytics inteiro (Resumo Executivo + Criativos + Campanhas), ainda não
- * implementada — desabilitado até essa exportação existir de verdade, nunca
- * apontando pro wizard antigo por engano.
+ * "Reportar cliente"); este botão aqui aciona o AnalyticsReport (Fase 3) —
+ * `<a>` normal apontando pra `/api/clients/[id]/analytics-report`, o
+ * navegador trata o download nativamente via `Content-Disposition:
+ * attachment` (nenhum JS de download aqui).
  */
 export function AnalyticsHubHeader({
   baseHref,
@@ -24,6 +24,7 @@ export function AnalyticsHubHeader({
   periodEnd,
   customStart,
   customEnd,
+  exportHref,
 }: {
   baseHref: string;
   activePreset: AnalyticsPeriodPreset;
@@ -31,21 +32,19 @@ export function AnalyticsHubHeader({
   periodEnd: string;
   customStart: string;
   customEnd: string;
+  exportHref: string;
 }) {
   return (
     <div className="flex items-center justify-between gap-3 pb-5">
       <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Analytics</p>
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          disabled
-          title="Exportação em PDF chegando em breve"
-          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground opacity-60"
+        <a
+          href={exportHref}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
         >
           <FileDown className="h-3.5 w-3.5" aria-hidden="true" />
           Exportar relatório
-          <span className="text-[10px] uppercase tracking-wide">Em breve</span>
-        </button>
+        </a>
         <AnalyticsPeriodMenu
           baseHref={baseHref}
           activePreset={activePreset}

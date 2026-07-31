@@ -2,17 +2,19 @@
 
 ## Status
 
-**Arquitetura aprovada. Fase 0 (validação técnica) concluída localmente e
-aprovada, condicional a um smoke test num Preview Deployment real da
-Vercel — ver `docs/ANALYTICS_REPORT_PHASE0_RESULTS.md`.** Implementação de
-verdade (Fase 1 em diante) ainda não iniciada. A primeira versão deste
-documento propunha 4 camadas (Dados → Tema → Renderer → Formatos); uma
-revisão posterior adicionou a quinta, `AnalyticsReportDocument` (estrutura
-do documento, separada do dado bruto), formalizou a restrição
-não-negociável de reuso de lógica, e resolveu as 3 perguntas em aberto da
-versão original. Esta revisão acrescenta a regra de produto pra Fase 1-2
-("primeira versão é uma reprodução fiel do Analytics, sem enriquecimento
-visual ainda").
+**v1 implementado e em produção.** Fase 0 (validação técnica) aprovada com
+smoke test real na Vercel (`docs/ANALYTICS_REPORT_PHASE0_RESULTS.md`).
+Fases 1-3 implementadas: as 5 camadas descritas neste documento existem em
+`src/lib/analytics-report/` e o botão "Exportar relatório" do
+`AnalyticsHubHeader` está ligado à rota real. A primeira versão é
+deliberadamente uma reprodução fiel do Analytics (mesma ordem, mesmos
+textos, mesmos destaques/aprendizados, mesmo gráfico de evolução — sem capa
+premium, sem White Label, sem imagens de criativo) — enriquecimento visual
+fica pra depois desta base estar sincronizada. Único desvio da Camada 5
+originalmente proposta: entrega via **Route Handler**, não Server Action
+(ver seção atualizada abaixo — download binário nativo do navegador via
+`Content-Disposition: attachment`, sem a complexidade de RPC com resposta
+binária que uma Server Action exigiria).
 
 ## Nome do produto interno
 
@@ -355,23 +357,32 @@ documento existe pra impedir.
 | **Chromium headless** (`puppeteer-core` + `@sparticuz/chromium`) — **escolhida** | Reaproveita o HTML/CSS exatamente como escrito; é o mesmo motor que serve a "página compartilhável" e o e-mail futuro — nenhum retrabalho | Function maior/mais lenta em serverless (cold start); precisa validar limite de tamanho/tempo do plano Vercel em uso — objeto da Fase 0 |
 | `@react-pdf/renderer` — descartado | Leve, sem binário de Chromium | Layout próprio, não é HTML real — exigiria um segundo template |
 
-## Camada 5 — Entrega (Server Action)
+## Camada 5 — Entrega (Route Handler)
+
+**Decisão desta implementação**: Route Handler, não Server Action — download
+binário nativo do navegador via `Content-Disposition: attachment`, sem a
+complexidade de RPC com resposta binária que uma Server Action exigiria.
 
 ```ts
-// src/app/clients/analytics-report-actions.ts
-export async function exportAnalyticsReportAction(clientId: string, period: {start,end}, format: "pdf")
+// src/app/api/clients/[id]/analytics-report/route.ts
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> })
 ```
 
 Fluxo completo: `buildAnalyticsReportData` → `buildAnalyticsReportDocument`
 → `resolveReportTheme(clientId)` → `renderReportHtml` → `renderReportPdf`
-→ stream do PDF de volta pro navegador como download. **v1 não persiste
-nada** — gerado sob demanda, sem armazenamento. "Link temporário"/"página
-compartilhável" (visão de futuro) é uma adição de v2 que grava o HTML/PDF
-no Supabase Storage com URL assinada expirável — custo marginal baixo
-DEPOIS que o renderer HTML já existe, mas fora do escopo desta primeira
-implementação.
+→ resposta com o PDF como download. **v1 não persiste nada** — gerado sob
+demanda, sem armazenamento. Nenhum auth manual: `createClient()`
+(cookie-based) já escopa `clients` ao que o usuário autenticado pode ver
+via RLS, mesmo critério de 404 silencioso de `clients/[id]/page.tsx`. O
+período vem dos mesmos query params do hub (`analyticsPreset`/
+`analyticsStart`/`analyticsEnd`), resolvidos por `resolveAnalyticsPeriod` —
+o botão "Exportar relatório" sempre exporta exatamente o período que está
+selecionado na tela. "Link temporário"/"página compartilhável" (visão de
+futuro) é uma adição de v2 que grava o HTML/PDF no Supabase Storage com URL
+assinada expirável — custo marginal baixo DEPOIS que o renderer HTML já
+existe, mas fora do escopo desta primeira implementação.
 
-## Estrutura de arquivos proposta
+## Estrutura de arquivos
 
 ```
 src/lib/analytics-report/
@@ -379,10 +390,14 @@ src/lib/analytics-report/
   report-document.ts        — AnalyticsReportDocument + buildAnalyticsReportDocument()
   report-theme.ts            — ReportTheme + REPORT_THEMES + resolveReportTheme()
   renderers/
-    html-renderer.tsx         — template canônico único (React → HTML estático), dispatcher por block.type
+    html-renderer.ts          — template canônico único, dispatcher por block.type
     pdf-renderer.ts             — HTML → PDF (Chromium headless)
-src/app/clients/
-  analytics-report-actions.ts  — Server Action, aciona o botão "Exportar relatório"
+src/app/api/clients/[id]/analytics-report/
+  route.ts                      — Route Handler GET, aciona o botão "Exportar relatório"
+src/lib/
+  chart-geometry.ts               — geometria pura do gráfico (extraída de analytics-trend-chart.tsx, reaproveitada pelo html-renderer)
+  html-escape.ts                   — escapeHtml() compartilhado entre os renderers
+  analytics-messages.ts             — textos de estado vazio compartilhados entre tela e relatório
 supabase/
   clients-report-theme.sql      — migration da Fase 1 (clients.report_theme)
 ```
@@ -411,30 +426,36 @@ supabase/
 - **v1 é stateless** — sem persistência de relatório gerado; armazenamento
   pra link compartilhável é uma etapa futura explícita, não implícita nesta.
 
-## Fases de implementação propostas
+## Fases de implementação
 
-- **Fase 0 — Validação técnica**: ✅ concluída localmente (ver
-  `docs/ANALYTICS_REPORT_PHASE0_RESULTS.md`), aprovada condicional a um
-  smoke test num Preview Deployment real da Vercel — rota temporária já
-  preparada (`src/app/api/dev/analytics-report-phase0-smoke/`), aguardando
-  alguém com acesso ao deploy rodar e reportar os números.
-- **Fase 1 — Dados, documento e tema**: `report-data.ts` (reaproveitando
-  100% das funções já existentes), `report-document.ts`, `report-theme.ts`
-  (os dois temas definidos) **e a migration `clients.report_theme`**
-  (criada nesta fase, mesmo sem UI de seleção).
-- **Fase 2 — Template HTML fiel**: `html-renderer.tsx` reproduz o
-  Analytics tela por tela (ver "Regra de produto pra Fase 1" acima —
-  aplica-se tecnicamente aqui, na Camada 4) — mesma ordem, mesmos textos,
-  mesmos destaques/aprendizados, mesmos gráficos. Nenhum enriquecimento
-  visual (capa elaborada, paginação refinada) nesta etapa. Validado
-  abrindo o HTML bruto no navegador antes de qualquer PDF.
-- **Fase 3 — PDF e wiring**: `pdf-renderer.ts` + Server Action + religar o
-  botão "Exportar relatório" (hoje "Em breve") no `AnalyticsHubHeader`.
+- **Fase 0 — Validação técnica**: ✅ concluída, com smoke test real num
+  Preview Deployment da Vercel aprovado (ver
+  `docs/ANALYTICS_REPORT_PHASE0_RESULTS.md`). A rota temporária de smoke
+  test (`src/app/api/dev/analytics-report-phase0-smoke/`) e o spike
+  (`scripts/analytics-report-phase0/`) já foram removidos do repositório —
+  sua única função era validar a tecnologia, que agora está em uso real.
+- **Fase 1 — Dados, documento e tema**: ✅ concluída. `report-data.ts`
+  (reaproveitando 100% das funções já existentes), `report-document.ts`,
+  `report-theme.ts` (os dois temas definidos) e a migration
+  `clients.report_theme`.
+- **Fase 2 — Template HTML fiel**: ✅ concluída. `html-renderer.ts`
+  reproduz o Analytics tela por tela — mesma ordem, mesmos textos, mesmos
+  destaques/aprendizados, mesmo gráfico de evolução (mesma geometria de
+  `analytics-trend-chart.tsx`, extraída para `lib/chart-geometry.ts` e
+  reaproveitada por ambos). Nenhum enriquecimento visual (capa elaborada,
+  paginação refinada) nesta versão. Desvio deliberado e documentado: sem
+  imagens de criativo no PDF (evita reintroduzir a dependência de rede que
+  a Fase 0 mediu como custosa com `waitUntil: "networkidle0"`) — texto/dado
+  idêntico à tela, não pixel-idêntico.
+- **Fase 3 — PDF e wiring**: ✅ concluída. `pdf-renderer.ts` + Route
+  Handler (`src/app/api/clients/[id]/analytics-report/route.ts`) + botão
+  "Exportar relatório" religado no `AnalyticsHubHeader`.
 - **Fase 4 — Fora de escopo por enquanto**: enriquecimento visual do
   template (capa institucional, paginação/layout premium — só depois da
-  versão fiel confirmada), link compartilhável (Supabase Storage + URL
-  assinada), e-mail, seletor de tema por cliente na UI de Configurações,
-  temas de parceiros adicionais, outros formatos (ex.: apresentação).
+  versão fiel confirmada em uso real), link compartilhável (Supabase
+  Storage + URL assinada), e-mail, seletor de tema por cliente na UI de
+  Configurações, temas de parceiros adicionais, outros formatos (ex.:
+  apresentação).
 
 ## Decisões confirmadas nesta rodada de revisão
 
