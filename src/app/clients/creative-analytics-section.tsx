@@ -7,6 +7,7 @@ import type { AnalyticsPeriodPreset, AnalyticsTrend } from "@/lib/analytics";
 import type { CreativeDetail, CreativeSummary } from "@/lib/creative-analytics";
 import { AnalyticsPeriodMenu } from "./analytics-period-menu";
 import { CreativeCard } from "./creative-card";
+import { CreativeThumbnail } from "./creative-thumbnail";
 import { AnalyticsTrendChart } from "./analytics-trend-chart";
 
 /**
@@ -107,17 +108,28 @@ function CreativeDetailView({ detail, backHref }: { detail: CreativeDetail; back
           Voltar aos criativos
         </Link>
 
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-semibold text-foreground">{summary.creativeName}</h1>
-          {summary.permalinkUrl && (
-            <a href={summary.permalinkUrl} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-brand" aria-label="Ver criativo no Instagram">
-              <ExternalLink className="h-4 w-4" aria-hidden="true" />
-            </a>
-          )}
+        <div className="flex items-start gap-4">
+          <div className="w-24 shrink-0">
+            <CreativeThumbnail url={summary.thumbnailUrl} alt={summary.creativeName} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-semibold text-foreground">{summary.creativeName}</h1>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {summary.campaignNames.length} {summary.campaignNames.length === 1 ? "campanha" : "campanhas"}
+            </p>
+            {summary.permalinkUrl && (
+              <a
+                href={summary.permalinkUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-brand hover:underline"
+              >
+                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                Abrir no Instagram
+              </a>
+            )}
+          </div>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {summary.campaignNames.length} {summary.campaignNames.length === 1 ? "campanha" : "campanhas"}
-        </p>
       </div>
 
       <section>

@@ -22,6 +22,11 @@ export interface AdCreativeDailyMetricRow {
   campaignName: string;
   creativeName: string;
   creativePermalinkUrl: string | null;
+  /** Reservado pra exibição futura de miniatura — hoje sempre `null` (nenhum
+   * mecanismo de preenchimento existe ainda: sem scraping, sem download, sem
+   * cache de mídia). A UI já trata os dois estados; popular este campo no
+   * futuro não exige nenhuma mudança estrutural aqui nem na UI. */
+  creativeThumbnailUrl: string | null;
   spend: number;
   impressions: number | null;
   reach: number | null;
@@ -44,9 +49,13 @@ export interface CreativeSummary {
   creativeName: string;
   /** Permalink da linha de DATA MAIS ANTIGA que tiver um link registrado —
    * fixado na "primeira aparição" do criativo, nunca trocado por um link
-   * mais recente (regra do usuário: sem cache de imagem/vídeo, a miniatura
-   * é sempre a da primeira vez que o criativo apareceu). */
+   * mais recente. Ação SECUNDÁRIA na UI (nunca a representação visual do
+   * criativo — essa é sempre `thumbnailUrl`/placeholder). */
   permalinkUrl: string | null;
+  /** Mesma regra de "primeira aparição" do permalink — hoje sempre `null`
+   * (ver `AdCreativeDailyMetricRow.creativeThumbnailUrl`). É este campo,
+   * não o permalink, que decide o que a UI mostra como imagem do card. */
+  thumbnailUrl: string | null;
   campaignNames: string[];
   totalSpend: number;
   totalImpressions: number | null;
@@ -69,6 +78,8 @@ interface CreativeAccumulator {
   creativeName: string;
   permalinkUrl: string | null;
   permalinkDate: string | null;
+  thumbnailUrl: string | null;
+  thumbnailDate: string | null;
   campaignNames: Set<string>;
   totalSpend: number;
   totalImpressions: number | null;
@@ -84,6 +95,8 @@ function newAccumulator(creativeName: string): CreativeAccumulator {
     creativeName,
     permalinkUrl: null,
     permalinkDate: null,
+    thumbnailUrl: null,
+    thumbnailDate: null,
     campaignNames: new Set(),
     totalSpend: 0,
     totalImpressions: null,
@@ -109,12 +122,17 @@ function accumulateRow(acc: CreativeAccumulator, row: AdCreativeDailyMetricRow):
     acc.permalinkUrl = row.creativePermalinkUrl;
     acc.permalinkDate = row.date;
   }
+  if (row.creativeThumbnailUrl && (acc.thumbnailDate === null || row.date < acc.thumbnailDate)) {
+    acc.thumbnailUrl = row.creativeThumbnailUrl;
+    acc.thumbnailDate = row.date;
+  }
 }
 
 function finishSummary(acc: CreativeAccumulator): CreativeSummary {
   return {
     creativeName: acc.creativeName,
     permalinkUrl: acc.permalinkUrl,
+    thumbnailUrl: acc.thumbnailUrl,
     campaignNames: Array.from(acc.campaignNames).sort(),
     totalSpend: acc.totalSpend,
     totalImpressions: acc.totalImpressions,

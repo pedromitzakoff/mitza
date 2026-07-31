@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import type { CreativeSummary } from "@/lib/creative-analytics";
+import { CreativeThumbnail } from "./creative-thumbnail";
 
 /** Uma estatística secundária só aparece quando o dado existe — nunca um
  * "0"/"—" fabricado pra preencher espaço (degradação graciosa exigida pelo
@@ -20,37 +21,33 @@ function Stat({ label, value }: { label: string; value: string }) {
  * Card de UM criativo (identidade = `creative_name`, o `ad_name` do Meta) —
  * mostra só os indicadores que a fonte de fato entrega pra este cliente.
  * Nunca gated por `performance_goal` da conta (pedido explícito do usuário:
- * o módulo existe independente do objetivo). Sem miniatura de imagem/vídeo
- * (nenhum cache) — o permalink vira um link "Ver no Instagram" quando
- * existir, nunca uma tentativa de embutir a imagem em si.
+ * o módulo existe independente do objetivo).
+ *
+ * Ajuste "representação visual dos criativos": a MINIATURA (`CreativeThumbnail`,
+ * hoje sempre placeholder — `creative_thumbnail_url` ainda não é preenchido
+ * por nenhum mecanismo) é o elemento visual principal do card, nunca o
+ * permalink. O permalink vira uma ação SECUNDÁRIA ("Abrir no Instagram"),
+ * nunca a representação do criativo em si.
+ *
+ * O card inteiro é clicável (vai pro detalhe) via um `<Link>` absoluto que
+ * cobre o container — o link do permalink fica ACIMA dele (`z-10`), como
+ * irmão, nunca aninhado dentro de outro `<a>` (HTML inválido).
  */
 export function CreativeCard({ summary, detailHref }: { summary: CreativeSummary; detailHref: string }) {
   const goalConfig = summary.resultType ? PERFORMANCE_GOALS[summary.resultType] : null;
 
   return (
-    <Link
-      href={detailHref}
-      className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-brand/40 hover:bg-brand/[0.03]"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 truncate text-sm font-semibold text-foreground">{summary.creativeName}</p>
-        {summary.permalinkUrl && (
-          <a
-            href={summary.permalinkUrl}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="shrink-0 text-muted-foreground hover:text-brand"
-            aria-label="Ver criativo no Instagram"
-          >
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-          </a>
-        )}
-      </div>
+    <div className="relative flex flex-col gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-brand/40 hover:bg-brand/[0.03]">
+      <Link href={detailHref} className="absolute inset-0 rounded-lg" aria-label={`Ver detalhes de ${summary.creativeName}`} />
 
-      <p className="text-xs text-muted-foreground">
-        {summary.campaignNames.length} {summary.campaignNames.length === 1 ? "campanha" : "campanhas"}
-      </p>
+      <CreativeThumbnail url={summary.thumbnailUrl} alt={summary.creativeName} />
+
+      <div>
+        <p className="truncate text-sm font-semibold text-foreground">{summary.creativeName}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {summary.campaignNames.length} {summary.campaignNames.length === 1 ? "campanha" : "campanhas"}
+        </p>
+      </div>
 
       <div className="flex flex-wrap gap-x-5 gap-y-3 border-t border-border pt-3">
         <Stat label="Investimento" value={formatCurrency(summary.totalSpend)} />
@@ -62,6 +59,18 @@ export function CreativeCard({ summary, detailHref }: { summary: CreativeSummary
         {summary.ctr !== null && <Stat label="CTR" value={formatPercent(summary.ctr * 100)} />}
         {summary.roas !== null && <Stat label="ROAS" value={`${summary.roas.toFixed(2)}x`} />}
       </div>
-    </Link>
+
+      {summary.permalinkUrl && (
+        <a
+          href={summary.permalinkUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="relative z-10 inline-flex w-fit items-center gap-1 text-xs font-medium text-muted-foreground hover:text-brand hover:underline"
+        >
+          <ExternalLink className="h-3 w-3" aria-hidden="true" />
+          Abrir no Instagram
+        </a>
+      )}
+    </div>
   );
 }
