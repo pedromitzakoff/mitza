@@ -1,14 +1,13 @@
 import { EmptyState } from "@/components/ui/empty-state";
 
 /**
- * Narrativa do Capítulo II ("O que explica esse resultado?") — Etapa
- * "Analytics como Relatório": as mesmas frases determinísticas
- * (`buildExecutiveSummaryNarrative`, sem IA) lidas como UM parágrafo
- * corrido de prosa de verdade — serifa reta (não itálica: isto é o corpo
- * do relatório, não uma citação de destaque), leading generoso, mesma
- * família tipográfica da manchete/lide do Capítulo I. Sem base suficiente
- * pra nenhuma frase, mostra só o estado vazio — o capítulo continua
- * existindo, só sem conteúdo ainda.
+ * Narrativa do Capítulo III ("O que aprendemos?") — as mesmas frases
+ * determinísticas (`buildLearningsNarrative`, sem IA) lidas como UM
+ * parágrafo corrido de prosa de verdade — serifa reta (não itálica: isto é
+ * o corpo do relatório, não uma citação de destaque), leading generoso,
+ * mesma família tipográfica da manchete/lide do Capítulo I. Sem base
+ * suficiente pra nenhuma frase, mostra só o estado vazio — o capítulo
+ * continua existindo, só sem conteúdo ainda.
  */
 export function AnalyticsExecutiveSummary({ sentences }: { sentences: string[] }) {
   if (sentences.length === 0) {

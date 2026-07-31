@@ -207,16 +207,17 @@ export interface AnalyticsChannelRow {
 }
 
 /**
- * Detalhamento por CANAL — substitui deliberadamente o "detalhamento por
- * campanha" pedido originalmente: a MITZA não guarda identidade de campanha
- * em NENHUMA tabela hoje (o Import Service agrega e descarta esse dado ao
- * gravar em `daily_spend`/`daily_performance` — ver
- * `import_sources.campaign_name_column`; o fluxo manual, `performance_records`,
- * nunca teve essa dimensão). Canal (`channel`) é a granularidade mais fina
- * que de fato existe e é consultável pra qualquer cliente — nunca inventa
- * uma dimensão que o sistema não possui. Só inclui canais com pelo menos
- * investimento ou resultado real registrado no período (nunca uma linha
- * "zerada" por completo).
+ * Detalhamento por CANAL (Meta/Google/etc.) — granularidade mais alta que
+ * campanha/criativo (essas duas hoje vivem em `ad_creative_daily_metrics`,
+ * ver `lib/creative-analytics.ts`/`lib/campaign-analytics.ts` e as
+ * sub-seções Criativos/Campanhas do hub). Este agregado por canal continua
+ * existindo só como INSUMO da frase de concentração de canal em
+ * `buildLearningsNarrative` (ex.: "o Meta concentrou X% do investimento") —
+ * Etapa "Resumo Executivo" removeu a tabela visual por canal do Resumo
+ * (Capítulo antigo "Onde aconteceu?"), porque a sub-seção Campanhas já
+ * responde essa pergunta com muito mais profundidade. Só inclui canais com
+ * pelo menos investimento ou resultado real registrado no período (nunca
+ * uma linha "zerada" por completo).
  *
  * `instagram` nunca entra aqui (Etapa Integração Instagram) — é uma fonte
  * de RESULTADO orgânico, nunca um canal de investimento próprio; uma linha
@@ -253,22 +254,6 @@ export function buildAnalyticsChannelRows(
       };
     })
     .sort((a, b) => b.resultCount - a.resultCount);
-}
-
-/**
- * Nota de fechamento do Capítulo III ("Onde aconteceu?") — Etapa "Analytics
- * como Relatório". Com 0 ou 1 canal, não existe comparação real a fazer
- * entre canais (nunca finge uma disputa que não existe); com 2+, só a nota
- * sobre criativos (mesma limitação de sempre: a MITZA não persiste
- * identidade de criativo em nenhuma tabela hoje).
- */
-export function buildWhereAside(channelCount: number): string {
-  const creativesNote =
-    "Em breve, este retrato também vai indicar qual criativo específico gerou cada resultado — a integração de criativos ainda não existe na plataforma.";
-  if (channelCount <= 1) {
-    return `Sem um segundo canal ativo no período, não há comparação a fazer — o capítulo existe pra confirmar isso, não pra inventar uma disputa entre canais. ${creativesNote}`;
-  }
-  return creativesNote;
 }
 
 export interface AnalyticsHero {
@@ -357,15 +342,25 @@ export function buildResultLede(input: {
  * um dashboard técnico"). Cada frase só entra quando há uma base real pra
  * afirmá-la — sem dado suficiente, a frase correspondente simplesmente não
  * existe (nunca um texto genérico tipo "dados insuficientes" no lugar).
+ *
+ * Etapa "Resumo Executivo": renomeada de `buildExecutiveSummaryNarrative` —
+ * alimenta o bloco "O que aprendemos" (pedido explícito do usuário: "esse
+ * talvez seja o bloco mais importante do Analytics"). Ganhou a frase de
+ * investimento vs. eficiência (`previousSummary`); frases sobre tipo de
+ * criativo (vídeo/estático) ou estabilidade de CPA entre canais ficaram de
+ * fora desta primeira versão — a MITZA não guarda tipo de mídia por
+ * criativo hoje, e estabilidade exigiria uma métrica de variância que ainda
+ * não existe. Nunca fabricar essas frases sem o dado real por trás.
  */
-export function buildExecutiveSummaryNarrative(input: {
+export function buildLearningsNarrative(input: {
   goal: PerformanceGoal;
   summary: PerformanceSummary;
+  previousSummary: PerformanceSummary | null;
   channelRows: AnalyticsChannelRow[];
   totalActualSpend: number;
   heroPercentChange: number | null;
 }): string[] {
-  const { goal, summary, channelRows, totalActualSpend, heroPercentChange } = input;
+  const { goal, summary, previousSummary, channelRows, totalActualSpend, heroPercentChange } = input;
   const config = PERFORMANCE_GOALS[goal];
   const resultLabel = config.resultMetricLabel.toLowerCase();
   const sentences: string[] = [];
@@ -401,6 +396,25 @@ export function buildExecutiveSummaryNarrative(input: {
     };
     const sentence = statusText[summary.comparison.status];
     if (sentence) sentences.push(sentence);
+  }
+
+  // Investimento vs. eficiência — só com período anterior comparável (ambos
+  // com gasto e custo por resultado reais). "Aumentou sem perda de
+  // eficiência" quando o gasto cresceu e o custo por resultado não piorou
+  // na mesma proporção (piorou menos da metade do quanto o gasto cresceu,
+  // ou até melhorou); nunca a leitura inversa fabricada quando os números
+  // não sustentam essa conclusão.
+  if (
+    previousSummary?.actualSpend &&
+    previousSummary.actualSpend > 0 &&
+    previousSummary.costPerResult !== null &&
+    summary.costPerResult !== null
+  ) {
+    const spendChange = computePercentChange(totalActualSpend, previousSummary.actualSpend);
+    const costChange = computePercentChange(summary.costPerResult, previousSummary.costPerResult);
+    if (spendChange !== null && costChange !== null && spendChange > 5 && costChange <= spendChange / 2) {
+      sentences.push("O investimento aumentou sem perda proporcional de eficiência.");
+    }
   }
 
   return sentences;

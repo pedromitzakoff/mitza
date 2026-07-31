@@ -1,12 +1,11 @@
 import Link from "next/link";
 
-export type AnalyticsHubSection = "resumo" | "criativos" | "campanhas" | "acoes" | "insights";
+export type AnalyticsHubSection = "resumo" | "criativos" | "campanhas" | "insights";
 
 const HUB_SECTIONS: { key: AnalyticsHubSection; label: string }[] = [
-  { key: "resumo", label: "Resumo" },
+  { key: "resumo", label: "Resumo Executivo" },
   { key: "criativos", label: "Criativos" },
   { key: "campanhas", label: "Campanhas" },
-  { key: "acoes", label: "Ações" },
   { key: "insights", label: "Insights" },
 ];
 

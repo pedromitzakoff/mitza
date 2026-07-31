@@ -1,15 +1,17 @@
-import { TrendingDown, TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import type { CampaignSummary } from "@/lib/campaign-analytics";
 
 /**
- * Card executivo de UMA campanha — investimento, resultado principal, CPA e
- * variação vs período anterior. Deliberadamente enxuto (pedido explícito:
+ * Card executivo de UMA campanha — nome, investimento, resultado principal,
+ * CPA e ROAS (quando existir). Deliberadamente enxuto (pedido explícito:
  * "não quero copiar o Meta Ads, quero uma visão muito mais limpa") — nunca
  * mostra todas as métricas disponíveis de uma vez, só o essencial pra
- * decisão rápida. Métricas sem dado real (sem metric_mappings, sem
- * variação anterior confiável) simplesmente não aparecem.
+ * decisão rápida.
+ *
+ * Etapa "Resumo Executivo": SEM indicador de variação % (removido a pedido
+ * explícito do usuário — "essa informação gera mais dúvida do que valor").
+ * Nunca reintroduzir esse dado neste card sem reabrir essa decisão.
  */
 export function CampaignCard({ summary }: { summary: CampaignSummary }) {
   const goalConfig = summary.resultType ? PERFORMANCE_GOALS[summary.resultType] : null;
@@ -41,14 +43,6 @@ export function CampaignCard({ summary }: { summary: CampaignSummary }) {
         )}
         {summary.roas !== null && <span className="tabular-nums text-muted-foreground">ROAS {summary.roas.toFixed(2)}x</span>}
       </div>
-
-      {summary.percentChange !== null && (
-        <div className={`flex items-center gap-1 text-sm font-medium ${summary.percentChange >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-          {summary.percentChange >= 0 ? <TrendingUp className="h-3.5 w-3.5" aria-hidden="true" /> : <TrendingDown className="h-3.5 w-3.5" aria-hidden="true" />}
-          {summary.percentChange >= 0 ? "+" : ""}
-          {summary.percentChange.toFixed(0)}%
-        </div>
-      )}
     </div>
   );
 }

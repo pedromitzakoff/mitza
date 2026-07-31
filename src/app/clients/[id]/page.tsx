@@ -61,15 +61,13 @@ import {
 } from "@/lib/performance";
 import { AVAILABLE_TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
 import type { SprintPerformanceProps } from "../sprint-card";
-import { buildReportViewData } from "../../reports/report-data";
 import { ClientHistoryList } from "../client-history-list";
 import { fetchRecurringTaskDetail, fetchRecurringTaskListsForSprints } from "@/lib/recurring-task-data";
 import { RecurringTaskDrawer } from "../recurring-task-drawer";
 import { defaultReportPeriod } from "@/lib/client-reports";
-import { fetchClientReportDetail, fetchClientReportHistory } from "../client-report-data";
+import { fetchClientReportDetail } from "../client-report-data";
 import { ClientReportWizard } from "../client-report-wizard";
 import { resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
-import { previousEquivalentPeriod } from "@/lib/period-comparison";
 import { fetchClientAnalyticsData } from "../analytics-data";
 import { AnalyticsSection } from "../analytics-section";
 import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
@@ -78,7 +76,6 @@ import { CreativeAnalyticsSection } from "../creative-analytics-section";
 import { buildCampaignSummaries } from "@/lib/campaign-analytics";
 import { AnalyticsCampaignsSection } from "../analytics-campaigns-section";
 import { AnalyticsInsightsSection } from "../analytics-insights-section";
-import { AnalyticsActionsSection } from "../analytics-actions-section";
 import { AnalyticsHubHeader } from "../analytics-hub-header";
 import { AnalyticsHubNav } from "../analytics-hub-nav";
 
@@ -799,10 +796,13 @@ export default async function ClientPage({
   // (subheader sticky compartilhado por toda /clients/[id]/**, removido).
   // Status já aparece como badge ao lado do nome, por isso não se repete
   // na linha secundária abaixo.
-  // Etapa "Reorganização do hub de Analytics": "Ver relatório" agora abre a
-  // sub-seção "Ações" dentro de Analytics (antiga aba "Relatórios" fundida
-  // ao hub) — nunca mais `/reports/${client.id}` nem `?area=relatorios`.
-  const reportHref = `/clients/${client.id}?area=analytics&analyticsSection=acoes${monthQueryParam ? `&month=${monthQueryParam}` : ""}`;
+  // Etapa "Resumo Executivo": "Ver relatório" volta a apontar pra
+  // `/reports/${client.id}` (pendências/timeline/fechamento de mês) — a
+  // sub-seção "Ações" do Analytics foi removida (pedido explícito do
+  // usuário: "ela não representa inteligência, pertence a outro lugar da
+  // plataforma"). A rota nunca deixou de existir; só deixou de ser
+  // alcançável a partir do hub por um tempo, entre as duas reorganizações.
+  const reportHref = `/reports/${client.id}${monthQueryParam ? `?month=${monthQueryParam}` : ""}`;
   // Etapa "Cabeçalho enxuto": a segunda linha do cabeçalho responde só
   // "quem é o responsável?" — conta Meta (`meta_ad_account_id`) e tempo de
   // relacionamento (`contract_start_date`) são dados técnicos/administrativos
@@ -859,44 +859,33 @@ export default async function ClientPage({
           ? "Google"
           : null;
 
-  // Etapa "Reorganização do hub de Analytics": Analytics virou o hub único
-  // de inteligência da conta, com 5 sub-seções (Resumo/Criativos/Campanhas/
-  // Ações/Insights) navegadas por `analyticsSection` — nunca abas irmãs
-  // próprias. Todo dado abaixo só é buscado quando `activeArea ===
-  // "analytics"` (nenhuma query extra fora do hub); dentro do hub, cada
-  // busca é recortada pela sub-seção que realmente precisa dela, pra não
-  // pagar o custo de todas as 5 sub-seções em toda visita.
-  const ANALYTICS_HUB_SECTIONS = ["resumo", "criativos", "campanhas", "acoes", "insights"] as const;
+  // Etapa "Resumo Executivo": Analytics é o hub único de inteligência da
+  // conta, com 4 sub-seções (Resumo/Criativos/Campanhas/Insights) navegadas
+  // por `analyticsSection` — nunca abas irmãs próprias. A antiga sub-seção
+  // "Ações" (pendências/timeline/histórico de report) foi removida daqui:
+  // pedido explícito do usuário ("ela não representa inteligência, pertence
+  // a outro lugar da plataforma"; no futuro, uma área própria de Pendências
+  // e Operação). O módulo `client_reports` (Report/WhatsApp) continua
+  // existindo sem alteração, só não é mais alcançável a partir do Analytics
+  // — permanece acessível pelo drawer "Reportar cliente" da recorrência.
+  // Todo dado abaixo só é buscado quando `activeArea === "analytics"`
+  // (nenhuma query extra fora do hub); dentro do hub, cada busca é recortada
+  // pela sub-seção que realmente precisa dela.
+  const ANALYTICS_HUB_SECTIONS = ["resumo", "criativos", "campanhas", "insights"] as const;
   type AnalyticsHubSectionValue = (typeof ANALYTICS_HUB_SECTIONS)[number];
   const analyticsSection = (
     ANALYTICS_HUB_SECTIONS.includes(analyticsSectionParam as AnalyticsHubSectionValue) ? analyticsSectionParam : "resumo"
   ) as AnalyticsHubSectionValue;
   const isAnalyticsArea = activeArea === "analytics";
 
-  // "Ações" — fusão da antiga aba "Relatórios" (pendências com responsável
-  // agência/cliente/terceiro + linha do tempo curada + fechar/reabrir mês,
-  // `ClientReportView` inalterado) com o histórico do módulo `client_reports`
-  // (relatório de WhatsApp/PDF enviado ao cliente, `ClientReportsView`
-  // inalterado) — os dois deixaram de ser áreas próprias da plataforma.
-  const isActionsSection = isAnalyticsArea && analyticsSection === "acoes";
-  const reportData = isActionsSection ? await buildReportViewData(supabase, id, monthQueryParam, today, formatMonthLabel) : null;
-  const reportResponsibleOptions = isActionsSection
-    ? ((await supabase.from("client_managers").select("team_members(id, name)").eq("client_id", id)).data?.flatMap((m) =>
-        m.team_members ? [m.team_members] : [],
-      ) ?? [])
-    : [];
-  const clientReportHistory = isActionsSection ? await fetchClientReportHistory(supabase, id) : [];
-
   // O wizard do `client_reports` (novo report ou reabertura de um existente)
-  // é independente da área/sub-seção ativa — pode ser aberto a partir do
-  // drawer da recorrência estando em qualquer lugar da página, por isso
-  // `clientReportParam` é lido fora desse `if` e o `closeHref` do wizard é
-  // sempre `returnTo` (nunca uma URL de sub-seção própria).
+  // é independente da área/sub-seção ativa — só é aberto a partir do drawer
+  // da recorrência ("Reportar cliente"), em qualquer lugar da página, por
+  // isso `clientReportParam` é lido fora de qualquer `if` de área e o
+  // `closeHref` do wizard é sempre `returnTo`.
   const isNewClientReport = clientReportParam === "new";
   const clientReportDetail =
     clientReportParam && !isNewClientReport ? await fetchClientReportDetail(supabase, id, clientReportParam) : null;
-  const newReportHref = withParam(returnTo, "clientReport=new");
-  const buildClientReportDetailHref = (reportId: string) => withParam(returnTo, `clientReport=${reportId}`);
   const suggestedReportPeriod =
     reportPeriodStartParam && reportPeriodEndParam
       ? { start: reportPeriodStartParam, end: reportPeriodEndParam }
@@ -934,10 +923,13 @@ export default async function ClientPage({
   // `client.performance_goal` (pedido explícito do usuário) — a
   // consolidação por criativo roda igual pra qualquer cliente, mostrando só
   // os indicadores que a fonte entrega. Buscado uma vez só, reaproveitado
-  // por Criativos E Campanhas (mesma fonte, `ad_creative_daily_metrics`).
-  const needsAdCreativeRows = isAnalyticsArea && (analyticsSection === "criativos" || analyticsSection === "campanhas");
+  // por Criativos, Campanhas E Resumo (Destaques do período reaproveita os
+  // mesmos agregados — ver `lib/period-highlights.ts`).
+  const needsAdCreativeRows =
+    isAnalyticsArea && (analyticsSection === "resumo" || analyticsSection === "criativos" || analyticsSection === "campanhas");
   const adCreativeRows = needsAdCreativeRows ? await getAdCreativeDailyMetricsForPeriod(supabase, id, analyticsPeriod) : [];
-  const creativeSummaries = analyticsSection === "criativos" ? buildCreativeSummaries(adCreativeRows) : [];
+  const creativeSummaries =
+    analyticsSection === "resumo" || analyticsSection === "criativos" ? buildCreativeSummaries(adCreativeRows) : [];
   const creativeDetail =
     isAnalyticsArea && analyticsSection === "criativos" && creativeParam ? buildCreativeDetail(adCreativeRows, creativeParam) : null;
   // Preserva o período selecionado (nunca reseta pra "this_month" ao entrar
@@ -954,14 +946,11 @@ export default async function ClientPage({
   };
 
   // Seção "Campanhas" — mesma fonte de Criativos, consolidada por
-  // `campaign_name` em vez de `creative_name`. O período anterior só é
-  // buscado quando essa sub-seção está ativa (nunca em Resumo/Criativos),
-  // pra calcular a variação vs período anterior de cada campanha.
-  const previousAnalyticsPeriod = previousEquivalentPeriod(analyticsPeriod);
-  const previousAdCreativeRows =
-    isAnalyticsArea && analyticsSection === "campanhas" ? await getAdCreativeDailyMetricsForPeriod(supabase, id, previousAnalyticsPeriod) : [];
+  // `campaign_name` em vez de `creative_name`. Etapa "Resumo Executivo":
+  // sem variação % vs período anterior (removida a pedido do usuário), por
+  // isso não busca mais um segundo período aqui.
   const campaignSummaries =
-    analyticsSection === "campanhas" ? buildCampaignSummaries(adCreativeRows, previousAdCreativeRows) : [];
+    analyticsSection === "resumo" || analyticsSection === "campanhas" ? buildCampaignSummaries(adCreativeRows) : [];
 
   // Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente" — "Resumo
   // consolidado do mês": nenhum dado novo, só uma leitura de fechamento
@@ -1439,12 +1428,11 @@ export default async function ClientPage({
         </>
       )}
 
-      {/* Etapa "Reorganização do hub de Analytics": Analytics virou o único
-          centro de inteligência da conta — Resumo/Criativos/Campanhas/Ações/
-          Insights vivem aqui dentro, navegados por `analyticsSection`, nunca
-          mais como abas irmãs próprias (antiga aba "Relatórios" e a extinta
-          "Criativos" foram fundidas aqui). Cabeçalho e período são ÚNICOS
-          pra todo o hub — nenhuma sub-seção tem seletor de período próprio. */}
+      {/* Etapa "Resumo Executivo": Analytics é o único centro de inteligência
+          da conta — Resumo Executivo/Criativos/Campanhas/Insights vivem
+          aqui dentro, navegados por `analyticsSection`, nunca abas irmãs
+          próprias. Cabeçalho e período são ÚNICOS pra todo o hub — nenhuma
+          sub-seção tem seletor de período próprio. */}
       {isAnalyticsArea && (
         <div className="mt-3">
           <AnalyticsHubHeader
@@ -1454,13 +1442,17 @@ export default async function ClientPage({
             periodEnd={analyticsPeriod.end}
             customStart={analyticsStartParam ?? analyticsPeriod.start}
             customEnd={analyticsEndParam ?? analyticsPeriod.end}
-            newReportHref={newReportHref}
           />
           <AnalyticsHubNav baseHref={analyticsNavBaseHref} activeSection={analyticsSection} />
 
           {analyticsSection === "resumo" &&
             (analyticsData ? (
-              <AnalyticsSection data={analyticsData} configureObjectiveHref={`/clients/${client.id}/edit`} />
+              <AnalyticsSection
+                data={analyticsData}
+                creativeSummaries={creativeSummaries}
+                campaignSummaries={campaignSummaries}
+                configureObjectiveHref={`/clients/${client.id}/edit`}
+              />
             ) : (
               <EmptyState>Não foi possível carregar o Analytics deste cliente.</EmptyState>
             ))}
@@ -1475,20 +1467,6 @@ export default async function ClientPage({
           )}
 
           {analyticsSection === "campanhas" && <AnalyticsCampaignsSection summaries={campaignSummaries} />}
-
-          {analyticsSection === "acoes" && (
-            <AnalyticsActionsSection
-              clientId={id}
-              month={monthQueryParam}
-              reportData={reportData}
-              isAdmin={isAdmin}
-              responsibleOptions={reportResponsibleOptions}
-              today={today}
-              reportHistory={clientReportHistory}
-              newReportHref={newReportHref}
-              buildReportDetailHref={buildClientReportDetailHref}
-            />
-          )}
 
           {analyticsSection === "insights" && <AnalyticsInsightsSection />}
         </div>
