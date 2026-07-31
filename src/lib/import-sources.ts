@@ -254,16 +254,17 @@ function toStringColumnValue(raw: unknown): string {
  *
  * Linha sem `creativeNameColumn` preenchido é ignorada (sem nome de
  * anúncio não há identidade possível). Colunas opcionais (`permalinkColumn`/
- * `impressionsColumn`/`reachColumn`/`clicksColumn`) ausentes na fonte
- * simplesmente resultam em campos `null` no agregado — nunca um valor
- * fabricado — pra sustentar a degradação graciosa exigida (a UI mostra só o
- * que existe).
+ * `previewImageColumn`/`impressionsColumn`/`reachColumn`/`clicksColumn`)
+ * ausentes na fonte simplesmente resultam em campos `null` no agregado —
+ * nunca um valor fabricado — pra sustentar a degradação graciosa exigida (a
+ * UI mostra só o que existe).
  */
 export interface AggregateAdCreativeRowsColumns {
   dateColumn: string;
   campaignNameColumn: string;
   creativeNameColumn: string;
   permalinkColumn?: string | null;
+  previewImageColumn?: string | null;
   spendColumn: string;
   impressionsColumn?: string | null;
   reachColumn?: string | null;
@@ -278,6 +279,7 @@ export interface AggregatedAdCreativeRow {
    * data+campanha+criativo — nunca sobrescrito depois (regra do usuário: a
    * miniatura é fixada na primeira aparição, sem cache de imagem/vídeo). */
   creativePermalinkUrl: string | null;
+  previewImageUrl: string | null;
   spend: number;
   impressions: number | null;
   reach: number | null;
@@ -289,7 +291,17 @@ export function aggregateAdCreativeDailyRows(
   rows: RawSourceRow[],
   columns: AggregateAdCreativeRowsColumns,
 ): AggregatedAdCreativeRow[] {
-  const { dateColumn, campaignNameColumn, creativeNameColumn, permalinkColumn, spendColumn, impressionsColumn, reachColumn, clicksColumn } = columns;
+  const {
+    dateColumn,
+    campaignNameColumn,
+    creativeNameColumn,
+    permalinkColumn,
+    previewImageColumn,
+    spendColumn,
+    impressionsColumn,
+    reachColumn,
+    clicksColumn,
+  } = columns;
 
   const groups = new Map<string, AggregatedAdCreativeRow>();
 
@@ -308,6 +320,7 @@ export function aggregateAdCreativeDailyRows(
       campaignName,
       creativeName,
       creativePermalinkUrl: null,
+      previewImageUrl: null,
       spend: 0,
       impressions: null,
       reach: null,
@@ -319,6 +332,13 @@ export function aggregateAdCreativeDailyRows(
       const rawPermalink = row[permalinkColumn];
       if (typeof rawPermalink === "string" && rawPermalink.length > 0) {
         group.creativePermalinkUrl = rawPermalink;
+      }
+    }
+
+    if (!group.previewImageUrl && previewImageColumn) {
+      const rawPreviewImage = row[previewImageColumn];
+      if (typeof rawPreviewImage === "string" && rawPreviewImage.length > 0) {
+        group.previewImageUrl = rawPreviewImage;
       }
     }
 
@@ -420,6 +440,7 @@ export interface AdCreativeDailyMetricsUpsertRow {
   campaign_name: string;
   creative_name: string;
   creative_permalink_url: string | null;
+  preview_image_url: string | null;
   spend: number;
   impressions: number | null;
   reach: number | null;
@@ -458,6 +479,7 @@ export function buildAdCreativeDailyMetricsUpsertRows(
       campaign_name: row.campaignName,
       creative_name: row.creativeName,
       creative_permalink_url: row.creativePermalinkUrl,
+      preview_image_url: row.previewImageUrl,
       spend: row.spend,
       impressions: row.impressions,
       reach: row.reach,

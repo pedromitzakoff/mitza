@@ -65,7 +65,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
   const { data: importSource, error: importSourceError } = await supabase
     .from("import_sources")
     .select(
-      "id, client_id, provider, channel, external_account_id, table_name, account_id_column, date_column, spend_column, campaign_name_column, campaign_name_filter, campaign_name_exclude, ad_name_column, creative_permalink_column, impressions_column, reach_column, clicks_column",
+      "id, client_id, provider, channel, external_account_id, table_name, account_id_column, date_column, spend_column, campaign_name_column, campaign_name_filter, campaign_name_exclude, ad_name_column, creative_permalink_column, preview_image_column, impressions_column, reach_column, clicks_column",
     )
     .eq("id", importSourceId)
     .single();
@@ -264,6 +264,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
       campaignNameColumn: importSource.campaign_name_column,
       creativeNameColumn: importSource.ad_name_column,
       permalinkColumn: importSource.creative_permalink_column,
+      previewImageColumn: importSource.preview_image_column,
       spendColumn: importSource.spend_column,
       impressionsColumn: importSource.impressions_column,
       reachColumn: importSource.reach_column,
