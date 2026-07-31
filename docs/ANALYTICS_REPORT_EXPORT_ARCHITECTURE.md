@@ -16,6 +16,37 @@ originalmente proposta: entrega via **Route Handler**, não Server Action
 `Content-Disposition: attachment`, sem a complexidade de RPC com resposta
 binária que uma Server Action exigiria).
 
+## Contrato estável (a partir do v1)
+
+**`report-data.ts`, `report-document.ts` e `report-theme.ts` são um
+contrato interno congelado.** v1 está em uso real — mudar a FORMA dessas
+três camadas agora (campos de `AnalyticsReportData`, o union de
+`AnalyticsReportBlock`, os campos de `ReportTheme`) é uma mudança
+estrutural, não uma evolução de rotina, e deve acontecer com critério
+(quem mexer decide isso deliberadamente, não como efeito colateral de
+"adicionar uma feature"). Motivo prático: essas três camadas são o ponto de
+acoplamento entre TUDO que consome o AnalyticsReport hoje (PDF) e no futuro
+(HTML compartilhável, e-mail, White Label) — mudar a forma delas depois que
+existirem múltiplos renderers reais significa mudar todos ao mesmo tempo.
+
+Isso NÃO significa congelar o produto. O crescimento esperado do
+AnalyticsReport daqui pra frente acontece por ADIÇÃO, sempre em um destes
+três lugares:
+
+- **Novo bloco** em `AnalyticsReportBlock` (`report-document.ts`) — ex.:
+  um bloco novo de conteúdo que a tela também ganhar.
+- **Novo tema** em `REPORT_THEMES` (`report-theme.ts`) — ex.: um tema de
+  parceiro adicional, sempre só configuração, nunca um `if (theme.id ===
+  ...)` no renderer.
+- **Novo renderer** em `renderers/` — ex.: uma versão e-mail resumida do
+  mesmo HTML, ou (futuro) um renderer de apresentação/slides.
+
+A restrição não-negociável desta arquitetura (nenhuma lógica própria do
+relatório — toda informação vem de função já usada pelo Analytics na tela)
+continua valendo por cima deste congelamento, exatamente como antes: um
+campo novo em `AnalyticsReportData` só existe depois que a métrica
+correspondente já existe na tela, nunca o caminho inverso.
+
 ## Nome do produto interno
 
 Internamente, esta funcionalidade se chama **AnalyticsReport** — nunca
