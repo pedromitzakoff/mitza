@@ -107,6 +107,23 @@ nesse tamanho — nada é referenciado externamente.
    dos ~62MB comprimidos em Brotli que vêm no pacote). Bem dentro de
    limites típicos de `/tmp` em serverless, mas é o número real, não uma
    estimativa.
+6. **`import.meta.dirname` + `readFileSync` pra ler assets (fontes/imagem)
+   quebra o build do Next.js** quando o arquivo que lê está fora de `src/`
+   — o build falhou com `TypeError: The "path" argument must be of type
+   string. Received undefined` ao tentar empacotar a rota de smoke test
+   apontando pros mesmos arquivos de fonte do script local. Causa: o
+   Turbopack reescreve o caminho do módulo bundlado, então
+   `import.meta.dirname` em tempo de execução não aponta mais pro
+   diretório fonte original. **Decisão registrada pra Fase 2**: o
+   `html-renderer.tsx` real vai precisar ler assets (se algum dia precisar
+   de arquivo em disco, e não só `data:` URIs já prontos) via
+   `path.join(process.cwd(), ...)` — nunca `import.meta.dirname`/
+   `__dirname` — e, se necessário, declarar `outputFileTracingIncludes` no
+   `next.config.ts` pra garantir que a Vercel empacote o arquivo junto da
+   function. A rota de smoke test contornou isso simplesmente não lendo
+   nenhum arquivo (`build-smoke-html.ts`, HTML 100% inline) — essa questão
+   de empacotamento é ortogonal à pergunta "Chromium roda?", por isso não
+   valia misturar as duas neste teste.
 
 Nenhuma limitação encontrada quebra a arquitetura proposta — todas foram
 contornáveis com o próprio Chromium headless, sem precisar de nenhum
@@ -138,13 +155,31 @@ funcionando, em ~400ms e ~50-160MB de RSS — números que cabem com folga
 larga em qualquer configuração de memória de function da Vercel (padrão
 de 1024MB).
 
-**Recomendação**: antes de investir a Fase 1 em diante, fazer UM teste real
-— subir este mesmo script como uma rota de API temporária
-(`/api/dev/analytics-report-phase0`, nunca exposta publicamente) num
-deploy de preview da Vercel, chamá-la uma vez a frio e uma vez a quente, e
-confirmar tempo de resposta e ausência de erro de tamanho de function. Não
-foi feito aqui por falta de acesso a um deploy real — é o único item desta
-lista que só se confirma em produção.
+**Rota de smoke test já preparada e validada localmente**:
+`src/app/api/dev/analytics-report-phase0-smoke/route.ts` — mesma técnica
+(Chromium headless), HTML de teste próprio sem leitura de arquivo
+(`build-smoke-html.ts`, ver limitação 6), bloqueada em produção
+(`VERCEL_ENV === "production"` → 404) e atrás do mesmo `CRON_SECRET` já
+usado por outras rotas administrativas do projeto.
+
+**Como rodar o smoke test real**: fazer deploy deste branch num Preview
+Deployment da Vercel (automático, se o GitHub App da Vercel já estiver
+instalado neste repositório) e chamar:
+
+```
+GET https://<preview-url>/api/dev/analytics-report-phase0-smoke?secret=<CRON_SECRET>
+GET https://<preview-url>/api/dev/analytics-report-phase0-smoke?secret=<CRON_SECRET>&format=pdf
+```
+
+A primeira chamada devolve JSON com `timingsMs`/`pdf.sizeKb` (comparar com
+os números desta página); a segunda devolve o PDF de verdade pra abrir no
+navegador. Chamar uma vez a frio (primeiro acesso, mede cold start) e
+outra em seguida (a quente). **Esta sessão não tem acesso a um deploy/
+projeto Vercel conectado**, então essa chamada final precisa ser feita
+por quem tiver acesso ao painel da Vercel — depois é só reportar os
+números de volta pra fechar esta validação. Depois de confirmado, apagar
+a rota inteira (`src/app/api/dev/analytics-report-phase0-smoke/`) — ela
+nunca deve ir pra produção.
 
 ## Decisão final
 

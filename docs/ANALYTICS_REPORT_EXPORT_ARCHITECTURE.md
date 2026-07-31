@@ -2,16 +2,17 @@
 
 ## Status
 
-**Arquitetura aprovada, com refinamentos incorporados nesta revisão —
-implementação ainda não iniciada.** Este documento existe pra ser discutido
-e aprovado antes de qualquer linha de código (pedido explícito do usuário:
-"essa funcionalidade vai ficar na plataforma por anos, vale gastar uma hora
-desenhando ela"). A primeira versão propunha 4 camadas (Dados → Tema →
-Renderer → Formatos); esta revisão adiciona uma quinta, `AnalyticsReportDocument`
-(estrutura do documento, separada do dado bruto), formaliza uma restrição
-não-negociável de reuso de lógica, e resolve as 3 perguntas em aberto da
-versão anterior. Próximo passo é a Fase 0 (validação técnica), ainda não
-iniciada.
+**Arquitetura aprovada. Fase 0 (validação técnica) concluída localmente e
+aprovada, condicional a um smoke test num Preview Deployment real da
+Vercel — ver `docs/ANALYTICS_REPORT_PHASE0_RESULTS.md`.** Implementação de
+verdade (Fase 1 em diante) ainda não iniciada. A primeira versão deste
+documento propunha 4 camadas (Dados → Tema → Renderer → Formatos); uma
+revisão posterior adicionou a quinta, `AnalyticsReportDocument` (estrutura
+do documento, separada do dado bruto), formalizou a restrição
+não-negociável de reuso de lógica, e resolveu as 3 perguntas em aberto da
+versão original. Esta revisão acrescenta a regra de produto pra Fase 1-2
+("primeira versão é uma reprodução fiel do Analytics, sem enriquecimento
+visual ainda").
 
 ## Nome do produto interno
 
@@ -53,6 +54,24 @@ o caminho inverso.
 Essa regra é o que garante, estruturalmente, que tela e relatório nunca
 divergem — não por disciplina de quem programa, mas porque não existe
 sequer um lugar no código onde uma segunda fórmula poderia ser escrita.
+
+## Regra de produto pra Fase 1: a primeira versão é uma reprodução fiel
+
+Complementar à restrição acima, mas de produto, não técnica: **o primeiro
+`html-renderer.tsx` funcional deve reproduzir o Analytics fielmente** —
+mesma ordem das informações, mesmos textos, mesmos destaques, mesmos
+aprendizados, mesmos gráficos (quando existirem). Nada de capa
+institucional elaborada, layout premium ou paginação refinada nesta
+primeira versão — isso vem DEPOIS, só quando a versão fiel já estiver
+funcionando de ponta a ponta.
+
+Motivo: é o clássico jeito de tela e PDF divergirem com o tempo — cada um
+evolui pra um lado diferente assim que alguém começa a "melhorar" o PDF
+antes dele nem existir de verdade. Uma primeira versão que é literalmente
+o Analytics em outro formato elimina esse risco desde o início; qualquer
+enriquecimento visual futuro (capa, paginação melhor, identidade visual
+mais rica) parte de uma base já sincronizada, nunca de uma ambição
+paralela.
 
 ## Contexto
 
@@ -394,23 +413,28 @@ supabase/
 
 ## Fases de implementação propostas
 
-- **Fase 0 — Validação técnica** (próximo passo, não iniciada): confirmar
-  Chromium headless dentro do ambiente real de deploy (Vercel, região
-  `gru1`) — teste mínimo HTML→PDF, medindo tamanho de function e tempo de
-  resposta, antes de comprometer a arquitetura final da Camada 4.
+- **Fase 0 — Validação técnica**: ✅ concluída localmente (ver
+  `docs/ANALYTICS_REPORT_PHASE0_RESULTS.md`), aprovada condicional a um
+  smoke test num Preview Deployment real da Vercel — rota temporária já
+  preparada (`src/app/api/dev/analytics-report-phase0-smoke/`), aguardando
+  alguém com acesso ao deploy rodar e reportar os números.
 - **Fase 1 — Dados, documento e tema**: `report-data.ts` (reaproveitando
   100% das funções já existentes), `report-document.ts`, `report-theme.ts`
   (os dois temas definidos) **e a migration `clients.report_theme`**
   (criada nesta fase, mesmo sem UI de seleção).
-- **Fase 2 — Template HTML**: `html-renderer.tsx`, validado abrindo o HTML
-  bruto no navegador antes de qualquer PDF — garante que o template em si
-  está certo antes de somar a variável "conversão pra PDF".
+- **Fase 2 — Template HTML fiel**: `html-renderer.tsx` reproduz o
+  Analytics tela por tela (ver "Regra de produto pra Fase 1" acima —
+  aplica-se tecnicamente aqui, na Camada 4) — mesma ordem, mesmos textos,
+  mesmos destaques/aprendizados, mesmos gráficos. Nenhum enriquecimento
+  visual (capa elaborada, paginação refinada) nesta etapa. Validado
+  abrindo o HTML bruto no navegador antes de qualquer PDF.
 - **Fase 3 — PDF e wiring**: `pdf-renderer.ts` + Server Action + religar o
   botão "Exportar relatório" (hoje "Em breve") no `AnalyticsHubHeader`.
-- **Fase 4 — Fora de escopo por enquanto**: link compartilhável (Supabase
-  Storage + URL assinada), e-mail, seletor de tema por cliente na UI de
-  Configurações, temas de parceiros adicionais, outros formatos (ex.:
-  apresentação).
+- **Fase 4 — Fora de escopo por enquanto**: enriquecimento visual do
+  template (capa institucional, paginação/layout premium — só depois da
+  versão fiel confirmada), link compartilhável (Supabase Storage + URL
+  assinada), e-mail, seletor de tema por cliente na UI de Configurações,
+  temas de parceiros adicionais, outros formatos (ex.: apresentação).
 
 ## Decisões confirmadas nesta rodada de revisão
 
