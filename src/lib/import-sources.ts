@@ -321,7 +321,7 @@ export function aggregateAdCreativeDailyRows(
 
     const campaignName = toStringColumnValue(row[campaignNameColumn]);
 
-    const key = `${rawDate} ${campaignName} ${creativeName}`;
+    const key = `${rawDate} ${campaignName} ${creativeName}`;
     const group = groups.get(key) ?? {
       date: rawDate,
       campaignName,
@@ -482,7 +482,7 @@ export function buildAdCreativeDailyMetricsUpsertRows(
   },
 ): AdCreativeDailyMetricsUpsertRow[] {
   return aggregated.map((row) => {
-    const key = `${row.date} ${row.campaignName} ${row.creativeName}`;
+    const key = `${row.date} ${row.campaignName} ${row.creativeName}`;
     const resultCount = options?.resultByGroup?.get(key);
     return {
       client_id: clientId,
