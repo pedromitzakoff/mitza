@@ -7,12 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "sync:meta": "tsx scripts/sync-meta.ts"
+    "sync:meta": "tsx scripts/sync-meta.ts",
+    "analytics-report:phase0": "tsx scripts/analytics-report-phase0/generate-test-pdf.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@sparticuz/chromium": "^149.0.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.2",
     "@tiptap/extension-link": "^2.27.2",
@@ -23,6 +25,7 @@
     "@types/sanitize-html": "^2.16.1",
     "lucide-react": "^1.24.0",
     "next": "16.2.10",
+    "puppeteer-core": "^25.4.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "sanitize-html": "^2.17.6"

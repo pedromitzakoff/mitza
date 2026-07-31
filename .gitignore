@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Fase 0 do AnalyticsReport — artefatos gerados pelo spike (PDF de teste,
+# resultados brutos), nunca commitados; o resumo vai pra
+# docs/ANALYTICS_REPORT_PHASE0_RESULTS.md
+/scripts/analytics-report-phase0/output/
