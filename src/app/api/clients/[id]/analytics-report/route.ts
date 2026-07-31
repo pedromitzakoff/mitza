@@ -23,7 +23,7 @@ import { renderReportPdf } from "@/lib/analytics-report/renderers/pdf-renderer";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-function buildFileName(clientName: string, period: { start: string; end: string }): string {
+export function buildFileName(clientName: string, period: { start: string; end: string }): string {
   const safeName = clientName
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
