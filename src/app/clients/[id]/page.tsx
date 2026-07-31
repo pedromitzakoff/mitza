@@ -73,6 +73,9 @@ import { ClientReportWizard } from "../client-report-wizard";
 import { resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
 import { fetchClientAnalyticsData } from "../analytics-data";
 import { AnalyticsSection } from "../analytics-section";
+import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
+import { buildCreativeDetail, buildCreativeSummaries } from "@/lib/creative-analytics";
+import { CreativeAnalyticsSection } from "../creative-analytics-section";
 
 async function fetchCommentsByType(
   supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
@@ -160,6 +163,10 @@ export default async function ClientPage({
     analyticsPreset?: string;
     analyticsStart?: string;
     analyticsEnd?: string;
+    creativesPreset?: string;
+    creativesStart?: string;
+    creativesEnd?: string;
+    creative?: string;
   }>;
 }) {
   const { id } = await params;
@@ -190,6 +197,10 @@ export default async function ClientPage({
     analyticsPreset: analyticsPresetParam,
     analyticsStart: analyticsStartParam,
     analyticsEnd: analyticsEndParam,
+    creativesPreset: creativesPresetParam,
+    creativesStart: creativesStartParam,
+    creativesEnd: creativesEndParam,
+    creative: creativeParam,
   } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
@@ -210,10 +221,14 @@ export default async function ClientPage({
   // intocados) — análise de resultados, distinta da Visão Geral (trabalho
   // operacional do dia a dia) e da aba "Relatórios" (relatório de gestão
   // interno).
-  type ClientArea = "visao-geral" | "analytics" | "relatorios" | "timeline";
+  // Módulo de Criativos (Creative Analytics) — nova aba exclusiva do
+  // cliente, mesmo princípio de "Analytics MVP": nunca aparece na visão
+  // global da agência, dados buscados só quando a aba está ativa.
+  type ClientArea = "visao-geral" | "analytics" | "criativos" | "relatorios" | "timeline";
   const AREA_TABS: { key: ClientArea; label: string }[] = [
     { key: "visao-geral", label: "Visão geral" },
     { key: "analytics", label: "Analytics" },
+    { key: "criativos", label: "Criativos" },
     { key: "relatorios", label: "Relatórios" },
     { key: "timeline", label: "Timeline" },
   ];
@@ -905,6 +920,35 @@ export default async function ClientPage({
       ? (await fetchClientOperationalHistory(supabase, id, { firstDay: analyticsPeriod.start, lastDay: analyticsPeriod.end }, 0, 5)).rows
       : [];
 
+  // Módulo de Criativos (Creative Analytics) — período independente do
+  // resto da página (mesmo princípio de `analyticsPeriod`), dado só buscado
+  // quando a aba está ativa. Nunca gated por `client.performance_goal`
+  // (pedido explícito do usuário) — a consolidação por criativo roda igual
+  // pra qualquer cliente, mostrando só os indicadores que a fonte entrega.
+  const creativesPreset = (creativesPresetParam ?? "this_month") as AnalyticsPeriodPreset;
+  const creativesPeriod = resolveAnalyticsPeriod(creativesPresetParam, todayStr, {
+    start: creativesStartParam,
+    end: creativesEndParam,
+  });
+  const creativesBaseHref = buildAreaHref("criativos");
+  const adCreativeRows =
+    activeArea === "criativos" ? await getAdCreativeDailyMetricsForPeriod(supabase, id, creativesPeriod) : [];
+  const creativeSummaries = activeArea === "criativos" ? buildCreativeSummaries(adCreativeRows) : [];
+  const creativeDetail =
+    activeArea === "criativos" && creativeParam ? buildCreativeDetail(adCreativeRows, creativeParam) : null;
+  // Preserva o período selecionado (nunca reseta pra "this_month" ao entrar
+  // no detalhe de um criativo) — mesmo cuidado de `customStart`/`customEnd`
+  // já usado pro seletor de período em si.
+  const buildCreativeDetailHref = (creativeName: string) => {
+    const params = new URLSearchParams({ creativesPreset });
+    if (creativesPreset === "custom") {
+      params.set("creativesStart", creativesStartParam ?? creativesPeriod.start);
+      params.set("creativesEnd", creativesEndParam ?? creativesPeriod.end);
+    }
+    params.set("creative", creativeName);
+    return `${creativesBaseHref}&${params.toString()}`;
+  };
+
   // Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente" — "Resumo
   // consolidado do mês": nenhum dado novo, só uma leitura de fechamento
   // reunindo números já calculados acima (investimento, performance,
@@ -1409,6 +1453,25 @@ export default async function ClientPage({
             configureObjectiveHref={`/clients/${client.id}/edit`}
             historyRows={analyticsHistoryRows}
             buildReviewDetailHref={buildReviewDetailHref}
+          />
+        </div>
+      )}
+
+      {/* Módulo de Criativos (Creative Analytics) — primeiro módulo da
+          plataforma que consolida performance por criativo (ad_name do
+          Meta), independente do objetivo da conta. */}
+      {activeArea === "criativos" && (
+        <div className="mt-3">
+          <CreativeAnalyticsSection
+            summaries={creativeSummaries}
+            detail={creativeDetail}
+            baseHref={creativesBaseHref}
+            activePreset={creativesPreset}
+            periodStart={creativesPeriod.start}
+            periodEnd={creativesPeriod.end}
+            customStart={creativesStartParam ?? creativesPeriod.start}
+            customEnd={creativesEndParam ?? creativesPeriod.end}
+            buildDetailHref={buildCreativeDetailHref}
           />
         </div>
       )}

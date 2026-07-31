@@ -710,6 +710,78 @@ export interface Database {
           },
         ];
       };
+      ad_creative_daily_metrics: {
+        Row: {
+          id: string;
+          client_id: string;
+          import_source_id: string;
+          date: string;
+          campaign_name: string;
+          creative_name: string;
+          creative_permalink_url: string | null;
+          spend: number;
+          impressions: number | null;
+          reach: number | null;
+          clicks: number | null;
+          result_type: PerformanceGoalDb | null;
+          result_count: number | null;
+          revenue: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          import_source_id: string;
+          date: string;
+          campaign_name: string;
+          creative_name: string;
+          creative_permalink_url?: string | null;
+          spend?: number;
+          impressions?: number | null;
+          reach?: number | null;
+          clicks?: number | null;
+          result_type?: PerformanceGoalDb | null;
+          result_count?: number | null;
+          revenue?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          import_source_id?: string;
+          date?: string;
+          campaign_name?: string;
+          creative_name?: string;
+          creative_permalink_url?: string | null;
+          spend?: number;
+          impressions?: number | null;
+          reach?: number | null;
+          clicks?: number | null;
+          result_type?: PerformanceGoalDb | null;
+          result_count?: number | null;
+          revenue?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ad_creative_daily_metrics_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ad_creative_daily_metrics_import_source_id_fkey";
+            columns: ["import_source_id"];
+            isOneToOne: false;
+            referencedRelation: "import_sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       import_sources: {
         Row: {
           id: string;
@@ -724,6 +796,11 @@ export interface Database {
           campaign_name_column: string | null;
           campaign_name_filter: string | null;
           campaign_name_exclude: string | null;
+          ad_name_column: string | null;
+          creative_permalink_column: string | null;
+          impressions_column: string | null;
+          reach_column: string | null;
+          clicks_column: string | null;
           status: ImportSourceStatusDb;
           enabled: boolean;
           last_imported_date: string | null;
@@ -744,6 +821,11 @@ export interface Database {
           campaign_name_column?: string | null;
           campaign_name_filter?: string | null;
           campaign_name_exclude?: string | null;
+          ad_name_column?: string | null;
+          creative_permalink_column?: string | null;
+          impressions_column?: string | null;
+          reach_column?: string | null;
+          clicks_column?: string | null;
           status?: ImportSourceStatusDb;
           enabled?: boolean;
           last_imported_date?: string | null;
@@ -764,6 +846,11 @@ export interface Database {
           campaign_name_column?: string | null;
           campaign_name_filter?: string | null;
           campaign_name_exclude?: string | null;
+          ad_name_column?: string | null;
+          creative_permalink_column?: string | null;
+          impressions_column?: string | null;
+          reach_column?: string | null;
+          clicks_column?: string | null;
           status?: ImportSourceStatusDb;
           enabled?: boolean;
           last_imported_date?: string | null;
@@ -829,6 +916,7 @@ export interface Database {
           rows_read: number | null;
           spend_rows_written: number | null;
           performance_rows_written: number | null;
+          creative_rows_written: number | null;
           error_message: string | null;
           created_at: string;
         };
@@ -841,6 +929,7 @@ export interface Database {
           rows_read?: number | null;
           spend_rows_written?: number | null;
           performance_rows_written?: number | null;
+          creative_rows_written?: number | null;
           error_message?: string | null;
           created_at?: string;
         };
@@ -853,6 +942,7 @@ export interface Database {
           rows_read?: number | null;
           spend_rows_written?: number | null;
           performance_rows_written?: number | null;
+          creative_rows_written?: number | null;
           error_message?: string | null;
           created_at?: string;
         };

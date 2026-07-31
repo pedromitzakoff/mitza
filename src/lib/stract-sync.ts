@@ -1,9 +1,13 @@
 import { createClient as createRawClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
+  aggregateAdCreativeDailyRows,
+  aggregateColumnByAdCreativeGroup,
   aggregateDailyColumn,
+  buildAdCreativeDailyMetricsUpsertRows,
   buildDailyPerformanceUpsertRows,
   buildDailySpendUpsertRows,
+  combineAdCreativeGroupValues,
   combineAggregatedDailyValues,
   excludeRowsByCampaignName,
   filterRowsByCampaignName,
@@ -29,6 +33,7 @@ export interface ImportSourceRunResult {
   rowsRead: number;
   spendRowsWritten: number;
   performanceRowsWritten: number;
+  creativeRowsWritten: number;
   errorMessage: string | null;
 }
 
@@ -60,7 +65,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
   const { data: importSource, error: importSourceError } = await supabase
     .from("import_sources")
     .select(
-      "id, client_id, provider, channel, external_account_id, table_name, account_id_column, date_column, spend_column, campaign_name_column, campaign_name_filter, campaign_name_exclude",
+      "id, client_id, provider, channel, external_account_id, table_name, account_id_column, date_column, spend_column, campaign_name_column, campaign_name_filter, campaign_name_exclude, ad_name_column, creative_permalink_column, impressions_column, reach_column, clicks_column",
     )
     .eq("id", importSourceId)
     .single();
@@ -113,9 +118,25 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
   }
 
   if (errorMessage) {
-    await finishRun(supabase, run.id, { status: "failed", rowsRead: rows.length, spendRowsWritten: 0, performanceRowsWritten: 0, errorMessage });
+    await finishRun(supabase, run.id, {
+      status: "failed",
+      rowsRead: rows.length,
+      spendRowsWritten: 0,
+      performanceRowsWritten: 0,
+      creativeRowsWritten: 0,
+      errorMessage,
+    });
     await supabase.from("import_sources").update({ status: "error" }).eq("id", importSourceId);
-    return { importSourceId, runId: run.id, status: "failed", rowsRead: rows.length, spendRowsWritten: 0, performanceRowsWritten: 0, errorMessage };
+    return {
+      importSourceId,
+      runId: run.id,
+      status: "failed",
+      rowsRead: rows.length,
+      spendRowsWritten: 0,
+      performanceRowsWritten: 0,
+      creativeRowsWritten: 0,
+      errorMessage,
+    };
   }
 
   // Filtro de campanha (opcional): nunca depende do provedor externo aplicar
@@ -133,6 +154,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
   let hadInvalidRows = false;
   let spendRowsWritten = 0;
   let performanceRowsWritten = 0;
+  let creativeRowsWritten = 0;
   const partialReasons: string[] = [];
 
   // Backfill automático de Sprints históricas (achado na validação: dado
@@ -229,6 +251,95 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
     }
   }
 
+  // Módulo de Criativos (Creative Analytics) — arquitetura aprovada:
+  // identidade do criativo é sempre `creative_name` (= ad_name do Meta),
+  // nunca ad_id. Só roda quando a fonte tiver `ad_name_column` E
+  // `campaign_name_column` configurados (campanha é obrigatória na tabela
+  // ad_creative_daily_metrics) — sem isso, degrada graciosamente: nenhum
+  // erro, só não escreve nada aqui (a fonte pode continuar servindo
+  // investimento/resultado normalmente pro resto da plataforma).
+  if (importSource.ad_name_column && importSource.campaign_name_column) {
+    const creativeAggregate = aggregateAdCreativeDailyRows(rows, {
+      dateColumn: importSource.date_column,
+      campaignNameColumn: importSource.campaign_name_column,
+      creativeNameColumn: importSource.ad_name_column,
+      permalinkColumn: importSource.creative_permalink_column,
+      spendColumn: importSource.spend_column,
+      impressionsColumn: importSource.impressions_column,
+      reachColumn: importSource.reach_column,
+      clicksColumn: importSource.clicks_column,
+    });
+    hadInvalidRows = hadInvalidRows || creativeAggregate.some((row) => row.invalidRowCount > 0);
+
+    if (creativeAggregate.length > 0) {
+      // ad_creative_daily_metrics guarda só UM result_type por linha —
+      // pega o primeiro objetivo leads/sales com dado real (followers nunca
+      // vem do Meta Ads, então nunca se aplica aqui). Mesma resolução de
+      // metric_mappings já usada pra daily_performance, nunca uma segunda
+      // lógica de mapeamento.
+      let creativeResultType: PerformanceGoal | null = null;
+      let resultByGroup: Map<string, number> | null = null;
+      let revenueByGroup: Map<string, number> | null = null;
+
+      for (const [goal, { resultColumns, valueColumns }] of mappingGroupsByGoal) {
+        if (goal !== "leads" && goal !== "sales") continue;
+
+        const resultColumnAggregates = resultColumns.map((resultColumn) =>
+          aggregateColumnByAdCreativeGroup(
+            rows,
+            importSource.date_column,
+            importSource.campaign_name_column!,
+            importSource.ad_name_column!,
+            resultColumn,
+          ),
+        );
+        for (const columnAggregate of resultColumnAggregates) {
+          hadInvalidRows = hadInvalidRows || columnAggregate.some((row) => row.invalidRowCount > 0);
+        }
+
+        const combinedResult = combineAdCreativeGroupValues(resultColumnAggregates);
+        if (combinedResult.length === 0) continue;
+
+        creativeResultType = goal;
+        resultByGroup = new Map(combinedResult.map((row) => [`${row.date} ${row.campaignName} ${row.creativeName}`, row.value]));
+
+        if (valueColumns.length > 0) {
+          const valueColumnAggregates = valueColumns.map((valueColumn) =>
+            aggregateColumnByAdCreativeGroup(
+              rows,
+              importSource.date_column,
+              importSource.campaign_name_column!,
+              importSource.ad_name_column!,
+              valueColumn,
+            ),
+          );
+          for (const columnAggregate of valueColumnAggregates) {
+            hadInvalidRows = hadInvalidRows || columnAggregate.some((row) => row.invalidRowCount > 0);
+          }
+          const combinedValue = combineAdCreativeGroupValues(valueColumnAggregates);
+          revenueByGroup = new Map(combinedValue.map((row) => [`${row.date} ${row.campaignName} ${row.creativeName}`, row.value]));
+        }
+        break;
+      }
+
+      const creativeUpsertRows = buildAdCreativeDailyMetricsUpsertRows(importSource.client_id, importSourceId, creativeAggregate, {
+        resultType: creativeResultType,
+        resultByGroup,
+        revenueByGroup,
+      });
+
+      const { error: creativeUpsertError } = await supabase
+        .from("ad_creative_daily_metrics")
+        .upsert(creativeUpsertRows, { onConflict: "import_source_id,date,campaign_name,creative_name" });
+
+      if (creativeUpsertError) {
+        partialReasons.push(`criativos não gravados: ${creativeUpsertError.message}`);
+      } else {
+        creativeRowsWritten = creativeUpsertRows.length;
+      }
+    }
+  }
+
   const isEmpty = rows.length === 0;
   const status: ImportSourceRunResult["status"] = partialReasons.length > 0 ? "partial" : hadInvalidRows ? "partial" : isEmpty ? "empty" : "success";
   const finalErrorMessage = partialReasons.length > 0
@@ -239,7 +350,14 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
         ? "A leitura da fonte não teve erro, mas voltou com zero linhas."
         : null;
 
-  await finishRun(supabase, run.id, { status, rowsRead: rows.length, spendRowsWritten, performanceRowsWritten, errorMessage: finalErrorMessage });
+  await finishRun(supabase, run.id, {
+    status,
+    rowsRead: rows.length,
+    spendRowsWritten,
+    performanceRowsWritten,
+    creativeRowsWritten,
+    errorMessage: finalErrorMessage,
+  });
 
   // Bug real encontrado em produção: antes, `import_sources.status`/
   // `last_success_at` eram sempre bumpados pra "active"/agora, mesmo quando
@@ -273,6 +391,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
     rowsRead: rows.length,
     spendRowsWritten,
     performanceRowsWritten,
+    creativeRowsWritten,
     errorMessage: finalErrorMessage,
   };
 }
@@ -309,6 +428,7 @@ async function finishRun(
     rowsRead: number;
     spendRowsWritten: number;
     performanceRowsWritten: number;
+    creativeRowsWritten: number;
     errorMessage: string | null;
   },
 ) {
@@ -320,6 +440,7 @@ async function finishRun(
       rows_read: result.rowsRead,
       spend_rows_written: result.spendRowsWritten,
       performance_rows_written: result.performanceRowsWritten,
+      creative_rows_written: result.creativeRowsWritten,
       error_message: result.errorMessage,
     })
     .eq("id", runId);

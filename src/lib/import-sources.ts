@@ -237,3 +237,234 @@ export function buildDailyPerformanceUpsertRows(
     source_updated_at: sourceUpdatedAt,
   }));
 }
+
+function toStringColumnValue(raw: unknown): string {
+  return typeof raw === "string" ? raw : String(raw ?? "");
+}
+
+/**
+ * Núcleo puro do Módulo de Criativos (Creative Analytics — arquitetura
+ * aprovada pelo usuário: identidade do criativo é SEMPRE `creative_name`
+ * (= `ad_name` do Meta), nunca `ad_id`/`creative_id`/`video_id`/`image_hash`
+ * — esses ids do Meta não são estáveis entre edições/reuploads. Agrupa por
+ * `(date, campaignName, creativeName)`, análogo a `aggregateDailyColumn` mas
+ * com uma chave composta (essa é a granularidade de armazenamento de
+ * `ad_creative_daily_metrics`; consolidação por criativo sozinho — somando
+ * todas as campanhas/dias — acontece só em tempo de consulta, nunca aqui).
+ *
+ * Linha sem `creativeNameColumn` preenchido é ignorada (sem nome de
+ * anúncio não há identidade possível). Colunas opcionais (`permalinkColumn`/
+ * `impressionsColumn`/`reachColumn`/`clicksColumn`) ausentes na fonte
+ * simplesmente resultam em campos `null` no agregado — nunca um valor
+ * fabricado — pra sustentar a degradação graciosa exigida (a UI mostra só o
+ * que existe).
+ */
+export interface AggregateAdCreativeRowsColumns {
+  dateColumn: string;
+  campaignNameColumn: string;
+  creativeNameColumn: string;
+  permalinkColumn?: string | null;
+  spendColumn: string;
+  impressionsColumn?: string | null;
+  reachColumn?: string | null;
+  clicksColumn?: string | null;
+}
+
+export interface AggregatedAdCreativeRow {
+  date: string;
+  campaignName: string;
+  creativeName: string;
+  /** Permalink da PRIMEIRA linha vista pra essa combinação de
+   * data+campanha+criativo — nunca sobrescrito depois (regra do usuário: a
+   * miniatura é fixada na primeira aparição, sem cache de imagem/vídeo). */
+  creativePermalinkUrl: string | null;
+  spend: number;
+  impressions: number | null;
+  reach: number | null;
+  clicks: number | null;
+  invalidRowCount: number;
+}
+
+export function aggregateAdCreativeDailyRows(
+  rows: RawSourceRow[],
+  columns: AggregateAdCreativeRowsColumns,
+): AggregatedAdCreativeRow[] {
+  const { dateColumn, campaignNameColumn, creativeNameColumn, permalinkColumn, spendColumn, impressionsColumn, reachColumn, clicksColumn } = columns;
+
+  const groups = new Map<string, AggregatedAdCreativeRow>();
+
+  for (const row of rows) {
+    const rawDate = row[dateColumn];
+    if (typeof rawDate !== "string" || rawDate.length === 0) continue;
+
+    const creativeName = toStringColumnValue(row[creativeNameColumn]);
+    if (creativeName.length === 0) continue;
+
+    const campaignName = toStringColumnValue(row[campaignNameColumn]);
+
+    const key = `${rawDate} ${campaignName} ${creativeName}`;
+    const group = groups.get(key) ?? {
+      date: rawDate,
+      campaignName,
+      creativeName,
+      creativePermalinkUrl: null,
+      spend: 0,
+      impressions: null,
+      reach: null,
+      clicks: null,
+      invalidRowCount: 0,
+    };
+
+    if (!group.creativePermalinkUrl && permalinkColumn) {
+      const rawPermalink = row[permalinkColumn];
+      if (typeof rawPermalink === "string" && rawPermalink.length > 0) {
+        group.creativePermalinkUrl = rawPermalink;
+      }
+    }
+
+    const spendValue = parseSourceNumericValue(row[spendColumn]);
+    if (spendValue.kind === "ok") group.spend += spendValue.value;
+    if (spendValue.kind === "invalid") group.invalidRowCount += 1;
+
+    if (impressionsColumn) {
+      const value = parseSourceNumericValue(row[impressionsColumn]);
+      if (value.kind === "ok") group.impressions = (group.impressions ?? 0) + value.value;
+      if (value.kind === "invalid") group.invalidRowCount += 1;
+    }
+    if (reachColumn) {
+      const value = parseSourceNumericValue(row[reachColumn]);
+      if (value.kind === "ok") group.reach = (group.reach ?? 0) + value.value;
+      if (value.kind === "invalid") group.invalidRowCount += 1;
+    }
+    if (clicksColumn) {
+      const value = parseSourceNumericValue(row[clicksColumn]);
+      if (value.kind === "ok") group.clicks = (group.clicks ?? 0) + value.value;
+      if (value.kind === "invalid") group.invalidRowCount += 1;
+    }
+
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values()).sort(
+    (a, b) => a.date.localeCompare(b.date) || a.campaignName.localeCompare(b.campaignName) || a.creativeName.localeCompare(b.creativeName),
+  );
+}
+
+export interface AggregatedAdCreativeGroupValue {
+  date: string;
+  campaignName: string;
+  creativeName: string;
+  value: number;
+  invalidRowCount: number;
+}
+
+/**
+ * Soma uma coluna por `(date, campaignName, creativeName)` — mesma
+ * granularidade de `aggregateAdCreativeDailyRows`, usada pra resolver
+ * `result_column`/`value_column` de `metric_mappings` por criativo (em vez
+ * de por dia inteiro do cliente, como `aggregateDailyColumn` faz pra
+ * `daily_performance`). Reaproveitada pra somar múltiplas colunas do mesmo
+ * objetivo via `combineAdCreativeGroupValues`, no mesmo espírito de
+ * `combineAggregatedDailyValues`.
+ */
+export function aggregateColumnByAdCreativeGroup(
+  rows: RawSourceRow[],
+  dateColumn: string,
+  campaignNameColumn: string,
+  creativeNameColumn: string,
+  valueColumn: string,
+): AggregatedAdCreativeGroupValue[] {
+  const groups = new Map<string, AggregatedAdCreativeGroupValue>();
+
+  for (const row of rows) {
+    const rawDate = row[dateColumn];
+    if (typeof rawDate !== "string" || rawDate.length === 0) continue;
+
+    const creativeName = toStringColumnValue(row[creativeNameColumn]);
+    if (creativeName.length === 0) continue;
+
+    const campaignName = toStringColumnValue(row[campaignNameColumn]);
+    const key = `${rawDate} ${campaignName} ${creativeName}`;
+    const group = groups.get(key) ?? { date: rawDate, campaignName, creativeName, value: 0, invalidRowCount: 0 };
+
+    const parsed = parseSourceNumericValue(row[valueColumn]);
+    if (parsed.kind === "ok") group.value += parsed.value;
+    if (parsed.kind === "invalid") group.invalidRowCount += 1;
+
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values());
+}
+
+export function combineAdCreativeGroupValues(aggregates: AggregatedAdCreativeGroupValue[][]): AggregatedAdCreativeGroupValue[] {
+  const groups = new Map<string, AggregatedAdCreativeGroupValue>();
+
+  for (const aggregate of aggregates) {
+    for (const row of aggregate) {
+      const key = `${row.date} ${row.campaignName} ${row.creativeName}`;
+      const group = groups.get(key) ?? { date: row.date, campaignName: row.campaignName, creativeName: row.creativeName, value: 0, invalidRowCount: 0 };
+      group.value += row.value;
+      group.invalidRowCount += row.invalidRowCount;
+      groups.set(key, group);
+    }
+  }
+
+  return Array.from(groups.values());
+}
+
+export interface AdCreativeDailyMetricsUpsertRow {
+  client_id: string;
+  import_source_id: string;
+  date: string;
+  campaign_name: string;
+  creative_name: string;
+  creative_permalink_url: string | null;
+  spend: number;
+  impressions: number | null;
+  reach: number | null;
+  clicks: number | null;
+  result_type: PerformanceGoal | null;
+  result_count: number | null;
+  revenue: number | null;
+}
+
+/**
+ * Monta as linhas prontas pro upsert em `ad_creative_daily_metrics` — chave
+ * `(import_source_id, date, campaign_name, creative_name)`, nunca `ad_id`.
+ * `resultByGroup`/`revenueByGroup` são opcionais (só quando a fonte tiver
+ * `metric_mappings` ativo pro objetivo, reaproveitando a mesma resolução já
+ * usada por `daily_performance` — nunca uma segunda lógica de mapeamento) e
+ * são resolvidos pela MESMA chave composta do agregado, então cada
+ * campanha+criativo recebe só o resultado que efetivamente teve naquele dia.
+ */
+export function buildAdCreativeDailyMetricsUpsertRows(
+  clientId: string,
+  importSourceId: string,
+  aggregated: AggregatedAdCreativeRow[],
+  options?: {
+    resultType?: PerformanceGoal | null;
+    resultByGroup?: Map<string, number> | null;
+    revenueByGroup?: Map<string, number> | null;
+  },
+): AdCreativeDailyMetricsUpsertRow[] {
+  return aggregated.map((row) => {
+    const key = `${row.date} ${row.campaignName} ${row.creativeName}`;
+    const resultCount = options?.resultByGroup?.get(key);
+    return {
+      client_id: clientId,
+      import_source_id: importSourceId,
+      date: row.date,
+      campaign_name: row.campaignName,
+      creative_name: row.creativeName,
+      creative_permalink_url: row.creativePermalinkUrl,
+      spend: row.spend,
+      impressions: row.impressions,
+      reach: row.reach,
+      clicks: row.clicks,
+      result_type: resultCount !== undefined ? (options?.resultType ?? null) : null,
+      result_count: resultCount !== undefined ? Math.round(resultCount) : null,
+      revenue: options?.revenueByGroup?.get(key) ?? null,
+    };
+  });
+}

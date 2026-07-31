@@ -18,12 +18,17 @@ import { formatDateRange } from "@/lib/format";
  * da Visão Geral/agência.
  *
  * Navegação continua 100% por querystring (Server Component acima decide os
- * dados a partir de `analyticsPreset`/`analyticsStart`/`analyticsEnd`) — o
- * único motivo de ser Client Component é abrir/fechar o popover e revelar o
- * seletor de datas personalizado só quando pedido.
+ * dados a partir de `{paramPrefix}Preset`/`{paramPrefix}Start`/
+ * `{paramPrefix}End`) — o único motivo de ser Client Component é abrir/
+ * fechar o popover e revelar o seletor de datas personalizado só quando
+ * pedido. `paramPrefix` existe pra este mesmo seletor servir mais de uma
+ * área da página do cliente (Analytics e Criativos) sem duas cópias do
+ * componente — cada área tem seu próprio período independente, nunca
+ * compartilhado.
  */
 export function AnalyticsPeriodMenu({
   baseHref,
+  paramPrefix = "analytics",
   activePreset,
   periodStart,
   periodEnd,
@@ -31,6 +36,7 @@ export function AnalyticsPeriodMenu({
   customEnd,
 }: {
   baseHref: string;
+  paramPrefix?: string;
   activePreset: AnalyticsPeriodPreset;
   periodStart: string;
   periodEnd: string;
@@ -45,7 +51,7 @@ export function AnalyticsPeriodMenu({
 
   function applyCustomRange() {
     if (!start || !end || end < start) return;
-    router.push(`${baseHref}&analyticsPreset=custom&analyticsStart=${start}&analyticsEnd=${end}`);
+    router.push(`${baseHref}&${paramPrefix}Preset=custom&${paramPrefix}Start=${start}&${paramPrefix}End=${end}`);
     setOpen(false);
   }
 
@@ -70,7 +76,7 @@ export function AnalyticsPeriodMenu({
               {ANALYTICS_PERIOD_PRESET_OPTIONS.map((option) => (
                 <Link
                   key={option.value}
-                  href={`${baseHref}&analyticsPreset=${option.value}`}
+                  href={`${baseHref}&${paramPrefix}Preset=${option.value}`}
                   onClick={() => setOpen(false)}
                   className={`rounded-md px-2.5 py-1.5 text-sm ${
                     activePreset === option.value ? "bg-brand/10 font-medium text-brand" : "text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
