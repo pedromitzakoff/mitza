@@ -9,31 +9,29 @@ import {
   buildResultLede,
   buildTrendCaption,
   buildWhereAside,
-  type AnalyticsPeriodPreset,
 } from "@/lib/analytics";
-import type { ClientHistoryRow } from "@/lib/client-operational-history";
 import type { ClientAnalyticsData } from "./analytics-data";
-import { AnalyticsPeriodMenu } from "./analytics-period-menu";
 import { AnalyticsChapter } from "./analytics-chapter";
 import { AnalyticsKpiGrid } from "./analytics-kpi-grid";
 import { AnalyticsExecutiveSummary } from "./analytics-executive-summary";
 import { AnalyticsTrendChart } from "./analytics-trend-chart";
 import { AnalyticsWhere } from "./analytics-where";
-import { ClientHistoryList } from "./client-history-list";
 
 /**
- * Aba Analytics — Etapa "Analytics como Relatório": segunda reformulação
- * completa (a primeira foi um facelift de dashboard; esta trata a tela como
- * a experiência de leitura de um relatório executivo — pedido explícito do
- * usuário). Cinco capítulos fixos, cada um com a PERGUNTA que responde como
- * título literal (`AnalyticsChapter`), nunca um rótulo genérico de
- * dashboard:
+ * Seção "Resumo" do hub de Analytics — Etapa "Reorganização do hub": deixou
+ * de ter masthead/período próprios (agora vivem no `AnalyticsHubHeader`
+ * compartilhado por todas as sub-seções) e perdeu o antigo Capítulo V ("O
+ * que fizemos durante esse período?") — essa pergunta já tem resposta
+ * própria na aba Timeline (histórico operacional completo), então repeti-la
+ * aqui era exatamente a redundância que o usuário pediu pra eliminar.
+ *
+ * Quatro capítulos fixos, cada um com a PERGUNTA que responde como título
+ * literal (`AnalyticsChapter`), nunca um rótulo genérico de dashboard:
  *
  *   I.   Como foi o resultado?          → manchete + lide em prosa
  *   II.  O que explica esse resultado?  → narrativa + evidência (KPIs)
  *   III. Onde aconteceu?                → participação por canal
  *   IV.  O que mudou?                   → evolução diária + legenda
- *   V.   O que fizemos durante esse período? → histórico de ações
  *
  * Mesma arquitetura de dados de sempre (`analytics-data.ts`,
  * `lib/analytics.ts`, `lib/instagram-metrics.ts`) — nenhuma consulta ou
@@ -43,45 +41,14 @@ import { ClientHistoryList } from "./client-history-list";
  */
 export function AnalyticsSection({
   data,
-  baseHref,
-  activePreset,
-  periodStart,
-  periodEnd,
-  customStart,
-  customEnd,
   configureObjectiveHref,
-  historyRows,
-  buildReviewDetailHref,
 }: {
   data: ClientAnalyticsData;
-  baseHref: string;
-  activePreset: AnalyticsPeriodPreset;
-  periodStart: string;
-  periodEnd: string;
-  customStart: string;
-  customEnd: string;
   configureObjectiveHref: string;
-  historyRows: ClientHistoryRow[];
-  buildReviewDetailHref: (reviewId: string) => string;
 }) {
-  const masthead = (
-    <div className="mb-10 flex items-center justify-between gap-3 border-b border-border pb-5">
-      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Relatório executivo</p>
-      <AnalyticsPeriodMenu
-        baseHref={baseHref}
-        activePreset={activePreset}
-        periodStart={periodStart}
-        periodEnd={periodEnd}
-        customStart={customStart}
-        customEnd={customEnd}
-      />
-    </div>
-  );
-
   if (!data.performanceGoal) {
     return (
       <div className="mx-auto max-w-2xl">
-        {masthead}
         <EmptyState>Este cliente ainda não tem um objetivo de performance configurado.</EmptyState>
         <Link href={configureObjectiveHref} className="mt-1 inline-block text-xs font-medium text-brand hover:underline">
           Configurar objetivo
@@ -94,7 +61,6 @@ export function AnalyticsSection({
   if (!hasAnyData) {
     return (
       <div className="mx-auto max-w-2xl">
-        {masthead}
         <EmptyState>Não encontramos dados para o período selecionado.</EmptyState>
       </div>
     );
@@ -118,8 +84,6 @@ export function AnalyticsSection({
 
   return (
     <div className="mx-auto max-w-2xl">
-      {masthead}
-
       <AnalyticsChapter index={1} question="Como foi o resultado?">
         <h1 className="mb-3 font-serif text-3xl font-bold leading-tight tracking-tight text-foreground sm:text-4xl">{headline}</h1>
         <p className="max-w-xl font-serif text-lg leading-relaxed text-foreground sm:text-xl">{lede}</p>
@@ -150,16 +114,6 @@ export function AnalyticsSection({
         ) : (
           <EmptyState>Ainda não há dados diários suficientes para descrever a mudança no período.</EmptyState>
         )}
-      </AnalyticsChapter>
-
-      <AnalyticsChapter index={5} question="O que fizemos durante esse período?">
-        <div className="rounded-lg bg-zinc-50 px-4 py-1 dark:bg-zinc-900/40">
-          <ClientHistoryList
-            rows={historyRows}
-            buildReviewDetailHref={buildReviewDetailHref}
-            emptyLabel="Nenhuma ação registrada no período selecionado."
-          />
-        </div>
       </AnalyticsChapter>
     </div>
   );

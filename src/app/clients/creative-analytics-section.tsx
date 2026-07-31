@@ -3,15 +3,14 @@ import { ArrowLeft, ExternalLink } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
-import type { AnalyticsPeriodPreset, AnalyticsTrend } from "@/lib/analytics";
+import type { AnalyticsTrend } from "@/lib/analytics";
 import type { CreativeDetail, CreativeSummary } from "@/lib/creative-analytics";
-import { AnalyticsPeriodMenu } from "./analytics-period-menu";
 import { CreativeCard } from "./creative-card";
 import { CreativeThumbnail } from "./creative-thumbnail";
 import { AnalyticsTrendChart } from "./analytics-trend-chart";
 
 /**
- * Módulo de Criativos (Creative Analytics) — arquitetura aprovada: primeiro
+ * Seção "Criativos" do hub de Analytics — arquitetura aprovada: primeiro
  * módulo da plataforma que consolida performance por CRIATIVO (identidade =
  * `creative_name`, o `ad_name` do Meta — nunca `ad_id`), nunca por
  * campanha/conjunto. Nunca gated por `client.performance_goal` (pedido
@@ -19,68 +18,36 @@ import { AnalyticsTrendChart } from "./analytics-trend-chart";
  * própria disponibilidade de dado em cada card/detalhe é que decide o que
  * aparece, sem nenhuma regra por cliente aqui.
  *
- * Lista (cards, ordenados por investimento) e detalhe (resumo + campanhas +
- * evolução) vivem na MESMA aba, alternando por querystring
- * (`creative=<nome>`) — mesmo padrão de navegação 100% por URL já usado em
- * Relatórios/Analytics, nenhum estado de UI novo.
+ * Etapa "Reorganização do hub": deixou de ter masthead/período próprios
+ * (agora vivem no `AnalyticsHubHeader` compartilhado, mesmo período de
+ * Resumo/Campanhas — nunca mais um seletor por sub-seção). Lista (cards,
+ * ordenados por investimento) e detalhe (resumo + campanhas + evolução)
+ * vivem na MESMA sub-seção, alternando por querystring (`creative=<nome>`).
  */
 export function CreativeAnalyticsSection({
   summaries,
   detail,
   baseHref,
-  activePreset,
-  periodStart,
-  periodEnd,
-  customStart,
-  customEnd,
   buildDetailHref,
 }: {
   summaries: CreativeSummary[];
   detail: CreativeDetail | null;
   baseHref: string;
-  activePreset: AnalyticsPeriodPreset;
-  periodStart: string;
-  periodEnd: string;
-  customStart: string;
-  customEnd: string;
   buildDetailHref: (creativeName: string) => string;
 }) {
-  const masthead = (
-    <div className="mb-6 flex items-center justify-between gap-3 border-b border-border pb-5">
-      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Criativos</p>
-      <AnalyticsPeriodMenu
-        baseHref={baseHref}
-        paramPrefix="creatives"
-        activePreset={activePreset}
-        periodStart={periodStart}
-        periodEnd={periodEnd}
-        customStart={customStart}
-        customEnd={customEnd}
-      />
-    </div>
-  );
-
   if (detail) {
-    return (
-      <div>
-        {masthead}
-        <CreativeDetailView detail={detail} backHref={baseHref} />
-      </div>
-    );
+    return <CreativeDetailView detail={detail} backHref={baseHref} />;
+  }
+
+  if (summaries.length === 0) {
+    return <EmptyState>Nenhum dado de criativo encontrado no período selecionado.</EmptyState>;
   }
 
   return (
-    <div>
-      {masthead}
-      {summaries.length === 0 ? (
-        <EmptyState>Nenhum dado de criativo encontrado no período selecionado.</EmptyState>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {summaries.map((summary) => (
-            <CreativeCard key={summary.creativeName} summary={summary} detailHref={buildDetailHref(summary.creativeName)} />
-          ))}
-        </div>
-      )}
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {summaries.map((summary) => (
+        <CreativeCard key={summary.creativeName} summary={summary} detailHref={buildDetailHref(summary.creativeName)} />
+      ))}
     </div>
   );
 }
