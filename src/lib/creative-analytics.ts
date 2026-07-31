@@ -5,12 +5,27 @@ import type { PerformanceGoal } from "./performance-goals";
  * aprovada pelo usuário). Nunca conhece Supabase — só recebe linhas já
  * lidas de `ad_creative_daily_metrics` e devolve agregados prontos pra UI.
  *
+ * Três responsabilidades DELIBERADAMENTE separadas, nunca combinadas ou
+ * substituídas uma pela outra:
+ *
+ *   Creative Identity   → creativeName (client_id + creative_name)
+ *   Visual Representation → previewImageUrl (opcional, enriquecimento)
+ *   External Reference  → permalinkUrl (opcional, ação secundária)
+ *
  * Identidade do criativo é SEMPRE `creativeName` (= `ad_name` do Meta,
  * nunca `ad_id`/`creative_id`/`video_id`/`image_hash` — esses ids não são
  * estáveis entre edições/reuploads). Toda consolidação por criativo
  * (somando todas as campanhas/dias) acontece aqui, em tempo de consulta —
  * nunca pré-computada/armazenada. CPA/CPC/CTR/ROAS são sempre recalculados
  * a partir de TOTAIS (nunca média simples de valores diários).
+ *
+ * `previewImageUrl` e `permalinkUrl` NUNCA sobem de "enriquecimento
+ * opcional" pra "requisito" — o módulo tem que funcionar exatamente igual
+ * (só com placeholder no lugar da imagem) pra um criativo que nunca teve
+ * nenhum dos dois preenchidos. Se algum dia alguém for tornar um dos dois
+ * obrigatório ("já que quase todo criativo tem imagem, vamos exigir"),
+ * isso quebra a garantia de degradação graciosa que é a base deste módulo
+ * — não faça isso sem reabrir essa decisão com o time.
  *
  * Degradação graciosa: qualquer indicador cuja coluna de origem nunca foi
  * configurada chega aqui como `null` (nunca `0` fabricado) e continua
@@ -22,14 +37,25 @@ export interface AdCreativeDailyMetricRow {
   campaignName: string;
   creativeName: string;
   creativePermalinkUrl: string | null;
-  /** Representação visual (imagem de capa) do criativo — hoje sempre `null`
-   * (nenhum mecanismo de preenchimento existe ainda: sem scraping, sem
-   * download, sem cache de mídia). Nome deliberadamente desacoplado de
-   * origem (nunca "thumbnailUrl"/"instagramImageUrl"): amanhã pode vir do
-   * Instagram, da CDN do Meta, de upload manual, de cache próprio ou até
-   * ser gerada internamente — este campo só representa "a imagem de capa",
-   * nunca de onde ela veio. A UI já trata os dois estados; popular este
-   * campo no futuro não exige nenhuma mudança estrutural aqui nem na UI. */
+  /**
+   * Representação visual (imagem de capa) do criativo — ENRIQUECIMENTO
+   * OPCIONAL, nunca parte da identidade. Deliberadamente `string | null`,
+   * e deve continuar assim pra sempre: o Módulo de Criativos precisa
+   * funcionar igual (com placeholder) mesmo quando nenhum criativo do
+   * cliente tiver preview. NUNCA torne este campo obrigatório — "quase
+   * todo criativo tem imagem" não é motivo suficiente pra isso virar um
+   * requisito, porque quebraria a garantia de degradação graciosa que
+   * sustenta o módulo inteiro.
+   *
+   * Hoje sempre `null` — nenhum mecanismo de preenchimento existe ainda
+   * (sem scraping, sem download, sem cache de mídia). Nome deliberadamente
+   * desacoplado de origem (nunca "thumbnailUrl"/"instagramImageUrl"):
+   * amanhã pode vir do Instagram, da CDN do Meta, de upload manual, de
+   * cache próprio (R2/S3/Supabase Storage) ou até ser gerada internamente
+   * — este campo só representa "a imagem de capa", nunca de onde ela veio.
+   * A UI já trata os dois estados; popular este campo no futuro não exige
+   * nenhuma mudança estrutural aqui nem na UI.
+   */
   previewImageUrl: string | null;
   spend: number;
   impressions: number | null;
@@ -50,14 +76,22 @@ function sumNullable(a: number | null, b: number | null): number | null {
 }
 
 export interface CreativeSummary {
+  /** Creative Identity — client_id (implícito no escopo da consulta) +
+   * creative_name. A ÚNICA responsabilidade que nunca pode ficar `null`
+   * nem opcional; `permalinkUrl`/`previewImageUrl` abaixo são só
+   * enriquecimento em cima dela, nunca o contrário. */
   creativeName: string;
-  /** Permalink da linha de DATA MAIS ANTIGA que tiver um link registrado —
-   * fixado na "primeira aparição" do criativo, nunca trocado por um link
-   * mais recente. Ação SECUNDÁRIA na UI (nunca a representação visual do
-   * criativo — essa é sempre `previewImageUrl`/placeholder). */
+  /** External Reference — permalink da linha de DATA MAIS ANTIGA que tiver
+   * um link registrado, fixado na "primeira aparição" do criativo, nunca
+   * trocado por um link mais recente. Ação SECUNDÁRIA na UI (nunca a
+   * representação visual do criativo — essa é sempre
+   * `previewImageUrl`/placeholder). */
   permalinkUrl: string | null;
-  /** Mesma regra de "primeira aparição" do permalink — hoje sempre `null`
-   * (ver `AdCreativeDailyMetricRow.previewImageUrl`). É este campo, não o
+  /** Visual Representation — mesma regra de "primeira aparição" do
+   * permalink (ver `AdCreativeDailyMetricRow.previewImageUrl`), pelo mesmo
+   * motivo: um criativo que rodou por 2 anos sob o mesmo `creative_name`
+   * sempre mostra a MESMA imagem, nunca a mais recente — isso cria memória
+   * visual pro gestor reconhecer o card de relance. É este campo, não o
    * permalink, que decide o que a UI mostra como imagem do card. */
   previewImageUrl: string | null;
   campaignNames: string[];
