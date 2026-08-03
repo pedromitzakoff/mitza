@@ -2,13 +2,17 @@ import { createClient as createRawClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   aggregateAdCreativeDailyRows,
+  aggregateCampaignDailyRows,
   aggregateColumnByAdCreativeGroup,
+  aggregateColumnByCampaignGroup,
   aggregateDailyColumn,
   buildAdCreativeDailyMetricsUpsertRows,
+  buildCampaignDailyMetricsUpsertRows,
   buildDailyPerformanceUpsertRows,
   buildDailySpendUpsertRows,
   combineAdCreativeGroupValues,
   combineAggregatedDailyValues,
+  combineCampaignGroupValues,
   excludeRowsByCampaignName,
   filterRowsByCampaignName,
   validateAccountIdColumn,
@@ -34,6 +38,7 @@ export interface ImportSourceRunResult {
   spendRowsWritten: number;
   performanceRowsWritten: number;
   creativeRowsWritten: number;
+  campaignRowsWritten: number;
   errorMessage: string | null;
 }
 
@@ -124,6 +129,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
       spendRowsWritten: 0,
       performanceRowsWritten: 0,
       creativeRowsWritten: 0,
+      campaignRowsWritten: 0,
       errorMessage,
     });
     await supabase.from("import_sources").update({ status: "error" }).eq("id", importSourceId);
@@ -135,6 +141,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
       spendRowsWritten: 0,
       performanceRowsWritten: 0,
       creativeRowsWritten: 0,
+      campaignRowsWritten: 0,
       errorMessage,
     };
   }
@@ -155,6 +162,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
   let spendRowsWritten = 0;
   let performanceRowsWritten = 0;
   let creativeRowsWritten = 0;
+  let campaignRowsWritten = 0;
   const partialReasons: string[] = [];
 
   // Backfill automático de Sprints históricas (achado na validação: dado
@@ -342,6 +350,77 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
     }
   }
 
+  // Camada normalizada de CAMPANHA (`campaign_daily_metrics`, achado da
+  // auditoria da integração Google Ads) — independente de Criativos: roda
+  // sempre que `campaign_name_column` existir, nunca condicionada a
+  // `ad_name_column`. Nunca fabrica creative_name/usa ad_creative_daily_metrics
+  // como atalho — é uma agregação própria por (date, campaign_name).
+  if (importSource.campaign_name_column) {
+    const campaignAggregate = aggregateCampaignDailyRows(rows, {
+      dateColumn: importSource.date_column,
+      campaignNameColumn: importSource.campaign_name_column,
+      spendColumn: importSource.spend_column,
+      impressionsColumn: importSource.impressions_column,
+      reachColumn: importSource.reach_column,
+      clicksColumn: importSource.clicks_column,
+    });
+    hadInvalidRows = hadInvalidRows || campaignAggregate.some((row) => row.invalidRowCount > 0);
+
+    if (campaignAggregate.length > 0) {
+      // Mesma resolução de metric_mappings já usada por daily_performance/
+      // ad_creative_daily_metrics — nunca uma segunda lógica de mapeamento.
+      // Um objetivo por campanha (mesma limitação de ad_creative_daily_metrics).
+      let campaignResultType: PerformanceGoal | null = null;
+      let resultByGroup: Map<string, number> | null = null;
+      let revenueByGroup: Map<string, number> | null = null;
+
+      for (const [goal, { resultColumns, valueColumns }] of mappingGroupsByGoal) {
+        if (goal !== "leads" && goal !== "sales") continue;
+
+        const resultColumnAggregates = resultColumns.map((resultColumn) =>
+          aggregateColumnByCampaignGroup(rows, importSource.date_column, importSource.campaign_name_column!, resultColumn),
+        );
+        for (const columnAggregate of resultColumnAggregates) {
+          hadInvalidRows = hadInvalidRows || columnAggregate.some((row) => row.invalidRowCount > 0);
+        }
+
+        const combinedResult = combineCampaignGroupValues(resultColumnAggregates);
+        if (combinedResult.length === 0) continue;
+
+        campaignResultType = goal;
+        resultByGroup = new Map(combinedResult.map((row) => [`${row.date} ${row.campaignName}`, row.value]));
+
+        if (valueColumns.length > 0) {
+          const valueColumnAggregates = valueColumns.map((valueColumn) =>
+            aggregateColumnByCampaignGroup(rows, importSource.date_column, importSource.campaign_name_column!, valueColumn),
+          );
+          for (const columnAggregate of valueColumnAggregates) {
+            hadInvalidRows = hadInvalidRows || columnAggregate.some((row) => row.invalidRowCount > 0);
+          }
+          const combinedValue = combineCampaignGroupValues(valueColumnAggregates);
+          revenueByGroup = new Map(combinedValue.map((row) => [`${row.date} ${row.campaignName}`, row.value]));
+        }
+        break;
+      }
+
+      const campaignUpsertRows = buildCampaignDailyMetricsUpsertRows(importSource.client_id, importSourceId, importSource.channel, campaignAggregate, {
+        resultType: campaignResultType,
+        resultByGroup,
+        revenueByGroup,
+      });
+
+      const { error: campaignUpsertError } = await supabase
+        .from("campaign_daily_metrics")
+        .upsert(campaignUpsertRows, { onConflict: "import_source_id,date,channel,campaign_name" });
+
+      if (campaignUpsertError) {
+        partialReasons.push(`campanhas não gravadas: ${campaignUpsertError.message}`);
+      } else {
+        campaignRowsWritten = campaignUpsertRows.length;
+      }
+    }
+  }
+
   const isEmpty = rows.length === 0;
   const status: ImportSourceRunResult["status"] = partialReasons.length > 0 ? "partial" : hadInvalidRows ? "partial" : isEmpty ? "empty" : "success";
   const finalErrorMessage = partialReasons.length > 0
@@ -358,6 +437,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
     spendRowsWritten,
     performanceRowsWritten,
     creativeRowsWritten,
+    campaignRowsWritten,
     errorMessage: finalErrorMessage,
   });
 
@@ -394,6 +474,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
     spendRowsWritten,
     performanceRowsWritten,
     creativeRowsWritten,
+    campaignRowsWritten,
     errorMessage: finalErrorMessage,
   };
 }
@@ -431,6 +512,7 @@ async function finishRun(
     spendRowsWritten: number;
     performanceRowsWritten: number;
     creativeRowsWritten: number;
+    campaignRowsWritten: number;
     errorMessage: string | null;
   },
 ) {
@@ -443,6 +525,7 @@ async function finishRun(
       spend_rows_written: result.spendRowsWritten,
       performance_rows_written: result.performanceRowsWritten,
       creative_rows_written: result.creativeRowsWritten,
+      campaign_rows_written: result.campaignRowsWritten,
       error_message: result.errorMessage,
     })
     .eq("id", runId);

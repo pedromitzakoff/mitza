@@ -793,6 +793,75 @@ export interface Database {
           },
         ];
       };
+      campaign_daily_metrics: {
+        Row: {
+          id: string;
+          client_id: string;
+          import_source_id: string;
+          channel: TrafficChannelDb;
+          date: string;
+          campaign_name: string;
+          spend: number;
+          impressions: number | null;
+          reach: number | null;
+          clicks: number | null;
+          result_type: PerformanceGoalDb | null;
+          result_count: number | null;
+          revenue: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          import_source_id: string;
+          channel: TrafficChannelDb;
+          date: string;
+          campaign_name: string;
+          spend?: number;
+          impressions?: number | null;
+          reach?: number | null;
+          clicks?: number | null;
+          result_type?: PerformanceGoalDb | null;
+          result_count?: number | null;
+          revenue?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          import_source_id?: string;
+          channel?: TrafficChannelDb;
+          date?: string;
+          campaign_name?: string;
+          spend?: number;
+          impressions?: number | null;
+          reach?: number | null;
+          clicks?: number | null;
+          result_type?: PerformanceGoalDb | null;
+          result_count?: number | null;
+          revenue?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_daily_metrics_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_daily_metrics_import_source_id_fkey";
+            columns: ["import_source_id"];
+            isOneToOne: false;
+            referencedRelation: "import_sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       import_sources: {
         Row: {
           id: string;
@@ -934,6 +1003,7 @@ export interface Database {
           spend_rows_written: number | null;
           performance_rows_written: number | null;
           creative_rows_written: number | null;
+          campaign_rows_written: number | null;
           error_message: string | null;
           created_at: string;
         };
@@ -947,6 +1017,7 @@ export interface Database {
           spend_rows_written?: number | null;
           performance_rows_written?: number | null;
           creative_rows_written?: number | null;
+          campaign_rows_written?: number | null;
           error_message?: string | null;
           created_at?: string;
         };
@@ -960,6 +1031,7 @@ export interface Database {
           spend_rows_written?: number | null;
           performance_rows_written?: number | null;
           creative_rows_written?: number | null;
+          campaign_rows_written?: number | null;
           error_message?: string | null;
           created_at?: string;
         };

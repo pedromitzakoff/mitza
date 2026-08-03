@@ -502,3 +502,182 @@ export function buildAdCreativeDailyMetricsUpsertRows(
     };
   });
 }
+
+/**
+ * Núcleo puro da camada de CAMPANHA (`campaign_daily_metrics`) — achado da
+ * auditoria da integração Google Ads: a antiga seção "Campanhas" não era
+ * independente, reaproveitava `ad_creative_daily_metrics` (Meta-only, exige
+ * `ad_name_column`) só agrupando por campanha em vez de criativo. Esta
+ * camada agrega por `(date, campaignName)` — SEM `creativeName` — pra nunca
+ * depender de `ad_name_column` estar configurado. Disparada sempre que
+ * `campaign_name_column` existir, independente de Criativos.
+ */
+export interface AggregateCampaignRowsColumns {
+  dateColumn: string;
+  campaignNameColumn: string;
+  spendColumn: string;
+  impressionsColumn?: string | null;
+  reachColumn?: string | null;
+  clicksColumn?: string | null;
+}
+
+export interface AggregatedCampaignRow {
+  date: string;
+  campaignName: string;
+  spend: number;
+  impressions: number | null;
+  reach: number | null;
+  clicks: number | null;
+  invalidRowCount: number;
+}
+
+export function aggregateCampaignDailyRows(rows: RawSourceRow[], columns: AggregateCampaignRowsColumns): AggregatedCampaignRow[] {
+  const { dateColumn, campaignNameColumn, spendColumn, impressionsColumn, reachColumn, clicksColumn } = columns;
+
+  const groups = new Map<string, AggregatedCampaignRow>();
+
+  for (const row of rows) {
+    const rawDate = row[dateColumn];
+    if (typeof rawDate !== "string" || rawDate.length === 0) continue;
+
+    const campaignName = toStringColumnValue(row[campaignNameColumn]);
+    const key = `${rawDate} ${campaignName}`;
+    const group = groups.get(key) ?? {
+      date: rawDate,
+      campaignName,
+      spend: 0,
+      impressions: null,
+      reach: null,
+      clicks: null,
+      invalidRowCount: 0,
+    };
+
+    const spendValue = parseSourceNumericValue(row[spendColumn]);
+    if (spendValue.kind === "ok") group.spend += spendValue.value;
+    if (spendValue.kind === "invalid") group.invalidRowCount += 1;
+
+    if (impressionsColumn) {
+      const value = parseSourceNumericValue(row[impressionsColumn]);
+      if (value.kind === "ok") group.impressions = (group.impressions ?? 0) + value.value;
+      if (value.kind === "invalid") group.invalidRowCount += 1;
+    }
+    if (reachColumn) {
+      const value = parseSourceNumericValue(row[reachColumn]);
+      if (value.kind === "ok") group.reach = (group.reach ?? 0) + value.value;
+      if (value.kind === "invalid") group.invalidRowCount += 1;
+    }
+    if (clicksColumn) {
+      const value = parseSourceNumericValue(row[clicksColumn]);
+      if (value.kind === "ok") group.clicks = (group.clicks ?? 0) + value.value;
+      if (value.kind === "invalid") group.invalidRowCount += 1;
+    }
+
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values()).sort((a, b) => a.date.localeCompare(b.date) || a.campaignName.localeCompare(b.campaignName));
+}
+
+export interface AggregatedCampaignGroupValue {
+  date: string;
+  campaignName: string;
+  value: number;
+  invalidRowCount: number;
+}
+
+/** Soma uma coluna por `(date, campaignName)` — irmã de
+ * `aggregateColumnByAdCreativeGroup`, mas na granularidade de campanha
+ * (sem `creativeName`). Usada pra resolver `result_column`/`value_column` de
+ * `metric_mappings` por campanha. */
+export function aggregateColumnByCampaignGroup(
+  rows: RawSourceRow[],
+  dateColumn: string,
+  campaignNameColumn: string,
+  valueColumn: string,
+): AggregatedCampaignGroupValue[] {
+  const groups = new Map<string, AggregatedCampaignGroupValue>();
+
+  for (const row of rows) {
+    const rawDate = row[dateColumn];
+    if (typeof rawDate !== "string" || rawDate.length === 0) continue;
+
+    const campaignName = toStringColumnValue(row[campaignNameColumn]);
+    const key = `${rawDate} ${campaignName}`;
+    const group = groups.get(key) ?? { date: rawDate, campaignName, value: 0, invalidRowCount: 0 };
+
+    const parsed = parseSourceNumericValue(row[valueColumn]);
+    if (parsed.kind === "ok") group.value += parsed.value;
+    if (parsed.kind === "invalid") group.invalidRowCount += 1;
+
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values());
+}
+
+export function combineCampaignGroupValues(aggregates: AggregatedCampaignGroupValue[][]): AggregatedCampaignGroupValue[] {
+  const groups = new Map<string, AggregatedCampaignGroupValue>();
+
+  for (const aggregate of aggregates) {
+    for (const row of aggregate) {
+      const key = `${row.date} ${row.campaignName}`;
+      const group = groups.get(key) ?? { date: row.date, campaignName: row.campaignName, value: 0, invalidRowCount: 0 };
+      group.value += row.value;
+      group.invalidRowCount += row.invalidRowCount;
+      groups.set(key, group);
+    }
+  }
+
+  return Array.from(groups.values());
+}
+
+export interface CampaignDailyMetricsUpsertRow {
+  client_id: string;
+  import_source_id: string;
+  channel: TrafficChannel;
+  date: string;
+  campaign_name: string;
+  spend: number;
+  impressions: number | null;
+  reach: number | null;
+  clicks: number | null;
+  result_type: PerformanceGoal | null;
+  result_count: number | null;
+  revenue: number | null;
+}
+
+/**
+ * Monta as linhas prontas pro upsert em `campaign_daily_metrics` — chave
+ * `(import_source_id, date, channel, campaign_name)`. `channel` nunca
+ * inferido, sempre o mesmo de `import_sources.channel` da fonte.
+ */
+export function buildCampaignDailyMetricsUpsertRows(
+  clientId: string,
+  importSourceId: string,
+  channel: TrafficChannel,
+  aggregated: AggregatedCampaignRow[],
+  options?: {
+    resultType?: PerformanceGoal | null;
+    resultByGroup?: Map<string, number> | null;
+    revenueByGroup?: Map<string, number> | null;
+  },
+): CampaignDailyMetricsUpsertRow[] {
+  return aggregated.map((row) => {
+    const key = `${row.date} ${row.campaignName}`;
+    const resultCount = options?.resultByGroup?.get(key);
+    return {
+      client_id: clientId,
+      import_source_id: importSourceId,
+      channel,
+      date: row.date,
+      campaign_name: row.campaignName,
+      spend: row.spend,
+      impressions: row.impressions,
+      reach: row.reach,
+      clicks: row.clicks,
+      result_type: resultCount !== undefined ? (options?.resultType ?? null) : null,
+      result_count: resultCount !== undefined ? Math.round(resultCount) : null,
+      revenue: options?.revenueByGroup?.get(key) ?? null,
+    };
+  });
+}

@@ -5,9 +5,11 @@ import { CampaignCard } from "./campaign-card";
 
 /**
  * Seção "Campanhas" do hub de Analytics — visão consolidada, nunca uma
- * réplica do painel do Meta Ads (pedido explícito do usuário). Mesma fonte
- * de dados de Criativos (`ad_creative_daily_metrics`) — vazio pelo mesmo
- * motivo (fonte sem `ad_name_column`/`campaign_name_column` configurados).
+ * réplica do painel do Meta Ads (pedido explícito do usuário). Integração
+ * Google Ads: fonte independente de Criativos (`campaign_daily_metrics`,
+ * channel-aware) — vazio quando nenhuma fonte tiver `campaign_name_column`
+ * configurada. Chave de renderização inclui o canal — Meta e Google podem
+ * ter campanhas com o mesmo nome, nunca tratadas como o mesmo card.
  */
 export function AnalyticsCampaignsSection({ summaries }: { summaries: CampaignSummary[] }) {
   if (summaries.length === 0) {
@@ -17,7 +19,7 @@ export function AnalyticsCampaignsSection({ summaries }: { summaries: CampaignSu
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {summaries.map((summary) => (
-        <CampaignCard key={summary.campaignName} summary={summary} />
+        <CampaignCard key={`${summary.channel}-${summary.campaignName}`} summary={summary} />
       ))}
     </div>
   );

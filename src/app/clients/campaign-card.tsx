@@ -1,13 +1,19 @@
 import { formatCurrency } from "@/lib/format";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
+import { TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
 import type { CampaignSummary } from "@/lib/campaign-analytics";
 
 /**
- * Card executivo de UMA campanha — nome, investimento, resultado principal,
- * CPA e ROAS (quando existir). Deliberadamente enxuto (pedido explícito:
- * "não quero copiar o Meta Ads, quero uma visão muito mais limpa") — nunca
- * mostra todas as métricas disponíveis de uma vez, só o essencial pra
- * decisão rápida.
+ * Card executivo de UMA campanha — nome, canal, investimento, resultado
+ * principal, CPA e ROAS (quando existir). Deliberadamente enxuto (pedido
+ * explícito: "não quero copiar o Meta Ads, quero uma visão muito mais
+ * limpa") — nunca mostra todas as métricas disponíveis de uma vez, só o
+ * essencial pra decisão rápida.
+ *
+ * Integração Google Ads: Campanhas passou a ser channel-aware
+ * (`campaign_daily_metrics`, independente de Criativos) — o badge de canal
+ * é a única identificação nova no card, nunca um comparativo entre canais
+ * aqui (isso pertence ao resumo consolidado do Resumo Executivo).
  *
  * Etapa "Resumo Executivo": SEM indicador de variação % (removido a pedido
  * explícito do usuário — "essa informação gera mais dúvida do que valor").
@@ -20,8 +26,8 @@ export function CampaignCard({ summary }: { summary: CampaignSummary }) {
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
       <div>
         <p className="truncate text-sm font-semibold text-foreground">{summary.campaignName}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {summary.creativeCount} {summary.creativeCount === 1 ? "criativo" : "criativos"}
+        <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          {TRAFFIC_CHANNELS[summary.channel].shortLabel}
         </p>
       </div>
 

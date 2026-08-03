@@ -2,6 +2,7 @@ import { formatCurrency, formatPercent, formatShortDate } from "@/lib/format";
 import { buildSmoothPath, buildTickIndices, scalePoints } from "@/lib/chart-geometry";
 import { escapeHtml } from "@/lib/html-escape";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
+import { TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
 import type { AnalyticsKpiCard, AnalyticsTrend } from "@/lib/analytics";
 import type { PeriodHighlight } from "@/lib/period-highlights";
 import type { CreativeSummary } from "@/lib/creative-analytics";
@@ -195,7 +196,7 @@ function renderCampaignCard(summary: CampaignSummary): string {
   return `
     <div class="card">
       <p class="card-title">${escapeHtml(summary.campaignName)}</p>
-      <p class="card-subtitle">${summary.creativeCount} ${summary.creativeCount === 1 ? "criativo" : "criativos"}</p>
+      <p class="card-subtitle">${escapeHtml(TRAFFIC_CHANNELS[summary.channel].shortLabel)}</p>
       <p class="stat-label">Investimento</p>
       <p class="campaign-spend">${formatCurrency(summary.totalSpend)}</p>
       ${metrics.length > 0 ? `<p class="campaign-metrics">${metrics.join(" · ")}</p>` : ""}

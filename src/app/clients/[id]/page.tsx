@@ -74,6 +74,7 @@ import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-dat
 import { buildCreativeDetail, buildCreativeSummaries } from "@/lib/creative-analytics";
 import { CreativeAnalyticsSection } from "../creative-analytics-section";
 import { buildCampaignSummaries } from "@/lib/campaign-analytics";
+import { getCampaignDailyMetricsForPeriod } from "@/lib/campaign-analytics-data";
 import { AnalyticsCampaignsSection } from "../analytics-campaigns-section";
 import { AnalyticsInsightsSection } from "../analytics-insights-section";
 import { AnalyticsHubHeader } from "../analytics-hub-header";
@@ -927,10 +928,12 @@ export default async function ClientPage({
   // `client.performance_goal` (pedido explícito do usuário) — a
   // consolidação por criativo roda igual pra qualquer cliente, mostrando só
   // os indicadores que a fonte entrega. Buscado uma vez só, reaproveitado
-  // por Criativos, Campanhas E Resumo (Destaques do período reaproveita os
-  // mesmos agregados — ver `lib/period-highlights.ts`).
-  const needsAdCreativeRows =
-    isAnalyticsArea && (analyticsSection === "resumo" || analyticsSection === "criativos" || analyticsSection === "campanhas");
+  // por Criativos E Resumo (Destaques do período reaproveita os mesmos
+  // agregados — ver `lib/period-highlights.ts`). Integração Google Ads:
+  // Campanhas NÃO depende mais desta busca (ver bloco abaixo) — Criativos
+  // continua exclusivamente Meta, `ad_creative_daily_metrics` nunca ganha
+  // canal.
+  const needsAdCreativeRows = isAnalyticsArea && (analyticsSection === "resumo" || analyticsSection === "criativos");
   const adCreativeRows = needsAdCreativeRows ? await getAdCreativeDailyMetricsForPeriod(supabase, id, analyticsPeriod) : [];
   const creativeSummaries =
     analyticsSection === "resumo" || analyticsSection === "criativos" ? buildCreativeSummaries(adCreativeRows) : [];
@@ -949,12 +952,16 @@ export default async function ClientPage({
     return `${analyticsBaseHref}&${params.toString()}`;
   };
 
-  // Seção "Campanhas" — mesma fonte de Criativos, consolidada por
-  // `campaign_name` em vez de `creative_name`. Etapa "Resumo Executivo":
-  // sem variação % vs período anterior (removida a pedido do usuário), por
-  // isso não busca mais um segundo período aqui.
+  // Seção "Campanhas" — Integração Google Ads: camada independente de
+  // Criativos desde a origem (`campaign_daily_metrics`, channel-aware,
+  // populada sempre que `campaign_name_column` existir, nunca condicionada
+  // a `ad_name_column`). Etapa "Resumo Executivo": sem variação % vs
+  // período anterior (removida a pedido do usuário), por isso não busca
+  // mais um segundo período aqui.
+  const needsCampaignRows = isAnalyticsArea && (analyticsSection === "resumo" || analyticsSection === "campanhas");
+  const campaignDailyMetricRows = needsCampaignRows ? await getCampaignDailyMetricsForPeriod(supabase, id, analyticsPeriod) : [];
   const campaignSummaries =
-    analyticsSection === "resumo" || analyticsSection === "campanhas" ? buildCampaignSummaries(adCreativeRows) : [];
+    analyticsSection === "resumo" || analyticsSection === "campanhas" ? buildCampaignSummaries(campaignDailyMetricRows) : [];
 
   // Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente" — "Resumo
   // consolidado do mês": nenhum dado novo, só uma leitura de fechamento

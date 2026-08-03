@@ -14,6 +14,7 @@ import {
 import { buildPeriodHighlights, type PeriodHighlight } from "@/lib/period-highlights";
 import { fetchClientAnalyticsData, type ClientAnalyticsData } from "@/app/clients/analytics-data";
 import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
+import { getCampaignDailyMetricsForPeriod } from "@/lib/campaign-analytics-data";
 import { buildCampaignSummaries, type CampaignSummary } from "@/lib/campaign-analytics";
 import { buildCreativeSummaries, type CreativeSummary } from "@/lib/creative-analytics";
 import { FUTURE_OPPORTUNITY_CATEGORIES } from "@/lib/analytics-messages";
@@ -91,15 +92,19 @@ function buildReportSummary(data: ClientAnalyticsData, creatives: CreativeSummar
 }
 
 export async function buildAnalyticsReportData(supabase: Supabase, clientId: string, period: { start: string; end: string }): Promise<AnalyticsReportData> {
-  const [clientRows, data, adCreativeRows] = await Promise.all([
+  // Integração Google Ads: Campanhas é uma busca independente de Criativos
+  // desde a origem (`campaign_daily_metrics`, channel-aware) — nunca mais
+  // derivada de `ad_creative_daily_metrics` (Meta-only).
+  const [clientRows, data, adCreativeRows, campaignRows] = await Promise.all([
     requireQuery(supabase.from("clients").select("id, name").eq("id", clientId), "clients:analytics-report"),
     fetchClientAnalyticsData(supabase, clientId, period),
     getAdCreativeDailyMetricsForPeriod(supabase, clientId, period),
+    getCampaignDailyMetricsForPeriod(supabase, clientId, period),
   ]);
 
   const client = clientRows[0];
   const creatives = buildCreativeSummaries(adCreativeRows);
-  const campaigns = buildCampaignSummaries(adCreativeRows);
+  const campaigns = buildCampaignSummaries(campaignRows);
 
   return {
     client: { id: client.id, name: client.name },
