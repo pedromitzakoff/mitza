@@ -6,7 +6,12 @@ import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
-import { getEnabledImportSourceIdsForClient, getImportSourceHealthIssue, resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
+import {
+  getActiveImportSourceChannelsForClient,
+  getEnabledImportSourceIdsForClient,
+  getImportSourceHealthIssue,
+  resolvePerformanceRowsForSprints,
+} from "@/lib/performance-queries";
 import {
   assertSingleCurrentSprint,
   computeSprintFinancials,
@@ -59,7 +64,6 @@ import {
   computePerformanceSummary,
   deriveMonthlyKpiTexts,
 } from "@/lib/performance";
-import { AVAILABLE_TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
 import type { SprintPerformanceProps } from "../sprint-card";
 import { ClientHistoryList } from "../client-history-list";
 import { fetchRecurringTaskDetail, fetchRecurringTaskListsForSprints } from "@/lib/recurring-task-data";
@@ -79,6 +83,10 @@ import { AnalyticsCampaignsSection } from "../analytics-campaigns-section";
 import { AnalyticsInsightsSection } from "../analytics-insights-section";
 import { AnalyticsHubHeader } from "../analytics-hub-header";
 import { AnalyticsHubNav } from "../analytics-hub-nav";
+import { AnalyticsPlatformSwitch } from "../analytics-platform-switch";
+import { GoogleNotConnectedState } from "../google-not-connected-state";
+import { CREATIVES_NOT_AVAILABLE_FOR_GOOGLE_MESSAGE } from "@/lib/analytics-messages";
+import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 
 async function fetchCommentsByType(
   supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
@@ -167,6 +175,7 @@ export default async function ClientPage({
     analyticsStart?: string;
     analyticsEnd?: string;
     analyticsSection?: string;
+    analyticsPlatform?: string;
     creative?: string;
   }>;
 }) {
@@ -199,6 +208,7 @@ export default async function ClientPage({
     analyticsStart: analyticsStartParam,
     analyticsEnd: analyticsEndParam,
     analyticsSection: analyticsSectionParam,
+    analyticsPlatform: analyticsPlatformParam,
     creative: creativeParam,
   } = await searchParams;
   const profile = await getCurrentProfile();
@@ -903,25 +913,45 @@ export default async function ClientPage({
     start: analyticsStartParam,
     end: analyticsEndParam,
   });
+
+  // Integração Google Ads — seletor de plataforma "Meta Ads | Google Ads".
+  // Meta é sempre o padrão (pedido explícito do usuário: "manter a
+  // experiência atual"); controla TODA a aba de Analytics (Resumo, gráfico,
+  // Campanhas, PDF exportado), nunca só uma sub-seção. Nunca consolida os
+  // dois canais na mesma visualização — cada um é uma leitura exclusiva.
+  const analyticsPlatform: TrafficChannel = AVAILABLE_TRAFFIC_CHANNELS.includes(analyticsPlatformParam as TrafficChannel)
+    ? (analyticsPlatformParam as TrafficChannel)
+    : "meta";
+  // "Conectado" só é uma pergunta real pra Google (Meta pode vir de
+  // performance_records manual, sem nenhuma import_sources — sempre
+  // continua funcionando como hoje). `import_sources` é a única fonte de
+  // verdade pra essa pergunta, nunca inferida de daily_spend/daily_performance.
+  const activeImportChannels = isAnalyticsArea ? await getActiveImportSourceChannelsForClient(supabase, id) : new Set<string>();
+  const showPlatformNotConnected = isAnalyticsArea && analyticsPlatform === "google" && !activeImportChannels.has("google");
+
   const analyticsData =
-    isAnalyticsArea && analyticsSection === "resumo" ? await fetchClientAnalyticsData(supabase, id, analyticsPeriod) : null;
+    isAnalyticsArea && analyticsSection === "resumo" && !showPlatformNotConnected
+      ? await fetchClientAnalyticsData(supabase, id, analyticsPeriod, analyticsPlatform)
+      : null;
   const analyticsBaseHref = buildAreaHref("analytics");
-  // Dois hrefs derivados do mesmo `analyticsBaseHref`, cada um preservando o
-  // parâmetro que o OUTRO controle vai mudar: a navegação entre sub-seções
-  // preserva o período selecionado (nunca reseta pra "this_month" ao trocar
-  // de aba dentro do hub) e o seletor de período preserva a sub-seção atual
-  // (nunca volta pro Resumo ao trocar o período em Campanhas, por exemplo).
+  // Hrefs derivados do mesmo `analyticsBaseHref`, cada um preservando os
+  // parâmetros que o OUTRO controle vai mudar: a navegação entre sub-seções
+  // preserva período+plataforma (nunca reseta pra "this_month"/Meta ao
+  // trocar de aba dentro do hub), o seletor de período preserva
+  // seção+plataforma, e o seletor de plataforma preserva período+seção.
   const analyticsPeriodQuery = `analyticsPreset=${analyticsPreset}${
     analyticsPreset === "custom"
       ? `&analyticsStart=${analyticsStartParam ?? analyticsPeriod.start}&analyticsEnd=${analyticsEndParam ?? analyticsPeriod.end}`
       : ""
   }`;
-  const analyticsNavBaseHref = `${analyticsBaseHref}&${analyticsPeriodQuery}`;
-  const analyticsHeaderBaseHref = `${analyticsBaseHref}&analyticsSection=${analyticsSection}`;
-  // AnalyticsReport (Fase 3) — mesmo período selecionado no hub, nunca um
-  // segundo seletor pro relatório; o download é um `<a>` normal, o
-  // navegador trata o `Content-Disposition: attachment` nativamente.
-  const exportHref = `/api/clients/${id}/analytics-report?${analyticsPeriodQuery}`;
+  const analyticsPlatformQuery = `analyticsPlatform=${analyticsPlatform}`;
+  const analyticsNavBaseHref = `${analyticsBaseHref}&${analyticsPeriodQuery}&${analyticsPlatformQuery}`;
+  const analyticsHeaderBaseHref = `${analyticsBaseHref}&analyticsSection=${analyticsSection}&${analyticsPlatformQuery}`;
+  const analyticsPlatformSwitchBaseHref = `${analyticsBaseHref}&${analyticsPeriodQuery}&analyticsSection=${analyticsSection}`;
+  // AnalyticsReport (Fase 3) — mesmo período E plataforma selecionados no
+  // hub, nunca um segundo seletor pro relatório; o download é um `<a>`
+  // normal, o navegador trata o `Content-Disposition: attachment` nativamente.
+  const exportHref = `/api/clients/${id}/analytics-report?${analyticsPeriodQuery}&${analyticsPlatformQuery}`;
 
   // Módulo de Criativos (Creative Analytics) — mesmo período único do hub
   // acima (antes tinha seletor próprio). Nunca gated por
@@ -930,20 +960,22 @@ export default async function ClientPage({
   // os indicadores que a fonte entrega. Buscado uma vez só, reaproveitado
   // por Criativos E Resumo (Destaques do período reaproveita os mesmos
   // agregados — ver `lib/period-highlights.ts`). Integração Google Ads:
-  // Campanhas NÃO depende mais desta busca (ver bloco abaixo) — Criativos
-  // continua exclusivamente Meta, `ad_creative_daily_metrics` nunca ganha
-  // canal.
-  const needsAdCreativeRows = isAnalyticsArea && (analyticsSection === "resumo" || analyticsSection === "criativos");
+  // Criativos continua exclusivamente Meta (pedido explícito do usuário:
+  // "não implementar criativos Google") — nunca busca nada quando a
+  // plataforma selecionada é Google, `ad_creative_daily_metrics` nunca
+  // ganha canal. Campanhas NÃO depende mais desta busca (ver bloco abaixo).
+  const needsAdCreativeRows =
+    isAnalyticsArea && analyticsPlatform === "meta" && (analyticsSection === "resumo" || analyticsSection === "criativos");
   const adCreativeRows = needsAdCreativeRows ? await getAdCreativeDailyMetricsForPeriod(supabase, id, analyticsPeriod) : [];
   const creativeSummaries =
     analyticsSection === "resumo" || analyticsSection === "criativos" ? buildCreativeSummaries(adCreativeRows) : [];
   const creativeDetail =
     isAnalyticsArea && analyticsSection === "criativos" && creativeParam ? buildCreativeDetail(adCreativeRows, creativeParam) : null;
-  // Preserva o período selecionado (nunca reseta pra "this_month" ao entrar
-  // no detalhe de um criativo) — mesmo cuidado de `customStart`/`customEnd`
-  // já usado pro seletor de período em si.
+  // Preserva período+plataforma (nunca reseta ao entrar no detalhe de um
+  // criativo) — mesmo cuidado de `customStart`/`customEnd` já usado pro
+  // seletor de período em si.
   const buildCreativeDetailHref = (creativeName: string) => {
-    const params = new URLSearchParams({ analyticsPreset, analyticsSection: "criativos" });
+    const params = new URLSearchParams({ analyticsPreset, analyticsSection: "criativos", analyticsPlatform });
     if (analyticsPreset === "custom") {
       params.set("analyticsStart", analyticsStartParam ?? analyticsPeriod.start);
       params.set("analyticsEnd", analyticsEndParam ?? analyticsPeriod.end);
@@ -957,11 +989,18 @@ export default async function ClientPage({
   // populada sempre que `campaign_name_column` existir, nunca condicionada
   // a `ad_name_column`). Etapa "Resumo Executivo": sem variação % vs
   // período anterior (removida a pedido do usuário), por isso não busca
-  // mais um segundo período aqui.
-  const needsCampaignRows = isAnalyticsArea && (analyticsSection === "resumo" || analyticsSection === "campanhas");
-  const campaignDailyMetricRows = needsCampaignRows ? await getCampaignDailyMetricsForPeriod(supabase, id, analyticsPeriod) : [];
+  // mais um segundo período aqui. Filtragem por `analyticsPlatform` ocorre
+  // aqui, na camada de dados, antes das funções puras de agregação — nunca
+  // mistura Meta e Google na mesma leitura.
+  const needsCampaignRows =
+    isAnalyticsArea && (analyticsSection === "resumo" || analyticsSection === "campanhas") && !showPlatformNotConnected;
+  const campaignDailyMetricRows = needsCampaignRows
+    ? (await getCampaignDailyMetricsForPeriod(supabase, id, analyticsPeriod)).filter((row) => row.channel === analyticsPlatform)
+    : [];
   const campaignSummaries =
-    analyticsSection === "resumo" || analyticsSection === "campanhas" ? buildCampaignSummaries(campaignDailyMetricRows) : [];
+    (analyticsSection === "resumo" || analyticsSection === "campanhas") && !showPlatformNotConnected
+      ? buildCampaignSummaries(campaignDailyMetricRows)
+      : [];
 
   // Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente" — "Resumo
   // consolidado do mês": nenhum dado novo, só uma leitura de fechamento
@@ -1454,11 +1493,16 @@ export default async function ClientPage({
             customStart={analyticsStartParam ?? analyticsPeriod.start}
             customEnd={analyticsEndParam ?? analyticsPeriod.end}
             exportHref={exportHref}
+            platformSwitch={
+              <AnalyticsPlatformSwitch baseHref={analyticsPlatformSwitchBaseHref} activePlatform={analyticsPlatform} />
+            }
           />
           <AnalyticsHubNav baseHref={analyticsNavBaseHref} activeSection={analyticsSection} />
 
           {analyticsSection === "resumo" &&
-            (analyticsData ? (
+            (showPlatformNotConnected ? (
+              <GoogleNotConnectedState />
+            ) : analyticsData ? (
               <AnalyticsSection
                 data={analyticsData}
                 creativeSummaries={creativeSummaries}
@@ -1469,16 +1513,26 @@ export default async function ClientPage({
               <EmptyState>Não foi possível carregar o Analytics deste cliente.</EmptyState>
             ))}
 
-          {analyticsSection === "criativos" && (
-            <CreativeAnalyticsSection
-              summaries={creativeSummaries}
-              detail={creativeDetail}
-              baseHref={analyticsBaseHref}
-              buildDetailHref={buildCreativeDetailHref}
-            />
-          )}
+          {analyticsSection === "criativos" &&
+            (analyticsPlatform === "google" ? (
+              <div className="mx-auto max-w-2xl">
+                <EmptyState>{CREATIVES_NOT_AVAILABLE_FOR_GOOGLE_MESSAGE}</EmptyState>
+              </div>
+            ) : (
+              <CreativeAnalyticsSection
+                summaries={creativeSummaries}
+                detail={creativeDetail}
+                baseHref={analyticsBaseHref}
+                buildDetailHref={buildCreativeDetailHref}
+              />
+            ))}
 
-          {analyticsSection === "campanhas" && <AnalyticsCampaignsSection summaries={campaignSummaries} />}
+          {analyticsSection === "campanhas" &&
+            (showPlatformNotConnected ? (
+              <GoogleNotConnectedState />
+            ) : (
+              <AnalyticsCampaignsSection summaries={campaignSummaries} />
+            ))}
 
           {analyticsSection === "insights" && <AnalyticsInsightsSection />}
         </div>

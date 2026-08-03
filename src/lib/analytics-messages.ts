@@ -12,6 +12,14 @@ export const NO_LEARNINGS_MESSAGE = "Ainda não há dados suficientes para expli
 export const NO_CREATIVES_MESSAGE = "Nenhum dado de criativo encontrado no período selecionado.";
 export const NO_CAMPAIGNS_MESSAGE = "Nenhum dado de campanha encontrado no período selecionado.";
 
+/** Integração Google Ads (seletor de plataforma) — nunca confundir com
+ * "sem dado no período" (`NO_ANALYTICS_DATA_MESSAGE`): esse estado é sobre
+ * NUNCA ter existido uma fonte configurada pra este canal neste cliente,
+ * nunca sobre o período selecionado estar vazio. */
+export const GOOGLE_NOT_CONNECTED_MESSAGE = "Google Ads ainda não está conectado para este cliente.";
+export const GOOGLE_NOT_CONNECTED_HINT = "Fale com o time responsável pela integração para configurar a conexão com o Google Ads desta conta.";
+export const CREATIVES_NOT_AVAILABLE_FOR_GOOGLE_MESSAGE = "Criativos do Google ainda não estão disponíveis nesta versão.";
+
 export const OPPORTUNITIES_EMPTY_MESSAGE = "As oportunidades automáticas desta conta ainda não foram implementadas.";
 export const OPPORTUNITIES_IN_DEVELOPMENT_LABEL = "Em desenvolvimento";
 export const FUTURE_OPPORTUNITY_CATEGORIES = [

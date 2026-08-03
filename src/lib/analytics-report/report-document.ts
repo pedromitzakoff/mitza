@@ -4,7 +4,9 @@ import type { PeriodHighlight } from "@/lib/period-highlights";
 import type { CreativeSummary } from "@/lib/creative-analytics";
 import type { CampaignSummary } from "@/lib/campaign-analytics";
 import {
+  CREATIVES_NOT_AVAILABLE_FOR_GOOGLE_MESSAGE,
   FUTURE_INSIGHT_CATEGORIES,
+  GOOGLE_NOT_CONNECTED_MESSAGE,
   INSIGHTS_EMPTY_MESSAGE,
   NO_ANALYTICS_DATA_MESSAGE,
   NO_CAMPAIGNS_MESSAGE,
@@ -54,11 +56,13 @@ export interface AnalyticsReportDocument {
 
 /** Blocos do Capítulo I ("Como foi o resultado?") + II ("O que mais chamou
  * atenção?") + III ("O que aprendemos?") + IV ("Quais oportunidades
- * existem?") — mesmos 3 estados de `AnalyticsSection` (sem objetivo / sem
- * dado / com dado), nunca um quarto estado inventado pro relatório. */
+ * existem?") — mesmos estados de `AnalyticsSection` (sem objetivo / sem
+ * dado / com dado), mais o 4º estado da Integração Google Ads
+ * (`"platform_not_connected"`, ver `report-data.ts`). */
 function buildSummaryBlocks(data: AnalyticsReportData): AnalyticsReportBlock[] {
   if (data.summary.status === "no_goal") return [{ type: "empty-state", message: NO_PERFORMANCE_GOAL_MESSAGE }];
   if (data.summary.status === "no_data") return [{ type: "empty-state", message: NO_ANALYTICS_DATA_MESSAGE }];
+  if (data.summary.status === "platform_not_connected") return [{ type: "empty-state", message: GOOGLE_NOT_CONNECTED_MESSAGE }];
 
   const { headline, lede, kpis, trend, trendCaption, highlights, learnings } = data.summary;
 
@@ -89,20 +93,30 @@ export function buildAnalyticsReportDocument(data: AnalyticsReportData): Analyti
     generatedAtLabel: formatDateTimeWithYear(data.generatedAt),
   };
 
+  // Integração Google Ads: Criativos continua exclusivamente Meta — mesma
+  // mensagem do hub quando a plataforma selecionada é Google, independente
+  // de conexão (nunca "nenhum dado encontrado", que sugeriria que criativos
+  // Google poderiam existir). Campanhas usa o mesmo "não conectado" do
+  // Resumo quando aplicável, nunca a mensagem genérica de período vazio.
+  const creativesBlock: AnalyticsReportBlock =
+    data.platform === "google"
+      ? { type: "empty-state", message: CREATIVES_NOT_AVAILABLE_FOR_GOOGLE_MESSAGE }
+      : data.creatives.length > 0
+        ? { type: "creative-cards", creatives: data.creatives }
+        : { type: "empty-state", message: NO_CREATIVES_MESSAGE };
+  const campaignsBlock: AnalyticsReportBlock =
+    data.summary.status === "platform_not_connected"
+      ? { type: "empty-state", message: GOOGLE_NOT_CONNECTED_MESSAGE }
+      : data.campaigns.length > 0
+        ? { type: "campaign-cards", campaigns: data.campaigns }
+        : { type: "empty-state", message: NO_CAMPAIGNS_MESSAGE };
+
   return {
     pages: [
       { id: "cover", title: "Capa", blocks: [cover] },
       { id: "summary", title: "Resumo Executivo", blocks: buildSummaryBlocks(data) },
-      {
-        id: "creatives",
-        title: "Criativos",
-        blocks: [data.creatives.length > 0 ? { type: "creative-cards", creatives: data.creatives } : { type: "empty-state", message: NO_CREATIVES_MESSAGE }],
-      },
-      {
-        id: "campaigns",
-        title: "Campanhas",
-        blocks: [data.campaigns.length > 0 ? { type: "campaign-cards", campaigns: data.campaigns } : { type: "empty-state", message: NO_CAMPAIGNS_MESSAGE }],
-      },
+      { id: "creatives", title: "Criativos", blocks: [creativesBlock] },
+      { id: "campaigns", title: "Campanhas", blocks: [campaignsBlock] },
       {
         id: "insights",
         title: "Insights",

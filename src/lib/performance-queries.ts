@@ -156,6 +156,16 @@ export async function getClientIdsWithActiveImportSource(supabase: Supabase, cli
   return new Set((data ?? []).map((row) => row.client_id));
 }
 
+/** Canais com PELO MENOS uma `import_sources.enabled = true` de UM cliente —
+ * Integração Google Ads (seletor de plataforma): decide se a visão "Google
+ * Ads" mostra dado real ou o estado "ainda não conectado". Nunca inferido
+ * de `daily_spend`/`daily_performance` (uma fonte pode existir sem ter
+ * sincronizado nada ainda) — a fonte de verdade é sempre `import_sources`. */
+export async function getActiveImportSourceChannelsForClient(supabase: Supabase, clientId: string): Promise<Set<TrafficChannelDb>> {
+  const { data } = await supabase.from("import_sources").select("channel").eq("client_id", clientId).eq("enabled", true);
+  return new Set((data ?? []).map((row) => row.channel));
+}
+
 /** IDs de todas as fontes `enabled = true` de UM cliente — usado pelo botão
  * "Sincronizar agora" da página do cliente (Etapa "Sincronização manual via
  * UI"), pra saber quais `import_source_id`s passar pro Import Service sem o

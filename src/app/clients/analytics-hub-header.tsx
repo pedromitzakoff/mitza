@@ -1,4 +1,5 @@
 import { FileDown } from "lucide-react";
+import type { ReactNode } from "react";
 import type { AnalyticsPeriodPreset } from "@/lib/analytics";
 import { AnalyticsPeriodMenu } from "./analytics-period-menu";
 
@@ -16,6 +17,13 @@ import { AnalyticsPeriodMenu } from "./analytics-period-menu";
  * `<a>` normal apontando pra `/api/clients/[id]/analytics-report`, o
  * navegador trata o download nativamente via `Content-Disposition:
  * attachment` (nenhum JS de download aqui).
+ *
+ * Integração Google Ads — `platformSwitch` é um slot opcional pro seletor
+ * "Meta Ads | Google Ads" (`AnalyticsPlatformSwitch`). Fica no cluster
+ * esquerdo, ao lado do rótulo "Analytics": pedido explícito do usuário foi
+ * um controle "compacto e evidente... não escondido dentro de filtros", e
+ * o nome da plataforma selecionada precisa ficar sempre visível — por isso
+ * nunca dentro de um menu/dropdown junto do período.
  */
 export function AnalyticsHubHeader({
   baseHref,
@@ -25,6 +33,7 @@ export function AnalyticsHubHeader({
   customStart,
   customEnd,
   exportHref,
+  platformSwitch,
 }: {
   baseHref: string;
   activePreset: AnalyticsPeriodPreset;
@@ -33,10 +42,14 @@ export function AnalyticsHubHeader({
   customStart: string;
   customEnd: string;
   exportHref: string;
+  platformSwitch?: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 pb-5">
-      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Analytics</p>
+    <div className="flex flex-wrap items-center justify-between gap-3 pb-5">
+      <div className="flex items-center gap-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Analytics</p>
+        {platformSwitch}
+      </div>
       <div className="flex items-center gap-2">
         <a
           href={exportHref}

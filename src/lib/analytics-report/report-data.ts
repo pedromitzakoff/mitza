@@ -18,6 +18,8 @@ import { getCampaignDailyMetricsForPeriod } from "@/lib/campaign-analytics-data"
 import { buildCampaignSummaries, type CampaignSummary } from "@/lib/campaign-analytics";
 import { buildCreativeSummaries, type CreativeSummary } from "@/lib/creative-analytics";
 import { FUTURE_OPPORTUNITY_CATEGORIES } from "@/lib/analytics-messages";
+import { getActiveImportSourceChannelsForClient } from "@/lib/performance-queries";
+import type { TrafficChannel } from "@/lib/traffic-channels";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -31,10 +33,17 @@ type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
  * `summary` espelha os 3 estados que `AnalyticsSection` já trata (sem
  * objetivo / sem dado / com dado) — discriminado por `status`, pra o
  * renderer nunca precisar adivinhar qual empty state mostrar.
+ *
+ * Integração Google Ads (seletor de plataforma): exceção deliberada e
+ * disclosed à "arquitetura congelada" do AnalyticsReport — `platform`
+ * (canal selecionado) e o 4º status `"platform_not_connected"` são
+ * genuinamente uma capacidade nova (o relatório agora respeita a mesma
+ * plataforma escolhida no hub), nunca uma reescrita do que já existia.
  */
 export type AnalyticsReportSummary =
   | { status: "no_goal" }
   | { status: "no_data" }
+  | { status: "platform_not_connected" }
   | {
       status: "ok";
       headline: string;
@@ -49,6 +58,11 @@ export type AnalyticsReportSummary =
 export interface AnalyticsReportData {
   client: { id: string; name: string };
   period: { start: string; end: string; label: string };
+  /** Plataforma selecionada no hub (`analyticsPlatform`) — Criativos (Camada
+   * 2) precisa saber disso pra escolher a mensagem certa mesmo quando
+   * `creatives` já está vazio por outro motivo (Google nunca busca
+   * `ad_creative_daily_metrics`, conectado ou não). */
+  platform: TrafficChannel;
   summary: AnalyticsReportSummary;
   /** Mesma lista estática do bloco "Oportunidades" do Resumo Executivo
    * (`FUTURE_OPPORTUNITY_CATEGORIES`) — reserva de espaço, sem inteligência
@@ -91,25 +105,40 @@ function buildReportSummary(data: ClientAnalyticsData, creatives: CreativeSummar
   return { status: "ok", headline, lede, kpis, trend: data.trend, trendCaption, highlights, learnings };
 }
 
-export async function buildAnalyticsReportData(supabase: Supabase, clientId: string, period: { start: string; end: string }): Promise<AnalyticsReportData> {
+export async function buildAnalyticsReportData(
+  supabase: Supabase,
+  clientId: string,
+  period: { start: string; end: string },
+  platform: TrafficChannel = "meta",
+): Promise<AnalyticsReportData> {
+  // Integração Google Ads: mesmo cuidado do hub (`page.tsx`) — "conectado"
+  // só é uma pergunta real pra Google, nunca pra Meta (que pode ser
+  // 100% manual, sem nenhuma `import_sources`).
+  const platformNotConnected =
+    platform === "google" && !(await getActiveImportSourceChannelsForClient(supabase, clientId)).has("google");
+
   // Integração Google Ads: Campanhas é uma busca independente de Criativos
   // desde a origem (`campaign_daily_metrics`, channel-aware) — nunca mais
-  // derivada de `ad_creative_daily_metrics` (Meta-only).
-  const [clientRows, data, adCreativeRows, campaignRows] = await Promise.all([
+  // derivada de `ad_creative_daily_metrics` (Meta-only). Criativos continua
+  // exclusivamente Meta — nunca busca nada quando a plataforma é Google.
+  // Nada disso roda quando a plataforma não está conectada, mesmo critério
+  // do hub (`showPlatformNotConnected`).
+  const [clientRows, data, adCreativeRows, campaignRowsAllChannels] = await Promise.all([
     requireQuery(supabase.from("clients").select("id, name").eq("id", clientId), "clients:analytics-report"),
-    fetchClientAnalyticsData(supabase, clientId, period),
-    getAdCreativeDailyMetricsForPeriod(supabase, clientId, period),
-    getCampaignDailyMetricsForPeriod(supabase, clientId, period),
+    platformNotConnected ? Promise.resolve(null) : fetchClientAnalyticsData(supabase, clientId, period, platform),
+    platform === "meta" ? getAdCreativeDailyMetricsForPeriod(supabase, clientId, period) : Promise.resolve([]),
+    platformNotConnected ? Promise.resolve([]) : getCampaignDailyMetricsForPeriod(supabase, clientId, period),
   ]);
 
   const client = clientRows[0];
   const creatives = buildCreativeSummaries(adCreativeRows);
-  const campaigns = buildCampaignSummaries(campaignRows);
+  const campaigns = buildCampaignSummaries(campaignRowsAllChannels.filter((row) => row.channel === platform));
 
   return {
     client: { id: client.id, name: client.name },
     period: { start: period.start, end: period.end, label: formatDateRange(period.start, period.end) },
-    summary: buildReportSummary(data, creatives, campaigns),
+    platform,
+    summary: platformNotConnected ? { status: "platform_not_connected" } : buildReportSummary(data!, creatives, campaigns),
     opportunities: [...FUTURE_OPPORTUNITY_CATEGORIES],
     creatives,
     campaigns,

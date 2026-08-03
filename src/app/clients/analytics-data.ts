@@ -53,8 +53,15 @@ export async function fetchClientAnalyticsData(
   supabase: Supabase,
   clientId: string,
   period: { start: string; end: string },
+  /** Integração Google Ads (seletor de plataforma): quando presente, filtra
+   * `dailySpendRows`/`records`/`dailyPerformanceRows` (período atual E
+   * anterior) pra ESSE canal antes de qualquer agregação — nunca dentro das
+   * funções puras de `lib/analytics.ts`, que continuam recebendo dado já
+   * escopado, exatamente como sempre receberam. `undefined` = consolidado
+   * (comportamento anterior, inalterado). */
+  channel?: TrafficChannel,
 ): Promise<ClientAnalyticsData> {
-  const [clientRows, dailySpendRows, activeImportClientIds] = await Promise.all([
+  const [clientRows, dailySpendRowsAllChannels, activeImportClientIds] = await Promise.all([
     requireQuery(
       supabase.from("clients").select("performance_goal, target_cost_per_result").eq("id", clientId),
       "clients:analytics",
@@ -62,6 +69,8 @@ export async function fetchClientAnalyticsData(
     getDailySpendRowsForPeriod(supabase, clientId, { firstDay: period.start, lastDay: period.end }),
     getClientIdsWithActiveImportSource(supabase, [clientId]),
   ]);
+
+  const dailySpendRows = channel ? dailySpendRowsAllChannels.filter((row) => row.channel === channel) : dailySpendRowsAllChannels;
 
   const performanceGoal = clientRows[0]?.performance_goal ?? null;
   const targetCostPerResult = clientRows[0]?.target_cost_per_result ?? null;
@@ -76,9 +85,12 @@ export async function fetchClientAnalyticsData(
   // manuais (`performance_records`) não têm essa granularidade — só por
   // sprint/período — por isso o gráfico de resultado nunca existe pra eles
   // (limitação real do que a MITZA armazena hoje).
-  const dailyPerformanceRows = hasActiveIntegration ? await getDailyPerformanceRowsForPeriod(supabase, clientId, dateRange) : [];
-  const records: PerformanceRecordRow[] = hasActiveIntegration
-    ? dailyPerformanceRows.map((r) => ({
+  const dailyPerformanceRowsAllChannels = hasActiveIntegration ? await getDailyPerformanceRowsForPeriod(supabase, clientId, dateRange) : [];
+  const dailyPerformanceRows = channel
+    ? dailyPerformanceRowsAllChannels.filter((row) => row.channel === channel)
+    : dailyPerformanceRowsAllChannels;
+  const recordsAllChannels: PerformanceRecordRow[] = hasActiveIntegration
+    ? dailyPerformanceRowsAllChannels.map((r) => ({
         channel: r.channel,
         resultType: r.resultType,
         resultCount: r.resultCount,
@@ -87,6 +99,7 @@ export async function fetchClientAnalyticsData(
         sourceUpdatedAt: r.date,
       }))
     : await getPerformanceRecordsForPeriod(supabase, clientId, dateRange);
+  const records = channel ? recordsAllChannels.filter((r) => r.channel === channel) : recordsAllChannels;
 
   const spendByChannel: Partial<Record<TrafficChannel, number>> = {};
   const dailySpendByDate = new Map<string, number>();
@@ -127,7 +140,7 @@ export async function fetchClientAnalyticsData(
     const previousPeriod = previousEquivalentPeriod(period);
     const previousDateRange = { firstDay: previousPeriod.start, lastDay: previousPeriod.end };
 
-    const [previousDailySpendRows, previousRecords] = await Promise.all([
+    const [previousDailySpendRowsAllChannels, previousRecordsAllChannels] = await Promise.all([
       getDailySpendRowsForPeriod(supabase, clientId, previousDateRange),
       hasActiveIntegration
         ? getDailyPerformanceRowsForPeriod(supabase, clientId, previousDateRange).then((rows) =>
@@ -144,6 +157,10 @@ export async function fetchClientAnalyticsData(
           )
         : getPerformanceRecordsForPeriod(supabase, clientId, previousDateRange),
     ]);
+    const previousDailySpendRows = channel
+      ? previousDailySpendRowsAllChannels.filter((row) => row.channel === channel)
+      : previousDailySpendRowsAllChannels;
+    const previousRecords = channel ? previousRecordsAllChannels.filter((r) => r.channel === channel) : previousRecordsAllChannels;
 
     const previousActualSpend = previousDailySpendRows.reduce((sum, row) => sum + row.spend, 0);
     const previousSpendByChannel: Partial<Record<TrafficChannel, number>> = {};

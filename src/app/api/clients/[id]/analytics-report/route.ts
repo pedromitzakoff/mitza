@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { resolveAnalyticsPeriod } from "@/lib/analytics";
 import { todayDateString } from "@/lib/today";
+import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { buildAnalyticsReportData } from "@/lib/analytics-report/report-data";
 import { buildAnalyticsReportDocument } from "@/lib/analytics-report/report-document";
 import { resolveReportTheme } from "@/lib/analytics-report/report-theme";
@@ -45,9 +46,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     start: url.searchParams.get("analyticsStart") ?? undefined,
     end: url.searchParams.get("analyticsEnd") ?? undefined,
   });
+  // Integração Google Ads: mesma plataforma selecionada no hub — nunca um
+  // segundo seletor pro relatório (`exportHref` do hub já inclui esse
+  // parâmetro, ver `clients/[id]/page.tsx`).
+  const analyticsPlatformParam = url.searchParams.get("analyticsPlatform");
+  const platform: TrafficChannel = AVAILABLE_TRAFFIC_CHANNELS.includes(analyticsPlatformParam as TrafficChannel)
+    ? (analyticsPlatformParam as TrafficChannel)
+    : "meta";
 
   try {
-    const data = await buildAnalyticsReportData(supabase, id, period);
+    const data = await buildAnalyticsReportData(supabase, id, period, platform);
     const document = buildAnalyticsReportDocument(data);
     const theme = await resolveReportTheme(supabase, id);
     const html = renderReportHtml(document, theme);
