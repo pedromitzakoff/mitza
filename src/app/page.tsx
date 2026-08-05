@@ -18,7 +18,6 @@ import {
   type OperationClientRawData,
   type SprintFilterBucket,
 } from "@/app/operation/operation-data";
-import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { computeFinancialSummary, computeManagerSummary, computeSpendRhythmCounts } from "@/lib/agency-metrics";
 import { computeHealthResultsSummary } from "@/lib/agency-health-aggregation";
@@ -34,7 +33,7 @@ import {
 } from "./overview-client-view";
 import { getActiveDiagnosticFilters, getDiagnosticPriorityRank } from "@/lib/metric-diagnostics";
 import { summarizeOperationTriage } from "@/lib/operation-triage";
-import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
+import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
@@ -66,15 +65,22 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-overview" });
 type ManagerFilter = "all" | "me" | string;
 /** "fora_do_ritmo" é só um atalho de drill-down (abaixo + acima combinados)
  * pro indicador "Contas fora do ritmo" — não aparece como opção no popover
- * de Filtros (que continua com as 4 opções reais), só via link direto,
+ * de Filtros (que continua com as opções reais), só via link direto,
  * mesmo padrão já usado por `sprintBucket`/`sync`/`meta`. */
 type RitmoFilter = "todos" | SpendStatus | "fora_do_ritmo";
-type TasksFilter = "todas" | "atrasadas" | "sem_atrasadas";
-/** Filtro de plataforma (Etapa 3 — MVP plataformas): "consolidado" é o
- * estado inicial e o único em que ritmo financeiro/planejado/prioridades
- * fazem sentido (não existe orçamento configurado por canal ainda — só
- * investimento REALIZADO, resultados e CPL/CPA têm uma fonte por canal). */
-type PlatformFilter = "consolidado" | "meta" | "google";
+/** "Tipo de resultado" (barra de filtros redesenhada) — filtra pelo
+ * objetivo de performance estruturado do cliente (`lib/performance-goals.ts`),
+ * nunca por `main_objective` (campo descritivo, conceito diferente). */
+type ResultTypeFilter = "todos" | PerformanceGoal;
+/** Filtro de plataforma (Etapa 3 — MVP plataformas, + TikTok Ads na barra
+ * redesenhada): "consolidado" é o estado inicial e o único em que ritmo
+ * financeiro/planejado/prioridades fazem sentido (não existe orçamento
+ * configurado por canal ainda — só investimento REALIZADO, resultados e
+ * CPL/CPA têm uma fonte por canal). `clientUsesChannel`/`monthActualByChannel`
+ * já são genéricos sobre `TrafficChannel` (ver `client-channel-breakdown.ts`),
+ * por isso adicionar um canal aqui não exige nenhuma mudança na agregação.
+ */
+type PlatformFilter = "consolidado" | "meta" | "google" | "tiktok";
 
 export default async function Home({
   searchParams,
@@ -84,9 +90,8 @@ export default async function Home({
     manager?: string;
     client?: string;
     diagnostico?: string;
-    activity?: string;
+    resultType?: string;
     ritmo?: string;
-    tasks?: string;
     sprintBucket?: string;
     sync?: string;
     meta?: string;
@@ -123,9 +128,8 @@ export default async function Home({
   const managerFilter: ManagerFilter = params.manager ?? (isAdmin ? "all" : "me");
   const clientParam = params.client;
   const diagnosticFilter = (params.diagnostico ?? "todos") as OverviewPriorityFilter | "todos";
-  const activityFilter = (params.activity ?? "todos") as OperationalActivityStatus | "todos";
+  const resultTypeFilter = (params.resultType ?? "todos") as ResultTypeFilter;
   const ritmoFilter = (params.ritmo ?? "todos") as RitmoFilter;
-  const tasksFilter = (params.tasks ?? "todas") as TasksFilter;
   const sprintBucketFilter = params.sprintBucket as SprintFilterBucket | undefined;
   const platformFilter = (params.platform ?? "consolidado") as PlatformFilter;
   const pendenciaFiltroFilter = (params.pendenciaFiltro ?? "todas") as ReminderFilter;
@@ -540,8 +544,8 @@ export default async function Home({
       return diagnostics ? getActiveDiagnosticFilters(diagnostics).includes(diagnosticFilter) : false;
     });
   }
-  if (activityFilter !== "todos") {
-    filteredBase = filteredBase.filter((card) => card.activityStatus === activityFilter);
+  if (resultTypeFilter !== "todos") {
+    filteredBase = filteredBase.filter((card) => card.performanceGoal === resultTypeFilter);
   }
   // Etapa 3: ritmo financeiro só existe pro orçamento CONSOLIDADO (não há
   // orçamento configurado por canal) — o filtro de ritmo é ignorado fora do
@@ -560,11 +564,6 @@ export default async function Home({
   // do consolidado, mesmo sem nenhuma plataforma com dado ainda).
   if (platformFilter !== "consolidado") {
     filteredBase = filteredBase.filter((card) => card.clientUsesChannel[platformFilter] === true);
-  }
-  if (tasksFilter === "atrasadas") {
-    filteredBase = filteredBase.filter((card) => card.taskCounts.overdue > 0);
-  } else if (tasksFilter === "sem_atrasadas") {
-    filteredBase = filteredBase.filter((card) => card.taskCounts.overdue === 0);
   }
   if (sprintBucketFilter) {
     filteredBase = filteredBase.filter((card) => card.sprintFilterBucket === sprintBucketFilter);
@@ -733,9 +732,8 @@ export default async function Home({
     next.set("manager", managerFilter);
     if (clientFilter) next.set("client", clientFilter);
     if (diagnosticFilter !== "todos") next.set("diagnostico", diagnosticFilter);
-    if (activityFilter !== "todos") next.set("activity", activityFilter);
+    if (resultTypeFilter !== "todos") next.set("resultType", resultTypeFilter);
     if (ritmoFilter !== "todos") next.set("ritmo", ritmoFilter);
-    if (tasksFilter !== "todas") next.set("tasks", tasksFilter);
     if (sprintBucketFilter) next.set("sprintBucket", sprintBucketFilter);
     if (syncFilter) next.set("sync", syncFilter);
     if (metaFilter) next.set("meta", metaFilter);
@@ -844,9 +842,8 @@ export default async function Home({
             clients={clientOptions}
             selectedClientId={clientFilter}
             diagnostico={diagnosticFilter}
-            activity={activityFilter}
+            resultType={resultTypeFilter}
             ritmo={ritmoFilter === "fora_do_ritmo" ? "todos" : ritmoFilter}
-            tasks={tasksFilter}
             platform={platformFilter}
             preserved={{
               month: params.month,

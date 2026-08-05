@@ -7,8 +7,9 @@
  * essa listagem cliente a cliente pertence à Operação/Árvore Viva, não a um
  * painel que só agrega (ver constituição do produto). `PLATFORM_LABEL` é o
  * único export deste arquivo que sobrevive, ainda usado fora dele. */
-export const PLATFORM_LABEL: Record<"consolidado" | "meta" | "google", string> = {
+export const PLATFORM_LABEL: Record<"consolidado" | "meta" | "google" | "tiktok", string> = {
   consolidado: "Consolidado",
-  meta: "Meta",
-  google: "Google",
+  meta: "Meta Ads",
+  google: "Google Ads",
+  tiktok: "TikTok Ads",
 };

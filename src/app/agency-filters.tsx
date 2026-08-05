@@ -1,33 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Filter } from "lucide-react";
-import { ClientCombobox, type ClientComboboxOption } from "./client-combobox";
+import { Filter, X } from "lucide-react";
+import { ScopeSelector, type ScopeValue } from "./scope-selector";
+import type { ClientComboboxOption } from "./client-combobox";
+import { PLATFORM_LABEL } from "./client-objective-table";
+import { PERFORMANCE_GOAL_OPTIONS } from "@/lib/performance-goals";
+import { useFloatingMenuPosition, FloatingPortalPanel } from "@/lib/floating-menu";
 import { Toolbar } from "@/components/workspace/toolbar";
 import { Select } from "@/components/workspace/select";
 import { Button } from "@/components/workspace/button";
 
 export type AgencyClientOption = ClientComboboxOption;
 
+const DIAGNOSTIC_LABEL: Record<string, string> = {
+  planejamento: "Planejamento",
+  investimento: "Investimento",
+  cpa: "CPA",
+  pendencias: "Pendências",
+};
+
+const RESULT_TYPE_LABEL: Record<string, string> = Object.fromEntries(
+  PERFORMANCE_GOAL_OPTIONS.map((option) => [option.value, option.label]),
+);
+
+const RITMO_LABEL: Record<string, string> = {
+  abaixo: "Abaixo do ritmo",
+  dentro: "No ritmo",
+  acima: "Acima do ritmo",
+  sem_meta: "Meta não configurada",
+};
+
 /**
- * Toolbar de filtros da Visão Geral — sempre visíveis: carteira (gestor),
- * cliente específico (combobox pesquisável, `client-combobox.tsx`, ainda não
- * migrado pro novo Design System — ver nota de dívida técnica no README) e o
- * botão "Filtros" (diagnóstico/atividade/ritmo/tarefas, escondidos num
- * popover até o usuário pedir). Nada de botão "Filtrar": toda mudança navega
- * na hora.
- *
- * Etapa "Visão Geral + Reports no Core": o filtro "Status da conta"
- * (Saudável/Atenção/Crítico, Sistema B) virou "Diagnóstico" — as mesmas 4
- * categorias do Motor de Diagnóstico Único que a Operação já usa
- * (Planejamento/Investimento/CPA/Pendências). "Atividade" (ativo/atenção/
- * inativo) não muda: é um eixo independente, de dias úteis sem atividade
- * (`operational-activity.ts`), nunca fez parte do modelo de saúde legado.
- *
- * "Carteira" (gestor) e "Cliente" são dois filtros independentes — carteira
- * decide de quem são os clientes mostrados, cliente escolhe um específico
- * dentro do que já está visível.
+ * Barra de contexto da Visão Geral — reescrita (pedido explícito do
+ * usuário: "parece um formulário de cadastro, não um controle de
+ * dashboard"). Lado esquerdo: escopo (substitui os antigos "Carteira" +
+ * "Cliente" — nunca coexistem na UI nova, ver `ScopeSelector`) + plataforma.
+ * Lado direito: "Filtros" (popover com os 3 critérios que sobram depois do
+ * escopo cobrir Gestor/Cliente: Situação da conta/Tipo de resultado/Ritmo
+ * de investimento) + "Limpar filtros" (só quando há algo ativo). Chips
+ * removíveis abaixo da barra espelham cada filtro ativo, incluindo o
+ * próprio escopo quando é um gestor ou cliente específico.
  */
 export function AgencyFilters({
   defaultManager,
@@ -36,9 +50,8 @@ export function AgencyFilters({
   clients,
   selectedClientId,
   diagnostico,
-  activity,
+  resultType,
   ritmo,
-  tasks,
   platform,
   preserved,
 }: {
@@ -48,19 +61,20 @@ export function AgencyFilters({
   clients: AgencyClientOption[];
   selectedClientId: string | undefined;
   diagnostico: string;
-  activity: string;
+  resultType: string;
   ritmo: string;
-  tasks: string;
   /** Filtro de plataforma (Etapa 3 — MVP plataformas): "consolidado" é o
    * padrão. Ritmo financeiro só existe pra "consolidado" (não há orçamento
    * configurado por canal), então o select de ritmo some quando a
    * plataforma não é "consolidado" — nunca um filtro que não tem efeito
    * nenhum. */
-  platform: "consolidado" | "meta" | "google";
-  preserved: { month?: string; sprintBucket?: string; sync?: string; meta?: string; sort?: string };
+  platform: "consolidado" | "meta" | "google" | "tiktok";
+  preserved: { month?: string; sprintBucket?: string; sync?: string; meta?: string };
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersTriggerRef = useRef<HTMLButtonElement>(null);
+  const filtersPosition = useFloatingMenuPosition(filtersTriggerRef, filtersOpen, "right");
 
   function buildUrl(overrides: Record<string, string>) {
     const next = new URLSearchParams();
@@ -68,14 +82,12 @@ export function AgencyFilters({
     next.set("manager", manager);
     if (selectedClientId) next.set("client", selectedClientId);
     if (diagnostico !== "todos") next.set("diagnostico", diagnostico);
-    if (activity !== "todos") next.set("activity", activity);
+    if (resultType !== "todos") next.set("resultType", resultType);
     if (ritmo !== "todos") next.set("ritmo", ritmo);
-    if (tasks !== "todas") next.set("tasks", tasks);
     if (platform !== "consolidado") next.set("platform", platform);
     if (preserved.sprintBucket) next.set("sprintBucket", preserved.sprintBucket);
     if (preserved.sync) next.set("sync", preserved.sync);
     if (preserved.meta) next.set("meta", preserved.meta);
-    if (preserved.sort) next.set("sort", preserved.sort);
 
     for (const [key, value] of Object.entries(overrides)) {
       if (value === "") next.delete(key);
@@ -85,132 +97,188 @@ export function AgencyFilters({
     return `/?${next.toString()}`;
   }
 
+  // Escopo: um único controle por trás do qual vivem `manager`+`client` —
+  // selecionar um cliente específico sempre reseta a carteira pra "all"
+  // (nunca deixa um cliente escolhido "sumir" por causa de um gestor que
+  // não é o dele); selecionar um gestor (ou "Todos"/"Minhas contas") sempre
+  // limpa o cliente.
+  const scopeValue: ScopeValue = selectedClientId
+    ? { kind: "client", id: selectedClientId }
+    : manager === "all"
+      ? { kind: "all" }
+      : manager === "me"
+        ? { kind: "me" }
+        : { kind: "manager", id: manager };
+
+  function handleScopeSelect(next: ScopeValue) {
+    if (next.kind === "client") {
+      router.push(buildUrl({ manager: "all", client: next.id }));
+    } else if (next.kind === "manager") {
+      router.push(buildUrl({ manager: next.id, client: "" }));
+    } else {
+      router.push(buildUrl({ manager: next.kind, client: "" }));
+    }
+  }
+
   // Trocar de plataforma nunca deve manter um filtro de ritmo que passou a
   // não fazer sentido — ao sair de "consolidado" o ritmo é sempre limpo.
   function handlePlatformChange(value: string) {
     router.push(buildUrl({ platform: value === "consolidado" ? "" : value, ritmo: value === "consolidado" ? ritmo : "" }));
   }
 
-  const secondaryCount = [diagnostico !== "todos", activity !== "todos", ritmo !== "todos", tasks !== "todas"].filter(
-    Boolean,
-  ).length;
+  const secondaryCount = [diagnostico !== "todos", resultType !== "todos", ritmo !== "todos"].filter(Boolean).length;
+
+  const chips: { key: string; label: string; onRemove: () => void }[] = [];
+  if (scopeValue.kind === "manager") {
+    const name = gestores.find((g) => g.id === scopeValue.id)?.name ?? "Gestor";
+    chips.push({ key: "manager", label: `Gestor: ${name}`, onRemove: () => router.push(buildUrl({ manager: "all", client: "" })) });
+  }
+  if (scopeValue.kind === "client") {
+    const name = clients.find((c) => c.id === scopeValue.id)?.name ?? "Cliente";
+    chips.push({ key: "client", label: `Cliente: ${name}`, onRemove: () => router.push(buildUrl({ manager: "all", client: "" })) });
+  }
+  if (platform !== "consolidado") {
+    chips.push({ key: "platform", label: PLATFORM_LABEL[platform], onRemove: () => router.push(buildUrl({ platform: "", ritmo: "" })) });
+  }
+  if (diagnostico !== "todos") {
+    chips.push({
+      key: "diagnostico",
+      label: DIAGNOSTIC_LABEL[diagnostico] ?? diagnostico,
+      onRemove: () => router.push(buildUrl({ diagnostico: "" })),
+    });
+  }
+  if (resultType !== "todos") {
+    chips.push({
+      key: "resultType",
+      label: RESULT_TYPE_LABEL[resultType] ?? resultType,
+      onRemove: () => router.push(buildUrl({ resultType: "" })),
+    });
+  }
+  if (ritmo !== "todos" && platform === "consolidado") {
+    chips.push({ key: "ritmo", label: RITMO_LABEL[ritmo] ?? ritmo, onRemove: () => router.push(buildUrl({ ritmo: "" })) });
+  }
 
   const hasAnythingToClear =
-    secondaryCount > 0 ||
-    Boolean(selectedClientId) ||
-    Boolean(preserved.sprintBucket) ||
-    Boolean(preserved.sync) ||
-    Boolean(preserved.meta) ||
-    platform !== "consolidado";
+    chips.length > 0 || Boolean(preserved.sprintBucket) || Boolean(preserved.sync) || Boolean(preserved.meta);
 
   function clearFilters() {
     const next = new URLSearchParams();
     if (preserved.month) next.set("month", preserved.month);
     next.set("manager", defaultManager);
     router.push(`/?${next.toString()}`);
-    setOpen(false);
+    setFiltersOpen(false);
   }
 
   return (
-    <Toolbar>
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs text-overview-text-muted">Carteira</span>
-        <Select value={manager} onChange={(e) => router.push(buildUrl({ manager: e.target.value }))} aria-label="Carteira">
-          <option value="me">Meus clientes</option>
-          <option value="all">Todos os clientes</option>
-          {gestores.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </Select>
-      </div>
+    <div className="flex flex-col gap-2">
+      <Toolbar>
+        <div className="flex items-center gap-1.5">
+          <ScopeSelector value={scopeValue} gestores={gestores} clients={clients} onSelect={handleScopeSelect} />
+          <Select value={platform} onChange={(e) => handlePlatformChange(e.target.value)} aria-label="Plataforma">
+            <option value="consolidado">Consolidado</option>
+            <option value="meta">Meta Ads</option>
+            <option value="google">Google Ads</option>
+            <option value="tiktok">TikTok Ads</option>
+          </Select>
+        </div>
 
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs text-overview-text-muted">Plataforma</span>
-        <Select value={platform} onChange={(e) => handlePlatformChange(e.target.value)} aria-label="Plataforma">
-          <option value="consolidado">Consolidado</option>
-          <option value="meta">Meta</option>
-          <option value="google">Google</option>
-        </Select>
-      </div>
+        <div className="ml-auto flex items-center gap-1.5">
+          <span ref={filtersTriggerRef} className="inline-block">
+            <Button variant="secondary" size="sm" onClick={() => setFiltersOpen((v) => !v)}>
+              <Filter className="h-3.5 w-3.5" aria-hidden="true" />
+              Filtros
+              {secondaryCount > 0 && (
+                <span className="rounded-full bg-overview-brand-subtle px-1.5 text-[11px] font-semibold text-brand">
+                  {secondaryCount}
+                </span>
+              )}
+            </Button>
+          </span>
 
-      <ClientCombobox
-        clients={clients}
-        selectedClientId={selectedClientId}
-        onSelect={(clientId) => router.push(buildUrl({ client: clientId }))}
-      />
-
-      <div className="relative">
-        <Button variant="secondary" size="sm" onClick={() => setOpen((v) => !v)}>
-          <Filter className="h-3.5 w-3.5" aria-hidden="true" />
-          Filtros
-          {secondaryCount > 0 && (
-            <span className="rounded-full bg-overview-brand-subtle px-1.5 text-[11px] font-semibold text-brand">
-              {secondaryCount}
-            </span>
+          {hasAnythingToClear && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="text-brand hover:bg-overview-brand-subtle hover:text-brand">
+              Limpar filtros
+            </Button>
           )}
-        </Button>
+        </div>
 
-        {open && (
-          <>
+        <FloatingPortalPanel
+          open={filtersOpen}
+          position={filtersPosition}
+          onClose={() => setFiltersOpen(false)}
+          role="menu"
+          closeLabel="Fechar filtros"
+          className="w-72 -translate-x-full rounded-lg border border-overview-border bg-overview-surface p-3 shadow-[var(--shadow-float)]"
+        >
+          <div className="flex flex-col gap-2">
+            <Select
+              value={diagnostico}
+              onChange={(e) => router.push(buildUrl({ diagnostico: e.target.value }))}
+              className="w-full"
+              aria-label="Situação da conta"
+            >
+              <option value="todos">Situação da conta: todas</option>
+              <option value="planejamento">Planejamento</option>
+              <option value="investimento">Investimento</option>
+              <option value="cpa">CPA</option>
+              <option value="pendencias">Pendências</option>
+            </Select>
+
+            <Select
+              value={resultType}
+              onChange={(e) => router.push(buildUrl({ resultType: e.target.value }))}
+              className="w-full"
+              aria-label="Tipo de resultado"
+            >
+              <option value="todos">Tipo de resultado: todos</option>
+              {PERFORMANCE_GOAL_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+
+            {/* Ritmo financeiro só existe pro orçamento CONSOLIDADO (Etapa 3
+                — não há orçamento configurado por canal) — escondido fora
+                desse recorte pra nunca oferecer um filtro sem efeito
+                nenhum. */}
+            {platform === "consolidado" ? (
+              <Select
+                value={ritmo}
+                onChange={(e) => router.push(buildUrl({ ritmo: e.target.value }))}
+                className="w-full"
+                aria-label="Ritmo de investimento"
+              >
+                <option value="todos">Ritmo de investimento: todos</option>
+                <option value="abaixo">Abaixo</option>
+                <option value="dentro">No ritmo</option>
+                <option value="acima">Acima</option>
+                <option value="sem_meta">Meta não configurada</option>
+              </Select>
+            ) : (
+              <p className="text-[11px] text-overview-text-muted">
+                Ritmo de investimento disponível só no recorte Consolidado.
+              </p>
+            )}
+          </div>
+        </FloatingPortalPanel>
+      </Toolbar>
+
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 px-0.5">
+          {chips.map((chip) => (
             <button
+              key={chip.key}
               type="button"
-              aria-label="Fechar filtros"
-              onClick={() => setOpen(false)}
-              className="fixed inset-0 z-40"
-            />
-            <div className="mitza-menu-in absolute right-0 z-50 mt-2 w-72 rounded-lg border border-overview-border bg-overview-surface p-3 shadow-[var(--shadow-float)]">
-              <div className="flex flex-col gap-2">
-                <Select value={diagnostico} onChange={(e) => router.push(buildUrl({ diagnostico: e.target.value }))} className="w-full">
-                  <option value="todos">Diagnóstico: todos</option>
-                  <option value="planejamento">Planejamento</option>
-                  <option value="investimento">Investimento</option>
-                  <option value="cpa">CPA</option>
-                  <option value="pendencias">Pendências</option>
-                </Select>
-
-                <Select value={activity} onChange={(e) => router.push(buildUrl({ activity: e.target.value }))} className="w-full">
-                  <option value="todos">Atividade: todas</option>
-                  <option value="ativo">Ativos</option>
-                  <option value="atencao">Atenção por inatividade</option>
-                  <option value="inativo">Inativos</option>
-                </Select>
-
-                {/* Ritmo financeiro só existe pro orçamento CONSOLIDADO
-                    (Etapa 3 — não há orçamento configurado por canal) —
-                    escondido fora desse recorte pra nunca oferecer um
-                    filtro sem efeito nenhum. */}
-                {platform === "consolidado" ? (
-                  <Select value={ritmo} onChange={(e) => router.push(buildUrl({ ritmo: e.target.value }))} className="w-full">
-                    <option value="todos">Ritmo de investimento: todos</option>
-                    <option value="abaixo">Abaixo</option>
-                    <option value="dentro">No ritmo</option>
-                    <option value="acima">Acima</option>
-                    <option value="sem_meta">Meta não configurada</option>
-                  </Select>
-                ) : (
-                  <p className="text-[11px] text-overview-text-muted">
-                    Ritmo de investimento disponível só no recorte Consolidado.
-                  </p>
-                )}
-
-                <Select value={tasks} onChange={(e) => router.push(buildUrl({ tasks: e.target.value }))} className="w-full">
-                  <option value="todas">Tarefas: todas</option>
-                  <option value="atrasadas">Com tarefas atrasadas</option>
-                  <option value="sem_atrasadas">Sem tarefas atrasadas</option>
-                </Select>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-
-      {hasAnythingToClear && (
-        <Button variant="ghost" size="sm" onClick={clearFilters} className="text-brand hover:text-brand hover:bg-overview-brand-subtle">
-          Limpar filtros
-        </Button>
+              onClick={chip.onRemove}
+              className="mitza-pressable inline-flex items-center gap-1 rounded-full border border-overview-border bg-overview-surface px-2 py-0.5 text-[11px] font-medium text-overview-text-primary transition-colors hover:border-overview-border-strong hover:bg-overview-surface-hover"
+            >
+              {chip.label}
+              <X className="h-3 w-3 text-overview-text-muted" aria-hidden="true" />
+            </button>
+          ))}
+        </div>
       )}
-    </Toolbar>
+    </div>
   );
 }
