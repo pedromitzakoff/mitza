@@ -9,14 +9,19 @@
 -- diretamente — se a tabela não existe, a exceção não tratada vira esse
 -- error boundary genérico do Next.js).
 --
--- Esta migration cobre TUDO que supabase/client-reports.sql cria, exceto a
--- redefinição de `register_recurring_execution` (já corrigida por
+-- Esta migration cobre TUDO que supabase/client-reports.sql E
+-- supabase/client-reports-status.sql criam, exceto a redefinição de
+-- `register_recurring_execution` (já corrigida por
 -- register-recurring-execution-cleanup-v2.sql — recriar de novo aqui seria
 -- redundante, mesmo corpo, mesma assinatura). Escrita pra ser seguro rodar
--- tanto se client-reports.sql nunca rodou (cria tudo do zero) quanto se
--- rodou parcialmente (cada passo é idempotente — `if not exists` nas
+-- em qualquer estado atual do banco (nunca rodou / rodou parcialmente /
+-- rodou por completo) — cada passo é idempotente: `if not exists` nas
 -- tabelas/colunas/índices, `drop policy if exists` + `create policy` nas
--- policies, já que `create policy` sozinho não aceita `if not exists`).
+-- policies (já que `create policy` sozinho não aceita `if not exists`), e a
+-- lista completa e ATUALIZADA (incluindo `client_report_sent`) na
+-- constraint de `operational_events` — usar uma lista desatualizada aqui
+-- quebra com "check constraint ... is violated by some row" se já existir
+-- alguma linha com um valor que ela não conhece.
 
 create table if not exists client_reports (
   id uuid primary key default gen_random_uuid(),
@@ -82,6 +87,23 @@ update recurring_tasks set uses_report = true where title = 'Reportar cliente';
 
 alter table recurring_task_executions add column if not exists client_report_id uuid references client_reports (id) on delete set null;
 
+-- Ciclo de vida do report (rascunho/enviado) — supabase/client-reports-status.sql,
+-- incluído aqui pelo mesmo motivo: melhor reafirmar tudo dessa família de
+-- uma vez do que descobrir mais um pedaço faltando aos poucos.
+alter table client_reports add column if not exists status text not null default 'draft';
+
+alter table client_reports drop constraint if exists client_reports_status_check;
+alter table client_reports add constraint client_reports_status_check check (status in ('draft', 'sent'));
+
+alter table client_reports add column if not exists sent_at timestamptz;
+alter table client_reports add column if not exists sent_by uuid references team_members (id) on delete set null;
+
+-- Lista igual a `supabase/client-reports-status.sql` (a mais recente a
+-- estender esta constraint) — não a de `client-reports.sql`, que ficou
+-- desatualizada assim que `client_report_sent` foi adicionado depois. Usar
+-- a lista errada aqui quebra com "check constraint ... is violated by some
+-- row" sempre que já existir uma linha com `client_report_sent` (prova de
+-- que aquela parte específica já rodou em produção antes).
 alter table operational_events drop constraint if exists operational_events_event_type_check;
 alter table operational_events add constraint operational_events_event_type_check check (event_type in (
   'team_member_created', 'team_member_updated', 'team_member_deactivated',
@@ -100,7 +122,7 @@ alter table operational_events add constraint operational_events_event_type_chec
   'account_review_issue_identified', 'account_optimization_recorded',
   'client_update_generated', 'client_update_edited', 'client_update_copied',
   'client_update_marked_sent', 'client_update_marked_unsent',
-  'client_report_generated', 'client_report_edited'
+  'client_report_generated', 'client_report_edited', 'client_report_sent'
 ));
 
 alter table operational_events drop constraint if exists operational_events_entity_type_check;
