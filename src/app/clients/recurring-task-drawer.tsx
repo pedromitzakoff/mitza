@@ -2,9 +2,7 @@ import Link from "next/link";
 import { SectionHeader } from "@/components/ui/section-header";
 import { formatDateTime } from "@/lib/format";
 import { formatPreviousWeekMissingLine, OPTIMIZATION_QUICK_GROUPS } from "@/lib/recurring-tasks";
-import { SubmitButton } from "@/app/submit-button";
-import { registerRecurringExecutionAction } from "./recurring-task-actions";
-import { OptimizationQuickPicker } from "./optimization-quick-picker";
+import { RegisterExecutionForm } from "./register-execution-form";
 import type { RecurringTaskDetail, RecurringTaskExecutionDetail } from "@/lib/recurring-task-data";
 
 const QUICK_ACTION_BY_COMBO = new Map(
@@ -145,34 +143,13 @@ export function RecurringTaskDrawer({
               )}
             </div>
           ) : (
-            <form action={registerRecurringExecutionAction.bind(null, detail.id, clientId, closeHref)} className="mt-2 flex flex-col gap-2">
-              {detail.usesAccountReview ? (
-                <OptimizationQuickPicker />
-              ) : (
-                detail.checklistItems.length > 0 && (
-                  <div className="flex flex-col gap-1">
-                    {detail.checklistItems.map((item) => (
-                      <label key={item.key} className="flex items-center gap-2 text-sm text-foreground">
-                        <input type="checkbox" name="checklist_items" value={item.key} className="h-3.5 w-3.5 rounded border-border" />
-                        {item.label}
-                      </label>
-                    ))}
-                  </div>
-                )
-              )}
-              <textarea
-                name="notes"
-                rows={2}
-                placeholder="Observações (opcional)"
-                className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand"
-              />
-              <SubmitButton
-                pendingChildren="Registrando..."
-                className="self-start rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
-              >
-                Registrar execução
-              </SubmitButton>
-            </form>
+            <RegisterExecutionForm
+              recurringTaskId={detail.id}
+              clientId={clientId}
+              closeHref={closeHref}
+              usesAccountReview={detail.usesAccountReview}
+              checklistItems={detail.checklistItems}
+            />
           )}
         </section>
 
