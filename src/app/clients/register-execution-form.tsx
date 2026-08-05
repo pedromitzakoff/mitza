@@ -2,9 +2,16 @@
 
 import { useActionState } from "react";
 import { SubmitButton } from "@/app/submit-button";
-import { registerRecurringExecutionAction, initialRegisterExecutionState } from "./recurring-task-actions";
+import { registerRecurringExecutionAction, type RegisterExecutionState } from "./recurring-task-actions";
 import { OptimizationQuickPicker } from "./optimization-quick-picker";
 import type { RecurringTaskChecklistItem } from "@/lib/recurring-task-data";
+
+// Precisa viver aqui, não em recurring-task-actions.ts: um arquivo
+// "use server" só pode exportar funções async — exportar esta constante de
+// lá (erro real já visto em produção: "A 'use server' file can only export
+// async functions, found object") derruba a avaliação do módulo pra
+// QUALQUER página que o importe, direta ou indiretamente.
+const INITIAL_STATE: RegisterExecutionState = { status: "idle" };
 
 /**
  * Formulário de "Registrar nova execução" — client component (`useActionState`
@@ -33,7 +40,7 @@ export function RegisterExecutionForm({
   checklistItems: RecurringTaskChecklistItem[];
 }) {
   const boundAction = registerRecurringExecutionAction.bind(null, recurringTaskId, clientId, closeHref);
-  const [state, formAction] = useActionState(boundAction, initialRegisterExecutionState);
+  const [state, formAction] = useActionState(boundAction, INITIAL_STATE);
 
   return (
     <form action={formAction} className="mt-2 flex flex-col gap-2">

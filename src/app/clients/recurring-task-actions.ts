@@ -25,8 +25,6 @@ import { OPTIMIZATION_QUICK_GROUPS } from "@/lib/recurring-tasks";
  */
 export type RegisterExecutionState = { status: "idle" } | { status: "success" } | { status: "error"; message: string };
 
-export const initialRegisterExecutionState: RegisterExecutionState = { status: "idle" };
-
 /** Valida o JSON do picker de otimização (`optimization_selections_json`,
  * montado no cliente por `OptimizationQuickPicker`) contra as combinações
  * curadas de `OPTIMIZATION_QUICK_GROUPS` — nunca confia em type/action/
