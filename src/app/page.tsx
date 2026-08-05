@@ -42,6 +42,11 @@ import { PrioritiesDrawer, PrioritiesPanel } from "./priorities-panel";
 import { OperationMetric, OperationMiniKpi } from "./operation-metric";
 import { PrimaryInvestmentMetric } from "./investment-metric";
 import { PLATFORM_LABEL } from "./client-objective-table";
+import { getCompletedReminders, getOpenReminders, getReminderById } from "@/lib/reminders-data";
+import { computeReminderCounts, filterReminders, sortReminders, type ReminderFilter } from "@/lib/reminders";
+import { RemindersPanel } from "./reminders-panel";
+import { RemindersCompletedDrawer } from "./reminders-completed-drawer";
+import { ReminderFormDrawer } from "./reminder-form-drawer";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { Button, IconButton } from "@/components/workspace/button";
 import { ProgressBar } from "@/components/workspace/progress-bar";
@@ -88,6 +93,9 @@ export default async function Home({
     prioridades?: string;
     prioridadeSeveridade?: string;
     platform?: string;
+    pendenciaFiltro?: string;
+    pendenciaModal?: string;
+    pendenciasConcluidas?: string;
   }>;
 }) {
   // Instrumentação temporária (Navigation Performance & Perceived Speed 1.0)
@@ -120,6 +128,7 @@ export default async function Home({
   const tasksFilter = (params.tasks ?? "todas") as TasksFilter;
   const sprintBucketFilter = params.sprintBucket as SprintFilterBucket | undefined;
   const platformFilter = (params.platform ?? "consolidado") as PlatformFilter;
+  const pendenciaFiltroFilter = (params.pendenciaFiltro ?? "todas") as ReminderFilter;
   const syncFilter = params.sync;
   const metaFilter = params.meta;
 
@@ -153,6 +162,7 @@ export default async function Home({
       performanceTargetHistory,
     ],
     clientOperationalStates,
+    openReminders,
   ] = await Promise.all([
     Promise.all([
     requireQuery(
@@ -259,8 +269,9 @@ export default async function Home({
     ),
     ]),
     loadClientOperationalStates(supabase, monthRange.firstDay),
+    getOpenReminders(supabase),
   ]);
-  perfLog("visão geral bloco 1 (12 queries + ClientOperationalState)", __perfBlock1Start);
+  perfLog("visão geral bloco 1 (12 queries + ClientOperationalState + Pendências)", __perfBlock1Start);
 
   const clientIds = (clients ?? []).map((c) => c.id);
   const currentSprintIds = (sprints ?? [])
@@ -729,6 +740,7 @@ export default async function Home({
     if (syncFilter) next.set("sync", syncFilter);
     if (metaFilter) next.set("meta", metaFilter);
     if (platformFilter !== "consolidado") next.set("platform", platformFilter);
+    if (pendenciaFiltroFilter !== "todas") next.set("pendenciaFiltro", pendenciaFiltroFilter);
 
     for (const [key, value] of Object.entries(overrides)) {
       if (value === "") next.delete(key);
@@ -764,6 +776,30 @@ export default async function Home({
   const closePrioritiesHref = prioritiesUrl({});
   const prioritiesSeverityHref = (severity: OverviewPriorityFilter | "todos") =>
     prioritiesUrl({ prioridades: "1", prioridadeSeveridade: severity === "todos" ? "" : severity });
+
+  // Módulo "Pendências" — independente de mês/gestor/plataforma de
+  // propósito (são registros rápidos, não parte do recorte financeiro/
+  // operacional). Mesmo espírito de `prioritiesUrl`: abrir/fechar os
+  // overlays (drawer de adicionar/editar, "Ver concluídas") nunca "gruda"
+  // em outras navegações — só o filtro de chips (Todas/Agência/Clientes/
+  // Minhas) é preservado via `buildUrl` (mesmo tratamento de `ritmo`/
+  // `tasks`).
+  const remindersSorted = sortReminders(openReminders, todayStr);
+  const reminderCounts = computeReminderCounts(remindersSorted, todayStr);
+  const remindersFiltered = filterReminders(remindersSorted, pendenciaFiltroFilter, profile.id);
+  const buildReminderFilterHref = (filter: ReminderFilter) => buildUrl({ pendenciaFiltro: filter === "todas" ? "" : filter });
+  const buildReminderEditHref = (reminderId: string) => buildUrl({ pendenciaModal: reminderId });
+  const addReminderHref = buildUrl({ pendenciaModal: "new" });
+  const closeReminderModalHref = buildUrl({ pendenciaModal: "" });
+  const openCompletedRemindersHref = buildUrl({ pendenciasConcluidas: "1" });
+  const closeCompletedRemindersHref = buildUrl({ pendenciasConcluidas: "" });
+
+  const isNewReminderModal = params.pendenciaModal === "new";
+  const editingReminder =
+    params.pendenciaModal && !isNewReminderModal ? await getReminderById(supabase, params.pendenciaModal) : null;
+  const showReminderModal = isNewReminderModal || Boolean(editingReminder);
+  const showCompletedReminders = params.pendenciasConcluidas === "1";
+  const completedReminders = showCompletedReminders ? await getCompletedReminders(supabase) : [];
 
   const monthLabel = formatMonthLabel(monthRange.firstDay);
 
@@ -1009,6 +1045,44 @@ export default async function Home({
             </div>
           </div>
         </details>
+
+        {/* Módulo "Pendências": lembretes rápidos e leves (agência/cliente),
+            deliberadamente fora do painel financeiro/operacional acima (que
+            fica atrás do accordion) — como envolve ações (adicionar/concluir/
+            editar), não pode ficar escondido atrás de um toggle. Fica antes
+            de Prioridades por ser o item mais "acionável agora". Nunca mistura
+            com tarefas/sprints: ver `src/lib/reminders.ts`. */}
+        <div className="mt-3">
+          <RemindersPanel
+            reminders={remindersFiltered}
+            todayStr={todayStr}
+            counts={reminderCounts}
+            filter={pendenciaFiltroFilter}
+            buildFilterHref={buildReminderFilterHref}
+            addHref={addReminderHref}
+            completedHref={openCompletedRemindersHref}
+            buildEditHref={buildReminderEditHref}
+          />
+        </div>
+
+        {showReminderModal && (
+          <ReminderFormDrawer
+            closeHref={closeReminderModalHref}
+            clients={clientOptions}
+            teamMembers={gestores ?? []}
+            reminderId={editingReminder?.id}
+            initialTitle={editingReminder?.title}
+            initialScope={editingReminder?.scope}
+            initialClientId={editingReminder?.clientId}
+            initialAssigneeId={editingReminder?.assigneeId}
+            initialDueDate={editingReminder?.dueDate}
+            initialNotes={editingReminder?.notes}
+          />
+        )}
+
+        {showCompletedReminders && (
+          <RemindersCompletedDrawer reminders={completedReminders} closeHref={closeCompletedRemindersHref} />
+        )}
 
         {/* Refinamento Visual da Visão Geral: Prioridades passa a vir
             DEPOIS do panorama geral da agência (acima) — primeiro "como

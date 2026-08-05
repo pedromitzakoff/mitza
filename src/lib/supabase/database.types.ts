@@ -25,6 +25,12 @@ export type ReportThemeDb = "mitza" | "white_label";
  * (`CLIENT_REPORT_STATUS_LABEL`). "sent" só é gravado por
  * `markClientReportSentAction`, nunca ao simplesmente salvar o conteúdo. */
 export type ClientReportStatusDb = "draft" | "sent";
+/** Módulo "Pendências" (Visão Geral da Agência) — nunca confundir com o
+ * conceito homônimo do Core de diagnóstico (`diagnostics.pendencias`,
+ * tarefas em aberto de um cliente, ver lib/metric-diagnostics.ts): são
+ * entidades diferentes que só compartilham o nome em português. */
+export type ReminderScopeDb = "agency" | "client";
+export type ReminderStatusDb = "pending" | "done";
 export type TrafficChannelDb = "meta" | "google" | "tiktok" | "linkedin" | "instagram" | "other";
 export type PerformanceSourceDb = "manual" | "meta" | "google";
 
@@ -2090,6 +2096,86 @@ export interface Database {
           {
             foreignKeyName: "client_reports_sent_by_fkey";
             columns: ["sent_by"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      reminders: {
+        Row: {
+          id: string;
+          organization_id: string;
+          title: string;
+          scope: ReminderScopeDb;
+          client_id: string | null;
+          assignee_id: string | null;
+          due_date: string | null;
+          notes: string | null;
+          status: ReminderStatusDb;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          completed_by: string | null;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          title: string;
+          scope: ReminderScopeDb;
+          client_id?: string | null;
+          assignee_id?: string | null;
+          due_date?: string | null;
+          notes?: string | null;
+          status?: ReminderStatusDb;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          completed_by?: string | null;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          title?: string;
+          scope?: ReminderScopeDb;
+          client_id?: string | null;
+          assignee_id?: string | null;
+          due_date?: string | null;
+          notes?: string | null;
+          status?: ReminderStatusDb;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          completed_by?: string | null;
+          completed_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "reminders_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "reminders_assignee_id_fkey";
+            columns: ["assignee_id"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "reminders_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "reminders_completed_by_fkey";
+            columns: ["completed_by"];
             isOneToOne: false;
             referencedRelation: "team_members";
             referencedColumns: ["id"];

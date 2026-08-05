@@ -62,6 +62,12 @@ const dayMonthLongFormatter = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "UTC",
 });
 
+/** Dia/mês por extenso, sem dia da semana e sem ano (ex.: "08 de agosto") —
+ * usado no módulo de Pendências (prazo futuro/passado, fora de hoje). */
+export function formatDayMonthLong(value: string): string {
+  return dayMonthLongFormatter.format(new Date(`${value}T00:00:00Z`));
+}
+
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
