@@ -31,7 +31,13 @@ import {
   computeMonthlyExpectedToDateByCalendar,
 } from "@/lib/monthly-budget";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
-import { groupChannelSpendBySprintId, buildEditableInvestmentValues } from "@/lib/channel-spend";
+import {
+  groupChannelSpendBySprintId,
+  buildEditableInvestmentValues,
+  sumChannelEffectiveSpend,
+  computeSprintChannelEffectiveSpend,
+  type SprintChannelSpendOverrideRow,
+} from "@/lib/channel-spend";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { todayDateString, todayUTC } from "@/lib/today";
 import { formatCurrency, formatMonthLabel, formatRelativeDateTime } from "@/lib/format";
@@ -89,6 +95,7 @@ import { AnalyticsPlatformSwitch } from "../analytics-platform-switch";
 import { GoogleNotConnectedState } from "../google-not-connected-state";
 import { CREATIVES_NOT_AVAILABLE_FOR_GOOGLE_MESSAGE } from "@/lib/analytics-messages";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+import { VisaoGeralChannelSwitch, type VisaoGeralMetricsChannel } from "../visao-geral-channel-switch";
 
 async function fetchCommentsByType(
   supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
@@ -179,6 +186,7 @@ export default async function ClientPage({
     analyticsSection?: string;
     analyticsPlatform?: string;
     creative?: string;
+    metricsChannel?: string;
   }>;
 }) {
   const { id } = await params;
@@ -212,6 +220,7 @@ export default async function ClientPage({
     analyticsSection: analyticsSectionParam,
     analyticsPlatform: analyticsPlatformParam,
     creative: creativeParam,
+    metricsChannel: metricsChannelParam,
   } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
@@ -234,6 +243,14 @@ export default async function ClientPage({
   ];
   const activeArea = (AREA_TABS.some((t) => t.key === areaParam) ? areaParam : "visao-geral") as ClientArea;
   const buildAreaHref = (area: ClientArea) => `/clients/${id}?area=${area}${monthQueryParam ? `&month=${monthQueryParam}` : ""}`;
+
+  // Seletor "Consolidado | Meta | Google" da Visão Geral (pedido explícito
+  // do usuário) — só vale pra essa aba; nunca lido fora do bloco
+  // `activeArea === "visao-geral"` abaixo. Inválido/ausente cai pro padrão
+  // consolidado, mesmo padrão de `activeArea`/`analyticsPlatform`.
+  const metricsChannel: VisaoGeralMetricsChannel =
+    metricsChannelParam === "meta" || metricsChannelParam === "google" ? metricsChannelParam : "consolidated";
+  const metricsChannelBaseHref = `/clients/${id}?area=visao-geral${monthQueryParam ? `&month=${monthQueryParam}` : ""}`;
 
   // RLS já garante que um gestor só recebe o cliente se estiver em
   // client_managers; para quem não tem acesso o select simplesmente não
@@ -342,8 +359,13 @@ export default async function ClientPage({
           .order("start_date"),
         "sprints",
       ),
+      // `channel` incluído aqui (Visão Geral — seletor Consolidado/Meta/
+      // Google) pra nunca precisar de uma segunda query igual só pra
+      // decompor por canal — a mesma linha já serve pro consolidado
+      // (`dailySpend`, campos `date`/`spend`) e pro breakdown por canal
+      // (`dailySpendChannelRows`, abaixo).
       requireQuery(
-        supabase.from("daily_spend").select("date, spend").eq("client_id", id).gte("date", firstDay).lte("date", lastDay),
+        supabase.from("daily_spend").select("date, spend, channel").eq("client_id", id).gte("date", firstDay).lte("date", lastDay),
         "daily_spend",
       ),
       requireQuery<{ synced_at: string } | null>(
@@ -405,14 +427,23 @@ export default async function ClientPage({
   // lib/effective-spend.ts), pra todo cálculo financeiro desta página
   // (cartão de cada sprint, total do mês, congelamento de snapshot) herdar
   // o valor certo sem duplicar a regra.
-  const channelSpendBySprintId = groupChannelSpendBySprintId(
-    (channelSpendRows ?? []).map((r) => ({
-      sprintId: r.sprint_id,
-      channel: r.channel,
-      spend_source: r.spend_source,
-      manual_actual_spend: r.manual_actual_spend,
-    })),
-  );
+  // Flat array reaproveitada tanto pra resolução consolidada (agrupada
+  // abaixo) quanto pro breakdown por canal do seletor Consolidado/Meta/
+  // Google da Visão Geral (`sumChannelEffectiveSpend`/
+  // `computeSprintChannelEffectiveSpend`, mais abaixo) — nunca uma segunda
+  // busca igual só pra decompor por canal.
+  const channelSpendOverrideRows: SprintChannelSpendOverrideRow[] = (channelSpendRows ?? []).map((r) => ({
+    sprintId: r.sprint_id,
+    channel: r.channel,
+    spend_source: r.spend_source,
+    manual_actual_spend: r.manual_actual_spend,
+  }));
+  const channelSpendBySprintId = groupChannelSpendBySprintId(channelSpendOverrideRows);
+  // Mesmo motivo do `channel` incluído na query de `daily_spend` acima —
+  // versão com a dimensão de canal da MESMA lista já buscada, pro
+  // breakdown por canal (seletor Consolidado/Meta/Google) nunca precisar de
+  // uma segunda query.
+  const dailySpendChannelRows = (dailySpend ?? []).map((d) => ({ date: d.date, channel: d.channel as TrafficChannel, spend: d.spend }));
   const sprints = sprintsRaw.map((sprint) => ({
     ...sprint,
     manual_actual_spend: resolveManualActualSpend(sprint.manual_actual_spend, channelSpendBySprintId.get(sprint.id) ?? []),
@@ -508,6 +539,25 @@ export default async function ClientPage({
   // resto do sistema, aqui explícita em vez de depender da ordem da query.
   const sortedSprints = [...sprintFinancials].sort((a, b) => a.startDate.localeCompare(b.startDate));
 
+  // Seletor Consolidado/Meta/Google da Visão Geral — investido do mês
+  // recalculado pra UM canal só, mesma fonte de verdade de sempre
+  // (`sumChannelEffectiveSpend`, lib/channel-spend.ts — mesma regra
+  // sincronizado×manual do consolidado, só filtrada por canal). Nunca
+  // decompõe Planejado/ritmo/status (`monthPlanned`/`monthExpectedToDate`/
+  // `monthStatus`, acima): esses continuam SEMPRE consolidados porque o
+  // orçamento mensal não tem meta separada por canal no modelo de dados —
+  // comparar o investido de só um canal contra o planejado do cliente
+  // inteiro produziria um "ritmo" artificialmente enganoso.
+  const visaoGeralMonthActual =
+    metricsChannel === "consolidated"
+      ? monthActual
+      : sumChannelEffectiveSpend(
+          sortedSprints.map((s) => ({ sprintId: s.sprintId, start_date: s.startDate, end_date: s.endDate })),
+          metricsChannel,
+          dailySpendChannelRows,
+          channelSpendOverrideRows,
+        );
+
   // Etapa 71 — camada de PERFORMANCE: consome `monthActual`/`sprint.actualSpend`
   // já calculados acima, nunca uma segunda fonte de investimento. Consolidado
   // do mês é sempre a soma direta dos registros já escopados às sprints do
@@ -538,23 +588,60 @@ export default async function ClientPage({
         targetCostPerResult,
       })
     : null;
-  const monthPerformanceChannelBreakdown = performanceGoal
-    ? AVAILABLE_TRAFFIC_CHANNELS.map((channel) => ({
-        channel,
-        resultCount: aggregatePerformanceResults(performanceRecords, performanceGoal, channel).resultCount,
-      })).filter((entry) => entry.resultCount > 0)
-    : [];
+  // Versão do resumo do mês escopada ao seletor Consolidado/Meta/Google —
+  // alimenta só `AccountFollowUpPanel`/"Fechamento do mês" (abaixo, dentro
+  // do bloco `visao-geral`); `monthPerformanceSummary` acima continua
+  // SEMPRE consolidado porque também alimenta o indicador de "Última
+  // atualização da performance" do cabeçalho (fora da aba Visão Geral, sem
+  // noção de canal selecionado).
+  const visaoGeralPerformanceSummary = performanceGoal
+    ? computePerformanceSummary({
+        scope: metricsChannel,
+        records: performanceRecords,
+        resultType: performanceGoal,
+        consolidatedActualSpend: monthActual,
+        targetCostPerResult,
+        channelActualSpend: metricsChannel !== "consolidated" ? { [metricsChannel]: visaoGeralMonthActual } : undefined,
+      })
+    : null;
+  const monthPerformanceChannelBreakdown =
+    performanceGoal && metricsChannel === "consolidated"
+      ? AVAILABLE_TRAFFIC_CHANNELS.map((channel) => ({
+          channel,
+          resultCount: aggregatePerformanceResults(performanceRecords, performanceGoal, channel).resultCount,
+        })).filter((entry) => entry.resultCount > 0)
+      : []; // Escopado a um canal só: o breakdown por canal vira redundante (o painel inteiro já É o canal selecionado).
   const sprintPerformanceBySprintId = new Map<string, SprintPerformanceProps>();
+  // Investido de CADA sprint no canal selecionado — só usado pra sobrepor
+  // `sprint.actualSpend` na hora de renderizar `SprintCard` (mesmo padrão
+  // de `visaoGeralMonthActual` acima, um nível mais fundo). Vazio quando
+  // consolidado (o card usa `sprint.actualSpend` normalmente).
+  const sprintActualSpendByChannelBySprintId = new Map<string, number>();
   for (const sprint of sprintFinancials) {
     const sprintRecords = performanceRecords.filter((r) => r.sprintId === sprint.sprintId);
+    const scopedActualSpend =
+      metricsChannel === "consolidated"
+        ? sprint.actualSpend
+        : computeSprintChannelEffectiveSpend(
+            { sprintId: sprint.sprintId, start_date: sprint.startDate, end_date: sprint.endDate },
+            metricsChannel,
+            dailySpendChannelRows,
+            channelSpendOverrideRows,
+          );
+    sprintActualSpendByChannelBySprintId.set(sprint.sprintId, scopedActualSpend);
+    const scopedRecords = metricsChannel === "consolidated" ? sprintRecords : sprintRecords.filter((r) => r.channel === metricsChannel);
     sprintPerformanceBySprintId.set(sprint.sprintId, {
       view: buildSprintPerformanceView({
         performanceGoal,
         isFuture: sprint.temporalStatus === "futura",
-        records: sprintRecords,
-        actualSpend: sprint.actualSpend,
+        records: scopedRecords,
+        actualSpend: scopedActualSpend,
         targetCostPerResult,
       }),
+      // Formulário de edição sempre trabalha com TODOS os canais,
+      // independente do seletor de exibição (`sprintRecords`/consolidado
+      // aqui, nunca `scopedRecords`) — o seletor só filtra o que É EXIBIDO,
+      // nunca o que pode ser editado.
       editableChannels: performanceGoal ? buildEditableChannelValues(sprintRecords, performanceGoal, AVAILABLE_TRAFFIC_CHANNELS) : [],
       editableInvestment: buildEditableInvestmentValues(
         AVAILABLE_TRAFFIC_CHANNELS,
@@ -1039,7 +1126,9 @@ export default async function ClientPage({
   // reunindo números já calculados acima (investimento, performance,
   // tarefas do mês inteiro — sprints + soltas), como se fosse "mais uma
   // sprint", representando o mês inteiro.
-  const monthKpiTexts = deriveMonthlyKpiTexts(performanceGoal, monthPerformanceSummary, formatCurrency);
+  // "Fechamento do mês" (dentro do bloco `visao-geral`, abaixo) — já nasce
+  // escopado ao seletor Consolidado/Meta/Google (`visaoGeralPerformanceSummary`).
+  const visaoGeralKpiTexts = deriveMonthlyKpiTexts(performanceGoal, visaoGeralPerformanceSummary, formatCurrency);
   const monthTaskRows = [...sortedSprints.flatMap((sprint) => tasksBySprintId.get(sprint.sprintId) ?? []), ...unlinkedTasks];
   const monthTasksTotal = monthTaskRows.length;
   const monthTasksDone = monthTaskRows.filter((task) => effectiveTaskStatus(task, today) === "feito").length;
@@ -1286,6 +1375,16 @@ export default async function ClientPage({
           a Fase F já tinha identificado como fragmentação). */}
       {activeArea === "visao-geral" && (
         <>
+          {/* Seletor "Consolidado | Meta Ads | Google Ads" — pedido
+              explícito do usuário: escopa Indicadores do mês, cada Sprint e
+              Fechamento do mês (abaixo) ao canal escolhido. Investimento do
+              mês (`MonthInvestmentSummary`, mais abaixo) fica de fora —
+              orçamento/ritmo não têm meta separada por canal, ver doc de
+              `visaoGeralMonthActual`. */}
+          <div className="mt-3 flex justify-end">
+            <VisaoGeralChannelSwitch baseHref={metricsChannelBaseHref} active={metricsChannel} />
+          </div>
+
           {/* Indicadores do mês — investimento, resultados, custo por
               resultado e meta (as 4 métricas principais, mesmo peso
               visual), diagnóstico de meta, resultados por canal, última
@@ -1296,9 +1395,9 @@ export default async function ClientPage({
           <div className="mt-3">
             <AccountFollowUpPanel
               monthLabel={monthLabel}
-              monthActual={monthActual}
+              monthActual={visaoGeralMonthActual}
               performanceGoal={performanceGoal}
-              performanceSummary={monthPerformanceSummary}
+              performanceSummary={visaoGeralPerformanceSummary}
               targetCostPerResult={targetCostPerResult}
               channelBreakdown={monthPerformanceChannelBreakdown}
               configureObjectiveHref={`/clients/${client.id}/edit`}
@@ -1377,7 +1476,19 @@ export default async function ClientPage({
                   sortedSprints.map((sprint) => (
                     <SprintCard
                       key={sprint.sprintId}
-                      sprint={sprint}
+                      // Seletor Consolidado/Meta/Google: só o `actualSpend`
+                      // exibido muda (`sprintActualSpendByChannelBySprintId`,
+                      // acima) — `plannedSpend`/`status`/`progressPct`/
+                      // `expectedToDate` continuam os valores consolidados
+                      // de sempre, mas nenhum deles é lido pelo card neste
+                      // modo (`hideTaskList`, relatório semanal — só o
+                      // financeiro/performance aparece, nunca o badge de
+                      // ritmo/planejado desta sprint).
+                      sprint={
+                        metricsChannel === "consolidated"
+                          ? sprint
+                          : { ...sprint, actualSpend: sprintActualSpendByChannelBySprintId.get(sprint.sprintId) ?? 0 }
+                      }
                       comments={sprintCommentsById.get(sprint.sprintId) ?? []}
                       clientId={client.id}
                       isAdmin={isAdmin}
@@ -1420,26 +1531,36 @@ export default async function ClientPage({
                     importantes por linha. Desktop (`sm:` e acima) continua
                     exatamente a linha única de sempre. */}
                 <div className="flex flex-col gap-2.5 text-xs sm:hidden">
-                  <span
-                    className={`inline-block w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[monthStatus]}`}
-                  >
-                    {SPEND_STATUS_LABEL[monthStatus]}
-                  </span>
+                  {/* Selo de ritmo + "de X planejados" ficam de fora quando
+                      um canal específico está selecionado — o orçamento do
+                      mês é sempre consolidado (nunca decomposto por canal
+                      no modelo de dados), então comparar o investido de só
+                      Meta ou só Google contra o planejado do cliente
+                      inteiro produziria um "ritmo" enganoso. */}
+                  {metricsChannel === "consolidated" && (
+                    <span
+                      className={`inline-block w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[monthStatus]}`}
+                    >
+                      {SPEND_STATUS_LABEL[monthStatus]}
+                    </span>
+                  )}
 
                   <div>
                     <p className="text-muted-foreground">Investido</p>
-                    <p className="text-base font-semibold text-foreground">{formatCurrency(monthActual)}</p>
-                    <p className="text-muted-foreground">de {formatCurrency(monthPlanned)} planejados</p>
+                    <p className="text-base font-semibold text-foreground">{formatCurrency(visaoGeralMonthActual)}</p>
+                    {metricsChannel === "consolidated" && (
+                      <p className="text-muted-foreground">de {formatCurrency(monthPlanned)} planejados</p>
+                    )}
                   </div>
 
                   <div>
                     <p className="text-muted-foreground">Resultados</p>
-                    <p className="font-semibold text-foreground">{monthKpiTexts.resultsValue}</p>
+                    <p className="font-semibold text-foreground">{visaoGeralKpiTexts.resultsValue}</p>
                   </div>
 
                   <div>
                     <p className="text-muted-foreground">Custo por resultado</p>
-                    <p className="font-semibold text-foreground">{monthKpiTexts.costValue}</p>
+                    <p className="font-semibold text-foreground">{visaoGeralKpiTexts.costValue}</p>
                   </div>
 
                   <div>
@@ -1451,30 +1572,35 @@ export default async function ClientPage({
                 </div>
 
                 <div className="hidden flex-wrap items-center gap-x-1.5 gap-y-1 text-xs sm:flex">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[monthStatus]}`}
-                  >
-                    {SPEND_STATUS_LABEL[monthStatus]}
-                  </span>
-
-                  <span className="text-border" aria-hidden="true">
-                    ·
-                  </span>
+                  {metricsChannel === "consolidated" && (
+                    <>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[monthStatus]}`}
+                      >
+                        {SPEND_STATUS_LABEL[monthStatus]}
+                      </span>
+                      <span className="text-border" aria-hidden="true">
+                        ·
+                      </span>
+                    </>
+                  )}
                   <span className="text-muted-foreground">Investido:</span>
-                  <span className="font-semibold text-foreground">{formatCurrency(monthActual)}</span>
-                  <span className="text-muted-foreground">de {formatCurrency(monthPlanned)} planejados</span>
+                  <span className="font-semibold text-foreground">{formatCurrency(visaoGeralMonthActual)}</span>
+                  {metricsChannel === "consolidated" && (
+                    <span className="text-muted-foreground">de {formatCurrency(monthPlanned)} planejados</span>
+                  )}
 
                   <span className="text-border" aria-hidden="true">
                     ·
                   </span>
                   <span className="text-muted-foreground">Resultados:</span>
-                  <span className="font-semibold text-foreground">{monthKpiTexts.resultsValue}</span>
+                  <span className="font-semibold text-foreground">{visaoGeralKpiTexts.resultsValue}</span>
 
                   <span className="text-border" aria-hidden="true">
                     ·
                   </span>
                   <span className="text-muted-foreground">Custo por resultado:</span>
-                  <span className="font-semibold text-foreground">{monthKpiTexts.costValue}</span>
+                  <span className="font-semibold text-foreground">{visaoGeralKpiTexts.costValue}</span>
 
                   <span className="text-border" aria-hidden="true">
                     ·
