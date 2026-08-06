@@ -9,6 +9,8 @@ import {
   sumActualSpendForMonth,
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
+import { resolveManualActualSpend } from "@/lib/effective-spend";
+import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { resolveMonthlyBudget, computeMonthlyExpectedToDateByCalendar } from "@/lib/monthly-budget";
 import {
@@ -217,7 +219,7 @@ export async function buildReportViewData(
   // vigente (`resolveMonthlyBudget`), realizado (`sumActualSpendForMonth`),
   // esperado até hoje (`computeMonthlyExpectedToDateByCalendar`, Etapa 67) e
   // `classifySpendStatus`, nunca uma conta paralela.
-  const [sprints, dailySpend, tasks, plannedAllocations, budgetChanges, { count: optimizationsCount }] =
+  const [sprints, dailySpend, tasks, plannedAllocations, budgetChanges, { count: optimizationsCount }, channelSpendRows] =
     await Promise.all([
       // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
       // mês precisa ser encontrada mesmo com start_date fora do intervalo.
@@ -274,9 +276,32 @@ export async function buildReportViewData(
         .eq("client_id", clientId)
         .gte("reviewed_at", `${monthRange.firstDay}T00:00:00Z`)
         .lte("reviewed_at", `${monthRange.lastDay}T23:59:59.999Z`),
+      // Investimento manual multicanal (`sprint_channel_spend`, adotada como
+      // fonte de verdade — ver `resolveManualActualSpend`, lib/effective-spend.ts).
+      requireQuery(
+        supabase
+          .from("sprint_channel_spend")
+          .select("sprint_id, channel, spend_source, manual_actual_spend")
+          .eq("client_id", clientId),
+        "sprint_channel_spend",
+      ),
     ]);
 
-  const monthSprintRows = sprints;
+  // Investimento manual multicanal — resolve `manual_actual_spend` de cada
+  // sprint ANTES de `sumActualSpendForMonth`/`computeSprintBehaviorRows`
+  // (ver `resolveManualActualSpend`, lib/effective-spend.ts).
+  const channelSpendBySprintId = groupChannelSpendBySprintId(
+    (channelSpendRows ?? []).map((r) => ({
+      sprintId: r.sprint_id,
+      channel: r.channel,
+      spend_source: r.spend_source,
+      manual_actual_spend: r.manual_actual_spend,
+    })),
+  );
+  const monthSprintRows = sprints.map((sprint) => ({
+    ...sprint,
+    manual_actual_spend: resolveManualActualSpend(sprint.manual_actual_spend, channelSpendBySprintId.get(sprint.id) ?? []),
+  }));
   const plannedAllocationRows = plannedAllocations.map((a) => ({
     date: a.date,
     sprintId: a.sprint_id,

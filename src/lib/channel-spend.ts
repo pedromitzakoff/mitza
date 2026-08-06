@@ -87,6 +87,23 @@ export function sumConsolidatedChannelEffectiveSpend(
   return channels.reduce((sum, channel) => sum + sumChannelEffectiveSpend(sprints, channel, dailySpend, overrides), 0);
 }
 
+/** Agrupa os overrides por `sprintId` — todo ponto que precisa resolver o
+ * investimento manual consolidado de várias sprints de uma vez (ver
+ * `resolveManualActualSpend`, lib/effective-spend.ts) usa isto em vez de
+ * filtrar a lista inteira a cada sprint (mesmo padrão de agrupamento batch
+ * já usado pra `dailySpend`/`tasks` por cliente). */
+export function groupChannelSpendBySprintId(
+  overrides: SprintChannelSpendOverrideRow[],
+): Map<string, SprintChannelSpendOverrideRow[]> {
+  const map = new Map<string, SprintChannelSpendOverrideRow[]>();
+  for (const row of overrides) {
+    const list = map.get(row.sprintId);
+    if (list) list.push(row);
+    else map.set(row.sprintId, [row]);
+  }
+  return map;
+}
+
 /** Quais canais um cliente efetivamente usa, inferido pelos dados que já
  * existem (nunca por um campo de configuração) — `daily_spend` sincronizado
  * ou override manual em `sprint_channel_spend` contam como "usa este

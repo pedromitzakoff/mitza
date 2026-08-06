@@ -56,6 +56,37 @@ export interface EffectiveSpend {
   hasData: boolean;
 }
 
+/**
+ * Resolve o valor MANUAL consolidado de uma sprint (adoção de
+ * `sprint_channel_spend` como fonte de verdade do investimento manual por
+ * canal): soma só os overrides por canal cujo `manual_actual_spend` está
+ * EXPLICITAMENTE preenchido (não-nulo); quando nenhum override tem valor
+ * explícito — inclusive quando a linha existe mas com `manual_actual_spend:
+ * null` —, cai pro campo legado `sprints.manual_actual_spend` sem alteração
+ * nenhuma. A mera EXISTÊNCIA de linhas em `sprint_channel_spend` nunca
+ * decide sozinha: só a presença de pelo menos um valor não-nulo troca a
+ * fonte, nunca transforma um valor legado em zero. Nunca soma os dois
+ * (legado x canais) — é sempre um OU outro.
+ *
+ * Única implementação desta regra na plataforma — todo ponto que hoje
+ * constrói `manualActualSpend`/`manual_actual_spend` a partir de
+ * `sprints.manual_actual_spend` passa a chamar esta função antes, nunca
+ * reimplementando a decisão (Visão Geral, Sprints, Clientes, Cliente,
+ * Relatórios, Core).
+ */
+export function resolveManualActualSpend(
+  legacyManualActualSpend: number | null,
+  channelSpendRows: { manual_actual_spend: number | null }[],
+): number | null {
+  const explicitValues = channelSpendRows
+    .map((row) => row.manual_actual_spend)
+    .filter((value): value is number => value !== null);
+  if (explicitValues.length > 0) {
+    return explicitValues.reduce((sum, value) => sum + value, 0);
+  }
+  return legacyManualActualSpend;
+}
+
 export function resolveEffectiveSpend(input: EffectiveSpendInput): EffectiveSpend {
   if (input.syncedSpend !== null) {
     return { actual: input.syncedSpend, hasData: true };

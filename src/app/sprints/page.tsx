@@ -31,6 +31,8 @@ import {
   type OperationClientRawData,
   type OperationTaskItem,
 } from "@/app/operation/operation-data";
+import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
+import { resolveManualActualSpend } from "@/lib/effective-spend";
 import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-section";
 import { RecordAccountReviewDrawer } from "@/app/clients/record-account-review-drawer";
 import { AccountReviewDetailDrawer, type AccountReviewDetail } from "@/app/clients/account-review-detail-drawer";
@@ -141,7 +143,7 @@ export default async function SprintsPage({
   const supabase = await createSupabaseClient();
 
   const __perfBlock1Start = perfNow();
-  const [clients, gestores, sprints, dailySpend, tasks, plannedAllocations, budgetChanges] = await Promise.all([
+  const [clients, gestores, sprints, dailySpend, tasks, plannedAllocations, budgetChanges, channelSpendRows] = await Promise.all([
     requireQuery(
       supabase
         .from("clients")
@@ -198,6 +200,14 @@ export default async function SprintsPage({
         .select("client_id, new_amount, changed_at")
         .eq("month", monthRange.firstDay),
       "monthly_budget_changes",
+    ),
+    // Investimento manual multicanal (`sprint_channel_spend`, adotada como
+    // fonte de verdade — ver `resolveManualActualSpend`, lib/effective-spend.ts)
+    // — mesma busca sem filtro já usada pela Visão Geral (`page.tsx`), a
+    // tabela é pequena (uma linha por sprint+canal com override lançado).
+    requireQuery(
+      supabase.from("sprint_channel_spend").select("client_id, sprint_id, channel, spend_source, manual_actual_spend"),
+      "sprint_channel_spend",
     ),
   ]);
   perfLog("sprints bloco 1 (clients/team_members/sprints/daily_spend/tasks/allocations/budget)", __perfBlock1Start);
@@ -374,10 +384,26 @@ export default async function SprintsPage({
     final_actual_amount: number | null;
     snapshot_frozen_at: string | null;
   };
+  // Investimento manual multicanal — resolve `manual_actual_spend` de cada
+  // sprint ANTES de agrupar por cliente, pra `ensureClosedSprintSnapshots` e
+  // `buildOperationClientCard` (abaixo) herdarem o valor certo sem
+  // duplicar a regra (ver `resolveManualActualSpend`, lib/effective-spend.ts).
+  const channelSpendBySprintId = groupChannelSpendBySprintId(
+    (channelSpendRows ?? []).map((r) => ({
+      sprintId: r.sprint_id,
+      channel: r.channel,
+      spend_source: r.spend_source,
+      manual_actual_spend: r.manual_actual_spend,
+    })),
+  );
   const sprintsByClient = new Map<string, SprintRow[]>();
   for (const s of sprints ?? []) {
+    const resolvedSprint: SprintRow = {
+      ...s,
+      manual_actual_spend: resolveManualActualSpend(s.manual_actual_spend, channelSpendBySprintId.get(s.id) ?? []),
+    };
     const list = sprintsByClient.get(s.client_id) ?? [];
-    list.push(s);
+    list.push(resolvedSprint);
     sprintsByClient.set(s.client_id, list);
   }
 

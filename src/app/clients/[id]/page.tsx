@@ -31,6 +31,8 @@ import {
   computeMonthlyExpectedToDateByCalendar,
 } from "@/lib/monthly-budget";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
+import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
+import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { todayDateString, todayUTC } from "@/lib/today";
 import { formatCurrency, formatMonthLabel, formatRelativeDateTime } from "@/lib/format";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
@@ -323,7 +325,7 @@ export default async function ClientPage({
 
   // Etapa 50 (correção): a geração de sprints não roda mais durante o
   // carregamento da página — só via /api/cron/ensure-sprints.
-  const [sprints, dailySpend, lastSync, plannedAllocations, budgetChanges, performanceTargetHistory] =
+  const [sprintsRaw, dailySpend, lastSync, plannedAllocations, budgetChanges, performanceTargetHistory, channelSpendRows] =
     await Promise.all([
       // Sobreposição com o mês (não "começa no mês") — uma sprint que
       // atravessa a fronteira (ex.: 27/jul-02/ago) precisa aparecer aqui
@@ -390,7 +392,31 @@ export default async function ClientPage({
           .limit(1),
         "monthly_budget_changes:target-history",
       ),
+      // Investimento manual multicanal (`sprint_channel_spend`, adotada como
+      // fonte de verdade — ver `resolveManualActualSpend`, lib/effective-spend.ts).
+      requireQuery(
+        supabase.from("sprint_channel_spend").select("sprint_id, channel, spend_source, manual_actual_spend").eq("client_id", id),
+        "sprint_channel_spend",
+      ),
     ]);
+
+  // Investimento manual multicanal — resolve `manual_actual_spend` de cada
+  // sprint ANTES de qualquer uso downstream (ver `resolveManualActualSpend`,
+  // lib/effective-spend.ts), pra todo cálculo financeiro desta página
+  // (cartão de cada sprint, total do mês, congelamento de snapshot) herdar
+  // o valor certo sem duplicar a regra.
+  const channelSpendBySprintId = groupChannelSpendBySprintId(
+    (channelSpendRows ?? []).map((r) => ({
+      sprintId: r.sprint_id,
+      channel: r.channel,
+      spend_source: r.spend_source,
+      manual_actual_spend: r.manual_actual_spend,
+    })),
+  );
+  const sprints = sprintsRaw.map((sprint) => ({
+    ...sprint,
+    manual_actual_spend: resolveManualActualSpend(sprint.manual_actual_spend, channelSpendBySprintId.get(sprint.id) ?? []),
+  }));
 
   // Etapa 71: registros de performance de todas as sprints do mês
   // selecionado — sempre por sprint (nenhum lançamento manual mensal

@@ -5,7 +5,8 @@ import { businessDaysSince } from "@/lib/business-days";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { aggregatePerformanceResults, computeCostPerResult, type PerformanceRecordRow } from "@/lib/performance";
 import { channelToPerformanceSource } from "@/lib/performance-queries";
-import { sumEffectiveSpendForMonth, type SprintSpendSource, type DailySpendRow } from "@/lib/effective-spend";
+import { resolveManualActualSpend, sumEffectiveSpendForMonth, type SprintSpendSource, type DailySpendRow } from "@/lib/effective-spend";
+import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
 import {
   computeMonthlyExpectedPct,
   computeMonthlyExpectedToDateByCalendar,
@@ -50,8 +51,18 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
   const { firstDay: monthStart, lastDay: monthEnd } = monthRange;
   const monthExpectedPct = computeMonthlyExpectedPct(monthRange, todayStr);
 
-  const [clients, sprints, dailySpendRows, latestReviews, lastActivityRows, openTasks, planChanges, reviewCadences, activeImportSources] =
-    await Promise.all([
+  const [
+    clients,
+    sprints,
+    dailySpendRows,
+    latestReviews,
+    lastActivityRows,
+    openTasks,
+    planChanges,
+    reviewCadences,
+    activeImportSources,
+    channelSpendRows,
+  ] = await Promise.all([
       requireQuery(
         supabase
           .from("clients")
@@ -115,6 +126,13 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
       // nunca de `performance_records` — nunca os dois somados. `enabled`
       // é o único campo que decide isso (status é só observabilidade).
       requireQuery(supabase.from("import_sources").select("client_id").eq("enabled", true), "import_sources:active"),
+      // Investimento manual multicanal (`sprint_channel_spend`, adotada como
+      // fonte de verdade — ver `resolveManualActualSpend`, lib/effective-spend.ts)
+      // — mesma busca sem filtro já usada pela Visão Geral (`page.tsx`).
+      requireQuery(
+        supabase.from("sprint_channel_spend").select("sprint_id, channel, spend_source, manual_actual_spend"),
+        "sprint_channel_spend",
+      ),
     ]);
 
   const sprintsByClient = new Map<string, typeof sprints>();
@@ -236,6 +254,19 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
 
   const reviewCadenceByClient = new Map((reviewCadences ?? []).map((row) => [row.client_id, row]));
 
+  // Investimento manual multicanal — resolve `manualActualSpend` de cada
+  // sprint ANTES de montar `clientSprints` abaixo (ver
+  // `resolveManualActualSpend`, lib/effective-spend.ts), pra
+  // `sumEffectiveSpendForMonth` herdar o valor certo sem duplicar a regra.
+  const channelSpendBySprintId = groupChannelSpendBySprintId(
+    (channelSpendRows ?? []).map((r) => ({
+      sprintId: r.sprint_id,
+      channel: r.channel,
+      spend_source: r.spend_source,
+      manual_actual_spend: r.manual_actual_spend,
+    })),
+  );
+
   const cards: ClientOperationalState[] = (clients ?? []).map((client) => {
     const managerId = client.primary_manager?.id ?? null;
     const managerName = client.primary_manager?.name ?? null;
@@ -244,7 +275,7 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
       startDate: sprint.start_date,
       endDate: sprint.end_date,
       spendSource: sprint.spend_source,
-      manualActualSpend: sprint.manual_actual_spend,
+      manualActualSpend: resolveManualActualSpend(sprint.manual_actual_spend, channelSpendBySprintId.get(sprint.id) ?? []),
       manualSpendUpdatedAt: sprint.manual_spend_updated_at,
     }));
     const clientDailySpend: DailySpendRow[] = (dailySpendByClient.get(client.id) ?? []).map((row) => ({

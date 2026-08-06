@@ -13,6 +13,8 @@ import {
   buildOperationClientCard,
   type OperationClientRawData,
 } from "@/app/operation/operation-data";
+import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
+import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { ClientsFilters } from "./clients-filters";
 
 /**
@@ -44,7 +46,7 @@ export default async function ClientsPage({
 
   const supabase = await createSupabaseClient();
 
-  const [clients, gestores, sprints, dailySpend, tasks, plannedAllocations, budgetChanges] = await Promise.all([
+  const [clients, gestores, sprints, dailySpend, tasks, plannedAllocations, budgetChanges, channelSpendRows] = await Promise.all([
     requireQuery(
       supabase
         .from("clients")
@@ -93,6 +95,12 @@ export default async function ClientsPage({
     requireQuery(
       supabase.from("monthly_budget_changes").select("client_id, new_amount, changed_at").eq("month", firstDay),
       "monthly_budget_changes",
+    ),
+    // Investimento manual multicanal (`sprint_channel_spend`, adotada como
+    // fonte de verdade — ver `resolveManualActualSpend`, lib/effective-spend.ts).
+    requireQuery(
+      supabase.from("sprint_channel_spend").select("client_id, sprint_id, channel, spend_source, manual_actual_spend"),
+      "sprint_channel_spend",
     ),
   ]);
 
@@ -146,10 +154,25 @@ export default async function ClientsPage({
     spend_source: "manual" | "meta_api";
     manual_actual_spend: number | null;
   };
+  // Investimento manual multicanal — resolve `manual_actual_spend` de cada
+  // sprint ANTES de agrupar por cliente (mesmo padrão de sprints/page.tsx —
+  // ver `resolveManualActualSpend`, lib/effective-spend.ts).
+  const channelSpendBySprintId = groupChannelSpendBySprintId(
+    (channelSpendRows ?? []).map((r) => ({
+      sprintId: r.sprint_id,
+      channel: r.channel,
+      spend_source: r.spend_source,
+      manual_actual_spend: r.manual_actual_spend,
+    })),
+  );
   const sprintsByClient = new Map<string, SprintRow[]>();
   for (const s of sprints ?? []) {
+    const resolvedSprint: SprintRow = {
+      ...s,
+      manual_actual_spend: resolveManualActualSpend(s.manual_actual_spend, channelSpendBySprintId.get(s.id) ?? []),
+    };
     const list = sprintsByClient.get(s.client_id) ?? [];
-    list.push(s);
+    list.push(resolvedSprint);
     sprintsByClient.set(s.client_id, list);
   }
 

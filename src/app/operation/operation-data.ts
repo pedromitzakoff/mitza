@@ -44,10 +44,12 @@ import {
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import {
+  groupChannelSpendBySprintId,
   inferClientChannels,
   sumChannelEffectiveSpend,
   type SprintChannelSpendOverrideRow,
 } from "@/lib/channel-spend";
+import { resolveManualActualSpend } from "@/lib/effective-spend";
 import type { SprintPerformanceProps } from "@/app/clients/sprint-card";
 
 const OPTIMIZATION_LOOKBACK_DAYS = 14;
@@ -264,7 +266,19 @@ export function buildOperationClientCard(
   const todayStr = today.toISOString().slice(0, 10);
   const { firstDay, lastDay } = monthRange ?? currentMonthRange(today);
 
-  const currentSprintRow = client.sprints.find(
+  // Investimento manual multicanal (`sprint_channel_spend` como fonte de
+  // verdade — ver `resolveManualActualSpend`, lib/effective-spend.ts):
+  // resolvido ANTES de qualquer uso de `client.sprints`, pra todo cálculo
+  // downstream (sprint atual, soma do mês) herdar automaticamente. Reusa o
+  // mesmo `client.channelSpendOverrides` que já alimentava só o breakdown
+  // por canal — agora também decide o CONSOLIDADO, sem duplicar a regra.
+  const channelSpendBySprintId = groupChannelSpendBySprintId(client.channelSpendOverrides ?? []);
+  const sprints = client.sprints.map((sprint) => ({
+    ...sprint,
+    manual_actual_spend: resolveManualActualSpend(sprint.manual_actual_spend, channelSpendBySprintId.get(sprint.id) ?? []),
+  }));
+
+  const currentSprintRow = sprints.find(
     (s) => s.start_date <= todayStr && s.end_date >= todayStr,
   );
 
@@ -283,7 +297,7 @@ export function buildOperationClientCard(
   // Sobreposição com o mês (não "começa no mês") — uma sprint que atravessa
   // a fronteira (ex.: 27/jul-02/ago) precisa aparecer tanto na visão de
   // julho quanto na de agosto, mesmo tendo start_date em julho.
-  const monthSprintRows = client.sprints
+  const monthSprintRows = sprints
     .filter((s) => s.start_date <= lastDay && s.end_date >= firstDay)
     .sort((a, b) => a.start_date.localeCompare(b.start_date));
   const monthRangeArg = { firstDay, lastDay };
