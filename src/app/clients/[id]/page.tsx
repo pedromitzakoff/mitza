@@ -31,7 +31,7 @@ import {
   computeMonthlyExpectedToDateByCalendar,
 } from "@/lib/monthly-budget";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
-import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
+import { groupChannelSpendBySprintId, buildEditableInvestmentValues } from "@/lib/channel-spend";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { todayDateString, todayUTC } from "@/lib/today";
 import { formatCurrency, formatMonthLabel, formatRelativeDateTime } from "@/lib/format";
@@ -417,6 +417,7 @@ export default async function ClientPage({
     ...sprint,
     manual_actual_spend: resolveManualActualSpend(sprint.manual_actual_spend, channelSpendBySprintId.get(sprint.id) ?? []),
   }));
+  const legacyManualActualSpendBySprintId = new Map(sprintsRaw.map((sprint) => [sprint.id, sprint.manual_actual_spend]));
 
   // Etapa 71: registros de performance de todas as sprints do mês
   // selecionado — sempre por sprint (nenhum lançamento manual mensal
@@ -555,6 +556,11 @@ export default async function ClientPage({
         targetCostPerResult,
       }),
       editableChannels: performanceGoal ? buildEditableChannelValues(sprintRecords, performanceGoal, AVAILABLE_TRAFFIC_CHANNELS) : [],
+      editableInvestment: buildEditableInvestmentValues(
+        AVAILABLE_TRAFFIC_CHANNELS,
+        legacyManualActualSpendBySprintId.get(sprint.sprintId) ?? null,
+        channelSpendBySprintId.get(sprint.sprintId) ?? [],
+      ),
       performanceGoal,
     });
   }

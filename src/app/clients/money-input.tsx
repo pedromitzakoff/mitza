@@ -9,6 +9,15 @@ import { formatMoneyDisplay, parseMoneyInput } from "@/lib/money-format";
  * (blur), com um input hidden carregando sempre o valor numérico limpo —
  * nunca uma string formatada — pra a action do servidor receber um número
  * válido direto de `formData.get(name)`.
+ *
+ * `defaultValue: null` (Investimento manual multicanal — adoção de
+ * `sprint_channel_spend`): estado "sem lançamento ainda" pra este canal —
+ * nasce em branco (nunca "R$ 0,00" fabricado) e, se o gestor não digitar
+ * nada, o hidden input submete string vazia — quem lê a action decide não
+ * tocar esse canal (nunca grava override manual `0` sem o gestor ter
+ * digitado nada; ver `updateSprintPerformanceAction`). Só limpar o campo
+ * manualmente também volta pro estado em branco, mesmo que `defaultValue`
+ * fosse um número.
  */
 export function MoneyInput({
   name,
@@ -16,11 +25,11 @@ export function MoneyInput({
   autoFocus,
 }: {
   name: string;
-  defaultValue: number;
+  defaultValue: number | null;
   autoFocus?: boolean;
 }) {
-  const [display, setDisplay] = useState(() => formatMoneyDisplay(defaultValue));
-  const numericValue = parseMoneyInput(display) ?? 0;
+  const [display, setDisplay] = useState(() => (defaultValue !== null ? formatMoneyDisplay(defaultValue) : ""));
+  const numericValue = display.trim() === "" ? null : (parseMoneyInput(display) ?? 0);
 
   return (
     <span className="inline-flex items-center gap-1">
@@ -30,11 +39,12 @@ export function MoneyInput({
         inputMode="decimal"
         value={display}
         onChange={(event) => setDisplay(event.target.value)}
-        onBlur={() => setDisplay(formatMoneyDisplay(numericValue))}
+        onBlur={() => setDisplay(numericValue !== null ? formatMoneyDisplay(numericValue) : "")}
+        placeholder="0,00"
         autoFocus={autoFocus}
         className="w-24 rounded-md border border-border px-2 py-1 text-xs text-foreground outline-none focus:border-zinc-500 dark:bg-zinc-900"
       />
-      <input type="hidden" name={name} value={numericValue} />
+      <input type="hidden" name={name} value={numericValue ?? ""} />
     </span>
   );
 }

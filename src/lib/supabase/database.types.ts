@@ -518,6 +518,7 @@ export interface Database {
           channel: TrafficChannelDb;
           result_type: PerformanceGoalDb;
           result_count: number;
+          revenue: number | null;
           period_start: string;
           period_end: string;
           source: PerformanceSourceDb;
@@ -533,6 +534,7 @@ export interface Database {
           channel: TrafficChannelDb;
           result_type: PerformanceGoalDb;
           result_count?: number;
+          revenue?: number | null;
           period_start: string;
           period_end: string;
           source?: PerformanceSourceDb;
@@ -548,6 +550,7 @@ export interface Database {
           channel?: TrafficChannelDb;
           result_type?: PerformanceGoalDb;
           result_count?: number;
+          revenue?: number | null;
           period_start?: string;
           period_end?: string;
           source?: PerformanceSourceDb;

@@ -31,7 +31,7 @@ import {
   type OperationClientRawData,
   type OperationTaskItem,
 } from "@/app/operation/operation-data";
-import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
+import { groupChannelSpendBySprintId, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-section";
 import { RecordAccountReviewDrawer } from "@/app/clients/record-account-review-drawer";
@@ -396,6 +396,17 @@ export default async function SprintsPage({
       manual_actual_spend: r.manual_actual_spend,
     })),
   );
+  // Mesma lista, agrupada por CLIENTE (não por sprint) — o pré-preenchimento
+  // do formulário de investimento (`buildEditableInvestmentValues`, dentro de
+  // `buildOperationClientCard`) precisa da lista bruta por cliente, mesmo
+  // padrão já usado pela Visão Geral (`page.tsx`).
+  const channelOverridesByClient = new Map<string, SprintChannelSpendOverrideRow[]>();
+  for (const o of channelSpendRows ?? []) {
+    const list = channelOverridesByClient.get(o.client_id) ?? [];
+    list.push({ sprintId: o.sprint_id, channel: o.channel, spend_source: o.spend_source, manual_actual_spend: o.manual_actual_spend });
+    channelOverridesByClient.set(o.client_id, list);
+  }
+
   const sprintsByClient = new Map<string, SprintRow[]>();
   for (const s of sprints ?? []) {
     const resolvedSprint: SprintRow = {
@@ -515,6 +526,7 @@ export default async function SprintsPage({
       performanceGoal: client.performance_goal,
       targetCostPerResult: client.target_cost_per_result,
       performanceRecords: performanceRecordsByClient.get(client.id) ?? [],
+      channelSpendOverrides: channelOverridesByClient.get(client.id) ?? [],
     };
   });
 

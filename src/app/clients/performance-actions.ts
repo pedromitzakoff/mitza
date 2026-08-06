@@ -16,12 +16,22 @@ function withError(returnTo: string, message: string): string {
 /**
  * "Atualizar performance" — ação única que substitui os antigos "Editar"
  * (investimento) e "Editar resultados" (por canal): um só submit grava
- * investimento realizado (`sprints.manual_actual_spend`) e o resultado de
- * cada canal presente no formulário (`performance_records`) — nenhuma fonte
- * de verdade nova, só as duas mesmas tabelas de sempre, na mesma transação
- * de UI. Um canal cujo campo ficou em branco é ignorado (nunca zera um
- * resultado que o gestor só não quis tocar agora). CPL/CPA continuam 100%
- * derivados — nenhum campo aqui os aceita diretamente.
+ * investimento realizado POR CANAL (`sprint_channel_spend`, fonte de verdade
+ * do investimento manual desde a adoção do multicanal — ver
+ * `resolveManualActualSpend`, lib/effective-spend.ts) e o resultado de cada
+ * canal presente no formulário (`performance_records`) — nenhuma fonte de
+ * verdade nova além dessas duas tabelas, na mesma transação de UI. Um campo
+ * (investimento OU resultado) que ficou em branco é ignorado — nunca zera um
+ * valor que o gestor só não quis tocar agora (mesma regra dos dois: o campo
+ * Meta de investimento nasce pré-preenchido com o valor efetivo atual —
+ * `resolveChannelManualActualSpendForEntry` — então mesmo um submit que só
+ * mexeu em resultados normalmente carrega Meta adiante sem apagar nada).
+ * `sprints.manual_actual_spend` PAROU de ser escrita aqui: o valor
+ * consolidado agora é sempre a soma das linhas por canal (regra de
+ * compatibilidade do Stage 2), nunca um valor solto desatualizado
+ * competindo com elas. CPL/CPA/receita continuam 100% derivados/opcionais —
+ * nenhum campo aqui aceita CPL/CPA diretamente, e receita nunca é estimada
+ * (só gravada quando o gestor efetivamente informa).
  *
  * Permissão: admin ou o gestor responsável por este cliente
  * (`requireClientManagerAccess`) — sem isso o gestor não conseguia
@@ -43,12 +53,19 @@ export async function updateSprintPerformanceAction(
 ) {
   await requireClientManagerAccess(clientId);
 
-  const actualSpend = Number(formData.get("actual_spend"));
-  if (!Number.isFinite(actualSpend) || actualSpend < 0) {
-    redirect(withError(returnTo, "Valor de investimento inválido"));
+  const investmentEntries: { channel: TrafficChannel; amount: number }[] = [];
+  for (const channel of AVAILABLE_TRAFFIC_CHANNELS) {
+    const raw = String(formData.get(`actual_spend_${channel}`) ?? "").trim();
+    if (!raw) continue; // em branco = gestor não tocou este canal agora
+
+    const amount = Number(raw);
+    if (!Number.isFinite(amount) || amount < 0) {
+      redirect(withError(returnTo, "Valor de investimento inválido"));
+    }
+    investmentEntries.push({ channel, amount });
   }
 
-  const channelEntries: { channel: TrafficChannel; resultCount: number }[] = [];
+  const channelEntries: { channel: TrafficChannel; resultCount: number; revenue?: number }[] = [];
   for (const channel of AVAILABLE_TRAFFIC_CHANNELS) {
     const raw = String(formData.get(`result_${channel}`) ?? "").trim();
     if (!raw) continue; // em branco = não alterar este canal agora
@@ -57,7 +74,20 @@ export async function updateSprintPerformanceAction(
     if (!Number.isFinite(resultCount) || resultCount < 0 || !Number.isInteger(resultCount)) {
       redirect(withError(returnTo, "Resultado inválido — informe um número inteiro maior ou igual a zero"));
     }
-    channelEntries.push({ channel, resultCount });
+
+    // Receita é sempre opcional — em branco não zera uma receita já
+    // registrada, só deixa de tocar a coluna neste upsert (nunca fabrica
+    // `0` de faturamento pra quem não informou nada).
+    const rawRevenue = String(formData.get(`revenue_${channel}`) ?? "").trim();
+    let revenue: number | undefined;
+    if (rawRevenue) {
+      revenue = Number(rawRevenue);
+      if (!Number.isFinite(revenue) || revenue < 0) {
+        redirect(withError(returnTo, "Receita inválida — informe um valor maior ou igual a zero"));
+      }
+    }
+
+    channelEntries.push({ channel, resultCount, ...(revenue !== undefined ? { revenue } : {}) });
   }
 
   const supabase = await createSupabaseClient();
@@ -76,13 +106,35 @@ export async function updateSprintPerformanceAction(
 
   const nowIso = new Date().toISOString();
 
-  const { error: spendError } = await supabase
-    .from("sprints")
-    .update({ spend_source: "manual", manual_actual_spend: actualSpend, manual_spend_updated_at: nowIso })
-    .eq("id", sprintId);
+  if (investmentEntries.length > 0) {
+    // `spend_source`/`manual_spend_updated_at` só mudam quando o gestor de
+    // fato informou algum investimento por canal neste submit — um submit
+    // que só lançou resultados não pode forçar a sprint pra modo manual sem
+    // nenhum valor de investimento acompanhando.
+    const { error: spendSourceError } = await supabase
+      .from("sprints")
+      .update({ spend_source: "manual", manual_spend_updated_at: nowIso })
+      .eq("id", sprintId);
 
-  if (spendError) {
-    redirect(withError(returnTo, toUserFacingError(spendError, "Não foi possível salvar o investimento.")));
+    if (spendSourceError) {
+      redirect(withError(returnTo, toUserFacingError(spendSourceError, "Não foi possível salvar o investimento.")));
+    }
+
+    const { error: channelSpendError } = await supabase.from("sprint_channel_spend").upsert(
+      investmentEntries.map(({ channel, amount }) => ({
+        client_id: clientId,
+        sprint_id: sprintId,
+        channel,
+        spend_source: "manual",
+        manual_actual_spend: amount,
+        updated_at: nowIso,
+      })),
+      { onConflict: "sprint_id,channel" },
+    );
+
+    if (channelSpendError) {
+      redirect(withError(returnTo, toUserFacingError(channelSpendError, "Não foi possível salvar o investimento por canal.")));
+    }
   }
 
   if (channelEntries.length > 0) {
@@ -93,12 +145,13 @@ export async function updateSprintPerformanceAction(
     }
 
     const { error: perfError } = await supabase.from("performance_records").upsert(
-      channelEntries.map(({ channel, resultCount }) => ({
+      channelEntries.map(({ channel, resultCount, revenue }) => ({
         client_id: clientId,
         sprint_id: sprintId,
         channel,
         result_type: client!.performance_goal as PerformanceGoalDb,
         result_count: resultCount,
+        ...(revenue !== undefined ? { revenue } : {}),
         period_start: sprint!.start_date,
         period_end: sprint!.end_date,
         source: "manual",

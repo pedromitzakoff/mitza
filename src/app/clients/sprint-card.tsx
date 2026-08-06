@@ -32,7 +32,16 @@ export interface SprintPerformanceProps {
   /** Valor já lançado de cada canal selecionável, pra pré-preencher
    * "Atualizar performance" — vazio quando `view.kind` não é `has_data`/`no_data`
    * (nada pra editar numa sprint futura). */
-  editableChannels: { channel: TrafficChannel; existingCount: number | null }[];
+  editableChannels: { channel: TrafficChannel; existingCount: number | null; existingRevenue: number | null }[];
+  /** Valor de investimento manual já lançado de cada canal selecionável
+   * (Google Ads manual multicanal), pra pré-preencher "Investimento · <canal>"
+   * no formulário de "Atualizar performance" — o campo Meta nasce
+   * pré-preenchido com o valor efetivo atual (legado migrado ou já por
+   * canal), nunca em branco, pra o primeiro lançamento multicanal nunca
+   * apagar Meta silenciosamente (ver `resolveChannelManualActualSpendForEntry`,
+   * lib/channel-spend.ts). Vazio quando `view.kind` não é `has_data`/`no_data`,
+   * mesmo padrão de `editableChannels`. */
+  editableInvestment: { channel: TrafficChannel; currentAmount: number | null }[];
   /** Objetivo de performance do CLIENTE (não da sprint) — separado de `view`
    * porque `view.kind === "not_started"` (sprint futura) não carrega o goal
    * mesmo quando ele já está configurado (ver `buildSprintPerformanceView`).
@@ -142,6 +151,61 @@ const EXECUTION_LABEL_CLASSES: Record<"atencao" | "critico" | "neutro", string> 
   atencao: "text-amber-600 dark:text-amber-400",
   critico: "text-red-600 dark:text-red-400",
 };
+
+/** Campos do formulário "Atualizar performance" — investimento por canal
+ * (Google Ads manual multicanal) + resultado/receita por canal — extraído
+ * pra `SprintPerformanceSection` (card completo) e `SprintPerformanceReportSection`
+ * (modo relatório) nunca duplicarem a mesma lista de campos com regras
+ * levemente diferentes. Receita é sempre opcional e só aparece pro objetivo
+ * "sales" (Vendas) — os demais objetivos (leads/seguidores) não têm noção de
+ * faturamento (ver `PerformanceRecordRow.revenue`, lib/performance.ts). */
+function SprintPerformanceFormFields({
+  editableInvestment,
+  editableChannels,
+  canEditResults,
+  performanceGoal,
+}: {
+  editableInvestment: { channel: TrafficChannel; currentAmount: number | null }[];
+  editableChannels: { channel: TrafficChannel; existingCount: number | null; existingRevenue: number | null }[];
+  canEditResults: boolean;
+  performanceGoal: PerformanceGoal | null;
+}) {
+  return (
+    <>
+      {editableInvestment.map(({ channel, currentAmount }) => (
+        <div key={`investment-${channel}`} className="flex flex-wrap items-center gap-1.5">
+          <span className="w-28 shrink-0 text-[11px] text-muted-foreground">
+            Investimento · {TRAFFIC_CHANNELS[channel].shortLabel}
+          </span>
+          <MoneyInput name={`actual_spend_${channel}`} defaultValue={currentAmount} autoFocus={channel === "meta"} />
+        </div>
+      ))}
+      {canEditResults &&
+        editableChannels.map(({ channel, existingCount, existingRevenue }) => (
+          <div key={`result-${channel}`} className="flex flex-wrap items-center gap-1.5">
+            <span className="w-28 shrink-0 text-[11px] text-muted-foreground">
+              Resultado · {TRAFFIC_CHANNELS[channel].shortLabel}
+            </span>
+            <input
+              type="number"
+              name={`result_${channel}`}
+              min={0}
+              step={1}
+              defaultValue={existingCount ?? ""}
+              placeholder="0"
+              className="w-20 rounded-md border border-border bg-transparent px-2 py-1 text-[11px] text-foreground outline-none focus:border-brand"
+            />
+            {performanceGoal === "sales" && (
+              <>
+                <span className="text-[11px] text-muted-foreground">Receita</span>
+                <MoneyInput name={`revenue_${channel}`} defaultValue={existingRevenue} />
+              </>
+            )}
+          </div>
+        ))}
+    </>
+  );
+}
 
 /**
  * "Performance da sprint" (Etapa 74) — substitui os antigos blocos separados
@@ -351,27 +415,12 @@ function SprintPerformanceSection({
           action={updateSprintPerformanceAction.bind(null, sprint.sprintId, clientId, returnTo)}
           className="mt-1.5 hidden flex-col gap-1.5 peer-checked:flex"
         >
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="w-28 shrink-0 text-[11px] text-muted-foreground">Investimento</span>
-            <MoneyInput name="actual_spend" defaultValue={sprint.actualSpend} autoFocus />
-          </div>
-          {canEditResults &&
-            editableChannels.map(({ channel, existingCount }) => (
-              <div key={channel} className="flex flex-wrap items-center gap-1.5">
-                <span className="w-28 shrink-0 text-[11px] text-muted-foreground">
-                  Resultado · {TRAFFIC_CHANNELS[channel].shortLabel}
-                </span>
-                <input
-                  type="number"
-                  name={`result_${channel}`}
-                  min={0}
-                  step={1}
-                  defaultValue={existingCount ?? ""}
-                  placeholder="0"
-                  className="w-20 rounded-md border border-border bg-transparent px-2 py-1 text-[11px] text-foreground outline-none focus:border-brand"
-                />
-              </div>
-            ))}
+          <SprintPerformanceFormFields
+            editableInvestment={performance?.editableInvestment ?? []}
+            editableChannels={editableChannels}
+            canEditResults={canEditResults}
+            performanceGoal={performanceGoal}
+          />
           <div className="flex items-center gap-1.5">
             <SubmitButton
               className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
@@ -484,6 +533,7 @@ function SprintPerformanceReportSection({
 }) {
   const view = performance?.view ?? { kind: "not_configured" as const };
   const editableChannels = performance?.editableChannels ?? [];
+  const performanceGoal = performance?.performanceGoal ?? null;
   const canEditResults = canEditPerformance && (view.kind === "has_data" || view.kind === "no_data") && editableChannels.length > 0;
   // "Meta · Sincronizado em ..."/"Manual · Atualizado em ..." — já é a
   // combinação origem+sincronização num texto só (`describeSpendSourceTimestamp`),
@@ -525,27 +575,12 @@ function SprintPerformanceReportSection({
           action={updateSprintPerformanceAction.bind(null, sprint.sprintId, clientId, returnTo)}
           className="mt-1.5 hidden flex-col gap-1.5 peer-checked:flex"
         >
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="w-28 shrink-0 text-[11px] text-muted-foreground">Investimento</span>
-            <MoneyInput name="actual_spend" defaultValue={sprint.actualSpend} autoFocus />
-          </div>
-          {canEditResults &&
-            editableChannels.map(({ channel, existingCount }) => (
-              <div key={channel} className="flex flex-wrap items-center gap-1.5">
-                <span className="w-28 shrink-0 text-[11px] text-muted-foreground">
-                  Resultado · {TRAFFIC_CHANNELS[channel].shortLabel}
-                </span>
-                <input
-                  type="number"
-                  name={`result_${channel}`}
-                  min={0}
-                  step={1}
-                  defaultValue={existingCount ?? ""}
-                  placeholder="0"
-                  className="w-20 rounded-md border border-border bg-transparent px-2 py-1 text-[11px] text-foreground outline-none focus:border-brand"
-                />
-              </div>
-            ))}
+          <SprintPerformanceFormFields
+            editableInvestment={performance?.editableInvestment ?? []}
+            editableChannels={editableChannels}
+            canEditResults={canEditResults}
+            performanceGoal={performanceGoal}
+          />
           <div className="flex items-center gap-1.5">
             <SubmitButton
               className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"

@@ -104,6 +104,49 @@ export function groupChannelSpendBySprintId(
   return map;
 }
 
+/**
+ * Valor manual ATUAL de UM canal específico, pra pré-popular o formulário de
+ * "Atualizar performance" — não confundir com `resolveSprintChannelActualSpend`
+ * (resolve sincronizado×manual pra EXIBIÇÃO). Regra: se já existe override
+ * explícito (`manual_actual_spend` não-nulo) pra este canal, usa ele. Senão,
+ * e SÓ pro canal "meta" quando a sprint ainda não tem NENHUM override
+ * explícito em NENHUM canal, cai pro valor legado (`sprints.manual_actual_spend`)
+ * — o legado sempre representou Meta (única plataforma manual antes desta
+ * etapa), então o campo "Investimento · Meta Ads" nasce pré-preenchido com
+ * ele. Isso é o que garante que o primeiro lançamento multicanal preserva o
+ * Meta existente (nunca some silenciosamente quando o gestor só quis
+ * adicionar Google): o campo Meta já vem com o valor certo, e ao salvar o
+ * formulário grava esse valor como override explícito. Qualquer outro canal
+ * sem override explícito nasce vazio (nunca "R$ 0,00" fabricado).
+ */
+export function resolveChannelManualActualSpendForEntry(
+  channel: TrafficChannel,
+  legacyManualActualSpend: number | null,
+  channelSpendRows: SprintChannelSpendOverrideRow[],
+): number | null {
+  const explicitForChannel = channelSpendRows.find((r) => r.channel === channel && r.manual_actual_spend !== null);
+  if (explicitForChannel) return explicitForChannel.manual_actual_spend;
+
+  const hasAnyExplicitChannel = channelSpendRows.some((r) => r.manual_actual_spend !== null);
+  if (!hasAnyExplicitChannel && channel === "meta") return legacyManualActualSpend;
+
+  return null;
+}
+
+/** Versão em lote de `resolveChannelManualActualSpendForEntry` pros canais
+ * selecionáveis de UMA sprint — pré-preenche cada campo "Investimento ·
+ * <canal>" do formulário, sem repetir a busca canal a canal. */
+export function buildEditableInvestmentValues(
+  channels: TrafficChannel[],
+  legacyManualActualSpend: number | null,
+  channelSpendRows: SprintChannelSpendOverrideRow[],
+): { channel: TrafficChannel; currentAmount: number | null }[] {
+  return channels.map((channel) => ({
+    channel,
+    currentAmount: resolveChannelManualActualSpendForEntry(channel, legacyManualActualSpend, channelSpendRows),
+  }));
+}
+
 /** Quais canais um cliente efetivamente usa, inferido pelos dados que já
  * existem (nunca por um campo de configuração) — `daily_spend` sincronizado
  * ou override manual em `sprint_channel_spend` contam como "usa este

@@ -44,6 +44,7 @@ import {
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import {
+  buildEditableInvestmentValues,
   groupChannelSpendBySprintId,
   inferClientChannels,
   sumChannelEffectiveSpend,
@@ -220,7 +221,17 @@ export interface OperationClientCard {
   sprintPerformanceViews: Record<string, SprintPerformanceView>;
   /** Valores já lançados por canal de cada sprint, por sprintId — pré-
    * preenche "Editar resultados" sem recalcular na tela. */
-  sprintPerformanceEditableChannels: Record<string, { channel: TrafficChannel; existingCount: number | null }[]>;
+  sprintPerformanceEditableChannels: Record<
+    string,
+    { channel: TrafficChannel; existingCount: number | null; existingRevenue: number | null }[]
+  >;
+  /** Investimento manual ATUAL de cada canal selecionável de cada sprint,
+   * por sprintId — pré-preenche "Investimento · <canal>" (ver
+   * `resolveChannelManualActualSpendForEntry`, lib/channel-spend.ts). O
+   * campo Meta Ads nasce com o valor legado quando a sprint ainda não tem
+   * nenhum override explícito — é o que garante que o primeiro lançamento
+   * multicanal preserva Meta em vez de apagá-lo silenciosamente. */
+  sprintPerformanceEditableInvestment: Record<string, { channel: TrafficChannel; currentAmount: number | null }[]>;
   /** Realizado do mês de CADA canal disponível (Etapa 3 — filtro de
    * plataforma na Visão Geral), calculado da mesma fonte de verdade que
    * `monthActual` (Etapa 2 — `lib/channel-spend.ts`), nunca uma segunda
@@ -249,6 +260,7 @@ export function buildSprintPerformanceProps(card: OperationClientCard, sprintId:
   return {
     view: card.sprintPerformanceViews[sprintId] ?? { kind: "not_configured" },
     editableChannels: card.sprintPerformanceEditableChannels[sprintId] ?? [],
+    editableInvestment: card.sprintPerformanceEditableInvestment[sprintId] ?? [],
     performanceGoal: card.performanceGoal,
   };
 }
@@ -277,6 +289,12 @@ export function buildOperationClientCard(
     ...sprint,
     manual_actual_spend: resolveManualActualSpend(sprint.manual_actual_spend, channelSpendBySprintId.get(sprint.id) ?? []),
   }));
+  // Valor LEGADO original (não o resolvido acima) — precisa continuar
+  // acessível pra pré-preencher "Investimento · Meta Ads" no formulário
+  // (ver `sprintPerformanceEditableInvestment` abaixo): o legado só conta
+  // como fallback de Meta quando a sprint ainda não tem nenhum override
+  // explícito, e essa distinção se perde depois de resolvido pro consolidado.
+  const legacyManualActualSpendBySprintId = new Map(client.sprints.map((sprint) => [sprint.id, sprint.manual_actual_spend]));
 
   const currentSprintRow = sprints.find(
     (s) => s.start_date <= todayStr && s.end_date >= todayStr,
@@ -426,7 +444,11 @@ export function buildOperationClientCard(
       })).filter((entry) => entry.resultCount > 0)
     : [];
   const sprintPerformanceViews: Record<string, SprintPerformanceView> = {};
-  const sprintPerformanceEditableChannels: Record<string, { channel: TrafficChannel; existingCount: number | null }[]> = {};
+  const sprintPerformanceEditableChannels: Record<
+    string,
+    { channel: TrafficChannel; existingCount: number | null; existingRevenue: number | null }[]
+  > = {};
+  const sprintPerformanceEditableInvestment: Record<string, { channel: TrafficChannel; currentAmount: number | null }[]> = {};
   for (const row of monthSprintRows) {
     const sprintRecords = performanceRecords.filter((r) => r.sprintId === row.id);
     const sprintFinancial = monthSprints.find((s) => s.sprintId === row.id);
@@ -441,6 +463,11 @@ export function buildOperationClientCard(
     sprintPerformanceEditableChannels[row.id] = performanceGoal
       ? buildEditableChannelValues(sprintRecords, performanceGoal, AVAILABLE_TRAFFIC_CHANNELS)
       : [];
+    sprintPerformanceEditableInvestment[row.id] = buildEditableInvestmentValues(
+      AVAILABLE_TRAFFIC_CHANNELS,
+      legacyManualActualSpendBySprintId.get(row.id) ?? null,
+      channelSpendBySprintId.get(row.id) ?? [],
+    );
   }
 
   const taskCounts = { total: 0, done: 0, pending: 0, overdue: 0 };
@@ -554,6 +581,7 @@ export function buildOperationClientCard(
     monthPerformanceChannelBreakdown,
     sprintPerformanceViews,
     sprintPerformanceEditableChannels,
+    sprintPerformanceEditableInvestment,
     monthActualByChannel,
     clientUsesChannel,
     monthPerformanceSummaryByChannel,

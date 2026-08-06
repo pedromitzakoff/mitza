@@ -14,11 +14,12 @@ import type { TrafficChannel } from "./traffic-channels";
 export type PerformanceSource = "manual" | "meta" | "google";
 
 /** Uma linha de `performance_records`/`daily_performance` já buscada do
- * banco — resultado de UM canal, UM tipo, UM período. `revenue` só é
- * populado quando a linha vier de `daily_performance` de um cliente com
- * objetivo de vendas E `metric_mappings.value_column` configurado — `null`
- * em qualquer outro caso (leads/seguidores, ou fluxo manual, que não tem
- * essa coluna). */
+ * banco — resultado de UM canal, UM tipo, UM período. `revenue` é populado
+ * quando a linha vier de `daily_performance` de um cliente com objetivo de
+ * vendas E `metric_mappings.value_column` configurado, OU quando vier de
+ * `performance_records` (manual) e o gestor tiver informado a receita —
+ * `null` em qualquer outro caso (nunca fabricada/estimada, ver
+ * `performance_records.revenue`). */
 export interface PerformanceRecordRow {
   channel: TrafficChannel;
   resultType: PerformanceGoal;
@@ -395,15 +396,17 @@ export function buildSprintPerformanceView(input: {
  * do cliente — pré-preenche o formulário de "Editar resultados" (seção 28)
  * sem duplicar a lógica de busca em cada tela que precisar dele. `null` =
  * canal nunca teve um lançamento pra esta sprint (input nasce vazio, nunca
- * "0" fabricado). */
+ * "0"/"R$ 0,00" fabricado). `existingRevenue` (Google manual — receita
+ * opcional) segue a mesma regra: só populado quando o registro existente
+ * já tinha receita informada. */
 export function buildEditableChannelValues(
   records: PerformanceRecordRow[],
   resultType: PerformanceGoal,
   channels: TrafficChannel[],
-): { channel: TrafficChannel; existingCount: number | null }[] {
+): { channel: TrafficChannel; existingCount: number | null; existingRevenue: number | null }[] {
   return channels.map((channel) => {
     const match = records.find((r) => r.channel === channel && r.resultType === resultType);
-    return { channel, existingCount: match ? match.resultCount : null };
+    return { channel, existingCount: match ? match.resultCount : null, existingRevenue: match?.revenue ?? null };
   });
 }
 

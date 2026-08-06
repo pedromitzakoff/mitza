@@ -32,13 +32,14 @@ export async function getPerformanceRecordsForSprint(
 ): Promise<PerformanceRecordRow[]> {
   const { data } = await supabase
     .from("performance_records")
-    .select("channel, result_type, result_count, source, source_updated_at")
+    .select("channel, result_type, result_count, revenue, source, source_updated_at")
     .eq("sprint_id", sprintId);
 
   return (data ?? []).map((r) => ({
     channel: r.channel,
     resultType: r.result_type,
     resultCount: r.result_count,
+    revenue: r.revenue,
     source: r.source,
     sourceUpdatedAt: r.source_updated_at,
   }));
@@ -224,13 +225,14 @@ export async function getPerformanceRecordsForPeriod(
 
   const { data } = await supabase
     .from("performance_records")
-    .select("channel, result_type, result_count, source, source_updated_at")
+    .select("channel, result_type, result_count, revenue, source, source_updated_at")
     .in("sprint_id", sprintIds);
 
   return (data ?? []).map((r) => ({
     channel: r.channel,
     resultType: r.result_type,
     resultCount: r.result_count,
+    revenue: r.revenue,
     source: r.source,
     sourceUpdatedAt: r.source_updated_at,
   }));
@@ -242,9 +244,10 @@ export interface RawPerformanceRow {
   channel: TrafficChannelDb;
   result_type: PerformanceGoalDb;
   result_count: number;
-  /** `null` pra qualquer linha de `performance_records` (fluxo manual, sem
-   * essa coluna) — só populado quando vier de `daily_performance` de um
-   * cliente com `value_column` configurado. */
+  /** Populado quando vier de `daily_performance` de um cliente com
+   * `value_column` configurado, OU de `performance_records` (manual) quando
+   * o gestor informou a receita — `null` em qualquer outro caso (nunca
+   * fabricada/estimada). */
   revenue: number | null;
   source: PerformanceSourceDb;
   source_updated_at: string;
@@ -282,7 +285,7 @@ export async function resolvePerformanceRowsForSprints(
       ? requireQuery(
           supabase
             .from("performance_records")
-            .select("client_id, sprint_id, channel, result_type, result_count, source, source_updated_at")
+            .select("client_id, sprint_id, channel, result_type, result_count, revenue, source, source_updated_at")
             .in("sprint_id", manualSprintIds),
           "performance_records:resolved",
         )
@@ -324,9 +327,5 @@ export async function resolvePerformanceRowsForSprints(
     }
   }
 
-  // `performance_records` (manual) nunca tem receita — `revenue: null`
-  // sempre, nunca fabricado.
-  const manualRowsWithRevenue: RawPerformanceRow[] = manualRows.map((r) => ({ ...r, revenue: null }));
-
-  return [...manualRowsWithRevenue, ...importRows];
+  return [...manualRows, ...importRows];
 }
