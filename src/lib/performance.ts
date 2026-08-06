@@ -1,5 +1,5 @@
 import { PERFORMANCE_GOALS, formatPerformanceResult, type PerformanceGoal } from "./performance-goals";
-import type { TrafficChannel } from "./traffic-channels";
+import type { TrafficChannel, ChannelScope } from "./traffic-channels";
 
 /**
  * Núcleo puro da camada de PERFORMANCE (Etapa 71) — consome os valores
@@ -251,8 +251,14 @@ export function isCostAboveTargetPriority(
  * de um único canal: por isso, mesmo agora, um escopo não-consolidado sem
  * entrada correspondente em `channelActualSpend` (cliente sem essa
  * plataforma configurada/sem dado) continua devolvendo `null`, nunca um
- * fallback pro valor consolidado. */
-export type PerformanceChannelScope = "consolidated" | TrafficChannel;
+ * fallback pro valor consolidado.
+ *
+ * Etapa "Arquitetura Multicanal Unificada": alias de `ChannelScope`
+ * (lib/traffic-channels.ts) — o tipo em si passou a viver lá (é o mesmo
+ * conceito de `VisaoGeralMetricsChannel`), nenhuma tela deveria mais
+ * reinventar este union por conta própria. Mantido como alias aqui pra não
+ * quebrar nenhum import existente. */
+export type PerformanceChannelScope = ChannelScope;
 
 export function resolveActualSpendForScope(
   scope: PerformanceChannelScope,

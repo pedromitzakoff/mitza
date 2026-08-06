@@ -41,3 +41,10 @@ export const AVAILABLE_TRAFFIC_CHANNELS: TrafficChannel[] = ["meta", "google"];
 export function getTrafficChannelConfig(channel: TrafficChannel): TrafficChannelConfig {
   return TRAFFIC_CHANNELS[channel];
 }
+
+/** Escopo canônico "consolidado ou um canal só" — Etapa "Arquitetura
+ * Multicanal Unificada": único tipo pra essa distinção na plataforma inteira
+ * (antes duplicado como `PerformanceChannelScope` em lib/performance.ts e
+ * `VisaoGeralMetricsChannel` em visao-geral-channel-switch.tsx, cada um
+ * reinventando o mesmo union — os dois viraram aliases deste). */
+export type ChannelScope = "consolidated" | TrafficChannel;

@@ -1,7 +1,11 @@
 import Link from "next/link";
-import { AVAILABLE_TRAFFIC_CHANNELS, TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+import { AVAILABLE_TRAFFIC_CHANNELS, TRAFFIC_CHANNELS, type ChannelScope } from "@/lib/traffic-channels";
 
-export type VisaoGeralMetricsChannel = "consolidated" | TrafficChannel;
+/** Etapa "Arquitetura Multicanal Unificada": alias de `ChannelScope`
+ * (lib/traffic-channels.ts) — nenhuma tela deveria mais reinventar este
+ * union por conta própria (era duplicado com `PerformanceChannelScope`).
+ * Mantido como alias aqui pra não quebrar nenhum import existente. */
+export type VisaoGeralMetricsChannel = ChannelScope;
 
 /**
  * Seletor "Consolidado | Meta Ads | Google Ads" da aba Visão Geral — pedido
