@@ -41,6 +41,16 @@ export function formatShortDate(value: string): string {
   return dayMonthFormatter.format(new Date(`${value}T00:00:00Z`));
 }
 
+const dayShortMonthFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", timeZone: "UTC" });
+
+/** Dia + mês abreviado, sem ano, sem ponto (ex.: "21 ago") — mesmo padrão
+ * de `formatSprintPeriodLabel` (lib/sprint-week.ts), extraído aqui pra ser
+ * reaproveitado por qualquer tela (Etapa "Horizonte de Planejamento": rótulo
+ * "Período de planejamento"/badge "Evento · até 21 ago"). */
+export function formatDayShortMonth(value: string): string {
+  return dayShortMonthFormatter.format(new Date(`${value}T00:00:00Z`)).replace(/\.$/, "");
+}
+
 const dayMonthYearFormatter = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",

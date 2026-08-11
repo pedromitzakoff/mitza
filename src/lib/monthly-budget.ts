@@ -51,7 +51,40 @@ export function getEligibleRedistributionDates(
   };
 }
 
-export const CLOSED_MONTH_MESSAGE = "Mês encerrado. O orçamento histórico não pode ser alterado por este fluxo.";
+export const CLOSED_MONTH_MESSAGE = "Período de planejamento encerrado. O investimento histórico não pode ser alterado por este fluxo.";
+
+/**
+ * Etapa "Horizonte de Planejamento": `effectivePlanningEnd = min(fim do mês,
+ * planning_end_date)` — a ÚNICA função da plataforma que sabe que
+ * `client_month_horizons` existe. Todo o resto (ritmo, dias restantes,
+ * redistribuição, recomendações, status de saúde) continua recebendo só um
+ * `{ firstDay, lastDay }` comum, exatamente como recebia de `monthRange`
+ * antes desta etapa — nenhuma função downstream pergunta "esse cliente é
+ * evento?", nenhuma sabe que esse conceito existe.
+ *
+ * `monthRange` (calendário puro, mês inteiro) continua sendo a fonte pra
+ * QUERIES — filtrar `daily_spend`/`sprints`/histórico do mês nunca encurta
+ * por causa de um horizonte menor, dado histórico nunca é apagado/ocultado.
+ * Só os cálculos OPERACIONAIS (a lista em `docs`/na etapa: esperado até
+ * hoje, dias restantes, ritmo, saldo, redistribuição, recomendações) usam o
+ * valor devolvido aqui em vez de `monthRange` diretamente.
+ *
+ * `planningEndDate` nulo (todo cliente sem horizonte configurado, o padrão)
+ * devolve `monthRange` inalterado — compatibilidade total, byte a byte, com
+ * o comportamento de antes desta etapa. `planningEndDate` igual ou posterior
+ * ao fim do mês também devolve o fim do mês (nunca estica o horizonte além
+ * do mês civil — um evento no dia 31 é matematicamente idêntico a um
+ * cliente normal, nunca um caso especial).
+ */
+export function resolvePlanningHorizon(
+  monthRange: { firstDay: string; lastDay: string },
+  planningEndDate: string | null,
+): { firstDay: string; lastDay: string } {
+  if (!planningEndDate || planningEndDate >= monthRange.lastDay) {
+    return monthRange;
+  }
+  return { firstDay: monthRange.firstDay, lastDay: planningEndDate };
+}
 
 /**
  * Data de efeito (corte histórico/elegível) pra uma alteração de orçamento:
@@ -60,7 +93,10 @@ export const CLOSED_MONTH_MESSAGE = "Mês encerrado. O orçamento histórico nã
  * futuro saem elegíveis, sem precisar de caso especial na redistribuição);
  * mês já encerrado (último dia < hoje) não tem data de efeito — bloqueado
  * por este fluxo (não existe "quanto ainda pode ser investido" num mês que
- * já acabou).
+ * já acabou). Chamada com `planningHorizon` (não `monthRange` cru) por quem
+ * já resolveu o horizonte do cliente — pra cliente de evento, "mês
+ * encerrado" passa a significar "depois do dia do evento", não só "depois
+ * do dia 31".
  */
 export function resolveBudgetEffectiveDate(
   monthRange: { firstDay: string; lastDay: string },

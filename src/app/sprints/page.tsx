@@ -16,7 +16,8 @@ import {
 } from "@/lib/sprint-financials";
 import { formatMonthLabel } from "@/lib/format";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
-import { getMonthTemporalStatus, resolveMonthlyBudget } from "@/lib/monthly-budget";
+import { getMonthTemporalStatus, resolveMonthlyBudget, resolvePlanningHorizon } from "@/lib/monthly-budget";
+import { getClientMonthHorizons } from "@/lib/client-month-horizons";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import type { SprintClosedSnapshot } from "@/lib/sprint-recommendation";
 import {
@@ -217,6 +218,10 @@ export default async function SprintsPage({
   perfLog("sprints bloco 1 (clients/team_members/sprints/daily_spend/tasks/allocations/budget)", __perfBlock1Start);
 
   const clientIds = clients.map((c) => c.id);
+  // Etapa "Horizonte de Planejamento": clientes de evento (campanha que
+  // termina antes do fim do mês) — mapa vazio pra quem não tem nenhum,
+  // comportamento idêntico a antes desta etapa.
+  const monthHorizonsByClient = await getClientMonthHorizons(supabase, clientIds, monthRange.firstDay);
   const allSprintIds = sprints.map((s) => s.id);
   const currentSprintIds = sprints
     .filter((s) => isDateWithinPeriod(todayStr, s.start_date, s.end_date))
@@ -491,10 +496,14 @@ export default async function SprintsPage({
         clientBudgetChanges,
         sumPlannedForMonth(clientPlannedAllocations, monthRange),
       );
+      // Etapa "Horizonte de Planejamento": o congelamento de sprint fechada
+      // (planejamento original/recomendação) usa o horizonte OPERACIONAL do
+      // cliente, não o mês civil cru — cliente sem horizonte configurado
+      // continua idêntico (resolvePlanningHorizon devolve monthRange).
       const snapshots = await ensureClosedSprintSnapshots(supabase, {
         clientId: client.id,
         today,
-        monthRange,
+        monthRange: resolvePlanningHorizon(monthRange, monthHorizonsByClient.get(client.id) ?? null),
         sprints: sprintsByClient.get(client.id) ?? [],
         dailySpend: dailySpendByClient.get(client.id) ?? [],
         budgetChanges: clientBudgetChanges,
@@ -534,7 +543,9 @@ export default async function SprintsPage({
     };
   });
 
-  const allCards = rawClients.map((client) => buildOperationClientCard(client, today, monthRange));
+  const allCards = rawClients.map((client) =>
+    buildOperationClientCard(client, today, monthRange, resolvePlanningHorizon(monthRange, monthHorizonsByClient.get(client.id) ?? null)),
+  );
 
   const clientOptions = [...allCards]
     .map((card) => ({ id: card.clientId, name: card.clientName }))

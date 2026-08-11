@@ -274,6 +274,14 @@ export function buildOperationClientCard(
   client: OperationClientRawData,
   today: Date,
   monthRange?: { firstDay: string; lastDay: string },
+  /** Etapa "Horizonte de Planejamento": intervalo OPERACIONAL do cliente
+   * (`resolvePlanningHorizon`, já resolvido por quem chama) — usado só nos
+   * cálculos de ritmo/redistribuição/recomendação abaixo. `monthRange`
+   * continua sendo o mês CIVIL inteiro, usado pra decidir quais
+   * tarefas/sprints pertencem ao mês (nunca encurtado — sprint/tarefa depois
+   * do horizonte continua aparecendo normalmente, só sem verba nova). Omitido
+   * = idêntico a `monthRange` (cliente sem horizonte configurado). */
+  planningHorizon?: { firstDay: string; lastDay: string },
 ): OperationClientCard {
   const todayStr = today.toISOString().slice(0, 10);
   const { firstDay, lastDay } = monthRange ?? currentMonthRange(today);
@@ -319,8 +327,11 @@ export function buildOperationClientCard(
     .filter((s) => s.start_date <= lastDay && s.end_date >= firstDay)
     .sort((a, b) => a.start_date.localeCompare(b.start_date));
   const monthRangeArg = { firstDay, lastDay };
+  const operationalRange = planningHorizon ?? monthRangeArg;
   // Etapa 66: orçamento mensal VIGENTE — nunca mais a soma dos planejamentos
-  // diários persistidos (ver `resolveMonthlyBudget`).
+  // diários persistidos (ver `resolveMonthlyBudget`). `monthRangeArg`
+  // (calendário) de propósito aqui, não `operationalRange`: soma de dado
+  // real/histórico nunca encurta pelo horizonte.
   const monthPlanned = resolveMonthlyBudget(
     client.monthlyBudgetChanges,
     sumPlannedForMonth(client.plannedAllocations, monthRangeArg),
@@ -328,8 +339,10 @@ export function buildOperationClientCard(
   const monthActual = sumActualSpendForMonth(monthSprintRows, monthRangeArg, client.dailySpend);
   // Etapa 67: "esperado até hoje" nunca mais soma sprint_planned_allocations
   // — é só o avanço do calendário do mês aplicado ao orçamento vigente,
-  // independente de sprints/planejamentos antigos.
-  const monthExpectedToDate = computeMonthlyExpectedToDateByCalendar(monthPlanned, monthRangeArg, todayStr).expectedToDate;
+  // independente de sprints/planejamentos antigos. Etapa "Horizonte de
+  // Planejamento": `operationalRange`, não `monthRangeArg` — cliente de
+  // evento avança proporcionalmente aos dias da campanha, não do mês inteiro.
+  const monthExpectedToDate = computeMonthlyExpectedToDateByCalendar(monthPlanned, operationalRange, todayStr).expectedToDate;
   // Ritmo do mês: sempre realizado x esperado até hoje (nunca x 100% do
   // planejado antes do mês acabar — clientes no início do mês não podem
   // aparecer "abaixo do ritmo" só por ainda não terem gastado o mês
@@ -341,13 +354,15 @@ export function buildOperationClientCard(
   });
   // Etapa 66: mesmo planejamento restante por sprint mostrado na página do
   // cliente — `null` quando o mês está encerrado (sem "restante" possível).
-  const { effectiveDate: monthEffectiveDate } = resolveBudgetEffectiveDate(monthRangeArg, todayStr);
+  // Etapa "Horizonte de Planejamento": `operationalRange` — pra cliente de
+  // evento, "encerrado" passa a significar "depois do dia do evento".
+  const { effectiveDate: monthEffectiveDate } = resolveBudgetEffectiveDate(operationalRange, todayStr);
   const monthSprintPlans: Record<string, { remainingPlanned: number; eligibleDaysCount: number }> | null = monthEffectiveDate
     ? Object.fromEntries(
         computeMonthlyBudgetPlan({
           monthlyBudget: monthPlanned,
           monthActual,
-          monthRange: monthRangeArg,
+          monthRange: operationalRange,
           effectiveDate: monthEffectiveDate,
           sprints: monthSprintRows.map((row) => ({ sprintId: row.id, startDate: row.start_date, endDate: row.end_date })),
         }).sprintPlans,
@@ -356,11 +371,14 @@ export function buildOperationClientCard(
   // Etapa 70 — planejamento original: congelado (`sprintClosedSnapshots`,
   // já resolvido por quem chama antes de invocar esta função pura) pra
   // sprint concluída; recalculado ao vivo pra atual/futura — nunca a mesma
-  // fórmula pras duas (ver `computeOriginalSprintPlans`).
+  // fórmula pras duas (ver `computeOriginalSprintPlans`). `operationalRange`:
+  // a partição de dias nunca passa do horizonte, mesmo com sprints do
+  // calendário inteiro na lista (`monthSprintRows`, abaixo, continua com
+  // TODAS as sprints do mês — sprint depois do horizonte só recebe 0).
   const closedSnapshots = client.sprintClosedSnapshots ?? new Map<string, SprintClosedSnapshot>();
   const liveOriginalPlans = computeOriginalSprintPlans(
     monthPlanned,
-    monthRangeArg,
+    operationalRange,
     monthSprintRows.map((row) => ({ sprintId: row.id, startDate: row.start_date, endDate: row.end_date })),
   );
   const monthSprintOriginalPlans: Record<string, number> = {};

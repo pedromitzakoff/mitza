@@ -2230,6 +2230,41 @@ export interface Database {
           },
         ];
       };
+      client_month_horizons: {
+        Row: {
+          id: string;
+          client_id: string;
+          month: string;
+          planning_end_date: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          month: string;
+          planning_end_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          month?: string;
+          planning_end_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_month_horizons_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       monthly_budget_changes: {
         Row: {
           id: string;

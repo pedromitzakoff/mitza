@@ -11,6 +11,7 @@ import {
   computeMonthlyExpectedPct,
   computeMonthlyExpectedToDateByCalendar,
   resolveMonthlyPlanSnapshot,
+  resolvePlanningHorizon,
   type MonthlyPlanChange,
 } from "@/lib/monthly-budget";
 import { evaluateAccountHealth, type AccountHealthInput } from "@/lib/account-health-engine";
@@ -49,7 +50,6 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
 
   const monthRange = monthRangeFromOperationParam(monthParam);
   const { firstDay: monthStart, lastDay: monthEnd } = monthRange;
-  const monthExpectedPct = computeMonthlyExpectedPct(monthRange, todayStr);
 
   const [
     clients,
@@ -62,6 +62,7 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
     reviewCadences,
     activeImportSources,
     channelSpendRows,
+    monthHorizons,
   ] = await Promise.all([
       requireQuery(
         supabase
@@ -139,7 +140,16 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
         supabase.from("sprint_channel_spend").select("sprint_id, channel, spend_source, manual_actual_spend"),
         "sprint_channel_spend",
       ),
+      // Etapa "Horizonte de Planejamento": clientes de evento (campanha que
+      // termina antes do fim do mês) — sem filtro de cliente (mesmo padrão
+      // de `monthly_budget_changes` acima), resolvido por cliente abaixo.
+      requireQuery(
+        supabase.from("client_month_horizons").select("client_id, planning_end_date").eq("month", monthRange.firstDay),
+        "client_month_horizons",
+      ),
     ]);
+
+  const monthHorizonByClient = new Map(monthHorizons.map((row) => [row.client_id, row.planning_end_date]));
 
   const sprintsByClient = new Map<string, typeof sprints>();
   const sprintIdToClientId = new Map<string, string>();
@@ -277,6 +287,15 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
     const managerId = client.primary_manager?.id ?? null;
     const managerName = client.primary_manager?.name ?? null;
 
+    // Etapa "Horizonte de Planejamento": cliente de evento (campanha que
+    // termina antes do fim do mês) — o "esperado até hoje" da Saúde da
+    // Conta passa a avançar proporcionalmente aos dias da campanha, nunca
+    // do mês inteiro. Cliente sem horizonte configurado (o padrão) recebe
+    // `monthRange` inalterado — `monthExpectedPct` idêntico a antes desta
+    // etapa.
+    const clientHorizon = resolvePlanningHorizon(monthRange, monthHorizonByClient.get(client.id) ?? null);
+    const monthExpectedPct = computeMonthlyExpectedPct(clientHorizon, todayStr);
+
     const clientSprints: SprintSpendSource[] = (sprintsByClient.get(client.id) ?? []).map((sprint) => ({
       startDate: sprint.start_date,
       endDate: sprint.end_date,
@@ -341,7 +360,7 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
     // fabricado.
     const investmentExpectedToDate =
       plan.investmentPlanned !== null
-        ? computeMonthlyExpectedToDateByCalendar(plan.investmentPlanned, monthRange, todayStr).expectedToDate
+        ? computeMonthlyExpectedToDateByCalendar(plan.investmentPlanned, clientHorizon, todayStr).expectedToDate
         : null;
 
     // Atividade: "alguém agiu nesta conta" — o mais recente entre uma

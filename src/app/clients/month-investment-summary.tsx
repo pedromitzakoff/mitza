@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatCurrency, formatPercent } from "@/lib/format";
+import { formatCurrency, formatPercent, formatDayShortMonth } from "@/lib/format";
 import type { SpendStatus } from "@/lib/spend-status";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
 import {
@@ -118,6 +118,8 @@ export function MonthInvestmentSummary({
   performanceGoal,
   channels,
   byChannel,
+  calendarMonthRange,
+  currentPlanningEndDate,
 }: {
   /** Orçamento mensal VIGENTE (Etapa 66) — sempre `resolveMonthlyBudget`,
    * nunca a soma dos planejamentos diários persistidos. */
@@ -146,6 +148,12 @@ export function MonthInvestmentSummary({
    * nunca recalculados aqui (este componente só mostra o consolidado). */
   channels: TrafficChannel[];
   byChannel: Partial<Record<TrafficChannel, ChannelMetrics>>;
+  /** Etapa "Horizonte de Planejamento": mês CIVIL inteiro (nunca o horizonte
+   * já encurtado, que é o que `monthRange` acima passou a ser) — só pro
+   * `ChannelPlanEditor` montar o seletor de data e o rótulo "Período de
+   * planejamento". */
+  calendarMonthRange: { firstDay: string; lastDay: string };
+  currentPlanningEndDate: string | null;
 }) {
   // A barra (sem marcador) ainda usa o formato central `FinancialPeriodSummary`
   // só pra decidir preenchimento/estouro — nenhum outro campo dele (status,
@@ -218,6 +226,16 @@ export function MonthInvestmentSummary({
 
   return (
     <div className="rounded-lg border border-border bg-card p-3">
+      {/* Etapa "Horizonte de Planejamento": sinalização discreta — impede o
+          gestor de olhar um cliente de evento e achar que ainda existem
+          dias de operação até o fim do mês, quando a campanha já terminou
+          antes disso (ex.: Baile do Hawaii, evento 21/08 — não sobra
+          "atraso" pra investir entre 22 e 31/08). */}
+      {currentPlanningEndDate && (
+        <p className="mb-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+          Evento · até {formatDayShortMonth(currentPlanningEndDate)}
+        </p>
+      )}
       {/* Etapa "Card de ritmo do orçamento": o valor investido/planejado
           saiu daqui — o resumo superior (`MonthlyKpiSummary`) já mostra
           esse mesmo número, e repeti-lo aqui era a duplicação que esta
@@ -399,6 +417,8 @@ export function MonthInvestmentSummary({
                   clientId={clientId}
                   monthParam={monthParam}
                   monthLabel={monthLabel}
+                  monthRange={calendarMonthRange}
+                  currentPlanningEndDate={currentPlanningEndDate}
                   channels={channels}
                   byChannel={byChannel}
                   performanceGoal={performanceGoal}

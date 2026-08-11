@@ -5,7 +5,9 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { todayUTC, todayDateString } from "@/lib/today";
 import { currentMonthRange, findSprintForDate, isDateWithinPeriod } from "@/lib/sprint-financials";
-import { computeMonthProjection } from "@/lib/client-metrics";
+import { computeMonthProjectionForRange } from "@/lib/client-metrics";
+import { resolvePlanningHorizon } from "@/lib/monthly-budget";
+import { getClientMonthHorizons } from "@/lib/client-month-horizons";
 import { formatCurrency, formatRelationshipDuration } from "@/lib/format";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
 import type { ClientContractStatus } from "@/lib/supabase/database.types";
@@ -112,7 +114,7 @@ export default async function ClientsPage({
     .filter((s) => isDateWithinPeriod(todayStr, s.start_date, s.end_date))
     .map((s) => s.id);
 
-  const [clientActivity, sprintActivity, lastReviews] = await Promise.all([
+  const [clientActivity, sprintActivity, lastReviews, monthHorizonsByClient] = await Promise.all([
     clientIds.length > 0
       ? requireQuery(
           supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds),
@@ -142,6 +144,10 @@ export default async function ClientsPage({
           "account_reviews",
         )
       : Promise.resolve([]),
+    // Etapa "Horizonte de Planejamento": clientes de evento (campanha que
+    // termina antes do fim do mês) — mapa vazio pra quem não tem nenhum,
+    // comportamento idêntico a antes desta etapa.
+    getClientMonthHorizons(supabase, clientIds, currentMonthRange(today).firstDay),
   ]);
   const lastReviewAtByClient = new Map<string, string>();
   for (const row of lastReviews) {
@@ -239,7 +245,10 @@ export default async function ClientsPage({
     };
   });
 
-  let cards = rawClients.map((client) => buildOperationClientCard(client, today));
+  const currentRange = currentMonthRange(today);
+  let cards = rawClients.map((client) =>
+    buildOperationClientCard(client, today, currentRange, resolvePlanningHorizon(currentRange, monthHorizonsByClient.get(client.id) ?? null)),
+  );
 
   // Dados estruturais (Etapa 27) — status contratual, início de contrato e
   // gestor principal não fazem parte de buildOperationClientCard (que é só
@@ -288,7 +297,16 @@ export default async function ClientsPage({
           <ul>
             {cards.map((card) => {
               const meta = clientMetaById.get(card.clientId);
-              const projection = computeMonthProjection(card.monthPlanned, card.monthActual, today);
+              // Etapa "Horizonte de Planejamento": `computeMonthProjectionForRange`
+              // com o horizonte do cliente, não `computeMonthProjection`
+              // (sempre calendário) — cliente de evento projeta o ritmo até
+              // a data da campanha, não até o fim do mês.
+              const projection = computeMonthProjectionForRange(
+                card.monthPlanned,
+                card.monthActual,
+                resolvePlanningHorizon(currentRange, monthHorizonsByClient.get(card.clientId) ?? null),
+                today,
+              );
               return (
                 <li
                   key={card.clientId}

@@ -12,7 +12,8 @@ import {
   shiftMonthParam,
 } from "@/lib/sprint-financials";
 import { formatCurrency, formatMonthLabel, formatPercent } from "@/lib/format";
-import { getMonthTemporalStatus, resolveMonthlyPerformanceTargets } from "@/lib/monthly-budget";
+import { getMonthTemporalStatus, resolveMonthlyPerformanceTargets, resolvePlanningHorizon } from "@/lib/monthly-budget";
+import { getClientMonthHorizons } from "@/lib/client-month-horizons";
 import {
   buildOperationClientCard,
   type OperationClientRawData,
@@ -298,7 +299,7 @@ export default async function Home({
   );
 
   const __perfBlock2Start = perfNow();
-  const [clientActivity, sprintActivity, performanceRecords, lastReviews] = await Promise.all([
+  const [clientActivity, sprintActivity, performanceRecords, lastReviews, monthHorizonsByClient] = await Promise.all([
     clientIds.length > 0
       ? requireQuery(
           supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds),
@@ -338,6 +339,10 @@ export default async function Home({
           "account_reviews:last-reviews",
         )
       : Promise.resolve([]),
+    // Etapa "Horizonte de Planejamento": clientes de evento (campanha que
+    // termina antes do fim do mês) — mapa vazio pra quem não tem nenhum,
+    // comportamento idêntico a antes desta etapa.
+    getClientMonthHorizons(supabase, clientIds, monthRange.firstDay),
   ]);
   perfLog("visão geral bloco 2 fundido (atividade/performance/lastReviews, antes lastReviews era sequencial à parte)", __perfBlock2Start);
   perfLog("visão geral — dados totais carregados (auth + queries)", __perfPageStart);
@@ -530,7 +535,9 @@ export default async function Home({
     };
   });
 
-  const allCards = rawClients.map((client) => buildOperationClientCard(client, today, monthRange));
+  const allCards = rawClients.map((client) =>
+    buildOperationClientCard(client, today, monthRange, resolvePlanningHorizon(monthRange, monthHorizonsByClient.get(client.id) ?? null)),
+  );
 
   // Opções do combobox de cliente: todos os clientes visíveis (mesma regra
   // de RLS que já trouxe `allCards` — Etapa 15 abriu leitura de `clients`

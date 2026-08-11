@@ -3,7 +3,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, formatShortDate } from "@/lib/format";
 import { classifySpendStatus, SPEND_STATUS_BADGE_CLASSES } from "@/lib/spend-status";
 import { resolveMonthPeriodSummary } from "@/lib/financial-period";
-import { getMonthTemporalStatus } from "@/lib/monthly-budget";
+import { getMonthTemporalStatus, resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { monthRangeFromParam } from "@/lib/sprint-financials";
 import {
   KPI_TARGET_STATUS_BADGE_CLASSES,
@@ -113,7 +113,11 @@ export function ClientReportView({
   const isReadOnly = data.status === "finalizado";
   const financialStatus = classifySpendStatus(data.financial.actual, data.financial.expectedToDate, data.financial.planned);
   const pct = data.financial.planned > 0 ? Math.round((data.financial.actual / data.financial.planned) * 100) : null;
-  const monthTemporalStatus = getMonthTemporalStatus(monthRange, today.toISOString().slice(0, 10));
+  // Etapa "Horizonte de Planejamento": mesmo horizonte já usado pra calcular
+  // `data.financial.expectedToDate` (report-data.ts) — nunca uma segunda
+  // fonte que possa divergir do número real exibido.
+  const planningHorizon = resolvePlanningHorizon(monthRange, data.planningEndDate);
+  const monthTemporalStatus = getMonthTemporalStatus(planningHorizon, today.toISOString().slice(0, 10));
   const contractBannerText = contractStatusBannerText(data.clientContractStatus);
 
   return (

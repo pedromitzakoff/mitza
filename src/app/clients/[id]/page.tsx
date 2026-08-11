@@ -24,8 +24,9 @@ import {
 } from "@/lib/sprint-financials";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus, SPEND_STATUS_BADGE_CLASSES, SPEND_STATUS_LABEL } from "@/lib/spend-status";
-import { resolveBudgetEffectiveDate, computeMonthlyExpectedToDateByCalendar } from "@/lib/monthly-budget";
+import { resolveBudgetEffectiveDate, computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { resolveClientPlan } from "@/lib/client-plan";
+import { getClientMonthHorizon } from "@/lib/client-month-horizons";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import {
   groupChannelSpendBySprintId,
@@ -338,7 +339,7 @@ export default async function ClientPage({
 
   // Etapa 50 (correção): a geração de sprints não roda mais durante o
   // carregamento da página — só via /api/cron/ensure-sprints.
-  const [sprintsRaw, dailySpend, lastSync, plannedAllocations, budgetChanges, performanceTargetHistory, channelSpendRows] =
+  const [sprintsRaw, dailySpend, lastSync, plannedAllocations, budgetChanges, performanceTargetHistory, channelSpendRows, planningEndDate] =
     await Promise.all([
       // Sobreposição com o mês (não "começa no mês") — uma sprint que
       // atravessa a fronteira (ex.: 27/jul-02/ago) precisa aparecer aqui
@@ -417,7 +418,19 @@ export default async function ClientPage({
         supabase.from("sprint_channel_spend").select("sprint_id, channel, spend_source, manual_actual_spend").eq("client_id", id),
         "sprint_channel_spend",
       ),
+      // Etapa "Horizonte de Planejamento": cliente de evento (campanha que
+      // termina antes do fim do mês) — null pra qualquer cliente sem
+      // horizonte configurado, comportamento idêntico a antes desta etapa.
+      getClientMonthHorizon(supabase, id, firstDay),
     ]);
+
+  // Etapa "Horizonte de Planejamento": todo cálculo OPERACIONAL (ritmo, dias
+  // restantes, esperado até hoje, redistribuição, recomendações) passa a
+  // receber `planningHorizon` em vez de `{ firstDay, lastDay }` cru — pra um
+  // cliente sem `planning_end_date` (o padrão), os dois são idênticos.
+  // `{ firstDay, lastDay }` continua sendo usado pras QUERIES acima (nunca
+  // encurtadas — dado histórico nunca é ocultado).
+  const planningHorizon = resolvePlanningHorizon({ firstDay, lastDay }, planningEndDate);
 
   // Investimento manual multicanal — resolve `manual_actual_spend` de cada
   // sprint ANTES de qualquer uso downstream (ver `resolveManualActualSpend`,
@@ -522,7 +535,7 @@ export default async function ClientPage({
   await ensureClosedSprintSnapshots(supabase, {
     clientId: id,
     today,
-    monthRange: { firstDay, lastDay },
+    monthRange: planningHorizon,
     sprints: sprints ?? [],
     dailySpend: dailySpend ?? [],
     budgetChanges: (budgetChanges ?? [])
@@ -535,9 +548,12 @@ export default async function ClientPage({
   // — é só o avanço do calendário do mês aplicado ao orçamento vigente,
   // independente de sprints/planejamentos antigos (mesma função central
   // usada em toda a Visão Geral/Sprints/Relatório — ver operation-data.ts).
+  // Etapa "Horizonte de Planejamento": `planningHorizon`, não `{firstDay,
+  // lastDay}` cru — pra cliente de evento, "hoje" avança proporcionalmente
+  // aos dias da CAMPANHA, não do mês inteiro.
   const monthExpectedToDate = computeMonthlyExpectedToDateByCalendar(
     monthPlanned,
-    { firstDay, lastDay },
+    planningHorizon,
     todayStr,
   ).expectedToDate;
   // Ritmo do mês: realizado x esperado até hoje, nunca x 100% do planejado
@@ -653,7 +669,11 @@ export default async function ClientPage({
     });
   }
 
-  const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate({ firstDay, lastDay }, todayStr);
+  // Etapa "Horizonte de Planejamento": "mês encerrado" passa a significar
+  // "depois do fim do horizonte" — pra cliente de evento, isso pode ser bem
+  // antes do dia 31 (a campanha acabou, não existe mais saldo pra investir
+  // nem redistribuir, mesmo com dias sobrando no calendário).
+  const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate(planningHorizon, todayStr);
   // Etapa 64: mês selecionado ainda não começou — usado só pra escolher o
   // texto da seção "Investimento do mês" (nunca uma segunda comparação de
   // datas: "não é o mês corrente" + "não está encerrado" já implica futuro,
@@ -1422,7 +1442,7 @@ export default async function ClientPage({
               monthParam={monthParam}
               monthLabel={monthLabel}
               sprints={budgetSprints}
-              monthRange={{ firstDay, lastDay }}
+              monthRange={planningHorizon}
               effectiveDate={effectiveDate}
               isAdmin={isAdmin}
               isClosedMonth={isClosedMonth}
@@ -1432,6 +1452,8 @@ export default async function ClientPage({
               performanceGoal={performanceGoal}
               channels={AVAILABLE_TRAFFIC_CHANNELS}
               byChannel={clientPlan.byChannel}
+              calendarMonthRange={{ firstDay, lastDay }}
+              currentPlanningEndDate={planningEndDate}
             />
           </div>
 

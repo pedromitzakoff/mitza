@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDayShortMonth } from "@/lib/format";
 import { formatMoneyDisplay, parseMoneyInput } from "@/lib/money-format";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import type { ChannelMetrics } from "@/lib/channel-metrics";
-import { applyMonthlyChannelPlanChangeAction } from "./monthly-budget-actions";
+import { applyMonthlyChannelPlanChangeAction, setClientMonthHorizonAction } from "./monthly-budget-actions";
 import { useToast } from "@/app/toast-provider";
 
 type CalculatorField = "investment" | "resultCount" | "cpa";
@@ -167,6 +167,8 @@ export function ChannelPlanEditor({
   clientId,
   monthParam,
   monthLabel,
+  monthRange,
+  currentPlanningEndDate,
   channels,
   byChannel,
   performanceGoal,
@@ -174,6 +176,12 @@ export function ChannelPlanEditor({
   clientId: string;
   monthParam: string;
   monthLabel: string;
+  /** Etapa "Horizonte de Planejamento": mês civil inteiro (não o horizonte
+   * já encurtado) — usado só pra limitar o seletor de data e montar o
+   * rótulo "Período de planejamento". */
+  monthRange: { firstDay: string; lastDay: string };
+  /** `null` = cliente sem horizonte configurado (comportamento padrão). */
+  currentPlanningEndDate: string | null;
   channels: TrafficChannel[];
   byChannel: Partial<Record<TrafficChannel, ChannelMetrics>>;
   performanceGoal: PerformanceGoal | null;
@@ -185,6 +193,7 @@ export function ChannelPlanEditor({
   const [cardStates, setCardStates] = useState<Partial<Record<TrafficChannel, ChannelCardState>>>(() =>
     Object.fromEntries(channels.map((c) => [c, initialCardState(byChannel[c])])),
   );
+  const [planningEndDateDisplay, setPlanningEndDateDisplay] = useState(currentPlanningEndDate ?? "");
   const [reason, setReason] = useState("");
   const [applyError, setApplyError] = useState<string | null>(null);
   const [isApplying, startApplyTransition] = useTransition();
@@ -214,6 +223,7 @@ export function ChannelPlanEditor({
     setIsOpen(false);
     setConfirmStep(false);
     setCardStates(Object.fromEntries(channels.map((c) => [c, initialCardState(byChannel[c])])));
+    setPlanningEndDateDisplay(currentPlanningEndDate ?? "");
     setReason("");
     setApplyError(null);
   };
@@ -222,10 +232,22 @@ export function ChannelPlanEditor({
   // chamada pra um canal deixado em branco (mesma convenção "branco = não
   // mexi" já usada no lançamento manual de investimento por plataforma).
   const touchedChannels = channels.filter((c) => (cardStates[c]?.investmentDisplay ?? "").trim() !== "");
+  const planningEndDateChanged = planningEndDateDisplay !== (currentPlanningEndDate ?? "");
+  // "01 ago → 31 ago" (sem data) ou "01 ago → 21 ago" (com evento) — mesmo
+  // cálculo mostrado no rodapé do formulário e na revisão final, nunca duas
+  // fórmulas diferentes pro mesmo texto.
+  const planningEndLabel = formatDayShortMonth(planningEndDateDisplay || monthRange.lastDay);
 
   function handleApply() {
     setApplyError(null);
     startApplyTransition(async () => {
+      if (planningEndDateChanged) {
+        const horizonResult = await setClientMonthHorizonAction(clientId, monthParam, planningEndDateDisplay || null);
+        if (horizonResult.error) {
+          setApplyError(horizonResult.error);
+          return;
+        }
+      }
       for (const channel of touchedChannels) {
         const state = cardStates[channel]!;
         const investment = parseMoneyInput(state.investmentDisplay) ?? 0;
@@ -263,6 +285,30 @@ export function ChannelPlanEditor({
               em branco pra não mexer nele.
             </p>
 
+            <div className="rounded-md border border-border p-3">
+              <label htmlFor="planning-end-date" className="text-[11px] text-muted-foreground">
+                Data final da campanha/evento — opcional
+              </label>
+              <input
+                id="planning-end-date"
+                type="date"
+                min={monthRange.firstDay}
+                max={monthRange.lastDay}
+                value={planningEndDateDisplay}
+                onChange={(e) => setPlanningEndDateDisplay(e.target.value)}
+                className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-zinc-500 dark:bg-zinc-900"
+              />
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                Período de planejamento: {formatDayShortMonth(monthRange.firstDay)} → {planningEndLabel}
+              </p>
+              {planningEndDateDisplay && (
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Sem orçamento distribuído nem ritmo calculado depois de {planningEndLabel} — os dias seguintes do mês continuam existindo,
+                  só sem verba nova.
+                </p>
+              )}
+            </div>
+
             {channels.map((channel) => (
               <ChannelPlanCard
                 key={channel}
@@ -278,7 +324,7 @@ export function ChannelPlanEditor({
               <button
                 type="button"
                 onClick={() => setConfirmStep(true)}
-                disabled={touchedChannels.length === 0}
+                disabled={touchedChannels.length === 0 && !planningEndDateChanged}
                 className="mitza-pressable rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Continuar
@@ -295,6 +341,12 @@ export function ChannelPlanEditor({
               <p className="mt-1 text-foreground">
                 O que já foi investido não muda — só o saldo restante do mês é recalculado e redistribuído, por canal.
               </p>
+              {planningEndDateChanged && (
+                <p className="mt-2 tabular-nums text-foreground">
+                  Período de planejamento: {formatDayShortMonth(monthRange.firstDay)} → {planningEndLabel}
+                  {!planningEndDateDisplay && " (removendo a data final)"}
+                </p>
+              )}
               <ul className="mt-2 flex flex-col gap-1">
                 {touchedChannels.map((channel) => {
                   const state = cardStates[channel]!;

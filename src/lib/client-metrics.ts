@@ -12,28 +12,14 @@ export interface MonthProjection {
 }
 
 /**
- * Projeta o gasto de fim de mês extrapolando o ritmo diário observado até
- * hoje (gasto até agora / dias já passados no mês) para os dias restantes.
- */
-export function computeMonthProjection(
-  monthPlanned: number,
-  monthActualSoFar: number,
-  today: Date = todayUTC(),
-): MonthProjection {
-  const year = today.getUTCFullYear();
-  const month = today.getUTCMonth();
-  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  const firstDay = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
-  const lastDay = new Date(Date.UTC(year, month, daysInMonth)).toISOString().slice(0, 10);
-  return computeMonthProjectionForRange(monthPlanned, monthActualSoFar, { firstDay, lastDay }, today);
-}
-
-/**
- * Mesma projeção por ritmo, mas para um mês qualquer (não necessariamente o
- * mês corrente) — usado pelo dashboard da agência, que respeita o mês
- * selecionado no filtro. Dias decorridos são contados dentro do próprio
- * intervalo: 0 se o mês ainda não começou (mês futuro), o mês inteiro se já
- * terminou (mês passado, projeção = realizado final).
+ * Projeta o gasto de fim de período extrapolando o ritmo diário observado
+ * até hoje (gasto até agora / dias já passados / dias totais do período).
+ * `monthRange` é sempre o intervalo já resolvido por quem chama — mês civil
+ * pra cliente normal, ou `resolvePlanningHorizon` (lib/monthly-budget.ts,
+ * Etapa "Horizonte de Planejamento") pra cliente de evento, nunca decidido
+ * aqui. Dias decorridos são contados dentro do próprio intervalo: 0 se ainda
+ * não começou (futuro), o intervalo inteiro se já terminou (passado,
+ * projeção = realizado final).
  */
 export function computeMonthProjectionForRange(
   monthPlanned: number,

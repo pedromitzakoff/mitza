@@ -12,7 +12,8 @@ import {
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import { resolveMonthlyBudget, computeMonthlyExpectedToDateByCalendar } from "@/lib/monthly-budget";
+import { resolveMonthlyBudget, computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
+import { getClientMonthHorizon } from "@/lib/client-month-horizons";
 import {
   computeAgencyExecutionSummary,
   computeSprintBehaviorRows,
@@ -132,6 +133,13 @@ export interface ReportViewData {
   finalizedByName: string | null;
   finalizedAt: string | null;
   isSnapshot: boolean;
+  /** Etapa "Horizonte de Planejamento": `null` = cliente sem horizonte
+   * configurado (comportamento idêntico a antes desta etapa). Repassado
+   * pra `report-view.tsx` resolver o mesmo horizonte usado no cálculo
+   * financeiro acima, pro rótulo "Período encerrado"/"não iniciado" nunca
+   * divergir do número real. `null` também pra reports finalizados
+   * (snapshot histórico, sempre de mês já encerrado). */
+  planningEndDate: string | null;
   financial: { planned: number; actual: number; expectedToDate: number; status: SpendStatus };
   kpis: ReportKpiRow[];
   execution: AgencyExecutionSummary;
@@ -188,6 +196,7 @@ export async function buildReportViewData(
       clientId,
       clientName: client.name,
       clientContractStatus: client.status,
+      planningEndDate: null,
       managerName,
       monthLabel,
       monthStart: monthRange.firstDay,
@@ -295,6 +304,14 @@ export async function buildReportViewData(
       ),
     ]);
 
+  // Etapa "Horizonte de Planejamento": cliente de evento (campanha que
+  // termina antes do fim do mês) — null (comportamento idêntico a antes
+  // desta etapa) pra qualquer cliente sem horizonte configurado. Repassado
+  // cru (`planningEndDate`) no retorno pra `report-view.tsx` resolver o
+  // mesmo horizonte pro rótulo "Período encerrado"/"não iniciado".
+  const planningEndDate = await getClientMonthHorizon(supabase, clientId, monthRange.firstDay);
+  const planningHorizon = resolvePlanningHorizon(monthRange, planningEndDate);
+
   // Investimento manual multicanal — resolve `manual_actual_spend` de cada
   // sprint ANTES de `sumActualSpendForMonth`/`computeSprintBehaviorRows`
   // (ver `resolveManualActualSpend`, lib/effective-spend.ts).
@@ -326,7 +343,7 @@ export async function buildReportViewData(
   // — é só o avanço do calendário do mês aplicado ao orçamento vigente.
   const expectedToDate = computeMonthlyExpectedToDateByCalendar(
     planned,
-    monthRange,
+    planningHorizon,
     today.toISOString().slice(0, 10),
   ).expectedToDate;
   const status = classifySpendStatus(actual, expectedToDate, planned);
@@ -345,6 +362,7 @@ export async function buildReportViewData(
       clientId,
       clientName: client.name,
       clientContractStatus: client.status,
+      planningEndDate,
       managerName,
       monthLabel,
       monthStart: monthRange.firstDay,
@@ -445,6 +463,7 @@ export async function buildReportViewData(
     clientId,
     clientName: client.name,
     clientContractStatus: client.status,
+    planningEndDate,
     managerName,
     monthLabel,
     monthStart: monthRange.firstDay,
