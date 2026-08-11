@@ -10,7 +10,6 @@ import { applyMonthlyChannelPlanChangeAction } from "./monthly-budget-actions";
 import { useToast } from "@/app/toast-provider";
 
 type CalculatorField = "investment" | "resultCount" | "cpa";
-const ALL_FIELDS: CalculatorField[] = ["investment", "resultCount", "cpa"];
 
 interface ChannelCardState {
   investmentDisplay: string;
@@ -28,33 +27,31 @@ function initialCardState(current: ChannelMetrics | undefined): ChannelCardState
 
 /**
  * Regra de três — o cálculo central deste editor (pedido explícito do
- * usuário: "qualquer dois campos determinam automaticamente o terceiro").
- * `touched` são os dois últimos campos que o gestor de fato editou (nunca
- * mais que 2 guardados) — o terceiro (nunca editado nos dois últimos toques)
- * é sempre o DERIVADO, recalculado a partir dos outros dois. Só investimento
- * e resultado são enviados ao salvar; CPA nunca é armazenado (sempre
- * recalculado na leitura, em qualquer lugar da plataforma).
+ * usuário: mudar Resultado atualiza CPA na hora e vice-versa, sem precisar
+ * de um segundo toque em outro campo pra disparar). Investimento é a âncora
+ * fixa: editar Resultado ou CPA sempre recalcula o outro mantendo o
+ * Investimento atual; editar o próprio Investimento recalcula Resultado
+ * mantendo o CPA atual (mesma eficiência, proporcionalmente mais/menos
+ * resultado). Determinístico só pelo campo sendo editado agora — nunca
+ * depende de histórico de toques anteriores. Só Investimento e Resultado são
+ * enviados ao salvar; CPA nunca é armazenado (sempre recalculado na leitura,
+ * em qualquer lugar da plataforma).
  */
-function deriveThirdField(
-  touched: [CalculatorField, CalculatorField],
+function deriveOnFieldChange(
+  changedField: CalculatorField,
   values: { investment: number | null; resultCount: number | null; cpa: number | null },
 ): Partial<Record<CalculatorField, number | null>> {
-  const derived = ALL_FIELDS.find((f) => f !== touched[0] && f !== touched[1])!;
-  const has = (f: CalculatorField) => touched.includes(f);
-
-  if (derived === "cpa") {
+  if (changedField === "resultCount") {
     const cpa = values.investment !== null && values.resultCount ? values.investment / values.resultCount : null;
     return { cpa };
   }
-  if (derived === "resultCount" && has("investment") && has("cpa")) {
+  if (changedField === "cpa") {
     const resultCount = values.investment !== null && values.cpa ? Math.round(values.investment / values.cpa) : null;
     return { resultCount };
   }
-  if (derived === "investment" && has("resultCount") && has("cpa")) {
-    const investment = values.resultCount !== null && values.cpa !== null ? values.resultCount * values.cpa : null;
-    return { investment };
-  }
-  return {};
+  // changedField === "investment": mantém o CPA atual, recalcula Resultado.
+  const resultCount = values.cpa !== null && values.investment !== null ? Math.round(values.investment / values.cpa) : null;
+  return { resultCount };
 }
 
 function ChannelPlanCard({
@@ -70,7 +67,6 @@ function ChannelPlanCard({
   state: ChannelCardState;
   onChange: (next: ChannelCardState) => void;
 }) {
-  const touchedRef = useRef<CalculatorField[]>([]);
   const goalConfig = performanceGoal ? PERFORMANCE_GOALS[performanceGoal] : null;
 
   function handleFieldChange(field: CalculatorField, display: string) {
@@ -79,18 +75,14 @@ function ChannelPlanCard({
     if (field === "resultCount") next.resultCountDisplay = display;
     if (field === "cpa") next.cpaDisplay = display;
 
-    touchedRef.current = [...touchedRef.current.filter((f) => f !== field), field].slice(-2);
-    if (touchedRef.current.length === 2) {
-      const values = {
-        investment: parseMoneyInput(next.investmentDisplay),
-        resultCount: next.resultCountDisplay.trim() ? Number(next.resultCountDisplay) : null,
-        cpa: parseMoneyInput(next.cpaDisplay),
-      };
-      const derived = deriveThirdField(touchedRef.current as [CalculatorField, CalculatorField], values);
-      if ("cpa" in derived) next.cpaDisplay = derived.cpa != null ? formatMoneyDisplay(derived.cpa) : "";
-      if ("resultCount" in derived) next.resultCountDisplay = derived.resultCount != null ? String(derived.resultCount) : "";
-      if ("investment" in derived) next.investmentDisplay = derived.investment != null ? formatMoneyDisplay(derived.investment) : "";
-    }
+    const values = {
+      investment: parseMoneyInput(next.investmentDisplay),
+      resultCount: next.resultCountDisplay.trim() ? Number(next.resultCountDisplay) : null,
+      cpa: parseMoneyInput(next.cpaDisplay),
+    };
+    const derived = deriveOnFieldChange(field, values);
+    if ("cpa" in derived) next.cpaDisplay = derived.cpa != null ? formatMoneyDisplay(derived.cpa) : "";
+    if ("resultCount" in derived) next.resultCountDisplay = derived.resultCount != null ? String(derived.resultCount) : "";
     onChange(next);
   }
 
