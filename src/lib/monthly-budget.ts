@@ -1,3 +1,5 @@
+import { safeDivide } from "./performance";
+
 function parseDateUTC(value: string): Date {
   return new Date(`${value}T00:00:00Z`);
 }
@@ -118,7 +120,17 @@ export interface MonthlyPerformanceTargetChange {
    * se refere — nunca a data de `changed_at`. */
   month: string;
   changedAt: string;
+  /** `new_amount` da versão — Etapa "Planejamento por Canal":
+   * `apply_monthly_channel_plan_change` nunca mais escreve
+   * `target_cost_per_result` (custo é sempre derivado), então este campo
+   * virou obrigatório aqui pra `resolveMonthlyPerformanceTargets` conseguir
+   * derivar o custo por resultado sozinho. */
+  investment: number;
   targetResultCount: number | null;
+  /** Legado — só populado por linhas antigas gravadas pelo editor
+   * consolidado (`apply_monthly_budget_change`, não mais chamado pela
+   * aplicação). Nunca a fonte primária: `resolveMonthlyPerformanceTargets`
+   * sempre tenta derivar de `investment ÷ targetResultCount` primeiro. */
   targetCostPerResult: number | null;
 }
 
@@ -137,12 +149,14 @@ export interface ResolvedMonthlyPerformanceTargets {
  * dentre os meses anteriores (nunca "sem meta" só porque ninguém tocou
  * neste mês específico).
  *
- * Meta de custo tem fallback pro campo permanente (`clients.target_cost_per_result`)
- * quando nenhuma versão do planejamento definiu uma própria — estratégia de
- * transição (não perder configuração de cliente que nunca passou pelo
- * planejamento mensal). Meta de quantidade não tem fallback permanente: não
- * existe em nenhum outro lugar da plataforma, então "nenhuma versão
- * definiu" é, de fato, "sem meta".
+ * Meta de custo é SEMPRE derivada primeiro (`investimento ÷ resultado` da
+ * própria versão vigente — Etapa "Planejamento por Canal", nunca mais
+ * armazenada por `apply_monthly_channel_plan_change`); `targetCostPerResult`
+ * (coluna legada, só linhas antigas) e `clients.target_cost_per_result`
+ * entram só como fallback, nessa ordem, quando a derivação não dá um valor
+ * (sem meta de quantidade definida, por exemplo). Meta de quantidade não tem
+ * fallback permanente: não existe em nenhum outro lugar da plataforma,
+ * então "nenhuma versão definiu" é, de fato, "sem meta".
  */
 export function resolveMonthlyPerformanceTargets(
   changes: MonthlyPerformanceTargetChange[],
@@ -161,14 +175,11 @@ export function resolveMonthlyPerformanceTargets(
 
   return {
     targetResultCount: latest.targetResultCount,
-    targetCostPerResult: latest.targetCostPerResult ?? permanentCostFallback,
+    targetCostPerResult: safeDivide(latest.investment, latest.targetResultCount) ?? latest.targetCostPerResult ?? permanentCostFallback,
   };
 }
 
-export interface MonthlyPlanChange extends MonthlyPerformanceTargetChange {
-  /** `new_amount` da versão — investimento vigente a partir desta linha. */
-  investment: number;
-}
+export type MonthlyPlanChange = MonthlyPerformanceTargetChange;
 
 export interface ResolvedMonthlyPlanSnapshot extends ResolvedMonthlyPerformanceTargets {
   investmentPlanned: number | null;
@@ -205,7 +216,7 @@ export function resolveMonthlyPlanSnapshot(
   return {
     investmentPlanned: latest.investment,
     targetResultCount: latest.targetResultCount,
-    targetCostPerResult: latest.targetCostPerResult ?? permanentCostFallback,
+    targetCostPerResult: safeDivide(latest.investment, latest.targetResultCount) ?? latest.targetCostPerResult ?? permanentCostFallback,
   };
 }
 

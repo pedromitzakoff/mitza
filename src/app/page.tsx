@@ -273,7 +273,7 @@ export default async function Home({
     requireQuery(
       supabase
         .from("monthly_budget_changes")
-        .select("client_id, month, changed_at, target_result_count, target_cost_per_result")
+        .select("client_id, month, changed_at, new_amount, target_result_count, target_cost_per_result")
         .lte("month", monthRange.firstDay)
         .eq("channel", "meta")
         .order("month", { ascending: false })
@@ -436,12 +436,16 @@ export default async function Home({
   // sobrescreve é suficiente pra "a primeira que eu vir, por cliente, é a
   // vigente". Fallback pro campo permanente de `clients` fica dentro de
   // `resolveMonthlyPerformanceTargets`, chamado por cliente logo abaixo.
-  const targetHistoryByClient = new Map<string, { month: string; changedAt: string; targetResultCount: number | null; targetCostPerResult: number | null }[]>();
+  const targetHistoryByClient = new Map<
+    string,
+    { month: string; changedAt: string; investment: number; targetResultCount: number | null; targetCostPerResult: number | null }[]
+  >();
   for (const row of performanceTargetHistory ?? []) {
     const list = targetHistoryByClient.get(row.client_id) ?? [];
     list.push({
       month: row.month,
       changedAt: row.changed_at,
+      investment: row.new_amount,
       targetResultCount: row.target_result_count,
       targetCostPerResult: row.target_cost_per_result,
     });
