@@ -221,11 +221,17 @@ export default async function Home({
     // Orçamento vigente (Etapa 66) — só do mês SELECIONADO (`monthRange`),
     // não da janela união com o mês corrente: `buildOperationClientCard` só
     // usa `monthRange` pra montar o card, nunca `rangeStart`/`rangeEnd`.
+    // Etapa "Planejamento por Canal": filtrado por channel='meta' de
+    // propósito — esta query alimenta tanto os cards do Dashboard quanto
+    // `buildOperationClientCard` (Operação), nenhum dos dois migrado pro
+    // plano consolidado por canal ainda; filtro preserva o comportamento
+    // exato de antes desta etapa nos dois.
     requireQuery(
       supabase
         .from("monthly_budget_changes")
         .select("client_id, new_amount, changed_at")
-        .eq("month", monthRange.firstDay),
+        .eq("month", monthRange.firstDay)
+        .eq("channel", "meta"),
       "monthly_budget_changes:current-month",
     ),
     // Consulta própria (independente de `gestores`, que serve o dropdown de
@@ -262,11 +268,14 @@ export default async function Home({
     // versão vigente do mês selecionado pode ter sido definida num mês
     // anterior. Sem filtro por cliente (é a Visão Geral inteira) — resolvido
     // por cliente logo abaixo, com `resolveMonthlyPerformanceTargets`.
+    // Etapa "Planejamento por Canal": filtrado por channel='meta' de
+    // propósito — mesmo motivo da query de investimento acima.
     requireQuery(
       supabase
         .from("monthly_budget_changes")
         .select("client_id, month, changed_at, target_result_count, target_cost_per_result")
         .lte("month", monthRange.firstDay)
+        .eq("channel", "meta")
         .order("month", { ascending: false })
         .order("changed_at", { ascending: false }),
       "monthly_budget_changes:target-history",

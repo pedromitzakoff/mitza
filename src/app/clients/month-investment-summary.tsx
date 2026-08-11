@@ -16,7 +16,9 @@ import {
   type MonthTemporalStatus,
 } from "@/lib/monthly-budget";
 import type { PerformanceGoal } from "@/lib/performance-goals";
-import { MonthlyBudgetEditor } from "./monthly-budget-editor";
+import type { TrafficChannel } from "@/lib/traffic-channels";
+import type { ChannelMetrics } from "@/lib/channel-metrics";
+import { ChannelPlanEditor } from "./channel-plan-editor";
 
 export interface MonthlyBudgetChangeSummary {
   lastEffectiveDate: string;
@@ -114,8 +116,8 @@ export function MonthInvestmentSummary({
   lastChange,
   historyHref,
   performanceGoal,
-  targetResultCount,
-  targetCostPerResult,
+  channels,
+  byChannel,
 }: {
   /** Orçamento mensal VIGENTE (Etapa 66) — sempre `resolveMonthlyBudget`,
    * nunca a soma dos planejamentos diários persistidos. */
@@ -138,12 +140,12 @@ export function MonthInvestmentSummary({
   isFutureMonth: boolean;
   lastChange: MonthlyBudgetChangeSummary | null;
   historyHref: string;
-  /** Metas vigentes do planejamento mensal (Etapa "Planejamento Mensal
-   * 1.0") — já resolvidas por `resolveMonthlyPerformanceTargets` por quem
-   * chama; este componente só repassa pro editor. */
   performanceGoal: PerformanceGoal | null;
-  targetResultCount: number | null;
-  targetCostPerResult: number | null;
+  /** Etapa "Planejamento por Canal": canais selecionáveis (Meta/Google) e o
+   * plano vigente de cada um — repassados direto pro `ChannelPlanEditor`,
+   * nunca recalculados aqui (este componente só mostra o consolidado). */
+  channels: TrafficChannel[];
+  byChannel: Partial<Record<TrafficChannel, ChannelMetrics>>;
 }) {
   // A barra (sem marcador) ainda usa o formato central `FinancialPeriodSummary`
   // só pra decidir preenchimento/estouro — nenhum outro campo dele (status,
@@ -393,18 +395,13 @@ export function MonthInvestmentSummary({
               <span className="text-[11px] text-muted-foreground">Mês encerrado</span>
             ) : (
               effectiveDate && (
-                <MonthlyBudgetEditor
+                <ChannelPlanEditor
                   clientId={clientId}
                   monthParam={monthParam}
                   monthLabel={monthLabel}
-                  sprints={sprints}
-                  monthRange={monthRange}
-                  effectiveDate={effectiveDate}
-                  currentMonthlyBudget={planned}
-                  monthActual={actual}
+                  channels={channels}
+                  byChannel={byChannel}
                   performanceGoal={performanceGoal}
-                  currentTargetResultCount={targetResultCount}
-                  currentTargetCostPerResult={targetCostPerResult}
                 />
               )
             ))}

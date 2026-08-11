@@ -193,12 +193,16 @@ export default async function SprintsPage({
       "sprint_planned_allocations",
     ),
     // Orçamento vigente (Etapa 66) — só do mês SELECIONADO (`monthRange`),
-    // não da janela união com o mês corrente.
+    // não da janela união com o mês corrente. Etapa "Planejamento por
+    // Canal": filtrado por channel='meta' de propósito — consumidor ainda
+    // não migrado pro plano consolidado por canal, filtro preserva o
+    // comportamento exato de antes desta etapa.
     requireQuery(
       supabase
         .from("monthly_budget_changes")
         .select("client_id, new_amount, changed_at")
-        .eq("month", monthRange.firstDay),
+        .eq("month", monthRange.firstDay)
+        .eq("channel", "meta"),
       "monthly_budget_changes",
     ),
     // Investimento manual multicanal (`sprint_channel_spend`, adotada como

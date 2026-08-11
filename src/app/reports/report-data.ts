@@ -259,12 +259,20 @@ export async function buildReportViewData(
           .lte("date", monthRange.lastDay),
         "sprint_planned_allocations",
       ),
+      // Etapa "Planejamento por Canal": filtrado por channel='meta' de
+      // propósito — este consumidor ainda não foi migrado pro plano
+      // consolidado por canal (`resolveClientPlan`), então o filtro mantém
+      // o comportamento EXATO de antes desta etapa (histórico sempre foi
+      // Meta), imune a qualquer plano de Google criado pela nova tela de
+      // Planejamento. Migração deste consumidor é trabalho de uma etapa
+      // seguinte.
       requireQuery(
         supabase
           .from("monthly_budget_changes")
           .select("new_amount, changed_at")
           .eq("client_id", clientId)
-          .eq("month", monthRange.firstDay),
+          .eq("month", monthRange.firstDay)
+          .eq("channel", "meta"),
         "monthly_budget_changes",
       ),
       // Otimizações do mês (Etapa 74) — revisões estratégicas da conta

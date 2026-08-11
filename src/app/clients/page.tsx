@@ -92,8 +92,11 @@ export default async function ClientsPage({
         .lte("date", lastDay),
       "sprint_planned_allocations",
     ),
+    // Etapa "Planejamento por Canal": filtrado por channel='meta' de
+    // propósito — consumidor ainda não migrado pro plano consolidado por
+    // canal, filtro preserva o comportamento exato de antes desta etapa.
     requireQuery(
-      supabase.from("monthly_budget_changes").select("client_id, new_amount, changed_at").eq("month", firstDay),
+      supabase.from("monthly_budget_changes").select("client_id, new_amount, changed_at").eq("month", firstDay).eq("channel", "meta"),
       "monthly_budget_changes",
     ),
     // Investimento manual multicanal (`sprint_channel_spend`, adotada como

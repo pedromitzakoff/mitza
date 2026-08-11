@@ -2193,6 +2193,7 @@ export interface Database {
           date: string;
           planned_amount: number;
           updated_at: string;
+          channel: string;
         };
         Insert: {
           id?: string;
@@ -2201,6 +2202,7 @@ export interface Database {
           date: string;
           planned_amount?: number;
           updated_at?: string;
+          channel?: string;
         };
         Update: {
           id?: string;
@@ -2209,6 +2211,7 @@ export interface Database {
           date?: string;
           planned_amount?: number;
           updated_at?: string;
+          channel?: string;
         };
         Relationships: [
           {
@@ -2244,6 +2247,7 @@ export interface Database {
           reason: string | null;
           target_result_count: number | null;
           target_cost_per_result: number | null;
+          channel: string;
         };
         Insert: {
           id?: string;
@@ -2261,6 +2265,7 @@ export interface Database {
           reason?: string | null;
           target_result_count?: number | null;
           target_cost_per_result?: number | null;
+          channel?: string;
         };
         Update: {
           id?: string;
@@ -2278,6 +2283,7 @@ export interface Database {
           reason?: string | null;
           target_result_count?: number | null;
           target_cost_per_result?: number | null;
+          channel?: string;
         };
         Relationships: [
           {
@@ -2701,6 +2707,26 @@ export interface Database {
           p_reason?: string | null;
           p_target_result_count?: number | null;
           p_target_cost_per_result?: number | null;
+        };
+        Returns: {
+          consolidatedAmount: number;
+          futureBudgetAvailable: number;
+          resultingTotal: number;
+          isBelowConsolidated: boolean;
+        };
+      };
+      apply_monthly_channel_plan_change: {
+        Args: {
+          p_client_id: string;
+          p_channel: string;
+          p_first_day: string;
+          p_last_day: string;
+          p_effective_date: string;
+          p_new_budget: number;
+          p_today: string;
+          p_changed_by: string;
+          p_reason?: string | null;
+          p_target_result_count?: number | null;
         };
         Returns: {
           consolidatedAmount: number;

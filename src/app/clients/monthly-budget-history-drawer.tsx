@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, formatDateWithYear, formatDateTime, formatShortDateFromInstant } from "@/lib/format";
+import { TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 
 export interface MonthlyBudgetChangeRow {
   id: string;
+  /** Etapa "Planejamento por Canal": a qual canal esta alteração pertence —
+   * cada canal tem seu próprio histórico independente agora. */
+  channel: TrafficChannel;
   effectiveDate: string;
   changedAt: string;
   changedByName: string | null;
@@ -56,8 +60,13 @@ export function MonthlyBudgetHistoryDrawer({
             {changes.map((change) => (
               <li key={change.id} className="rounded-md border border-border p-3 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-foreground">
-                    Efeito em {formatDateWithYear(change.effectiveDate)}
+                  <span className="flex items-center gap-1.5">
+                    <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground dark:bg-zinc-800">
+                      {TRAFFIC_CHANNELS[change.channel].shortLabel}
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      Efeito em {formatDateWithYear(change.effectiveDate)}
+                    </span>
                   </span>
                   <span className="text-muted-foreground">{formatDateTime(change.changedAt)}</span>
                 </div>

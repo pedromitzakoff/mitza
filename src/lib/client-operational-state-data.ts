@@ -110,11 +110,17 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
           .in("status", ["pendente", "atrasado"]),
         "tasks",
       ),
+      // Etapa "Planejamento por Canal": filtrado por channel='meta' de
+      // propósito — Saúde da Conta ainda não migrada pro plano consolidado
+      // por canal, filtro preserva o comportamento exato de antes desta
+      // etapa (imune a qualquer plano de Google criado pela nova tela de
+      // Planejamento).
       requireQuery(
         supabase
           .from("monthly_budget_changes")
           .select("client_id, month, changed_at, new_amount, target_result_count, target_cost_per_result")
-          .lte("month", monthRange.firstDay),
+          .lte("month", monthRange.firstDay)
+          .eq("channel", "meta"),
         "monthly_budget_changes:plan-history",
       ),
       requireQuery(

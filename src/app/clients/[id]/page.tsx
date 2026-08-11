@@ -24,12 +24,8 @@ import {
 } from "@/lib/sprint-financials";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus, SPEND_STATUS_BADGE_CLASSES, SPEND_STATUS_LABEL } from "@/lib/spend-status";
-import {
-  resolveBudgetEffectiveDate,
-  resolveMonthlyBudget,
-  resolveMonthlyPerformanceTargets,
-  computeMonthlyExpectedToDateByCalendar,
-} from "@/lib/monthly-budget";
+import { resolveBudgetEffectiveDate, computeMonthlyExpectedToDateByCalendar } from "@/lib/monthly-budget";
+import { resolveClientPlan } from "@/lib/client-plan";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import {
   groupChannelSpendBySprintId,
@@ -391,27 +387,28 @@ export default async function ClientPage({
         supabase
           .from("monthly_budget_changes")
           .select(
-            "id, effective_date, changed_at, previous_amount, new_amount, consolidated_amount, future_amount_distributed, resulting_total, is_below_consolidated, reason, changed_by_profile:team_members!monthly_budget_changes_changed_by_fkey(name)",
+            "id, channel, effective_date, changed_at, previous_amount, new_amount, consolidated_amount, future_amount_distributed, resulting_total, is_below_consolidated, reason, changed_by_profile:team_members!monthly_budget_changes_changed_by_fkey(name)",
           )
           .eq("client_id", id)
           .eq("month", firstDay)
           .order("changed_at", { ascending: false }),
         "monthly_budget_changes:current-month",
       ),
-      // Metas do planejamento mensal vigente (Etapa "Planejamento Mensal
-      // 1.0") — deliberadamente `.lte` em vez de `.eq`: a versão vigente do
-      // mês selecionado pode ter sido definida num mês anterior (ver
-      // `resolveMonthlyPerformanceTargets`), diferente da consulta de
-      // `budgetChanges` acima (que é só o HISTÓRICO deste mês específico).
+      // Etapa "Planejamento por Canal": plano vigente por canal — `.lte` (não
+      // `.eq`): a versão vigente de um canal pro mês selecionado pode ter
+      // sido definida num mês anterior (mesma regra que já existia só pras
+      // metas de performance, agora unificada com investimento — os dois são
+      // sempre o mesmo objeto/snapshot, nunca dois conceitos com regra de
+      // vigência diferente). Sem `.limit(1)`: cada canal tem sua própria
+      // versão vigente, `resolveClientPlan` resolve por canal.
       requireQuery(
         supabase
           .from("monthly_budget_changes")
-          .select("month, changed_at, target_result_count, target_cost_per_result")
+          .select("channel, month, changed_at, new_amount, target_result_count, target_cost_per_result")
           .eq("client_id", id)
           .lte("month", firstDay)
           .order("month", { ascending: false })
-          .order("changed_at", { ascending: false })
-          .limit(1),
+          .order("changed_at", { ascending: false }),
         "monthly_budget_changes:target-history",
       ),
       // Investimento manual multicanal (`sprint_channel_spend`, adotada como
@@ -486,23 +483,29 @@ export default async function ClientPage({
   // Etapa 70: `sprint_planned_allocations` deixou de alimentar o card da
   // sprint (o "planejamento histórico" virou o "planejamento original"
   // congelado, `sprint-recommendation.ts`) — continua existindo só como
-  // fallback de `resolveMonthlyBudget`, abaixo.
+  // fallback de `resolveClientPlan`, abaixo.
   const monthPlannedAllocationRows = (plannedAllocations ?? []).map((a) => ({
     date: a.date,
     sprintId: a.sprint_id,
     amount: a.planned_amount,
   }));
-  // Etapa 66: orçamento mensal VIGENTE — sempre o valor mais recente
-  // configurado (`monthly_budget_changes.new_amount`), nunca a soma dos
-  // planejamentos diários persistidos (que diverge do vigente assim que o
-  // planejado histórico não bate com o realizado histórico — a regra, não a
-  // exceção). `sumPlannedForMonth` só entra como fallback pra cliente que
-  // nunca passou pelo editor de orçamento (sem nenhuma linha em
-  // monthly_budget_changes ainda).
-  const monthPlanned = resolveMonthlyBudget(
-    (budgetChanges ?? []).map((c) => ({ newAmount: c.new_amount, changedAt: c.changed_at })),
-    sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay }),
-  );
+  // Etapa "Planejamento por Canal": plano vigente do cliente — sempre a
+  // soma dos canais (Meta + Google), cada um resolvido pra sua própria
+  // versão mais recente elegível (`resolveClientPlan`). `sumPlannedForMonth`
+  // só entra como fallback pra cliente que nunca passou pelo planejamento
+  // por canal (sem nenhuma linha em monthly_budget_changes ainda).
+  const clientPlan = resolveClientPlan({
+    channels: AVAILABLE_TRAFFIC_CHANNELS,
+    changes: (performanceTargetHistory ?? []).map((row) => ({
+      channel: row.channel as TrafficChannel,
+      month: row.month,
+      changedAt: row.changed_at,
+      investment: row.new_amount,
+      targetResultCount: row.target_result_count,
+    })),
+    selectedMonth: firstDay,
+  });
+  const monthPlanned = clientPlan.consolidated.investment ?? sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay });
   const monthActual = sumActualSpendForMonth(sprints ?? [], { firstDay, lastDay }, dailySpend ?? []);
   // Etapa 73: a camada de planejamento/recomendação POR SPRINT saiu da
   // interface operacional (fica só no nível mensal) — `computeOriginalSprintPlans`/
@@ -510,14 +513,21 @@ export default async function ClientPage({
   // `ensureClosedSprintSnapshots` continua rodando (preserva o congelamento
   // histórico em `sprints.original_planned_amount`/`final_recommended_amount`
   // pra uma eventual reativação futura), só o valor devolvido não é mais
-  // lido por ninguém nesta página.
+  // lido por ninguém nesta página. Etapa "Planejamento por Canal": filtrado
+  // por channel='meta' de propósito — o congelamento de snapshot histórico
+  // ainda não foi migrado pra reconstruir um total consolidado por canal ao
+  // longo do tempo (cada linha aqui precisa representar o total vigente
+  // NAQUELE momento, não a fatia de um canal só); migração é trabalho de
+  // uma etapa seguinte.
   await ensureClosedSprintSnapshots(supabase, {
     clientId: id,
     today,
     monthRange: { firstDay, lastDay },
     sprints: sprints ?? [],
     dailySpend: dailySpend ?? [],
-    budgetChanges: (budgetChanges ?? []).map((c) => ({ newAmount: c.new_amount, changedAt: c.changed_at })),
+    budgetChanges: (budgetChanges ?? [])
+      .filter((c) => c.channel === "meta")
+      .map((c) => ({ newAmount: c.new_amount, changedAt: c.changed_at })),
     plannedAllocations: monthPlannedAllocationRows,
     currentMonthlyBudget: monthPlanned,
   });
@@ -563,22 +573,13 @@ export default async function ClientPage({
   // do mês é sempre a soma direta dos registros já escopados às sprints do
   // mês selecionado (nenhum lançamento manual mensal independente).
   const performanceGoal = client.performance_goal;
-  // Etapa "Planejamento Mensal 1.0": meta de custo vigente vem do
-  // planejamento mensal (com `clients.target_cost_per_result` como
-  // fallback só pra quem nunca teve nenhuma versão de planejamento) —
-  // nunca mais lido direto de `clients` sem passar por este resolvedor.
-  const resolvedTargets = resolveMonthlyPerformanceTargets(
-    (performanceTargetHistory ?? []).map((row) => ({
-      month: row.month,
-      changedAt: row.changed_at,
-      targetResultCount: row.target_result_count,
-      targetCostPerResult: row.target_cost_per_result,
-    })),
-    firstDay,
-    client.target_cost_per_result,
-  );
-  const targetCostPerResult = resolvedTargets.targetCostPerResult;
-  const targetResultCount = resolvedTargets.targetResultCount;
+  // Etapa "Planejamento por Canal": meta de resultado/custo vigente vem do
+  // mesmo `clientPlan` resolvido acima (investimento e meta são sempre o
+  // mesmo objeto agora, nunca dois resolvedores separados) — soma dos
+  // canais pro resultado, custo por resultado sempre derivado (nunca uma
+  // coluna própria). `clients.target_cost_per_result` como fallback só
+  // quando nenhum canal tem plano nenhum ainda.
+  const targetCostPerResult = clientPlan.consolidated.cpa ?? client.target_cost_per_result;
   const monthPerformanceSummary = performanceGoal
     ? computePerformanceSummary({
         scope: "consolidated",
@@ -1429,8 +1430,8 @@ export default async function ClientPage({
               lastChange={lastChange}
               historyHref={historyDrawerHref}
               performanceGoal={performanceGoal}
-              targetResultCount={targetResultCount}
-              targetCostPerResult={targetCostPerResult}
+              channels={AVAILABLE_TRAFFIC_CHANNELS}
+              byChannel={clientPlan.byChannel}
             />
           </div>
 
@@ -1761,6 +1762,7 @@ export default async function ClientPage({
           monthLabel={monthLabel}
           changes={(budgetChanges ?? []).map((change) => ({
             id: change.id,
+            channel: change.channel as TrafficChannel,
             effectiveDate: change.effective_date,
             changedAt: change.changed_at,
             changedByName: change.changed_by_profile?.name ?? null,

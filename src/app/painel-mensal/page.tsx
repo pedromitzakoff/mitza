@@ -45,9 +45,12 @@ export default async function PainelMensalPage() {
       "daily_spend",
     ),
     // Etapa 66: orçamento mensal VIGENTE — nunca mais a soma das alocações
-    // diárias persistidas (ver resolveMonthlyBudget).
+    // diárias persistidas (ver resolveMonthlyBudget). Etapa "Planejamento
+    // por Canal": filtrado por channel='meta' de propósito — consumidor
+    // ainda não migrado pro plano consolidado por canal, filtro preserva o
+    // comportamento exato de antes desta etapa.
     requireQuery(
-      supabase.from("monthly_budget_changes").select("client_id, new_amount, changed_at").eq("month", firstDay),
+      supabase.from("monthly_budget_changes").select("client_id, new_amount, changed_at").eq("month", firstDay).eq("channel", "meta"),
       "monthly_budget_changes",
     ),
   ]);
