@@ -71,7 +71,7 @@ comment on column monthly_budget_changes.target_cost_per_result is
 --      correto assim que mais de um canal tem planejamento;
 --   4. nunca recebe/grava target_cost_per_result — só target_result_count
 --      (a quantidade). Custo por resultado planejado é sempre derivado na
---      leitura (ver resolveClientPlan, lib/client-plan.ts).
+--      leitura (ver resolveClientMonthlyPlan, lib/client-plan.ts).
 -- ---------------------------------------------------------------------------
 create or replace function apply_monthly_channel_plan_change(
   p_client_id uuid,

@@ -15,7 +15,7 @@ import type { TrafficChannel } from "@/lib/traffic-channels";
  * por Canal") — Investimento planejado + Resultado planejado, o mesmo
  * objeto/snapshot sempre (nunca dois formulários/duas chamadas separadas
  * pra investimento x meta). CPA planejado nunca é enviado nem armazenado —
- * sempre derivado na leitura (`resolveClientPlan`). Toda a redistribuição
+ * sempre derivado na leitura (`resolveClientMonthlyPlan`). Toda a redistribuição
  * diária roda numa única função transacional no banco
  * (`apply_monthly_channel_plan_change`), nunca calculada e gravada aqui em
  * vários passos separados.
