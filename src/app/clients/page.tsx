@@ -16,6 +16,7 @@ import {
   type OperationClientRawData,
 } from "@/app/operation/operation-data";
 import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
+import type { TrafficChannel } from "@/lib/traffic-channels";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { ClientsFilters } from "./clients-filters";
 
@@ -94,11 +95,11 @@ export default async function ClientsPage({
         .lte("date", lastDay),
       "sprint_planned_allocations",
     ),
-    // Etapa "Planejamento por Canal": filtrado por channel='meta' de
-    // propósito — consumidor ainda não migrado pro plano consolidado por
-    // canal, filtro preserva o comportamento exato de antes desta etapa.
+    // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
+    // mais só `channel = 'meta'`) — `resolveConsolidatedMonthlyPlanned`
+    // (dentro de `buildOperationClientCard`) soma os canais com plano.
     requireQuery(
-      supabase.from("monthly_budget_changes").select("client_id, new_amount, changed_at").eq("month", firstDay).eq("channel", "meta"),
+      supabase.from("monthly_budget_changes").select("client_id, channel, month, new_amount, changed_at").eq("month", firstDay),
       "monthly_budget_changes",
     ),
     // Investimento manual multicanal (`sprint_channel_spend`, adotada como
@@ -215,7 +216,7 @@ export default async function ClientsPage({
   const budgetChangesByClient = new Map<string, OperationClientRawData["monthlyBudgetChanges"]>();
   for (const c of budgetChanges ?? []) {
     const list = budgetChangesByClient.get(c.client_id) ?? [];
-    list.push({ newAmount: c.new_amount, changedAt: c.changed_at });
+    list.push({ channel: c.channel as TrafficChannel, month: c.month, newAmount: c.new_amount, changedAt: c.changed_at });
     budgetChangesByClient.set(c.client_id, list);
   }
 

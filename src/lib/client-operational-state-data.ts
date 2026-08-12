@@ -10,10 +10,10 @@ import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
 import {
   computeMonthlyExpectedPct,
   computeMonthlyExpectedToDateByCalendar,
-  resolveMonthlyPlanSnapshot,
   resolvePlanningHorizon,
-  type MonthlyPlanChange,
 } from "@/lib/monthly-budget";
+import { resolveClientMonthlyPlan, type ClientPlanChangeRow } from "@/lib/client-plan";
+import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { evaluateAccountHealth, type AccountHealthInput } from "@/lib/account-health-engine";
 import { DEFAULT_REVIEW_MAX_BUSINESS_DAYS } from "@/lib/operation-health-thresholds";
 import { monthRangeFromOperationParam } from "@/lib/operation-triage";
@@ -111,17 +111,15 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
           .in("status", ["pendente", "atrasado"]),
         "tasks",
       ),
-      // Etapa "Planejamento por Canal": filtrado por channel='meta' de
-      // propósito — Saúde da Conta ainda não migrada pro plano consolidado
-      // por canal, filtro preserva o comportamento exato de antes desta
-      // etapa (imune a qualquer plano de Google criado pela nova tela de
-      // Planejamento).
+      // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
+      // mais só `channel = 'meta'`) — `resolveClientMonthlyPlan` resolve o
+      // investimento/meta de resultado vigente POR CANAL, consolidado é a
+      // soma aditiva (nunca o plano de um canal só).
       requireQuery(
         supabase
           .from("monthly_budget_changes")
-          .select("client_id, month, changed_at, new_amount, target_result_count, target_cost_per_result")
-          .lte("month", monthRange.firstDay)
-          .eq("channel", "meta"),
+          .select("client_id, channel, month, changed_at, new_amount, target_result_count")
+          .lte("month", monthRange.firstDay),
         "monthly_budget_changes:plan-history",
       ),
       requireQuery(
@@ -255,15 +253,15 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
     overdueCountByClient.set(task.client_id, (overdueCountByClient.get(task.client_id) ?? 0) + 1);
   }
 
-  const planChangesByClient = new Map<string, MonthlyPlanChange[]>();
+  const planChangesByClient = new Map<string, ClientPlanChangeRow[]>();
   for (const row of planChanges ?? []) {
     const list = planChangesByClient.get(row.client_id) ?? [];
     list.push({
+      channel: row.channel as TrafficChannel,
       month: row.month,
       changedAt: row.changed_at,
       investment: row.new_amount,
       targetResultCount: row.target_result_count,
-      targetCostPerResult: row.target_cost_per_result,
     });
     planChangesByClient.set(row.client_id, list);
   }
@@ -320,11 +318,24 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
       performanceResult.hasAnyRecord,
     );
 
-    const plan = resolveMonthlyPlanSnapshot(
-      planChangesByClient.get(client.id) ?? [],
-      monthRange.firstDay,
-      client.target_cost_per_result,
-    );
+    // Etapa "Migração Multicanal dos Consumidores": `investmentPlanned`/
+    // `targetResultCount` são a soma aditiva dos canais com plano (nunca
+    // fabricando um Google inexistente); `targetCostPerResult` é sempre
+    // derivado do consolidado (`investment ÷ resultCount`), nunca
+    // média/soma de CPA por canal — cai pro campo permanente do cliente só
+    // quando NENHUM canal tem meta de resultado definida ainda (mesmo
+    // fallback de sempre, ver `resolveMonthlyPlanSnapshot`, agora aplicado
+    // ao consolidado em vez de só Meta).
+    const consolidatedPlan = resolveClientMonthlyPlan({
+      channels: AVAILABLE_TRAFFIC_CHANNELS,
+      changes: planChangesByClient.get(client.id) ?? [],
+      selectedMonth: monthRange.firstDay,
+    }).consolidated;
+    const plan = {
+      investmentPlanned: consolidatedPlan.investment,
+      targetResultCount: consolidatedPlan.resultCount,
+      targetCostPerResult: consolidatedPlan.cpa ?? client.target_cost_per_result,
+    };
 
     const lastReviewAt = latestReviewByClient.get(client.id) ?? null;
     const reviewBusinessDaysAgo = lastReviewAt ? businessDaysSince(new Date(lastReviewAt), today) : null;

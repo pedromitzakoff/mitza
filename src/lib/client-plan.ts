@@ -67,3 +67,37 @@ export function resolveClientMonthlyPlan(input: {
     consolidated: consolidateChannelMetrics(channels, byChannel),
   };
 }
+
+/**
+ * Wrapper de `resolveClientMonthlyPlan` pros consumidores que só precisam
+ * do INVESTIMENTO consolidado do mês (Sprints, Dashboard, lista de
+ * Clientes, Painel Mensal, Relatórios — Etapa "Migração Multicanal dos
+ * Consumidores") — nunca uma soma local reimplementada por tela. Esses
+ * consumidores historicamente buscam `monthly_budget_changes` já filtrado
+ * `month = selectedMonth` (nunca `month <= selectedMonth`) — passar essas
+ * linhas direto aqui preserva esse comportamento de sempre, porque toda
+ * linha do input já satisfaz `month <= selectedMonth` trivialmente (são
+ * todas do mesmo mês); a regra de "versão vigente carregada de um mês
+ * anterior" de `resolveClientMonthlyPlan` só ativa se o chamador decidir
+ * ampliar a própria query — nenhuma mudança de comportamento pra quem
+ * continuar buscando só o mês exato.
+ *
+ * `fallbackPlannedSum` é o mesmo fallback de sempre (`resolveMonthlyBudget`,
+ * lib/monthly-budget.ts): só usado quando NENHUM canal tem nenhuma versão
+ * pra este mês — cliente que nunca passou pelo editor de planejamento.
+ * `targetResultCount` nunca importa pra este consumidor (só investimento),
+ * por isso não faz parte da assinatura — sempre `null` internamente.
+ */
+export function resolveConsolidatedMonthlyPlanned(
+  channels: TrafficChannel[],
+  changes: { channel: TrafficChannel; month: string; changedAt: string; investment: number }[],
+  selectedMonth: string,
+  fallbackPlannedSum: number,
+): number {
+  const plan = resolveClientMonthlyPlan({
+    channels,
+    changes: changes.map((c) => ({ ...c, targetResultCount: null })),
+    selectedMonth,
+  });
+  return plan.consolidated.investment ?? fallbackPlannedSum;
+}

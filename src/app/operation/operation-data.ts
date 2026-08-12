@@ -9,11 +9,11 @@ import {
   type PlannedAllocationRow,
 } from "@/lib/sprint-financials";
 import {
-  resolveMonthlyBudget,
   resolveBudgetEffectiveDate,
   computeMonthlyBudgetPlan,
   computeMonthlyExpectedToDateByCalendar,
 } from "@/lib/monthly-budget";
+import { resolveConsolidatedMonthlyPlanned } from "@/lib/client-plan";
 import { computeOriginalSprintPlans, type SprintClosedSnapshot } from "@/lib/sprint-recommendation";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
@@ -90,9 +90,12 @@ export interface OperationClientRawData {
   plannedAllocations: PlannedAllocationRow[];
   /** Histórico de alterações de orçamento (`monthly_budget_changes`) do mês
    * selecionado — Etapa 66: única fonte do orçamento mensal VIGENTE
-   * (`resolveMonthlyBudget`), nunca mais a soma dos planejamentos diários
-   * persistidos. */
-  monthlyBudgetChanges: { newAmount: number; changedAt: string }[];
+   * (`resolveConsolidatedMonthlyPlanned`), nunca mais a soma dos
+   * planejamentos diários persistidos. Etapa "Migração Multicanal dos
+   * Consumidores": o chamador busca TODOS os canais (nunca mais só
+   * `channel = 'meta'`) — o consolidado passa a ser a soma real dos canais
+   * com plano, não mais só o que o Meta tem configurado. */
+  monthlyBudgetChanges: { channel: TrafficChannel; month: string; changedAt: string; newAmount: number }[];
   tasks: OperationTaskItem[];
   clientLastActivityAt: string | null;
   sprintLastActivityAt: string | null;
@@ -329,11 +332,15 @@ export function buildOperationClientCard(
   const monthRangeArg = { firstDay, lastDay };
   const operationalRange = planningHorizon ?? monthRangeArg;
   // Etapa 66: orçamento mensal VIGENTE — nunca mais a soma dos planejamentos
-  // diários persistidos (ver `resolveMonthlyBudget`). `monthRangeArg`
-  // (calendário) de propósito aqui, não `operationalRange`: soma de dado
-  // real/histórico nunca encurta pelo horizonte.
-  const monthPlanned = resolveMonthlyBudget(
-    client.monthlyBudgetChanges,
+  // diários persistidos (ver `resolveConsolidatedMonthlyPlanned`).
+  // `monthRangeArg` (calendário) de propósito aqui, não `operationalRange`:
+  // soma de dado real/histórico nunca encurta pelo horizonte. Etapa
+  // "Migração Multicanal dos Consumidores": consolidado real (Meta + Google
+  // com plano), nunca mais só o que o Meta tem configurado.
+  const monthPlanned = resolveConsolidatedMonthlyPlanned(
+    AVAILABLE_TRAFFIC_CHANNELS,
+    client.monthlyBudgetChanges.map((c) => ({ channel: c.channel, month: c.month, changedAt: c.changedAt, investment: c.newAmount })),
+    firstDay,
     sumPlannedForMonth(client.plannedAllocations, monthRangeArg),
   );
   const monthActual = sumActualSpendForMonth(monthSprintRows, monthRangeArg, client.dailySpend);

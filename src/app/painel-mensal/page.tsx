@@ -11,7 +11,8 @@ import {
   SPEND_STATUS_MARGIN,
 } from "@/lib/spend-status";
 import { formatCurrency } from "@/lib/format";
-import { resolveMonthlyBudget } from "@/lib/monthly-budget";
+import { resolveConsolidatedMonthlyPlanned } from "@/lib/client-plan";
+import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 
 export default async function PainelMensalPage() {
@@ -45,12 +46,11 @@ export default async function PainelMensalPage() {
       "daily_spend",
     ),
     // Etapa 66: orçamento mensal VIGENTE — nunca mais a soma das alocações
-    // diárias persistidas (ver resolveMonthlyBudget). Etapa "Planejamento
-    // por Canal": filtrado por channel='meta' de propósito — consumidor
-    // ainda não migrado pro plano consolidado por canal, filtro preserva o
-    // comportamento exato de antes desta etapa.
+    // diárias persistidas (ver resolveConsolidatedMonthlyPlanned). Etapa
+    // "Migração Multicanal dos Consumidores": todos os canais (nunca mais só
+    // `channel = 'meta'`) — consolidado real (Meta + Google com plano).
     requireQuery(
-      supabase.from("monthly_budget_changes").select("client_id, new_amount, changed_at").eq("month", firstDay).eq("channel", "meta"),
+      supabase.from("monthly_budget_changes").select("client_id, channel, month, new_amount, changed_at").eq("month", firstDay),
       "monthly_budget_changes",
     ),
   ]);
@@ -61,10 +61,10 @@ export default async function PainelMensalPage() {
     list.push({ date: row.date, sprintId: "", amount: row.planned_amount });
     allocationsByClient.set(row.client_id, list);
   }
-  const budgetChangesByClient = new Map<string, { newAmount: number; changedAt: string }[]>();
+  const budgetChangesByClient = new Map<string, { channel: TrafficChannel; month: string; changedAt: string; investment: number }[]>();
   for (const row of budgetChanges) {
     const list = budgetChangesByClient.get(row.client_id) ?? [];
-    list.push({ newAmount: row.new_amount, changedAt: row.changed_at });
+    list.push({ channel: row.channel as TrafficChannel, month: row.month, changedAt: row.changed_at, investment: row.new_amount });
     budgetChangesByClient.set(row.client_id, list);
   }
 
@@ -73,7 +73,12 @@ export default async function PainelMensalPage() {
     const rows = allocationsByClient.get(client.id) ?? [];
     plannedByClient.set(
       client.id,
-      resolveMonthlyBudget(budgetChangesByClient.get(client.id) ?? [], sumPlannedForMonth(rows, { firstDay, lastDay })),
+      resolveConsolidatedMonthlyPlanned(
+        AVAILABLE_TRAFFIC_CHANNELS,
+        budgetChangesByClient.get(client.id) ?? [],
+        firstDay,
+        sumPlannedForMonth(rows, { firstDay, lastDay }),
+      ),
     );
   }
 

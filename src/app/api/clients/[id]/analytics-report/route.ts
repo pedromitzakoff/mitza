@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { resolveAnalyticsPeriod } from "@/lib/analytics";
 import { todayDateString } from "@/lib/today";
-import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+import type { ChannelScope } from "@/lib/traffic-channels";
 import { buildAnalyticsReportData } from "@/lib/analytics-report/report-data";
 import { buildAnalyticsReportDocument } from "@/lib/analytics-report/report-document";
 import { resolveReportTheme } from "@/lib/analytics-report/report-theme";
@@ -48,11 +48,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   });
   // Integração Google Ads: mesma plataforma selecionada no hub — nunca um
   // segundo seletor pro relatório (`exportHref` do hub já inclui esse
-  // parâmetro, ver `clients/[id]/page.tsx`).
+  // parâmetro, ver `clients/[id]/page.tsx`). Etapa "Migração Multicanal dos
+  // Consumidores": mesmo parsing de `analyticsPlatform` do hub, incluindo
+  // `consolidated`.
   const analyticsPlatformParam = url.searchParams.get("analyticsPlatform");
-  const platform: TrafficChannel = AVAILABLE_TRAFFIC_CHANNELS.includes(analyticsPlatformParam as TrafficChannel)
-    ? (analyticsPlatformParam as TrafficChannel)
-    : "meta";
+  const platform: ChannelScope =
+    analyticsPlatformParam === "google" ? "google" : analyticsPlatformParam === "consolidated" ? "consolidated" : "meta";
 
   try {
     const data = await buildAnalyticsReportData(supabase, id, period, platform);

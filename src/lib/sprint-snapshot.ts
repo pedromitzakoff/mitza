@@ -7,6 +7,7 @@ import {
 } from "./sprint-financials";
 import { computeSprintClosedSnapshot, type SprintClosedSnapshot, type SprintCalendarInput } from "./sprint-recommendation";
 import { createClient as createSupabaseClient } from "./supabase/server";
+import type { TrafficChannel } from "./traffic-channels";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -57,7 +58,7 @@ export async function ensureClosedSprintSnapshots(
     monthRange: { firstDay: string; lastDay: string };
     sprints: SprintSnapshotRow[];
     dailySpend: { date: string; spend: number }[];
-    budgetChanges: { newAmount: number; changedAt: string }[];
+    budgetChanges: { channel: TrafficChannel; newAmount: number; changedAt: string }[];
     plannedAllocations: { date: string; amount: number }[];
     /** Orçamento mensal vigente AGORA (`resolveMonthlyBudget` sobre todas as
      * mudanças, sem filtro de data) — já calculado por quem chama, nunca

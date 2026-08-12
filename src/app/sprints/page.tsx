@@ -33,6 +33,7 @@ import {
   type OperationTaskItem,
 } from "@/app/operation/operation-data";
 import { groupChannelSpendBySprintId, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
+import type { TrafficChannel } from "@/lib/traffic-channels";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-section";
 import { RecordAccountReviewDrawer } from "@/app/clients/record-account-review-drawer";
@@ -194,16 +195,15 @@ export default async function SprintsPage({
       "sprint_planned_allocations",
     ),
     // Orçamento vigente (Etapa 66) — só do mês SELECIONADO (`monthRange`),
-    // não da janela união com o mês corrente. Etapa "Planejamento por
-    // Canal": filtrado por channel='meta' de propósito — consumidor ainda
-    // não migrado pro plano consolidado por canal, filtro preserva o
-    // comportamento exato de antes desta etapa.
+    // não da janela união com o mês corrente. Etapa "Migração Multicanal dos
+    // Consumidores": todos os canais (nunca mais só `channel = 'meta'`) —
+    // `resolveConsolidatedMonthlyPlanned` (chamada dentro de
+    // `buildOperationClientCard`) soma os canais com plano.
     requireQuery(
       supabase
         .from("monthly_budget_changes")
-        .select("client_id, new_amount, changed_at")
-        .eq("month", monthRange.firstDay)
-        .eq("channel", "meta"),
+        .select("client_id, channel, month, new_amount, changed_at")
+        .eq("month", monthRange.firstDay),
       "monthly_budget_changes",
     ),
     // Investimento manual multicanal (`sprint_channel_spend`, adotada como
@@ -457,7 +457,7 @@ export default async function SprintsPage({
   const budgetChangesByClient = new Map<string, OperationClientRawData["monthlyBudgetChanges"]>();
   for (const c of budgetChanges ?? []) {
     const list = budgetChangesByClient.get(c.client_id) ?? [];
-    list.push({ newAmount: c.new_amount, changedAt: c.changed_at });
+    list.push({ channel: c.channel as TrafficChannel, month: c.month, newAmount: c.new_amount, changedAt: c.changed_at });
     budgetChangesByClient.set(c.client_id, list);
   }
 

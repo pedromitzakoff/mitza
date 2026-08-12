@@ -91,7 +91,7 @@ import { AnalyticsHubNav } from "../analytics-hub-nav";
 import { AnalyticsPlatformSwitch } from "../analytics-platform-switch";
 import { GoogleNotConnectedState } from "../google-not-connected-state";
 import { CREATIVES_NOT_AVAILABLE_FOR_GOOGLE_MESSAGE } from "@/lib/analytics-messages";
-import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel, type ChannelScope } from "@/lib/traffic-channels";
 import { VisaoGeralChannelSwitch, type VisaoGeralMetricsChannel } from "../visao-geral-channel-switch";
 
 async function fetchCommentsByType(
@@ -526,21 +526,22 @@ export default async function ClientPage({
   // `ensureClosedSprintSnapshots` continua rodando (preserva o congelamento
   // histórico em `sprints.original_planned_amount`/`final_recommended_amount`
   // pra uma eventual reativação futura), só o valor devolvido não é mais
-  // lido por ninguém nesta página. Etapa "Planejamento por Canal": filtrado
-  // por channel='meta' de propósito — o congelamento de snapshot histórico
-  // ainda não foi migrado pra reconstruir um total consolidado por canal ao
-  // longo do tempo (cada linha aqui precisa representar o total vigente
-  // NAQUELE momento, não a fatia de um canal só); migração é trabalho de
-  // uma etapa seguinte.
+  // lido por ninguém nesta página. Etapa "Migração Multicanal dos
+  // Consumidores": todos os canais (nunca mais só `channel = 'meta'`) — o
+  // congelamento de snapshot histórico agora reconstrói o total consolidado
+  // por canal NAQUELE momento (`computeSprintClosedSnapshot`, via
+  // `resolveConsolidatedMonthlyPlanned`), nunca a fatia de um canal só.
   await ensureClosedSprintSnapshots(supabase, {
     clientId: id,
     today,
     monthRange: planningHorizon,
     sprints: sprints ?? [],
     dailySpend: dailySpend ?? [],
-    budgetChanges: (budgetChanges ?? [])
-      .filter((c) => c.channel === "meta")
-      .map((c) => ({ newAmount: c.new_amount, changedAt: c.changed_at })),
+    budgetChanges: (budgetChanges ?? []).map((c) => ({
+      channel: c.channel as TrafficChannel,
+      newAmount: c.new_amount,
+      changedAt: c.changed_at,
+    })),
     plannedAllocations: monthPlannedAllocationRows,
     currentMonthlyBudget: monthPlanned,
   });
@@ -1061,14 +1062,16 @@ export default async function ClientPage({
     end: analyticsEndParam,
   });
 
-  // Integração Google Ads — seletor de plataforma "Meta Ads | Google Ads".
-  // Meta é sempre o padrão (pedido explícito do usuário: "manter a
-  // experiência atual"); controla TODA a aba de Analytics (Resumo, gráfico,
-  // Campanhas, PDF exportado), nunca só uma sub-seção. Nunca consolida os
-  // dois canais na mesma visualização — cada um é uma leitura exclusiva.
-  const analyticsPlatform: TrafficChannel = AVAILABLE_TRAFFIC_CHANNELS.includes(analyticsPlatformParam as TrafficChannel)
-    ? (analyticsPlatformParam as TrafficChannel)
-    : "meta";
+  // Integração Google Ads — seletor de plataforma "Consolidado | Meta Ads |
+  // Google Ads" (Etapa "Migração Multicanal dos Consumidores": mesma regra
+  // de escopo da Visão Geral, `VisaoGeralChannelSwitch`). Meta continua o
+  // padrão quando o parâmetro está ausente/inválido (pedido explícito do
+  // usuário original: "manter a experiência atual") — `consolidated` é um
+  // valor explícito, nunca o fallback silencioso. Controla TODA a aba de
+  // Analytics (Resumo, gráfico, Campanhas, PDF exportado), nunca só uma
+  // sub-seção.
+  const analyticsPlatform: ChannelScope =
+    analyticsPlatformParam === "google" ? "google" : analyticsPlatformParam === "consolidated" ? "consolidated" : "meta";
   // "Conectado" só é uma pergunta real pra Google (Meta pode vir de
   // performance_records manual, sem nenhuma import_sources — sempre
   // continua funcionando como hoje). `import_sources` é a única fonte de
@@ -1078,7 +1081,7 @@ export default async function ClientPage({
 
   const analyticsData =
     isAnalyticsArea && analyticsSection === "resumo" && !showPlatformNotConnected
-      ? await fetchClientAnalyticsData(supabase, id, analyticsPeriod, analyticsPlatform)
+      ? await fetchClientAnalyticsData(supabase, id, analyticsPeriod, analyticsPlatform === "consolidated" ? undefined : analyticsPlatform)
       : null;
   const analyticsBaseHref = buildAreaHref("analytics");
   // Hrefs derivados do mesmo `analyticsBaseHref`, cada um preservando os
@@ -1108,11 +1111,14 @@ export default async function ClientPage({
   // por Criativos E Resumo (Destaques do período reaproveita os mesmos
   // agregados — ver `lib/period-highlights.ts`). Integração Google Ads:
   // Criativos continua exclusivamente Meta (pedido explícito do usuário:
-  // "não implementar criativos Google") — nunca busca nada quando a
-  // plataforma selecionada é Google, `ad_creative_daily_metrics` nunca
-  // ganha canal. Campanhas NÃO depende mais desta busca (ver bloco abaixo).
+  // "não implementar criativos Google") — `ad_creative_daily_metrics` nunca
+  // ganha canal, então "Consolidado" aqui é sempre igual a "Meta" (não há
+  // dado de Google pra somar); só a visão Google explícita busca nada.
+  // Campanhas NÃO depende mais desta busca (ver bloco abaixo).
   const needsAdCreativeRows =
-    isAnalyticsArea && analyticsPlatform === "meta" && (analyticsSection === "resumo" || analyticsSection === "criativos");
+    isAnalyticsArea &&
+    (analyticsPlatform === "meta" || analyticsPlatform === "consolidated") &&
+    (analyticsSection === "resumo" || analyticsSection === "criativos");
   const adCreativeRows = needsAdCreativeRows ? await getAdCreativeDailyMetricsForPeriod(supabase, id, analyticsPeriod) : [];
   const creativeSummaries =
     analyticsSection === "resumo" || analyticsSection === "criativos" ? buildCreativeSummaries(adCreativeRows) : [];
@@ -1137,12 +1143,19 @@ export default async function ClientPage({
   // a `ad_name_column`). Etapa "Resumo Executivo": sem variação % vs
   // período anterior (removida a pedido do usuário), por isso não busca
   // mais um segundo período aqui. Filtragem por `analyticsPlatform` ocorre
-  // aqui, na camada de dados, antes das funções puras de agregação — nunca
-  // mistura Meta e Google na mesma leitura.
+  // aqui, na camada de dados, antes das funções puras de agregação — Meta e
+  // Google nunca se misturam numa mesma LINHA (identidade de campanha já é
+  // `(channel, campaignName)`, ver `lib/campaign-analytics.ts`), mas
+  // "Consolidado" (Etapa "Migração Multicanal dos Consumidores") passa as
+  // linhas dos dois canais juntas de propósito — a agregação por
+  // `(channel, campaignName)` já soma investimento/resultado corretamente
+  // sem duplicar lógica aqui.
   const needsCampaignRows =
     isAnalyticsArea && (analyticsSection === "resumo" || analyticsSection === "campanhas") && !showPlatformNotConnected;
   const campaignDailyMetricRows = needsCampaignRows
-    ? (await getCampaignDailyMetricsForPeriod(supabase, id, analyticsPeriod)).filter((row) => row.channel === analyticsPlatform)
+    ? (await getCampaignDailyMetricsForPeriod(supabase, id, analyticsPeriod)).filter(
+        (row) => analyticsPlatform === "consolidated" || row.channel === analyticsPlatform,
+      )
     : [];
   const campaignSummaries =
     (analyticsSection === "resumo" || analyticsSection === "campanhas") && !showPlatformNotConnected

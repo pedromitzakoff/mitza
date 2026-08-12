@@ -12,8 +12,10 @@ import {
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import { resolveMonthlyBudget, computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
+import { computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { getClientMonthHorizon } from "@/lib/client-month-horizons";
+import { resolveConsolidatedMonthlyPlanned } from "@/lib/client-plan";
+import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import {
   computeAgencyExecutionSummary,
   computeSprintBehaviorRows,
@@ -225,8 +227,9 @@ export async function buildReportViewData(
   }
 
   // Dados ao vivo — mesma fonte financeira central de sempre: orçamento
-  // vigente (`resolveMonthlyBudget`), realizado (`sumActualSpendForMonth`),
-  // esperado até hoje (`computeMonthlyExpectedToDateByCalendar`, Etapa 67) e
+  // vigente (`resolveConsolidatedMonthlyPlanned`), realizado
+  // (`sumActualSpendForMonth`), esperado até hoje
+  // (`computeMonthlyExpectedToDateByCalendar`, Etapa 67) e
   // `classifySpendStatus`, nunca uma conta paralela.
   const [sprints, dailySpend, tasks, plannedAllocations, budgetChanges, { count: optimizationsCount }, channelSpendRows] =
     await Promise.all([
@@ -268,20 +271,15 @@ export async function buildReportViewData(
           .lte("date", monthRange.lastDay),
         "sprint_planned_allocations",
       ),
-      // Etapa "Planejamento por Canal": filtrado por channel='meta' de
-      // propósito — este consumidor ainda não foi migrado pro plano
-      // consolidado por canal (`resolveClientMonthlyPlan`), então o filtro mantém
-      // o comportamento EXATO de antes desta etapa (histórico sempre foi
-      // Meta), imune a qualquer plano de Google criado pela nova tela de
-      // Planejamento. Migração deste consumidor é trabalho de uma etapa
-      // seguinte.
+      // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
+      // mais só `channel = 'meta'`) — `resolveConsolidatedMonthlyPlanned`
+      // soma os canais com plano.
       requireQuery(
         supabase
           .from("monthly_budget_changes")
-          .select("new_amount, changed_at")
+          .select("channel, month, new_amount, changed_at")
           .eq("client_id", clientId)
-          .eq("month", monthRange.firstDay)
-          .eq("channel", "meta"),
+          .eq("month", monthRange.firstDay),
         "monthly_budget_changes",
       ),
       // Otimizações do mês (Etapa 74) — revisões estratégicas da conta
@@ -333,9 +331,13 @@ export async function buildReportViewData(
     amount: a.planned_amount,
   }));
   // Etapa 66: orçamento mensal VIGENTE — nunca mais a soma dos planejamentos
-  // diários persistidos (ver `resolveMonthlyBudget`).
-  const planned = resolveMonthlyBudget(
-    budgetChanges.map((c) => ({ newAmount: c.new_amount, changedAt: c.changed_at })),
+  // diários persistidos (ver `resolveConsolidatedMonthlyPlanned`). Etapa
+  // "Migração Multicanal dos Consumidores": consolidado real (Meta + Google
+  // com plano), nunca mais só o que o Meta tem configurado.
+  const planned = resolveConsolidatedMonthlyPlanned(
+    AVAILABLE_TRAFFIC_CHANNELS,
+    budgetChanges.map((c) => ({ channel: c.channel as TrafficChannel, month: c.month, changedAt: c.changed_at, investment: c.new_amount })),
+    monthRange.firstDay,
     sumPlannedForMonth(plannedAllocationRows, monthRange),
   );
   const actual = sumActualSpendForMonth(monthSprintRows, monthRange, dailySpend);

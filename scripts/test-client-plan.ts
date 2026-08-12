@@ -8,7 +8,7 @@
  * Rodar: npx tsx scripts/test-client-plan.ts
  */
 import assert from "node:assert/strict";
-import { resolveClientMonthlyPlan, type ClientPlanChangeRow } from "../src/lib/client-plan";
+import { resolveClientMonthlyPlan, resolveConsolidatedMonthlyPlanned, type ClientPlanChangeRow } from "../src/lib/client-plan";
 
 let passed = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -199,5 +199,84 @@ check(
 // ONDE o investimento é distribuído dia a dia (sprint_planned_allocations),
 // nunca o snapshot mensal que este resolvedor lê.
 console.log("\n(nota) horizonte de evento: resolveClientMonthlyPlan não tem parâmetro de horizonte — ver scripts/test-planning-horizon.ts");
+
+console.log("\nresolveConsolidatedMonthlyPlanned (Etapa \"Migração Multicanal dos Consumidores\")\n");
+
+// Cenário A — Meta-only: consolidado deve ser IDÊNTICO ao legado (Sprints,
+// Dashboard, Painel Mensal, Relatórios, Saúde da Conta).
+check(
+  "A — Meta-only: consolidado = 10.000 (igual ao que Meta sozinho já mostrava)",
+  resolveConsolidatedMonthlyPlanned(
+    ["meta", "google"],
+    [{ channel: "meta", month: "2026-08-01", changedAt: "2026-08-01T10:00:00Z", investment: 10000 }],
+    "2026-08-01",
+    0,
+  ),
+  10000,
+);
+
+// Cenário B — Meta + Google: consolidado soma os dois (nunca só Meta).
+check(
+  "B — Meta (10.000) + Google (5.000): consolidado = 15.000",
+  resolveConsolidatedMonthlyPlanned(
+    ["meta", "google"],
+    [
+      { channel: "meta", month: "2026-08-01", changedAt: "2026-08-01T10:00:00Z", investment: 10000 },
+      { channel: "google", month: "2026-08-01", changedAt: "2026-08-01T10:00:00Z", investment: 5000 },
+    ],
+    "2026-08-01",
+    0,
+  ),
+  15000,
+);
+
+// Cenário C — Meta configurado, Google inexistente: sem regressão, e sem
+// fabricar um plano Google zerado que mudaria o consolidado.
+check(
+  "C — Google nunca configurado -> consolidado é só o Meta (nunca 10.000 + 0 fabricado, seria o mesmo número aqui, mas a garantia real é no byChannel)",
+  resolveConsolidatedMonthlyPlanned(
+    ["meta", "google"],
+    [{ channel: "meta", month: "2026-08-01", changedAt: "2026-08-01T10:00:00Z", investment: 10000 }],
+    "2026-08-01",
+    0,
+  ),
+  10000,
+);
+check(
+  "C — confirmação via resolveClientMonthlyPlan: Google entra em byChannel com tudo null, nunca omitido nem zerado",
+  resolveClientMonthlyPlan({
+    channels: ["meta", "google"],
+    changes: [{ channel: "meta", month: "2026-08-01", changedAt: "2026-08-01T10:00:00Z", investment: 10000, targetResultCount: null }],
+    selectedMonth: "2026-08-01",
+  }).byChannel.google,
+  { investment: null, resultCount: null, cpa: null },
+);
+
+// Cenário D — alteração de planejamento durante o mês: a versão vigente é
+// sempre a mais recente por changedAt, nunca a primeira digitada nem uma
+// soma das duas.
+check(
+  "D — Google alterado de 5.000 pra 7.000 no meio do mês -> consolidado usa a versão vigente (10.000 + 7.000), nunca soma as duas versões nem fica com a antiga",
+  resolveConsolidatedMonthlyPlanned(
+    ["meta", "google"],
+    [
+      { channel: "meta", month: "2026-08-01", changedAt: "2026-08-01T10:00:00Z", investment: 10000 },
+      { channel: "google", month: "2026-08-01", changedAt: "2026-08-05T10:00:00Z", investment: 5000 },
+      { channel: "google", month: "2026-08-01", changedAt: "2026-08-15T10:00:00Z", investment: 7000 },
+    ],
+    "2026-08-01",
+    0,
+  ),
+  17000,
+);
+
+// Fallback (comportamento de sempre, `resolveMonthlyBudget`): nenhum canal
+// com nenhuma versão pra este mês -> cai pra soma das alocações diárias já
+// persistidas (nunca 0/null fabricado quando existe dado real de sprint).
+check(
+  "Fallback — nenhum canal com plano definido pra este mês -> usa a soma de sprint_planned_allocations (fallbackPlannedSum)",
+  resolveConsolidatedMonthlyPlanned(["meta", "google"], [], "2026-08-01", 4200),
+  4200,
+);
 
 console.log(`\n${passed} verificações passaram.`);

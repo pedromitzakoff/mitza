@@ -19,7 +19,7 @@ import { buildCampaignSummaries, type CampaignSummary } from "@/lib/campaign-ana
 import { buildCreativeSummaries, type CreativeSummary } from "@/lib/creative-analytics";
 import { FUTURE_OPPORTUNITY_CATEGORIES } from "@/lib/analytics-messages";
 import { getActiveImportSourceChannelsForClient } from "@/lib/performance-queries";
-import type { TrafficChannel } from "@/lib/traffic-channels";
+import type { ChannelScope } from "@/lib/traffic-channels";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -62,7 +62,7 @@ export interface AnalyticsReportData {
    * 2) precisa saber disso pra escolher a mensagem certa mesmo quando
    * `creatives` já está vazio por outro motivo (Google nunca busca
    * `ad_creative_daily_metrics`, conectado ou não). */
-  platform: TrafficChannel;
+  platform: ChannelScope;
   summary: AnalyticsReportSummary;
   /** Mesma lista estática do bloco "Oportunidades" do Resumo Executivo
    * (`FUTURE_OPPORTUNITY_CATEGORIES`) — reserva de espaço, sem inteligência
@@ -109,7 +109,7 @@ export async function buildAnalyticsReportData(
   supabase: Supabase,
   clientId: string,
   period: { start: string; end: string },
-  platform: TrafficChannel = "meta",
+  platform: ChannelScope = "meta",
 ): Promise<AnalyticsReportData> {
   // Integração Google Ads: mesmo cuidado do hub (`page.tsx`) — "conectado"
   // só é uma pergunta real pra Google, nunca pra Meta (que pode ser
@@ -120,19 +120,26 @@ export async function buildAnalyticsReportData(
   // Integração Google Ads: Campanhas é uma busca independente de Criativos
   // desde a origem (`campaign_daily_metrics`, channel-aware) — nunca mais
   // derivada de `ad_creative_daily_metrics` (Meta-only). Criativos continua
-  // exclusivamente Meta — nunca busca nada quando a plataforma é Google.
-  // Nada disso roda quando a plataforma não está conectada, mesmo critério
-  // do hub (`showPlatformNotConnected`).
+  // exclusivamente Meta — "Consolidado" busca os mesmos criativos de Meta
+  // (não há dado de Google pra somar), só a visão Google explícita não
+  // busca nada. Nada disso roda quando a plataforma não está conectada,
+  // mesmo critério do hub (`showPlatformNotConnected`).
   const [clientRows, data, adCreativeRows, campaignRowsAllChannels] = await Promise.all([
     requireQuery(supabase.from("clients").select("id, name").eq("id", clientId), "clients:analytics-report"),
-    platformNotConnected ? Promise.resolve(null) : fetchClientAnalyticsData(supabase, clientId, period, platform),
-    platform === "meta" ? getAdCreativeDailyMetricsForPeriod(supabase, clientId, period) : Promise.resolve([]),
+    platformNotConnected
+      ? Promise.resolve(null)
+      : fetchClientAnalyticsData(supabase, clientId, period, platform === "consolidated" ? undefined : platform),
+    platform === "meta" || platform === "consolidated"
+      ? getAdCreativeDailyMetricsForPeriod(supabase, clientId, period)
+      : Promise.resolve([]),
     platformNotConnected ? Promise.resolve([]) : getCampaignDailyMetricsForPeriod(supabase, clientId, period),
   ]);
 
   const client = clientRows[0];
   const creatives = buildCreativeSummaries(adCreativeRows);
-  const campaigns = buildCampaignSummaries(campaignRowsAllChannels.filter((row) => row.channel === platform));
+  const campaigns = buildCampaignSummaries(
+    campaignRowsAllChannels.filter((row) => platform === "consolidated" || row.channel === platform),
+  );
 
   return {
     client: { id: client.id, name: client.name },

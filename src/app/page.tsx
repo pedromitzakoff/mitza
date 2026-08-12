@@ -12,7 +12,7 @@ import {
   shiftMonthParam,
 } from "@/lib/sprint-financials";
 import { formatCurrency, formatMonthLabel, formatPercent } from "@/lib/format";
-import { getMonthTemporalStatus, resolveMonthlyPerformanceTargets, resolvePlanningHorizon } from "@/lib/monthly-budget";
+import { getMonthTemporalStatus, resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { getClientMonthHorizons } from "@/lib/client-month-horizons";
 import {
   buildOperationClientCard,
@@ -54,6 +54,8 @@ import { PageHeader } from "@/components/workspace/page-header";
 import { SectionHeader } from "@/components/workspace/section-header";
 import type { StatusTone } from "@/components/workspace/status-dot";
 import type { TrafficChannelDb } from "@/lib/supabase/database.types";
+import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+import { resolveClientMonthlyPlan, type ClientPlanChangeRow } from "@/lib/client-plan";
 import type { SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 
 /**
@@ -222,17 +224,15 @@ export default async function Home({
     // Orçamento vigente (Etapa 66) — só do mês SELECIONADO (`monthRange`),
     // não da janela união com o mês corrente: `buildOperationClientCard` só
     // usa `monthRange` pra montar o card, nunca `rangeStart`/`rangeEnd`.
-    // Etapa "Planejamento por Canal": filtrado por channel='meta' de
-    // propósito — esta query alimenta tanto os cards do Dashboard quanto
-    // `buildOperationClientCard` (Operação), nenhum dos dois migrado pro
-    // plano consolidado por canal ainda; filtro preserva o comportamento
-    // exato de antes desta etapa nos dois.
+    // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
+    // mais só `channel = 'meta'`) — esta query alimenta tanto os cards do
+    // Dashboard quanto `buildOperationClientCard` (Operação), os dois via
+    // `resolveConsolidatedMonthlyPlanned` (soma real dos canais com plano).
     requireQuery(
       supabase
         .from("monthly_budget_changes")
-        .select("client_id, new_amount, changed_at")
-        .eq("month", monthRange.firstDay)
-        .eq("channel", "meta"),
+        .select("client_id, channel, month, new_amount, changed_at")
+        .eq("month", monthRange.firstDay),
       "monthly_budget_changes:current-month",
     ),
     // Consulta própria (independente de `gestores`, que serve o dropdown de
@@ -268,15 +268,16 @@ export default async function Home({
     // 1.0") — `.lte` (não `.eq`) pelo mesmo motivo da página do Cliente: a
     // versão vigente do mês selecionado pode ter sido definida num mês
     // anterior. Sem filtro por cliente (é a Visão Geral inteira) — resolvido
-    // por cliente logo abaixo, com `resolveMonthlyPerformanceTargets`.
-    // Etapa "Planejamento por Canal": filtrado por channel='meta' de
-    // propósito — mesmo motivo da query de investimento acima.
+    // por cliente logo abaixo, com `resolveClientMonthlyPlan`.
+    // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
+    // mais só `channel = 'meta'`) — `resolveClientMonthlyPlan` resolve a
+    // meta de resultado e o CPA vigente POR CANAL, e o consolidado é a soma
+    // aditiva dos canais (nunca a meta de um canal só).
     requireQuery(
       supabase
         .from("monthly_budget_changes")
-        .select("client_id, month, changed_at, new_amount, target_result_count, target_cost_per_result")
+        .select("client_id, channel, month, changed_at, new_amount, target_result_count")
         .lte("month", monthRange.firstDay)
-        .eq("channel", "meta")
         .order("month", { ascending: false })
         .order("changed_at", { ascending: false }),
       "monthly_budget_changes:target-history",
@@ -416,7 +417,7 @@ export default async function Home({
   const budgetChangesByClient = new Map<string, OperationClientRawData["monthlyBudgetChanges"]>();
   for (const c of budgetChanges ?? []) {
     const list = budgetChangesByClient.get(c.client_id) ?? [];
-    list.push({ newAmount: c.new_amount, changedAt: c.changed_at });
+    list.push({ channel: c.channel as TrafficChannel, month: c.month, newAmount: c.new_amount, changedAt: c.changed_at });
     budgetChangesByClient.set(c.client_id, list);
   }
 
@@ -441,30 +442,32 @@ export default async function Home({
   // sobrescreve é suficiente pra "a primeira que eu vir, por cliente, é a
   // vigente". Fallback pro campo permanente de `clients` fica dentro de
   // `resolveMonthlyPerformanceTargets`, chamado por cliente logo abaixo.
-  const targetHistoryByClient = new Map<
-    string,
-    { month: string; changedAt: string; investment: number; targetResultCount: number | null; targetCostPerResult: number | null }[]
-  >();
+  const targetHistoryByClient = new Map<string, ClientPlanChangeRow[]>();
   for (const row of performanceTargetHistory ?? []) {
     const list = targetHistoryByClient.get(row.client_id) ?? [];
     list.push({
+      channel: row.channel as TrafficChannel,
       month: row.month,
       changedAt: row.changed_at,
       investment: row.new_amount,
       targetResultCount: row.target_result_count,
-      targetCostPerResult: row.target_cost_per_result,
     });
     targetHistoryByClient.set(row.client_id, list);
   }
   const permanentCostFallbackByClient = new Map((clients ?? []).map((c) => [c.id, c.target_cost_per_result]));
+  // Etapa "Migração Multicanal dos Consumidores": CPA consolidado = derivado
+  // do investimento/resultado consolidados (nunca média/soma de CPA por
+  // canal, ver `consolidateChannelMetrics`) — cai pro campo permanente do
+  // cliente só quando NENHUM canal tem meta de resultado definida (mesmo
+  // fallback de sempre, agora aplicado ao consolidado em vez de só Meta).
   const resolvedTargetCostByClient = new Map<string, number | null>(
     (clients ?? []).map((c) => [
       c.id,
-      resolveMonthlyPerformanceTargets(
-        targetHistoryByClient.get(c.id) ?? [],
-        monthRange.firstDay,
-        permanentCostFallbackByClient.get(c.id) ?? null,
-      ).targetCostPerResult,
+      resolveClientMonthlyPlan({
+        channels: AVAILABLE_TRAFFIC_CHANNELS,
+        changes: targetHistoryByClient.get(c.id) ?? [],
+        selectedMonth: monthRange.firstDay,
+      }).consolidated.cpa ?? permanentCostFallbackByClient.get(c.id) ?? null,
     ]),
   );
 

@@ -1,9 +1,10 @@
 import {
   distributeCentsEqually,
   listDatesInclusive,
-  resolveMonthlyBudget,
   computeMonthlyBudgetPlan,
 } from "./monthly-budget";
+import { resolveConsolidatedMonthlyPlanned } from "./client-plan";
+import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "./traffic-channels";
 
 /**
  * Camada de planejamento original + recomendação dinâmica por SPRINT (Etapa
@@ -112,10 +113,11 @@ export interface ComputeSprintClosedSnapshotInput {
   /** Todas as sprints do mês — precisa do calendário inteiro pra partição
    * (planejamento original) e pra recomendação, não só desta sprint. */
   allSprintsOfMonth: SprintCalendarInput[];
-  /** Histórico de `monthly_budget_changes` do mês inteiro (qualquer data),
-   * já buscado — esta função filtra internamente pelas mudanças que
-   * aconteceram até o fim desta sprint. */
-  budgetChanges: { newAmount: number; changedAt: string }[];
+  /** Histórico de `monthly_budget_changes` do mês inteiro (qualquer data,
+   * QUALQUER CANAL — Etapa "Migração Multicanal dos Consumidores"), já
+   * buscado — esta função filtra internamente pelas mudanças que
+   * aconteceram até o fim desta sprint, por canal, e soma (nunca só Meta). */
+  budgetChanges: { channel: TrafficChannel; newAmount: number; changedAt: string }[];
   /** Fallback de `resolveMonthlyBudget` pra quando não existe NENHUMA linha
    * em `monthly_budget_changes` até o fim desta sprint — soma das alocações
    * diárias (`sprint_planned_allocations`) através do fim desta sprint. */
@@ -175,16 +177,29 @@ export function computeSprintClosedSnapshot(input: ComputeSprintClosedSnapshotIn
   const budgetChangesAsOfEnd = budgetChanges.filter((c) => c.changedAt <= cutoff);
   const hadBudgetDuringSprint = budgetChangesAsOfEnd.length > 0 || fallbackPlannedSumThroughSprintEnd > 0;
 
-  const budgetForOriginalPlan = hadBudgetDuringSprint
-    ? resolveMonthlyBudget(budgetChangesAsOfEnd, fallbackPlannedSumThroughSprintEnd)
-    : currentMonthlyBudget;
+  // Etapa "Migração Multicanal dos Consumidores": consolidado real (soma dos
+  // canais com plano vigente NAQUELE momento, nunca só Meta) — mesmo
+  // resolvedor central usado por Sprints/Dashboard/Relatórios/Painel Mensal
+  // (`resolveConsolidatedMonthlyPlanned`), só que sobre a lista já
+  // pré-filtrada por `changedAt <= cutoff` (todas as linhas pertencem ao
+  // mesmo `monthRange.firstDay`, então a elegibilidade por mês do resolvedor
+  // central nunca filtra nada aqui — o corte de verdade já aconteceu acima).
+  const resolveBudgetAsOfCutoff = () =>
+    resolveConsolidatedMonthlyPlanned(
+      AVAILABLE_TRAFFIC_CHANNELS,
+      budgetChangesAsOfEnd.map((c) => ({ channel: c.channel, month: monthRange.firstDay, changedAt: c.changedAt, investment: c.newAmount })),
+      monthRange.firstDay,
+      fallbackPlannedSumThroughSprintEnd,
+    );
+
+  const budgetForOriginalPlan = hadBudgetDuringSprint ? resolveBudgetAsOfCutoff() : currentMonthlyBudget;
 
   const originalPlans = computeOriginalSprintPlans(budgetForOriginalPlan, monthRange, allSprintsOfMonth);
   const originalPlannedAmount = originalPlans.get(sprint.sprintId)?.originalPlannedAmount ?? 0;
 
   let finalRecommendedAmount: number | null = null;
   if (hadBudgetDuringSprint) {
-    const monthlyBudgetAsOfEnd = resolveMonthlyBudget(budgetChangesAsOfEnd, fallbackPlannedSumThroughSprintEnd);
+    const monthlyBudgetAsOfEnd = resolveBudgetAsOfCutoff();
     const plan = computeMonthlyBudgetPlan({
       monthlyBudget: monthlyBudgetAsOfEnd,
       monthActual: monthActualThroughSprintStart,
