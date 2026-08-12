@@ -606,6 +606,15 @@ export default async function ClientPage({
         targetCostPerResult,
       })
     : null;
+  // QA multicanal: a meta de custo por resultado (CPA-alvo) também é
+  // resolvida por canal em `clientPlan.byChannel` (Etapa "Planejamento
+  // Mensal por Canal") — quando um canal específico está selecionado, usar
+  // a meta DAQUELE canal, nunca a consolidada (senão o card "Meta" mostraria
+  // o CPA-alvo combinado enquanto todo o resto do painel já está escopado a
+  // um canal só). Cai pra `targetCostPerResult` consolidado só quando o
+  // canal selecionado ainda não tem meta própria definida.
+  const scopedTargetCostPerResult =
+    metricsChannel === "consolidated" ? targetCostPerResult : (clientPlan.byChannel[metricsChannel]?.cpa ?? targetCostPerResult);
   // Versão do resumo do mês escopada ao seletor Consolidado/Meta/Google —
   // alimenta só `AccountFollowUpPanel`/"Fechamento do mês" (abaixo, dentro
   // do bloco `visao-geral`); `monthPerformanceSummary` acima continua
@@ -618,7 +627,7 @@ export default async function ClientPage({
         records: performanceRecords,
         resultType: performanceGoal,
         consolidatedActualSpend: monthActual,
-        targetCostPerResult,
+        targetCostPerResult: scopedTargetCostPerResult,
         channelActualSpend: metricsChannel !== "consolidated" ? { [metricsChannel]: visaoGeralMonthActual } : undefined,
       })
     : null;
@@ -654,7 +663,7 @@ export default async function ClientPage({
         isFuture: sprint.temporalStatus === "futura",
         records: scopedRecords,
         actualSpend: scopedActualSpend,
-        targetCostPerResult,
+        targetCostPerResult: scopedTargetCostPerResult,
       }),
       // Formulário de edição sempre trabalha com TODOS os canais,
       // independente do seletor de exibição (`sprintRecords`/consolidado
@@ -1439,7 +1448,7 @@ export default async function ClientPage({
               monthActual={visaoGeralMonthActual}
               performanceGoal={performanceGoal}
               performanceSummary={visaoGeralPerformanceSummary}
-              targetCostPerResult={targetCostPerResult}
+              targetCostPerResult={scopedTargetCostPerResult}
               channelBreakdown={monthPerformanceChannelBreakdown}
               configureObjectiveHref={`/clients/${client.id}/edit`}
               historyRows={recentHistoryRows}
@@ -1543,7 +1552,7 @@ export default async function ClientPage({
                       taskManagers={managers ?? []}
                       defaultAssigneeName={client.primary_manager?.name ?? null}
                       performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
-                      targetCostPerResult={targetCostPerResult}
+                      targetCostPerResult={scopedTargetCostPerResult}
                       returnTo={returnTo}
                       hideNextAction
                       hideTaskList
