@@ -16,6 +16,7 @@ import {
   resolvePlanningHorizon,
   resolveBudgetEffectiveDate,
   computeMonthlyExpectedToDateByCalendar,
+  computeMonthlyBudgetPlan,
   getMonthTemporalStatus,
 } from "../src/lib/monthly-budget";
 
@@ -94,5 +95,66 @@ check(
   resolvePlanningHorizon(AGOSTO_2026, "2026-09-15"),
   AGOSTO_2026,
 );
+
+console.log("\ncomputeMonthlyBudgetPlan sobre o horizonte resolvido (saldo/dias restantes/recomendação diária)\n");
+
+// Caso D — perto do evento: hoje 19/08, evento 21/08. Saldo restante
+// distribuído só pelos dias restantes ATÉ O HORIZONTE (19, 20, 21 = 3
+// dias), nunca até 31/08.
+{
+  const horizon = resolvePlanningHorizon(AGOSTO_2026, "2026-08-21");
+  const plan = computeMonthlyBudgetPlan({
+    monthlyBudget: 12000,
+    monthActual: 0,
+    monthRange: horizon,
+    effectiveDate: "2026-08-19",
+    sprints: [],
+  });
+  check("hoje 19/08, evento 21/08 -> 3 dias elegíveis (19, 20, 21), não 13", plan.eligibleDaysCount, 3);
+  check("saldo de R$12.000 em 3 dias -> R$4.000/dia, não R$12.000/13 dias", plan.recommendedDaily, 4000);
+}
+
+// Caso E — dia do evento: hoje = 21/08 (o próprio último dia do horizonte).
+// Ainda existe 1 dia elegível (hoje sempre conta) — nunca divisão por zero,
+// nunca NaN/Infinity, nunca recomendação absurda.
+{
+  const horizon = resolvePlanningHorizon(AGOSTO_2026, "2026-08-21");
+  const plan = computeMonthlyBudgetPlan({
+    monthlyBudget: 30000,
+    monthActual: 28000,
+    monthRange: horizon,
+    effectiveDate: "2026-08-21",
+    sprints: [],
+  });
+  check("hoje é o próprio dia do evento -> ainda 1 dia elegível (hoje sempre conta), nunca 0", plan.eligibleDaysCount, 1);
+  check("recomendação do último dia é finita e positiva (nunca NaN/Infinity)", Number.isFinite(plan.recommendedDaily) && plan.recommendedDaily >= 0, true);
+  check("recomendação do último dia = todo o saldo restante (R$2.000) num único dia", plan.recommendedDaily, 2000);
+}
+
+// Caso F — depois do evento: hoje 22/08+. `resolveBudgetEffectiveDate` já
+// devolve `effectiveDate: null` (testado acima) — por construção,
+// `computeMonthlyBudgetPlan` NUNCA é chamada nesse estado por nenhum
+// consumidor real (`plan = effectiveDate ? computeMonthlyBudgetPlan(...) :
+// null`, ver month-investment-summary.tsx/operation-data.ts) — não existe
+// "R$0/dia" fabricado, a recomendação simplesmente deixa de existir.
+{
+  const horizon = resolvePlanningHorizon(AGOSTO_2026, "2026-08-21");
+  const { effectiveDate } = resolveBudgetEffectiveDate(horizon, "2026-08-22");
+  check("hoje 22/08 (depois do evento) -> effectiveDate null -> nenhum consumidor chama computeMonthlyBudgetPlan, nunca mostra R$0/dia", effectiveDate, null);
+}
+
+// Caso H — planejamento multicanal: Meta R$20.000, Google R$10.000,
+// Consolidado R$30.000, evento 21/08. Os 3 escopos usam o MESMO horizonte
+// resolvido (resolvePlanningHorizon não sabe o que é canal) — só o
+// orçamento/saldo mudam entre eles, nunca os dias elegíveis.
+{
+  const horizon = resolvePlanningHorizon(AGOSTO_2026, "2026-08-21");
+  const today = "2026-08-19";
+  const meta = computeMonthlyBudgetPlan({ monthlyBudget: 20000, monthActual: 0, monthRange: horizon, effectiveDate: today, sprints: [] });
+  const google = computeMonthlyBudgetPlan({ monthlyBudget: 10000, monthActual: 0, monthRange: horizon, effectiveDate: today, sprints: [] });
+  const consolidado = computeMonthlyBudgetPlan({ monthlyBudget: 30000, monthActual: 0, monthRange: horizon, effectiveDate: today, sprints: [] });
+  check("Meta, Google e Consolidado compartilham os mesmos dias elegíveis (mesmo horizonte 01→21)", [meta.eligibleDaysCount, google.eligibleDaysCount, consolidado.eligibleDaysCount], [3, 3, 3]);
+  check("saldo consolidado (R$30.000) é a soma dos saldos por canal (R$20.000 + R$10.000)", consolidado.remainingBudget, meta.remainingBudget + google.remainingBudget);
+}
 
 console.log(`\n${passed} verificações passaram.`);
