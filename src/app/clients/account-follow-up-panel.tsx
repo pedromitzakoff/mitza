@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { ClientHistoryRow } from "@/lib/client-operational-history";
 import type { AccountReviewOutcome, OptimizationType } from "@/lib/supabase/database.types";
 import type { PerformanceSummary } from "@/lib/performance";
@@ -48,8 +49,17 @@ export interface LastOptimizationInfo {
  * histórico do mês, recolhido por padrão. Nenhum cálculo financeiro ou de
  * performance muda — os 4 KPIs e o diagnóstico só consomem valores já
  * calculados pela página; nunca recomputados aqui.
+ *
+ * Refinamento visual (Etapa "Grid e hierarquia da página do cliente"): o
+ * seletor "Consolidado | Meta Ads | Google Ads" (`channelSwitch`, montado
+ * pela página — este componente nunca conhece `VisaoGeralChannelSwitch`)
+ * passou a viver DENTRO da borda deste card, alinhado à direita no topo —
+ * antes ficava solto num `<div>` acima do card, lido como um elemento
+ * desconectado das métricas que ele controla. Puramente posicional: nenhuma
+ * prop, href ou lógica de seleção mudou, só onde o slot é renderizado.
  */
 export function AccountFollowUpPanel({
+  channelSwitch,
   monthLabel,
   monthActual,
   performanceGoal,
@@ -62,6 +72,9 @@ export function AccountFollowUpPanel({
   historyHref,
   buildReviewDetailHref,
 }: {
+  /** Seletor de canal — `undefined`/`null` quando a tela que usa este card
+   * não tem esse conceito (nunca fabricado aqui). */
+  channelSwitch?: ReactNode;
   monthLabel: string;
   /** Investimento realizado do mês selecionado — já calculado pela camada
    * financeira (`sumActualSpendForMonth`), nunca recomputado aqui. */
@@ -81,6 +94,7 @@ export function AccountFollowUpPanel({
 }) {
   return (
     <div className="rounded-lg border border-border bg-card p-3">
+      {channelSwitch && <div className="mb-2 flex justify-end">{channelSwitch}</div>}
       <MonthlyKpiSummary
         monthActual={monthActual}
         performanceGoal={performanceGoal}

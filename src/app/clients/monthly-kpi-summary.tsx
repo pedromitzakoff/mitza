@@ -9,7 +9,11 @@ function Kpi({ label, value, auxiliary }: { label: string; value: string; auxili
     <div className="flex flex-col gap-0.5">
       <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="text-xl font-semibold tracking-tight text-foreground">{value}</p>
-      {auxiliary && <p className="text-xs text-muted-foreground">{auxiliary}</p>}
+      {/* Linha reservada mesmo vazia (Etapa "Refinamento visual — grid 4x2"):
+          só "Resultados" às vezes tem texto auxiliar, mas todo Kpi da mesma
+          linha precisa da mesma altura pro grid ficar alinhado — nunca um
+          card mais alto que os vizinhos. */}
+      <p className="min-h-[1em] text-xs text-muted-foreground">{auxiliary}</p>
     </div>
   );
 }
@@ -80,17 +84,24 @@ export function MonthlyKpiSummary({
 
   return (
     <div>
-      <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-4">
+      {/* Grid 4x2 consistente (Etapa "Refinamento visual"): as duas linhas
+          usam exatamente o mesmo template de colunas (`grid-cols-2
+          sm:grid-cols-4`), então os eixos horizontais sempre batem — a 2ª
+          linha (faturamento/ROAS/ticket médio) nunca fica mais estreita que
+          a 1ª. Quando não há receita, a 2ª linha simplesmente não existe
+          (nenhum espaço vazio reservado à toa). */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
         <Kpi label="Investimento total" value={formatCurrency(monthActual)} />
         <Kpi label="Resultados" value={resultsValue} auxiliary={resultsAuxiliary} />
         <Kpi label="Custo por resultado" value={costValue} />
         <Kpi label="Meta" value={metaValue} />
       </div>
       {hasRevenue && (
-        <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-2 border-t border-border pt-2 sm:grid-cols-3">
+        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-3 sm:grid-cols-4">
           <Kpi label="Faturamento" value={revenueValue} />
           <Kpi label="ROAS" value={roasValue} />
           <Kpi label="Ticket médio" value={averageTicketValue} />
+          <div aria-hidden="true" />
         </div>
       )}
       {!performanceGoal && (

@@ -1403,25 +1403,25 @@ export default async function ClientPage({
           a Fase F já tinha identificado como fragmentação). */}
       {activeArea === "visao-geral" && (
         <>
-          {/* Seletor "Consolidado | Meta Ads | Google Ads" — pedido
-              explícito do usuário: escopa Indicadores do mês, cada Sprint e
-              Fechamento do mês (abaixo) ao canal escolhido. Investimento do
-              mês (`MonthInvestmentSummary`, mais abaixo) fica de fora —
-              orçamento/ritmo não têm meta separada por canal, ver doc de
-              `visaoGeralMonthActual`. */}
-          <div className="mt-3 flex justify-end">
-            <VisaoGeralChannelSwitch baseHref={metricsChannelBaseHref} active={metricsChannel} />
-          </div>
-
           {/* Indicadores do mês — investimento, resultados, custo por
               resultado e meta (as 4 métricas principais, mesmo peso
               visual), diagnóstico de meta, resultados por canal, última
               otimização e tracking operacional. A meta do mês (antes numa
               aba própria, depois um card "Performance do mês" à parte)
               agora é só mais uma destas métricas — nunca um fluxo
-              separado. */}
+              separado.
+
+              Seletor "Consolidado | Meta Ads | Google Ads" — pedido
+              explícito do usuário: escopa Indicadores do mês, cada Sprint e
+              Fechamento do mês (abaixo) ao canal escolhido. Investimento do
+              mês (`MonthInvestmentSummary`, mais abaixo) fica de fora —
+              orçamento/ritmo não têm meta separada por canal, ver doc de
+              `visaoGeralMonthActual`. Refinamento visual: vive dentro da
+              borda do card (`channelSwitch`), não mais solto acima dele —
+              mesmo href/estado ativo de sempre, só a posição mudou. */}
           <div className="mt-3">
             <AccountFollowUpPanel
+              channelSwitch={<VisaoGeralChannelSwitch baseHref={metricsChannelBaseHref} active={metricsChannel} />}
               monthLabel={monthLabel}
               monthActual={visaoGeralMonthActual}
               performanceGoal={performanceGoal}

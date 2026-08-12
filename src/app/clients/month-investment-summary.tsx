@@ -230,91 +230,106 @@ export function MonthInvestmentSummary({
     `Diferença: ${diffPP !== null ? `${percentagePointsFormatter.format(diffPP)} p.p.` : "—"}`,
   ].join("\n");
 
+  // Etapa "Refinamento visual — 3 zonas": mesma condição que já decidia
+  // se o diagnóstico aparecia (nunca em mês futuro/encerrado/sem plano),
+  // só extraída pra decidir também se a ZONA 1 (contexto/status) precisa de
+  // margem abaixo dela antes da barra — nenhuma fórmula nova.
+  const showDiagnosis = planned > 0 && !isFutureMonth && !isClosedMonth && diagnosisText;
+  const hasContextZone = Boolean(currentPlanningEndDate) || Boolean(showDiagnosis);
+
   return (
     <div className="rounded-lg border border-border bg-card p-3">
-      {/* Etapa "Horizonte de Planejamento": sinalização discreta — impede o
-          gestor de olhar um cliente de evento e achar que ainda existem
-          dias de operação até o fim do mês, quando a campanha já terminou
-          antes disso (ex.: Baile do Hawaii, evento 21/08 — não sobra
-          "atraso" pra investir entre 22 e 31/08). */}
-      {currentPlanningEndDate && (
-        <p className="mb-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-          Evento · até {formatDayShortMonth(currentPlanningEndDate)}
-        </p>
-      )}
-      {/* Etapa "Card de ritmo do orçamento": o valor investido/planejado
-          saiu daqui — o resumo superior (`MonthlyKpiSummary`) já mostra
-          esse mesmo número, e repeti-lo aqui era a duplicação que esta
-          etapa pediu pra remover. Este card agora é só ritmo: barra
-          (com tooltip) → diagnóstico → recomendação → restante → rodapé. */}
-      {planned <= 0 ? (
-        <EmptyState>Sem planejamento configurado para este mês.</EmptyState>
-      ) : isFutureMonth ? (
-        <>
-          <InvestmentBarWithTooltip summary={summary} monthTemporalStatus="futuro" tooltipText={barTooltipText} />
-          {plan && (
-            <div className="mt-2">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Ritmo planejado inicial</p>
-              <p className="text-sm font-semibold text-brand">{formatCurrency(plan.recommendedDaily)}/dia</p>
-            </div>
+      {/* ZONA 1 — Contexto/status: badge de evento (Etapa "Horizonte de
+          Planejamento" — impede o gestor de achar que ainda existem dias de
+          operação até o fim do mês quando a campanha já terminou antes
+          disso, ex.: Baile do Hawaii) e o alerta de ritmo (diagnóstico)
+          agrupados na mesma faixa, no topo do card — antes viviam em dois
+          lugares (badge sempre no topo, diagnóstico só dentro do ramo "mês
+          em andamento", logo acima da barra). Mesmo texto/tom/condição de
+          sempre, só a posição relativa mudou. */}
+      {hasContextZone && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {currentPlanningEndDate && (
+            <p className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+              Evento · até {formatDayShortMonth(currentPlanningEndDate)}
+            </p>
           )}
-        </>
-      ) : isClosedMonth ? (
-        <InvestmentBarWithTooltip summary={summary} monthTemporalStatus="passado" tooltipText={barTooltipText} />
-      ) : (
-        <>
-          {/* DIAGNÓSTICO — agora ANTES da barra (Etapa "Reordenar
-              diagnóstico"): o gestor quer a resposta primeiro, o gráfico é
-              o suporte visual dela, não o contrário. Mesma frase/tom de
-              sempre, só subiu de posição. */}
-          {diagnosisText && (
+          {showDiagnosis && (
             <p className={`flex items-center gap-1.5 text-sm font-semibold ${diagnosisToneClass}`}>
               <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-current" aria-hidden="true" />
               {diagnosisText}
             </p>
           )}
+        </div>
+      )}
 
-          <InvestmentBarWithTooltip summary={summary} tooltipText={barTooltipText} />
+      {/* Etapa "Card de ritmo do orçamento": o valor investido/planejado
+          saiu daqui — o resumo superior (`MonthlyKpiSummary`) já mostra
+          esse mesmo número, e repeti-lo aqui era a duplicação que esta
+          etapa pediu pra remover. */}
+      {planned <= 0 ? (
+        <div className={hasContextZone ? "mt-2" : ""}>
+          <EmptyState>Sem planejamento configurado para este mês.</EmptyState>
+        </div>
+      ) : (
+        <>
+          {/* ZONA 2 — Progresso: barra + marcador de esperado (mesmo
+              componente pros 3 estados temporais, só o `monthTemporalStatus`
+              muda — nenhuma barra nova, nenhuma prop nova). */}
+          <div className={hasContextZone ? "mt-2" : ""}>
+            <InvestmentBarWithTooltip
+              summary={summary}
+              monthTemporalStatus={isFutureMonth ? "futuro" : isClosedMonth ? "passado" : undefined}
+              tooltipText={barTooltipText}
+            />
+          </div>
 
-          {/* RECOMENDAÇÃO — mesmos 3 números de sempre (`recommendedDaily`/
-              `remainingBudget`/`eligibleDaysCount`, computeMonthlyBudgetPlan,
-              nunca a fórmula do ritmo acima), agora como uma faixa de mini-
-              KPIs (Etapa "Ritmo recomendado vira mini-KPI") — mesmo padrão
-              label pequeno + valor de `MonthlyKpiSummary`, só mais compacto
-              e lado a lado, pra ler mais rápido que a frase longa de antes. */}
-          {plan && (
-            <div className="mt-2">
-              {plan.isBudgetReached && (
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Orçamento mensal atingido</p>
-              )}
-              <div className={`grid grid-cols-3 gap-x-3 gap-y-1 ${plan.isBudgetReached ? "mt-1" : ""}`}>
-                <div>
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Ritmo</p>
+          {/* ZONA 3 — Resumo: Ritmo | Restam | Dias (mês em andamento) ou
+              "Ritmo planejado inicial" (mês futuro, único número disponível
+              ainda — nunca inventar Restam/Dias que o mês futuro não tem).
+              Mês encerrado não tem zona de resumo, igual a antes. */}
+          {isFutureMonth
+            ? plan && (
+                <div className="mt-2">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Ritmo planejado inicial</p>
                   <p className="text-sm font-semibold text-brand">{formatCurrency(plan.recommendedDaily)}/dia</p>
                 </div>
-                <div>
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Restam</p>
-                  <p className="text-sm font-semibold text-foreground">{formatCurrency(plan.remainingBudget)}</p>
+              )
+            : !isClosedMonth &&
+              plan && (
+                <div className="mt-2">
+                  {plan.isBudgetReached && (
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Orçamento mensal atingido</p>
+                  )}
+                  <div className={`grid grid-cols-3 gap-x-3 gap-y-1 ${plan.isBudgetReached ? "mt-1" : ""}`}>
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Ritmo</p>
+                      <p className="text-sm font-semibold text-brand">{formatCurrency(plan.recommendedDaily)}/dia</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Restam</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(plan.remainingBudget)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Dias</p>
+                      <p className="text-sm font-semibold text-foreground">{plan.eligibleDaysCount}</p>
+                    </div>
+                  </div>
+                  {plan.isBudgetReached && plan.overageAmount > 0 && (
+                    <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">
+                      {formatCurrency(plan.overageAmount)} acima do orçamento planejado
+                    </p>
+                  )}
                 </div>
-                <div>
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Dias</p>
-                  <p className="text-sm font-semibold text-foreground">{plan.eligibleDaysCount}</p>
-                </div>
-              </div>
-              {plan.isBudgetReached && plan.overageAmount > 0 && (
-                <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">
-                  {formatCurrency(plan.overageAmount)} acima do orçamento planejado
-                </p>
               )}
-            </div>
-          )}
         </>
       )}
 
-      {/* Rodapé (Etapa "Facelift"): "Ver detalhes"/edição do planejamento
-          reorganizados numa única faixa, alinhados nas pontas — antes o
-          editor/"Mês encerrado" viviam soltos no topo do card, competindo
-          com o valor principal antes mesmo de o gestor ler o diagnóstico. */}
+      {/* ZONA 4 — Ações: "Ver detalhes" à esquerda; "Editar planejamento"
+          (ou o aviso de mês encerrado) e "Ver histórico" agrupados na MESMA
+          região de ações à direita — antes "Ver histórico" vivia numa faixa
+          própria abaixo deste rodapé, um elemento a mais espalhado pelo
+          card. Mesmos textos/condições/links de sempre, só reagrupados. */}
       <div className="mt-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5 border-t border-border pt-2">
         {hasDetails ? (
           <details className="group/details min-w-0 flex-1 [&_summary::-webkit-details-marker]:hidden">
@@ -413,7 +428,7 @@ export function MonthInvestmentSummary({
           <span />
         )}
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-col items-end gap-1">
           {isAdmin &&
             (isClosedMonth ? (
               <span className="text-[11px] text-muted-foreground">
@@ -433,16 +448,13 @@ export function MonthInvestmentSummary({
                 />
               )
             ))}
+          {isAdmin && lastChange && lastChange.changeCountThisMonth > 1 && (
+            <Link href={historyHref} className="text-xs font-medium text-foreground hover:underline">
+              Ver histórico
+            </Link>
+          )}
         </div>
       </div>
-
-      {isAdmin && lastChange && lastChange.changeCountThisMonth > 1 && (
-        <div className="mt-1 flex items-center justify-end text-xs text-muted-foreground">
-          <Link href={historyHref} className="font-medium text-foreground hover:underline">
-            Ver histórico
-          </Link>
-        </div>
-      )}
     </div>
   );
 }
