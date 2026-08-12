@@ -519,6 +519,9 @@ export function buildOperationClientCard(
 
   const alerts = buildAttentionAlerts({
     monthStatus,
+    // Etapa "Horizonte de Planejamento": período encerrado (mês civil ou
+    // horizonte de evento) — desvio final, nunca um alerta "aja agora".
+    isPeriodClosed: monthEffectiveDate === null,
     overdueTasksCount: taskCounts.overdue,
     optimizationRecentlyDone,
     lastSyncedAt: client.lastSyncedAt,

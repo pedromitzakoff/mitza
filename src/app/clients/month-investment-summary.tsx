@@ -112,6 +112,7 @@ export function MonthInvestmentSummary({
   effectiveDate,
   isAdmin,
   isClosedMonth,
+  isClosedByHorizonOnly,
   isFutureMonth,
   lastChange,
   historyHref,
@@ -135,6 +136,11 @@ export function MonthInvestmentSummary({
   effectiveDate: string | null;
   isAdmin: boolean;
   isClosedMonth: boolean;
+  /** Etapa "Horizonte de Planejamento": `true` quando `isClosedMonth` veio
+   * do horizonte de evento (mês civil ainda em andamento, só a campanha já
+   * terminou) — só decide o TEXTO do rodapé ("Mês encerrado" x "Período de
+   * planejamento encerrado"), nunca nenhum cálculo. */
+  isClosedByHorizonOnly: boolean;
   /** Etapa 64: mês selecionado ainda não começou (`!isCurrentMonth &&
    * !isClosedMonth` — já calculado uma vez na página, nunca uma segunda
    * comparação de datas aqui) — muda o texto principal e a recomendação
@@ -410,7 +416,9 @@ export function MonthInvestmentSummary({
         <div className="flex shrink-0 items-center gap-2">
           {isAdmin &&
             (isClosedMonth ? (
-              <span className="text-[11px] text-muted-foreground">Mês encerrado</span>
+              <span className="text-[11px] text-muted-foreground">
+                {isClosedByHorizonOnly ? "Período de planejamento encerrado" : "Mês encerrado"}
+              </span>
             ) : (
               effectiveDate && (
                 <ChannelPlanEditor

@@ -32,6 +32,16 @@ const SYNC_STALE_AFTER_HOURS = 48;
 
 export interface AttentionAlertsInput {
   monthStatus: SpendStatus;
+  /** Etapa "Horizonte de Planejamento" — `true` quando o período de
+   * planejamento do mês já encerrou (mês civil OU horizonte de evento já
+   * passou, `resolveBudgetEffectiveDate(...).isClosedMonth`). Um desvio
+   * "abaixo"/"acima" do esperado num período JÁ ENCERRADO é resultado
+   * final, não algo que ainda precisa de ação — nunca gera o alerta de
+   * investimento (que soa como "aja agora"), sem inventar uma verificação
+   * de "isso é um evento?" pra isso: o mesmo booleano cobre cliente normal
+   * no dia seguinte ao fim do mês e cliente de evento no dia seguinte à
+   * campanha. */
+  isPeriodClosed: boolean;
   overdueTasksCount: number;
   /** Houve alguma otimização (revisão estratégica da conta, account_reviews)
    * registrada recentemente? */
@@ -58,10 +68,12 @@ export function buildAttentionAlerts(input: AttentionAlertsInput): AttentionAler
   const alerts: AttentionAlert[] = [];
   const now = input.now ?? new Date();
 
-  if (input.monthStatus === "acima") {
-    alerts.push({ severity: "critico", kind: "investimento", message: "Investimento do mês acima do esperado." });
-  } else if (input.monthStatus === "abaixo") {
-    alerts.push({ severity: "atencao", kind: "investimento", message: "Investimento do mês abaixo do esperado." });
+  if (!input.isPeriodClosed) {
+    if (input.monthStatus === "acima") {
+      alerts.push({ severity: "critico", kind: "investimento", message: "Investimento do mês acima do esperado." });
+    } else if (input.monthStatus === "abaixo") {
+      alerts.push({ severity: "atencao", kind: "investimento", message: "Investimento do mês abaixo do esperado." });
+    }
   }
 
   if (input.overdueTasksCount > 0) {

@@ -679,6 +679,13 @@ export default async function ClientPage({
   // datas: "não é o mês corrente" + "não está encerrado" já implica futuro,
   // dado que todo mês é ou passado, ou corrente, ou futuro).
   const isFutureMonth = !isCurrentMonth && !isClosedMonth;
+  // Etapa "Horizonte de Planejamento": distingue POR QUE o período está
+  // encerrado — o mês civil realmente acabou (`todayStr > lastDay`) ou só o
+  // horizonte de evento (`todayStr` ainda dentro do mês civil, mas depois
+  // do `planning_end_date`) — só pra escolher o texto certo ("Mês
+  // encerrado" x "Período de planejamento encerrado"), nunca pra mudar
+  // nenhum cálculo (isso já é só `isClosedMonth`, derivado do horizonte).
+  const isClosedByHorizonOnly = isClosedMonth && todayStr <= lastDay;
   // `budgetSprints` alimenta só `MonthInvestmentSummary` agora (Etapa 73) —
   // esta página não computa mais `computeMonthlyBudgetPlan` por conta própria
   // pra derivar planejamento por sprint; o componente mensal já calcula seu
@@ -1446,6 +1453,7 @@ export default async function ClientPage({
               effectiveDate={effectiveDate}
               isAdmin={isAdmin}
               isClosedMonth={isClosedMonth}
+              isClosedByHorizonOnly={isClosedByHorizonOnly}
               isFutureMonth={isFutureMonth}
               lastChange={lastChange}
               historyHref={historyDrawerHref}

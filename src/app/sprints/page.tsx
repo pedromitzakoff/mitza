@@ -642,7 +642,6 @@ export default async function SprintsPage({
   };
 
   const monthLabel = formatMonthLabel(monthRange.firstDay);
-  const monthTemporalStatus = getMonthTemporalStatus(monthRange, todayStr);
 
   const openTaskId = params.task ?? null;
   let openTask: {
@@ -909,7 +908,10 @@ export default async function SprintsPage({
                 monthRange={monthRange}
                 primaryManagerName={primaryManagerNameByClient.get(card.clientId) ?? null}
                 returnTo={buildUrl({})}
-                monthTemporalStatus={monthTemporalStatus}
+                monthTemporalStatus={getMonthTemporalStatus(
+                  resolvePlanningHorizon(monthRange, monthHorizonsByClient.get(card.clientId) ?? null),
+                  todayStr,
+                )}
                 isAdmin={isAdmin}
               />
             ))
@@ -926,7 +928,10 @@ export default async function SprintsPage({
                 sprintCommentsById={sprintCommentsById}
                 accountReviewsBySprintId={accountReviewsBySprintId}
                 recurringTasksBySprintId={recurringTasksBySprintId}
-                monthTemporalStatus={monthTemporalStatus}
+                monthTemporalStatus={getMonthTemporalStatus(
+                  resolvePlanningHorizon(monthRange, monthHorizonsByClient.get(card.clientId) ?? null),
+                  todayStr,
+                )}
                 managers={gestores ?? []}
               />
             ))
