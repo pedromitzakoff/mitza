@@ -25,7 +25,7 @@ import {
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus, SPEND_STATUS_BADGE_CLASSES, SPEND_STATUS_LABEL } from "@/lib/spend-status";
 import { resolveBudgetEffectiveDate, computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
-import { resolveClientPlan } from "@/lib/client-plan";
+import { resolveClientMonthlyPlan } from "@/lib/client-plan";
 import { getClientMonthHorizon } from "@/lib/client-month-horizons";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import {
@@ -401,7 +401,7 @@ export default async function ClientPage({
       // metas de performance, agora unificada com investimento — os dois são
       // sempre o mesmo objeto/snapshot, nunca dois conceitos com regra de
       // vigência diferente). Sem `.limit(1)`: cada canal tem sua própria
-      // versão vigente, `resolveClientPlan` resolve por canal.
+      // versão vigente, `resolveClientMonthlyPlan` resolve por canal.
       requireQuery(
         supabase
           .from("monthly_budget_changes")
@@ -496,7 +496,7 @@ export default async function ClientPage({
   // Etapa 70: `sprint_planned_allocations` deixou de alimentar o card da
   // sprint (o "planejamento histórico" virou o "planejamento original"
   // congelado, `sprint-recommendation.ts`) — continua existindo só como
-  // fallback de `resolveClientPlan`, abaixo.
+  // fallback de `resolveClientMonthlyPlan`, abaixo.
   const monthPlannedAllocationRows = (plannedAllocations ?? []).map((a) => ({
     date: a.date,
     sprintId: a.sprint_id,
@@ -504,10 +504,10 @@ export default async function ClientPage({
   }));
   // Etapa "Planejamento por Canal": plano vigente do cliente — sempre a
   // soma dos canais (Meta + Google), cada um resolvido pra sua própria
-  // versão mais recente elegível (`resolveClientPlan`). `sumPlannedForMonth`
+  // versão mais recente elegível (`resolveClientMonthlyPlan`). `sumPlannedForMonth`
   // só entra como fallback pra cliente que nunca passou pelo planejamento
   // por canal (sem nenhuma linha em monthly_budget_changes ainda).
-  const clientPlan = resolveClientPlan({
+  const clientPlan = resolveClientMonthlyPlan({
     channels: AVAILABLE_TRAFFIC_CHANNELS,
     changes: (performanceTargetHistory ?? []).map((row) => ({
       channel: row.channel as TrafficChannel,
