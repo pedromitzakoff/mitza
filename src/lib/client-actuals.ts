@@ -2,32 +2,32 @@ import { sumChannelEffectiveSpend, inferClientChannels, type SprintChannelSpendO
 import { aggregatePerformanceResults, safeDivide, computeRoas, type PerformanceRecordRow } from "@/lib/performance";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import type { TrafficChannel } from "@/lib/traffic-channels";
-import { consolidateChannelMetrics, type ChannelMetrics, type ClientMetrics } from "@/lib/channel-metrics";
+import { consolidateChannelMetrics, type ChannelMetrics, type ClientChannelMetrics } from "@/lib/channel-metrics";
 
 /**
- * Primeiro resolvedor do domínio Realizado no formato canônico
- * (`ClientMetrics`, lib/channel-metrics.ts) — Etapa "Arquitetura Multicanal
- * Unificada". Nunca reimplementa investimento/resultado/receita: só
- * reempacota `sumChannelEffectiveSpend` (lib/channel-spend.ts) e
- * `aggregatePerformanceResults` (lib/performance.ts), as mesmas fontes já
- * validadas, no objeto `{byChannel, consolidated}` que passa a ser o único
- * formato que qualquer tela deveria consumir.
+ * Primeiro dos dois resolvedores canônicos da plataforma no formato
+ * `ClientChannelMetrics` (lib/channel-metrics.ts) — Etapa "Arquitetura
+ * Multicanal Unificada" (o segundo é `resolveClientPlan`,
+ * lib/client-plan.ts, pro lado Planejado). Nunca reimplementa
+ * investimento/resultado/receita: só reempacota `sumChannelEffectiveSpend`
+ * (lib/channel-spend.ts) e `aggregatePerformanceResults` (lib/performance.ts),
+ * as mesmas fontes já validadas, no objeto `{byChannel, consolidated}` que
+ * passa a ser o único formato que qualquer tela deveria consumir.
  *
- * Convivência com o código existente: esta função é ADITIVA — não substitui
- * `resolveClientChannelBreakdown` (lib/client-channel-breakdown.ts, hoje
- * consumido pela Visão Geral pra diagnóstico "Prioridades de hoje") nem os
- * loops por canal já existentes em `operation-data.ts`. Migrar cada
- * consumidor pra este resolvedor é trabalho de uma etapa seguinte, um de
- * cada vez — cada um tem nuances próprias de "quais canais mostrar" que
+ * Consumido diretamente por `resolveClientChannelBreakdown`
+ * (lib/client-channel-breakdown.ts, Etapa "Fundação Compartilhada") pro
+ * investimento por canal — os loops por canal ainda próprios de
+ * `operation-data.ts`/`analytics.ts` continuam fora desta etapa: cada um tem
+ * nuances próprias (ex.: `metaAdAccountId` em `operation-data.ts`) que
  * precisam ser conferidas individualmente antes da troca.
  */
-export function resolveClientActuals(input: {
+export function resolveClientMonthlyActuals(input: {
   sprints: { sprintId: string; start_date: string; end_date: string }[];
   dailySpendChannel: { date: string; channel: TrafficChannel; spend: number }[];
   channelSpendOverrides: SprintChannelSpendOverrideRow[];
   performanceRecords: PerformanceRecordRow[];
   performanceGoal: PerformanceGoal | null;
-}): ClientMetrics {
+}): ClientChannelMetrics {
   const { sprints, dailySpendChannel, channelSpendOverrides, performanceRecords, performanceGoal } = input;
 
   // Mesma regra de sempre: só os canais que o cliente de fato usa (dado
