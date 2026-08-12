@@ -6,17 +6,15 @@ import { formatMoneyDisplay, parseMoneyInput } from "@/lib/money-format";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import type { ChannelMetrics } from "@/lib/channel-metrics";
-import { deriveOnFieldChange, DEFAULT_FIELD_ORDER, type CalculatorField } from "@/lib/channel-plan-calculator";
 import { applyMonthlyChannelPlanChangeAction, setClientMonthHorizonAction } from "./monthly-budget-actions";
 import { useToast } from "@/app/toast-provider";
+
+type CalculatorField = "investment" | "resultCount" | "cpa";
 
 interface ChannelCardState {
   investmentDisplay: string;
   resultCountDisplay: string;
   cpaDisplay: string;
-  /** Fila de recência da calculadora (`lib/channel-plan-calculator.ts`) —
-   * decide qual campo recalcular no próximo toque. */
-  fieldOrder: CalculatorField[];
 }
 
 function initialCardState(current: ChannelMetrics | undefined): ChannelCardState {
@@ -24,8 +22,36 @@ function initialCardState(current: ChannelMetrics | undefined): ChannelCardState
     investmentDisplay: current?.investment != null ? formatMoneyDisplay(current.investment) : "",
     resultCountDisplay: current?.resultCount != null ? String(current.resultCount) : "",
     cpaDisplay: current?.cpa != null ? formatMoneyDisplay(current.cpa) : "",
-    fieldOrder: DEFAULT_FIELD_ORDER,
   };
+}
+
+/**
+ * Regra de três — o cálculo central deste editor (pedido explícito do
+ * usuário: mudar Resultado atualiza CPA na hora e vice-versa, sem precisar
+ * de um segundo toque em outro campo pra disparar). Investimento é a âncora
+ * fixa: editar Resultado ou CPA sempre recalcula o outro mantendo o
+ * Investimento atual; editar o próprio Investimento recalcula Resultado
+ * mantendo o CPA atual (mesma eficiência, proporcionalmente mais/menos
+ * resultado). Determinístico só pelo campo sendo editado agora — nunca
+ * depende de histórico de toques anteriores. Só Investimento e Resultado são
+ * enviados ao salvar; CPA nunca é armazenado (sempre recalculado na leitura,
+ * em qualquer lugar da plataforma).
+ */
+function deriveOnFieldChange(
+  changedField: CalculatorField,
+  values: { investment: number | null; resultCount: number | null; cpa: number | null },
+): Partial<Record<CalculatorField, number | null>> {
+  if (changedField === "resultCount") {
+    const cpa = values.investment !== null && values.resultCount ? values.investment / values.resultCount : null;
+    return { cpa };
+  }
+  if (changedField === "cpa") {
+    const resultCount = values.investment !== null && values.cpa ? Math.round(values.investment / values.cpa) : null;
+    return { resultCount };
+  }
+  // changedField === "investment": mantém o CPA atual, recalcula Resultado.
+  const resultCount = values.cpa !== null && values.investment !== null ? Math.round(values.investment / values.cpa) : null;
+  return { resultCount };
 }
 
 function ChannelPlanCard({
@@ -54,11 +80,9 @@ function ChannelPlanCard({
       resultCount: next.resultCountDisplay.trim() ? Number(next.resultCountDisplay) : null,
       cpa: parseMoneyInput(next.cpaDisplay),
     };
-    const { fieldOrder, derivedField, derivedValue } = deriveOnFieldChange(field, state.fieldOrder, values);
-    next.fieldOrder = fieldOrder;
-    if (derivedField === "investment") next.investmentDisplay = derivedValue != null ? formatMoneyDisplay(derivedValue) : "";
-    if (derivedField === "resultCount") next.resultCountDisplay = derivedValue != null ? String(derivedValue) : "";
-    if (derivedField === "cpa") next.cpaDisplay = derivedValue != null ? formatMoneyDisplay(derivedValue) : "";
+    const derived = deriveOnFieldChange(field, values);
+    if ("cpa" in derived) next.cpaDisplay = derived.cpa != null ? formatMoneyDisplay(derived.cpa) : "";
+    if ("resultCount" in derived) next.resultCountDisplay = derived.resultCount != null ? String(derived.resultCount) : "";
     onChange(next);
   }
 
