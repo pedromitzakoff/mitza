@@ -85,23 +85,29 @@ export function MonthlyKpiSummary({
   return (
     <div>
       {/* Grid 4x2 consistente (Etapa "Refinamento visual"): as duas linhas
-          usam exatamente o mesmo template de colunas (`grid-cols-2
-          sm:grid-cols-4`), então os eixos horizontais sempre batem — a 2ª
-          linha (faturamento/ROAS/ticket médio) nunca fica mais estreita que
-          a 1ª. Quando não há receita, a 2ª linha simplesmente não existe
-          (nenhum espaço vazio reservado à toa). */}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+          usam exatamente o mesmo template de colunas a partir de `sm:`
+          (`sm:grid-cols-4`), então os eixos horizontais sempre batem nessa
+          largura — a 2ª linha (faturamento/ROAS/ticket médio) nunca fica
+          mais estreita que a 1ª. No mobile (abaixo de `sm:`) continua
+          `grid-cols-1`, empilhado, exatamente como antes desta etapa —
+          comportamento responsivo intencionalmente intocado. Quando não há
+          receita, a 2ª linha simplesmente não existe (nenhum espaço vazio
+          reservado à toa). */}
+      <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-4">
         <Kpi label="Investimento total" value={formatCurrency(monthActual)} />
         <Kpi label="Resultados" value={resultsValue} auxiliary={resultsAuxiliary} />
         <Kpi label="Custo por resultado" value={costValue} />
         <Kpi label="Meta" value={metaValue} />
       </div>
       {hasRevenue && (
-        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-3 sm:grid-cols-4">
+        <div className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 border-t border-border pt-3 sm:grid-cols-4">
           <Kpi label="Faturamento" value={revenueValue} />
           <Kpi label="ROAS" value={roasValue} />
           <Kpi label="Ticket médio" value={averageTicketValue} />
-          <div aria-hidden="true" />
+          {/* Só preenche a 4ª coluna a partir de `sm:` — no mobile
+              (`grid-cols-1`, tudo empilhado) uma célula vazia aqui viraria
+              um espaço em branco perdido no meio da lista. */}
+          <div aria-hidden="true" className="hidden sm:block" />
         </div>
       )}
       {!performanceGoal && (
