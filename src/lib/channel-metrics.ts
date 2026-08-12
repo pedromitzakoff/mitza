@@ -34,7 +34,7 @@ export interface ChannelMetrics {
   roas?: number | null;
 }
 
-export interface ClientChannelMetrics {
+export interface ClientMetrics {
   /** Só os canais que de fato têm dado pro escopo — nunca uma lista fixa de
    * todos os canais possíveis (mesma regra de `inferClientChannels`,
    * lib/channel-spend.ts). */
@@ -61,7 +61,7 @@ export function consolidateAdditive(
 }
 
 /**
- * Monta o `consolidated` de um `ClientChannelMetrics` a partir do `byChannel` já
+ * Monta o `consolidated` de um `ClientMetrics` a partir do `byChannel` já
  * resolvido — único lugar da plataforma que decide como consolidar:
  * `investment`/`resultCount`/`revenue` somados via `consolidateAdditive`;
  * `cpa`/`roas` SEMPRE derivados dos totais já somados (nunca média/soma dos

@@ -1,6 +1,6 @@
 import { safeDivide } from "@/lib/performance";
 import type { TrafficChannel } from "@/lib/traffic-channels";
-import { consolidateChannelMetrics, type ChannelMetrics, type ClientChannelMetrics } from "@/lib/channel-metrics";
+import { consolidateChannelMetrics, type ChannelMetrics, type ClientMetrics } from "@/lib/channel-metrics";
 
 /** Uma versão de `monthly_budget_changes` já achatada pro resolvedor — `investment`
  * é `new_amount` (o campo já chamado assim em `MonthlyPlanChange`, lib/monthly-budget.ts). */
@@ -15,10 +15,9 @@ export interface ClientPlanChangeRow {
 
 /**
  * Segundo dos dois resolvedores canônicos da plataforma (o primeiro é
- * `resolveClientMonthlyActuals`, lib/client-actuals.ts) — Planejado e
- * Realizado são só duas implementações diferentes da mesma estrutura
- * (`ClientChannelMetrics`, lib/channel-metrics.ts). Etapa "Planejamento por
- * Canal": cada canal tem
+ * `resolveClientActuals`, lib/client-actuals.ts) — Planejado e Realizado são
+ * só duas implementações diferentes da mesma estrutura (`ClientMetrics`,
+ * lib/channel-metrics.ts). Etapa "Planejamento por Canal": cada canal tem
  * sua própria versão vigente do plano (`monthly_budget_changes.channel`) — a
  * vigente pro mês selecionado é a mais recente dentre as com
  * `month <= selectedMonth` (mesma regra de elegibilidade que já existia em
@@ -39,7 +38,7 @@ export function resolveClientPlan(input: {
   channels: TrafficChannel[];
   changes: ClientPlanChangeRow[];
   selectedMonth: string;
-}): ClientChannelMetrics {
+}): ClientMetrics {
   const { channels, changes, selectedMonth } = input;
 
   const byChannel: Partial<Record<TrafficChannel, ChannelMetrics>> = {};

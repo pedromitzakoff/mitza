@@ -1,7 +1,7 @@
 /**
  * Testes puros do objeto canônico de métricas por canal (Etapa "Arquitetura
  * Multicanal Unificada") — `consolidateAdditive`/`consolidateChannelMetrics`
- * (lib/channel-metrics.ts) e `resolveClientMonthlyActuals` (lib/client-actuals.ts).
+ * (lib/channel-metrics.ts) e `resolveClientActuals` (lib/client-actuals.ts).
  * Cobre especificamente a regra que motivou toda esta etapa: CPA/ROAS
  * consolidados NUNCA são média/soma dos valores por canal, sempre derivados
  * dos totais aditivos já somados.
@@ -10,7 +10,7 @@
  */
 import assert from "node:assert/strict";
 import { consolidateAdditive, consolidateChannelMetrics, type ChannelMetrics } from "../src/lib/channel-metrics";
-import { resolveClientMonthlyActuals } from "../src/lib/client-actuals";
+import { resolveClientActuals } from "../src/lib/client-actuals";
 
 let passed = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -72,13 +72,13 @@ check(
   { investment: 10000, resultCount: 400, revenue: undefined, cpa: 25, roas: undefined },
 );
 
-console.log("\nresolveClientMonthlyActuals\n");
+console.log("\nresolveClientActuals\n");
 
 const sprints = [{ sprintId: "s1", start_date: "2026-08-01", end_date: "2026-08-07" }];
 
 check(
   "cliente só-Meta (comportamento pré-existente): 1 canal no byChannel, consolidado igual ao canal único",
-  resolveClientMonthlyActuals({
+  resolveClientActuals({
     sprints,
     dailySpendChannel: [{ date: "2026-08-03", channel: "meta", spend: 1000 }],
     channelSpendOverrides: [],
@@ -95,7 +95,7 @@ check(
 
 check(
   "Meta + Google: consolidado soma os dois, CPA consolidado é derivado dos totais",
-  resolveClientMonthlyActuals({
+  resolveClientActuals({
     sprints,
     dailySpendChannel: [
       { date: "2026-08-03", channel: "meta", spend: 6000 },
@@ -113,7 +113,7 @@ check(
 
 check(
   "canal com investimento mas sem nenhum registro de performance -> resultCount/cpa null (nunca 0 fabricado)",
-  resolveClientMonthlyActuals({
+  resolveClientActuals({
     sprints,
     dailySpendChannel: [{ date: "2026-08-03", channel: "google", spend: 500 }],
     channelSpendOverrides: [],
