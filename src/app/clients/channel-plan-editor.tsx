@@ -159,7 +159,7 @@ function ChannelPlanCard({
  * uma calculadora inteligente (qualquer 2 campos determinam o 3º, `regra de
  * três`, sem botão "calcular") — nunca envia CPA ao salvar, sempre derivado.
  * O consolidado do cliente nunca é editável aqui — é sempre a soma da
- * versão vigente de cada canal (ver `resolveClientMonthlyPlan`), calculada em
+ * versão vigente de cada canal (ver `resolveClientPlan`), calculada em
  * outro lugar. Canal com Investimento em branco ao confirmar = não tocado
  * (nunca envia uma chamada pra esse canal).
  */

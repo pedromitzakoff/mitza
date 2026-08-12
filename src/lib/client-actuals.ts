@@ -7,7 +7,7 @@ import { consolidateChannelMetrics, type ChannelMetrics, type ClientChannelMetri
 /**
  * Primeiro dos dois resolvedores canônicos da plataforma no formato
  * `ClientChannelMetrics` (lib/channel-metrics.ts) — Etapa "Arquitetura
- * Multicanal Unificada" (o segundo é `resolveClientMonthlyPlan`,
+ * Multicanal Unificada" (o segundo é `resolveClientPlan`,
  * lib/client-plan.ts, pro lado Planejado). Nunca reimplementa
  * investimento/resultado/receita: só reempacota `sumChannelEffectiveSpend`
  * (lib/channel-spend.ts) e `aggregatePerformanceResults` (lib/performance.ts),

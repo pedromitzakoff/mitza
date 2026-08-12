@@ -270,7 +270,7 @@ export async function buildReportViewData(
       ),
       // Etapa "Planejamento por Canal": filtrado por channel='meta' de
       // propósito — este consumidor ainda não foi migrado pro plano
-      // consolidado por canal (`resolveClientMonthlyPlan`), então o filtro mantém
+      // consolidado por canal (`resolveClientPlan`), então o filtro mantém
       // o comportamento EXATO de antes desta etapa (histórico sempre foi
       // Meta), imune a qualquer plano de Google criado pela nova tela de
       // Planejamento. Migração deste consumidor é trabalho de uma etapa

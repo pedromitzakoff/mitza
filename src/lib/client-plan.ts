@@ -17,8 +17,8 @@ export interface ClientPlanChangeRow {
  * Segundo dos dois resolvedores canônicos da plataforma (o primeiro é
  * `resolveClientMonthlyActuals`, lib/client-actuals.ts) — Planejado e
  * Realizado são só duas implementações diferentes da mesma estrutura
- * (`ClientChannelMetrics`, lib/channel-metrics.ts). Etapa "Planejamento
- * Mensal por Canal": cada canal tem
+ * (`ClientChannelMetrics`, lib/channel-metrics.ts). Etapa "Planejamento por
+ * Canal": cada canal tem
  * sua própria versão vigente do plano (`monthly_budget_changes.channel`) — a
  * vigente pro mês selecionado é a mais recente dentre as com
  * `month <= selectedMonth` (mesma regra de elegibilidade que já existia em
@@ -35,7 +35,7 @@ export interface ClientPlanChangeRow {
  * chamador, via a lista `channels` — normalmente `AVAILABLE_TRAFFIC_CHANNELS`
  * pra sempre mostrar Meta e Google, mesmo sem plano ainda).
  */
-export function resolveClientMonthlyPlan(input: {
+export function resolveClientPlan(input: {
   channels: TrafficChannel[];
   changes: ClientPlanChangeRow[];
   selectedMonth: string;
