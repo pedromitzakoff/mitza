@@ -23,7 +23,12 @@ import { ImageOff } from "lucide-react";
  * a representação visual do criativo — só uma ação secundária renderizada
  * por quem usa este componente, fora dele.
  */
-export function CreativeThumbnail({ url, alt }: { url: string | null; alt: string }) {
+/** `size="sm"` — Etapa "Análise de Criativos": mesma miniatura, versão
+ * compacta pra caber numa linha de tabela (ícone menor, sem o rótulo de
+ * texto — não cabe em ~36px). Nunca muda a fonte da imagem/estado, só o
+ * tamanho de apresentação; default preserva exatamente o comportamento de
+ * sempre pros cards. */
+export function CreativeThumbnail({ url, alt, size = "default" }: { url: string | null; alt: string; size?: "default" | "sm" }) {
   const [failed, setFailed] = useState(false);
 
   if (url && !failed) {
@@ -41,8 +46,8 @@ export function CreativeThumbnail({ url, alt }: { url: string | null; alt: strin
       role="img"
       aria-label={`${alt} — miniatura indisponível`}
     >
-      <ImageOff className="h-6 w-6" aria-hidden="true" />
-      <span className="text-[11px] font-medium">Thumbnail indisponível</span>
+      <ImageOff className={size === "sm" ? "h-3.5 w-3.5" : "h-6 w-6"} aria-hidden="true" />
+      {size === "default" && <span className="text-[11px] font-medium">Thumbnail indisponível</span>}
     </div>
   );
 }

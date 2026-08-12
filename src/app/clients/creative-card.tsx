@@ -32,13 +32,57 @@ function Stat({ label, value }: { label: string; value: string }) {
  * O card inteiro é clicável (vai pro detalhe) via um `<Link>` absoluto que
  * cobre o container — o link do permalink fica ACIMA dele (`z-10`), como
  * irmão, nunca aninhado dentro de outro `<a>` (HTML inválido).
+ *
+ * Etapa "Análise de Criativos": duas mudanças mínimas em cima do card que já
+ * estava certo.
+ *   1. Alinhamento do resultado/custo — quando a conta tem objetivo
+ *      configurado (`goalConfig`), os dois slots SEMPRE aparecem (com "—"
+ *      quando este criativo em particular não teve resultado), nunca somem
+ *      condicionalmente — evita a impressão de "layout quebrado" num
+ *      criativo sem venda ao lado de outros que têm.
+ *   2. Checkbox de comparação — opcional/retrocompatível (`selectable`
+ *      default `false`): sem essas props o card continua idêntico a antes.
  */
-export function CreativeCard({ summary, detailHref }: { summary: CreativeSummary; detailHref: string }) {
+export function CreativeCard({
+  summary,
+  detailHref,
+  selectable = false,
+  selected = false,
+  selectionDisabled = false,
+  onToggleSelect,
+}: {
+  summary: CreativeSummary;
+  detailHref: string;
+  selectable?: boolean;
+  selected?: boolean;
+  /** `true` quando já há 3 criativos selecionados e este não é um deles —
+   * nunca desmarca sozinho, só impede marcar um 4º. */
+  selectionDisabled?: boolean;
+  onToggleSelect?: () => void;
+}) {
   const goalConfig = summary.resultType ? PERFORMANCE_GOALS[summary.resultType] : null;
 
   return (
-    <div className="relative flex flex-col gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-brand/40 hover:bg-brand/[0.03]">
+    <div className="group relative flex flex-col gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-brand/40 hover:bg-brand/[0.03]">
       <Link href={detailHref} className="absolute inset-0 rounded-lg" aria-label={`Ver detalhes de ${summary.creativeName}`} />
+
+      {selectable && (
+        <label
+          className={`absolute right-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md border border-border bg-card/95 px-1.5 py-1 text-[11px] font-medium text-muted-foreground shadow-sm transition-opacity ${
+            selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[:focus-visible]:opacity-100"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            disabled={selectionDisabled}
+            onChange={onToggleSelect}
+            aria-label={`Comparar ${summary.creativeName}`}
+            className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-brand disabled:cursor-not-allowed"
+          />
+          Comparar
+        </label>
+      )}
 
       <CreativeThumbnail url={summary.previewImageUrl} alt={summary.creativeName} />
 
@@ -51,8 +95,10 @@ export function CreativeCard({ summary, detailHref }: { summary: CreativeSummary
 
       <div className="flex flex-wrap gap-x-5 gap-y-3 border-t border-border pt-3">
         <Stat label="Investimento" value={formatCurrency(summary.totalSpend)} />
-        {goalConfig && summary.totalResultCount !== null && <Stat label={goalConfig.resultMetricLabel} value={String(summary.totalResultCount)} />}
-        {goalConfig && summary.cpa !== null && <Stat label={goalConfig.costMetricShortLabel} value={formatCurrency(summary.cpa)} />}
+        {goalConfig && (
+          <Stat label={goalConfig.resultMetricLabel} value={summary.totalResultCount !== null ? String(summary.totalResultCount) : "—"} />
+        )}
+        {goalConfig && <Stat label={goalConfig.costMetricShortLabel} value={summary.cpa !== null ? formatCurrency(summary.cpa) : "—"} />}
         {summary.totalImpressions !== null && <Stat label="Impressões" value={summary.totalImpressions.toLocaleString("pt-BR")} />}
         {summary.totalReach !== null && <Stat label="Alcance" value={summary.totalReach.toLocaleString("pt-BR")} />}
         {summary.totalClicks !== null && <Stat label="Cliques" value={summary.totalClicks.toLocaleString("pt-BR")} />}

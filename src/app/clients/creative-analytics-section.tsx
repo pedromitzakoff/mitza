@@ -6,7 +6,7 @@ import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { NO_CREATIVES_MESSAGE } from "@/lib/analytics-messages";
 import type { AnalyticsTrend } from "@/lib/analytics";
 import type { CreativeDetail, CreativeSummary } from "@/lib/creative-analytics";
-import { CreativeCard } from "./creative-card";
+import { CreativeAnalyticsList } from "./creative-analytics-list";
 import { CreativeThumbnail } from "./creative-thumbnail";
 import { AnalyticsTrendChart } from "./analytics-trend-chart";
 
@@ -21,9 +21,16 @@ import { AnalyticsTrendChart } from "./analytics-trend-chart";
  *
  * Etapa "Reorganização do hub": deixou de ter masthead/período próprios
  * (agora vivem no `AnalyticsHubHeader` compartilhado, mesmo período de
- * Resumo/Campanhas — nunca mais um seletor por sub-seção). Lista (cards,
- * ordenados por investimento) e detalhe (resumo + campanhas + evolução)
- * vivem na MESMA sub-seção, alternando por querystring (`creative=<nome>`).
+ * Resumo/Campanhas — nunca mais um seletor por sub-seção). Lista e detalhe
+ * (resumo + campanhas + evolução) vivem na MESMA sub-seção, alternando por
+ * querystring (`creative=<nome>`).
+ *
+ * Etapa "Análise de Criativos": a lista (antes um grid simples) virou
+ * `CreativeAnalyticsList` — controles de busca/ordenação/filtro,
+ * resumo mínimo, alternância Cards/Tabela e comparação — só a lista, nunca
+ * o detalhe (que continua exatamente como estava). `summaries.length === 0`
+ * (nenhum criativo no período, condição de dado) continua distinto de "0
+ * resultado após busca/filtro" (condição de UI, tratada dentro da lista).
  */
 export function CreativeAnalyticsSection({
   summaries,
@@ -44,13 +51,7 @@ export function CreativeAnalyticsSection({
     return <EmptyState>{NO_CREATIVES_MESSAGE}</EmptyState>;
   }
 
-  return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {summaries.map((summary) => (
-        <CreativeCard key={summary.creativeName} summary={summary} detailHref={buildDetailHref(summary.creativeName)} />
-      ))}
-    </div>
-  );
+  return <CreativeAnalyticsList summaries={summaries} buildDetailHref={buildDetailHref} />;
 }
 
 function CreativeDetailView({ detail, backHref }: { detail: CreativeDetail; backHref: string }) {

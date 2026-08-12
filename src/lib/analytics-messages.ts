@@ -10,6 +10,10 @@ export const NO_ANALYTICS_DATA_MESSAGE = "Não encontramos dados para o período
 export const NO_HIGHLIGHTS_MESSAGE = "Ainda não há destaques suficientes pra este período.";
 export const NO_LEARNINGS_MESSAGE = "Ainda não há dados suficientes para explicar o resultado neste período.";
 export const NO_CREATIVES_MESSAGE = "Nenhum dado de criativo encontrado no período selecionado.";
+/** Distinto de `NO_CREATIVES_MESSAGE`: existe criativo no período, só nenhum
+ * bate com a busca/filtro atual da barra de controles (Etapa "Análise de
+ * Criativos"). */
+export const NO_CREATIVES_MATCH_FILTERS_MESSAGE = "Nenhum criativo encontrado com esses filtros.";
 export const NO_CAMPAIGNS_MESSAGE = "Nenhum dado de campanha encontrado no período selecionado.";
 
 /** Integração Google Ads (seletor de plataforma) — nunca confundir com
