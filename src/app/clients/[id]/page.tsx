@@ -569,12 +569,7 @@ export default async function ClientPage({
   // Seletor Consolidado/Meta/Google da Visão Geral — investido do mês
   // recalculado pra UM canal só, mesma fonte de verdade de sempre
   // (`sumChannelEffectiveSpend`, lib/channel-spend.ts — mesma regra
-  // sincronizado×manual do consolidado, só filtrada por canal). Nunca
-  // decompõe Planejado/ritmo/status (`monthPlanned`/`monthExpectedToDate`/
-  // `monthStatus`, acima): esses continuam SEMPRE consolidados porque o
-  // orçamento mensal não tem meta separada por canal no modelo de dados —
-  // comparar o investido de só um canal contra o planejado do cliente
-  // inteiro produziria um "ritmo" artificialmente enganoso.
+  // sincronizado×manual do consolidado, só filtrada por canal).
   const visaoGeralMonthActual =
     metricsChannel === "consolidated"
       ? monthActual
@@ -584,6 +579,25 @@ export default async function ClientPage({
           dailySpendChannelRows,
           channelSpendOverrideRows,
         );
+  // QA multicanal: `MonthInvestmentSummary` ("Investimento do mês") também
+  // escopado pelo seletor — planejado do canal vem de `clientPlan.byChannel`
+  // (mesma arquitetura de sempre, nenhum resolvedor novo); `0` quando o
+  // canal não tem plano ainda é só o sinal que o próprio componente já
+  // entende como "sem planejamento configurado" (`planned <= 0`, gate
+  // existente), nunca um número exibido/dividido — nunca cai pro
+  // consolidado como fallback (senão voltaria a comparar canal contra
+  // consolidado). "Esperado até hoje"/status reaproveitam as MESMAS funções
+  // centrais de `monthExpectedToDate`/`monthStatus` acima, só alimentadas
+  // com o planejado/realizado do canal em vez do consolidado.
+  const visaoGeralPlanned = metricsChannel === "consolidated" ? monthPlanned : (clientPlan.byChannel[metricsChannel]?.investment ?? 0);
+  const visaoGeralExpectedToDate =
+    metricsChannel === "consolidated"
+      ? monthExpectedToDate
+      : computeMonthlyExpectedToDateByCalendar(visaoGeralPlanned, planningHorizon, todayStr).expectedToDate;
+  const visaoGeralStatus =
+    metricsChannel === "consolidated"
+      ? monthStatus
+      : classifySpendStatus(visaoGeralMonthActual, visaoGeralExpectedToDate, visaoGeralPlanned);
 
   // Etapa 71 — camada de PERFORMANCE: consome `monthActual`/`sprint.actualSpend`
   // já calculados acima, nunca uma segunda fonte de investimento. Consolidado
@@ -1434,13 +1448,14 @@ export default async function ClientPage({
               separado.
 
               Seletor "Consolidado | Meta Ads | Google Ads" — pedido
-              explícito do usuário: escopa Indicadores do mês, cada Sprint e
-              Fechamento do mês (abaixo) ao canal escolhido. Investimento do
-              mês (`MonthInvestmentSummary`, mais abaixo) fica de fora —
-              orçamento/ritmo não têm meta separada por canal, ver doc de
-              `visaoGeralMonthActual`. Refinamento visual: vive dentro da
-              borda do card (`channelSwitch`), não mais solto acima dele —
-              mesmo href/estado ativo de sempre, só a posição mudou. */}
+              explícito do usuário: escopa Indicadores do mês, cada Sprint,
+              Fechamento do mês e Investimento do mês (`MonthInvestmentSummary`,
+              mais abaixo — QA multicanal: passou a receber
+              `visaoGeralPlanned`/`visaoGeralExpectedToDate`/`visaoGeralStatus`,
+              não mais os valores sempre-consolidados) ao canal escolhido.
+              Refinamento visual: vive dentro da borda do card
+              (`channelSwitch`), não mais solto acima dele — mesmo href/estado
+              ativo de sempre, só a posição mudou. */}
           <div className="mt-3">
             <AccountFollowUpPanel
               channelSwitch={<VisaoGeralChannelSwitch baseHref={metricsChannelBaseHref} active={metricsChannel} />}
@@ -1463,10 +1478,10 @@ export default async function ClientPage({
               parte. */}
           <div className="mt-3">
             <MonthInvestmentSummary
-              planned={monthPlanned}
-              actual={monthActual}
-              expectedToDate={monthExpectedToDate}
-              status={monthStatus}
+              planned={visaoGeralPlanned}
+              actual={visaoGeralMonthActual}
+              expectedToDate={visaoGeralExpectedToDate}
+              status={visaoGeralStatus}
               clientId={client.id}
               monthParam={monthParam}
               monthLabel={monthLabel}
