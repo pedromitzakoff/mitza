@@ -39,25 +39,31 @@ export async function syncClientStractSourcesAction(clientId: string) {
     redirect(`/clients/${clientId}?error=${encodeURIComponent("Sem acesso a este cliente")}`);
   }
 
-  let query: string;
+  let query = "";
   try {
     const importSourceIds = await getEnabledImportSourceIdsForClient(supabase, clientId);
 
     if (importSourceIds.length === 0) {
-      query = `error=${encodeURIComponent("Este cliente não tem nenhuma integração ativa para sincronizar.")}`;
+      query = `?error=${encodeURIComponent("Este cliente não tem nenhuma integração ativa para sincronizar.")}`;
     } else {
       const results = await Promise.all(importSourceIds.map((importSourceId) => runImportForSource(importSourceId)));
       const failedCount = results.filter((result) => result.status === "failed").length;
       revalidatePath(`/clients/${clientId}`);
+      // Sem toast de sucesso aqui (Etapa "Consolidação do status de
+      // sincronização"): o bloco "Sincronização" na própria página já
+      // mostra o estado real assim que recarrega — um toast genérico
+      // "sincronizado com sucesso" contradizia o bloco sempre que alguma
+      // fonte terminava "partial" (contava como sucesso aqui, mas o
+      // bloco mostrava parcial).
       query =
         failedCount > 0
-          ? `error=${encodeURIComponent(`${failedCount} de ${results.length} fonte(s) falharam ao sincronizar — confira o histórico de execuções.`)}`
-          : `stractSynced=${results.length}`;
+          ? `?error=${encodeURIComponent(`${failedCount} de ${results.length} fonte(s) falharam ao sincronizar — confira o histórico de execuções.`)}`
+          : "";
     }
   } catch (err) {
     const message = toUserFacingError(err, "Não foi possível sincronizar os dados agora.");
-    query = `error=${encodeURIComponent(message)}`;
+    query = `?error=${encodeURIComponent(message)}`;
   }
 
-  redirect(`/clients/${clientId}?${query}`);
+  redirect(`/clients/${clientId}${query}`);
 }

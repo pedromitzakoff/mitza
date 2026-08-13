@@ -10,7 +10,6 @@ import {
   getActiveImportSourceChannelsForClient,
   getDailyPerformanceForPeriod,
   getEnabledImportSourceIdsForClient,
-  getImportSourceHealthIssue,
   getRecentSyncRunsForClient,
   resolvePerformanceRowsForSprints,
   type SyncRunSummary,
@@ -47,6 +46,7 @@ import { effectiveTaskStatus } from "@/lib/task-status";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL, contractStatusBannerText, isWorkspaceClient } from "@/lib/client-fields";
 import { syncClientMetaAction } from "../meta-actions";
 import { syncClientStractSourcesAction } from "../stract-sync-actions";
+import { getLatestSyncRunStatusForSources } from "@/lib/stract-sync";
 import { ClientIdentitySticky } from "../client-identity-sticky";
 import { ClientWorkspaceContext } from "../client-workspace-context";
 import { MonthInvestmentSummary } from "../month-investment-summary";
@@ -98,7 +98,12 @@ import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel, type ChannelScope } fr
 import { VisaoGeralChannelSwitch, type VisaoGeralMetricsChannel } from "../visao-geral-channel-switch";
 
 const SYNC_RUN_STATUS_LABEL: Record<SyncRunSummary["status"], string> = {
-  running: "Interrompida (sem status final)",
+  // Só fica presa em "running" além de alguns minutos se travou num timeout
+  // — o próprio Import Service já fecha automaticamente como falha ao
+  // iniciar a próxima tentativa (ver STALE_RUNNING_RUN_THRESHOLD_MS em
+  // `lib/stract-sync.ts`), então na prática isso quase sempre é uma
+  // execução genuinamente em andamento agora.
+  running: "Em andamento",
   success: "Sucesso",
   partial: "Parcial",
   empty: "Vazio",
@@ -188,7 +193,6 @@ export default async function ClientPage({
   searchParams: Promise<{
     error?: string;
     synced?: string;
-    stractSynced?: string;
     saved?: string;
     taskError?: string;
     task?: string;
@@ -222,7 +226,6 @@ export default async function ClientPage({
   const {
     error,
     synced,
-    stractSynced,
     saved,
     taskError,
     task: openTaskId,
@@ -307,12 +310,20 @@ export default async function ClientPage({
   // lista de ids é o que a action dispara.
   const stractImportSourceIds = await getEnabledImportSourceIdsForClient(supabase, id);
 
-  // "O sistema já sabe quando uma sincronização deu problema e não conta pra
-  // ninguém" — `data_sync_runs` guarda linhas lidas/gravadas e erro POR
-  // EXECUÇÃO desde sempre, mas nenhuma tela lia isso (motivo real de um
-  // diagnóstico precisar de quase uma hora de SQL manual). RLS já restringe
-  // a leitura a admin — `isAdmin` só evita mostrar "sem histórico" enganoso
-  // pra quem nunca teria acesso a essas linhas mesmo.
+  // Etapa "Consolidação do status de sincronização": antes existiam 3
+  // pedaços soltos (banner vermelho binário, botão longe de tudo, histórico
+  // fechado por padrão sem nenhum resumo antes de abrir) — viraram UM bloco
+  // só (ver render mais abaixo), com dois níveis de acesso:
+  //
+  // - `latestSyncStatus`: status/horário da execução mais recente, SEM
+  //   detalhe (nunca error_message/contagens) — lido com o client ADMIN
+  //   (bypassa RLS) de propósito: quem já vê esta página (admin ou gestor
+  //   responsável, garantido pela RLS de `clients` no `select` acima) deve
+  //   saber se a integração está saudável, mesmo sem poder ver o histórico
+  //   técnico completo (isso continua admin-only).
+  // - `recentSyncRuns`: histórico completo (linhas lidas/gravadas, erro
+  //   bruto) — client normal (RLS), só populado pra admin de propósito.
+  const latestSyncStatus = stractImportSourceIds.length > 0 ? await getLatestSyncRunStatusForSources(stractImportSourceIds) : null;
   const recentSyncRuns = isAdmin && stractImportSourceIds.length > 0 ? await getRecentSyncRunsForClient(supabase, stractImportSourceIds) : [];
 
   // Habilitar Gestores 1.0: "Atualizar performance" (investimento realizado
@@ -883,32 +894,25 @@ export default async function ClientPage({
 
   const contractBannerText = contractStatusBannerText(client.status);
 
-  // "Se uma conexão do Stract falhar e não trouxer dados novos, quero que a
-  // plataforma sinalize isso" — antes, `import_sources.status` existia só no
-  // banco, sem nenhuma tela lendo o campo (ver `lib/stract-sync.ts`). Sempre
-  // buscado (não só na aba Analytics): o gestor precisa ver isso não importa
-  // em qual aba do cliente esteja.
-  const importSourceHealthIssue = await getImportSourceHealthIssue(supabase, id);
-  const importSourceHealthBannerText =
-    importSourceHealthIssue?.status === "error"
-      ? "A integração com o Stract falhou na última sincronização — os dados de performance podem estar desatualizados."
-      : importSourceHealthIssue?.status === "no_data"
-        ? "A última sincronização com o Stract não retornou nenhum dado — verifique se a conexão continua ativa."
-        : null;
-
+  // O status da integração Stract deixou de ser um banner solto aqui —
+  // virou a linha-resumo do bloco "Sincronização" (ver render mais abaixo,
+  // usa `latestSyncStatus`), visível pra qualquer pessoa com acesso à
+  // página, sempre (não só quando há erro). Pelo mesmo motivo, o toast
+  // verde pós-clique de "Sincronizar agora" (`stractSynced`) foi removido —
+  // ele podia contradizer o bloco (dizia "sucesso" mesmo quando alguma
+  // fonte terminava "partial"); o bloco já mostra o estado real assim que a
+  // página recarrega depois do clique.
   const banners = [
     contractBannerText && {
       tone: "amber",
       text: `${contractBannerText} A página continua acessível apenas para consulta de histórico.`,
     },
-    importSourceHealthBannerText && { tone: "red", text: importSourceHealthBannerText },
     error && { tone: "red", text: error },
     taskError && { tone: "red", text: taskError },
     reviewError && { tone: "red", text: reviewError },
     recurringTaskError && { tone: "red", text: recurringTaskError },
     clientUpdateError && { tone: "red", text: clientUpdateError },
     synced && { tone: "green", text: `${synced} dia(s) de spend sincronizado(s) com o Meta.` },
-    stractSynced && { tone: "green", text: `${stractSynced} fonte(s) sincronizada(s) com sucesso.` },
     saved && { tone: "green", text: "Dados do cliente atualizados." },
   ].filter((banner): banner is { tone: "red" | "green" | "amber"; text: string } => Boolean(banner));
 
@@ -1370,16 +1374,6 @@ export default async function ClientPage({
                 </button>
               </form>
             )}
-            {canOperate && stractImportSourceIds.length > 0 && (
-              <form action={syncClientStractSourcesAction.bind(null, client.id)}>
-                <button
-                  type="submit"
-                  className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                >
-                  Sincronizar agora
-                </button>
-              </form>
-            )}
           </div>
         </div>
 
@@ -1438,34 +1432,64 @@ export default async function ClientPage({
         </div>
       )}
 
-      {/* "O sistema já sabe quando uma sincronização deu problema e não
-          conta pra ninguém" — antes, diagnosticar uma sincronização exigia
-          SQL manual direto no Supabase porque `data_sync_runs` (linhas
-          lidas/gravadas e erro POR EXECUÇÃO) não tinha nenhuma tela. Admin
-          só (RLS + `isAdmin`, ver `getRecentSyncRunsForClient`); fechado por
-          padrão (`<details>`, sem JS) pra não competir com o resto da
-          página — só aparece quando existe pelo menos uma execução pra
-          mostrar. */}
-      {recentSyncRuns.length > 0 && (
-        <details className="rounded-md border border-border bg-card px-3 py-2 text-sm">
-          <summary className="cursor-pointer select-none font-medium text-foreground">
-            Histórico de sincronização (Stract)
-          </summary>
-          <ul className="mt-2 flex flex-col gap-2 border-t border-border pt-2">
-            {recentSyncRuns.map((run) => (
-              <li key={run.id} className="flex flex-col gap-0.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SYNC_RUN_STATUS_BADGE_CLASSES[run.status]}`}>
-                    {SYNC_RUN_STATUS_LABEL[run.status]}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{formatRelativeDateTime(run.startedAt, nowInstant)}</span>
-                </div>
-                {formatSyncRunCounts(run) && <p className="text-xs text-muted-foreground">{formatSyncRunCounts(run)}</p>}
-                {run.errorMessage && <p className="text-xs text-red-700 dark:text-red-300">{run.errorMessage}</p>}
-              </li>
-            ))}
-          </ul>
-        </details>
+      {/* Etapa "Consolidação do status de sincronização": um bloco só,
+          substituindo o banner vermelho binário + botão longe daqui +
+          histórico sem nenhum resumo antes de abrir (3 pedaços soltos,
+          cada um só contava parte da história). Linha-resumo SEMPRE
+          visível pra quem tem acesso à página (gestor incluso, via
+          `latestSyncStatus` — lido com client admin, ver
+          `getLatestSyncRunStatusForSources`); detalhe técnico (motivo,
+          contagens, execuções anteriores) fica atrás de um `<details>`
+          só pra admin (RLS de `data_sync_runs`, ver
+          `getRecentSyncRunsForClient`). */}
+      {stractImportSourceIds.length > 0 && (
+        <div className="rounded-md border border-border bg-card px-3 py-2 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  latestSyncStatus
+                    ? SYNC_RUN_STATUS_BADGE_CLASSES[latestSyncStatus.status]
+                    : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                }`}
+              >
+                {latestSyncStatus ? SYNC_RUN_STATUS_LABEL[latestSyncStatus.status] : "Nunca sincronizado"}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Stract{latestSyncStatus ? ` · ${formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant)}` : ""}
+              </span>
+            </div>
+            {canOperate && (
+              <form action={syncClientStractSourcesAction.bind(null, client.id)}>
+                <button
+                  type="submit"
+                  className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                >
+                  Sincronizar agora
+                </button>
+              </form>
+            )}
+          </div>
+          {isAdmin && recentSyncRuns.length > 0 && (
+            <details className="mt-2 border-t border-border pt-2">
+              <summary className="cursor-pointer select-none text-xs font-medium text-foreground">Detalhes e histórico</summary>
+              <ul className="mt-2 flex flex-col gap-2">
+                {recentSyncRuns.map((run) => (
+                  <li key={run.id} className="flex flex-col gap-0.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SYNC_RUN_STATUS_BADGE_CLASSES[run.status]}`}>
+                        {SYNC_RUN_STATUS_LABEL[run.status]}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{formatRelativeDateTime(run.startedAt, nowInstant)}</span>
+                    </div>
+                    {formatSyncRunCounts(run) && <p className="text-xs text-muted-foreground">{formatSyncRunCounts(run)}</p>}
+                    {run.errorMessage && <p className="text-xs text-red-700 dark:text-red-300">{run.errorMessage}</p>}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
       )}
 
       {/* Etapa 59, seção 16: ação rápida depois de registrar uma análise —

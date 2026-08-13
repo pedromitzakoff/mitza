@@ -178,28 +178,6 @@ export async function getEnabledImportSourceIdsForClient(supabase: Supabase, cli
   return (data ?? []).map((row) => row.id);
 }
 
-/** `"error"` = a última execução falhou de verdade (tabela de origem
- * ilegível, `external_account_id` divergente etc.). `"no_data"` = a última
- * releitura COMPLETA rodou sem erro, mas a fonte voltou com zero linhas —
- * sinal de que a conexão pode ter parado de enviar dado (ver
- * `lib/stract-sync.ts`). Só considera fontes `enabled = true` (uma fonte
- * desligada deliberadamente nunca deve gerar aviso). */
-export async function getImportSourceHealthIssue(
-  supabase: Supabase,
-  clientId: string,
-): Promise<{ status: "error" | "no_data" } | null> {
-  const { data } = await supabase
-    .from("import_sources")
-    .select("status")
-    .eq("client_id", clientId)
-    .eq("enabled", true)
-    .in("status", ["error", "no_data"])
-    .limit(1)
-    .maybeSingle();
-
-  return data ? { status: data.status as "error" | "no_data" } : null;
-}
-
 export interface SyncRunSummary {
   id: string;
   startedAt: string;
@@ -214,14 +192,17 @@ export interface SyncRunSummary {
 }
 
 /** Últimas execuções do Import Service (`data_sync_runs`) pras fontes Stract
- * de UM cliente — histórico por EXECUÇÃO (rows lidas/gravadas por tabela,
- * erro daquela rodada específica), nunca a saúde persistente da fonte
- * (isso é `import_sources.status`, ver `getImportSourceHealthIssue` acima).
- * Existia só no banco, sem nenhuma tela lendo — motivo real de precisar de
- * SQL manual pra diagnosticar uma sincronização com problema. RLS restringe
- * a leitura de `data_sync_runs` a admin; pra qualquer outro perfil a
- * consulta sempre volta vazia (só chamar dentro de um bloco `isAdmin`, senão
- * o gestor veria uma seção "sem histórico" enganosa em vez de "sem acesso"). */
+ * de UM cliente — histórico DETALHADO por execução (rows lidas/gravadas por
+ * tabela, erro bruto daquela rodada específica). Existia só no banco, sem
+ * nenhuma tela lendo — motivo real de precisar de SQL manual pra
+ * diagnosticar uma sincronização com problema. RLS restringe a leitura de
+ * `data_sync_runs` a admin; pra qualquer outro perfil a consulta sempre
+ * volta vazia (só chamar dentro de um bloco `isAdmin`, senão o gestor veria
+ * uma seção "sem histórico" enganosa em vez de "sem acesso"). O status/
+ * horário mais recente SEM detalhe (visível pra qualquer um com acesso à
+ * página, gestor incluso) é `getLatestSyncRunStatusForSources`,
+ * `lib/stract-sync.ts` — lê com o client admin de propósito, pra não
+ * depender desta mesma restrição de RLS. */
 export async function getRecentSyncRunsForClient(
   supabase: Supabase,
   importSourceIds: string[],

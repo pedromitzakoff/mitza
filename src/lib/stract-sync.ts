@@ -19,6 +19,7 @@ import {
   type RawSourceRow,
 } from "@/lib/import-sources";
 import type { PerformanceGoal } from "@/lib/performance-goals";
+import type { DataSyncRunStatusDb } from "@/lib/supabase/database.types";
 
 export interface ImportDateRange {
   since: string; // YYYY-MM-DD, inclusive
@@ -594,6 +595,37 @@ export async function runImportForAllEnabledSources(): Promise<ImportSourceRunRe
     }
   }
   return results;
+}
+
+export interface LatestSyncRunStatus {
+  status: DataSyncRunStatusDb;
+  startedAt: string;
+}
+
+/** Status/horário (SEM detalhe — nunca `error_message`/contagens) da
+ * execução mais recente entre as fontes Stract de um cliente — usado pela
+ * linha-resumo de sincronização que QUALQUER pessoa com acesso à página do
+ * cliente vê, não só admin (ver Etapa "Consolidação do status de
+ * sincronização" em `clients/[id]/page.tsx`). Lê deliberadamente com o
+ * client ADMIN (bypassa RLS): `data_sync_runs` é admin-only via RLS (é
+ * detalhe técnico — mensagem de erro bruta, contagem por tabela), mas quem
+ * já vê esta página (garantido pela RLS de `clients`, resolvida antes desta
+ * chamada) precisa saber se a integração está saudável mesmo sem acesso ao
+ * histórico técnico completo (esse continua só em
+ * `getRecentSyncRunsForClient`, `lib/performance-queries.ts`, admin-only). */
+export async function getLatestSyncRunStatusForSources(importSourceIds: string[]): Promise<LatestSyncRunStatus | null> {
+  if (importSourceIds.length === 0) return null;
+
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("data_sync_runs")
+    .select("status, started_at")
+    .in("import_source_id", importSourceIds)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return data ? { status: data.status, startedAt: data.started_at } : null;
 }
 
 type AdminClient = ReturnType<typeof createAdminClient>;
