@@ -25,6 +25,12 @@ export interface ImportDateRange {
   until: string; // YYYY-MM-DD, inclusive
 }
 
+/** Nenhuma sincronização real de UMA fonte deveria levar perto disso —
+ * usado só pra distinguir "execução realmente em andamento agora" de
+ * "execução travou num timeout de função serverless e nunca chegou em
+ * `finishRun`", ficando presa em `status = "running"` pra sempre. */
+const STALE_RUNNING_RUN_THRESHOLD_MS = 30 * 60 * 1000;
+
 /** Campos comuns a toda a fonte (ver comentário de `import_sources` em
  * `supabase/stract-integration.sql`) sem os quais nem faz sentido tentar ler
  * a tabela de origem. `not null` no banco já impede NULL, mas não impede
@@ -109,6 +115,57 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
 
   if (mappingsError) {
     throw new Error(`Falha ao ler metric_mappings de ${importSourceId}: ${mappingsError.message}`);
+  }
+
+  // Prevenção de execução concorrente da MESMA fonte (ex.: cron e
+  // "Sincronizar agora" clicado no mesmo instante, ou duplo clique) — as
+  // escritas já são idempotentes (upsert), então concorrência nunca corrompe
+  // dado, mas gastaria API/DB à toa e deixaria duas linhas de
+  // `data_sync_runs` concorrentes reportando a mesma janela.
+  const { data: activeRun } = await supabase
+    .from("data_sync_runs")
+    .select("id, started_at")
+    .eq("import_source_id", importSourceId)
+    .eq("status", "running")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (activeRun) {
+    const startedAgoMs = Date.now() - new Date(activeRun.started_at).getTime();
+    if (startedAgoMs < STALE_RUNNING_RUN_THRESHOLD_MS) {
+      const concurrencyMessage = `Sincronização já em andamento para esta fonte (iniciada há ${Math.round(startedAgoMs / 1000)}s) — nova execução não iniciada para evitar concorrência.`;
+      const { data: skippedRun } = await supabase
+        .from("data_sync_runs")
+        .insert({ import_source_id: importSourceId, status: "failed", finished_at: new Date().toISOString(), error_message: concurrencyMessage })
+        .select("id")
+        .single();
+      return {
+        importSourceId,
+        runId: skippedRun?.id ?? activeRun.id,
+        status: "failed",
+        rowsRead: 0,
+        spendRowsWritten: 0,
+        performanceRowsWritten: 0,
+        creativeRowsWritten: 0,
+        campaignRowsWritten: 0,
+        errorMessage: concurrencyMessage,
+      };
+    }
+
+    // "running" há mais tempo do que qualquer sincronização real levaria —
+    // provável timeout de função serverless que nunca chegou em
+    // `finishRun`, ficando presa pra sempre. Fecha como falha antes de
+    // seguir, pra nunca deixar uma linha órfã confundindo o histórico.
+    await finishRun(supabase, activeRun.id, {
+      status: "failed",
+      rowsRead: 0,
+      spendRowsWritten: 0,
+      performanceRowsWritten: 0,
+      creativeRowsWritten: 0,
+      campaignRowsWritten: 0,
+      errorMessage: "Execução interrompida sem finalizar (provável timeout) — marcada como falha automaticamente ao iniciar uma nova tentativa.",
+    });
   }
 
   const { data: run, error: runInsertError } = await supabase
