@@ -182,7 +182,12 @@ export function CreativeAnalyticsList({
           value={searchInput}
           onChange={(event) => handleSearchChange(event.target.value)}
           placeholder="Buscar criativo..."
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          // QA visual: sem largura fluida, o campo mantinha o tamanho nativo
+          // do navegador (~170px) mesmo sozinho numa linha no mobile —
+          // cresce até preencher a linha abaixo de `sm:`, volta a uma
+          // largura fixa confortável a partir dali (mesmo comportamento de
+          // sempre no desktop, só corrigido no mobile).
+          className="min-w-[120px] flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand sm:flex-none sm:w-44"
         />
 
         <select
