@@ -25,6 +25,28 @@ export interface ImportDateRange {
   until: string; // YYYY-MM-DD, inclusive
 }
 
+/** Campos comuns a toda a fonte (ver comentário de `import_sources` em
+ * `supabase/stract-integration.sql`) sem os quais nem faz sentido tentar ler
+ * a tabela de origem. `not null` no banco já impede NULL, mas não impede
+ * string vazia — validado aqui pra falhar rápido com uma mensagem clara
+ * (achado no levantamento "estado geral do sistema": hoje configuração
+ * inválida só se manifesta como falha silenciosa ou um erro confuso de
+ * leitura mais adiante, nunca um aviso direto sobre QUAL campo falta). */
+function findMissingRequiredFields(importSource: {
+  table_name: string;
+  account_id_column: string;
+  date_column: string;
+  spend_column: string;
+}): string[] {
+  const requiredFields: Array<[string, string]> = [
+    ["table_name", importSource.table_name],
+    ["account_id_column", importSource.account_id_column],
+    ["date_column", importSource.date_column],
+    ["spend_column", importSource.spend_column],
+  ];
+  return requiredFields.filter(([, value]) => typeof value !== "string" || value.trim().length === 0).map(([key]) => key);
+}
+
 export interface ImportSourceRunResult {
   importSourceId: string;
   runId: string;
@@ -103,16 +125,23 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
   let rows: RawSourceRow[] = [];
   let errorMessage: string | null = null;
 
-  try {
-    rows = await readSourceTable(importSource.table_name);
-    if (dateRange) {
-      rows = rows.filter((row) => {
-        const value = row[importSource.date_column];
-        return typeof value === "string" && value >= dateRange.since && value <= dateRange.until;
-      });
+  const missingRequiredFields = findMissingRequiredFields(importSource);
+  if (missingRequiredFields.length > 0) {
+    errorMessage = `Configuração incompleta: ${missingRequiredFields.join(", ")} não definido(s) em import_sources — corrija via SQL antes de sincronizar de novo.`;
+  }
+
+  if (!errorMessage) {
+    try {
+      rows = await readSourceTable(importSource.table_name);
+      if (dateRange) {
+        rows = rows.filter((row) => {
+          const value = row[importSource.date_column];
+          return typeof value === "string" && value >= dateRange.since && value <= dateRange.until;
+        });
+      }
+    } catch (err) {
+      errorMessage = `Falha ao ler a tabela de origem "${importSource.table_name}": ${err instanceof Error ? err.message : String(err)}`;
     }
-  } catch (err) {
-    errorMessage = `Falha ao ler a tabela de origem "${importSource.table_name}": ${err instanceof Error ? err.message : String(err)}`;
   }
 
   if (!errorMessage && rows.length > 0) {
@@ -348,6 +377,15 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
         creativeRowsWritten = creativeUpsertRows.length;
       }
     }
+  } else if ((mappings ?? []).length > 0) {
+    // Antes degradava 100% silencioso (nenhum erro, só nunca escrevia
+    // nada aqui — achado real em produção: vendas sumindo da Análise de
+    // Criativos sem nenhuma explicação). Só sinaliza quando a fonte tem
+    // pelo menos um objetivo mapeado (senão a fonte nem pretende rastrear
+    // resultado, e a ausência dessas colunas não é uma lacuna real).
+    partialReasons.push(
+      "Configuração incompleta: ad_name_column e/ou campaign_name_column não definidos nesta fonte — rastreamento por criativo (Análise de Criativos) fica sem dado; investimento e resultado no nível da conta continuam normais.",
+    );
   }
 
   // Camada normalizada de CAMPANHA (`campaign_daily_metrics`, achado da
