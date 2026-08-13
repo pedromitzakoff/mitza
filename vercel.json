@@ -1,6 +1,7 @@
 {
   "regions": ["gru1"],
   "crons": [
-    { "path": "/api/cron/sync-stract", "schedule": "0 11 * * *" }
+    { "path": "/api/cron/sync-stract", "schedule": "0 11 * * *" },
+    { "path": "/api/cron/ensure-sprints", "schedule": "0 3 * * *" }
   ]
 }
