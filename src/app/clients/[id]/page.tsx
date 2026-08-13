@@ -8,6 +8,7 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import {
   getActiveImportSourceChannelsForClient,
+  getDailyPerformanceForPeriod,
   getEnabledImportSourceIdsForClient,
   getImportSourceHealthIssue,
   resolvePerformanceRowsForSprints,
@@ -1145,6 +1146,30 @@ export default async function ClientPage({
   const adCreativeRows = needsAdCreativeRows ? await getAdCreativeDailyMetricsForPeriod(supabase, id, analyticsPeriod) : [];
   const creativeSummaries =
     analyticsSection === "resumo" || analyticsSection === "criativos" ? buildCreativeSummaries(adCreativeRows) : [];
+  // Achado no QA de produção: o total de vendas da Visão Geral/Resumo
+  // Executivo (`daily_performance`, `getDailyPerformanceForPeriod` — soma
+  // TODA linha do período) pode ser maior que a soma das vendas por
+  // criativo aqui (`ad_creative_daily_metrics` só grava linha COM nome de
+  // anúncio resolvido — ver `aggregateAdCreativeDailyRows`,
+  // lib/import-sources.ts — sem nome não há como atribuir a venda a
+  // NENHUM criativo). A diferença é real, nunca um erro de soma; só ficava
+  // invisível — parecia que a Análise de Criativos "perdia" vendas.
+  const unattributedCreativeResultCount = await (async () => {
+    if (!needsAdCreativeRows || analyticsSection !== "criativos" || !client.performance_goal) return null;
+    const dailyPerformanceForPeriod = await getDailyPerformanceForPeriod(supabase, id, {
+      firstDay: analyticsPeriod.start,
+      lastDay: analyticsPeriod.end,
+    });
+    // "meta" — Criativos é exclusivamente Meta (mesma regra de
+    // `needsAdCreativeRows`, ver comentário acima dele); comparar contra o
+    // total consolidado inflaria o gap com vendas de Google que nunca
+    // poderiam aparecer aqui de qualquer forma.
+    const accountLevel = aggregatePerformanceResults(dailyPerformanceForPeriod, client.performance_goal, "meta");
+    if (!accountLevel.hasAnyRecord) return null;
+    const attributedResultCount = creativeSummaries.reduce((sum, s) => sum + (s.totalResultCount ?? 0), 0);
+    const gap = accountLevel.resultCount - attributedResultCount;
+    return gap > 0 ? gap : null;
+  })();
   const creativeDetail =
     isAnalyticsArea && analyticsSection === "criativos" && creativeParam ? buildCreativeDetail(adCreativeRows, creativeParam) : null;
   // Preserva período+plataforma (nunca reseta ao entrar no detalhe de um
@@ -1752,6 +1777,7 @@ export default async function ClientPage({
                 detail={creativeDetail}
                 baseHref={analyticsBaseHref}
                 creativeDetailHrefBase={creativeDetailHrefBase}
+                unattributedResultCount={unattributedCreativeResultCount}
               />
             ))}
 

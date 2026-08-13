@@ -44,11 +44,18 @@ export function CreativeAnalyticsSection({
   detail,
   baseHref,
   creativeDetailHrefBase,
+  unattributedResultCount,
 }: {
   summaries: CreativeSummary[];
   detail: CreativeDetail | null;
   baseHref: string;
   creativeDetailHrefBase: string;
+  /** Vendas/leads do período que existem em `daily_performance` mas não
+   * puderam ser atribuídos a nenhum criativo (sem nome de anúncio
+   * resolvido) — `null` quando não há gap ou não se aplica. Achado no QA de
+   * produção: sem isso, essas vendas somem silenciosamente da Análise de
+   * Criativos e parecem um erro de soma. */
+  unattributedResultCount: number | null;
 }) {
   if (detail) {
     return <CreativeDetailView detail={detail} backHref={baseHref} />;
@@ -58,7 +65,13 @@ export function CreativeAnalyticsSection({
     return <EmptyState>{NO_CREATIVES_MESSAGE}</EmptyState>;
   }
 
-  return <CreativeAnalyticsList summaries={summaries} creativeDetailHrefBase={creativeDetailHrefBase} />;
+  return (
+    <CreativeAnalyticsList
+      summaries={summaries}
+      creativeDetailHrefBase={creativeDetailHrefBase}
+      unattributedResultCount={unattributedResultCount}
+    />
+  );
 }
 
 function CreativeDetailView({ detail, backHref }: { detail: CreativeDetail; backHref: string }) {

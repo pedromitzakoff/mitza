@@ -77,12 +77,19 @@ function Segmented<T extends string>({
 export function CreativeAnalyticsList({
   summaries,
   creativeDetailHrefBase,
+  unattributedResultCount,
 }: {
   summaries: CreativeSummary[];
   /** Href da lista SEM o `creative=<nome>` final (Server Component não pode
    * passar uma função pra cá — só o prefixo, serializável; o href de cada
    * item é montado aqui mesmo, client-side, com `buildDetailHref` abaixo). */
   creativeDetailHrefBase: string;
+  /** Vendas/leads do período que existem em `daily_performance` mas não têm
+   * nome de anúncio resolvido — não puderam ser atribuídos a NENHUM
+   * criativo, então nunca aparecem em nenhuma linha da tabela/grid. Sobre o
+   * total do período inteiro (nunca recalculado pela busca/filtro atual —
+   * é sobre completude do dado, não sobre o que está visível agora). */
+  unattributedResultCount: number | null;
 }) {
   function buildDetailHref(creativeName: string) {
     return `${creativeDetailHrefBase}&creative=${encodeURIComponent(creativeName)}`;
@@ -275,6 +282,19 @@ export function CreativeAnalyticsList({
           </>
         )}
       </p>
+
+      {/* Achado no QA de produção: vendas que existem no total do período
+          mas não têm nome de anúncio resolvido — nunca podem aparecer em
+          nenhuma linha da tabela/grid abaixo. Sem esta linha, sumiam sem
+          explicação (pareciam um erro de soma). Nunca reage à busca/filtro
+          atual — é sobre completude do dado do período inteiro. */}
+      {unattributedResultCount !== null && unattributedResultCount > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {unattributedResultCount} {resultLabel} do período {unattributedResultCount === 1 ? "não pôde" : "não puderam"} ser
+          atribuído{unattributedResultCount === 1 ? "" : "s"} a nenhum criativo específico (anúncio sem nome
+          identificado na origem).
+        </p>
+      )}
 
       {/* Barra de seleção — só aparece com 2+ selecionados VISÍVEIS */}
       {selectedCount >= 2 && (
