@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDayShortMonth } from "@/lib/format";
 import { PERFORMANCE_GOALS, type PerformanceGoalConfig } from "@/lib/performance-goals";
 import { NO_CREATIVES_MATCH_FILTERS_MESSAGE } from "@/lib/analytics-messages";
 import type { CreativeSummary } from "@/lib/creative-analytics";
@@ -78,18 +78,25 @@ export function CreativeAnalyticsList({
   summaries,
   creativeDetailHrefBase,
   unattributedResultCount,
+  creativeHistoryStartsLaterThanPeriod,
 }: {
   summaries: CreativeSummary[];
   /** Href da lista SEM o `creative=<nome>` final (Server Component não pode
    * passar uma função pra cá — só o prefixo, serializável; o href de cada
    * item é montado aqui mesmo, client-side, com `buildDetailHref` abaixo). */
   creativeDetailHrefBase: string;
-  /** Vendas/leads do período que existem em `daily_performance` mas não têm
-   * nome de anúncio resolvido — não puderam ser atribuídos a NENHUM
-   * criativo, então nunca aparecem em nenhuma linha da tabela/grid. Sobre o
-   * total do período inteiro (nunca recalculado pela busca/filtro atual —
-   * é sobre completude do dado, não sobre o que está visível agora). */
+  /** Vendas/leads do período que existem em `daily_performance` mas não
+   * aparecem em nenhuma linha da tabela/grid abaixo. Sobre o total do
+   * período inteiro (nunca recalculado pela busca/filtro atual — é sobre
+   * completude do dado, não sobre o que está visível agora). */
   unattributedResultCount: number | null;
+  /** Quando o gap acima é explicado pelo histórico de Criativos começando
+   * DEPOIS do início do período (causa confirmada investigando um caso
+   * real — coluna de nome de anúncio configurada bem depois do cliente já
+   * ter histórico de resultado): a data em que esse histórico de fato
+   * começa. `null` quando não se aplica — cai no texto genérico
+   * (possibilidade residual de anúncio sem nome). */
+  creativeHistoryStartsLaterThanPeriod: string | null;
 }) {
   function buildDetailHref(creativeName: string) {
     return `${creativeDetailHrefBase}&creative=${encodeURIComponent(creativeName)}`;
@@ -284,15 +291,26 @@ export function CreativeAnalyticsList({
       </p>
 
       {/* Achado no QA de produção: vendas que existem no total do período
-          mas não têm nome de anúncio resolvido — nunca podem aparecer em
-          nenhuma linha da tabela/grid abaixo. Sem esta linha, sumiam sem
-          explicação (pareciam um erro de soma). Nunca reage à busca/filtro
-          atual — é sobre completude do dado do período inteiro. */}
+          mas não aparecem em nenhuma linha da tabela/grid abaixo. Sem esta
+          linha, sumiam sem explicação (pareciam um erro de soma). Nunca
+          reage à busca/filtro atual — é sobre completude do dado do
+          período inteiro. Causa real investigada com um caso de produção:
+          normalmente é o histórico de Criativos começando depois do
+          início do período (`creativeHistoryStartsLaterThanPeriod`), não
+          "anúncio sem nome" — esse texto só aparece quando a causa acima
+          não se aplica. */}
       {unattributedResultCount !== null && unattributedResultCount > 0 && (
         <p className="text-xs text-muted-foreground">
-          {unattributedResultCount} {resultLabel} do período {unattributedResultCount === 1 ? "não pôde" : "não puderam"} ser
-          atribuído{unattributedResultCount === 1 ? "" : "s"} a nenhum criativo específico (anúncio sem nome
-          identificado na origem).
+          {unattributedResultCount} {resultLabel} do período {unattributedResultCount === 1 ? "aparece" : "aparecem"} no
+          total geral, mas não em nenhum criativo específico
+          {creativeHistoryStartsLaterThanPeriod ? (
+            <>
+              {" "}— o histórico de Criativos desta conta começa em {formatDayShortMonth(creativeHistoryStartsLaterThanPeriod)}; dias
+              anteriores no período não têm esse detalhamento.
+            </>
+          ) : (
+            <> (anúncio sem nome identificado na origem).</>
+          )}
         </p>
       )}
 

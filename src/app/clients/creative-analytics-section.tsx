@@ -45,17 +45,28 @@ export function CreativeAnalyticsSection({
   baseHref,
   creativeDetailHrefBase,
   unattributedResultCount,
+  creativeHistoryStartsLaterThanPeriod,
 }: {
   summaries: CreativeSummary[];
   detail: CreativeDetail | null;
   baseHref: string;
   creativeDetailHrefBase: string;
   /** Vendas/leads do período que existem em `daily_performance` mas não
-   * puderam ser atribuídos a nenhum criativo (sem nome de anúncio
-   * resolvido) — `null` quando não há gap ou não se aplica. Achado no QA de
-   * produção: sem isso, essas vendas somem silenciosamente da Análise de
-   * Criativos e parecem um erro de soma. */
+   * puderam ser atribuídos a nenhum criativo — `null` quando não há gap ou
+   * não se aplica. Achado no QA de produção: sem isso, essas vendas somem
+   * silenciosamente da Análise de Criativos e parecem um erro de soma.
+   *
+   * Investigado com dado real: a causa usual não é "anúncio sem nome" — é
+   * `creativeHistoryStartsLaterThanPeriod` abaixo (histórico de criativos
+   * começando depois do início do período, tipicamente porque a coluna de
+   * nome de anúncio de uma fonte foi configurada bem depois do cliente já
+   * ter histórico de resultado). "Anúncio sem nome" continua existindo
+   * como possibilidade residual quando essa outra causa não se aplica. */
   unattributedResultCount: number | null;
+  /** Data (YYYY-MM-DD) em que o histórico de `ad_creative_daily_metrics`
+   * de fato começa — só preenchida quando é DEPOIS do início do período
+   * selecionado (quando isso explica o gap acima); `null` caso contrário. */
+  creativeHistoryStartsLaterThanPeriod: string | null;
 }) {
   if (detail) {
     return <CreativeDetailView detail={detail} backHref={baseHref} />;
@@ -70,6 +81,7 @@ export function CreativeAnalyticsSection({
       summaries={summaries}
       creativeDetailHrefBase={creativeDetailHrefBase}
       unattributedResultCount={unattributedResultCount}
+      creativeHistoryStartsLaterThanPeriod={creativeHistoryStartsLaterThanPeriod}
     />
   );
 }

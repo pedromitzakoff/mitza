@@ -1149,11 +1149,19 @@ export default async function ClientPage({
   // Achado no QA de produção: o total de vendas da Visão Geral/Resumo
   // Executivo (`daily_performance`, `getDailyPerformanceForPeriod` — soma
   // TODA linha do período) pode ser maior que a soma das vendas por
-  // criativo aqui (`ad_creative_daily_metrics` só grava linha COM nome de
-  // anúncio resolvido — ver `aggregateAdCreativeDailyRows`,
-  // lib/import-sources.ts — sem nome não há como atribuir a venda a
-  // NENHUM criativo). A diferença é real, nunca um erro de soma; só ficava
-  // invisível — parecia que a Análise de Criativos "perdia" vendas.
+  // criativo aqui. Investigado com dado real (cliente Ateliê): a causa
+  // usual NÃO é "anúncio sem nome" (`aggregateAdCreativeDailyRows`,
+  // lib/import-sources.ts, ainda existe como possibilidade, mas não foi o
+  // caso observado) — é o histórico de `ad_creative_daily_metrics` COMEÇAR
+  // DEPOIS do início do período selecionado: a coluna de nome de anúncio
+  // de uma fonte pode ser configurada bem depois do cliente já ter
+  // histórico de resultado em `daily_performance`, então os dias
+  // anteriores à configuração nunca tiveram (e nunca terão
+  // retroativamente) nenhuma linha de criativo — não é uma venda "perdida
+  // por falta de nome", é um dia que nunca foi sincronizado com
+  // detalhamento de criativo. A diferença é real, nunca um erro de soma;
+  // só ficava invisível — parecia que a Análise de Criativos "perdia"
+  // vendas sem explicação nenhuma.
   const unattributedCreativeResultCount = await (async () => {
     if (!needsAdCreativeRows || analyticsSection !== "criativos" || !client.performance_goal) return null;
     const dailyPerformanceForPeriod = await getDailyPerformanceForPeriod(supabase, id, {
@@ -1170,6 +1178,17 @@ export default async function ClientPage({
     const gap = accountLevel.resultCount - attributedResultCount;
     return gap > 0 ? gap : null;
   })();
+  // Só é relevante quando REALMENTE explica o gap acima (posterior ao
+  // início do período) — `adCreativeRows` já é a mesma busca que alimenta
+  // `creativeSummaries`, nenhuma consulta nova.
+  const earliestCreativeDate = adCreativeRows.reduce<string | null>(
+    (min, row) => (min === null || row.date < min ? row.date : min),
+    null,
+  );
+  const creativeHistoryStartsLaterThanPeriod =
+    unattributedCreativeResultCount !== null && earliestCreativeDate !== null && earliestCreativeDate > analyticsPeriod.start
+      ? earliestCreativeDate
+      : null;
   const creativeDetail =
     isAnalyticsArea && analyticsSection === "criativos" && creativeParam ? buildCreativeDetail(adCreativeRows, creativeParam) : null;
   // Preserva período+plataforma (nunca reseta ao entrar no detalhe de um
@@ -1778,6 +1797,7 @@ export default async function ClientPage({
                 baseHref={analyticsBaseHref}
                 creativeDetailHrefBase={creativeDetailHrefBase}
                 unattributedResultCount={unattributedCreativeResultCount}
+                creativeHistoryStartsLaterThanPeriod={creativeHistoryStartsLaterThanPeriod}
               />
             ))}
 
