@@ -69,7 +69,13 @@ export function CreativeCard({
       {selectable && (
         <label
           className={`absolute right-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md border border-border bg-card/95 px-1.5 py-1 text-[11px] font-medium text-muted-foreground shadow-sm transition-opacity ${
-            selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[:focus-visible]:opacity-100"
+            // QA final: sempre visível abaixo de `sm:` — toque não tem
+            // estado de hover, então "só aparece no hover" deixaria a
+            // comparação inacessível no mobile. Continua discreto (hover-only)
+            // a partir de `sm:`, onde mouse é a interação predominante.
+            selected
+              ? "opacity-100"
+              : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 sm:has-[:focus-visible]:opacity-100"
           }`}
         >
           <input

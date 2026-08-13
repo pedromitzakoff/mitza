@@ -48,7 +48,15 @@ export function CreativeComparisonDrawer({
         aria-label="Fechar comparação"
         className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30"
       />
-      <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
+      <div
+        className={`mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg ${
+          // QA final: com 3 selecionados, max-w-2xl (672px) sobrava só
+          // ~200px por coluna — apertado pra miniatura + nome + 4 linhas de
+          // estatística. max-w-3xl dá ~230px, sem redesenhar o componente
+          // (mesmo layout, só mais respiro). Com 2, 672px já era confortável.
+          summaries.length === 3 ? "max-w-3xl" : "max-w-2xl"
+        }`}
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-foreground">Comparar criativos</h2>
