@@ -31,17 +31,24 @@ import { AnalyticsTrendChart } from "./analytics-trend-chart";
  * o detalhe (que continua exatamente como estava). `summaries.length === 0`
  * (nenhum criativo no período, condição de dado) continua distinto de "0
  * resultado após busca/filtro" (condição de UI, tratada dentro da lista).
+ *
+ * Correção de produção: `CreativeAnalyticsList` é Client Component (estado
+ * de busca/ordenação/seleção) — uma FUNÇÃO (`buildDetailHref`, como era
+ * antes) não pode atravessar a fronteira Server→Client (React só serializa
+ * dados, nunca funções, exceto Server Actions). Este componente (Server)
+ * agora só passa `creativeDetailHrefBase` (string, serializável); quem monta
+ * o href final por criativo é o próprio `CreativeAnalyticsList`, client-side.
  */
 export function CreativeAnalyticsSection({
   summaries,
   detail,
   baseHref,
-  buildDetailHref,
+  creativeDetailHrefBase,
 }: {
   summaries: CreativeSummary[];
   detail: CreativeDetail | null;
   baseHref: string;
-  buildDetailHref: (creativeName: string) => string;
+  creativeDetailHrefBase: string;
 }) {
   if (detail) {
     return <CreativeDetailView detail={detail} backHref={baseHref} />;
@@ -51,7 +58,7 @@ export function CreativeAnalyticsSection({
     return <EmptyState>{NO_CREATIVES_MESSAGE}</EmptyState>;
   }
 
-  return <CreativeAnalyticsList summaries={summaries} buildDetailHref={buildDetailHref} />;
+  return <CreativeAnalyticsList summaries={summaries} creativeDetailHrefBase={creativeDetailHrefBase} />;
 }
 
 function CreativeDetailView({ detail, backHref }: { detail: CreativeDetail; backHref: string }) {

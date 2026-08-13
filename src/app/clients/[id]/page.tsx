@@ -1149,16 +1149,18 @@ export default async function ClientPage({
     isAnalyticsArea && analyticsSection === "criativos" && creativeParam ? buildCreativeDetail(adCreativeRows, creativeParam) : null;
   // Preserva período+plataforma (nunca reseta ao entrar no detalhe de um
   // criativo) — mesmo cuidado de `customStart`/`customEnd` já usado pro
-  // seletor de período em si.
-  const buildCreativeDetailHref = (creativeName: string) => {
+  // seletor de período em si. Só o PREFIXO do href (sem `creative=<nome>`
+  // ainda) — `CreativeAnalyticsList` (Client Component) monta o href final
+  // de cada criativo, porque uma função não pode atravessar a fronteira
+  // Server→Client (só este prefixo, uma string serializável).
+  const creativeDetailHrefBase = (() => {
     const params = new URLSearchParams({ analyticsPreset, analyticsSection: "criativos", analyticsPlatform });
     if (analyticsPreset === "custom") {
       params.set("analyticsStart", analyticsStartParam ?? analyticsPeriod.start);
       params.set("analyticsEnd", analyticsEndParam ?? analyticsPeriod.end);
     }
-    params.set("creative", creativeName);
     return `${analyticsBaseHref}&${params.toString()}`;
-  };
+  })();
 
   // Seção "Campanhas" — Integração Google Ads: camada independente de
   // Criativos desde a origem (`campaign_daily_metrics`, channel-aware,
@@ -1749,7 +1751,7 @@ export default async function ClientPage({
                 summaries={creativeSummaries}
                 detail={creativeDetail}
                 baseHref={analyticsBaseHref}
-                buildDetailHref={buildCreativeDetailHref}
+                creativeDetailHrefBase={creativeDetailHrefBase}
               />
             ))}
 

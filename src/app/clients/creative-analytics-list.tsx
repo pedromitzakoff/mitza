@@ -76,11 +76,18 @@ function Segmented<T extends string>({
  */
 export function CreativeAnalyticsList({
   summaries,
-  buildDetailHref,
+  creativeDetailHrefBase,
 }: {
   summaries: CreativeSummary[];
-  buildDetailHref: (creativeName: string) => string;
+  /** Href da lista SEM o `creative=<nome>` final (Server Component não pode
+   * passar uma função pra cá — só o prefixo, serializável; o href de cada
+   * item é montado aqui mesmo, client-side, com `buildDetailHref` abaixo). */
+  creativeDetailHrefBase: string;
 }) {
+  function buildDetailHref(creativeName: string) {
+    return `${creativeDetailHrefBase}&creative=${encodeURIComponent(creativeName)}`;
+  }
+
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
