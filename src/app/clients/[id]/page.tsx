@@ -11,7 +11,9 @@ import {
   getDailyPerformanceForPeriod,
   getEnabledImportSourceIdsForClient,
   getImportSourceHealthIssue,
+  getRecentSyncRunsForClient,
   resolvePerformanceRowsForSprints,
+  type SyncRunSummary,
 } from "@/lib/performance-queries";
 import {
   assertSingleCurrentSprint,
@@ -94,6 +96,35 @@ import { GoogleNotConnectedState } from "../google-not-connected-state";
 import { CREATIVES_NOT_AVAILABLE_FOR_GOOGLE_MESSAGE } from "@/lib/analytics-messages";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel, type ChannelScope } from "@/lib/traffic-channels";
 import { VisaoGeralChannelSwitch, type VisaoGeralMetricsChannel } from "../visao-geral-channel-switch";
+
+const SYNC_RUN_STATUS_LABEL: Record<SyncRunSummary["status"], string> = {
+  running: "Interrompida (sem status final)",
+  success: "Sucesso",
+  partial: "Parcial",
+  empty: "Vazio",
+  failed: "Falha",
+};
+
+const SYNC_RUN_STATUS_BADGE_CLASSES: Record<SyncRunSummary["status"], string> = {
+  running: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  success: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
+  partial: "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  empty: "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  failed: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
+};
+
+/** "36 lidas · 36 investimento · 12 performance" — só lista as contagens que
+ * a execução de fato preencheu (cada tabela de destino é opcional: uma fonte
+ * sem `ad_name_column`, por exemplo, nunca escreve `creativeRowsWritten`). */
+function formatSyncRunCounts(run: SyncRunSummary): string {
+  const parts: string[] = [];
+  if (run.rowsRead !== null) parts.push(`${run.rowsRead} lidas`);
+  if (run.spendRowsWritten !== null) parts.push(`${run.spendRowsWritten} investimento`);
+  if (run.performanceRowsWritten !== null) parts.push(`${run.performanceRowsWritten} performance`);
+  if (run.creativeRowsWritten !== null) parts.push(`${run.creativeRowsWritten} criativos`);
+  if (run.campaignRowsWritten !== null) parts.push(`${run.campaignRowsWritten} campanhas`);
+  return parts.join(" · ");
+}
 
 async function fetchCommentsByType(
   supabase: Awaited<ReturnType<typeof createSupabaseClient>>,
@@ -275,6 +306,14 @@ export default async function ClientPage({
   // aparece quando o cliente tem pelo menos 1 fonte Stract ativa; a mesma
   // lista de ids é o que a action dispara.
   const stractImportSourceIds = await getEnabledImportSourceIdsForClient(supabase, id);
+
+  // "O sistema já sabe quando uma sincronização deu problema e não conta pra
+  // ninguém" — `data_sync_runs` guarda linhas lidas/gravadas e erro POR
+  // EXECUÇÃO desde sempre, mas nenhuma tela lia isso (motivo real de um
+  // diagnóstico precisar de quase uma hora de SQL manual). RLS já restringe
+  // a leitura a admin — `isAdmin` só evita mostrar "sem histórico" enganoso
+  // pra quem nunca teria acesso a essas linhas mesmo.
+  const recentSyncRuns = isAdmin && stractImportSourceIds.length > 0 ? await getRecentSyncRunsForClient(supabase, stractImportSourceIds) : [];
 
   // Habilitar Gestores 1.0: "Atualizar performance" (investimento realizado
   // + resultados da sprint) deixou de ser admin-only — o gestor responsável
@@ -1397,6 +1436,36 @@ export default async function ClientPage({
             </p>
           ))}
         </div>
+      )}
+
+      {/* "O sistema já sabe quando uma sincronização deu problema e não
+          conta pra ninguém" — antes, diagnosticar uma sincronização exigia
+          SQL manual direto no Supabase porque `data_sync_runs` (linhas
+          lidas/gravadas e erro POR EXECUÇÃO) não tinha nenhuma tela. Admin
+          só (RLS + `isAdmin`, ver `getRecentSyncRunsForClient`); fechado por
+          padrão (`<details>`, sem JS) pra não competir com o resto da
+          página — só aparece quando existe pelo menos uma execução pra
+          mostrar. */}
+      {recentSyncRuns.length > 0 && (
+        <details className="rounded-md border border-border bg-card px-3 py-2 text-sm">
+          <summary className="cursor-pointer select-none font-medium text-foreground">
+            Histórico de sincronização (Stract)
+          </summary>
+          <ul className="mt-2 flex flex-col gap-2 border-t border-border pt-2">
+            {recentSyncRuns.map((run) => (
+              <li key={run.id} className="flex flex-col gap-0.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SYNC_RUN_STATUS_BADGE_CLASSES[run.status]}`}>
+                    {SYNC_RUN_STATUS_LABEL[run.status]}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{formatRelativeDateTime(run.startedAt, nowInstant)}</span>
+                </div>
+                {formatSyncRunCounts(run) && <p className="text-xs text-muted-foreground">{formatSyncRunCounts(run)}</p>}
+                {run.errorMessage && <p className="text-xs text-red-700 dark:text-red-300">{run.errorMessage}</p>}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
 
       {/* Etapa 59, seção 16: ação rápida depois de registrar uma análise —

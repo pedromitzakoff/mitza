@@ -1,6 +1,6 @@
 import type { createClient as createSupabaseClient } from "./supabase/server";
 import type { PerformanceRecordRow, PerformanceSource } from "./performance";
-import type { PerformanceGoalDb, TrafficChannelDb, PerformanceSourceDb } from "./supabase/database.types";
+import type { PerformanceGoalDb, TrafficChannelDb, PerformanceSourceDb, DataSyncRunStatusDb } from "./supabase/database.types";
 import { requireQuery } from "./require-query";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
@@ -198,6 +198,58 @@ export async function getImportSourceHealthIssue(
     .maybeSingle();
 
   return data ? { status: data.status as "error" | "no_data" } : null;
+}
+
+export interface SyncRunSummary {
+  id: string;
+  startedAt: string;
+  finishedAt: string | null;
+  status: DataSyncRunStatusDb;
+  rowsRead: number | null;
+  spendRowsWritten: number | null;
+  performanceRowsWritten: number | null;
+  creativeRowsWritten: number | null;
+  campaignRowsWritten: number | null;
+  errorMessage: string | null;
+}
+
+/** Últimas execuções do Import Service (`data_sync_runs`) pras fontes Stract
+ * de UM cliente — histórico por EXECUÇÃO (rows lidas/gravadas por tabela,
+ * erro daquela rodada específica), nunca a saúde persistente da fonte
+ * (isso é `import_sources.status`, ver `getImportSourceHealthIssue` acima).
+ * Existia só no banco, sem nenhuma tela lendo — motivo real de precisar de
+ * SQL manual pra diagnosticar uma sincronização com problema. RLS restringe
+ * a leitura de `data_sync_runs` a admin; pra qualquer outro perfil a
+ * consulta sempre volta vazia (só chamar dentro de um bloco `isAdmin`, senão
+ * o gestor veria uma seção "sem histórico" enganosa em vez de "sem acesso"). */
+export async function getRecentSyncRunsForClient(
+  supabase: Supabase,
+  importSourceIds: string[],
+  limit = 8,
+): Promise<SyncRunSummary[]> {
+  if (importSourceIds.length === 0) return [];
+
+  const { data } = await supabase
+    .from("data_sync_runs")
+    .select(
+      "id, started_at, finished_at, status, rows_read, spend_rows_written, performance_rows_written, creative_rows_written, campaign_rows_written, error_message",
+    )
+    .in("import_source_id", importSourceIds)
+    .order("started_at", { ascending: false })
+    .limit(limit);
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at,
+    status: row.status,
+    rowsRead: row.rows_read,
+    spendRowsWritten: row.spend_rows_written,
+    performanceRowsWritten: row.performance_rows_written,
+    creativeRowsWritten: row.creative_rows_written,
+    campaignRowsWritten: row.campaign_rows_written,
+    errorMessage: row.error_message,
+  }));
 }
 
 /**
