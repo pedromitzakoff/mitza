@@ -295,22 +295,41 @@ export interface MonthlyExpectedToDate {
  * só pra descartar o valor em reais. `computeMonthlyExpectedToDateByCalendar`
  * (abaixo) é só esta função + uma multiplicação.
  */
-export function computeMonthlyExpectedPct(
-  monthRange: { firstDay: string; lastDay: string },
-  todayStr: string,
-): number {
+export interface DaysElapsedInRange {
+  daysElapsed: number;
+  daysInMonth: number;
+}
+
+/** Dias decorridos vs. total de dias de um intervalo — fonte única pra essa
+ * contagem, reaproveitada tanto por `computeMonthlyExpectedPct` (% do
+ * calendário) quanto por `computeMonthProjectionForRange`
+ * (`lib/client-metrics.ts`, projeção de fechamento por ritmo). Antes existiam
+ * duas implementações independentes da mesma pergunta (uma em milissegundos,
+ * outra por índice em `listDatesInclusive`) — risco real de uma corrigir um
+ * caso de borda e a outra não. 0 se o intervalo ainda não começou (futuro),
+ * o intervalo inteiro se já terminou (passado) — hoje sempre conta como
+ * decorrido. */
+export function resolveDaysElapsedInRange(monthRange: { firstDay: string; lastDay: string }, todayStr: string): DaysElapsedInRange {
   const allDates = listDatesInclusive(monthRange.firstDay, monthRange.lastDay);
   const daysInMonth = allDates.length;
 
   let daysElapsed: number;
   if (todayStr < monthRange.firstDay) {
-    daysElapsed = 0; // mês futuro — nada transcorrido ainda
+    daysElapsed = 0; // intervalo futuro — nada transcorrido ainda
   } else if (todayStr > monthRange.lastDay) {
-    daysElapsed = daysInMonth; // mês encerrado — 100% transcorrido
+    daysElapsed = daysInMonth; // intervalo encerrado — 100% transcorrido
   } else {
     daysElapsed = allDates.indexOf(todayStr) + 1; // hoje conta como transcorrido
   }
 
+  return { daysElapsed, daysInMonth };
+}
+
+export function computeMonthlyExpectedPct(
+  monthRange: { firstDay: string; lastDay: string },
+  todayStr: string,
+): number {
+  const { daysElapsed, daysInMonth } = resolveDaysElapsedInRange(monthRange, todayStr);
   return daysInMonth > 0 ? (daysElapsed / daysInMonth) * 100 : 0;
 }
 

@@ -1,6 +1,7 @@
 import { todayUTC } from "@/lib/today";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { effectiveTaskStatus } from "@/lib/task-status";
+import { resolveDaysElapsedInRange } from "@/lib/monthly-budget";
 import type { TaskStatus } from "@/lib/supabase/database.types";
 
 export interface MonthProjection {
@@ -27,11 +28,14 @@ export function computeMonthProjectionForRange(
   monthRange: { firstDay: string; lastDay: string },
   today: Date = todayUTC(),
 ): MonthProjection {
-  const start = new Date(`${monthRange.firstDay}T00:00:00Z`);
-  const end = new Date(`${monthRange.lastDay}T00:00:00Z`);
-  const daysInMonth = Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1;
-  const daysElapsed =
-    today < start ? 0 : today > end ? daysInMonth : Math.floor((today.getTime() - start.getTime()) / 86_400_000) + 1;
+  // `today` é sempre meia-noite UTC do dia civil já resolvido (contrato de
+  // `todayUTC()`, respeitado por todo caller conhecido) — a conversão pra
+  // string aqui é uma fatia direta do ISO, NUNCA `todayDateString()` de
+  // novo (reconverteria pelo fuso da agência uma segunda vez e empurraria a
+  // data um dia pra trás — mesmo bug já documentado em
+  // `formatRelativeDateTime`, lib/format.ts).
+  const todayStr = today.toISOString().slice(0, 10);
+  const { daysElapsed, daysInMonth } = resolveDaysElapsedInRange(monthRange, todayStr);
 
   const projectedSpend = daysElapsed > 0 ? (monthActualSoFar / daysElapsed) * daysInMonth : 0;
   const status = classifySpendStatus(projectedSpend, monthPlanned, monthPlanned);
