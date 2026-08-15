@@ -52,12 +52,21 @@ export function OperationFilterBar({
   onQuickFilterChange,
   query,
   onQueryChange,
+  managers,
+  managerFilter,
+  onManagerFilterChange,
 }: {
   summary: OperationTriageSummary;
   quickFilter: OperationQuickFilter;
   onQuickFilterChange: (filter: OperationQuickFilter) => void;
   query: string;
   onQueryChange: (query: string) => void;
+  /** Só gestores com pelo menos 1 conta ativa neste mês (ver
+   * `operation-triage-view.tsx`) — nunca a lista cheia de gestores da
+   * agência, que poderia oferecer um filtro sem nenhum resultado possível. */
+  managers: { id: string; name: string }[];
+  managerFilter: string;
+  onManagerFilterChange: (managerId: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -94,15 +103,42 @@ export function OperationFilterBar({
         />
       </div>
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Buscar cliente ou gestor..."
-          className="w-full rounded-md border border-border bg-transparent py-1.5 pl-8 pr-3 text-sm text-foreground outline-none transition-colors focus:border-zinc-500"
-        />
+      <div className="flex flex-wrap gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Buscar cliente ou gestor..."
+            className="w-full rounded-md border border-border bg-transparent py-1.5 pl-8 pr-3 text-sm text-foreground outline-none transition-colors focus:border-zinc-500"
+          />
+        </div>
+        {/* Gestor (Etapa "Central de Decisão Diária", item "Filtros
+            adicionais") — único filtro novo adicionado: responde direto
+            "quais contas críticas estão comigo?" sem precisar digitar o
+            próprio nome na busca. Severidade/revisão/qualidade de dado já
+            têm caminho próprio (agrupamento Crítico/Atenção/Saudável/Sem
+            dados da fila, ver operation-triage-view.tsx) — um segundo
+            controle pra isso duplicaria a mesma pergunta, então não foi
+            adicionado, pra manter a barra enxuta. Canal não entrou por não
+            existir hoje como fato consolidado e confiável por cliente neste
+            pipeline (ver relatório da etapa). */}
+        {managers.length > 0 && (
+          <select
+            value={managerFilter}
+            onChange={(event) => onManagerFilterChange(event.target.value)}
+            aria-label="Filtrar por gestor"
+            className="rounded-md border border-border bg-transparent py-1.5 pl-2.5 pr-7 text-sm text-foreground outline-none transition-colors focus:border-zinc-500"
+          >
+            <option value="todos">Todos os gestores</option>
+            {managers.map((manager) => (
+              <option key={manager.id} value={manager.id}>
+                {manager.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
     </div>
   );

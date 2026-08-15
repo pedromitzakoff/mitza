@@ -24,6 +24,14 @@ const DIRECTION_ARROW: Record<MetricDirection, string> = {
  * normal, 10–20% atenção, acima de 20% crítico). No estado normal a linha
  * de desvio nem aparece — só a exceção deve chamar atenção; a seta é
  * sempre só a direção matemática do desvio, nunca decide cor sozinha.
+ *
+ * `referenceLabel` (Etapa "Central de Decisão Diária" da Operação): junta
+ * valor + referência (ex.: "Meta R$ 10,00") + desvio na MESMA linha, em vez
+ * de uma coluna "Meta" separada em outro canto do layout — o pedido
+ * explícito era aproximar essas três informações pra reduzir o esforço de
+ * leitura lateral. Sem desvio (dentro do normal, ou sem diagnóstico), a
+ * referência ainda aparece sozinha, só que em tom neutro (nunca inventa uma
+ * cor de alerta que o diagnóstico não decidiu).
  */
 export function MetricDeviation({
   label,
@@ -32,6 +40,7 @@ export function MetricDeviation({
   size = "md",
   href,
   title,
+  referenceLabel,
 }: {
   label: string;
   value: string;
@@ -43,6 +52,11 @@ export function MetricDeviation({
   size?: "md" | "lg";
   href?: string;
   title?: string;
+  /** Ex.: "Meta R$ 10,00" — texto de referência exibido junto do desvio
+   * (`"Meta R$ 10,00 · ↑ 58%"`) ou sozinho, em tom neutro, quando não há
+   * desvio a mostrar. `undefined` preserva o comportamento de sempre (só
+   * valor + desvio, sem referência). */
+  referenceLabel?: string;
 }) {
   const valueClass = size === "lg" ? "text-2xl font-bold text-navy" : "text-base font-semibold text-overview-text-primary";
 
@@ -54,12 +68,20 @@ export function MetricDeviation({
         }
       : null;
 
+  const referenceLine = referenceLabel
+    ? { text: deviation ? `${referenceLabel} · ${deviation.text}` : referenceLabel, tone: deviation?.tone }
+    : deviation
+      ? { text: deviation.text, tone: deviation.tone }
+      : null;
+
   const content = (
     <div title={title}>
       <p className="text-[11px] text-overview-text-muted">{label}</p>
       <p className={`tabular-nums ${valueClass}`}>{value}</p>
-      {deviation && (
-        <p className={`text-xs font-medium tabular-nums ${TONE_TEXT_CLASSES[deviation.tone]}`}>{deviation.text}</p>
+      {referenceLine && (
+        <p className={`text-xs font-medium tabular-nums ${referenceLine.tone ? TONE_TEXT_CLASSES[referenceLine.tone] : "text-overview-text-muted"}`}>
+          {referenceLine.text}
+        </p>
       )}
     </div>
   );

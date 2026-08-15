@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 export type StatusTone = "success" | "warning" | "danger" | "neutral" | "brand";
 
 const DOT_CLASSES: Record<StatusTone, string> = {
@@ -39,5 +41,24 @@ export function StatusDot({
       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT_CLASSES[tone]}`} aria-hidden="true" />
       <span className={emphasize ? `font-medium ${LABEL_CLASSES[tone]}` : "text-overview-text-secondary"}>{label}</span>
     </span>
+  );
+}
+
+/** Destaca só o primeiro percentual dentro de um motivo ("CPL 58% acima da
+ * meta") — o número é o fato acionável, o resto da frase continua no mesmo
+ * peso neutro de sempre. Extraído do padrão já usado nas Prioridades da
+ * Visão Geral (`app/priorities-panel.tsx`) pra qualquer outra tela (ex.:
+ * Operação) reaproveitar sem duplicar o regex. */
+export function emphasizeDeviationText(reason: string, tone: StatusTone): ReactNode {
+  const match = reason.match(/\d+%/);
+  if (!match || match.index === undefined) return reason;
+  const start = match.index;
+  const end = start + match[0].length;
+  return (
+    <>
+      {reason.slice(0, start)}
+      <span className={`font-semibold ${LABEL_CLASSES[tone]}`}>{match[0]}</span>
+      {reason.slice(end)}
+    </>
   );
 }

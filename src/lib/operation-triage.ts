@@ -1,5 +1,6 @@
 import type { ClientOperationalState } from "@/lib/client-operational-state";
 import { getActiveDiagnosticFilters } from "@/lib/metric-diagnostics";
+import type { AccountHealthEvaluation } from "@/lib/account-health-engine";
 
 /**
  * Suporte da tela Operação (fila de triagem, ordenação/contagem/navegação
@@ -85,5 +86,54 @@ export function monthRangeFromOperationParam(monthParam: string): { firstDay: st
   const [year, month] = monthParam.split("-").map(Number);
   const lastDay = daysInMonth(year, month);
   return { firstDay: monthParam, lastDay: `${monthParam.slice(0, 7)}-${String(lastDay).padStart(2, "0")}` };
+}
+
+/**
+ * Agrupamento de prioridade visual da fila da Operação (Etapa "Central de
+ * Decisão Diária") — deriva 100% de `evaluation.healthStatus`/
+ * `evaluation.primaryDimension`, já calculados pelo Motor de Saúde da Conta
+ * (`lib/account-health-engine.ts`, nunca alterado por esta etapa). Nenhuma
+ * severidade nova: só reagrupa o que o motor já decidiu, em 4 baldes pra
+ * leitura rápida ("qual conta ignoro, qual eu olho primeiro").
+ *
+ * O balde `sem_dados` é a única reinterpretação deliberada: no motor, uma
+ * conta sem configuração mínima (`primaryDimension === "dataQuality"`) é
+ * SEMPRE a mais grave — "sem dado confiável não existe operação" (ver
+ * `DIMENSION_PRIORITY_ORDER`, account-health-engine.ts) — e por isso
+ * `evaluation.healthStatus` vem `"acao_necessaria"` pra ela, igual a uma
+ * conta com performance realmente ruim. Isso é correto pra decidir o
+ * `primaryReason`/desempate do motor, mas ENGANOSO nesta tela: uma conta
+ * sem dado não "performou mal", só não pôde ser avaliada — misturá-la com
+ * quem tem um problema real de performance faria o gestor tratar as duas
+ * coisas como o mesmo tipo de urgência. Por isso ela sai do topo aqui e
+ * vira o último grupo, nunca competindo visualmente com Crítico/Atenção —
+ * mesma distinção pedida explicitamente pro conteúdo do card. Dentro de
+ * cada balde, a ordem relativa que `sortClientOperationalStates` já decidiu
+ * é preservada (partição estável, nenhum critério de desempate novo).
+ */
+export type OperationPriorityGroup = "critico" | "atencao" | "saudavel" | "sem_dados";
+
+const OPERATION_PRIORITY_GROUP_RANK: Record<OperationPriorityGroup, number> = {
+  critico: 0,
+  atencao: 1,
+  saudavel: 2,
+  sem_dados: 3,
+};
+
+export function resolveOperationPriorityGroup(evaluation: AccountHealthEvaluation): OperationPriorityGroup {
+  if (evaluation.primaryDimension === "dataQuality") return "sem_dados";
+  if (evaluation.healthStatus === "acao_necessaria") return "critico";
+  if (evaluation.healthStatus === "em_risco" || evaluation.healthStatus === "em_acompanhamento") return "atencao";
+  return "saudavel";
+}
+
+/** Reordena a fila (já ordenada por `sortClientOperationalStates`) só pelos
+ * 4 baldes acima — `Array.prototype.sort` é estável (ES2019+, mesma garantia
+ * já usada por `collectAccountHealthReasons`), então a ordem dentro de cada
+ * balde continua exatamente a que o motor decidiu. */
+export function groupClientsByOperationPriority(cards: ClientOperationalState[]): ClientOperationalState[] {
+  return [...cards].sort(
+    (a, b) => OPERATION_PRIORITY_GROUP_RANK[resolveOperationPriorityGroup(a.evaluation)] - OPERATION_PRIORITY_GROUP_RANK[resolveOperationPriorityGroup(b.evaluation)],
+  );
 }
 

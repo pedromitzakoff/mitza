@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { MetricDeviation } from "@/components/workspace/metric-deviation";
+import { StatusDot, emphasizeDeviationText, type StatusTone } from "@/components/workspace/status-dot";
 import { formatCurrency, formatRelativeShortDateTime } from "@/lib/format";
 import { MIN_RELIABLE_RESULT_COUNT } from "@/lib/operation-health-thresholds";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { getLatestPerformanceUpdateText } from "@/lib/performance";
 import { formatAtividadeLabel } from "@/lib/metric-diagnostics";
+import { resolveOperationPriorityGroup, type OperationPriorityGroup } from "@/lib/operation-triage";
 import type { ClientOperationalState } from "@/lib/client-operational-state";
 
 const countFormatter = new Intl.NumberFormat("pt-BR");
@@ -19,33 +21,55 @@ function formatWholeCurrency(value: number): string {
   return `R$ ${Math.round(value).toLocaleString("pt-BR")}`;
 }
 
+/** "Crítico"/"Atenção"/"Saudável"/"Sem dados" + o tom visual de cada balde
+ * (Etapa "Central de Decisão Diária") — `emphasize` só nos dois primeiros
+ * (o pedido explícito era hierarquia clara: motivo principal evidente pra
+ * quem precisa de atenção). Saudável usa o mesmo `StatusDot` discreto do
+ * resto do produto (ponto pequeno + texto neutro) — nunca um verde grande
+ * competindo com os alertas acima dele na fila; Sem dados fica neutro de
+ * propósito: não é "performou mal", é "não pôde ser avaliada" (ver
+ * `resolveOperationPriorityGroup`, lib/operation-triage.ts). */
+const PRIORITY_GROUP_LABEL: Record<OperationPriorityGroup, string> = {
+  critico: "Crítico",
+  atencao: "Atenção",
+  saudavel: "Saudável",
+  sem_dados: "Sem dados",
+};
+
+const PRIORITY_GROUP_TONE: Record<OperationPriorityGroup, StatusTone> = {
+  critico: "danger",
+  atencao: "warning",
+  saudavel: "success",
+  sem_dados: "neutral",
+};
+
+const PRIORITY_GROUP_EMPHASIZE: Record<OperationPriorityGroup, boolean> = {
+  critico: true,
+  atencao: true,
+  saudavel: false,
+  sem_dados: false,
+};
+
 /**
- * Card da Operação (Etapa "Novo Conceito de Monitoramento Operacional") —
- * o diagnóstico deixou de ser uma frase abaixo do nome
- * (`evaluation.primaryReason`) e passa a acontecer diretamente em cada
- * métrica, através do componente único de desvio (`MetricDeviation`):
- * valor + desvio % + seta + cor, sempre pela MESMA régua de magnitude
- * (até 10% normal, 10–20% atenção/amarelo, acima de 20% crítico/vermelho —
- * Motor de Diagnóstico Único, `lib/metric-diagnostics.ts`). Resultado e
- * Meta são valores de referência, não desvios — aparecem como valor
- * simples, sem seta/cor. Pendências saiu do corpo do card (continua
- * existindo como eixo/filtro da Operação — ver
- * `metric-diagnostics.ts`/`operation-filter-bar.tsx` — só deixou de ser
- * uma métrica principal aqui). O rodapé (antes "Última atualização",
- * baseado em sincronização de dados; depois "Acompanhamento") mostra
- * Atividade — só aparece quando a conta está sem qualquer atividade há
- * 48h ou mais, em vermelho; abaixo disso o card fica limpo de propósito,
- * porque só a exceção deve chamar atenção.
+ * Card da Operação (Etapa "Central de Decisão Diária") — a linha de motivo
+ * deixou de ser um rótulo solto (planejamento OU atividade, o que existisse)
+ * e passa a ser o `primaryReason` do Motor de Saúde da Conta
+ * (`evaluation`, `lib/account-health-engine.ts`), prefixado pelo balde de
+ * prioridade (`resolveOperationPriorityGroup`) — a MESMA fonte que já
+ * decide a ordem da fila (`groupClientsByOperationPriority`), nunca um
+ * segundo vocabulário. Hierarquia pedida explicitamente: 1) cliente, 2)
+ * motivo principal (evidente, colorido só quando crítico/atenção), 3)
+ * contexto secundário (atividade/atualização de performance, sempre menor
+ * e mais discreto — nunca outro aviso vermelho competindo com o principal).
  *
- * Planejamento tem prioridade sobre Atividade nesse mesmo rodapé: se a
- * conta ainda não tem meta de CPA/CPL ou plano mensal configurado, o
- * motivo aparece ali em amarelo ("Meta de CPA/CPL não configurada" /
- * "Planejamento mensal de investimento não configurado") — o gestor não
- * precisa adivinhar por que o cliente está no filtro Planejamento. Isso
- * nunca é um estado manual: `evaluatePlanejamento` recalcula a cada
- * carregamento a partir dos dados atuais, então assim que a meta/plano é
- * preenchido o cliente sai do filtro e volta a mostrar Atividade sozinho,
- * sem nenhuma ação de "concluir planejamento".
+ * As métricas continuam vindo do Motor de Diagnóstico Único
+ * (`diagnostics`, `lib/metric-diagnostics.ts` — mesma régua de magnitude de
+ * sempre, 10/20%) para Investimento e Custo; Resultado continua um valor de
+ * referência simples (o motor não define desvio pra contagem bruta). A
+ * coluna "Meta" separada foi removida: a meta de custo agora é a linha de
+ * referência do próprio bloco de Custo (`MetricDeviation.referenceLabel`,
+ * "Meta R$ 10,00 · ↑ 58%"), o mesmo número, só mais perto do valor que ele
+ * explica — nunca um cálculo novo, só reposicionado.
  *
  * ⚠️ PARCIALMENTE PROVISÓRIO: `diagnostics.atividade` combina duas
  * fontes — `client_last_operational_activity` (tarefa criada/editada/
@@ -64,6 +88,9 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
   const results = evaluation.dimensions.results;
   const targetCostPerResult = evaluation.dimensions.cost.planned;
 
+  const priorityGroup = resolveOperationPriorityGroup(evaluation);
+  const reasonText = evaluation.primaryDimension ? evaluation.primaryReason : null;
+
   const investmentValue = investment.hasSyncedData ? formatWholeCurrency(investment.actual) : "—";
   const investmentTitle = investment.hasSyncedData ? undefined : "Sem dados de investimento";
 
@@ -81,19 +108,16 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
         ? `Aguardando amostra suficiente — mínimo de ${MIN_RELIABLE_RESULT_COUNT} resultados`
         : "Sem dados de custo"
       : undefined;
+  const costReferenceLabel = targetCostPerResult === null ? undefined : `Meta ${formatCurrency(targetCostPerResult)}`;
 
-  const metaLabel = goalConfig ? `Meta ${goalConfig.costMetricShortLabel}` : "Meta";
-  const metaValue = targetCostPerResult === null ? "—" : formatCurrency(targetCostPerResult);
-  const metaTitle = !goalConfig
-    ? "Objetivo não configurado"
-    : targetCostPerResult === null
-      ? "Meta de custo não configurada"
-      : undefined;
-
-  const planejamentoLabel = diagnostics.planejamento.items.map((item) => item.label).join(" · ") || null;
+  // Atividade continua a mesma conta de sempre (48h/3 dias/N dias,
+  // `metric-diagnostics.ts`) — nunca um novo limiar. Deixou só de ser o
+  // ÚNICO motivo visível: agora é contexto secundário, atrás do
+  // `primaryReason` do motor. Planejamento incompleto não aparece mais
+  // aqui separadamente porque, nesse caso, ele já É o motivo principal
+  // (toda lacuna de configuração vira `primaryDimension === "dataQuality"`
+  // no motor — mesmo fato, uma vez só, sem repetir o texto duas vezes).
   const atividadeLabel = formatAtividadeLabel(diagnostics.atividade);
-  const footerLabel = planejamentoLabel ?? atividadeLabel;
-  const footerClass = planejamentoLabel ? "text-overview-warning" : "text-overview-danger";
 
   // Etapa "Data de atualização da performance por cliente": de quando são
   // os números de Resultado/Custo deste card especificamente — nunca a
@@ -103,7 +127,7 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
   // · Atualizado em..."/"Meta · Sincronizado em..."/"Sem atualização
   // registrada") — nenhum cálculo novo, só exibida aqui também. Só
   // relevante quando o cliente tem objetivo de performance configurado
-  // (sem isso, o rodapé já explica "Objetivo não configurado").
+  // (sem isso, o motivo principal já explica "Objetivo não configurado").
   //
   // Etapa "Ajuste hoje/ontem": aqui (só aqui — Sprint/página do cliente
   // continuam com `formatShortDateTime`, sem "Hoje"/"Ontem") o formatter
@@ -121,94 +145,93 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
       )
     : null;
 
+  // Contexto secundário: só UM sinal por vez (nunca dois avisos
+  // competindo) — atividade parada tem prioridade por ser um fato mais
+  // acionável ("ninguém mexeu nisso"); sem isso, cai pra "quando os
+  // números foram atualizados pela última vez".
+  const secondaryText = atividadeLabel ?? (performanceUpdateText ? `Performance: ${performanceUpdateText}` : null);
+  const secondaryClass = atividadeLabel ? "text-overview-danger" : "text-overview-text-muted";
+
+  const priorityTone = PRIORITY_GROUP_TONE[priorityGroup];
+  const priorityLabel = PRIORITY_GROUP_LABEL[priorityGroup];
+
+  const metrics = (
+    <>
+      <MetricDeviation
+        label="Investimento"
+        value={investmentValue}
+        diagnostic={investment.hasSyncedData ? diagnostics.investment : null}
+        title={investmentTitle}
+      />
+      <MetricDeviation
+        label={goalConfig?.resultMetricLabel ?? "Resultado"}
+        value={resultValue}
+        diagnostic={null}
+        title={resultTitle}
+      />
+      <MetricDeviation
+        label={goalConfig?.costMetricShortLabel ?? "Custo"}
+        value={costValue}
+        diagnostic={diagnostics.cpa}
+        title={costTitle}
+        referenceLabel={costReferenceLabel}
+      />
+    </>
+  );
+
   return (
     <Link
       href={`/clients/${card.clientId}`}
-      className="mitza-pressable group block rounded-lg border border-border px-4 py-3 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:border-zinc-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:border-zinc-700"
+      className="mitza-pressable group block rounded-lg border border-border px-3.5 py-2.5 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:border-zinc-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:border-zinc-700"
     >
-      {/* Facelift "Operação no mobile": o layout de desktop (nome com largura
-          fixa de 256px + grid de 4 colunas com gap de 40px) nunca foi pensado
-          pra caber numa tela estreita — abaixo de `sm` as 4 colunas do grid
-          colapsavam a quase zero de largura e os rótulos das métricas
-          ficavam sobrepostos uns aos outros (o "Investimeleatdas" ilegível
-          reportado). Mobile ganha uma segunda apresentação: avatar+nome no
-          topo, métricas num grid 2×2 (nunca mais de 2 por linha, mesmo
-          princípio já aplicado em Fechamento do mês/Sprint). Mesmos dados,
-          mesmo `MetricDeviation`, nenhum cálculo novo. Desktop (`sm:` e
-          acima) continua exatamente a linha única de sempre. */}
-      <div className="flex flex-col gap-3 sm:hidden">
+      {/* Mobile (abaixo de `sm`): avatar+nome+motivo no topo, métricas num
+          grid de 3 colunas numa linha só (nunca mais de 2×2 desalinhado —
+          3 métricas cabem lado a lado mesmo em telas estreitas, mesmo
+          princípio já aplicado em Fechamento do mês/Sprint). Desktop
+          (`sm:` e acima) continua a linha única, agora com 3 blocos de
+          métrica em vez de 4 (a Meta virou referência dentro do bloco de
+          Custo). */}
+      <div className="flex flex-col gap-2 sm:hidden">
         <div className="flex items-center gap-3">
           <ClientAvatar name={card.clientName} imageUrl={card.avatarUrl} size="sm" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
-            <p className={`text-[11px] ${footerClass}`}>{footerLabel ?? ""}</p>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
+              <StatusDot tone={priorityTone} label={priorityLabel} emphasize={PRIORITY_GROUP_EMPHASIZE[priorityGroup]} />
+            </div>
+            {reasonText && (
+              <p className="mt-0.5 truncate text-xs text-overview-text-secondary" title={reasonText}>
+                {emphasizeDeviationText(reasonText, priorityTone)}
+              </p>
+            )}
+            {secondaryText && <p className={`mt-0.5 truncate text-[11px] ${secondaryClass}`}>{secondaryText}</p>}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-          <MetricDeviation
-            label="Investimento"
-            value={investmentValue}
-            diagnostic={investment.hasSyncedData ? diagnostics.investment : null}
-            title={investmentTitle}
-          />
-          <MetricDeviation
-            label={goalConfig?.resultMetricLabel ?? "Resultado"}
-            value={resultValue}
-            diagnostic={null}
-            title={resultTitle}
-          />
-          <MetricDeviation
-            label={goalConfig?.costMetricShortLabel ?? "Custo"}
-            value={costValue}
-            diagnostic={diagnostics.cpa}
-            title={costTitle}
-          />
-          <MetricDeviation label={metaLabel} value={metaValue} diagnostic={null} title={metaTitle} />
-        </div>
-
-        {performanceUpdateText && <p className="text-[11px] text-muted-foreground">Performance: {performanceUpdateText}</p>}
+        <div className="grid grid-cols-3 gap-x-3 gap-y-3">{metrics}</div>
       </div>
 
       <div className="hidden items-center gap-4 sm:flex">
         <ClientAvatar name={card.clientName} imageUrl={card.avatarUrl} size="sm" />
 
-        <div className="flex w-64 min-w-0 shrink-0 flex-col">
-          <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
-          <p className={`text-[11px] ${footerClass}`}>{footerLabel ?? ""}</p>
-          {/* Etapa "Data de atualização por cliente no desktop": mesma
-              regra/mesmo texto já usado no mobile (goalConfig +
-              performanceUpdateText, calculados uma vez só acima — nenhuma
-              lógica nova aqui, só a mesma informação também nesta
-              apresentação). */}
-          {performanceUpdateText && (
-            <p className="truncate text-[11px] text-muted-foreground" title={`Performance: ${performanceUpdateText}`}>
-              Performance: {performanceUpdateText}
+        <div className="flex w-72 min-w-0 shrink-0 flex-col">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
+            <StatusDot tone={priorityTone} label={priorityLabel} emphasize={PRIORITY_GROUP_EMPHASIZE[priorityGroup]} />
+          </div>
+          {reasonText && (
+            <p className="mt-0.5 truncate text-xs text-overview-text-secondary" title={reasonText}>
+              {emphasizeDeviationText(reasonText, priorityTone)}
+            </p>
+          )}
+          {secondaryText && (
+            <p className={`mt-0.5 truncate text-[11px] ${secondaryClass}`} title={secondaryText}>
+              {secondaryText}
             </p>
           )}
         </div>
 
-        <div className="grid flex-1 grid-cols-4 gap-10">
-          <MetricDeviation
-            label="Investimento"
-            value={investmentValue}
-            diagnostic={investment.hasSyncedData ? diagnostics.investment : null}
-            title={investmentTitle}
-          />
-          <MetricDeviation
-            label={goalConfig?.resultMetricLabel ?? "Resultado"}
-            value={resultValue}
-            diagnostic={null}
-            title={resultTitle}
-          />
-          <MetricDeviation
-            label={goalConfig?.costMetricShortLabel ?? "Custo"}
-            value={costValue}
-            diagnostic={diagnostics.cpa}
-            title={costTitle}
-          />
-          <MetricDeviation label={metaLabel} value={metaValue} diagnostic={null} title={metaTitle} />
-        </div>
+        <div className="grid flex-1 grid-cols-3 gap-6">{metrics}</div>
       </div>
     </Link>
   );
