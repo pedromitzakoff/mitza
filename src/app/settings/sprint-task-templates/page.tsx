@@ -4,6 +4,7 @@ import { requireQuery } from "@/lib/require-query";
 import { CLIENT_CONTRACT_STATUS_REGISTRY } from "@/lib/status-registry";
 import { SprintTaskTemplatesList, type GlobalTemplateItem } from "../sprint-task-templates-list";
 import { BackfillButton } from "./backfill-button";
+import { SettingsPageShell } from "../settings-shell";
 
 export default async function SprintTaskTemplatesPage({
   searchParams,
@@ -62,33 +63,29 @@ export default async function SprintTaskTemplatesPage({
   }));
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-foreground">
-          Tarefas padrão de sprint
-        </h1>
-        <BackfillButton />
-      </div>
-
-      <p className="mt-2 text-sm text-zinc-500">
-        Essas tarefas são geradas automaticamente em cada sprint nova, no dia da semana
-        configurado. Editar um template não altera tarefas já geradas — só as futuras (ou as
-        sprints existentes, se você clicar em &quot;Aplicar às sprints já existentes&quot;).
-      </p>
-
+    <SettingsPageShell
+      title="Tarefas padrão de sprint"
+      description={
+        <>
+          Essas tarefas são geradas automaticamente em cada sprint nova, no dia da semana configurado. Editar um template não altera
+          tarefas já geradas — só as futuras (ou as sprints existentes, se você clicar em &quot;Aplicar às sprints já
+          existentes&quot;).
+        </>
+      }
+      actions={<BackfillButton />}
+      backHref="/settings"
+    >
       {templateError && (
-        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           {templateError}
         </p>
       )}
 
-      <div className="mt-6">
-        <SprintTaskTemplatesList
-          templates={templateItems}
-          managers={managers ?? []}
-          clients={sortedClients}
-        />
-      </div>
-    </div>
+      <SprintTaskTemplatesList
+        templates={templateItems}
+        managers={managers ?? []}
+        clients={sortedClients}
+      />
+    </SettingsPageShell>
   );
 }

@@ -24,6 +24,7 @@ import {
   InlineStatusCell,
 } from "./inline-cell";
 import { SettingsClientsFilters } from "./filters";
+import { SettingsPageShell } from "../settings-shell";
 
 /**
  * Configurações > Clientes — cadastro administrativo da carteira: status,
@@ -81,23 +82,24 @@ export default async function SettingsClientsPage({
   const managerOptions = (managers ?? []).map((m) => ({ value: m.id, label: m.name }));
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Clientes</h1>
-          <p className="text-xs text-muted-foreground">
-            Manutenção dos dados cadastrais. Para abrir uma conta e trabalhar nela, use a árvore
-            &ldquo;Contas da Agência&rdquo; na barra lateral ou a Operação.
-          </p>
-        </div>
+    <SettingsPageShell
+      title="Clientes"
+      description={
+        <>
+          Manutenção dos dados cadastrais. Para abrir uma conta e trabalhar nela, use a árvore &ldquo;Contas da
+          Agência&rdquo; na barra lateral ou a Operação.
+        </>
+      }
+      actions={
         <Link
           href="/clients/new"
           className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
         >
           + Novo cliente
         </Link>
-      </div>
-
+      }
+      backHref="/settings"
+    >
       <SettingsClientsFilters search={search} status={statusFilter} />
 
       <p className="mt-3 text-xs text-muted-foreground">
@@ -200,6 +202,6 @@ export default async function SettingsClientsPage({
         </Link>
         .
       </p>
-    </div>
+    </SettingsPageShell>
   );
 }

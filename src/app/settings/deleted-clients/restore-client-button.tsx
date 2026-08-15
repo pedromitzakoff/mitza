@@ -2,6 +2,7 @@
 
 import { restoreClientAction } from "@/app/clients/actions";
 import { ToastActionButton } from "@/app/toast-action-button";
+import { SETTINGS_SECONDARY_BUTTON_CLASSES } from "../settings-shell";
 
 /**
  * "Restaurar" é o exemplo clássico de ação cujo resultado some da tela
@@ -17,7 +18,7 @@ export function RestoreClientButton({ clientId, clientName }: { clientId: string
         return { message: `${clientName} foi restaurado.` };
       }}
       pendingLabel="Restaurando..."
-      className="shrink-0 rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-black hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+      className={`shrink-0 px-3 py-1.5 text-sm ${SETTINGS_SECONDARY_BUTTON_CLASSES}`}
     >
       Restaurar
     </ToastActionButton>

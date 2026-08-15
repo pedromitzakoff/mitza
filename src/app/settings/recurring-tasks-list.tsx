@@ -11,6 +11,7 @@ import {
   updateRecurringTaskGoalAction,
 } from "./recurring-tasks-actions";
 import { SubmitButton } from "@/app/submit-button";
+import { SETTINGS_SECONDARY_BUTTON_CLASSES, SETTINGS_DESTRUCTIVE_BUTTON_CLASSES } from "./settings-shell";
 
 export interface RecurringTaskItem {
   id: string;
@@ -196,7 +197,7 @@ function GoalUpdateForm({ task }: { task: RecurringTaskItem }) {
       />
       <SubmitButton
         pendingChildren="..."
-        className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+        className={`px-2 py-1 text-xs ${SETTINGS_SECONDARY_BUTTON_CLASSES}`}
       >
         Atualizar meta
       </SubmitButton>
@@ -226,7 +227,7 @@ export function RecurringTasksList({
             <RecurringTaskFields task={task} managers={managers} clients={clients} />
             <SubmitButton
               pendingChildren="Salvando..."
-              className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-black hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+              className={`px-2 py-1 text-xs ${SETTINGS_SECONDARY_BUTTON_CLASSES}`}
             >
               Salvar
             </SubmitButton>
@@ -239,7 +240,7 @@ export function RecurringTasksList({
               <form action={toggleRecurringTaskActiveAction.bind(null, task.id, !task.isActive)}>
                 <SubmitButton
                   pendingChildren={task.isActive ? "Desativando..." : "Ativando..."}
-                  className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-black hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+                  className={`px-2 py-1 text-xs ${SETTINGS_SECONDARY_BUTTON_CLASSES}`}
                 >
                   {task.isActive ? "Desativar" : "Ativar"}
                 </SubmitButton>
@@ -249,7 +250,7 @@ export function RecurringTasksList({
                 <form action={deleteRecurringTaskAction.bind(null, task.id)}>
                   <SubmitButton
                     pendingChildren="Excluindo..."
-                    className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+                    className={`px-2 py-1 text-xs ${SETTINGS_DESTRUCTIVE_BUTTON_CLASSES}`}
                   >
                     Excluir
                   </SubmitButton>

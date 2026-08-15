@@ -5,6 +5,7 @@ import { CLIENT_CONTRACT_STATUS_REGISTRY } from "@/lib/status-registry";
 import { resolveWeeklyGoalForSprint } from "@/lib/recurring-tasks";
 import { todayDateString } from "@/lib/today";
 import { RecurringTasksList, type RecurringTaskItem } from "../recurring-tasks-list";
+import { SettingsPageShell } from "../settings-shell";
 
 export default async function RecurringTasksPage({
   searchParams,
@@ -85,22 +86,16 @@ export default async function RecurringTasksPage({
   }));
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12">
-      <h1 className="text-2xl font-semibold text-foreground">Recorrências</h1>
-
-      <p className="mt-2 text-sm text-zinc-500">
-        Tarefas permanentes — Checar saldo, Reportar cliente, Otimização e o que mais a agência precisar. Não geram uma tarefa nova toda
-        sprint: o gestor registra execuções, e o histórico nunca zera. A meta semanal atualizada aqui vale a partir de agora — sprints já em
-        andamento mantêm a meta anterior.
-      </p>
-
+    <SettingsPageShell
+      title="Recorrências"
+      description="Tarefas permanentes — Checar saldo, Reportar cliente, Otimização e o que mais a agência precisar. Não geram uma tarefa nova toda sprint: o gestor registra execuções, e o histórico nunca zera. A meta semanal atualizada aqui vale a partir de agora — sprints já em andamento mantêm a meta anterior."
+      backHref="/settings"
+    >
       {recurringTaskError && (
-        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{recurringTaskError}</p>
+        <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{recurringTaskError}</p>
       )}
 
-      <div className="mt-6">
-        <RecurringTasksList tasks={taskItems} managers={managers ?? []} clients={sortedClients} />
-      </div>
-    </div>
+      <RecurringTasksList tasks={taskItems} managers={managers ?? []} clients={sortedClients} />
+    </SettingsPageShell>
   );
 }

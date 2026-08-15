@@ -12,6 +12,7 @@ import {
   updateGlobalTemplateAction,
 } from "./sprint-task-templates-actions";
 import { SubmitButton } from "@/app/submit-button";
+import { SETTINGS_SECONDARY_BUTTON_CLASSES, SETTINGS_DESTRUCTIVE_BUTTON_CLASSES } from "./settings-shell";
 
 export interface GlobalTemplateItem {
   id: string;
@@ -184,7 +185,7 @@ export function SprintTaskTemplatesList({
             <TemplateFields template={template} managers={managers} clients={clients} />
             <SubmitButton
               pendingChildren="Salvando..."
-              className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-black hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+              className={`px-2 py-1 text-xs ${SETTINGS_SECONDARY_BUTTON_CLASSES}`}
             >
               Salvar
             </SubmitButton>
@@ -200,7 +201,7 @@ export function SprintTaskTemplatesList({
             >
               <SubmitButton
                 pendingChildren={template.is_active ? "Desativando..." : "Ativando..."}
-                className="w-full rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-black hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
+                className={`w-full px-2 py-1 text-xs ${SETTINGS_SECONDARY_BUTTON_CLASSES}`}
               >
                 {template.is_active ? "Desativar" : "Ativar"}
               </SubmitButton>
@@ -210,7 +211,7 @@ export function SprintTaskTemplatesList({
               <form action={deleteGlobalTemplateAction.bind(null, template.id)}>
                 <SubmitButton
                   pendingChildren="Excluindo..."
-                  className="w-full rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+                  className={`w-full px-2 py-1 text-xs ${SETTINGS_DESTRUCTIVE_BUTTON_CLASSES}`}
                 >
                   Excluir
                 </SubmitButton>

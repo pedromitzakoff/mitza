@@ -3,6 +3,7 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { RestoreClientButton } from "./restore-client-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDateFromInstant } from "@/lib/format";
+import { SettingsPageShell } from "../settings-shell";
 
 export default async function DeletedClientsPage() {
   await requireAdmin();
@@ -15,16 +16,12 @@ export default async function DeletedClientsPage() {
     .order("deleted_at", { ascending: false });
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-12">
-      <h1 className="text-2xl font-semibold text-foreground">
-        Clientes excluídos
-      </h1>
-      <p className="mt-1 text-sm text-zinc-500">
-        Sprints, tarefas e comentários desses clientes continuam preservados. Restaurar faz o
-        cliente voltar a aparecer nas listagens normais.
-      </p>
-
-      <ul className="mt-6 divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+    <SettingsPageShell
+      title="Clientes excluídos"
+      description="Sprints, tarefas e comentários desses clientes continuam preservados. Restaurar faz o cliente voltar a aparecer nas listagens normais."
+      backHref="/settings"
+    >
+      <ul className="divide-y divide-border rounded-lg border border-border">
         {clients && clients.length > 0 ? (
           clients.map((client) => (
             <li
@@ -33,7 +30,7 @@ export default async function DeletedClientsPage() {
             >
               <div className="min-w-0">
                 <p className="truncate text-foreground">{client.name}</p>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-muted-foreground">
                   {client.meta_ad_account_id} · excluído em{" "}
                   {formatDateFromInstant(client.deleted_at!)}
                 </p>
@@ -47,6 +44,6 @@ export default async function DeletedClientsPage() {
           </li>
         )}
       </ul>
-    </div>
+    </SettingsPageShell>
   );
 }
