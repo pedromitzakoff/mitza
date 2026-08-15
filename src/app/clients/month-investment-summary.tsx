@@ -90,14 +90,22 @@ function InvestmentBarWithTooltip({
  *
  * Refinamento visual (Etapa 73): as informações de diagnóstico (percentual
  * realizado/esperado detalhado, esperado em reais, diferença para o ritmo,
- * legenda da barra, explicação do dia atual) saíram do card sempre visível
- * e passaram pra "Ver detalhes do investimento", recolhida por padrão —
- * mesmo padrão de disclosure (`<details>/<summary>` nativo) já usado em
- * "Histórico" dos comentários/análises. Nenhuma fórmula mudou: os mesmos
- * valores só passaram a ter uma única apresentação (nunca mais a mesma
- * diferença repetida em duas frases — a barra deixou de mostrar sua própria
+ * explicação do dia atual) saíram do card sempre visível e passaram pra
+ * "Ver detalhes do investimento", recolhida por padrão — mesmo padrão de
+ * disclosure (`<details>/<summary>` nativo) já usado em "Histórico" dos
+ * comentários/análises. Nenhuma fórmula mudou: os mesmos valores só
+ * passaram a ter uma única apresentação (nunca mais a mesma diferença
+ * repetida em duas frases — a barra deixou de mostrar sua própria
  * legenda/desvio aqui via `showLegend={false}`, unificando tudo dentro dos
  * detalhes).
+ *
+ * Etapa "Revisão de disclosure da Visão Geral do cliente": a legenda de
+ * cores (Realizado/Esperado hoje) voltou a ficar sempre visível, logo
+ * abaixo da barra — 2 rótulos curtos não justificam um clique, e ficar
+ * escondida obrigava quem olha o card a adivinhar o que cada cor significa
+ * antes de abrir os detalhes. O resto do disclosure (números de
+ * acompanhamento, regra da projeção) continua recolhido — é diagnóstico
+ * denso, não uma legenda.
  */
 export function MonthInvestmentSummary({
   planned,
@@ -275,13 +283,30 @@ export function MonthInvestmentSummary({
         <>
           {/* ZONA 2 — Progresso: barra + marcador de esperado (mesmo
               componente pros 3 estados temporais, só o `monthTemporalStatus`
-              muda — nenhuma barra nova, nenhuma prop nova). */}
+              muda — nenhuma barra nova, nenhuma prop nova).
+              Etapa "Revisão de disclosure da Visão Geral do cliente": a
+              legenda de cores (Realizado/Esperado hoje) saiu de dentro de
+              "Ver detalhes do investimento" — são só 2 rótulos curtos, informação
+              pequena demais pra justificar um clique, e é exatamente o mesmo
+              padrão que o `ProgressBar` da Visão Geral da agência já usa
+              (legenda sempre visível abaixo da barra). Nenhuma cor, valor ou
+              cálculo mudou, só deixou de estar escondida. */}
           <div className={hasContextZone ? "mt-2" : ""}>
             <InvestmentBarWithTooltip
               summary={summary}
               monthTemporalStatus={isFutureMonth ? "futuro" : isClosedMonth ? "passado" : undefined}
               tooltipText={barTooltipText}
             />
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block h-2 w-2 rounded-sm bg-brand" aria-hidden="true" />
+                Realizado
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block h-2 w-0.5 bg-navy dark:bg-white" aria-hidden="true" />
+                Esperado hoje
+              </span>
+            </p>
           </div>
 
           {/* ZONA 3 — Resumo: Ritmo | Restam | Dias (mês em andamento) ou
@@ -395,22 +420,6 @@ export function MonthInvestmentSummary({
                 {plan.eligibleDaysCount} dias em {monthLabel}
               </p>
             )}
-
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Leitura da barra
-              </p>
-              <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-block h-2 w-2 rounded-sm bg-brand" aria-hidden="true" />
-                  Azul: realizado
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-block h-2 w-0.5 bg-navy dark:bg-white" aria-hidden="true" />
-                  Marcador: esperado hoje
-                </span>
-              </p>
-            </div>
 
             {!isFutureMonth && !isClosedMonth && plan && !plan.isBudgetReached && (
               <div>

@@ -25,7 +25,7 @@ import {
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
-import { classifySpendStatus, SPEND_STATUS_BADGE_CLASSES, SPEND_STATUS_LABEL } from "@/lib/spend-status";
+import { classifySpendStatus } from "@/lib/spend-status";
 import { resolveBudgetEffectiveDate, computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { resolveClientMonthlyPlan } from "@/lib/client-plan";
 import { getClientMonthHorizon } from "@/lib/client-month-horizons";
@@ -39,10 +39,9 @@ import {
 } from "@/lib/channel-spend";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatCurrency, formatMonthLabel, formatRelativeDateTime } from "@/lib/format";
+import { formatMonthLabel, formatRelativeDateTime } from "@/lib/format";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
 import { fetchClientOperationalHistory } from "@/lib/client-operational-history";
-import { effectiveTaskStatus } from "@/lib/task-status";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL, contractStatusBannerText, isWorkspaceClient } from "@/lib/client-fields";
 import { syncClientMetaAction } from "../meta-actions";
 import { syncClientStractSourcesAction } from "../stract-sync-actions";
@@ -70,7 +69,6 @@ import {
   buildEditableChannelValues,
   buildSprintPerformanceView,
   computePerformanceSummary,
-  deriveMonthlyKpiTexts,
 } from "@/lib/performance";
 import type { SprintPerformanceProps } from "../sprint-card";
 import { ClientHistoryList } from "../client-history-list";
@@ -1274,17 +1272,7 @@ export default async function ClientPage({
       ? buildCampaignSummaries(campaignDailyMetricRows)
       : [];
 
-  // Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente" — "Resumo
-  // consolidado do mês": nenhum dado novo, só uma leitura de fechamento
-  // reunindo números já calculados acima (investimento, performance,
-  // tarefas do mês inteiro — sprints + soltas), como se fosse "mais uma
-  // sprint", representando o mês inteiro.
-  // "Fechamento do mês" (dentro do bloco `visao-geral`, abaixo) — já nasce
-  // escopado ao seletor Consolidado/Meta/Google (`visaoGeralPerformanceSummary`).
-  const visaoGeralKpiTexts = deriveMonthlyKpiTexts(performanceGoal, visaoGeralPerformanceSummary, formatCurrency);
   const monthTaskRows = [...sortedSprints.flatMap((sprint) => tasksBySprintId.get(sprint.sprintId) ?? []), ...unlinkedTasks];
-  const monthTasksTotal = monthTaskRows.length;
-  const monthTasksDone = monthTaskRows.filter((task) => effectiveTaskStatus(task, today) === "feito").length;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-5">
@@ -1718,105 +1706,6 @@ export default async function ClientPage({
                     Nenhuma sprint encontrada para este período — verifique se as sprints do mês já foram geradas.
                   </EmptyState>
                 )}
-              </div>
-            </Section>
-          </div>
-
-          {/* Resumo consolidado do mês — como se fosse "mais uma sprint",
-              só que representando o fechamento do período inteiro. Nenhum
-              dado novo: mesmos números de investimento/performance/tarefas
-              já calculados acima, só lidos juntos como fechamento. */}
-          <div className="mt-3">
-            <Section title={`Fechamento de ${monthLabel}`}>
-              <div className="rounded-lg border border-border bg-card p-3">
-                {/* Facelift "Fechamento do mês no mobile": abaixo de `sm`, a
-                    mesma linha única (flex-wrap) espremia status/investido/
-                    planejado/resultados/custo/tarefas competindo pelo mesmo
-                    espaço horizontal. Mobile ganha uma segunda apresentação
-                    em blocos verticais (mesmos dados, mesmas variáveis,
-                    nenhum cálculo novo) — nunca mais de 2 informações
-                    importantes por linha. Desktop (`sm:` e acima) continua
-                    exatamente a linha única de sempre. */}
-                <div className="flex flex-col gap-2.5 text-xs sm:hidden">
-                  {/* Selo de ritmo + "de X planejados" ficam de fora quando
-                      um canal específico está selecionado — o orçamento do
-                      mês é sempre consolidado (nunca decomposto por canal
-                      no modelo de dados), então comparar o investido de só
-                      Meta ou só Google contra o planejado do cliente
-                      inteiro produziria um "ritmo" enganoso. */}
-                  {metricsChannel === "consolidated" && (
-                    <span
-                      className={`inline-block w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[monthStatus]}`}
-                    >
-                      {SPEND_STATUS_LABEL[monthStatus]}
-                    </span>
-                  )}
-
-                  <div>
-                    <p className="text-muted-foreground">Investido</p>
-                    <p className="text-base font-semibold text-foreground">{formatCurrency(visaoGeralMonthActual)}</p>
-                    {metricsChannel === "consolidated" && (
-                      <p className="text-muted-foreground">de {formatCurrency(monthPlanned)} planejados</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <p className="text-muted-foreground">Resultados</p>
-                    <p className="font-semibold text-foreground">{visaoGeralKpiTexts.resultsValue}</p>
-                  </div>
-
-                  <div>
-                    <p className="text-muted-foreground">Custo por resultado</p>
-                    <p className="font-semibold text-foreground">{visaoGeralKpiTexts.costValue}</p>
-                  </div>
-
-                  <div>
-                    <p className="text-muted-foreground">Tarefas do mês</p>
-                    <p className="font-semibold text-foreground">
-                      {monthTasksDone}/{monthTasksTotal}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="hidden flex-wrap items-center gap-x-1.5 gap-y-1 text-xs sm:flex">
-                  {metricsChannel === "consolidated" && (
-                    <>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[monthStatus]}`}
-                      >
-                        {SPEND_STATUS_LABEL[monthStatus]}
-                      </span>
-                      <span className="text-border" aria-hidden="true">
-                        ·
-                      </span>
-                    </>
-                  )}
-                  <span className="text-muted-foreground">Investido:</span>
-                  <span className="font-semibold text-foreground">{formatCurrency(visaoGeralMonthActual)}</span>
-                  {metricsChannel === "consolidated" && (
-                    <span className="text-muted-foreground">de {formatCurrency(monthPlanned)} planejados</span>
-                  )}
-
-                  <span className="text-border" aria-hidden="true">
-                    ·
-                  </span>
-                  <span className="text-muted-foreground">Resultados:</span>
-                  <span className="font-semibold text-foreground">{visaoGeralKpiTexts.resultsValue}</span>
-
-                  <span className="text-border" aria-hidden="true">
-                    ·
-                  </span>
-                  <span className="text-muted-foreground">Custo por resultado:</span>
-                  <span className="font-semibold text-foreground">{visaoGeralKpiTexts.costValue}</span>
-
-                  <span className="text-border" aria-hidden="true">
-                    ·
-                  </span>
-                  <span className="text-muted-foreground">Tarefas do mês:</span>
-                  <span className="font-semibold text-foreground">
-                    {monthTasksDone}/{monthTasksTotal}
-                  </span>
-                </div>
               </div>
             </Section>
           </div>
