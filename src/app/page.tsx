@@ -33,7 +33,7 @@ import {
   type OverviewPriorityItem,
 } from "./overview-client-view";
 import { getActiveDiagnosticFilters, getDiagnosticPriorityRank } from "@/lib/metric-diagnostics";
-import { summarizeOperationTriage } from "@/lib/operation-triage";
+import { resolveOperationPriorityGroup, summarizeOperationTriage, type OperationPriorityGroup } from "@/lib/operation-triage";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
@@ -656,6 +656,28 @@ export default async function Home({
   }
   const agencyResults = computeHealthResultsSummary(indicatorStates);
 
+  // Etapa "Saúde da carteira" (auditoria da Visão Geral): "como está minha
+  // carteira agora", um número por balde — mesmo agrupamento de 4 baldes já
+  // construído e testado pra Operação (`resolveOperationPriorityGroup`,
+  // `lib/operation-triage.ts`), nunca um score/threshold novo aqui. Mesmo
+  // recorte de mês/carteira/cliente de `agencyResults`/`operationIndicators`
+  // (`indicatorStates`, nunca os filtros de recorte de `cards`) — é um
+  // retrato macro da carteira, não uma lista filtrável.
+  const portfolioHealthCounts: Record<OperationPriorityGroup, number> = {
+    critico: 0,
+    atencao: 0,
+    saudavel: 0,
+    sem_dados: 0,
+  };
+  for (const state of indicatorStates) {
+    portfolioHealthCounts[resolveOperationPriorityGroup(state.evaluation)]++;
+  }
+  // Operação não filtra por balde via URL (o agrupamento lá é só ordenação/
+  // divisor visual, ver `operation-triage-view.tsx`) — o link leva pro mês
+  // certo, onde Crítico já aparece primeiro na fila, nunca um filtro
+  // fabricado que a tela de destino não suporta.
+  const operationHref = `/operation?month=${monthRange.firstDay}`;
+
   // Etapa "Visão Geral + Reports no Core": "Prioridades de hoje" passa a vir
   // do Motor de Diagnóstico Único (`metric-diagnostics.ts`) — uma linha por
   // CLIENTE, restrito a quem tem ao menos 1 diagnóstico ativo (Planejamento/
@@ -891,6 +913,39 @@ export default async function Home({
             <span className="text-sm">▾</span>
           </summary>
 
+          {/* Etapa "Saúde da carteira" (auditoria da Visão Geral): a
+              primeira coisa dentro do painel, antes até dos 4 KPIs
+              financeiros — resposta mais direta e mais macro pra "como está
+              minha agência hoje", que a auditoria encontrou ausente da
+              Home (o Motor de Saúde da Conta, já usado inteiro na Operação,
+              não alimentava nada aqui). 4 números, mesmo agrupamento já
+              testado da Operação (`portfolioHealthCounts`, acima) — nenhuma
+              lista de cliente, nenhum score novo. "Sem dados" nunca ganha
+              tom de alerta (mesma decisão da Operação: não é um problema de
+              performance, só ausência de configuração). */}
+          <div className="px-5 py-3 sm:px-6 sm:py-3.5">
+            <div className="flex items-center justify-between">
+              <SectionHeader title="Saúde da carteira" />
+              <Button href={operationHref} variant="ghost" size="sm">
+                Ver em Operação
+              </Button>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-x-10 gap-y-3 sm:grid-cols-4">
+              <OperationMetric
+                label="Críticas"
+                value={String(portfolioHealthCounts.critico)}
+                tone={portfolioHealthCounts.critico > 0 ? "danger" : "neutral"}
+              />
+              <OperationMetric
+                label="Atenção"
+                value={String(portfolioHealthCounts.atencao)}
+                tone={portfolioHealthCounts.atencao > 0 ? "warning" : "neutral"}
+              />
+              <OperationMetric label="Saudáveis" value={String(portfolioHealthCounts.saudavel)} tone="success" />
+              <OperationMetric label="Sem dados" value={String(portfolioHealthCounts.sem_dados)} tone="neutral" />
+            </div>
+          </div>
+
           {/* Facelift "Painel financeiro e operacional": só 4 KPIs de
               destaque máximo (nunca mais números grandes competindo pelo
               mesmo peso visual) — investimento realizado, leads, vendas e
@@ -909,7 +964,7 @@ export default async function Home({
               acrescentava contexto novo. Investimento realizado ganhou
               `emphasis` (maior/mais pesado) por ser o indicador financeiro
               principal — os outros 3 continuam equilibrados entre si. */}
-          <div className="px-5 py-3 sm:px-6 sm:py-3.5">
+          <div className="border-t border-overview-border px-5 py-3 sm:px-6 sm:py-3.5">
             <div className="grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
               <OperationMetric
                 emphasis
@@ -1066,12 +1121,37 @@ export default async function Home({
           </div>
         </details>
 
+        {/* Refinamento "Saúde da carteira" (auditoria da Visão Geral):
+            Prioridades passa a vir ANTES de Pendências — primeiro "como está
+            a carteira" (o pulso real dos clientes), só depois os lembretes
+            administrativos avulsos. Nenhum dado, cálculo ou link mudou, só a
+            posição na página. */}
+        <div className="mt-3">
+          <PrioritiesPanel
+            priorities={prioritiesTop}
+            managerNameByClient={primaryManagerNameByClient}
+            totalCount={priorityQueue.length}
+            viewAllHref={openPrioritiesHref}
+          />
+        </div>
+
+        {prioritiesOpen && (
+          <PrioritiesDrawer
+            priorities={priorityQueue}
+            managerNameByClient={primaryManagerNameByClient}
+            severity={prioritySeverity}
+            closeHref={closePrioritiesHref}
+            buildSeverityHref={prioritiesSeverityHref}
+          />
+        )}
+
         {/* Módulo "Pendências": lembretes rápidos e leves (agência/cliente),
             deliberadamente fora do painel financeiro/operacional acima (que
             fica atrás do accordion) — como envolve ações (adicionar/concluir/
-            editar), não pode ficar escondido atrás de um toggle. Fica antes
-            de Prioridades por ser o item mais "acionável agora". Nunca mistura
-            com tarefas/sprints: ver `src/lib/reminders.ts`. */}
+            editar), não pode ficar escondido atrás de um toggle. Fica depois
+            de Prioridades (auditoria da Visão Geral: situação real da
+            carteira antes de tarefa administrativa). Nunca mistura com
+            tarefas/sprints: ver `src/lib/reminders.ts`. */}
         <div className="mt-3">
           <RemindersPanel
             reminders={remindersFiltered}
@@ -1104,31 +1184,13 @@ export default async function Home({
           <RemindersCompletedDrawer reminders={completedReminders} closeHref={closeCompletedRemindersHref} />
         )}
 
-        {/* Refinamento Visual da Visão Geral: Prioridades passa a vir
-            DEPOIS do panorama geral da agência (acima) — primeiro "como
-            está a saúde da agência", só então "o que exige atenção agora".
-            Nenhum dado, cálculo ou link mudou, só a posição na página. */}
-        <div className="mt-3">
-          <PrioritiesPanel
-            priorities={prioritiesTop}
-            managerNameByClient={primaryManagerNameByClient}
-            totalCount={priorityQueue.length}
-            viewAllHref={openPrioritiesHref}
-          />
-        </div>
-
-        {prioritiesOpen && (
-          <PrioritiesDrawer
-            priorities={priorityQueue}
-            managerNameByClient={primaryManagerNameByClient}
-            severity={prioritySeverity}
-            closeHref={closePrioritiesHref}
-            buildSeverityHref={prioritiesSeverityHref}
-          />
-        )}
-
-        {/* Análises secundárias — fora do primeiro viewport de propósito */}
-        <details className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface [&_summary]:cursor-pointer [&_summary]:list-none">
+        {/* Etapa "Saúde da carteira" (auditoria da Visão Geral): passa a
+            abrir expandido por padrão — "Operação por gestor" é a única
+            visão de distribuição por gestor que existe na Home hoje,
+            escondida demais atrás de um accordion fechado. Continua
+            colapsável (útil pra quem prefere a tela mais curta), só o
+            estado inicial mudou — nenhum dado, cálculo ou link mudou. */}
+        <details open className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface [&_summary]:cursor-pointer [&_summary]:list-none">
           <summary className="flex items-center justify-between px-3.5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted hover:text-brand">
             Ver análises adicionais
             <span className="text-sm">▾</span>
