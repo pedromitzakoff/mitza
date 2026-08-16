@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ClipboardCheck, BarChart3 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
+import { Button, IconButton } from "@/components/workspace/button";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
@@ -107,6 +108,16 @@ const SYNC_RUN_STATUS_LABEL: Record<SyncRunSummary["status"], string> = {
   empty: "Vazio",
   failed: "Falha",
 };
+
+/** Etapa "Unificação visual da página do cliente": botão secundário compacto
+ * pros dois únicos casos que não podem usar o `Button` do design system
+ * (`@/components/workspace/button`) — ele renderiza `type="button"` fixo, e
+ * "Sincronizar agora"/"Atualizar Meta" precisam de `type="submit"` dentro de
+ * um `<form action>`. Mesma classe visual que `Button` variant="secondary"
+ * size="sm" produz, nunca uma aparência nova — só o único jeito de ter um
+ * botão de submit com a mesma cara. */
+const HEADER_SUBMIT_BUTTON_CLASSES =
+  "mitza-pressable rounded-md border border-overview-border bg-overview-surface px-2.5 py-1 text-xs font-medium text-overview-text-primary transition-colors hover:bg-overview-surface-hover hover:border-overview-border-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
 
 const SYNC_RUN_STATUS_BADGE_CLASSES: Record<SyncRunSummary["status"], string> = {
   running: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
@@ -1298,66 +1309,55 @@ export default async function ClientPage({
           identidade + ações à esquerda, dois cards compactos à direita.
           Nenhum dado novo: os dois cards só reempacotam as variáveis
           lastOptimization e lastPerformanceUpdate (já calculadas acima)
-          num cartão com a mesma borda/cantos/fundo (border-border +
-          rounded-lg + bg-card) usada no resto da plataforma (ver
-          AccountFollowUpPanel), em vez de texto solto no cabeçalho. */}
+          num cartão com a mesma borda/cantos/fundo usada no resto da
+          plataforma (ver AccountFollowUpPanel), em vez de texto solto no
+          cabeçalho.
+          Etapa "Unificação visual da página do cliente": tokens migrados
+          pra `overview-*` (mesma família de Operação/Dashboard/
+          Configurações); ações de navegação (Dashboard/Saldo/Ver relatório/
+          Editar) passam a usar o `Button` do design system em vez de
+          `<a>`/`<Link>` com classe escrita à mão — "Atualizar Meta" continua
+          um botão de formulário cru (precisa de `type="submit"`, que
+          `Button` não permite), mas com a mesma aparência exata. Nenhum
+          href, ação ou permissão mudou. */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <ClientAvatar name={client.name} imageUrl={client.avatar_url} size="lg" />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-bold text-foreground">{client.name}</h1>
+                <h1 className="text-2xl font-bold text-overview-text-primary">{client.name}</h1>
                 <span
                   className={`rounded-full px-2.5 py-1 text-xs font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}
                 >
                   {CLIENT_STATUS_LABEL[client.status]}
                 </span>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">{identitySecondaryLine}</p>
+              <p className="mt-1 text-sm text-overview-text-secondary">{identitySecondaryLine}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {client.dashboard_url && (
-              <a
-                href={client.dashboard_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              >
+              <Button href={client.dashboard_url} target="_blank" rel="noopener noreferrer" variant="secondary" size="sm">
                 Dashboard
-              </a>
+              </Button>
             )}
             {client.balance_url && (
-              <a
-                href={client.balance_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              >
+              <Button href={client.balance_url} target="_blank" rel="noopener noreferrer" variant="secondary" size="sm">
                 Saldo
-              </a>
+              </Button>
             )}
-            <Link
-              href={reportHref}
-              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            >
+            <Button href={reportHref} variant="secondary" size="sm">
               Ver relatório
-            </Link>
+            </Button>
             {canManageClient && (
-              <Link
-                href={`/clients/${client.id}/edit`}
-                className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              >
+              <Button href={`/clients/${client.id}/edit`} variant="secondary" size="sm">
                 Editar
-              </Link>
+              </Button>
             )}
             {canOperate && (
               <form action={syncClientMetaAction.bind(null, client.id)}>
-                <button
-                  type="submit"
-                  className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                >
+                <button type="submit" className={HEADER_SUBMIT_BUTTON_CLASSES}>
                   Atualizar Meta
                 </button>
               </form>
@@ -1366,27 +1366,27 @@ export default async function ClientPage({
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <div className="w-full rounded-lg border border-border bg-card p-3 sm:w-56">
-            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="w-full rounded-lg border border-overview-border bg-overview-surface p-3 sm:w-56">
+            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">
               <ClipboardCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
               {lastOptimizationLabel}
             </p>
-            <p className="mt-1 text-base font-semibold text-foreground">{lastOptimizationValue}</p>
+            <p className="mt-1 text-base font-semibold text-overview-text-primary">{lastOptimizationValue}</p>
             {lastOptimization && (
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
+              <p className="mt-0.5 text-[11px] text-overview-text-secondary">
                 {ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}
                 {lastOptimizationDetail ? ` · ${lastOptimizationDetail}` : ""}
               </p>
             )}
           </div>
-          <div className="w-full rounded-lg border border-border bg-card p-3 sm:w-56">
-            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="w-full rounded-lg border border-overview-border bg-overview-surface p-3 sm:w-56">
+            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">
               <BarChart3 className="h-3 w-3 shrink-0" aria-hidden="true" />
               {lastPerformanceUpdateLabel}
             </p>
-            <p className="mt-1 text-base font-semibold text-foreground">{lastPerformanceUpdateValue}</p>
+            <p className="mt-1 text-base font-semibold text-overview-text-primary">{lastPerformanceUpdateValue}</p>
             {lastPerformanceUpdateSourceLabel && (
-              <p className="mt-0.5 text-[11px] text-muted-foreground">Origem: {lastPerformanceUpdateSourceLabel}</p>
+              <p className="mt-0.5 text-[11px] text-overview-text-secondary">Origem: {lastPerformanceUpdateSourceLabel}</p>
             )}
           </div>
         </div>
@@ -1431,36 +1431,33 @@ export default async function ClientPage({
           só pra admin (RLS de `data_sync_runs`, ver
           `getRecentSyncRunsForClient`). */}
       {stractImportSourceIds.length > 0 && (
-        <div className="rounded-md border border-border bg-card px-3 py-2 text-sm">
+        <div className="rounded-md border border-overview-border bg-overview-surface px-3 py-2 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <span
                 className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                   latestSyncStatus
                     ? SYNC_RUN_STATUS_BADGE_CLASSES[latestSyncStatus.status]
-                    : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                    : "bg-overview-surface-subtle text-overview-text-secondary"
                 }`}
               >
                 {latestSyncStatus ? SYNC_RUN_STATUS_LABEL[latestSyncStatus.status] : "Nunca sincronizado"}
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-overview-text-secondary">
                 Stract{latestSyncStatus ? ` · ${formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant)}` : ""}
               </span>
             </div>
             {canOperate && (
               <form action={syncClientStractSourcesAction.bind(null, client.id)}>
-                <button
-                  type="submit"
-                  className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-                >
+                <button type="submit" className={HEADER_SUBMIT_BUTTON_CLASSES}>
                   Sincronizar agora
                 </button>
               </form>
             )}
           </div>
           {isAdmin && recentSyncRuns.length > 0 && (
-            <details className="mt-2 border-t border-border pt-2">
-              <summary className="cursor-pointer select-none text-xs font-medium text-foreground">Detalhes e histórico</summary>
+            <details className="mt-2 border-t border-overview-border pt-2">
+              <summary className="cursor-pointer select-none text-xs font-medium text-overview-text-primary">Detalhes e histórico</summary>
               <ul className="mt-2 flex flex-col gap-2">
                 {recentSyncRuns.map((run) => (
                   <li key={run.id} className="flex flex-col gap-0.5">
@@ -1468,10 +1465,10 @@ export default async function ClientPage({
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SYNC_RUN_STATUS_BADGE_CLASSES[run.status]}`}>
                         {SYNC_RUN_STATUS_LABEL[run.status]}
                       </span>
-                      <span className="text-xs text-muted-foreground">{formatRelativeDateTime(run.startedAt, nowInstant)}</span>
+                      <span className="text-xs text-overview-text-secondary">{formatRelativeDateTime(run.startedAt, nowInstant)}</span>
                     </div>
-                    {formatSyncRunCounts(run) && <p className="text-xs text-muted-foreground">{formatSyncRunCounts(run)}</p>}
-                    {run.errorMessage && <p className="text-xs text-red-700 dark:text-red-300">{run.errorMessage}</p>}
+                    {formatSyncRunCounts(run) && <p className="text-xs text-overview-text-secondary">{formatSyncRunCounts(run)}</p>}
+                    {run.errorMessage && <p className="text-xs text-overview-danger">{run.errorMessage}</p>}
                   </li>
                 ))}
               </ul>
@@ -1483,8 +1480,8 @@ export default async function ClientPage({
       {/* Etapa 59, seção 16: ação rápida depois de registrar uma análise —
           opcional, nunca gera a atualização automaticamente. */}
       {reviewSaved && !clientUpdatesByReviewId.has(reviewSaved) && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
-          <span className="text-foreground">Revisão de conta registrada com sucesso.</span>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-overview-border bg-overview-surface px-3 py-2 text-sm">
+          <span className="text-overview-text-primary">Revisão de conta registrada com sucesso.</span>
           <div className="flex items-center gap-2">
             <form action={generateClientUpdateAction.bind(null, reviewSaved, withParam(returnTo, `reviewDetail=${reviewSaved}`))}>
               <button
@@ -1494,12 +1491,9 @@ export default async function ClientPage({
                 Gerar atualização
               </button>
             </form>
-            <Link
-              href={returnTo}
-              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            >
+            <Button href={returnTo} variant="secondary" size="sm">
               Fechar
-            </Link>
+            </Button>
           </div>
         </div>
       )}
@@ -1510,24 +1504,18 @@ export default async function ClientPage({
           nenhum componente novo de seletor. Etapa 75: removido o texto
           "Período em análise" — o próprio seletor já comunica o período,
           sem precisar de rótulo. Fica fora das abas — é contexto de toda a
-          página, não de uma área específica. */}
+          página, não de uma área específica.
+          Etapa "Unificação visual da página do cliente": mesmo `IconButton`
+          de navegação de mês já usado na Visão Geral da agência/Operação. */}
       <div className="mt-3 flex items-center justify-end gap-2">
-        <div className="flex items-center gap-0.5 rounded-md border border-border bg-card px-1 py-1 text-sm">
-          <Link
-            href={prevMonthHref}
-            className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            aria-label="Mês anterior"
-          >
+        <div className="flex items-center gap-0.5 rounded-md border border-overview-border bg-overview-surface px-1 py-1 text-sm">
+          <IconButton href={prevMonthHref} aria-label="Mês anterior" variant="ghost" size="sm">
             &lsaquo;
-          </Link>
-          <span className="px-1.5 text-sm font-medium text-foreground">{monthLabel}</span>
-          <Link
-            href={nextMonthHref}
-            className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            aria-label="Próximo mês"
-          >
+          </IconButton>
+          <span className="min-w-[6rem] px-1.5 text-center text-sm font-medium text-overview-text-primary">{monthLabel}</span>
+          <IconButton href={nextMonthHref} aria-label="Próximo mês" variant="ghost" size="sm">
             &rsaquo;
-          </Link>
+          </IconButton>
         </div>
       </div>
 
@@ -1536,7 +1524,7 @@ export default async function ClientPage({
           nenhum componente de aba novo). Cada área abaixo é um bloco já
           existente, só reorganizado — nenhum cálculo, prop ou comportamento
           interno de componente foi alterado. */}
-      <div role="tablist" className="mt-3 flex items-center gap-4 overflow-x-auto border-b border-border text-sm">
+      <div role="tablist" className="mt-3 flex items-center gap-4 overflow-x-auto border-b border-overview-border text-sm">
         {AREA_TABS.map((tab) => (
           <Link
             key={tab.key}
@@ -1547,7 +1535,7 @@ export default async function ClientPage({
             className={`-mb-px shrink-0 border-b-2 pb-1.5 font-medium transition-colors ${
               tab.key === activeArea
                 ? "border-brand text-brand"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                : "border-transparent text-overview-text-secondary hover:text-overview-text-primary"
             }`}
           >
             {tab.label}
@@ -1812,7 +1800,7 @@ export default async function ClientPage({
             />
 
             {(historyPage > 0 || fullHistory.hasMore) && (
-              <div className="mt-3 flex items-center justify-between border-t border-border pt-2 text-xs">
+              <div className="mt-3 flex items-center justify-between border-t border-overview-border pt-2 text-xs">
                 {historyPage > 0 ? (
                   <Link
                     href={buildTimelineHistoryPageHref(historyPage - 1)}

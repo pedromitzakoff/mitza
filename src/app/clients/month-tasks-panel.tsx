@@ -29,7 +29,7 @@ const FILTERS: { key: TaskFilter; label: string }[] = [
 ];
 
 const CANCEL_CLASSES =
-  "mitza-pressable rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900";
+  "mitza-pressable rounded-md border border-overview-border px-3 py-1.5 text-xs font-medium text-overview-text-primary hover:bg-overview-surface-hover disabled:cursor-not-allowed disabled:opacity-60";
 // Mesmo tratamento visual de "Excluir cliente" (delete-client-button.tsx) —
 // a plataforma nunca usou um botão vermelho preenchido, sempre contorno +
 // texto vermelho. Reaproveitado aqui em vez de inventar uma variante nova.
@@ -84,12 +84,12 @@ function BulkDeleteConfirmDialog({
           role="dialog"
           aria-modal="true"
           aria-labelledby="bulk-delete-title"
-          className="mitza-modal-in w-full max-w-sm rounded-lg border border-border bg-card p-4 shadow-lg"
+          className="mitza-modal-in w-full max-w-sm rounded-lg border border-overview-border bg-overview-surface p-4 shadow-lg"
         >
-          <h2 id="bulk-delete-title" className="text-sm font-semibold text-foreground">
+          <h2 id="bulk-delete-title" className="text-sm font-semibold text-overview-text-primary">
             Excluir tarefas selecionadas?
           </h2>
-          <p className="mt-1.5 text-sm text-muted-foreground">
+          <p className="mt-1.5 text-sm text-overview-text-secondary">
             Esta ação exclui permanentemente {count} {count === 1 ? "tarefa" : "tarefas"}. Não pode ser desfeita.
           </p>
           <div className="mt-4 flex items-center justify-end gap-2">
@@ -283,7 +283,7 @@ export function MonthTasksPanel({
   const showSelectionUi = Boolean(isAdmin);
 
   return (
-    <div className="rounded-lg border border-border bg-card p-3">
+    <div className="rounded-lg border border-overview-border bg-overview-surface p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
@@ -300,13 +300,13 @@ export function MonthTasksPanel({
           className="mitza-pressable flex min-w-0 items-center gap-1.5 rounded text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
           <span
-            className={`mitza-chevron shrink-0 text-xs text-muted-foreground ${expanded ? "rotate-90" : ""}`}
+            className={`mitza-chevron shrink-0 text-xs text-overview-text-secondary ${expanded ? "rotate-90" : ""}`}
             aria-hidden="true"
           >
             ▸
           </span>
-          <h2 className="truncate text-base font-medium text-foreground">Tarefas de {monthLabel}</h2>
-          <span className="shrink-0 text-xs font-normal text-muted-foreground">
+          <h2 className="truncate text-base font-medium text-overview-text-primary">Tarefas de {monthLabel}</h2>
+          <span className="shrink-0 text-xs font-normal text-overview-text-secondary">
             {expanded && selectedCount > 0
               ? `${selectedCount} selecionada${selectedCount === 1 ? "" : "s"}`
               : expanded
@@ -321,7 +321,7 @@ export function MonthTasksPanel({
               <button
                 type="button"
                 onClick={() => setSelected(new Set())}
-                className="font-medium text-muted-foreground hover:underline"
+                className="font-medium text-overview-text-secondary hover:underline"
               >
                 Limpar
               </button>
@@ -357,7 +357,7 @@ export function MonthTasksPanel({
                   className={`mitza-pressable rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
                     filter === key
                       ? "border-brand bg-brand text-white"
-                      : "border-border text-muted-foreground hover:border-brand hover:text-brand"
+                      : "border-overview-border text-overview-text-secondary hover:border-brand hover:text-brand"
                   }`}
                 >
                   {label}
@@ -368,8 +368,8 @@ export function MonthTasksPanel({
           )}
 
           {filtered.length > 0 || recurringTasksList.length > 0 ? (
-            <div className="mt-2 overflow-hidden rounded-lg border border-border">
-              <div className="flex items-center gap-2.5 border-b border-border bg-zinc-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground dark:bg-zinc-900/40">
+            <div className="mt-2 overflow-hidden rounded-lg border border-overview-border">
+              <div className="flex items-center gap-2.5 border-b border-overview-border bg-overview-surface-subtle px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
                 {showSelectionUi && (
                   <span className={ACTIVITY_COL_SELECT}>
                     <input

@@ -63,13 +63,13 @@ function ChannelPlanCard({
   }
 
   return (
-    <div className="rounded-md border border-border p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{TRAFFIC_CHANNELS[channel].label}</p>
+    <div className="rounded-md border border-overview-border p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-overview-text-muted">{TRAFFIC_CHANNELS[channel].label}</p>
       <div className="mt-2 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         <div>
-          <label className="text-[11px] text-muted-foreground">Investimento</label>
+          <label className="text-[11px] text-overview-text-muted">Investimento</label>
           <div className="mt-0.5 flex items-center gap-1">
-            <span className="text-xs text-muted-foreground">R$</span>
+            <span className="text-xs text-overview-text-muted">R$</span>
             <input
               type="text"
               inputMode="decimal"
@@ -80,10 +80,10 @@ function ChannelPlanCard({
                 onChange({ ...state, investmentDisplay: parsed !== null ? formatMoneyDisplay(parsed) : "" });
               }}
               placeholder="0,00"
-              className="w-full rounded-md border border-border px-2 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-zinc-500 dark:bg-zinc-900"
+              className="w-full rounded-md border border-overview-border px-2 py-1.5 text-sm text-overview-text-primary outline-none transition-colors focus:border-overview-border-strong dark:bg-overview-surface"
             />
           </div>
-          <p className="mt-0.5 text-[10px] text-muted-foreground">
+          <p className="mt-0.5 text-[10px] text-overview-text-muted">
             Atual: {current?.investment != null ? formatCurrency(current.investment) : "sem plano"}
           </p>
         </div>
@@ -91,7 +91,7 @@ function ChannelPlanCard({
         {goalConfig && (
           <>
             <div>
-              <label className="text-[11px] text-muted-foreground">{goalConfig.resultMetricLabel}</label>
+              <label className="text-[11px] text-overview-text-muted">{goalConfig.resultMetricLabel}</label>
               <input
                 type="number"
                 inputMode="numeric"
@@ -99,26 +99,26 @@ function ChannelPlanCard({
                 value={state.resultCountDisplay}
                 onChange={(e) => handleFieldChange("resultCount", e.target.value)}
                 placeholder="Opcional"
-                className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-zinc-500 dark:bg-zinc-900"
+                className="mt-0.5 w-full rounded-md border border-overview-border px-2 py-1.5 text-sm text-overview-text-primary outline-none transition-colors focus:border-overview-border-strong dark:bg-overview-surface"
               />
-              <p className="mt-0.5 text-[10px] text-muted-foreground">
+              <p className="mt-0.5 text-[10px] text-overview-text-muted">
                 Atual: {current?.resultCount != null ? current.resultCount : "sem meta"}
               </p>
             </div>
             <div>
-              <label className="text-[11px] text-muted-foreground">{goalConfig.costMetricShortLabel}</label>
+              <label className="text-[11px] text-overview-text-muted">{goalConfig.costMetricShortLabel}</label>
               <div className="mt-0.5 flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">R$</span>
+                <span className="text-xs text-overview-text-muted">R$</span>
                 <input
                   type="text"
                   inputMode="decimal"
                   value={state.cpaDisplay}
                   onChange={(e) => handleFieldChange("cpa", e.target.value)}
                   placeholder="Opcional"
-                  className="w-full rounded-md border border-border px-2 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-zinc-500 dark:bg-zinc-900"
+                  className="w-full rounded-md border border-overview-border px-2 py-1.5 text-sm text-overview-text-primary outline-none transition-colors focus:border-overview-border-strong dark:bg-overview-surface"
                 />
               </div>
-              <p className="mt-0.5 text-[10px] text-muted-foreground">
+              <p className="mt-0.5 text-[10px] text-overview-text-muted">
                 Atual: {current?.cpa != null ? formatCurrency(current.cpa) : "—"}
               </p>
             </div>
@@ -242,13 +242,13 @@ export function ChannelPlanEditor({
   return (
     <>
       <div className="mitza-backdrop-in fixed inset-0 z-40 cursor-pointer bg-black/30" onClick={close} aria-hidden />
-      <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
+      <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-overview-border bg-overview-surface p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-foreground">Planejamento de {monthLabel}</h2>
+          <h2 className="text-lg font-semibold text-overview-text-primary">Planejamento de {monthLabel}</h2>
           <button
             type="button"
             onClick={close}
-            className="mitza-pressable shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="mitza-pressable shrink-0 rounded-md border border-overview-border px-2 py-1 text-xs font-medium text-overview-text-primary hover:bg-overview-surface-hover"
           >
             Fechar
           </button>
@@ -256,13 +256,13 @@ export function ChannelPlanEditor({
 
         {!confirmStep ? (
           <div className="mt-4 flex flex-col gap-3">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-overview-text-muted">
               Cada canal tem seu próprio plano — o consolidado do cliente é sempre a soma dos canais, nunca editado direto. Deixe um canal
               em branco pra não mexer nele.
             </p>
 
-            <div className="rounded-md border border-border p-3">
-              <label htmlFor="planning-end-date" className="text-[11px] text-muted-foreground">
+            <div className="rounded-md border border-overview-border p-3">
+              <label htmlFor="planning-end-date" className="text-[11px] text-overview-text-muted">
                 Data final da campanha/evento — opcional
               </label>
               <input
@@ -272,13 +272,13 @@ export function ChannelPlanEditor({
                 max={monthRange.lastDay}
                 value={planningEndDateDisplay}
                 onChange={(e) => setPlanningEndDateDisplay(e.target.value)}
-                className="mt-0.5 w-full rounded-md border border-border px-2 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-zinc-500 dark:bg-zinc-900"
+                className="mt-0.5 w-full rounded-md border border-overview-border px-2 py-1.5 text-sm text-overview-text-primary outline-none transition-colors focus:border-overview-border-strong dark:bg-overview-surface"
               />
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
+              <p className="mt-1.5 text-[11px] text-overview-text-muted">
                 Período de planejamento: {formatDayShortMonth(monthRange.firstDay)} → {planningEndLabel}
               </p>
               {planningEndDateDisplay && (
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                <p className="mt-0.5 text-[11px] text-overview-text-muted">
                   Sem orçamento distribuído nem ritmo calculado depois de {planningEndLabel} — os dias seguintes do mês continuam existindo,
                   só sem verba nova.
                 </p>
@@ -305,20 +305,20 @@ export function ChannelPlanEditor({
               >
                 Continuar
               </button>
-              <button type="button" onClick={close} className="mitza-pressable text-sm text-muted-foreground hover:underline">
+              <button type="button" onClick={close} className="mitza-pressable text-sm text-overview-text-muted hover:underline">
                 Cancelar
               </button>
             </div>
           </div>
         ) : (
           <div className="mt-4 flex flex-col gap-4">
-            <div className="rounded-md border border-border bg-zinc-50 p-3 text-xs dark:bg-zinc-900/40">
-              <p className="font-semibold text-foreground">Confirmar alteração</p>
-              <p className="mt-1 text-foreground">
+            <div className="rounded-md border border-overview-border bg-overview-surface-subtle p-3 text-xs">
+              <p className="font-semibold text-overview-text-primary">Confirmar alteração</p>
+              <p className="mt-1 text-overview-text-primary">
                 O que já foi investido não muda — só o saldo restante do mês é recalculado e redistribuído, por canal.
               </p>
               {planningEndDateChanged && (
-                <p className="mt-2 tabular-nums text-foreground">
+                <p className="mt-2 tabular-nums text-overview-text-primary">
                   Período de planejamento: {formatDayShortMonth(monthRange.firstDay)} → {planningEndLabel}
                   {!planningEndDateDisplay && " (removendo a data final)"}
                 </p>
@@ -330,8 +330,8 @@ export function ChannelPlanEditor({
                   const currentInvestment = byChannel[channel]?.investment ?? 0;
                   return (
                     <li key={channel} className="flex justify-between tabular-nums">
-                      <span className="text-muted-foreground">{TRAFFIC_CHANNELS[channel].label}</span>
-                      <span className="text-foreground">
+                      <span className="text-overview-text-muted">{TRAFFIC_CHANNELS[channel].label}</span>
+                      <span className="text-overview-text-primary">
                         {formatCurrency(currentInvestment)} → {formatCurrency(newInvestment)}
                       </span>
                     </li>
@@ -342,7 +342,7 @@ export function ChannelPlanEditor({
 
             <div className="flex flex-col gap-3">
               <div>
-                <label htmlFor="plan-reason" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <label htmlFor="plan-reason" className="text-xs font-semibold uppercase tracking-wide text-overview-text-muted">
                   Motivo da alteração (opcional)
                 </label>
                 <textarea
@@ -352,7 +352,7 @@ export function ChannelPlanEditor({
                   onChange={(event) => setReason(event.target.value)}
                   rows={2}
                   placeholder="Ex.: Cliente aprovou aumento de investimento para campanha promocional."
-                  className="mt-1 w-full resize-none rounded-md border border-border px-2 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-zinc-500 dark:bg-zinc-900"
+                  className="mt-1 w-full resize-none rounded-md border border-overview-border px-2 py-1.5 text-sm text-overview-text-primary outline-none transition-colors focus:border-overview-border-strong dark:bg-overview-surface"
                 />
               </div>
 
@@ -373,7 +373,7 @@ export function ChannelPlanEditor({
                   type="button"
                   onClick={() => setConfirmStep(false)}
                   disabled={isApplying}
-                  className="mitza-pressable text-sm text-muted-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mitza-pressable text-sm text-overview-text-muted hover:underline disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Voltar
                 </button>

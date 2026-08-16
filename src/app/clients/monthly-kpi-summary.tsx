@@ -7,13 +7,13 @@ import { formatCurrency } from "@/lib/format";
 function Kpi({ label, value, auxiliary }: { label: string; value: string; auxiliary?: string | null }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-xl font-semibold tracking-tight text-foreground">{value}</p>
+      <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">{label}</p>
+      <p className="text-xl font-semibold tracking-tight text-overview-text-primary">{value}</p>
       {/* Linha reservada mesmo vazia (Etapa "Refinamento visual — grid 4x2"):
           só "Resultados" às vezes tem texto auxiliar, mas todo Kpi da mesma
           linha precisa da mesma altura pro grid ficar alinhado — nunca um
           card mais alto que os vizinhos. */}
-      <p className="min-h-[1em] text-xs text-muted-foreground">{auxiliary}</p>
+      <p className="min-h-[1em] text-xs text-overview-text-secondary">{auxiliary}</p>
     </div>
   );
 }
@@ -100,7 +100,7 @@ export function MonthlyKpiSummary({
         <Kpi label="Meta" value={metaValue} />
       </div>
       {hasRevenue && (
-        <div className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 border-t border-border pt-3 sm:grid-cols-4">
+        <div className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 border-t border-overview-border pt-3 sm:grid-cols-4">
           <Kpi label="Faturamento" value={revenueValue} />
           <Kpi label="ROAS" value={roasValue} />
           <Kpi label="Ticket médio" value={averageTicketValue} />

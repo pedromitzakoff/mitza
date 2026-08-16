@@ -33,7 +33,7 @@ export function MoneyInput({
 
   return (
     <span className="inline-flex items-center gap-1">
-      <span className="text-xs text-muted-foreground">R$</span>
+      <span className="text-xs text-overview-text-secondary">R$</span>
       <input
         type="text"
         inputMode="decimal"
@@ -42,7 +42,7 @@ export function MoneyInput({
         onBlur={() => setDisplay(numericValue !== null ? formatMoneyDisplay(numericValue) : "")}
         placeholder="0,00"
         autoFocus={autoFocus}
-        className="w-24 rounded-md border border-border px-2 py-1 text-xs text-foreground outline-none focus:border-zinc-500 dark:bg-zinc-900"
+        className="w-24 rounded-md border border-overview-border px-2 py-1 text-xs text-overview-text-primary outline-none focus:border-overview-border-strong"
       />
       <input type="hidden" name={name} value={numericValue ?? ""} />
     </span>

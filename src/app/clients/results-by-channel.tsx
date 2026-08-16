@@ -21,13 +21,13 @@ export function ResultsByChannel({
   if (channelBreakdown.length <= 1) return null;
 
   return (
-    <div className="mt-3 border-t border-border pt-1.5">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Resultados por canal</p>
+    <div className="mt-3 border-t border-overview-border pt-1.5">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">Resultados por canal</p>
       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5">
         {channelBreakdown.map(({ channel, resultCount }) => (
-          <p key={channel} className="text-xs text-muted-foreground">
+          <p key={channel} className="text-xs text-overview-text-secondary">
             {TRAFFIC_CHANNELS[channel].shortLabel}:{" "}
-            <span className="font-medium text-foreground">{formatPerformanceResult(resultCount, goal)}</span>
+            <span className="font-medium text-overview-text-primary">{formatPerformanceResult(resultCount, goal)}</span>
           </p>
         ))}
       </div>

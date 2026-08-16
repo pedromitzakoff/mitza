@@ -11,15 +11,15 @@ function HistoryRow({
   buildReviewDetailHref: (id: string) => string;
 }) {
   return (
-    <li className="flex items-start justify-between gap-2 border-t border-border py-1.5 first:border-t-0 first:pt-0">
+    <li className="flex items-start justify-between gap-2 border-t border-overview-border py-1.5 first:border-t-0 first:pt-0">
       <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-overview-text-secondary">
           <span className="tabular-nums">{formatRelativeDateTime(event.occurredAt, new Date())}</span>
-          <span className="font-medium text-foreground">{event.label}</span>
+          <span className="font-medium text-overview-text-primary">{event.label}</span>
           {event.detail && <span>{event.detail}</span>}
         </div>
         {event.responsibleName && (
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">{event.responsibleName}</p>
+          <p className="mt-0.5 truncate text-xs text-overview-text-secondary">{event.responsibleName}</p>
         )}
       </div>
       {event.reviewId && (
@@ -71,10 +71,10 @@ export function CollapsibleAccountHistory({
       : "";
 
   return (
-    <details className="group mt-3 border-t border-border pt-1.5 [&_summary::-webkit-details-marker]:hidden">
+    <details className="group mt-3 border-t border-overview-border pt-1.5 [&_summary::-webkit-details-marker]:hidden">
       <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-brand">
-        <span className="mitza-chevron text-xs text-muted-foreground group-open:rotate-90">▸</span>
-        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="mitza-chevron text-xs text-overview-text-muted group-open:rotate-90">▸</span>
+        <span className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">
           Histórico de {monthLabel}
           {countSuffix}
         </span>

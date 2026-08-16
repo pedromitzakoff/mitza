@@ -131,22 +131,22 @@ export function TaskDrawerPanel({
       />
       <div
         ref={panelRef}
-        className={`${isClosing ? "mitza-panel-out" : "mitza-panel-in"} fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg`}
+        className={`${isClosing ? "mitza-panel-out" : "mitza-panel-in"} fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-overview-border bg-overview-surface p-5 shadow-lg`}
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-overview-text-secondary">
               {clientName}
               {sprintPeriodLabel ? ` · ${sprintPeriodLabel}` : ""}
             </p>
-            <h2 className="mt-0.5 text-lg font-semibold text-foreground">{task.title}</h2>
+            <h2 className="mt-0.5 text-lg font-semibold text-overview-text-primary">{task.title}</h2>
           </div>
           <Link
             href={closeHref}
             scroll={false}
             onClick={requestClose}
             autoFocus
-            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="shrink-0 rounded-md border border-overview-border px-2 py-1 text-xs font-medium text-overview-text-primary transition-colors hover:bg-overview-surface-hover"
           >
             Fechar
           </Link>
@@ -156,24 +156,24 @@ export function TaskDrawerPanel({
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TASK_STATUS_BADGE_CLASSES[status]}`}>
             {TASK_STATUS_LABEL[status]}
           </span>
-          <span className="text-xs text-muted-foreground">{TASK_TYPE_LABEL[task.type]}</span>
+          <span className="text-xs text-overview-text-secondary">{TASK_TYPE_LABEL[task.type]}</span>
         </div>
 
         <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
           <div>
-            <dt className="text-muted-foreground">Responsável</dt>
-            <dd className="text-foreground">{task.assignee?.name ?? "Sem responsável"}</dd>
+            <dt className="text-overview-text-secondary">Responsável</dt>
+            <dd className="text-overview-text-primary">{task.assignee?.name ?? "Sem responsável"}</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Prazo</dt>
-            <dd className="text-foreground">{formatDueDate(task.due_date)}</dd>
+            <dt className="text-overview-text-secondary">Prazo</dt>
+            <dd className="text-overview-text-primary">{formatDueDate(task.due_date)}</dd>
           </div>
         </dl>
 
         {task.notes && (
           <div className="mt-4">
-            <p className="text-xs font-medium text-muted-foreground">Observações</p>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">{task.notes}</p>
+            <p className="text-xs font-medium text-overview-text-secondary">Observações</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-overview-text-primary">{task.notes}</p>
           </div>
         )}
 
@@ -225,16 +225,16 @@ export function TaskDrawerPanel({
           )}
         </div>
 
-        <div className="mt-5 border-t border-border pt-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Comentários</p>
+        <div className="mt-5 border-t border-overview-border pt-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-overview-text-secondary">Comentários</p>
 
           {comments.length > 0 && (
             <ul className="mt-2 flex flex-col gap-2">
               {comments.map((comment) => (
-                <li key={comment.id} className="text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{comment.author?.name ?? "Alguém"}</span>{" "}
+                <li key={comment.id} className="text-xs text-overview-text-secondary">
+                  <span className="font-medium text-overview-text-primary">{comment.author?.name ?? "Alguém"}</span>{" "}
                   · {formatDateTime(comment.created_at)}
-                  <p className="text-foreground">{comment.content}</p>
+                  <p className="text-overview-text-primary">{comment.content}</p>
                 </li>
               ))}
             </ul>
@@ -247,12 +247,12 @@ export function TaskDrawerPanel({
                 placeholder="Comentar..."
                 required
                 disabled={isCommentPending}
-                className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none transition-colors focus:border-zinc-500 disabled:opacity-60"
+                className="flex-1 rounded-md border border-overview-border bg-transparent px-2 py-1 text-xs text-overview-text-primary outline-none transition-colors focus:border-overview-border-strong disabled:opacity-60"
               />
               <button
                 type="submit"
                 disabled={isCommentPending}
-                className="mitza-pressable shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900"
+                className="mitza-pressable shrink-0 rounded-md border border-overview-border px-2 py-1 text-xs font-medium text-overview-text-primary hover:bg-overview-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isCommentPending ? "Enviando..." : "Enviar"}
               </button>

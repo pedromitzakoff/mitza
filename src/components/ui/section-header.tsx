@@ -8,9 +8,12 @@ import type { ReactNode } from "react";
  * Mesmo padrão visual já usado em "Atualizar performance"/"Comentários"
  * (`sprint-card.tsx`): borda discreta, hover com tom da marca, pressed
  * (`mitza-pressable`), focus-visible.
+ *
+ * Etapa "Unificação visual da página do cliente": tokens migrados pra
+ * `overview-*` — mesmo shape/comportamento, só a cor lida do token certo.
  */
 export const SECONDARY_ACTION_BUTTON_CLASSES =
-  "mitza-pressable inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
+  "mitza-pressable inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-overview-border bg-overview-surface px-2 py-1 text-[11px] font-medium text-overview-text-primary transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
 
 /**
  * Design System oficial (tokens base) — Onda 1. Só a variante "label em
@@ -33,7 +36,7 @@ export function SectionHeader({
 }) {
   return (
     <div className={`flex flex-wrap items-center justify-between gap-2 ${className ?? ""}`}>
-      <Tag className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{children}</Tag>
+      <Tag className="text-xs font-semibold uppercase tracking-wide text-overview-text-muted">{children}</Tag>
       {action}
     </div>
   );

@@ -47,7 +47,7 @@ export function RecurringTaskRow({
   const progressLabel = progress.goal === null ? `${progress.done}` : `${progress.done}/${progress.goal}`;
 
   return (
-    <li className="flex min-h-[28px] items-center border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
+    <li className="flex min-h-[28px] items-center border-b border-overview-border/60 px-2 py-1 last:border-0 hover:bg-overview-surface-hover">
       <Link href={detailHref} scroll={false} className="flex w-full items-center gap-2.5">
         {selectColClassName && <span className={selectColClassName} aria-hidden="true" />}
 
@@ -58,22 +58,22 @@ export function RecurringTaskRow({
         <span className={`${dateColClassName} truncate`}>{item.nextExecutionLabel}</span>
 
         <span className="flex min-w-0 flex-1 items-center justify-between gap-2 text-sm">
-          <span className="truncate font-medium text-foreground">{item.title}</span>
-          <span className="shrink-0 tabular-nums text-xs text-muted-foreground">{progressLabel}</span>
+          <span className="truncate font-medium text-overview-text-primary">{item.title}</span>
+          <span className="shrink-0 tabular-nums text-xs text-overview-text-secondary">{progressLabel}</span>
         </span>
 
         {showAssigneeCol && <span className={ACTIVITY_COL_ASSIGNEE} aria-hidden="true" />}
 
         {typeLabel && (
           <span className={ACTIVITY_COL_TYPE}>
-            <span className="inline-flex max-w-full items-center truncate rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground dark:bg-zinc-800">
+            <span className="inline-flex max-w-full items-center truncate rounded-full bg-overview-surface-subtle px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">
               {typeLabel}
             </span>
           </span>
         )}
 
         <span className={ACTIVITY_COL_ACTIONS}>
-          <span className="text-sm text-muted-foreground" aria-hidden="true">
+          <span className="text-sm text-overview-text-secondary" aria-hidden="true">
             ›
           </span>
         </span>

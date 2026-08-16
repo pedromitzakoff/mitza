@@ -67,7 +67,7 @@ function InvestmentBarWithTooltip({
           duplicar o anúncio pra leitor de tela. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-0 top-full z-10 mt-1.5 w-60 whitespace-pre-line rounded-md border border-border bg-card p-2 text-[11px] text-foreground opacity-0 shadow-lg transition-opacity duration-150 group-hover/investmentbar:opacity-100 group-focus/investmentbar:opacity-100"
+        className="pointer-events-none absolute left-0 top-full z-10 mt-1.5 w-60 whitespace-pre-line rounded-md border border-overview-border bg-overview-surface p-2 text-[11px] text-overview-text-primary opacity-0 shadow-lg transition-opacity duration-150 group-hover/investmentbar:opacity-100 group-focus/investmentbar:opacity-100"
       >
         {tooltipText}
       </div>
@@ -223,7 +223,7 @@ export function MonthInvestmentSummary({
         ? "text-amber-600 dark:text-amber-400"
         : status === "dentro"
           ? "text-green-600 dark:text-green-400"
-          : "text-foreground";
+          : "text-overview-text-primary";
 
   // Etapa "Card de ritmo do orçamento": tooltip da barra — mesmas 5 linhas
   // que já viviam em "Ver detalhes do investimento" (Realizado/Esperado
@@ -246,7 +246,7 @@ export function MonthInvestmentSummary({
   const hasContextZone = Boolean(currentPlanningEndDate) || Boolean(showDiagnosis);
 
   return (
-    <div className="rounded-lg border border-border bg-card p-3">
+    <div className="rounded-lg border border-overview-border bg-overview-surface p-3">
       {/* ZONA 1 — Contexto/status: badge de evento (Etapa "Horizonte de
           Planejamento" — impede o gestor de achar que ainda existem dias de
           operação até o fim do mês quando a campanha já terminou antes
@@ -297,7 +297,7 @@ export function MonthInvestmentSummary({
               monthTemporalStatus={isFutureMonth ? "futuro" : isClosedMonth ? "passado" : undefined}
               tooltipText={barTooltipText}
             />
-            <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-overview-text-muted">
               <span className="inline-flex items-center gap-1">
                 <span className="inline-block h-2 w-2 rounded-sm bg-brand" aria-hidden="true" />
                 Realizado
@@ -316,7 +316,7 @@ export function MonthInvestmentSummary({
           {isFutureMonth
             ? plan && (
                 <div className="mt-2">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Ritmo planejado inicial</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">Ritmo planejado inicial</p>
                   <p className="text-sm font-semibold text-brand">{formatCurrency(plan.recommendedDaily)}/dia</p>
                 </div>
               )
@@ -324,20 +324,20 @@ export function MonthInvestmentSummary({
               plan && (
                 <div className="mt-2">
                   {plan.isBudgetReached && (
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Orçamento mensal atingido</p>
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">Orçamento mensal atingido</p>
                   )}
                   <div className={`grid grid-cols-3 gap-x-3 gap-y-1 ${plan.isBudgetReached ? "mt-1" : ""}`}>
                     <div>
-                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Ritmo</p>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">Ritmo</p>
                       <p className="text-sm font-semibold text-brand">{formatCurrency(plan.recommendedDaily)}/dia</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Restam</p>
-                      <p className="text-sm font-semibold text-foreground">{formatCurrency(plan.remainingBudget)}</p>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">Restam</p>
+                      <p className="text-sm font-semibold text-overview-text-primary">{formatCurrency(plan.remainingBudget)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Dias</p>
-                      <p className="text-sm font-semibold text-foreground">{plan.eligibleDaysCount}</p>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">Dias</p>
+                      <p className="text-sm font-semibold text-overview-text-primary">{plan.eligibleDaysCount}</p>
                     </div>
                   </div>
                   {plan.isBudgetReached && plan.overageAmount > 0 && (
@@ -355,10 +355,10 @@ export function MonthInvestmentSummary({
           região de ações à direita — antes "Ver histórico" vivia numa faixa
           própria abaixo deste rodapé, um elemento a mais espalhado pelo
           card. Mesmos textos/condições/links de sempre, só reagrupados. */}
-      <div className="mt-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5 border-t border-border pt-2">
+      <div className="mt-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5 border-t border-overview-border pt-2">
         {hasDetails ? (
           <details className="group/details min-w-0 flex-1 [&_summary::-webkit-details-marker]:hidden">
-            <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm text-[11px] font-medium text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-brand">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm text-[11px] font-medium text-overview-text-muted hover:text-overview-text-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-brand">
               <span className="mitza-chevron text-xs group-open/details:rotate-90">▸</span>
               <span className="group-open/details:hidden">Ver detalhes do investimento</span>
               <span className="hidden group-open/details:inline">Ocultar detalhes do investimento</span>
@@ -367,33 +367,33 @@ export function MonthInvestmentSummary({
           <div className="mt-2 flex flex-col gap-3">
             {!isFutureMonth && !isClosedMonth && (
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
                   Detalhes do acompanhamento
                 </p>
                 <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
                   <div>
-                    <p className="text-[11px] text-muted-foreground">Realizado</p>
-                    <p className="text-sm font-medium text-foreground">
+                    <p className="text-[11px] text-overview-text-muted">Realizado</p>
+                    <p className="text-sm font-medium text-overview-text-primary">
                       {pctRealizado !== null ? formatPercent(pctRealizado) : "—"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[11px] text-muted-foreground">Esperado hoje</p>
-                    <p className="text-sm font-medium text-foreground">{formatPercent(expectedPct)}</p>
+                    <p className="text-[11px] text-overview-text-muted">Esperado hoje</p>
+                    <p className="text-sm font-medium text-overview-text-primary">{formatPercent(expectedPct)}</p>
                   </div>
                   <div>
-                    <p className="text-[11px] text-muted-foreground">Esperado até hoje</p>
-                    <p className="text-sm font-medium text-foreground">{formatCurrency(expectedToDate)}</p>
+                    <p className="text-[11px] text-overview-text-muted">Esperado até hoje</p>
+                    <p className="text-sm font-medium text-overview-text-primary">{formatCurrency(expectedToDate)}</p>
                   </div>
                   <div>
-                    <p className="text-[11px] text-muted-foreground">Diferença para o ritmo</p>
+                    <p className="text-[11px] text-overview-text-muted">Diferença para o ritmo</p>
                     <p
                       className={`text-sm font-medium ${
                         ritmoDiff < 0
                           ? "text-amber-600 dark:text-amber-400"
                           : ritmoDiff > 0
                             ? "text-red-600 dark:text-red-400"
-                            : "text-foreground"
+                            : "text-overview-text-primary"
                       }`}
                     >
                       {ritmoDiffText}
@@ -405,28 +405,28 @@ export function MonthInvestmentSummary({
 
             {isClosedMonth && (utilizedPct != null || closedDiffText) && (
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
                   Detalhes do acompanhamento
                 </p>
                 {utilizedPct != null && (
-                  <p className="mt-1 text-sm text-foreground">{Math.round(utilizedPct)}% do orçamento utilizado</p>
+                  <p className="mt-1 text-sm text-overview-text-primary">{Math.round(utilizedPct)}% do orçamento utilizado</p>
                 )}
-                {closedDiffText && <p className="mt-0.5 text-[11px] text-muted-foreground">{closedDiffText}</p>}
+                {closedDiffText && <p className="mt-0.5 text-[11px] text-overview-text-muted">{closedDiffText}</p>}
               </div>
             )}
 
             {isFutureMonth && plan && (
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[11px] text-overview-text-muted">
                 {plan.eligibleDaysCount} dias em {monthLabel}
               </p>
             )}
 
             {!isFutureMonth && !isClosedMonth && plan && !plan.isBudgetReached && (
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
                   Regra da projeção
                 </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
+                <p className="mt-1 text-[11px] text-overview-text-muted">
                   O cálculo considera o dia de hoje como disponível para ajuste.
                 </p>
               </div>
@@ -440,7 +440,7 @@ export function MonthInvestmentSummary({
         <div className="flex shrink-0 flex-col items-end gap-1">
           {isAdmin &&
             (isClosedMonth ? (
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-[11px] text-overview-text-muted">
                 {isClosedByHorizonOnly ? "Período de planejamento encerrado" : "Mês encerrado"}
               </span>
             ) : (
@@ -458,7 +458,7 @@ export function MonthInvestmentSummary({
               )
             ))}
           {isAdmin && lastChange && lastChange.changeCountThisMonth > 1 && (
-            <Link href={historyHref} className="text-xs font-medium text-foreground hover:underline">
+            <Link href={historyHref} className="text-xs font-medium text-overview-text-primary hover:underline">
               Ver histórico
             </Link>
           )}

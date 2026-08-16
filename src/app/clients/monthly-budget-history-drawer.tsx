@@ -42,14 +42,14 @@ export function MonthlyBudgetHistoryDrawer({
   return (
     <>
       <Link href={closeHref} scroll={false} className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
-      <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
+      <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-overview-border bg-overview-surface p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-foreground">Histórico de orçamento · {monthLabel}</h2>
+          <h2 className="text-lg font-semibold text-overview-text-primary">Histórico de orçamento · {monthLabel}</h2>
           <Link
             href={closeHref}
             scroll={false}
             autoFocus
-            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="shrink-0 rounded-md border border-overview-border px-2 py-1 text-xs font-medium text-overview-text-primary transition-colors hover:bg-overview-surface-hover"
           >
             Fechar
           </Link>
@@ -58,22 +58,22 @@ export function MonthlyBudgetHistoryDrawer({
         {changes.length > 0 ? (
           <ul className="mt-4 flex flex-col gap-3">
             {changes.map((change) => (
-              <li key={change.id} className="rounded-md border border-border p-3 text-xs">
+              <li key={change.id} className="rounded-md border border-overview-border p-3 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
-                    <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground dark:bg-zinc-800">
+                    <span className="rounded-full bg-overview-surface-subtle px-1.5 py-0.5 text-[10px] font-medium text-overview-text-secondary">
                       {TRAFFIC_CHANNELS[change.channel].shortLabel}
                     </span>
-                    <span className="font-semibold text-foreground">
+                    <span className="font-semibold text-overview-text-primary">
                       Efeito em {formatDateWithYear(change.effectiveDate)}
                     </span>
                   </span>
-                  <span className="text-muted-foreground">{formatDateTime(change.changedAt)}</span>
+                  <span className="text-overview-text-secondary">{formatDateTime(change.changedAt)}</span>
                 </div>
-                <p className="mt-1 tabular-nums text-foreground">
+                <p className="mt-1 tabular-nums text-overview-text-primary">
                   {formatCurrency(change.previousAmount)} → {formatCurrency(change.newAmount)}
                 </p>
-                <dl className="mt-1.5 flex flex-col gap-0.5 text-muted-foreground">
+                <dl className="mt-1.5 flex flex-col gap-0.5 text-overview-text-secondary">
                   <div className="flex justify-between">
                     <dt>Consolidado até a data de efeito</dt>
                     <dd className="tabular-nums">{formatCurrency(change.consolidatedAmount)}</dd>
@@ -92,15 +92,15 @@ export function MonthlyBudgetHistoryDrawer({
                     Excedente histórico
                   </p>
                 )}
-                <p className="mt-1.5 text-muted-foreground">
+                <p className="mt-1.5 text-overview-text-secondary">
                   Alterado em {formatShortDateFromInstant(change.changedAt)} por {change.changedByName ?? "usuário removido"}
                 </p>
                 {/* Etapa MVP "Comentário no histórico de alteração de
                     orçamento" — só aparece quando o gestor informou um
                     motivo (nunca "Motivo: —" fabricado). */}
                 {change.reason && (
-                  <p className="mt-1 text-foreground">
-                    <span className="text-muted-foreground">Motivo: </span>
+                  <p className="mt-1 text-overview-text-primary">
+                    <span className="text-overview-text-secondary">Motivo: </span>
                     {change.reason}
                   </p>
                 )}

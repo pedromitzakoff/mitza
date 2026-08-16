@@ -151,7 +151,7 @@ function TaskRowMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Mais ações da tarefa"
-        className="mitza-pressable rounded px-1 text-sm text-muted-foreground transition-colors hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        className="mitza-pressable rounded px-1 text-sm text-overview-text-secondary transition-colors hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       >
         •••
       </button>
@@ -162,7 +162,7 @@ function TaskRowMenu({
         onClose={closeMenu}
         role="menu"
         closeLabel="Fechar menu"
-        className="w-44 -translate-x-full rounded-lg border border-border bg-card p-1 shadow-[var(--shadow-float)]"
+        className="w-44 -translate-x-full rounded-lg border border-overview-border bg-overview-surface p-1 shadow-[var(--shadow-float)]"
       >
         {onToggleExpand ? (
           <button
@@ -172,7 +172,7 @@ function TaskRowMenu({
               onToggleExpand();
               closeMenu();
             }}
-            className="mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+            className="mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs text-overview-text-primary hover:bg-overview-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand"
           >
             Ver detalhes
           </button>
@@ -185,7 +185,7 @@ function TaskRowMenu({
               saveFocusForReturn(event.currentTarget);
               closeMenu();
             }}
-            className="mitza-pressable block rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+            className="mitza-pressable block rounded-md px-2 py-1.5 text-left text-xs text-overview-text-primary hover:bg-overview-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand"
           >
             Ver detalhes
           </Link>
@@ -194,7 +194,7 @@ function TaskRowMenu({
         {isAdmin &&
           (confirming ? (
             <div className="mt-0.5 flex items-center gap-1.5 px-2 py-1">
-              <span className="text-[11px] text-muted-foreground">Confirmar exclusão?</span>
+              <span className="text-[11px] text-overview-text-secondary">Confirmar exclusão?</span>
               <button
                 type="button"
                 disabled={isPending}
@@ -206,7 +206,7 @@ function TaskRowMenu({
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                className="mitza-pressable rounded px-1 text-[11px] text-muted-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                className="mitza-pressable rounded px-1 text-[11px] text-overview-text-secondary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               >
                 Não
               </button>
@@ -407,7 +407,7 @@ export function TaskRow({
     ? "text-red-600 dark:text-red-400"
     : isToday && !isDone
       ? "text-brand"
-      : "text-muted-foreground";
+      : "text-overview-text-secondary";
 
   const rowOpacityClass = isDone || isNotDone ? "opacity-60" : isFuture ? "opacity-70" : "";
 
@@ -435,7 +435,7 @@ export function TaskRow({
 
   return (
     <li
-      className={`relative flex min-h-[28px] items-center border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 mitza-row-exit ${isLeaving ? "mitza-row-exit-active" : ""}`}
+      className={`relative flex min-h-[28px] items-center border-b border-overview-border/60 px-2 py-1 last:border-0 hover:bg-overview-surface-hover mitza-row-exit ${isLeaving ? "mitza-row-exit-active" : ""}`}
     >
       {onToggleExpand ? (
         <button
@@ -475,7 +475,7 @@ export function TaskRow({
             <Tooltip label="Não realizado">
               <span
                 aria-label="Não realizado"
-                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[10px] leading-none text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-overview-surface-subtle text-[10px] leading-none text-overview-text-muted"
               >
                 ×
               </span>
@@ -494,7 +494,7 @@ export function TaskRow({
                     ? "border-red-400 dark:border-red-700"
                     : isToday
                       ? "border-brand"
-                      : "border-zinc-300 dark:border-zinc-600"
+                      : "border-overview-border-strong"
                 }`}
               />
             </Tooltip>
@@ -504,15 +504,15 @@ export function TaskRow({
         <span className={`${compactDate ? ACTIVITY_COL_DATE_COMPACT : ACTIVITY_COL_DATE} ${dateClasses}`}>{dueDate}</span>
 
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-foreground" title={task.title}>
+          <span className="block truncate text-sm font-medium text-overview-text-primary" title={task.title}>
             {task.title}
           </span>
         </span>
 
         {!hideAssignee && (!hideAssigneeIfName || task.assignee?.name !== hideAssigneeIfName) && (
           <span className={ACTIVITY_COL_ASSIGNEE}>
-            <User className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span className="min-w-0 truncate text-xs text-muted-foreground">
+            <User className="h-3 w-3 shrink-0 text-overview-text-secondary" aria-hidden="true" />
+            <span className="min-w-0 truncate text-xs text-overview-text-secondary">
               {task.assignee?.name ?? "Sem responsável"}
               {task.assignee?.status === "inativo" && " (inativo)"}
             </span>
@@ -521,7 +521,7 @@ export function TaskRow({
 
         {typeLabel && (
           <span className={ACTIVITY_COL_TYPE}>
-            <span className="inline-flex max-w-full items-center truncate rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground dark:bg-zinc-800">
+            <span className="inline-flex max-w-full items-center truncate rounded-full bg-overview-surface-subtle px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">
               {typeLabel}
             </span>
           </span>
@@ -556,7 +556,7 @@ export function TaskRow({
           padrão do drawer): o campo não aparece e o valor real nunca é
           resetado. */}
       {isExpanded && onToggleExpand && (
-        <div className="relative z-10 mt-1.5 border-t border-border pl-[26px] pt-1.5">
+        <div className="relative z-10 mt-1.5 border-t border-overview-border pl-[26px] pt-1.5">
           <InlineEditTaskForm
             taskId={task.id}
             clientId={clientId}

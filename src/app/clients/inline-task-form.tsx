@@ -15,7 +15,7 @@ export interface InlineTaskManagerOption {
 }
 
 const fieldClasses =
-  "rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none focus:border-brand";
+  "rounded-md border border-overview-border bg-transparent px-2 py-1 text-xs text-overview-text-primary outline-none focus:border-brand";
 
 /**
  * Criar/editar tarefa sem sair do workspace atual (Etapa "MITZA
@@ -211,7 +211,7 @@ export function InlineCreateTaskForm({
         <button
           type="submit"
           disabled={isPending}
-          className="mitza-pressable rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900"
+          className="mitza-pressable rounded-md border border-overview-border px-2 py-1 text-[11px] font-medium text-overview-text-primary hover:bg-overview-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isPending ? "Salvando..." : "Salvar"}
         </button>
@@ -222,7 +222,7 @@ export function InlineCreateTaskForm({
             setOpen(false);
             setError(null);
           }}
-          className="text-[11px] text-muted-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+          className="text-[11px] text-overview-text-secondary hover:underline disabled:cursor-not-allowed disabled:opacity-60"
         >
           Cancelar
         </button>
@@ -316,7 +316,7 @@ export function InlineEditTaskForm({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mitza-pressable rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-900"
+        className="mitza-pressable rounded-md border border-overview-border px-3 py-1.5 text-xs font-medium text-overview-text-primary transition-colors hover:bg-overview-surface-hover"
       >
         Editar tarefa
       </button>
@@ -353,7 +353,7 @@ export function InlineEditTaskForm({
             setOpen(false);
             setError(null);
           }}
-          className="text-muted-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+          className="text-overview-text-secondary hover:underline disabled:cursor-not-allowed disabled:opacity-60"
         >
           Cancelar
         </button>

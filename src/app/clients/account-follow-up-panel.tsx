@@ -93,7 +93,7 @@ export function AccountFollowUpPanel({
   buildReviewDetailHref: (reviewId: string) => string;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-3">
+    <div className="rounded-lg border border-overview-border bg-overview-surface p-3">
       {channelSwitch && <div className="mb-2 flex justify-end">{channelSwitch}</div>}
       <MonthlyKpiSummary
         monthActual={monthActual}

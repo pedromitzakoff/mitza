@@ -141,13 +141,13 @@ const TEMPORAL_LABEL = {
 } as const;
 
 const TEMPORAL_BADGE_CLASSES = {
-  futura: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  futura: "bg-overview-surface-subtle text-overview-text-muted",
   atual: "bg-brand/10 text-brand",
-  concluida: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  concluida: "bg-overview-surface-subtle text-overview-text-muted",
 } as const;
 
 const EXECUTION_LABEL_CLASSES: Record<"atencao" | "critico" | "neutro", string> = {
-  neutro: "text-muted-foreground",
+  neutro: "text-overview-text-secondary",
   atencao: "text-amber-600 dark:text-amber-400",
   critico: "text-red-600 dark:text-red-400",
 };
@@ -174,7 +174,7 @@ function SprintPerformanceFormFields({
     <>
       {editableInvestment.map(({ channel, currentAmount }) => (
         <div key={`investment-${channel}`} className="flex flex-wrap items-center gap-1.5">
-          <span className="w-28 shrink-0 text-[11px] text-muted-foreground">
+          <span className="w-28 shrink-0 text-[11px] text-overview-text-secondary">
             Investimento · {TRAFFIC_CHANNELS[channel].shortLabel}
           </span>
           <MoneyInput name={`actual_spend_${channel}`} defaultValue={currentAmount} autoFocus={channel === "meta"} />
@@ -183,7 +183,7 @@ function SprintPerformanceFormFields({
       {canEditResults &&
         editableChannels.map(({ channel, existingCount, existingRevenue }) => (
           <div key={`result-${channel}`} className="flex flex-wrap items-center gap-1.5">
-            <span className="w-28 shrink-0 text-[11px] text-muted-foreground">
+            <span className="w-28 shrink-0 text-[11px] text-overview-text-secondary">
               Resultado · {TRAFFIC_CHANNELS[channel].shortLabel}
             </span>
             <input
@@ -193,11 +193,11 @@ function SprintPerformanceFormFields({
               step={1}
               defaultValue={existingCount ?? ""}
               placeholder="0"
-              className="w-20 rounded-md border border-border bg-transparent px-2 py-1 text-[11px] text-foreground outline-none focus:border-brand"
+              className="w-20 rounded-md border border-overview-border bg-transparent px-2 py-1 text-[11px] text-overview-text-primary outline-none focus:border-brand"
             />
             {performanceGoal === "sales" && (
               <>
-                <span className="text-[11px] text-muted-foreground">Receita</span>
+                <span className="text-[11px] text-overview-text-secondary">Receita</span>
                 <MoneyInput name={`revenue_${channel}`} defaultValue={existingRevenue} />
               </>
             )}
@@ -451,9 +451,9 @@ function SprintKpiCell({
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-lg font-semibold tracking-tight text-foreground">{value}</p>
-      {aux && <p className={`text-xs ${tone ? PERFORMANCE_STATUS_TEXT_CLASSES[tone] : "text-muted-foreground"}`}>{aux}</p>}
+      <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">{label}</p>
+      <p className="text-lg font-semibold tracking-tight text-overview-text-primary">{value}</p>
+      {aux && <p className={`text-xs ${tone ? PERFORMANCE_STATUS_TEXT_CLASSES[tone] : "text-overview-text-secondary"}`}>{aux}</p>}
     </div>
   );
 }
@@ -555,14 +555,14 @@ function SprintPerformanceReportSection({
 
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-foreground">{sourceOrigin}</p>
-          {sourceDetail && <p className="text-[11px] text-muted-foreground">{sourceDetail}</p>}
+          <p className="text-xs font-medium text-overview-text-primary">{sourceOrigin}</p>
+          {sourceDetail && <p className="text-[11px] text-overview-text-secondary">{sourceDetail}</p>}
         </div>
 
         {canEditPerformance && (
           <label
             htmlFor={editToggleId}
-            className="mitza-pressable inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand peer-checked:hidden"
+            className="mitza-pressable inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-overview-border bg-overview-surface px-2 py-1 text-[11px] font-medium text-overview-text-primary transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand peer-checked:hidden"
           >
             <RefreshCw className="h-3 w-3" aria-hidden="true" />
             Atualizar performance
@@ -583,12 +583,12 @@ function SprintPerformanceReportSection({
           />
           <div className="flex items-center gap-1.5">
             <SubmitButton
-              className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              className="rounded-md border border-overview-border px-2 py-1 text-[11px] font-medium text-overview-text-primary transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               pendingChildren="Salvando..."
             >
               Salvar
             </SubmitButton>
-            <label htmlFor={editToggleId} className="cursor-pointer text-[11px] text-muted-foreground hover:underline">
+            <label htmlFor={editToggleId} className="cursor-pointer text-[11px] text-overview-text-secondary hover:underline">
               Cancelar
             </label>
           </div>
@@ -799,7 +799,7 @@ export function SprintCardBody({
     const performanceGoal = performance?.performanceGoal ?? null;
 
     return (
-      <div className="border-t border-border p-1.5">
+      <div className="border-t border-overview-border p-1.5">
         <div>
           <SprintKpiStrip
             sprint={sprint}
@@ -809,8 +809,8 @@ export function SprintCardBody({
           />
         </div>
 
-        <div className="mt-2 border-t border-border pt-1.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Fonte dos dados</p>
+        <div className="mt-2 border-t border-overview-border pt-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Fonte dos dados</p>
           <div className="mt-1">
             <SprintPerformanceReportSection
               sprint={sprint}
@@ -1157,8 +1157,8 @@ export function SprintCard({
           ? `group scroll-mt-4 border-b border-border/60 last:border-0 [&_summary::-webkit-details-marker]:hidden ${
               isCurrent ? "bg-brand/[0.03]" : ""
             }`
-          : `group scroll-mt-4 rounded-lg border bg-card [&_summary::-webkit-details-marker]:hidden ${
-              isCurrent ? "border-l-4 border-l-brand border-y-border border-r-border" : "border-border"
+          : `group scroll-mt-4 rounded-lg border bg-overview-surface [&_summary::-webkit-details-marker]:hidden ${
+              isCurrent ? "border-l-4 border-l-brand border-y-overview-border border-r-overview-border" : "border-overview-border"
             }`
       }
     >
@@ -1275,10 +1275,10 @@ export function SprintCard({
               exatamente a linha única de sempre. */}
           <div className="flex flex-col gap-1 text-xs sm:hidden">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="mitza-chevron shrink-0 text-xs text-muted-foreground group-open:rotate-90">
+              <span className="mitza-chevron shrink-0 text-xs text-overview-text-secondary group-open:rotate-90">
                 ▸
               </span>
-              <span className="font-semibold text-foreground">
+              <span className="font-semibold text-overview-text-primary">
                 {formatSprintPeriodLabel(sprint.startDate, sprint.endDate)}
               </span>
               <span
@@ -1288,18 +1288,18 @@ export function SprintCard({
               </span>
             </div>
             {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) && (
-              <span className="tabular-nums text-muted-foreground">{formatCurrency(sprint.actualSpend)} investidos</span>
+              <span className="tabular-nums text-overview-text-secondary">{formatCurrency(sprint.actualSpend)} investidos</span>
             )}
             {performance && performance.view.kind !== "not_configured" && (
-              <span className="tabular-nums text-muted-foreground">{formatCompactPerformanceText(performance.view)}</span>
+              <span className="tabular-nums text-overview-text-secondary">{formatCompactPerformanceText(performance.view)}</span>
             )}
           </div>
 
           <div className="hidden flex-wrap items-center gap-x-3 gap-y-1 sm:flex">
-            <span className="mitza-chevron shrink-0 text-xs text-muted-foreground group-open:rotate-90">
+            <span className="mitza-chevron shrink-0 text-xs text-overview-text-secondary group-open:rotate-90">
               ▸
             </span>
-            <span className="shrink-0 text-sm font-semibold text-foreground">
+            <span className="shrink-0 text-sm font-semibold text-overview-text-primary">
               {formatSprintPeriodLabel(sprint.startDate, sprint.endDate)}
             </span>
             <span
@@ -1315,14 +1315,14 @@ export function SprintCard({
                 migraram pra `MonthTasksPanel`/aba de Tarefas, repeti-las era
                 a mesma informação em dois lugares. Meta e comparação com a
                 sprint anterior ficam só na Sprint aberta (KPIs), não aqui. */}
-            <span className="ml-auto flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+            <span className="ml-auto flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-overview-text-secondary">
               {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) && (
                 <span className="tabular-nums">{formatCurrency(sprint.actualSpend)} investidos</span>
               )}
               {performance && performance.view.kind !== "not_configured" && (
                 <>
                   {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) && (
-                    <span className="text-border" aria-hidden="true">
+                    <span className="text-overview-border" aria-hidden="true">
                       ·
                     </span>
                   )}

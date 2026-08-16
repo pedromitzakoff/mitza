@@ -50,13 +50,13 @@ export function EssentialInfoPanel({
   ];
 
   return (
-    <details className="rounded-lg border border-border bg-card p-3">
-      <summary className="cursor-pointer text-sm font-medium text-foreground">Informações essenciais</summary>
+    <details className="rounded-lg border border-overview-border bg-overview-surface p-3">
+      <summary className="cursor-pointer text-sm font-medium text-overview-text-primary">Informações essenciais</summary>
       <div className="mt-3 flex flex-col gap-2">
         {fields.map((field) => (
           <div key={field.label}>
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{field.label}</p>
-            <p className="text-sm text-foreground">{field.value || "—"}</p>
+            <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">{field.label}</p>
+            <p className="text-sm text-overview-text-primary">{field.value || "—"}</p>
           </div>
         ))}
         {isAdmin && (

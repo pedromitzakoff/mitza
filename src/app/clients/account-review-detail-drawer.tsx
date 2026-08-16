@@ -69,13 +69,13 @@ export function AccountReviewDetailDrawer({
   return (
     <>
       <Link href={closeHref} scroll={false} className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
-      <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card p-5 shadow-lg">
+      <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-overview-border bg-overview-surface p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-foreground">Revisão de conta</h2>
+          <h2 className="text-lg font-semibold text-overview-text-primary">Revisão de conta</h2>
           <Link
             href={closeHref}
             scroll={false}
-            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="shrink-0 rounded-md border border-overview-border px-2 py-1 text-xs font-medium text-overview-text-primary hover:bg-overview-surface-hover"
           >
             Fechar
           </Link>
@@ -83,58 +83,58 @@ export function AccountReviewDetailDrawer({
 
         <dl className="mt-4 flex flex-col gap-2 text-sm">
           <div className="flex justify-between">
-            <dt className="text-muted-foreground">Data e hora</dt>
-            <dd className="font-medium text-foreground">{formatDateTime(review.reviewedAt)}</dd>
+            <dt className="text-overview-text-secondary">Data e hora</dt>
+            <dd className="font-medium text-overview-text-primary">{formatDateTime(review.reviewedAt)}</dd>
           </div>
           <div className="flex justify-between">
-            <dt className="text-muted-foreground">Gestor</dt>
-            <dd className="font-medium text-foreground">{review.managerName}</dd>
+            <dt className="text-overview-text-secondary">Gestor</dt>
+            <dd className="font-medium text-overview-text-primary">{review.managerName}</dd>
           </div>
           <div className="flex justify-between">
-            <dt className="text-muted-foreground">Motivo</dt>
-            <dd className="text-right font-medium text-foreground">{reasonLabel(review)}</dd>
+            <dt className="text-overview-text-secondary">Motivo</dt>
+            <dd className="text-right font-medium text-overview-text-primary">{reasonLabel(review)}</dd>
           </div>
           <div className="flex justify-between">
-            <dt className="text-muted-foreground">Resultado</dt>
-            <dd className="font-medium text-foreground">{ACCOUNT_REVIEW_OUTCOME_LABEL[review.outcome]}</dd>
+            <dt className="text-overview-text-secondary">Resultado</dt>
+            <dd className="font-medium text-overview-text-primary">{ACCOUNT_REVIEW_OUTCOME_LABEL[review.outcome]}</dd>
           </div>
           <div className="flex justify-between">
-            <dt className="text-muted-foreground">Tempo desde a otimização anterior</dt>
-            <dd className="font-medium text-foreground">
+            <dt className="text-overview-text-secondary">Tempo desde a otimização anterior</dt>
+            <dd className="font-medium text-overview-text-primary">
               {review.secondsSincePreviousReview === null ? "Primeira otimização" : formatDelay(review.secondsSincePreviousReview)}
             </dd>
           </div>
         </dl>
 
         {review.optimizations.length > 0 && (
-          <section className="mt-4 border-t border-border pt-4">
+          <section className="mt-4 border-t border-overview-border pt-4">
             <SectionHeader>Alterações realizadas</SectionHeader>
             <ul className="mt-2 flex flex-col gap-2">
               {review.optimizations.map((opt) => (
-                <li key={opt.id} className="rounded-md border border-border p-2.5 text-sm">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <li key={opt.id} className="rounded-md border border-overview-border p-2.5 text-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-overview-text-secondary">
                     {OPTIMIZATION_TYPE_LABEL[opt.type]}
                   </p>
-                  <p className="mt-1 text-foreground">
-                    <span className="text-muted-foreground">Ação: </span>
+                  <p className="mt-1 text-overview-text-primary">
+                    <span className="text-overview-text-secondary">Ação: </span>
                     {OPTIMIZATION_ACTION_LABEL[opt.action] ?? opt.action}
-                    {opt.quantity > 1 && <span className="text-muted-foreground"> ×{opt.quantity}</span>}
+                    {opt.quantity > 1 && <span className="text-overview-text-secondary"> ×{opt.quantity}</span>}
                   </p>
                   {opt.description && (
-                    <p className="mt-0.5 text-foreground">
-                      <span className="text-muted-foreground">Descrição: </span>
+                    <p className="mt-0.5 text-overview-text-primary">
+                      <span className="text-overview-text-secondary">Descrição: </span>
                       {opt.description}
                     </p>
                   )}
                   {opt.reason && (
-                    <p className="mt-0.5 text-foreground">
-                      <span className="text-muted-foreground">Motivo: </span>
+                    <p className="mt-0.5 text-overview-text-primary">
+                      <span className="text-overview-text-secondary">Motivo: </span>
                       {opt.reason}
                     </p>
                   )}
                   {opt.expectedImpact && (
-                    <p className="mt-0.5 text-foreground">
-                      <span className="text-muted-foreground">Resultado esperado: </span>
+                    <p className="mt-0.5 text-overview-text-primary">
+                      <span className="text-overview-text-secondary">Resultado esperado: </span>
                       {opt.expectedImpact}
                     </p>
                   )}
@@ -145,24 +145,24 @@ export function AccountReviewDetailDrawer({
         )}
 
         {review.outcome === "ISSUE_IDENTIFIED" && (
-          <section className="mt-4 border-t border-border pt-4">
+          <section className="mt-4 border-t border-overview-border pt-4">
             <SectionHeader>Problema identificado</SectionHeader>
-            <p className="mt-2 text-sm text-foreground">{review.issueDescription}</p>
-            {review.issueCategory && <p className="mt-1 text-xs text-muted-foreground">Categoria: {review.issueCategory}</p>}
+            <p className="mt-2 text-sm text-overview-text-primary">{review.issueDescription}</p>
+            {review.issueCategory && <p className="mt-1 text-xs text-overview-text-secondary">Categoria: {review.issueCategory}</p>}
             {review.issueTaskTitle && (
-              <p className="mt-1 text-xs text-muted-foreground">Tarefa criada: {review.issueTaskTitle}</p>
+              <p className="mt-1 text-xs text-overview-text-secondary">Tarefa criada: {review.issueTaskTitle}</p>
             )}
           </section>
         )}
 
         {review.notes && (
-          <section className="mt-4 border-t border-border pt-4">
+          <section className="mt-4 border-t border-overview-border pt-4">
             <SectionHeader>Observações</SectionHeader>
-            <p className="mt-2 text-sm text-foreground">{review.notes}</p>
+            <p className="mt-2 text-sm text-overview-text-primary">{review.notes}</p>
           </section>
         )}
 
-        <section className="mt-4 border-t border-border pt-4">
+        <section className="mt-4 border-t border-overview-border pt-4">
           <SectionHeader>Atualização para o cliente</SectionHeader>
           {review.clientUpdate ? (
             <ClientUpdateEditor
@@ -174,7 +174,7 @@ export function AccountReviewDetailDrawer({
             />
           ) : (
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-overview-text-secondary">
                 Transforme esta otimização em uma atualização pronta para enviar ao cliente.
               </p>
               <form

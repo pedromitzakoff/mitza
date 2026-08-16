@@ -13,6 +13,13 @@ const SIZE_CLASSES: Record<EmptyStateSize, string> = {
  * cada tela mantém sua própria condição de exibição e seu próprio
  * espaçamento (`className`); o componente só centraliza cor/tamanho de
  * fonte, que antes eram redefinidos à mão em cada arquivo.
+ *
+ * Etapa "Unificação visual da página do cliente": cor migrada pro token
+ * `overview-*` (mesma família de Operação/Dashboard/Configurações) — como
+ * este componente é reaproveitado por várias telas, a correção de token
+ * aqui já resolve todo mundo que o usa, sem precisar tocar em cada
+ * chamador. Mesma API (`children`/`size`/`className`), nenhum comportamento
+ * mudou.
  */
 export function EmptyState({
   children,
@@ -23,7 +30,7 @@ export function EmptyState({
   size?: EmptyStateSize;
   className?: string;
 }) {
-  return <p className={`${SIZE_CLASSES[size]} text-muted-foreground ${className ?? ""}`}>{children}</p>;
+  return <p className={`${SIZE_CLASSES[size]} text-overview-text-secondary ${className ?? ""}`}>{children}</p>;
 }
 
 /**

@@ -64,12 +64,12 @@ export function CommentThread({
   }
 
   return (
-    <div className="mt-2 border-t border-border pt-2">
+    <div className="mt-2 border-t border-overview-border pt-2">
       {comments.length > 0 && (
         <ul className="flex flex-col gap-1.5">
           {comments.map((comment) => (
-            <li key={comment.id} className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">{comment.author?.name ?? "Alguém"}</span>{" "}
+            <li key={comment.id} className="text-xs text-overview-text-secondary">
+              <span className="font-medium text-overview-text-primary">{comment.author?.name ?? "Alguém"}</span>{" "}
               · {formatDateTime(comment.created_at)}
               <p>{comment.content}</p>
               {commentableType === "sprint" && comment.includedInReport !== undefined && (
@@ -106,12 +106,12 @@ export function CommentThread({
             }
             required
             disabled={isPending}
-            className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground outline-none focus:border-zinc-500 disabled:opacity-60"
+            className="flex-1 rounded-md border border-overview-border bg-transparent px-2 py-1 text-xs text-overview-text-primary outline-none focus:border-overview-border-strong disabled:opacity-60"
           />
           <button
             type="submit"
             disabled={isPending}
-            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 disabled:opacity-60 dark:hover:bg-zinc-900"
+            className="shrink-0 rounded-md border border-overview-border px-2 py-1 text-xs font-medium text-overview-text-primary hover:bg-overview-surface-hover disabled:opacity-60"
           >
             Enviar
           </button>

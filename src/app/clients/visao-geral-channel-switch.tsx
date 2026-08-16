@@ -30,7 +30,7 @@ export function VisaoGeralChannelSwitch({ baseHref, active }: { baseHref: string
   ];
 
   return (
-    <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-card p-0.5">
+    <div className="inline-flex items-center gap-0.5 rounded-full border border-overview-border bg-overview-surface p-0.5">
       {options.map((option) => (
         <Link
           key={option.key}
@@ -38,7 +38,7 @@ export function VisaoGeralChannelSwitch({ baseHref, active }: { baseHref: string
           scroll={false}
           aria-pressed={option.key === active}
           className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-            option.key === active ? "bg-brand text-white" : "text-muted-foreground hover:text-foreground"
+            option.key === active ? "bg-brand text-white" : "text-overview-text-secondary hover:text-overview-text-primary"
           }`}
         >
           {option.label}

@@ -62,11 +62,11 @@ export function AgencyInvestmentBar({
 
   if (planned <= 0) {
     if (!showExpectedMarker) {
-      return <div className="h-3 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />;
+      return <div className="h-3 w-full rounded-full bg-overview-surface-subtle" />;
     }
     return (
       <div>
-        <div className="h-3 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />
+        <div className="h-3 w-full rounded-full bg-overview-surface-subtle" />
         <EmptyState size="2xs" className="mt-1.5">Nenhum planejamento configurado neste recorte.</EmptyState>
       </div>
     );
@@ -88,7 +88,7 @@ export function AgencyInvestmentBar({
 
   if (!showExpectedMarker) {
     return (
-      <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+      <div className="h-3 w-full overflow-hidden rounded-full bg-overview-surface-subtle">
         <div
           className={`h-full rounded-full transition-[width] duration-300 ease-out ${isOver ? "bg-red-500" : "bg-brand"}`}
           style={{ width: `${fillWidth}%` }}
@@ -105,14 +105,14 @@ export function AgencyInvestmentBar({
           verdade em vez de posicionamento absoluto solto. */}
       <div className="relative h-3.5">
         <span
-          className="absolute -translate-x-1/2 whitespace-nowrap text-[10px] font-medium text-navy dark:text-zinc-200"
+          className="absolute -translate-x-1/2 whitespace-nowrap text-[10px] font-medium text-navy"
           style={{ left: `${labelPos}%` }}
         >
           {markerLabel}
         </span>
       </div>
       <div className="relative h-3">
-        <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+        <div className="h-3 w-full overflow-hidden rounded-full bg-overview-surface-subtle">
           <div
             className={`h-full rounded-full transition-[width] duration-300 ease-out ${isOver ? "bg-red-500" : "bg-brand"}`}
             style={{ width: `${fillWidth}%` }}
@@ -132,7 +132,7 @@ export function AgencyInvestmentBar({
           discreta, sem aumentar a altura da seção. */}
       {showLegend && (
         <>
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-overview-text-secondary">
             <span className="inline-flex items-center gap-1">
               <span className="inline-block h-2 w-2 rounded-sm bg-brand" aria-hidden="true" />
               {Math.round(actualPct)}% realizado
@@ -142,7 +142,7 @@ export function AgencyInvestmentBar({
               Marcador: esperado até hoje
             </span>
           </p>
-          {deviationText && <p className="mt-0.5 text-[11px] text-muted-foreground">{deviationText}</p>}
+          {deviationText && <p className="mt-0.5 text-[11px] text-overview-text-secondary">{deviationText}</p>}
         </>
       )}
     </div>
