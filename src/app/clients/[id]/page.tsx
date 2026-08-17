@@ -9,12 +9,16 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import {
   getActiveImportSourceChannelsForClient,
+  getClientIdsWithActiveImportSource,
   getDailyPerformanceForPeriod,
+  getDailyPerformanceRowsForPeriod,
+  getDailySpendRowsForPeriod,
   getEnabledImportSourceIdsForClient,
   getRecentSyncRunsForClient,
   resolvePerformanceRowsForSprints,
   type SyncRunSummary,
 } from "@/lib/performance-queries";
+import { lastNDaysEndingToday, buildDailyResultSeries } from "@/lib/daily-results";
 import {
   assertSingleCurrentSprint,
   computeSprintFinancials,
@@ -397,10 +401,31 @@ export default async function ClientPage({
   const prevMonthHref = `/clients/${id}?month=${shiftMonthParam({ firstDay }, -1)}`;
   const nextMonthHref = `/clients/${id}?month=${shiftMonthParam({ firstDay }, 1)}`;
 
+  // Etapa "Evolução diária de resultados": janela dos últimos 7 dias
+  // CORRIDOS terminando em hoje real (`todayStr`) — deliberadamente
+  // independente do mês selecionado no seletor (`firstDay`/`lastDay` acima),
+  // já que "Hoje"/"Ontem" só fazem sentido em relação ao dia real, nunca ao
+  // mês que o gestor está navegando. Por isso busca `daily_performance`/
+  // `daily_spend` num período PRÓPRIO em vez de reaproveitar `dailySpend`
+  // (que é escopado ao mês selecionado, podendo nem cobrir esta janela).
+  const dailyResultWindowDates = lastNDaysEndingToday(todayStr, 7);
+  const dailyResultWindow = { firstDay: dailyResultWindowDates[0], lastDay: todayStr };
+
   // Etapa 50 (correção): a geração de sprints não roda mais durante o
   // carregamento da página — só via /api/cron/ensure-sprints.
-  const [sprintsRaw, dailySpend, lastSync, plannedAllocations, budgetChanges, performanceTargetHistory, channelSpendRows, planningEndDate] =
-    await Promise.all([
+  const [
+    sprintsRaw,
+    dailySpend,
+    lastSync,
+    plannedAllocations,
+    budgetChanges,
+    performanceTargetHistory,
+    channelSpendRows,
+    planningEndDate,
+    activeImportClientIds,
+    dailyResultPerformanceRows,
+    dailyResultSpendRows,
+  ] = await Promise.all([
       // Sobreposição com o mês (não "começa no mês") — uma sprint que
       // atravessa a fronteira (ex.: 27/jul-02/ago) precisa aparecer aqui
       // mesmo com start_date no mês anterior.
@@ -482,6 +507,12 @@ export default async function ClientPage({
       // termina antes do fim do mês) — null pra qualquer cliente sem
       // horizonte configurado, comportamento idêntico a antes desta etapa.
       getClientMonthHorizon(supabase, id, firstDay),
+      // Etapa "Evolução diária de resultados": mesmo gate de sempre
+      // (`resolvePerformanceRowsForSprints`/`analytics-data.ts`) — só
+      // cliente com Stract ativo tem granularidade diária de resultado.
+      getClientIdsWithActiveImportSource(supabase, [id]),
+      getDailyPerformanceRowsForPeriod(supabase, id, dailyResultWindow),
+      getDailySpendRowsForPeriod(supabase, id, dailyResultWindow),
     ]);
 
   // Etapa "Horizonte de Planejamento": todo cálculo OPERACIONAL (ritmo, dias
@@ -705,6 +736,34 @@ export default async function ClientPage({
         channelActualSpend: metricsChannel !== "consolidated" ? { [metricsChannel]: visaoGeralMonthActual } : undefined,
       })
     : null;
+  // Etapa "Evolução diária de resultados": mesma janela dos últimos 7 dias
+  // (`dailyResultWindowDates`, calculada acima independente do mês
+  // selecionado), escopada ao MESMO seletor Consolidado/Meta/Google de todo
+  // o resto do painel (`metricsChannel`) — nenhum cálculo paralelo ao de
+  // `visaoGeralPerformanceSummary` acima, só a mesma filtragem por canal
+  // (`aggregatePerformanceResults`) aplicada dia a dia.
+  const dailyResultSeries = performanceGoal
+    ? buildDailyResultSeries({
+        windowDates: dailyResultWindowDates,
+        hasActiveIntegration: activeImportClientIds.has(id),
+        goal: performanceGoal,
+        scope: metricsChannel,
+        performanceRows: dailyResultPerformanceRows,
+        spendRows: dailyResultSpendRows,
+      })
+    : undefined;
+  // "Esperado até hoje" de RESULTADO — mesma fórmula central já usada pro
+  // investimento (`computeMonthlyExpectedToDateByCalendar`), só aplicada à
+  // meta de QUANTIDADE (`targetResultCount`) em vez do orçamento. Meta por
+  // canal vem do mesmo `clientPlan.byChannel` já resolvido acima (nenhum
+  // resolvedor novo); `null` quando o escopo selecionado não tem meta de
+  // quantidade definida (nunca mostra "X/undefined").
+  const scopedTargetResultCount =
+    metricsChannel === "consolidated" ? clientPlan.consolidated.resultCount : (clientPlan.byChannel[metricsChannel]?.resultCount ?? null);
+  const expectedResultsToDate =
+    scopedTargetResultCount !== null
+      ? computeMonthlyExpectedToDateByCalendar(scopedTargetResultCount, planningHorizon, todayStr).expectedToDate
+      : null;
   const monthPerformanceChannelBreakdown =
     performanceGoal && metricsChannel === "consolidated"
       ? AVAILABLE_TRAFFIC_CHANNELS.map((channel) => ({
@@ -1579,6 +1638,9 @@ export default async function ClientPage({
               performanceGoal={performanceGoal}
               performanceSummary={visaoGeralPerformanceSummary}
               targetCostPerResult={scopedTargetCostPerResult}
+              dailyResultSeries={dailyResultSeries}
+              targetResultCount={scopedTargetResultCount}
+              expectedResultsToDate={expectedResultsToDate}
               channelBreakdown={monthPerformanceChannelBreakdown}
               configureObjectiveHref={`/clients/${client.id}/edit`}
               historyRows={recentHistoryRows}

@@ -4,7 +4,9 @@ import type { AccountReviewOutcome, OptimizationType } from "@/lib/supabase/data
 import type { PerformanceSummary } from "@/lib/performance";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import type { TrafficChannel } from "@/lib/traffic-channels";
+import type { DailyResultSeries } from "@/lib/daily-results";
 import { MonthlyKpiSummary } from "./monthly-kpi-summary";
+import { DailyResultsEvolution } from "./daily-results-evolution";
 import { ResultsByChannel } from "./results-by-channel";
 import { CollapsibleAccountHistory } from "./collapsible-account-history";
 
@@ -50,6 +52,13 @@ export interface LastOptimizationInfo {
  * performance muda — os 4 KPIs e o diagnóstico só consomem valores já
  * calculados pela página; nunca recomputados aqui.
  *
+ * Etapa "Evolução diária de resultados": novo sub-bloco entre os KPIs e
+ * "Resultados por canal" — responde "quantos resultados por dia,
+ * recentemente" (granularidade que não existia na Visão Geral antes desta
+ * etapa), diferente do "quanto no mês" que a grade acima já responde. Evolui
+ * o card já existente (pedido explícito do usuário: nunca um card novo) —
+ * `DailyResultsEvolution` é só mais uma seção deste mesmo painel.
+ *
  * Refinamento visual (Etapa "Grid e hierarquia da página do cliente"): o
  * seletor "Consolidado | Meta Ads | Google Ads" (`channelSwitch`, montado
  * pela página — este componente nunca conhece `VisaoGeralChannelSwitch`)
@@ -65,6 +74,9 @@ export function AccountFollowUpPanel({
   performanceGoal,
   performanceSummary,
   targetCostPerResult,
+  dailyResultSeries,
+  targetResultCount,
+  expectedResultsToDate,
   channelBreakdown,
   configureObjectiveHref,
   historyRows,
@@ -83,6 +95,15 @@ export function AccountFollowUpPanel({
   performanceSummary: PerformanceSummary | null;
   /** Meta de custo por resultado vigente — `null` quando não configurada. */
   targetCostPerResult: number | null;
+  /** Série dos últimos 7 dias já resolvida (`buildDailyResultSeries`) — só
+   * `undefined` quando `performanceGoal` também é `null` (nada a evoluir). */
+  dailyResultSeries?: DailyResultSeries;
+  /** Meta de QUANTIDADE de resultado vigente pro mês selecionado — `null` =
+   * sem meta configurada (nunca mostra "X/undefined"). */
+  targetResultCount?: number | null;
+  /** `computeMonthlyExpectedToDateByCalendar` aplicado a `targetResultCount`
+   * — mesma lógica temporal já usada pro investimento. */
+  expectedResultsToDate?: number | null;
   /** Resultado por canal do mês, só os canais com pelo menos 1 registro —
    * `ResultsByChannel` só renderiza algo com dado em mais de 1 canal. */
   channelBreakdown: { channel: TrafficChannel; resultCount: number }[];
@@ -102,6 +123,15 @@ export function AccountFollowUpPanel({
         targetCostPerResult={targetCostPerResult}
         configureObjectiveHref={configureObjectiveHref}
       />
+
+      {performanceGoal && dailyResultSeries && (
+        <DailyResultsEvolution
+          series={dailyResultSeries}
+          targetResultCount={targetResultCount ?? null}
+          expectedToDate={expectedResultsToDate ?? null}
+          monthResultCount={performanceSummary?.resultCount ?? 0}
+        />
+      )}
 
       {performanceGoal && <ResultsByChannel goal={performanceGoal} channelBreakdown={channelBreakdown} />}
 
