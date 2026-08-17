@@ -20,7 +20,7 @@ import {
   type SprintFilterBucket,
 } from "@/app/operation/operation-data";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import { computeFinancialSummary, computeManagerSummary, computeSpendRhythmCounts } from "@/lib/agency-metrics";
+import { computeFinancialSummary, computeSpendRhythmCounts } from "@/lib/agency-metrics";
 import { computeHealthResultsSummary } from "@/lib/agency-health-aggregation";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
 import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
@@ -33,7 +33,7 @@ import {
   type OverviewPriorityItem,
 } from "./overview-client-view";
 import { getActiveDiagnosticFilters, getDiagnosticPriorityRank } from "@/lib/metric-diagnostics";
-import { resolveOperationPriorityGroup, summarizeOperationTriage, type OperationPriorityGroup } from "@/lib/operation-triage";
+import { resolveOperationPriorityGroup, type OperationPriorityGroup } from "@/lib/operation-triage";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
@@ -728,23 +728,6 @@ export default async function Home({
   const channelActualTotal =
     platformFilter !== "consolidado" ? cards.reduce((sum, c) => sum + (c.monthActualByChannel[platformFilter] ?? 0), 0) : null;
 
-  const managersForSummary = isAdmin ? gestores ?? [] : [{ id: profile.id, name: profile.name }];
-  const managerSummary = computeManagerSummary(managersForSummary, filteredBase, todayStr);
-  // Etapa "Visão Geral + Reports no Core": contadores de diagnóstico do
-  // "Resumo por Gestor" migram pro Core — mesmo recorte de `filteredBase`
-  // (todos os filtros de recorte já aplicados), só que sobre
-  // `ClientOperationalState[]` (que carrega `.diagnostics`) em vez do card
-  // legado. Reaproveita `summarizeOperationTriage` (a mesma função que
-  // alimenta os contadores da Operação), nunca uma contagem nova.
-  const filteredBaseClientIds = new Set(filteredBase.map((card) => card.clientId));
-  const diagnosticStatesForSummary = clientOperationalStates.filter((state) => filteredBaseClientIds.has(state.clientId));
-  const managerDiagnosticSummaryById = new Map(
-    managersForSummary.map((manager) => [
-      manager.id,
-      summarizeOperationTriage(diagnosticStatesForSummary.filter((state) => state.managerId === manager.id)),
-    ]),
-  );
-
   const investmentDiff = financial.actual - financial.expectedToDate;
   const investmentRitmoStatus =
     financial.planned > 0 ? classifySpendStatus(financial.actual, financial.expectedToDate, financial.planned) : "sem_meta";
@@ -1183,71 +1166,6 @@ export default async function Home({
         {showCompletedReminders && (
           <RemindersCompletedDrawer reminders={completedReminders} closeHref={closeCompletedRemindersHref} />
         )}
-
-        {/* Etapa "Saúde da carteira" (auditoria da Visão Geral): passa a
-            abrir expandido por padrão — "Operação por gestor" é a única
-            visão de distribuição por gestor que existe na Home hoje,
-            escondida demais atrás de um accordion fechado. Continua
-            colapsável (útil pra quem prefere a tela mais curta), só o
-            estado inicial mudou — nenhum dado, cálculo ou link mudou. */}
-        <details open className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface [&_summary]:cursor-pointer [&_summary]:list-none">
-          <summary className="flex items-center justify-between px-3.5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted hover:text-brand">
-            Ver análises adicionais
-            <span className="text-sm">▾</span>
-          </summary>
-
-          <div className="border-t border-overview-border p-3.5">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">
-              {isAdmin ? "Operação por gestor" : "Minha operação"}
-            </h3>
-            {/* Etapa "MITZA 2.0 — Fase E": resumo compacto por gestor (cards),
-                substitui a tabela de 10 colunas — mesmos dados de sempre
-                (`computeManagerSummary`), nenhum cálculo novo, só o formato.
-                Etapa "Visão Geral + Reports no Core": a linha de diagnóstico
-                (antes Saudável/Atenção/Crítico, Sistema B) passa a vir do
-                Core (`summarizeOperationTriage`, `managerDiagnosticSummaryById`
-                acima) — "inativo" continua vindo de `computeManagerSummary`
-                sem alteração: é `activityStatus` (dias úteis sem atividade,
-                `operational-activity.ts`), um eixo independente que nunca
-                fez parte do modelo de saúde legado. */}
-            {managerSummary.length > 0 ? (
-              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {managerSummary.map((row) => {
-                  const diagSummary = managerDiagnosticSummaryById.get(row.id);
-                  return (
-                    <div key={row.id} className="rounded-md border border-overview-border px-3 py-2.5">
-                      <div className="font-medium text-overview-text-primary">
-                        {isAdmin ? (
-                          <Button href={drillDownUrl({ manager: row.id })} variant="ghost" size="sm" className="h-auto px-0 py-0 font-medium">
-                            {row.name}
-                          </Button>
-                        ) : (
-                          row.name
-                        )}
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-overview-text-secondary">
-                        <span>{row.totalClients} cliente{row.totalClients !== 1 ? "s" : ""}</span>
-                        <span>{diagSummary?.withPlanejamentoIncompleto ?? 0} planejamento</span>
-                        <span>{diagSummary?.withInvestmentOff ?? 0} investimento</span>
-                        <span>{diagSummary?.withCpaOff ?? 0} CPA</span>
-                        <span>{diagSummary?.withPendencias ?? 0} pendências</span>
-                        <span>{row.portfolio.inativos} inativo{row.portfolio.inativos !== 1 ? "s" : ""}</span>
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-overview-text-muted">
-                        <span>{row.semExecucao} sem execução</span>
-                        <span>{row.atrasadas} atrasada{row.atrasadas !== 1 ? "s" : ""}</span>
-                        <span>{row.paraHoje} hoje</span>
-                        <span>Execução: {row.taxaExecucao !== null ? `${Math.round(row.taxaExecucao)}%` : "—"}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <EmptyState title="Nenhum gestor encontrado." className="mt-2" />
-            )}
-          </div>
-        </details>
       </div>
     </div>
   );
