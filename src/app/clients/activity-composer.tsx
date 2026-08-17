@@ -141,7 +141,7 @@ export function ActivityComposer({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-wrap items-center gap-2 rounded-xl border border-brand bg-card px-2.5 py-2"
+      className="flex flex-wrap items-center gap-2 rounded-xl border border-brand bg-overview-surface px-2.5 py-2"
     >
       <span
         aria-hidden="true"
@@ -164,10 +164,10 @@ export function ActivityComposer({
         placeholder="Adicionar atividade..."
         disabled={isPending}
         aria-label="Título da atividade"
-        className="min-w-[160px] flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60"
+        className="min-w-[160px] flex-1 bg-transparent text-sm text-overview-text-primary outline-none placeholder:text-overview-text-muted disabled:opacity-60"
       />
 
-      <span className="inline-flex shrink-0 items-center rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors focus-within:border-brand">
+      <span className="inline-flex shrink-0 items-center rounded-md border border-overview-border px-2 py-1 text-xs text-overview-text-secondary transition-colors focus-within:border-brand">
         <input
           type="date"
           value={dueDate}
@@ -179,7 +179,7 @@ export function ActivityComposer({
         />
       </span>
 
-      <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors focus-within:border-brand">
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-overview-border px-2 py-1 text-xs text-overview-text-secondary transition-colors focus-within:border-brand">
         <User className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <select
           value={assigneeId ?? ""}

@@ -51,7 +51,7 @@ export function SprintMonthlyConsolidatedGroup({
   return (
     <details
       id={`client-${card.clientId}`}
-      className="group rounded-lg border border-border bg-card [&_summary::-webkit-details-marker]:hidden"
+      className="group rounded-lg border border-overview-border bg-overview-surface [&_summary::-webkit-details-marker]:hidden"
     >
       <AccountCardSummary
         clientId={card.clientId}
@@ -64,17 +64,17 @@ export function SprintMonthlyConsolidatedGroup({
         tasksTotal={card.monthTasks.length}
       />
 
-      <div className="border-t border-border p-2">
-        <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+      <div className="border-t border-overview-border p-2">
+        <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-overview-text-secondary">
           {summary.planned > 0 && <span>Diferença pro ritmo esperado: {formatCurrency(diff)}</span>}
           <span>Última atividade: {card.activityLabel === "Nunca houve atividade" ? "Nunca" : card.activityLabel}</span>
         </div>
 
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-overview-text-muted">
           Tarefas do mês
         </p>
         {orderedTasks.length > 0 ? (
-          <ul className="rounded-lg border border-border [&>li:first-child]:rounded-t-lg [&>li:last-child]:rounded-b-lg">
+          <ul className="rounded-lg border border-overview-border [&>li:first-child]:rounded-t-lg [&>li:last-child]:rounded-b-lg">
             {orderedTasks.map((task) => (
               <TaskRow
                 key={task.id}
@@ -89,10 +89,10 @@ export function SprintMonthlyConsolidatedGroup({
           <EmptyStateRow>Nenhuma tarefa neste mês.</EmptyStateRow>
         )}
 
-        <div className="mt-1 border-t border-border pt-1 text-xs">
+        <div className="mt-1 border-t border-overview-border pt-1 text-xs">
           <Link
             href={`/clients/${card.clientId}`}
-            className="mitza-pressable inline-block rounded text-muted-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            className="mitza-pressable inline-block rounded text-overview-text-secondary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
           >
             Abrir cliente
           </Link>

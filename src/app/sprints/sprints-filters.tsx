@@ -113,14 +113,14 @@ export function SprintsFilters({
   }
 
   const selectClasses =
-    "w-full sm:w-auto rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
+    "w-full sm:w-auto rounded-md border border-overview-border bg-transparent px-2 py-1 text-sm text-overview-text-primary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <select
         value={manager}
         onChange={(e) => pushFilters({ manager: e.target.value })}
-        className="h-8 rounded-md border border-border bg-transparent px-2 text-xs text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        className="h-8 rounded-md border border-overview-border bg-transparent px-2 text-xs text-overview-text-primary transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         aria-label="Carteira"
       >
         <option value="me">Meus clientes</option>
@@ -143,12 +143,12 @@ export function SprintsFilters({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+          className="flex h-8 items-center gap-1.5 rounded-md border border-overview-border px-2.5 text-xs font-medium text-overview-text-primary transition-colors hover:bg-overview-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
           <Filter className="h-3.5 w-3.5" aria-hidden="true" />
           Filtros
           {secondaryCount > 0 && (
-            <span className="rounded-full bg-brand/10 px-1.5 text-[11px] font-semibold text-brand">
+            <span className="rounded-full bg-overview-brand-subtle px-1.5 text-[11px] font-semibold text-brand">
               {secondaryCount}
             </span>
           )}
@@ -162,7 +162,7 @@ export function SprintsFilters({
               onClick={() => setOpen(false)}
               className="fixed inset-0 z-40"
             />
-            <div className="mitza-menu-in absolute right-0 z-50 mt-2 w-72 rounded-xl border border-border bg-card p-3 shadow-[var(--shadow-float)]">
+            <div className="mitza-menu-in absolute right-0 z-50 mt-2 w-72 rounded-xl border border-overview-border bg-overview-surface p-3 shadow-[var(--shadow-float)]">
               <div className="flex flex-col gap-2">
                 <select
                   value={ritmo}

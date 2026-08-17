@@ -133,7 +133,7 @@ export function ActivitySection({
              mesma de sempre, nunca fundida com a contagem de revisões
              (métricas semanticamente diferentes). */
           optimisticTasks.length > 0 ? (
-            <span className="text-[11px] tabular-nums text-muted-foreground">
+            <span className="text-[11px] tabular-nums text-overview-text-secondary">
               {tasksDone}/{optimisticTasks.length} concluída{optimisticTasks.length !== 1 ? "s" : ""}
             </span>
           ) : undefined
@@ -143,7 +143,7 @@ export function ActivitySection({
       </SectionHeader>
 
       {optimisticTasks.length > 0 && (
-        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-overview-surface-subtle">
           <div
             className="h-full rounded-full bg-brand transition-[width] duration-150"
             style={{ width: `${Math.min(Math.max(progressPct, 0), 100)}%` }}
@@ -163,8 +163,8 @@ export function ActivitySection({
         </div>
       )}
 
-      <div className="mt-1.5 overflow-hidden rounded-lg border border-border">
-        <div className="flex items-center gap-2.5 border-b border-border bg-zinc-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground dark:bg-zinc-900/40">
+      <div className="mt-1.5 overflow-hidden rounded-lg border border-overview-border">
+        <div className="flex items-center gap-2.5 border-b border-overview-border bg-overview-surface-subtle px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
           <span className={`${ACTIVITY_COL_STATUS} truncate`}>Status</span>
           <span className={ACTIVITY_COL_DATE}>Próxima execução</span>
           <span className="min-w-0 flex-1">Atividade</span>
@@ -224,7 +224,7 @@ export function ActivitySection({
               );
             })
           ) : (
-            <li className="flex min-h-[28px] items-center px-2 py-1 text-xs text-muted-foreground">
+            <li className="flex min-h-[28px] items-center px-2 py-1 text-xs text-overview-text-secondary">
               Nenhuma atividade nesta sprint.
             </li>
           )}

@@ -140,9 +140,13 @@ const TEMPORAL_LABEL = {
   concluida: "Concluída",
 } as const;
 
+/** Etapa "Evolução visual de /sprints": "Sprint atual" ganhou um selo cheio
+ * (fundo sólido, não mais um tom suave) — precisa ser inconfundível entre
+ * várias sprints futuras/concluídas na mesma tela. Futura/Concluída
+ * continuam neutras de propósito (nunca competem visualmente com a atual). */
 const TEMPORAL_BADGE_CLASSES = {
   futura: "bg-overview-surface-subtle text-overview-text-muted",
-  atual: "bg-brand/10 text-brand",
+  atual: "bg-brand text-white",
   concluida: "bg-overview-surface-subtle text-overview-text-muted",
 } as const;
 
@@ -303,7 +307,7 @@ function SprintPerformanceSection({
   // (`px-2.5 py-1.5` → `px-2 py-1`) — nenhuma informação a menos, só menos
   // espaço morto ao redor do texto. Tipografia e área de clique intactas.
   return (
-    <div className="rounded-lg border border-border bg-zinc-50 px-2 py-1 dark:bg-zinc-900/40">
+    <div className="rounded-lg border border-overview-border bg-overview-surface-subtle px-2 py-1">
       {/* Os dois checkboxes-hack (revert de fonte manual / editar performance)
           precisam ser IRMÃOS diretos dos blocos que eles revelam
           (`peer-checked:`/`peer-checked/revert:` dependem do seletor de
@@ -323,26 +327,26 @@ function SprintPerformanceSection({
             dado (fonte/timestamp) que vivia nesse rótulo migrou pro
             primeiro valor real da linha ("Investido:"), sem perder a
             informação. */}
-        <span title={sourceTooltip} className="text-muted-foreground">
+        <span title={sourceTooltip} className="text-overview-text-secondary">
           Investido:
         </span>
-        <span className="font-semibold text-foreground">{formatCurrency(sprint.actualSpend)}</span>
+        <span className="font-semibold text-overview-text-primary">{formatCurrency(sprint.actualSpend)}</span>
 
         <span className="text-border" aria-hidden="true">
           ·
         </span>
-        <span className="text-muted-foreground">Resultados:</span>
-        <span className="font-semibold text-foreground">{cells.resultsValue}</span>
-        {cells.resultsAux && <span className="text-muted-foreground">({cells.resultsAux})</span>}
+        <span className="text-overview-text-secondary">Resultados:</span>
+        <span className="font-semibold text-overview-text-primary">{cells.resultsValue}</span>
+        {cells.resultsAux && <span className="text-overview-text-secondary">({cells.resultsAux})</span>}
 
         <span className="text-border" aria-hidden="true">
           ·
         </span>
-        <span className="text-muted-foreground">{costLabel}:</span>
-        <span className="font-semibold text-foreground">{cells.costValue}</span>
+        <span className="text-overview-text-secondary">{costLabel}:</span>
+        <span className="font-semibold text-overview-text-primary">{cells.costValue}</span>
         {cells.costAux && (
           <span
-            className={`font-medium ${cells.costAux.tone ? PERFORMANCE_STATUS_TEXT_CLASSES[cells.costAux.tone] : "text-muted-foreground"}`}
+            className={`font-medium ${cells.costAux.tone ? PERFORMANCE_STATUS_TEXT_CLASSES[cells.costAux.tone] : "text-overview-text-secondary"}`}
           >
             ({cells.costAux.text})
           </span>
@@ -351,11 +355,11 @@ function SprintPerformanceSection({
         <span className="text-border" aria-hidden="true">
           ·
         </span>
-        <span className="text-muted-foreground">Objetivo:</span>
+        <span className="text-overview-text-secondary">Objetivo:</span>
         {isAdmin ? (
           <ClientPerformanceGoalEditor clientId={clientId} currentGoal={performanceGoal} />
         ) : (
-          <span className="rounded-full border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground">
+          <span className="rounded-full border border-overview-border px-1.5 py-0.5 text-[11px] font-medium text-overview-text-primary">
             {performanceGoal ? PERFORMANCE_GOALS[performanceGoal].label : "Não configurado"}
           </span>
         )}
@@ -367,7 +371,7 @@ function SprintPerformanceSection({
             </span>
             <label
               htmlFor={revertSourceToggleId}
-              className="cursor-pointer text-muted-foreground hover:underline peer-checked/revert:hidden"
+              className="cursor-pointer text-overview-text-secondary hover:underline peer-checked/revert:hidden"
             >
               Usar dado do Meta
             </label>
@@ -384,7 +388,7 @@ function SprintPerformanceSection({
             {canEditPerformance && (
               <label
                 htmlFor={editToggleId}
-                className="mitza-pressable shrink-0 cursor-pointer rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand peer-checked:hidden"
+                className="mitza-pressable shrink-0 cursor-pointer rounded-md border border-overview-border bg-overview-surface px-2 py-1 text-[11px] font-medium text-overview-text-primary transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand peer-checked:hidden"
               >
                 Atualizar performance
               </label>
@@ -395,7 +399,7 @@ function SprintPerformanceSection({
 
       {isManualSource && (
         <div className="mt-1 hidden items-center gap-1.5 text-xs peer-checked/revert:flex">
-          <span className="text-muted-foreground">Substituir valor manual pelo do Meta?</span>
+          <span className="text-overview-text-secondary">Substituir valor manual pelo do Meta?</span>
           <form action={resetSprintSpendSourceAction.bind(null, sprint.sprintId, clientId, returnTo)}>
             <SubmitButton
               className="rounded font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
@@ -404,7 +408,7 @@ function SprintPerformanceSection({
               Confirmar
             </SubmitButton>
           </form>
-          <label htmlFor={revertSourceToggleId} className="cursor-pointer text-muted-foreground hover:underline">
+          <label htmlFor={revertSourceToggleId} className="cursor-pointer text-overview-text-secondary hover:underline">
             Cancelar
           </label>
         </div>
@@ -423,12 +427,12 @@ function SprintPerformanceSection({
           />
           <div className="flex items-center gap-1.5">
             <SubmitButton
-              className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              className="rounded-md border border-overview-border px-2 py-1 text-[11px] font-medium text-overview-text-primary transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               pendingChildren="Salvando..."
             >
               Salvar
             </SubmitButton>
-            <label htmlFor={editToggleId} className="cursor-pointer text-[11px] text-muted-foreground hover:underline">
+            <label htmlFor={editToggleId} className="cursor-pointer text-[11px] text-overview-text-secondary hover:underline">
               Cancelar
             </label>
           </div>
@@ -835,7 +839,7 @@ export function SprintCardBody({
             `createCommentAction`) — só lista + campo + "Enviar", nada além
             disso. Sem `<div>` própria aqui (Etapa "Facelift da faixa Fonte
             dos dados"): `CommentThread` já vem com seu próprio
-            `mt-2 border-t border-border pt-2` — envolver de novo criava
+            `mt-2 border-t border-overview-border pt-2` — envolver de novo criava
             DUAS divisórias/espaços empilhados entre "Fonte dos dados" e o
             campo de registro. */}
         <CommentThread
@@ -850,7 +854,7 @@ export function SprintCardBody({
   }
 
   return (
-    <div className="border-t border-border p-1.5">
+    <div className="border-t border-overview-border p-1.5">
         {/* MITZA Operational Card Architecture 2.0 (Steve Jobs Review):
             "Próxima ação" abre o corpo expandido — é a única pergunta que a
             Sprint aberta precisa responder de cara ("o que eu faço agora?").
@@ -873,10 +877,10 @@ export function SprintCardBody({
               novo, nenhuma tarefa criada automaticamente. */}
           {!hideNextAction && nextAction && nextAction.kind !== "none" && (
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
-              <span className="font-medium text-muted-foreground">Próxima ação:</span>
+              <span className="font-medium text-overview-text-secondary">Próxima ação:</span>
               {nextAction.taskId ? (
                 <>
-                  <span className="text-foreground">{nextAction.text}</span>
+                  <span className="text-overview-text-primary">{nextAction.text}</span>
                   <Link
                     href={buildTaskHref ? buildTaskHref(nextAction.taskId) : `/clients/${clientId}?task=${nextAction.taskId}`}
                     scroll={false}
@@ -901,12 +905,12 @@ export function SprintCardBody({
                   {nextAction.text}
                 </Link>
               ) : (
-                <span className="text-muted-foreground">{nextAction.text}</span>
+                <span className="text-overview-text-secondary">{nextAction.text}</span>
               )}
             </div>
           )}
           {!hideNextAction && nextAction && nextAction.kind === "none" && (
-            <p className="text-xs text-muted-foreground">Próxima ação: {nextAction.text}</p>
+            <p className="text-xs text-overview-text-secondary">Próxima ação: {nextAction.text}</p>
           )}
 
           {/* MITZA Operational Card Architecture 2.0: "Última execução" só
@@ -957,9 +961,9 @@ export function SprintCardBody({
             de consulta, nunca a decisão em si. Nenhum número, fórmula ou
             ação mudou, só deixou de ficar sempre montada como uma caixa
             cheia permanente. */}
-        <details className="group mt-1.5 border-t border-border pt-1 [&_summary::-webkit-details-marker]:hidden">
-          <summary className="mitza-pressable inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
-            <span className="mitza-chevron text-xs text-muted-foreground group-open:rotate-90">▸</span>
+        <details className="group mt-1.5 border-t border-overview-border pt-1 [&_summary::-webkit-details-marker]:hidden">
+          <summary className="mitza-pressable inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md border border-overview-border bg-overview-surface px-2 py-1 text-[11px] font-medium text-overview-text-primary transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+            <span className="mitza-chevron text-xs text-overview-text-secondary group-open:rotate-90">▸</span>
             Performance
           </summary>
           <div className="mt-1.5">
@@ -993,10 +997,10 @@ export function SprintCardBody({
             `comments.length`, já calculado — nenhuma contagem nova. */}
         <details
           id={`comments-${sprint.sprintId}`}
-          className="group mt-1 border-t border-border pt-1 [&_summary::-webkit-details-marker]:hidden"
+          className="group mt-1 border-t border-overview-border pt-1 [&_summary::-webkit-details-marker]:hidden"
         >
-          <summary className="mitza-pressable inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
-            <span className="mitza-chevron text-xs text-muted-foreground group-open:rotate-90">▸</span>
+          <summary className="mitza-pressable inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md border border-overview-border bg-overview-surface px-2 py-1 text-[11px] font-medium text-overview-text-primary transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+            <span className="mitza-chevron text-xs text-overview-text-secondary group-open:rotate-90">▸</span>
             Comentários{comments.length > 0 ? ` · ${comments.length}` : ""}
           </summary>
           <div className="mt-1.5">
@@ -1011,10 +1015,10 @@ export function SprintCardBody({
         </details>
 
         {openClientHref && (
-          <div className="mt-1 border-t border-border pt-1 text-xs">
+          <div className="mt-1 border-t border-overview-border pt-1 text-xs">
             <Link
               href={openClientHref}
-              className="mitza-pressable inline-block rounded text-muted-foreground hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              className="mitza-pressable inline-block rounded text-overview-text-secondary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
               Abrir cliente
             </Link>
@@ -1152,10 +1156,20 @@ export function SprintCard({
       // (`SprintsContextMemory`) são desfeitos pelas novas ações otimistas
       // que chamam `revalidatePath`.
       open={isOpen}
+      // Etapa "Evolução visual de /sprints": no modo `flat` (só "Mensal por
+      // sprints" usa), a sprint atual ganha um fundo sólido reconhecível
+      // (`overview-surface-selected`, o mesmo token semântico de "item
+      // selecionado/em foco" já existente no design system — nunca uma cor
+      // nova) em vez do tint quase imperceptível de antes (3% de opacidade).
+      // Futura/Concluída ganham `opacity-75`: continuam totalmente legíveis
+      // e clicáveis, só com menos peso visual — nunca competem com a atual.
+      // Nenhuma delas muda de estado aberto/fechado por causa disso (isso
+      // continua controlado só por `isOpen`/`defaultOpen`, sem relação com o
+      // destaque visual).
       className={
         flat
-          ? `group scroll-mt-4 border-b border-border/60 last:border-0 [&_summary::-webkit-details-marker]:hidden ${
-              isCurrent ? "bg-brand/[0.03]" : ""
+          ? `group scroll-mt-4 border-b border-overview-border/60 last:border-0 [&_summary::-webkit-details-marker]:hidden ${
+              isCurrent ? "bg-overview-surface-selected" : "opacity-75"
             }`
           : `group scroll-mt-4 rounded-lg border bg-overview-surface [&_summary::-webkit-details-marker]:hidden ${
               isCurrent ? "border-l-4 border-l-brand border-y-overview-border border-r-overview-border" : "border-overview-border"
@@ -1187,18 +1201,18 @@ export function SprintCard({
           corrida de sempre. */}
       {flat ? (
         <summary className="flex cursor-pointer list-none items-start gap-2 px-2 py-1">
-          <span className="mitza-chevron mt-0.5 shrink-0 text-xs text-muted-foreground group-open:rotate-90">
+          <span className="mitza-chevron mt-0.5 shrink-0 text-xs text-overview-text-secondary group-open:rotate-90">
             ▸
           </span>
           <div className="min-w-0 flex-1">
             {/* Mobile (< sm): linha corrida — ver doc do bloco equivalente em
                 `account-card-summary.tsx`. */}
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs sm:hidden">
-              <span className="font-medium text-foreground">
+              <span className="font-medium text-overview-text-primary">
                 {formatSprintPeriodLabel(sprint.startDate, sprint.endDate)}
               </span>
               {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) && (
-                <span className="tabular-nums text-muted-foreground">{formatCurrency(sprint.actualSpend)} investidos</span>
+                <span className="tabular-nums text-overview-text-secondary">{formatCurrency(sprint.actualSpend)} investidos</span>
               )}
               <span
                 className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
@@ -1206,7 +1220,7 @@ export function SprintCard({
                 {TEMPORAL_LABEL[sprint.temporalStatus]}
               </span>
               {!(sprint.temporalStatus === "futura" && tasks.length === 0) && (
-                <span className="tabular-nums text-muted-foreground">
+                <span className="tabular-nums text-overview-text-secondary">
                   {tasksDone}/{tasks.length} tarefas
                 </span>
               )}
@@ -1218,16 +1232,16 @@ export function SprintCard({
                 exatamente sob as mesmas colunas de cima. */}
             <div className={ROW_GRID_CLASSES}>
               <span aria-hidden="true" />
-              <span className="truncate text-xs font-medium text-foreground">
+              <span className="truncate text-xs font-medium text-overview-text-primary">
                 {formatSprintPeriodLabel(sprint.startDate, sprint.endDate)}
               </span>
               <div className="min-w-0">
                 {!(sprint.temporalStatus === "futura" && sprint.actualSpend === 0) ? (
                   <>
-                    <p className="truncate text-xs tabular-nums text-muted-foreground">
+                    <p className="truncate text-xs tabular-nums text-overview-text-secondary">
                       {formatCurrency(sprint.actualSpend)} / {formatCurrency(sprint.plannedSpend)}
                     </p>
-                    <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-overview-surface-subtle">
                       <div
                         className="h-full rounded-full bg-brand"
                         style={{ width: `${Math.min(Math.max(sprint.progressPct, 0), 100)}%` }}
@@ -1235,7 +1249,7 @@ export function SprintCard({
                     </div>
                   </>
                 ) : (
-                  <span className="text-xs text-muted-foreground">Não iniciada</span>
+                  <span className="text-xs text-overview-text-secondary">Não iniciada</span>
                 )}
                 <span
                   className={`mt-0.5 block w-fit rounded-full px-1.5 py-0.5 text-[10px] font-medium ${TEMPORAL_BADGE_CLASSES[sprint.temporalStatus]}`}
@@ -1246,10 +1260,10 @@ export function SprintCard({
               <div className="min-w-0">
                 {tasks.length > 0 ? (
                   <>
-                    <span className="truncate text-xs tabular-nums text-muted-foreground">
+                    <span className="truncate text-xs tabular-nums text-overview-text-secondary">
                       {tasksDone}/{tasks.length}
                     </span>
-                    <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-overview-surface-subtle">
                       <div
                         className="h-full rounded-full bg-brand"
                         style={{ width: `${Math.min(Math.max((tasksDone / tasks.length) * 100, 0), 100)}%` }}
@@ -1257,7 +1271,7 @@ export function SprintCard({
                     </div>
                   </>
                 ) : (
-                  <span className="truncate text-xs text-muted-foreground">—</span>
+                  <span className="truncate text-xs text-overview-text-secondary">—</span>
                 )}
               </div>
             </div>

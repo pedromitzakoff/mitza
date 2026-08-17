@@ -15,10 +15,16 @@ import { AccountCardSummary } from "./account-card-summary";
  * por cliente, com o mesmo resumo compacto (`AccountCardSummary`) usado
  * pelas visões Mensais, e o corpo investigativo reaproveitado de
  * `SprintCard` (`SprintCardBody` — mesmo financeiro/tarefas/comentários da
- * página do cliente, sem duplicar). Antes (Etapa 42) o próprio `SprintCard`
- * era o único nível de accordion aqui, sempre aberto por padrão; agora o
- * nível é este `<details>` externo, sempre fechado ao entrar na tela (regra
- * "cards iniciam fechados" — o gestor decide o que investigar).
+ * página do cliente, sem duplicar).
+ *
+ * Etapa "Evolução visual de /sprints": esta visão existe especificamente
+ * pra responder "qual sprint está ativa e como ela está indo" — por isso o
+ * card abre expandido por padrão (nunca precisa de clique pra ver o
+ * essencial) e ganha a mesma borda de destaque (`border-l-4 border-l-brand`)
+ * já usada pro card da sprint atual na página do cliente — mesmo padrão
+ * visual reaproveitado, nunca um novo. `SprintsContextMemory` continua
+ * lembrando se o gestor fechar manualmente (mesmo mecanismo de sempre, só o
+ * estado inicial mudou).
  */
 export function SprintCurrentClientGroup({
   card,
@@ -47,9 +53,9 @@ export function SprintCurrentClientGroup({
 }) {
   if (!card.sprint) {
     return (
-      <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-sm">
-        <span className="font-semibold text-foreground">{card.clientName}</span>
-        <span className="text-xs text-muted-foreground">Sem sprint em andamento</span>
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-overview-border bg-overview-surface px-3 py-2.5 text-sm">
+        <span className="font-semibold text-overview-text-primary">{card.clientName}</span>
+        <span className="text-xs text-overview-text-secondary">Sem sprint em andamento</span>
       </div>
     );
   }
@@ -66,7 +72,8 @@ export function SprintCurrentClientGroup({
   return (
     <details
       id={`client-${card.clientId}`}
-      className="group rounded-lg border border-border bg-card [&_summary::-webkit-details-marker]:hidden"
+      open
+      className="group rounded-lg border-l-4 border-l-brand border-y border-r border-overview-border bg-overview-surface [&_summary::-webkit-details-marker]:hidden"
     >
       <AccountCardSummary
         clientId={card.clientId}

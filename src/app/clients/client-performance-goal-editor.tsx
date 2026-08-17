@@ -96,7 +96,7 @@ export function ClientPerformanceGoalEditor({
         aria-label={`Objetivo: ${optimisticGoal ? PERFORMANCE_GOALS[optimisticGoal].label : "não configurado"} — clique para alterar`}
         className={
           triggerClassName ??
-          "mitza-pressable rounded-full border border-border bg-card px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:border-brand hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
+          "mitza-pressable rounded-full border border-overview-border bg-overview-surface px-1.5 py-0.5 text-[11px] font-medium text-overview-text-primary hover:border-brand hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
         }
       >
         {triggerLabel ?? (optimisticGoal ? PERFORMANCE_GOALS[optimisticGoal].label : "Não configurado")}
@@ -108,7 +108,7 @@ export function ClientPerformanceGoalEditor({
         onClose={() => setOpen(false)}
         role="listbox"
         closeLabel="Fechar seleção de objetivo"
-        className="w-40 rounded-lg border border-border bg-card p-1 shadow-[var(--shadow-float)]"
+        className="w-40 rounded-lg border border-overview-border bg-overview-surface p-1 shadow-[var(--shadow-float)]"
       >
         {PERFORMANCE_GOAL_OPTIONS.map((option) => (
           <button
@@ -118,8 +118,8 @@ export function ClientPerformanceGoalEditor({
             aria-selected={option.value === optimisticGoal}
             disabled={isPending}
             onClick={() => handleSelect(option.value)}
-            className={`mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900 ${
-              option.value === optimisticGoal ? "font-medium text-brand" : "text-foreground"
+            className={`mitza-pressable block w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-overview-surface-hover disabled:cursor-not-allowed disabled:opacity-60 ${
+              option.value === optimisticGoal ? "font-medium text-brand" : "text-overview-text-primary"
             }`}
           >
             {option.label}

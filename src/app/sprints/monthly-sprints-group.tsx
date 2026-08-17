@@ -65,7 +65,7 @@ export function SprintMonthlyBySprintsGroup({
   return (
     <details
       id={`client-${card.clientId}`}
-      className="group rounded-lg border border-border bg-card [&_summary::-webkit-details-marker]:hidden"
+      className="group rounded-lg border border-overview-border bg-overview-surface [&_summary::-webkit-details-marker]:hidden"
     >
       <AccountCardSummary
         clientId={card.clientId}
@@ -82,9 +82,9 @@ export function SprintMonthlyBySprintsGroup({
           cliente — indentação + divisória à esquerda (border-l), nunca mais
           uma pilha de cards independentes (gap-2 entre cards soltos). Cada
           SprintCard entra em modo `flat` (sem moldura própria). */}
-      <div className="border-t border-border pl-3">
+      <div className="border-t border-overview-border pl-3">
         {card.monthSprints.length > 0 ? (
-          <div className="border-l border-border/60 pl-2">
+          <div className="border-l border-overview-border/60 pl-2">
             {card.monthSprints.map((sprint, index) => {
               const isCurrent = sprint.temporalStatus === "atual";
               return (

@@ -28,7 +28,7 @@ export interface AccountReviewSummaryItem {
 }
 
 export const OUTCOME_TEXT_CLASSES: Record<AccountReviewOutcome, string> = {
-  NO_CHANGE: "text-muted-foreground",
+  NO_CHANGE: "text-overview-text-secondary",
   OPTIMIZATION_PERFORMED: "text-green-600 dark:text-green-400",
   ISSUE_IDENTIFIED: "text-amber-600 dark:text-amber-400",
 };
@@ -85,10 +85,10 @@ export function AccountReviewRow({
   typeLabel?: string;
 }) {
   return (
-    <li className="flex min-h-[28px] items-center border-b border-border/60 px-2 py-1 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
+    <li className="flex min-h-[28px] items-center border-b border-overview-border/60 px-2 py-1 last:border-0 hover:bg-overview-surface-hover">
       <Link href={detailHref} scroll={false} className="flex w-full items-center gap-2.5">
         <span className={ACTIVITY_COL_STATUS} aria-hidden="true">
-          <span className="h-1.5 w-1.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+          <span className="h-1.5 w-1.5 rounded-full bg-overview-border-strong" />
         </span>
 
         <span className={ACTIVITY_COL_DATE}>{formatDateTime(review.reviewedAt)}</span>
@@ -98,28 +98,28 @@ export function AccountReviewRow({
             {ACCOUNT_REVIEW_OUTCOME_LABEL[review.outcome]}
           </span>
           {reviewSubtitle(review) && (
-            <span className="truncate text-xs text-muted-foreground"> · {reviewSubtitle(review)}</span>
+            <span className="truncate text-xs text-overview-text-secondary"> · {reviewSubtitle(review)}</span>
           )}
           {review.updateStatus !== "none" && (
-            <span className="truncate text-xs text-muted-foreground"> · {CLIENT_UPDATE_STATUS_LABEL[review.updateStatus]}</span>
+            <span className="truncate text-xs text-overview-text-secondary"> · {CLIENT_UPDATE_STATUS_LABEL[review.updateStatus]}</span>
           )}
         </span>
 
         <span className={ACTIVITY_COL_ASSIGNEE}>
-          <User className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="min-w-0 truncate text-xs text-muted-foreground">{review.managerName}</span>
+          <User className="h-3 w-3 shrink-0 text-overview-text-secondary" aria-hidden="true" />
+          <span className="min-w-0 truncate text-xs text-overview-text-secondary">{review.managerName}</span>
         </span>
 
         {typeLabel && (
           <span className={ACTIVITY_COL_TYPE}>
-            <span className="inline-flex max-w-full items-center truncate rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground dark:bg-zinc-800">
+            <span className="inline-flex max-w-full items-center truncate rounded-full bg-overview-surface-subtle px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">
               {typeLabel}
             </span>
           </span>
         )}
 
         <span className={ACTIVITY_COL_ACTIONS}>
-          <span className="text-sm text-muted-foreground" aria-hidden="true">
+          <span className="text-sm text-overview-text-secondary" aria-hidden="true">
             ›
           </span>
         </span>

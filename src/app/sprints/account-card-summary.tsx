@@ -22,7 +22,7 @@ export const PERIOD_STATUS_LABEL: Record<FinancialPeriodSummary["status"], strin
 const OPERATIONAL_TONE_CLASSES = {
   critical: "font-medium text-red-600 dark:text-red-400",
   warning: "text-amber-600 dark:text-amber-400",
-  neutral: "text-muted-foreground",
+  neutral: "text-overview-text-secondary",
 } as const;
 
 /**
@@ -91,7 +91,7 @@ export function AccountCardSummary({
 
   return (
     <summary className="flex cursor-pointer list-none items-start gap-2 px-2 py-1">
-      <span className="mitza-chevron mt-0.5 shrink-0 text-xs text-muted-foreground group-open:rotate-90">
+      <span className="mitza-chevron mt-0.5 shrink-0 text-xs text-overview-text-secondary group-open:rotate-90">
         ▸
       </span>
 
@@ -101,13 +101,13 @@ export function AccountCardSummary({
             de `sm` ela ficaria espremida demais (Princípios Cap. 7: "Desktop
             primeiro... Mobile prioriza consultas/pequenas ações"). */}
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs sm:hidden">
-          <Link href={`/clients/${clientId}`} className="text-sm font-semibold text-foreground hover:underline">
+          <Link href={`/clients/${clientId}`} className="text-sm font-semibold text-overview-text-primary hover:underline">
             {clientName}
           </Link>
-          {managerName && <span className="text-muted-foreground">· {managerName}</span>}
+          {managerName && <span className="text-overview-text-secondary">· {managerName}</span>}
           {investedPct !== null ? (
             <>
-              <span className="tabular-nums text-muted-foreground">{investedPct}% investido</span>
+              <span className="tabular-nums text-overview-text-secondary">{investedPct}% investido</span>
               <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${SPEND_STATUS_BADGE_CLASSES[summary.status]}`}>
                 {PERIOD_STATUS_LABEL[summary.status]}
               </span>
@@ -118,7 +118,7 @@ export function AccountCardSummary({
             </span>
           )}
           {tasksTotal !== undefined && (
-            <span className="tabular-nums text-muted-foreground">
+            <span className="tabular-nums text-overview-text-secondary">
               {tasksTotal === 0 ? "Sem tarefas no período" : `${tasksDone ?? 0}/${tasksTotal} tarefas`}
             </span>
           )}
@@ -127,7 +127,7 @@ export function AccountCardSummary({
           {summary.planned > 0 ? (
             <AgencyInvestmentBar summary={summary} showExpectedMarker={false} showLegend={false} />
           ) : (
-            <div className="h-1 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />
+            <div className="h-1 w-full rounded-full bg-overview-surface-subtle" />
           )}
         </div>
 
@@ -149,17 +149,17 @@ export function AccountCardSummary({
               className="truncate text-sm"
               title={managerName ? `${clientName} · ${managerName}` : clientName}
             >
-              <Link href={`/clients/${clientId}`} className="font-semibold text-foreground hover:underline">
+              <Link href={`/clients/${clientId}`} className="font-semibold text-overview-text-primary hover:underline">
                 {clientName}
               </Link>
-              {managerName && <span className="text-[11px] font-normal text-muted-foreground"> · {managerName}</span>}
+              {managerName && <span className="text-[11px] font-normal text-overview-text-secondary"> · {managerName}</span>}
             </p>
           </div>
 
           <div className="min-w-0">
             {investedPct !== null ? (
               <>
-                <p className="truncate text-xs tabular-nums text-muted-foreground">
+                <p className="truncate text-xs tabular-nums text-overview-text-secondary">
                   {formatCurrency(summary.actual)} / {formatCurrency(summary.planned)}
                 </p>
                 <div className="mt-0.5">
@@ -177,10 +177,10 @@ export function AccountCardSummary({
           <div className="min-w-0">
             {progressPct !== null ? (
               <>
-                <span className="truncate text-xs tabular-nums text-muted-foreground">
+                <span className="truncate text-xs tabular-nums text-overview-text-secondary">
                   {tasksDone ?? 0}/{tasksTotal}
                 </span>
-                <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-overview-surface-subtle">
                   <div
                     className="h-full rounded-full bg-brand"
                     style={{ width: `${Math.min(Math.max(progressPct, 0), 100)}%` }}
@@ -188,7 +188,7 @@ export function AccountCardSummary({
                 </div>
               </>
             ) : (
-              <span className="truncate text-xs text-muted-foreground">—</span>
+              <span className="truncate text-xs text-overview-text-secondary">—</span>
             )}
           </div>
         </div>

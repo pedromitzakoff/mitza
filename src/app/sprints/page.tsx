@@ -780,20 +780,20 @@ export default async function SprintsPage({
           mudou, só a disposição visual. */}
       <div className="flex flex-wrap items-center justify-end gap-2">
         {view === "monthly" && (
-          <div className="flex h-8 items-center gap-0.5 rounded-md border border-border px-1 text-sm">
+          <div className="flex h-8 items-center gap-0.5 rounded-md border border-overview-border px-1 text-sm">
             <Link
               href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
               scroll={false}
-              className="rounded px-1 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              className="rounded px-1 text-overview-text-primary hover:bg-overview-surface-hover"
               aria-label="Mês anterior"
             >
               &lsaquo;
             </Link>
-            <span className="min-w-[7.5rem] text-center text-xs font-medium text-foreground">{monthLabel}</span>
+            <span className="min-w-[7.5rem] text-center text-xs font-medium text-overview-text-primary">{monthLabel}</span>
             <Link
               href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
               scroll={false}
-              className="rounded px-1 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              className="rounded px-1 text-overview-text-primary hover:bg-overview-surface-hover"
               aria-label="Próximo mês"
             >
               &rsaquo;
@@ -834,7 +834,7 @@ export default async function SprintsPage({
           lado (Sprint atual / Mensal consolidado / Mensal por sprints),
           direto abaixo do cabeçalho, sem virar uma segunda barra de
           ferramentas (texto + sublinhado, não pílulas/caixas). */}
-      <div role="tablist" className="mt-2.5 flex items-center gap-4 border-b border-border text-sm">
+      <div role="tablist" className="mt-2.5 flex items-center gap-4 border-b border-overview-border text-sm">
         {TABS.map((tab) => (
           <Link
             key={tab.key}
@@ -845,7 +845,7 @@ export default async function SprintsPage({
             className={`-mb-px border-b-2 pb-1.5 font-medium transition-colors ${
               tab.key === activeTabKey
                 ? "border-brand text-brand"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                : "border-transparent text-overview-text-secondary hover:text-overview-text-primary"
             }`}
           >
             {tab.label}
@@ -853,7 +853,7 @@ export default async function SprintsPage({
         ))}
       </div>
 
-      <p className="mt-2 text-xs text-muted-foreground">
+      <p className="mt-2 text-xs text-overview-text-secondary">
         {cards.length !== baseCount ? `${cards.length} de ${baseCount} clientes` : `${baseCount} cliente${baseCount !== 1 ? "s" : ""}`}
         {attentionCount > 0 && ` · ${attentionCount} precisa${attentionCount !== 1 ? "m" : ""} de atenção`}
       </p>
@@ -873,7 +873,7 @@ export default async function SprintsPage({
               colunas reais (cada linha tem um caret antes da própria grade). */}
           <span aria-hidden="true" className="invisible shrink-0 text-xs">▸</span>
           <div
-            className={`flex-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground ${ROW_GRID_CLASSES}`}
+            className={`flex-1 text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted ${ROW_GRID_CLASSES}`}
           >
             <span />
             <span>Cliente / Gestor</span>
@@ -937,7 +937,7 @@ export default async function SprintsPage({
             ))
           )
         ) : (
-          <div className="rounded-lg border border-border bg-card p-4">
+          <div className="rounded-lg border border-overview-border bg-overview-surface p-4">
             <EmptyState>Nenhum cliente encontrado com esses filtros.</EmptyState>
           </div>
         )}
