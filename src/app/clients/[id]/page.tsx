@@ -44,13 +44,13 @@ import {
 } from "@/lib/channel-spend";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatMonthLabel, formatRelativeDateTime } from "@/lib/format";
+import { formatMonthLabel, formatRelativeDateTime, formatShortDate } from "@/lib/format";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
 import { fetchClientOperationalHistory } from "@/lib/client-operational-history";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL, contractStatusBannerText, isWorkspaceClient } from "@/lib/client-fields";
 import { syncClientMetaAction } from "../meta-actions";
 import { syncClientStractSourcesAction } from "../stract-sync-actions";
-import { getLatestSyncRunStatusForSources } from "@/lib/stract-sync";
+import { getLatestSyncRunStatusForSources, getLatestImportedDateForSources } from "@/lib/stract-sync";
 import { ClientIdentitySticky } from "../client-identity-sticky";
 import { ClientWorkspaceContext } from "../client-workspace-context";
 import { MonthInvestmentSummary } from "../month-investment-summary";
@@ -337,6 +337,11 @@ export default async function ClientPage({
   // - `recentSyncRuns`: histórico completo (linhas lidas/gravadas, erro
   //   bruto) — client normal (RLS), só populado pra admin de propósito.
   const latestSyncStatus = stractImportSourceIds.length > 0 ? await getLatestSyncRunStatusForSources(stractImportSourceIds) : null;
+  // "Até quando os números são reais?" — diferente de `latestSyncStatus`
+  // (que só diz quando a sincronização RODOU). Ver comentário completo em
+  // `getLatestImportedDateForSources`.
+  const latestImportedDate =
+    stractImportSourceIds.length > 0 ? await getLatestImportedDateForSources(stractImportSourceIds) : null;
   const recentSyncRuns = isAdmin && stractImportSourceIds.length > 0 ? await getRecentSyncRunsForClient(supabase, stractImportSourceIds) : [];
 
   // Habilitar Gestores 1.0: "Atualizar performance" (investimento realizado
@@ -1488,7 +1493,17 @@ export default async function ClientPage({
           `getLatestSyncRunStatusForSources`); detalhe técnico (motivo,
           contagens, execuções anteriores) fica atrás de um `<details>`
           só pra admin (RLS de `data_sync_runs`, ver
-          `getRecentSyncRunsForClient`). */}
+          `getRecentSyncRunsForClient`).
+
+          Etapa "Auditoria Investimento Errado": "dados até DD/MM" somado —
+          `latestSyncStatus` só diz QUANDO a sincronização rodou, nunca até
+          que dia ela trouxe dado real (`latestImportedDate`,
+          `import_sources.last_imported_date`). Uma fonte pode sincronizar
+          "com sucesso" todo dia e mesmo assim só trazer o dia corrente —
+          foi exatamente isso que aconteceu, sem nenhum sinal visível até
+          comparar manualmente com o Meta Ads Manager. Só exibe o dado já
+          existente, sem nenhuma classificação nova (nunca compara com hoje
+          pra decidir "atrasado"/"em dia" — isso fica a critério de quem lê). */}
       {stractImportSourceIds.length > 0 && (
         <div className="rounded-md border border-overview-border bg-overview-surface px-3 py-2 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1503,7 +1518,8 @@ export default async function ClientPage({
                 {latestSyncStatus ? SYNC_RUN_STATUS_LABEL[latestSyncStatus.status] : "Nunca sincronizado"}
               </span>
               <span className="text-xs text-overview-text-secondary">
-                Stract{latestSyncStatus ? ` · ${formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant)}` : ""}
+                Stract{latestSyncStatus ? ` · sincronizado ${formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant)}` : ""}
+                {latestImportedDate ? ` · dados até ${formatShortDate(latestImportedDate)}` : ""}
               </span>
             </div>
             {canOperate && (
