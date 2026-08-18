@@ -31,13 +31,19 @@ export default async function OperationPage({
   const clients = await loadOperationTriageClients(monthParam);
   const summary = summarizeOperationTriage(clients);
 
+  // Etapa "Auditoria da Operação": era rotulado "Atualizado {hora}", mas é
+  // só a hora em que a PÁGINA carregou (`new Date()` no render), nunca uma
+  // data de sincronização real — "Atualizado" dava a entender que os
+  // números abaixo eram daquele instante. Vira só um relógio neutro, sem
+  // verbo nenhum implicando frescor de dado (mesmo espírito do relógio da
+  // Sidebar) — nenhuma lógica nova, só a palavra errada removida.
   const { weekdayShort, dateShort, time } = formatAgencyDateTime(new Date());
 
   return (
     <OperationTriageView
       clients={clients}
       monthParam={monthParam}
-      monthLastUpdatedLabel={`Atualizado ${weekdayShort} · ${dateShort} · ${time}`}
+      currentDateTimeLabel={`${weekdayShort} · ${dateShort} · ${time}`}
       summary={summary}
     />
   );

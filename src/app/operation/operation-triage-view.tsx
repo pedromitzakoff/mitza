@@ -42,12 +42,16 @@ const PRIORITY_GROUP_SECTION_LABEL: Record<OperationPriorityGroup, string> = {
 export function OperationTriageView({
   clients,
   monthParam,
-  monthLastUpdatedLabel,
+  currentDateTimeLabel,
   summary,
 }: {
   clients: ClientOperationalState[];
   monthParam: string;
-  monthLastUpdatedLabel: string;
+  /** Só um relógio (dia da semana/data/hora atuais) — deliberadamente sem
+   * verbo/rótulo que implique frescor de dado (ver comentário em
+   * `page.tsx`: era "Atualizado {hora}", mas media o carregamento da
+   * página, nunca uma sincronização real). */
+  currentDateTimeLabel: string;
   summary: OperationTriageSummary;
 }) {
   const [quickFilter, setQuickFilter] = useState<OperationQuickFilter>("todos");
@@ -112,7 +116,7 @@ export function OperationTriageView({
           >
             ›
           </Link>
-          <span className="ml-2 text-xs text-muted-foreground">{monthLastUpdatedLabel}</span>
+          <span className="ml-2 text-xs text-muted-foreground">{currentDateTimeLabel}</span>
         </div>
       </div>
 

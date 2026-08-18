@@ -62,6 +62,13 @@ const PRIORITY_GROUP_EMPHASIZE: Record<OperationPriorityGroup, boolean> = {
  * contexto secundário (atividade/atualização de performance, sempre menor
  * e mais discreto — nunca outro aviso vermelho competindo com o principal).
  *
+ * Etapa "Auditoria da Operação": `managerName` entra na mesma linha do
+ * nome do cliente, texto pequeno e neutro (nunca badge, nunca avatar
+ * próprio) — achado da auditoria: "quem é responsável por essa conta?"
+ * não tinha resposta nenhuma no card antes disso, só via filtro/busca de
+ * gestor. "Sem gestor" quando `null` (nunca omitido) — uma conta sem
+ * responsável é, ela mesma, um fato operacional relevante.
+ *
  * As métricas continuam vindo do Motor de Diagnóstico Único
  * (`diagnostics`, `lib/metric-diagnostics.ts` — mesma régua de magnitude de
  * sempre, 10/20%) para Investimento e Custo; Resultado continua um valor de
@@ -197,6 +204,7 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
+              <span className="truncate text-[11px] text-overview-text-muted">{card.managerName ?? "Sem gestor"}</span>
               <StatusDot tone={priorityTone} label={priorityLabel} emphasize={PRIORITY_GROUP_EMPHASIZE[priorityGroup]} />
             </div>
             {reasonText && (
@@ -217,6 +225,7 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
         <div className="flex w-72 min-w-0 shrink-0 flex-col">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
+            <span className="truncate text-[11px] text-overview-text-muted">{card.managerName ?? "Sem gestor"}</span>
             <StatusDot tone={priorityTone} label={priorityLabel} emphasize={PRIORITY_GROUP_EMPHASIZE[priorityGroup]} />
           </div>
           {reasonText && (
