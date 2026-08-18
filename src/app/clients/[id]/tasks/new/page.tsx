@@ -4,6 +4,7 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { createTaskAction } from "../../../tasks-actions";
 import { TASK_RECURRENCE_LABEL, TASK_TYPE_LABEL } from "../../../task-labels";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
+import { SubmitButton } from "@/app/submit-button";
 
 export default async function NewTaskPage({
   params,
@@ -152,12 +153,12 @@ export default async function NewTaskPage({
           />
         </label>
 
-        <button
-          type="submit"
+        <SubmitButton
+          pendingChildren="Criando..."
           className="mt-2 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
         >
           Criar tarefa
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );

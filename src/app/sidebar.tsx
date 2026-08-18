@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { syncAllMetaAction } from "@/app/global-actions";
+import { SubmitButton } from "@/app/submit-button";
 import { formatAgencyDateTime } from "@/lib/format";
 import type { UserRole } from "@/lib/supabase/database.types";
 import { SIDEBAR_COLLAPSED_WIDTH_CLASS, SIDEBAR_EXPANDED_WIDTH_CLASS, SIDEBAR_HEIGHT_CLASS } from "./app-shell-dimensions";
@@ -387,14 +388,25 @@ function SidebarContent({
         {isAdmin && (
           <form action={syncAllMetaAction}>
             <Tooltip label="Atualizar Meta (todos)">
-              <button
-                type="submit"
-                aria-label="Atualizar Meta (todos)"
-                className={`mitza-pressable flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-[11px] text-zinc-500 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-zinc-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center" : ""}`}
+              {/* Etapa "Padronização Global de Feedback": ação GLOBAL (roda
+                  pra todos os clientes) — antes sem nenhum sinal de "em
+                  andamento" nem proteção contra clique duplo. `SubmitButton`
+                  cobre os dois de graça (mesmo padrão do resto da
+                  plataforma), sem mudar a Server Action nem o peso visual
+                  discreto já deliberado pra esta ação (ver comentário da
+                  Etapa "Revisão da Sidebar" logo acima). */}
+              <SubmitButton
+                pendingChildren={
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <ItemLabel collapsed={collapsed}>Atualizando...</ItemLabel>
+                  </>
+                }
+                className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-[11px] text-zinc-500 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-zinc-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center" : ""}`}
               >
                 <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <ItemLabel collapsed={collapsed}>Atualizar Meta (todos)</ItemLabel>
-              </button>
+              </SubmitButton>
             </Tooltip>
           </form>
         )}

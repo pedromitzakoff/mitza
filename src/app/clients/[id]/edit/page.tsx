@@ -9,6 +9,7 @@ import { DeleteClientButton } from "../../delete-client-button";
 import { addClientKpiAction, deleteClientKpiAction } from "@/app/reports/report-actions";
 import { KPI_DIRECTION_LABEL, KPI_UNIT_LABEL, formatKpiValue } from "@/lib/monthly-reports";
 import { updateAccountReviewCadenceAction } from "../../account-review-actions";
+import { SubmitButton } from "@/app/submit-button";
 
 export default async function EditClientPage({
   params,
@@ -108,9 +109,12 @@ export default async function EditClientPage({
                   </span>
                 </span>
                 <form action={deleteClientKpiAction.bind(null, kpi.id, id)}>
-                  <button type="submit" className="text-xs text-zinc-500 hover:text-red-600 dark:hover:text-red-400">
+                  <SubmitButton
+                    pendingChildren="Removendo..."
+                    className="text-xs text-zinc-500 hover:text-red-600 dark:hover:text-red-400"
+                  >
                     Remover
-                  </button>
+                  </SubmitButton>
                 </form>
               </li>
             ))}
@@ -156,9 +160,12 @@ export default async function EditClientPage({
               className="w-28 rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm text-black dark:border-zinc-700 dark:text-zinc-50"
             />
           </div>
-          <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover">
+          <SubmitButton
+            pendingChildren="Adicionando..."
+            className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
+          >
             Adicionar KPI
-          </button>
+          </SubmitButton>
         </form>
         </div>
 
@@ -201,9 +208,12 @@ export default async function EditClientPage({
             />
             Cadência ativa
           </label>
-          <button type="submit" className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover">
+          <SubmitButton
+            pendingChildren="Salvando..."
+            className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
+          >
             Salvar cadência
-          </button>
+          </SubmitButton>
         </form>
         </div>
       </Block>

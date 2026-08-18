@@ -1,4 +1,5 @@
 import { login } from "./actions";
+import { SubmitButton } from "@/app/submit-button";
 
 export default async function LoginPage({
   searchParams,
@@ -48,12 +49,12 @@ export default async function LoginPage({
           />
         </label>
 
-        <button
-          type="submit"
+        <SubmitButton
+          pendingChildren="Entrando..."
           className="mt-2 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
         >
           Entrar
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );

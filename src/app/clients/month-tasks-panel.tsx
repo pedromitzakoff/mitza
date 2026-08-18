@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { useOptimisticTasks } from "@/lib/optimistic-tasks";
 import { useToast } from "@/app/toast-provider";
@@ -28,14 +29,6 @@ const FILTERS: { key: TaskFilter; label: string }[] = [
   { key: "concluidas", label: "Concluídas" },
 ];
 
-const CANCEL_CLASSES =
-  "mitza-pressable rounded-md border border-overview-border px-3 py-1.5 text-xs font-medium text-overview-text-primary hover:bg-overview-surface-hover disabled:cursor-not-allowed disabled:opacity-60";
-// Mesmo tratamento visual de "Excluir cliente" (delete-client-button.tsx) —
-// a plataforma nunca usou um botão vermelho preenchido, sempre contorno +
-// texto vermelho. Reaproveitado aqui em vez de inventar uma variante nova.
-const DESTRUCTIVE_CLASSES =
-  "mitza-pressable rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950";
-
 function matchesFilter(task: TaskListItem, filter: TaskFilter): boolean {
   if (filter === "todas") return true;
   const status = effectiveTaskStatus(task);
@@ -49,61 +42,6 @@ function buildCompactSummary(counts: { todas: number; pendentes: number; atrasad
   if (counts.pendentes > 0) parts.push(`${counts.pendentes} pendente${counts.pendentes === 1 ? "" : "s"}`);
   if (counts.atrasadas > 0) parts.push(`${counts.atrasadas} atrasada${counts.atrasadas === 1 ? "" : "s"}`);
   return parts.join(" · ");
-}
-
-/**
- * Confirmação de exclusão em massa — mesmo padrão visual de
- * `AgencyTransferDialog` (backdrop + `mitza-modal-in`, `role="dialog"`).
- * Exclusão de tarefa é PERMANENTE (`deleteTaskAction` faz `.delete()` de
- * verdade — não existe soft delete/arquivamento pra tarefa, diferente de
- * cliente), por isso o texto é explícito sobre isso, em vez de um genérico
- * "mover para exclusão" que sugeriria uma lixeira reversível inexistente.
- */
-function BulkDeleteConfirmDialog({
-  count,
-  pending,
-  onCancel,
-  onConfirm,
-}: {
-  count: number;
-  pending: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <>
-      <button
-        type="button"
-        aria-label="Cancelar exclusão"
-        onClick={onCancel}
-        disabled={pending}
-        className="mitza-backdrop-in fixed inset-0 z-50 bg-black/30"
-      />
-      <div className="fixed inset-0 z-50 flex items-start justify-center px-4 py-16 sm:items-center">
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="bulk-delete-title"
-          className="mitza-modal-in w-full max-w-sm rounded-lg border border-overview-border bg-overview-surface p-4 shadow-lg"
-        >
-          <h2 id="bulk-delete-title" className="text-sm font-semibold text-overview-text-primary">
-            Excluir tarefas selecionadas?
-          </h2>
-          <p className="mt-1.5 text-sm text-overview-text-secondary">
-            Esta ação exclui permanentemente {count} {count === 1 ? "tarefa" : "tarefas"}. Não pode ser desfeita.
-          </p>
-          <div className="mt-4 flex items-center justify-end gap-2">
-            <button type="button" onClick={onCancel} disabled={pending} className={CANCEL_CLASSES}>
-              Cancelar
-            </button>
-            <button type="button" onClick={onConfirm} disabled={pending} className={DESTRUCTIVE_CLASSES}>
-              {pending ? "Excluindo..." : "Excluir tarefas"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
 }
 
 /**
@@ -429,8 +367,12 @@ export function MonthTasksPanel({
       )}
 
       {confirmOpen && (
-        <BulkDeleteConfirmDialog
-          count={selectedCount}
+        <ConfirmDialog
+          title="Excluir tarefas selecionadas?"
+          description={`Esta ação exclui permanentemente ${selectedCount} ${selectedCount === 1 ? "tarefa" : "tarefas"}. Não pode ser desfeita.`}
+          confirmLabel="Excluir tarefas"
+          confirmPendingLabel="Excluindo..."
+          tone="destructive"
           pending={isDeleting}
           onCancel={() => setConfirmOpen(false)}
           onConfirm={handleBulkDelete}

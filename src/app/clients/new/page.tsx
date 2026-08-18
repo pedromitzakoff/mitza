@@ -30,6 +30,7 @@ export default async function NewClientPage({
         assignedIds={[]}
         error={error}
         submitLabel="Criar cliente"
+        submitPendingLabel="Criando..."
         cancelHref="/clients"
       />
     </div>

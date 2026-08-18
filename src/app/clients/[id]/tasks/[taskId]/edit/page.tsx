@@ -5,6 +5,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { deleteTaskAction, updateTaskAction } from "../../../../tasks-actions";
 import { TASK_RECURRENCE_LABEL, TASK_TYPE_LABEL } from "../../../../task-labels";
 import { DeleteTaskButton } from "../../../../delete-task-button";
+import { SubmitButton } from "@/app/submit-button";
 
 export default async function EditTaskPage({
   params,
@@ -147,12 +148,12 @@ export default async function EditTaskPage({
           />
         </label>
 
-        <button
-          type="submit"
+        <SubmitButton
+          pendingChildren="Salvando..."
           className="mt-2 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
         >
           Salvar
-        </button>
+        </SubmitButton>
       </form>
 
       {isAdmin && (

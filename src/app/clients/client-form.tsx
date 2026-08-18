@@ -9,6 +9,7 @@ import { CONTRACTED_SERVICE_OPTIONS } from "@/lib/client-fields";
 import { formatCnpj } from "@/lib/cnpj";
 import { PERFORMANCE_GOAL_OPTIONS, PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { SETTINGS_SECONDARY_BUTTON_CLASSES } from "../settings/settings-shell";
+import { SubmitButton } from "@/app/submit-button";
 
 type Manager = { id: string; name: string };
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
@@ -64,6 +65,7 @@ export function ClientForm({
   defaultMetaAdAccountId,
   defaults,
   submitLabel,
+  submitPendingLabel = "Salvando...",
   cancelHref,
 }: {
   action: (formData: FormData) => void | Promise<void>;
@@ -76,6 +78,11 @@ export function ClientForm({
    * criação nova. */
   defaults?: Partial<ClientRow>;
   submitLabel: string;
+  /** Etapa "Padronização Global de Feedback" — texto mostrado durante o
+   * envio (`SubmitButton`). Padrão cobre o caso comum ("Salvar" →
+   * "Salvando..."); `/clients/new` passa "Criando..." pra combinar com
+   * "Criar cliente". */
+  submitPendingLabel?: string;
   cancelHref: string;
 }) {
   const assigned = new Set(assignedIds);
@@ -604,12 +611,12 @@ export function ClientForm({
       </Block>
 
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
+        <SubmitButton
+          pendingChildren={submitPendingLabel}
           className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
         >
           {submitLabel}
-        </button>
+        </SubmitButton>
         <Link href={cancelHref} className={`px-4 py-2 text-sm ${SETTINGS_SECONDARY_BUTTON_CLASSES}`}>
           Cancelar
         </Link>

@@ -54,6 +54,7 @@ import { resolveOperationPriorityGroup } from "@/lib/operation-triage";
 import { PRIORITY_GROUP_TONE } from "@/app/operation/operation-client-card";
 import { emphasizeDeviationText } from "@/components/workspace/status-dot";
 import { SECONDARY_ACTION_BUTTON_CLASSES } from "@/components/ui/section-header";
+import { SubmitButton } from "@/app/submit-button";
 import { syncClientMetaAction } from "../meta-actions";
 import { syncClientStractSourcesAction } from "../stract-sync-actions";
 import { getLatestSyncRunStatusForSources } from "@/lib/stract-sync";
@@ -1419,9 +1420,10 @@ export default async function ClientPage({
           Configurações); ações de navegação (Dashboard/Saldo/Ver relatório/
           Editar) passam a usar o `Button` do design system em vez de
           `<a>`/`<Link>` com classe escrita à mão — "Atualizar Meta" continua
-          um botão de formulário cru (precisa de `type="submit"`, que
-          `Button` não permite), mas com a mesma aparência exata. Nenhum
-          href, ação ou permissão mudou. */}
+          usando `SubmitButton` (precisa de `type="submit"`, que `Button` não
+          permite), mesma aparência exata, agora com "Atualizando..." durante
+          o envio (Etapa "Padronização Global de Feedback"). Nenhum href,
+          ação ou permissão mudou. */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -1473,9 +1475,9 @@ export default async function ClientPage({
             )}
             {canOperate && (
               <form action={syncClientMetaAction.bind(null, client.id)}>
-                <button type="submit" className={HEADER_SUBMIT_BUTTON_CLASSES}>
+                <SubmitButton pendingChildren="Atualizando..." className={HEADER_SUBMIT_BUTTON_CLASSES}>
                   Atualizar Meta
-                </button>
+                </SubmitButton>
               </form>
             )}
           </div>
@@ -1591,9 +1593,9 @@ export default async function ClientPage({
             </div>
             {canOperate && (
               <form action={syncClientStractSourcesAction.bind(null, client.id)}>
-                <button type="submit" className={HEADER_SUBMIT_BUTTON_CLASSES}>
+                <SubmitButton pendingChildren="Sincronizando..." className={HEADER_SUBMIT_BUTTON_CLASSES}>
                   Sincronizar agora
-                </button>
+                </SubmitButton>
               </form>
             )}
           </div>
@@ -1626,12 +1628,12 @@ export default async function ClientPage({
           <span className="text-overview-text-primary">Revisão de conta registrada com sucesso.</span>
           <div className="flex items-center gap-2">
             <form action={generateClientUpdateAction.bind(null, reviewSaved, withParam(returnTo, `reviewDetail=${reviewSaved}`))}>
-              <button
-                type="submit"
+              <SubmitButton
+                pendingChildren="Gerando..."
                 className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
               >
                 Gerar atualização
-              </button>
+              </SubmitButton>
             </form>
             <Button href={returnTo} variant="secondary" size="sm">
               Fechar

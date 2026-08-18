@@ -7,6 +7,7 @@ import { toggleCommentReportSelectionAction } from "@/app/reports/report-actions
 import { useToast } from "@/app/toast-provider";
 import { isRedirectSignal } from "@/lib/next-redirect";
 import { formatDateTime } from "@/lib/format";
+import { SubmitButton } from "@/app/submit-button";
 
 export interface CommentItem {
   id: string;
@@ -82,12 +83,12 @@ export function CommentThread({
                     comment.includedInReport,
                   )}
                 >
-                  <button
-                    type="submit"
+                  <SubmitButton
+                    pendingChildren="Salvando..."
                     className={comment.includedInReport ? "font-medium text-brand hover:underline" : "hover:text-brand hover:underline"}
                   >
                     {comment.includedInReport ? "✓ Incluído no relatório mensal" : "Adicionar ao relatório mensal"}
-                  </button>
+                  </SubmitButton>
                 </form>
               )}
             </li>
@@ -111,9 +112,9 @@ export function CommentThread({
           <button
             type="submit"
             disabled={isPending}
-            className="shrink-0 rounded-md border border-overview-border px-2 py-1 text-xs font-medium text-overview-text-primary hover:bg-overview-surface-hover disabled:opacity-60"
+            className="shrink-0 rounded-md border border-overview-border px-2 py-1 text-xs font-medium text-overview-text-primary hover:bg-overview-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Enviar
+            {isPending ? "Enviando..." : "Enviar"}
           </button>
         </form>
       )}
