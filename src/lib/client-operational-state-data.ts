@@ -43,13 +43,89 @@ type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
  * — cliente pausado/encerrado nunca chega a este pipeline, então nenhum
  * consumidor (Operação, Relatórios, Dashboard) precisa filtrar de novo.
  */
-export async function loadClientOperationalStates(supabase: Supabase, monthParam: string): Promise<ClientOperationalState[]> {
+export async function loadClientOperationalStates(
+  supabase: Supabase,
+  monthParam: string,
+  /** Etapa "Motivo da Operação no Cliente": escopa TODA esta pipeline a um
+   * único cliente — nenhuma query nova, nenhuma regra nova, só um `.eq`
+   * condicional em cada busca (a montagem final continua sendo o mesmo
+   * `.map` sobre `clients`, o Motor de Saúde continua sendo chamado
+   * exatamente como sempre). Usado pela página individual do cliente pra
+   * reaproveitar `evaluateAccountHealth()` sem rodar a busca da agência
+   * inteira só pra ler o `primaryReason` de UMA conta. Omitir preserva o
+   * comportamento de sempre (Operação/Relatórios/Dashboard, que continuam
+   * olhando todos os clientes ativos do mês). */
+  clientId?: string,
+): Promise<ClientOperationalState[]> {
   const today = todayUTC();
   const todayStr = todayDateString();
   const now = new Date();
 
   const monthRange = monthRangeFromOperationParam(monthParam);
   const { firstDay: monthStart, lastDay: monthEnd } = monthRange;
+
+  let clientsQuery = supabase
+    .from("clients")
+    .select(
+      "id, name, avatar_url, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
+    )
+    .is("deleted_at", null)
+    .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS);
+  if (clientId) clientsQuery = clientsQuery.eq("id", clientId);
+
+  let sprintsQuery = supabase
+    .from("sprints")
+    .select("id, client_id, start_date, end_date, spend_source, manual_actual_spend, manual_spend_updated_at")
+    .lte("start_date", monthEnd)
+    .gte("end_date", monthStart);
+  if (clientId) sprintsQuery = sprintsQuery.eq("client_id", clientId);
+
+  let dailySpendQuery = supabase.from("daily_spend").select("client_id, date, spend, synced_at").gte("date", monthStart).lte("date", monthEnd);
+  if (clientId) dailySpendQuery = dailySpendQuery.eq("client_id", clientId);
+
+  let latestReviewsQuery = supabase.from("account_reviews").select("client_id, reviewed_at").order("reviewed_at", { ascending: false });
+  if (clientId) latestReviewsQuery = latestReviewsQuery.eq("client_id", clientId);
+
+  // Fonte real de Atividade (task criada/editada/concluída/comentada,
+  // comentário de sprint) — `operational_activities`/view agregada já
+  // existiam (Etapa 15) pra outro propósito; aqui viram, junto com
+  // `account_reviews` acima, os dois insumos legítimos de "alguém agiu
+  // nesta conta", nunca um valor fabricado.
+  let lastActivityQuery = supabase.from("client_last_operational_activity").select("client_id, last_activity_at");
+  if (clientId) lastActivityQuery = lastActivityQuery.eq("client_id", clientId);
+
+  let openTasksQuery = supabase.from("tasks").select("client_id, status, due_date").in("status", ["pendente", "atrasado"]);
+  if (clientId) openTasksQuery = openTasksQuery.eq("client_id", clientId);
+
+  // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
+  // mais só `channel = 'meta'`) — `resolveClientMonthlyPlan` resolve o
+  // investimento/meta de resultado vigente POR CANAL, consolidado é a soma
+  // aditiva (nunca o plano de um canal só).
+  let planChangesQuery = supabase
+    .from("monthly_budget_changes")
+    .select("client_id, channel, month, changed_at, new_amount, target_result_count")
+    .lte("month", monthRange.firstDay);
+  if (clientId) planChangesQuery = planChangesQuery.eq("client_id", clientId);
+
+  let reviewCadencesQuery = supabase.from("account_review_cadences").select("client_id, max_business_days_without_review, is_active");
+  if (clientId) reviewCadencesQuery = reviewCadencesQuery.eq("client_id", clientId);
+
+  // Integração Stract (arquitetura aprovada — ver DECISIONS.md): cliente
+  // com uma import_source ativa lê performance de `daily_performance` —
+  // nunca de `performance_records`, nunca os dois somados. `enabled` é o
+  // único campo que decide isso (status é só observabilidade).
+  let activeImportSourcesQuery = supabase.from("import_sources").select("client_id").eq("enabled", true);
+  if (clientId) activeImportSourcesQuery = activeImportSourcesQuery.eq("client_id", clientId);
+
+  // Investimento manual multicanal (`sprint_channel_spend`, adotada como
+  // fonte de verdade — ver `resolveManualActualSpend`, lib/effective-spend.ts).
+  let channelSpendQuery = supabase.from("sprint_channel_spend").select("sprint_id, channel, spend_source, manual_actual_spend");
+  if (clientId) channelSpendQuery = channelSpendQuery.eq("client_id", clientId);
+
+  // Etapa "Horizonte de Planejamento": clientes de evento (campanha que
+  // termina antes do fim do mês), resolvido por cliente abaixo.
+  let monthHorizonsQuery = supabase.from("client_month_horizons").select("client_id, planning_end_date").eq("month", monthRange.firstDay);
+  if (clientId) monthHorizonsQuery = monthHorizonsQuery.eq("client_id", clientId);
 
   const [
     clients,
@@ -64,87 +140,17 @@ export async function loadClientOperationalStates(supabase: Supabase, monthParam
     channelSpendRows,
     monthHorizons,
   ] = await Promise.all([
-      requireQuery(
-        supabase
-          .from("clients")
-          .select(
-            "id, name, avatar_url, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
-          )
-          .is("deleted_at", null)
-          .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS)
-          .order("name"),
-        "clients",
-      ),
-      requireQuery(
-        supabase
-          .from("sprints")
-          .select("id, client_id, start_date, end_date, spend_source, manual_actual_spend, manual_spend_updated_at")
-          .lte("start_date", monthEnd)
-          .gte("end_date", monthStart),
-        "sprints",
-      ),
-      requireQuery(
-        supabase
-          .from("daily_spend")
-          .select("client_id, date, spend, synced_at")
-          .gte("date", monthStart)
-          .lte("date", monthEnd),
-        "daily_spend",
-      ),
-      requireQuery(
-        supabase.from("account_reviews").select("client_id, reviewed_at").order("reviewed_at", { ascending: false }),
-        "account_reviews",
-      ),
-      // Fonte real de Atividade (task criada/editada/concluída/comentada,
-      // comentário de sprint) — `operational_activities`/view agregada já
-      // existiam (Etapa 15) pra outro propósito; aqui viram, junto com
-      // `account_reviews` acima, os dois insumos legítimos de "alguém agiu
-      // nesta conta", nunca um valor fabricado.
-      requireQuery(
-        supabase.from("client_last_operational_activity").select("client_id, last_activity_at"),
-        "client_last_operational_activity",
-      ),
-      requireQuery(
-        supabase
-          .from("tasks")
-          .select("client_id, status, due_date")
-          .in("status", ["pendente", "atrasado"]),
-        "tasks",
-      ),
-      // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
-      // mais só `channel = 'meta'`) — `resolveClientMonthlyPlan` resolve o
-      // investimento/meta de resultado vigente POR CANAL, consolidado é a
-      // soma aditiva (nunca o plano de um canal só).
-      requireQuery(
-        supabase
-          .from("monthly_budget_changes")
-          .select("client_id, channel, month, changed_at, new_amount, target_result_count")
-          .lte("month", monthRange.firstDay),
-        "monthly_budget_changes:plan-history",
-      ),
-      requireQuery(
-        supabase.from("account_review_cadences").select("client_id, max_business_days_without_review, is_active"),
-        "account_review_cadences",
-      ),
-      // Integração Stract (arquitetura aprovada — ver DECISIONS.md): cliente
-      // com uma import_source ativa lê performance de `daily_performance`,
-      // nunca de `performance_records` — nunca os dois somados. `enabled`
-      // é o único campo que decide isso (status é só observabilidade).
-      requireQuery(supabase.from("import_sources").select("client_id").eq("enabled", true), "import_sources:active"),
-      // Investimento manual multicanal (`sprint_channel_spend`, adotada como
-      // fonte de verdade — ver `resolveManualActualSpend`, lib/effective-spend.ts)
-      // — mesma busca sem filtro já usada pela Visão Geral (`page.tsx`).
-      requireQuery(
-        supabase.from("sprint_channel_spend").select("sprint_id, channel, spend_source, manual_actual_spend"),
-        "sprint_channel_spend",
-      ),
-      // Etapa "Horizonte de Planejamento": clientes de evento (campanha que
-      // termina antes do fim do mês) — sem filtro de cliente (mesmo padrão
-      // de `monthly_budget_changes` acima), resolvido por cliente abaixo.
-      requireQuery(
-        supabase.from("client_month_horizons").select("client_id, planning_end_date").eq("month", monthRange.firstDay),
-        "client_month_horizons",
-      ),
+      requireQuery(clientsQuery.order("name"), "clients"),
+      requireQuery(sprintsQuery, "sprints"),
+      requireQuery(dailySpendQuery, "daily_spend"),
+      requireQuery(latestReviewsQuery, "account_reviews"),
+      requireQuery(lastActivityQuery, "client_last_operational_activity"),
+      requireQuery(openTasksQuery, "tasks"),
+      requireQuery(planChangesQuery, "monthly_budget_changes:plan-history"),
+      requireQuery(reviewCadencesQuery, "account_review_cadences"),
+      requireQuery(activeImportSourcesQuery, "import_sources:active"),
+      requireQuery(channelSpendQuery, "sprint_channel_spend"),
+      requireQuery(monthHorizonsQuery, "client_month_horizons"),
     ]);
 
   const monthHorizonByClient = new Map(monthHorizons.map((row) => [row.client_id, row.planning_end_date]));

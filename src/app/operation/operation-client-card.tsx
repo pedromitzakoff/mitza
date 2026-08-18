@@ -36,7 +36,10 @@ const PRIORITY_GROUP_LABEL: Record<OperationPriorityGroup, string> = {
   sem_dados: "Sem dados",
 };
 
-const PRIORITY_GROUP_TONE: Record<OperationPriorityGroup, StatusTone> = {
+/** Exportado (Etapa "Motivo da Operação no Cliente") pra página individual
+ * do cliente colorir a mesma frase de motivo com o mesmo tom — nenhuma
+ * segunda tabela crítico/atenção/saudável→cor, a mesma fonte única. */
+export const PRIORITY_GROUP_TONE: Record<OperationPriorityGroup, StatusTone> = {
   critico: "danger",
   atencao: "warning",
   saudavel: "success",

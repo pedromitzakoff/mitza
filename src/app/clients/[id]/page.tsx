@@ -49,6 +49,11 @@ import { formatMonthLabel, formatRelativeDateTime, formatShortDate } from "@/lib
 import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
 import { fetchClientOperationalHistory } from "@/lib/client-operational-history";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL, contractStatusBannerText, isWorkspaceClient } from "@/lib/client-fields";
+import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
+import { resolveOperationPriorityGroup } from "@/lib/operation-triage";
+import { PRIORITY_GROUP_TONE } from "@/app/operation/operation-client-card";
+import { emphasizeDeviationText } from "@/components/workspace/status-dot";
+import { SECONDARY_ACTION_BUTTON_CLASSES } from "@/components/ui/section-header";
 import { syncClientMetaAction } from "../meta-actions";
 import { syncClientStractSourcesAction } from "../stract-sync-actions";
 import { getLatestSyncRunStatusForSources } from "@/lib/stract-sync";
@@ -401,6 +406,30 @@ export default async function ClientPage({
   // página) continuam fora do filtro — não fazem sentido "por mês".
   const { firstDay, lastDay } = monthRangeFromParam(monthQueryParam, today);
   const isCurrentMonth = firstDay === currentMonthRange(today).firstDay;
+
+  // Etapa "Motivo da Operação no Cliente": a mesma conclusão que a
+  // Operação já mostra ("Crítico — CPL 58% acima da meta") passa a
+  // aparecer aqui também — sempre a do MÊS CORRENTE (independente de qual
+  // mês o gestor está navegando nesta página agora), porque a pergunta que
+  // isso responde é "por que a Operação me trouxe até aqui HOJE", não "como
+  // estava a conta no mês que estou olhando". `loadClientOperationalStates`
+  // é a MESMA pipeline que alimenta `/operation` (Motor de Saúde da Conta,
+  // `lib/account-health-engine.ts`) — só escopada a este único cliente, via
+  // o parâmetro `clientId` (ver `lib/client-operational-state-data.ts`).
+  // Nenhuma severidade recalculada aqui, nenhuma regra nova: só lemos
+  // `evaluation.primaryReason`/`primaryDimension` já prontos. Cliente
+  // pausado/encerrado não passa pelo filtro de `status` desta pipeline
+  // (mesmo filtro que a Operação já usa) — `clientOperationalState` fica
+  // `null` e a linha simplesmente não aparece, sem tratamento especial
+  // aqui.
+  const [clientOperationalState] = await loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, id);
+  const primaryReasonText = clientOperationalState?.evaluation.primaryDimension
+    ? clientOperationalState.evaluation.primaryReason
+    : null;
+  const primaryReasonTone = clientOperationalState
+    ? PRIORITY_GROUP_TONE[resolveOperationPriorityGroup(clientOperationalState.evaluation)]
+    : "neutral";
+
   const monthParam = firstDay.slice(0, 7);
   const monthLabel = formatMonthLabel(firstDay);
   const monthQuery = monthQueryParam ? `?month=${monthQueryParam}` : "";
@@ -1113,6 +1142,15 @@ export default async function ClientPage({
     ? `Gestor: ${client.primary_manager.name}`
     : "Sem gestor atribuído";
 
+  // Etapa "Restaurar Registrar Revisão no Cliente": mesmo drawer/Server
+  // Action que `/sprints` já usa (`RecordAccountReviewDrawer`/
+  // `recordAccountReviewAction`, abertos via `?review=new`, já renderizados
+  // mais abaixo nesta própria página) — aqui só falta o link de entrada,
+  // que nunca existiu na página individual. Nenhum formulário novo, nenhuma
+  // permissão nova: mesmo gate (`canOperate`) que já protege as outras
+  // ações de criação desta página (Atualizar Meta, comentários, tarefas).
+  const newReviewHref = withParam(returnTo, "review=new");
+
   // Cabeçalho da conta — dois indicadores independentes (Etapa "Dois
   // relógios no cabeçalho"): "Última otimização" responde "a operação está
   // sendo acompanhada?" (evento do GESTOR, mesma fonte de sempre,
@@ -1399,6 +1437,20 @@ export default async function ClientPage({
                 </span>
               </div>
               <p className="mt-1 text-sm text-overview-text-secondary">{identitySecondaryLine}</p>
+              {/* Etapa "Motivo da Operação no Cliente": a mesma frase que
+                  justifica o balde Crítico/Atenção na Operação
+                  (`evaluation.primaryReason`, calculado por
+                  `evaluateAccountHealth()` — nenhuma segunda lógica), com o
+                  mesmo destaque discreto (`emphasizeDeviationText`, só o
+                  número em destaque, nunca a frase inteira colorida) já
+                  usado no card da Operação. Ausente quando o cliente está
+                  saudável (`primaryDimension === null`, mesma condição de
+                  lá) — nenhum "Nenhum sinal de atenção" fabricado aqui. */}
+              {primaryReasonText && (
+                <p className="mt-0.5 text-xs text-overview-text-secondary" title={primaryReasonText}>
+                  {emphasizeDeviationText(primaryReasonText, primaryReasonTone)}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1442,6 +1494,17 @@ export default async function ClientPage({
                 {ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}
                 {lastOptimizationDetail ? ` · ${lastOptimizationDetail}` : ""}
               </p>
+            )}
+            {/* Etapa "Restaurar Registrar Revisão no Cliente": ação de
+                criação junto do card que já lê este mesmo dado — relação
+                semântica direta com "Última otimização", nunca um CTA
+                solto. Mesmo drawer/action de sempre (`?review=new`,
+                renderizado mais abaixo nesta página); `canOperate` é o
+                mesmo gate das outras ações de criação da página. */}
+            {canOperate && (
+              <Link href={newReviewHref} scroll={false} className={`mt-1.5 ${SECONDARY_ACTION_BUTTON_CLASSES}`}>
+                Registrar revisão
+              </Link>
             )}
           </div>
           <div className="w-full rounded-lg border border-overview-border bg-overview-surface p-3 sm:w-56">
