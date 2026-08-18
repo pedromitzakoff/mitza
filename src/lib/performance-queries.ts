@@ -145,6 +145,44 @@ export async function getDailySpendRowsForPeriod(
   return data ?? [];
 }
 
+export interface LatestDailySpendCapture {
+  /** Dia (civil) do investimento mais recente já gravado. */
+  date: string;
+  /** Instante exato em que ESSE dia foi gravado/sobrescrito pela última vez
+   * — não confundir com "agora", pode ser bem mais antigo que o último
+   * ciclo de sincronização se aquele dia não foi tocado desde então. */
+  syncedAt: string;
+}
+
+/**
+ * Data + horário exatos de captura do dia de investimento mais recente
+ * (`daily_spend`, qualquer canal) — responde "até quando, e a que horas, os
+ * números que estou vendo são reais?", a pergunta mais direta possível já
+ * que é a MESMA linha que alimenta "Investido" em qualquer tela.
+ *
+ * Achado da auditoria "investimento não bate" (Baile do Hawai): o horário
+ * de captura de um dia específico é o que revela se aquele número é o dia
+ * inteiro fechado ou só uma fração capturada de manhã (ex.: 15h55 capturou
+ * só R$47 de um dia que fechou em R$243 — o mesmo dia, sincronizado às
+ * 23h01, já tinha o valor certo). Sem `synced_at` visível, essa diferença
+ * fica invisível até alguém comparar manualmente com o Meta Ads Manager.
+ *
+ * Client normal (RLS) — mesma regra de `getDailySpendRowsForPeriod`, sem
+ * gate admin: `daily_spend` já é lido por qualquer gestor com acesso à
+ * página do cliente.
+ */
+export async function getLatestDailySpendCapture(supabase: Supabase, clientId: string): Promise<LatestDailySpendCapture | null> {
+  const { data } = await supabase
+    .from("daily_spend")
+    .select("date, synced_at")
+    .eq("client_id", clientId)
+    .order("date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return data ? { date: data.date, syncedAt: data.synced_at } : null;
+}
+
 /** Clientes (dentre os passados) com integração automática ativa — usado
  * pra decidir, por cliente, se a leitura de performance vem de
  * `daily_performance` (Stract) ou `performance_records` (manual), nunca as

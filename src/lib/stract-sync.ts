@@ -628,40 +628,6 @@ export async function getLatestSyncRunStatusForSources(importSourceIds: string[]
   return data ? { status: data.status, startedAt: data.started_at } : null;
 }
 
-/**
- * Data mais recente (`import_sources.last_imported_date`, o maior valor
- * entre as fontes do cliente) de dado REAL já sincronizado — responde "até
- * quando os números que estou vendo são de verdade?", pergunta diferente de
- * `getLatestSyncRunStatusForSources` (que só diz QUANDO a sincronização
- * rodou, nunca até que dia ela trouxe dado). Uma sincronização pode rodar
- * "com sucesso" hoje e mesmo assim só trazer dado até um dia antigo — achado
- * real da auditoria "investimento não bate": uma fonte ficou dias
- * sincronizando com sucesso trazendo sempre só o dia corrente, sem nenhum
- * sinal visível disso na interface até comparar manualmente com o Meta Ads
- * Manager. `last_imported_date` já existe e já é atualizado corretamente a
- * cada sync (`runImportForSource`, acima) — só nunca tinha sido exibido em
- * lugar nenhum.
- *
- * Mesmo motivo de `getLatestSyncRunStatusForSources` pro client ADMIN:
- * visível a qualquer gestor com acesso à página, sem depender de RLS
- * admin-only.
- */
-export async function getLatestImportedDateForSources(importSourceIds: string[]): Promise<string | null> {
-  if (importSourceIds.length === 0) return null;
-
-  const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("import_sources")
-    .select("last_imported_date")
-    .in("id", importSourceIds)
-    .not("last_imported_date", "is", null)
-    .order("last_imported_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  return data?.last_imported_date ?? null;
-}
-
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 async function finishRun(

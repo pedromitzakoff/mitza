@@ -146,6 +146,15 @@ export function formatDateTime(value: string): string {
  * pelos outros formatters de hora deste arquivo. */
 const timeOnlyFormatter = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: APP_TIMEZONE });
 
+/** Só o horário ("15:55"), no fuso da agência, a partir de um INSTANTE real
+ * (timestamptz) — usado quando o dia civil já é mostrado separadamente por
+ * outro campo (ex.: "dados até 17/08" + "capturados às 15:55" da última
+ * captura de `daily_spend`) e repetir a data também no horário seria
+ * redundante. */
+export function formatTimeOnly(value: string): string {
+  return timeOnlyFormatter.format(new Date(value));
+}
+
 /** Diferença em dias civis no fuso da agência (`APP_TIMEZONE`) entre `value`
  * e `today` — nunca `getUTCFullYear/Month/Date()` direto num timestamptz
  * (achado real: um sync às 17:37 no fuso da agência, entre 21h e 23h59
