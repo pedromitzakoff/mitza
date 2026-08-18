@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
   Clock,
@@ -212,6 +212,57 @@ function NavLink({
   );
 }
 
+/**
+ * Etapa "Revisão da Sidebar — indicador de overflow": detecta se a região
+ * de navegação tem mais conteúdo além do que está visível, em cada borda
+ * (topo/rodapé) — hoje a scrollbar fica escondida (`mitza-scrollbar-hidden`)
+ * sem nenhum outro indício de que dá pra rolar, o que pode esconder pastas
+ * de gestor numa agência com muitos gestores.
+ *
+ * `contentRef` (altura natural, cresce com o conteúdo) é observado via
+ * `ResizeObserver` — necessário porque `scrollRef` (o container com
+ * `overflow-y-auto`) tem altura FIXA (via flex), então abrir/fechar uma
+ * pasta de gestor nunca redimensiona `scrollRef` em si, só o conteúdo
+ * dentro dele. Sem essa distinção, o indicador nunca reagiria a pastas
+ * abrindo/fechando, só a scroll manual.
+ */
+function useScrollEdges(): {
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  contentRef: React.RefObject<HTMLDivElement | null>;
+  edges: { top: boolean; bottom: boolean };
+} {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [edges, setEdges] = useState({ top: false, bottom: false });
+
+  useEffect(() => {
+    const scrollEl = scrollRef.current;
+    const contentEl = contentRef.current;
+    if (!scrollEl || !contentEl) return;
+
+    function measure() {
+      if (!scrollEl) return;
+      const scrollable = scrollEl.scrollHeight > scrollEl.clientHeight + 1;
+      setEdges({
+        top: scrollable && scrollEl.scrollTop > 1,
+        bottom: scrollable && scrollEl.scrollTop + scrollEl.clientHeight < scrollEl.scrollHeight - 1,
+      });
+    }
+
+    measure();
+    scrollEl.addEventListener("scroll", measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(contentEl);
+
+    return () => {
+      scrollEl.removeEventListener("scroll", measure);
+      observer.disconnect();
+    };
+  }, []);
+
+  return { scrollRef, contentRef, edges };
+}
+
 function SidebarContent({
   profile,
   agencyTree,
@@ -232,6 +283,7 @@ function SidebarContent({
   const principal = items.filter((item) => item.group === "principal");
   const flexivel = items.filter((item) => item.group === "flexivel");
   const initial = profile.name.trim().charAt(0).toUpperCase() || "?";
+  const { scrollRef, contentRef, edges } = useScrollEdges();
 
   return (
     <div className="flex h-full flex-col">
@@ -265,53 +317,60 @@ function SidebarContent({
       </div>
 
       {/* Região com scroll próprio: só a navegação rola se não couber —
-       * rodapé (usuário/sair) fica sempre visível, fora desta região. */}
-      <div className="mitza-scrollbar-hidden flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <nav className="flex flex-col gap-0.5 px-2.5">
-          {principal.map((item) => (
-            <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
-          ))}
-        </nav>
+       * rodapé (usuário/sair) fica sempre visível, fora desta região.
+       * Etapa "Revisão da Sidebar": envolvida num wrapper `relative` pra
+       * caber os fades de overflow abaixo, sem mudar nada do scroll/drag-
+       * and-drop já existente — os fades são só `pointer-events-none`,
+       * nunca interceptam clique nem toque. */}
+      <div className="relative min-h-0 flex-1">
+        <div ref={scrollRef} className="mitza-scrollbar-hidden h-full overflow-y-auto">
+          <div ref={contentRef} className="flex min-h-full flex-col">
+            <nav className="flex flex-col gap-0.5 px-2.5">
+              {principal.map((item) => (
+                <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
+              ))}
+            </nav>
 
-        {/* Recolhida (só desktop): não tenta mostrar a árvore no modo
-         * compacto, mesmo comportamento das demais seções da nav. */}
-        <div className={collapsed ? "md:hidden" : ""}>{agencyTree}</div>
+            {/* Recolhida (só desktop): não tenta mostrar a árvore no modo
+             * compacto, mesmo comportamento das demais seções da nav. */}
+            <div className={collapsed ? "md:hidden" : ""}>{agencyTree}</div>
 
-        <div className="flex-1" />
+            <div className="flex-1" />
 
-        {(flexivel.length > 0 || isAdmin) && (
-          <div className="flex flex-col gap-0.5 px-2.5 pb-2">
-            {/* Etapa "MITZA 2.0 — Fase H": rótulo visual só pra deixar
-             * explícito que Equipe/Configurações são Administração —
-             * infraestrutura fora da hierarquia operacional, nunca um
-             * terceiro nível ao lado de Painel Geral/Operação. */}
             {flexivel.length > 0 && (
-              <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 ${collapsed ? "md:hidden" : ""}`}>
-                Administração
-              </span>
+              <div className="flex flex-col gap-0.5 px-2.5 pb-2">
+                {/* Etapa "MITZA 2.0 — Fase H": rótulo visual só pra deixar
+                 * explícito que Equipe/Configurações são Administração —
+                 * infraestrutura fora da hierarquia operacional, nunca um
+                 * terceiro nível ao lado de Painel Geral/Operação. Etapa
+                 * "Revisão da Sidebar": "Atualizar Meta (todos)" saiu daqui
+                 * — não é uma rota, é uma ação técnica; agora vive no
+                 * rodapé, junto do relógio, com peso visual secundário. */}
+                <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 ${collapsed ? "md:hidden" : ""}`}>
+                  Administração
+                </span>
+                <nav className="flex flex-col gap-0.5">
+                  {flexivel.map((item) => (
+                    <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
+                  ))}
+                </nav>
+              </div>
             )}
-            <div className="flex items-center gap-1">
-              <nav className="flex flex-1 flex-col gap-0.5">
-                {flexivel.map((item) => (
-                  <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
-                ))}
-              </nav>
-              {isAdmin && (
-                <form action={syncAllMetaAction}>
-                  <Tooltip label="Atualizar Meta (todos)">
-                    <button
-                      type="submit"
-                      aria-label="Atualizar Meta (todos)"
-                      className="mitza-pressable shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-                    >
-                      <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    </button>
-                  </Tooltip>
-                </form>
-              )}
-            </div>
           </div>
-        )}
+        </div>
+
+        {/* Etapa "Revisão da Sidebar — indicador de overflow": fade sutil
+         * no topo/rodapé da região de navegação quando há mais conteúdo pra
+         * rolar além do visível (`edges`, `useScrollEdges` acima) — nunca
+         * aparece se o conteúdo já couber inteiro. */}
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-black to-transparent transition-opacity duration-150 ${edges.top ? "opacity-100" : "opacity-0"}`}
+        />
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-black to-transparent transition-opacity duration-150 ${edges.bottom ? "opacity-100" : "opacity-0"}`}
+        />
       </div>
 
       {/* RODAPÉ — sempre visível, uma borda sutil separando do resto.
@@ -320,6 +379,25 @@ function SidebarContent({
        * com a navegação (Etapa Global UX Refinement 1.0). */}
       <div className="shrink-0 space-y-2 border-t border-white/10 p-2.5">
         <SidebarClock collapsed={collapsed} />
+
+        {/* Etapa "Revisão da Sidebar": movido do grupo "Administração" pra
+         * cá — não é uma rota, é uma ação técnica (dispara sync manual do
+         * Meta), então recebe o mesmo peso visual discreto do relógio
+         * acima (11px, cinza), nunca competindo com Equipe/Configurações. */}
+        {isAdmin && (
+          <form action={syncAllMetaAction}>
+            <Tooltip label="Atualizar Meta (todos)">
+              <button
+                type="submit"
+                aria-label="Atualizar Meta (todos)"
+                className={`mitza-pressable flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-[11px] text-zinc-500 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-zinc-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center" : ""}`}
+              >
+                <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <ItemLabel collapsed={collapsed}>Atualizar Meta (todos)</ItemLabel>
+              </button>
+            </Tooltip>
+          </form>
+        )}
 
         <div
           className={`flex items-center gap-2 ${collapsed ? "md:justify-center" : ""}`}
