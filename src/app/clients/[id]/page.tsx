@@ -14,7 +14,7 @@ import {
   getDailyPerformanceRowsForPeriod,
   getDailySpendRowsForPeriod,
   getEnabledImportSourceIdsForClient,
-  getLatestDailySpendCapture,
+  getLatestDailySpendDate,
   getRecentSyncRunsForClient,
   resolvePerformanceRowsForSprints,
   type SyncRunSummary,
@@ -45,7 +45,7 @@ import {
 } from "@/lib/channel-spend";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatMonthLabel, formatRelativeDateTime, formatShortDate, formatTimeOnly } from "@/lib/format";
+import { formatMonthLabel, formatRelativeDateTime, formatShortDate } from "@/lib/format";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
 import { fetchClientOperationalHistory } from "@/lib/client-operational-history";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL, contractStatusBannerText, isWorkspaceClient } from "@/lib/client-fields";
@@ -338,10 +338,11 @@ export default async function ClientPage({
   // - `recentSyncRuns`: histórico completo (linhas lidas/gravadas, erro
   //   bruto) — client normal (RLS), só populado pra admin de propósito.
   const latestSyncStatus = stractImportSourceIds.length > 0 ? await getLatestSyncRunStatusForSources(stractImportSourceIds) : null;
-  // "Até quando, e a que horas, os números são reais?" — diferente de
-  // `latestSyncStatus` (que só diz quando a sincronização RODOU). Ver
-  // comentário completo em `getLatestDailySpendCapture`.
-  const latestSpendCapture = stractImportSourceIds.length > 0 ? await getLatestDailySpendCapture(supabase, id) : null;
+  // "Até quando os números são reais?" — diferente de `latestSyncStatus`
+  // (que só diz quando a sincronização RODOU). Ver comentário completo em
+  // `getLatestDailySpendDate` — deliberadamente só a data, nunca um horário
+  // (ver nota lá sobre por que `synced_at` não serve pra isso).
+  const latestSpendDate = stractImportSourceIds.length > 0 ? await getLatestDailySpendDate(supabase, id) : null;
   const recentSyncRuns = isAdmin && stractImportSourceIds.length > 0 ? await getRecentSyncRunsForClient(supabase, stractImportSourceIds) : [];
 
   // Habilitar Gestores 1.0: "Atualizar performance" (investimento realizado
@@ -1495,18 +1496,19 @@ export default async function ClientPage({
           só pra admin (RLS de `data_sync_runs`, ver
           `getRecentSyncRunsForClient`).
 
-          Etapa "Auditoria Investimento Errado": "dados até DD/MM, capturados
-          às HH:mm" somado — `latestSyncStatus` só diz QUANDO a sincronização
-          rodou, nunca até que dia (e a que horas) ela trouxe dado real
-          (`latestSpendCapture`, `daily_spend.synced_at` da data mais
-          recente). Uma fonte pode sincronizar "com sucesso" todo dia e mesmo
-          assim só trazer uma fração do dia — foi exatamente isso que
-          aconteceu (um dia capturado às 15h55 tinha só 20% do valor real; o
-          mesmo dia, capturado às 23h01, já estava correto), sem nenhum
-          sinal visível até comparar manualmente com o Meta Ads Manager. Só
-          exibe o dado já existente, sem nenhuma classificação nova (nunca
-          compara com hoje pra decidir "atrasado"/"em dia" — isso fica a
-          critério de quem lê). */}
+          Etapa "Auditoria Investimento Errado": "dados até DD/MM" somado —
+          `latestSyncStatus` só diz QUANDO a sincronização rodou, nunca até
+          que dia ela trouxe dado real (`latestSpendDate`, data mais recente
+          em `daily_spend`). Uma fonte pode sincronizar "com sucesso" todo
+          dia e mesmo assim só trazer dado até um dia antigo — foi
+          exatamente isso que aconteceu (Baile do Hawai), sem nenhum sinal
+          visível até comparar manualmente com o Meta Ads Manager. Só exibe
+          o dado já existente, sem nenhuma classificação nova (nunca compara
+          com hoje pra decidir "atrasado"/"em dia" — isso fica a critério de
+          quem lê). Deliberadamente SEM horário — ver nota em
+          `getLatestDailySpendDate` sobre por que expor `synced_at` como
+          "horário de captura" é redundante/confuso no caso saudável
+          (tentativa revertida). */}
       {stractImportSourceIds.length > 0 && (
         <div className="rounded-md border border-overview-border bg-overview-surface px-3 py-2 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1522,9 +1524,7 @@ export default async function ClientPage({
               </span>
               <span className="text-xs text-overview-text-secondary">
                 Stract{latestSyncStatus ? ` · sincronizado ${formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant)}` : ""}
-                {latestSpendCapture
-                  ? ` · dados até ${formatShortDate(latestSpendCapture.date)}, capturados às ${formatTimeOnly(latestSpendCapture.syncedAt)}`
-                  : ""}
+                {latestSpendDate ? ` · dados até ${formatShortDate(latestSpendDate)}` : ""}
               </span>
             </div>
             {canOperate && (
