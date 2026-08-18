@@ -30,7 +30,7 @@ export interface RecurringTaskItem {
 }
 
 const fieldClasses =
-  "rounded-md border border-zinc-300 px-2 py-1 text-xs text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50";
+  "rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground outline-none focus:border-zinc-500";
 
 function ClientScopePicker({
   task,
@@ -47,7 +47,7 @@ function ClientScopePicker({
       </label>
 
       {clients.length > 0 && (
-        <details className="rounded-md border border-dashed border-zinc-300 p-2 dark:border-zinc-700">
+        <details className="rounded-md border border-dashed border-border p-2">
           <summary className="cursor-pointer select-none">
             Ou escolher clientes específicos
             {!task?.appliesToAll && task && task.selectedClientIds.length > 0
@@ -56,7 +56,7 @@ function ClientScopePicker({
           </summary>
           <div className="mt-2 grid max-h-40 grid-cols-2 gap-x-3 gap-y-1 overflow-y-auto">
             {clients.map((client) => (
-              <label key={client.id} className={`flex items-center gap-1.5 ${isWorkspaceClient(client) ? "" : "text-zinc-400 dark:text-zinc-600"}`}>
+              <label key={client.id} className={`flex items-center gap-1.5 ${isWorkspaceClient(client) ? "" : "text-muted-foreground"}`}>
                 <input type="checkbox" name="client_ids" value={client.id} defaultChecked={task?.selectedClientIds.includes(client.id) ?? false} />
                 {client.name}
                 {!isWorkspaceClient(client) && (
@@ -135,7 +135,7 @@ function RecurringTaskFields({
           type="color"
           name="color"
           defaultValue={task?.color ?? "#4169E1"}
-          className="h-7 w-9 rounded border border-zinc-300 dark:border-zinc-700"
+          className="h-7 w-9 rounded border border-border"
           aria-label="Cor"
         />
         <select name="default_assignee_id" defaultValue={task?.defaultAssigneeId ?? ""} className={fieldClasses}>
@@ -220,7 +220,7 @@ export function RecurringTasksList({
         <div
           key={task.id}
           className={`flex flex-wrap items-start gap-2 rounded-lg border p-3 ${
-            task.isActive ? "border-zinc-200 dark:border-zinc-800" : "border-zinc-200 opacity-50 dark:border-zinc-800"
+            task.isActive ? "border-border" : "border-border opacity-50"
           }`}
         >
           <form action={updateRecurringTaskAction.bind(null, task.id)} className="flex flex-1 flex-wrap items-start gap-2">
@@ -261,7 +261,7 @@ export function RecurringTasksList({
         </div>
       ))}
 
-      <form action={createRecurringTaskAction} className="flex flex-wrap items-start gap-2 rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
+      <form action={createRecurringTaskAction} className="flex flex-wrap items-start gap-2 rounded-lg border border-dashed border-border p-3">
         <RecurringTaskFields managers={managers} clients={clients} />
         <SubmitButton
           pendingChildren="Adicionando..."

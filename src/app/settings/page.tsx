@@ -24,7 +24,8 @@ const SETTINGS_GROUPS: { label: string; items: SettingsLink[] }[] = [
       {
         href: "/settings/clients",
         title: "Clientes",
-        description: "Cadastro e dados estruturais: contrato, contatos, comercial e contexto estratégico.",
+        description:
+          "Cadastro, responsáveis, dados operacionais e configurações completas de cada cliente — inclusive integrações, metas e cadência de revisão.",
       },
       {
         href: "/settings/deleted-clients",

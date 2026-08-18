@@ -27,7 +27,7 @@ export interface GlobalTemplateItem {
 }
 
 const fieldClasses =
-  "rounded-md border border-zinc-300 px-2 py-1 text-xs text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50";
+  "rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground outline-none focus:border-zinc-500";
 
 /**
  * Como são tarefas padronizadas, o tipo já define o nome exibido
@@ -124,7 +124,7 @@ function ClientScopePicker({
       </label>
 
       {clients.length > 0 && (
-        <details className="rounded-md border border-dashed border-zinc-300 p-2 dark:border-zinc-700">
+        <details className="rounded-md border border-dashed border-border p-2">
           <summary className="cursor-pointer select-none">
             Ou escolher clientes específicos
             {!template?.applies_to_all && template && template.selectedClientIds.length > 0
@@ -135,7 +135,7 @@ function ClientScopePicker({
             {clients.map((client) => (
               <label
                 key={client.id}
-                className={`flex items-center gap-1.5 ${isWorkspaceClient(client) ? "" : "text-zinc-400 dark:text-zinc-600"}`}
+                className={`flex items-center gap-1.5 ${isWorkspaceClient(client) ? "" : "text-muted-foreground"}`}
               >
                 <input
                   type="checkbox"
@@ -173,9 +173,7 @@ export function SprintTaskTemplatesList({
         <div
           key={template.id}
           className={`flex flex-wrap items-start gap-2 rounded-lg border p-3 ${
-            template.is_active
-              ? "border-zinc-200 dark:border-zinc-800"
-              : "border-zinc-200 opacity-50 dark:border-zinc-800"
+            template.is_active ? "border-border" : "border-border opacity-50"
           }`}
         >
           <form
@@ -223,7 +221,7 @@ export function SprintTaskTemplatesList({
 
       <form
         action={createGlobalTemplateAction}
-        className="flex flex-wrap items-start gap-2 rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700"
+        className="flex flex-wrap items-start gap-2 rounded-lg border border-dashed border-border p-3"
       >
         <TemplateFields managers={managers} clients={clients} />
         <SubmitButton

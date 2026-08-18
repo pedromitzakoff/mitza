@@ -16,7 +16,7 @@ export default async function SprintTaskTemplatesPage({
 
   const supabase = await createSupabaseClient();
 
-  const [templates, templateClients, clients, managers, taskLinks] = await Promise.all([
+  const [templates, templateClients, clients, managers, taskLinks, backfillSprintRows] = await Promise.all([
     requireQuery(
       supabase
         .from("sprint_task_templates")
@@ -34,6 +34,13 @@ export default async function SprintTaskTemplatesPage({
     ),
     requireQuery(supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"), "team_members"),
     requireQuery(supabase.from("tasks").select("template_id").not("template_id", "is", null), "tasks:template_id"),
+    // Etapa "Proteger backfill global": prévia de alcance pro botão
+    // "Aplicar às sprints já existentes" — `backfill_sprint_tasks_from_templates()`
+    // roda sobre TODAS as sprints da tabela, sem filtro nenhum (ver
+    // supabase/global-sprint-task-templates.sql), então a contagem real é só
+    // "quantas sprints existem" / "quantos clientes distintos elas cobrem" —
+    // uma única coluna, nenhuma query nova complexa, nenhuma mudança na RPC.
+    requireQuery(supabase.from("sprints").select("client_id"), "sprints:backfill-scope"),
   ]);
 
   // Área administrativa: continua mostrando clientes pausados/encerrados
@@ -56,6 +63,9 @@ export default async function SprintTaskTemplatesPage({
 
   const templatesWithGeneratedTasks = new Set(taskLinks.map((row) => row.template_id));
 
+  const backfillSprintCount = backfillSprintRows.length;
+  const backfillClientCount = new Set(backfillSprintRows.map((row) => row.client_id)).size;
+
   const templateItems: GlobalTemplateItem[] = templates.map((template) => ({
     ...template,
     selectedClientIds: clientIdsByTemplate.get(template.id) ?? [],
@@ -72,7 +82,7 @@ export default async function SprintTaskTemplatesPage({
           existentes&quot;).
         </>
       }
-      actions={<BackfillButton />}
+      actions={<BackfillButton clientCount={backfillClientCount} sprintCount={backfillSprintCount} />}
       backHref="/settings"
     >
       {templateError && (

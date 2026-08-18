@@ -109,7 +109,7 @@ export default async function SettingsClientsPage({
       <div className="mt-2 overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[820px] text-sm">
           <thead>
-            <tr className="border-b border-border bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-muted-foreground dark:bg-zinc-900">
+            <tr className="border-b border-border bg-card text-left text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="px-3 py-1.5">Cliente</th>
               <th className="px-3 py-1.5">Status</th>
               <th className="px-3 py-1.5">Gestor principal</th>
@@ -174,9 +174,10 @@ export default async function SettingsClientsPage({
                   <td className="px-3 py-1.5 text-right">
                     <Link
                       href={`/clients/${client.id}/edit?return_to=${encodeURIComponent("/settings/clients")}`}
-                      className="text-xs font-medium text-brand hover:underline"
+                      className="whitespace-nowrap text-xs font-medium text-brand hover:underline"
+                      title="Abre o cadastro completo: integrações, metas, cadência de revisão e mais"
                     >
-                      Editar
+                      Editar cadastro
                     </Link>
                   </td>
                 </tr>

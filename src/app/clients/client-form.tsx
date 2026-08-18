@@ -8,13 +8,13 @@ import type { Database } from "@/lib/supabase/database.types";
 import { CONTRACTED_SERVICE_OPTIONS } from "@/lib/client-fields";
 import { formatCnpj } from "@/lib/cnpj";
 import { PERFORMANCE_GOAL_OPTIONS, PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
+import { SETTINGS_SECONDARY_BUTTON_CLASSES } from "../settings/settings-shell";
 
 type Manager = { id: string; name: string };
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 
-const inputClasses =
-  "rounded-md border border-zinc-300 px-3 py-2 text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50";
-const labelClasses = "flex flex-col gap-1 text-sm text-zinc-700 dark:text-zinc-300";
+const inputClasses = "rounded-md border border-border bg-card px-3 py-2 text-foreground outline-none focus:border-zinc-500";
+const labelClasses = "flex flex-col gap-1 text-sm text-foreground";
 
 /**
  * MITZA 2.0 — Refinamento do Cadastro do Cliente: esta tela é o cadastro
@@ -36,10 +36,10 @@ export function Block({
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-6 rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950/40">
+    <section className="flex flex-col gap-6 rounded-xl border border-border bg-card p-6">
       <div>
         <h2 className="text-base font-semibold text-foreground">{title}</h2>
-        {description && <p className="mt-1 text-sm text-zinc-500">{description}</p>}
+        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
       <div className="flex flex-col gap-6">{children}</div>
     </section>
@@ -49,7 +49,7 @@ export function Block({
 function Subgroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">{label}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</div>
     </div>
   );
@@ -139,9 +139,9 @@ export function ClientForm({
                 const file = event.target.files?.[0];
                 setPhotoPreview(file ? URL.createObjectURL(file) : null);
               }}
-              className="text-sm text-zinc-600 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-black hover:file:bg-zinc-200 dark:text-zinc-400 dark:file:bg-zinc-800 dark:file:text-zinc-50 dark:hover:file:bg-zinc-700"
+              className="text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground hover:file:bg-zinc-200 dark:file:bg-zinc-800 dark:hover:file:bg-zinc-700"
             />
-            <span className="text-xs text-zinc-400">Sem foto, mostramos as iniciais do cliente.</span>
+            <span className="text-xs text-muted-foreground">Sem foto, mostramos as iniciais do cliente.</span>
           </div>
         </div>
 
@@ -152,12 +152,12 @@ export function ClientForm({
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className={labelClasses}>
-            Empresa (razão social) <span className="text-xs text-zinc-400">(opcional)</span>
+            Empresa (razão social) <span className="text-xs text-muted-foreground">(opcional)</span>
             <input name="legal_name" defaultValue={defaults?.legal_name ?? ""} className={inputClasses} />
           </label>
 
           <label className={labelClasses}>
-            CNPJ <span className="text-xs text-zinc-400">(opcional)</span>
+            CNPJ <span className="text-xs text-muted-foreground">(opcional)</span>
             <input
               name="cnpj"
               inputMode="numeric"
@@ -172,7 +172,7 @@ export function ClientForm({
         </div>
 
         <label className={labelClasses}>
-          Gestor principal <span className="text-xs text-zinc-400">(opcional)</span>
+          Gestor principal <span className="text-xs text-muted-foreground">(opcional)</span>
           <select
             name="primary_manager_id"
             defaultValue={defaults?.primary_manager_id ?? ""}
@@ -188,20 +188,20 @@ export function ClientForm({
         </label>
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-sm text-zinc-700 dark:text-zinc-300">Gestores de apoio</legend>
+          <legend className="text-sm text-foreground">Gestores de apoio</legend>
           {managers.length === 0 && (
             <EmptyState>
               Nenhum membro da equipe cadastrado ainda (cadastre em Equipe).
             </EmptyState>
           )}
           {managers.map((manager) => (
-            <label key={manager.id} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+            <label key={manager.id} className="flex items-center gap-2 text-sm text-foreground">
               <input
                 type="checkbox"
                 name="manager_ids"
                 value={manager.id}
                 defaultChecked={assigned.has(manager.id)}
-                className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+                className="h-4 w-4 rounded border-border"
               />
               {manager.name}
             </label>
@@ -224,7 +224,7 @@ export function ClientForm({
             />
           </label>
           <label className={labelClasses}>
-            Nome da conta de anúncios <span className="text-xs text-zinc-400">(opcional)</span>
+            Nome da conta de anúncios <span className="text-xs text-muted-foreground">(opcional)</span>
             <input
               name="meta_ad_account_name"
               defaultValue={defaults?.meta_ad_account_name ?? ""}
@@ -253,7 +253,7 @@ export function ClientForm({
               defaultValue={defaults?.monthly_planned_spend ?? ""}
               className={inputClasses}
             />
-            <span className="text-xs text-zinc-400">
+            <span className="text-xs text-muted-foreground">
               Valor de referência do cliente — não altera o planejado das sprints.
             </span>
           </label>
@@ -282,12 +282,12 @@ export function ClientForm({
                 </option>
               ))}
             </select>
-            <span className="text-xs text-zinc-400">
+            <span className="text-xs text-muted-foreground">
               Define se os resultados desta conta são acompanhados como leads, vendas ou seguidores.
             </span>
           </label>
           <label className={labelClasses}>
-            Meta de {costMetricLabel.toLowerCase()} <span className="text-xs text-zinc-400">(opcional)</span>
+            Meta padrão de {costMetricLabel.toLowerCase()} <span className="text-xs text-muted-foreground">(opcional)</span>
             <input
               type="number"
               step="0.01"
@@ -296,7 +296,15 @@ export function ClientForm({
               defaultValue={defaults?.target_cost_per_result ?? ""}
               className={inputClasses}
             />
-            <span className="text-xs text-zinc-400">Utilizada para comparar a eficiência atual da conta.</span>
+            {/* Etapa "Clarificar meta padrão" (Auditoria de Settings, item 3):
+                a meta vigente de verdade vem do Planejamento por Canal
+                (mês a mês, na própria página do cliente — `channel-plan-editor.tsx`);
+                este campo é só o fallback quando nenhum canal tem meta
+                definida ainda (`resolveClientMonthlyPlan`, lib/client-plan.ts,
+                nunca alterado aqui — só o texto ficou explícito). */}
+            <span className="text-xs text-muted-foreground">
+              Usada quando não houver uma meta definida no planejamento mensal por canal.
+            </span>
           </label>
           <label className={labelClasses}>
             KPI principal
@@ -314,7 +322,7 @@ export function ClientForm({
 
         <Subgroup label="Contrato">
           <label className={labelClasses}>
-            Início de contrato <span className="text-xs text-zinc-400">(opcional)</span>
+            Início de contrato <span className="text-xs text-muted-foreground">(opcional)</span>
             <input
               type="date"
               name="contract_start_date"
@@ -323,7 +331,7 @@ export function ClientForm({
             />
           </label>
           <label className={labelClasses}>
-            Fim de contrato <span className="text-xs text-zinc-400">(opcional)</span>
+            Fim de contrato <span className="text-xs text-muted-foreground">(opcional)</span>
             <input
               type="date"
               name="contract_end_date"
@@ -332,7 +340,7 @@ export function ClientForm({
             />
           </label>
           <label className={labelClasses}>
-            Próxima renovação <span className="text-xs text-zinc-400">(opcional)</span>
+            Próxima renovação <span className="text-xs text-muted-foreground">(opcional)</span>
             <input
               type="date"
               name="renewal_date"
@@ -433,16 +441,16 @@ export function ClientForm({
         </Subgroup>
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-xs font-medium uppercase tracking-wide text-zinc-400">Serviços contratados</legend>
+          <legend className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Serviços contratados</legend>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {CONTRACTED_SERVICE_OPTIONS.map((service) => (
-              <label key={service} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+              <label key={service} className="flex items-center gap-2 text-sm text-foreground">
                 <input
                   type="checkbox"
                   name="contracted_services"
                   value={service}
                   defaultChecked={contractedServices.has(service)}
-                  className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+                  className="h-4 w-4 rounded border-border"
                 />
                 {service}
               </label>
@@ -529,7 +537,7 @@ export function ClientForm({
               defaultValue={defaults?.dashboard_url ?? ""}
               className={inputClasses}
             />
-            <span className="text-xs text-zinc-400">Usado só pelo atalho &ldquo;Dashboard&rdquo; no prontuário do cliente.</span>
+            <span className="text-xs text-muted-foreground">Usado só pelo atalho &ldquo;Dashboard&rdquo; no prontuário do cliente.</span>
           </label>
           <label className={labelClasses}>
             Link da página de Saldo
@@ -540,7 +548,7 @@ export function ClientForm({
               defaultValue={defaults?.balance_url ?? ""}
               className={inputClasses}
             />
-            <span className="text-xs text-zinc-400">Usado só pelo atalho &ldquo;Saldo&rdquo; no prontuário do cliente.</span>
+            <span className="text-xs text-muted-foreground">Usado só pelo atalho &ldquo;Saldo&rdquo; no prontuário do cliente.</span>
           </label>
           <label className={labelClasses}>
             Instagram
@@ -602,13 +610,10 @@ export function ClientForm({
         >
           {submitLabel}
         </button>
-        <Link
-          href={cancelHref}
-          className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
-        >
+        <Link href={cancelHref} className={`px-4 py-2 text-sm ${SETTINGS_SECONDARY_BUTTON_CLASSES}`}>
           Cancelar
         </Link>
-        <span className="text-xs text-zinc-400">
+        <span className="text-xs text-muted-foreground">
           <span className="text-red-500">*</span> campos obrigatórios
         </span>
       </div>
