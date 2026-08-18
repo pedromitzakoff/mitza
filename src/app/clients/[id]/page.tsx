@@ -65,7 +65,6 @@ import { MonthTasksPanel } from "../month-tasks-panel";
 import { Section } from "../section";
 import { AccountFollowUpPanel, type LastOptimizationInfo } from "../account-follow-up-panel";
 import { ClientOperationalHistoryDrawer } from "../client-operational-history-drawer";
-import { EssentialInfoPanel } from "../essential-info-panel";
 import type { CommentItem } from "../comment-thread";
 import type { TaskListItem } from "../task-row";
 import { RecordAccountReviewDrawer } from "../record-account-review-drawer";
@@ -1844,25 +1843,6 @@ export default async function ClientPage({
             </Section>
           </div>
 
-          {/* Dados estruturais do cliente (briefing) — informação de
-              referência sobre a conta, não faz parte do fluxo diário de
-              trabalho (não muda por mês selecionado), por isso fica no
-              fim, depois de toda a operação. */}
-          <div className="mt-3">
-            <EssentialInfoPanel
-              mainObjective={client.main_objective}
-              mainProductOrService={client.main_product_or_service}
-              operationRegion={client.operation_region}
-              primaryAudience={client.primary_audience}
-              clientDifferentials={client.client_differentials}
-              clientRestrictions={client.client_restrictions}
-              importantSeasonalDates={client.important_seasonal_dates}
-              operationalSummary={client.operational_summary}
-              importantNotes={client.important_notes}
-              isAdmin={isAdmin}
-              editHref={`/clients/${client.id}/edit`}
-            />
-          </div>
         </>
       )}
 
