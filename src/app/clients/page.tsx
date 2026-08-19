@@ -15,6 +15,7 @@ import {
   buildOperationClientCard,
   type OperationClientRawData,
 } from "@/app/operation/operation-data";
+import { resolveReviewComplianceStatus } from "@/lib/account-health-engine";
 import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
 import type { TrafficChannel } from "@/lib/traffic-channels";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
@@ -155,6 +156,24 @@ export default async function ClientsPage({
     if (!lastReviewAtByClient.has(row.client_id)) lastReviewAtByClient.set(row.client_id, row.reviewed_at);
   }
 
+  // Convergência da Regra de Revisão de Conta: mesma decisão oficial que
+  // Operação/Dashboard/Sprints já usam (`resolveReviewComplianceStatus`,
+  // account-health-engine.ts) — nenhuma matemática de cadência nova aqui,
+  // só a busca de `account_review_cadences` que faltava nesta tela.
+  const reviewCadences = clientIds.length > 0
+    ? await requireQuery(
+        supabase.from("account_review_cadences").select("client_id, max_business_days_without_review, is_active").in("client_id", clientIds),
+        "account_review_cadences",
+      )
+    : [];
+  const reviewCadenceByClient = new Map(reviewCadences.map((row) => [row.client_id, row]));
+  const reviewIsOverdueByClient = new Map(
+    clientIds.map((clientId) => [
+      clientId,
+      resolveReviewComplianceStatus(lastReviewAtByClient.get(clientId) ?? null, reviewCadenceByClient.get(clientId) ?? null, today).isOverdue,
+    ]),
+  );
+
   type SprintRow = {
     id: string;
     client_id: string;
@@ -243,6 +262,10 @@ export default async function ClientsPage({
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
       lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
       lastReviewAt: lastReviewAtByClient.get(client.id) ?? null,
+      // `?? false` só cobre a impossibilidade estática do Map.get() (todo
+      // client.id vem do mesmo `clientIds` que populou o mapa) — nunca um
+      // fallback de comportamento de verdade.
+      reviewIsOverdue: reviewIsOverdueByClient.get(client.id) ?? false,
     };
   });
 

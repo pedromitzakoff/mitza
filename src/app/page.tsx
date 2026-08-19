@@ -546,7 +546,10 @@ export default async function Home({
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
       lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
       lastReviewAt: lastReviewAtByClient.get(client.id) ?? null,
-      reviewIsOverdue: reviewOverdueByClient.get(client.id),
+      // `?? false` só cobre a impossibilidade estática do Map.get() (todo
+      // client.id vem do mesmo `clients` que populou o mapa) — nunca um
+      // fallback de comportamento de verdade.
+      reviewIsOverdue: reviewOverdueByClient.get(client.id) ?? false,
       performanceGoal: client.performance_goal,
       // Etapa "Planejamento Mensal 1.0": meta de custo VIGENTE (planejamento
       // mensal, com o campo permanente de `clients` só como fallback) —

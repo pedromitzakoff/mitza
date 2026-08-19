@@ -58,6 +58,7 @@ function minimalRawClient(overrides: Partial<OperationClientRawData>): Operation
     sprintLastActivityAt: null,
     lastSyncedAt: TODAY.toISOString(),
     lastReviewAt: null,
+    reviewIsOverdue: false,
     ...overrides,
   };
 }
@@ -176,21 +177,19 @@ console.log("\nCenário F (integração) — cadência desativada: Sprints tamb�
   check("F integração — priorityTier = 5", priorityTier(card, "month", TODAY), 5);
 }
 
-console.log("\nCompatibilidade — consumidor que NÃO passa reviewIsOverdue preserva o cálculo legado (clients/page.tsx)\n");
+console.log("\nFechamento do último consumidor legado — clients/page.tsx também respeita a cadência oficial, nunca mais 14 dias corridos\n");
 {
-  // undefined (nenhum campo passado) -> comportamento antigo intacto:
-  // 8 dias corridos < 14 -> recente, sem alerta.
-  const legacyClient = minimalRawClient({ lastReviewAt: isoDaysAgo(8) });
-  const card = buildOperationClientCard(legacyClient, TODAY);
-  check("legado — sem reviewIsOverdue, 8 dias corridos ainda conta como recente (14 dias)", card.alerts.some((a) => a.kind === "otimizacao"), false);
+  // Mesmo cenário que já provava a divergência antes desta etapa: 8 dias
+  // corridos é "recente" pra regra antiga (14 dias), mas já está ATRASADO
+  // pra uma cadência de 5 dias úteis. `reviewIsOverdue` (obrigatório agora)
+  // é sempre a decisão oficial — não existe mais nenhum cálculo de dias
+  // corridos em `buildOperationClientCard` pra nenhum consumidor cair.
+  const { isOverdue } = resolveReviewComplianceStatus(isoDaysAgo(8), { max_business_days_without_review: 5, is_active: true }, TODAY);
+  check("fechamento — 8 dias corridos, cadência 5 dias úteis: oficial diz atrasada", isOverdue, true);
 
-  const legacyOverdueClient = minimalRawClient({ lastReviewAt: isoDaysAgo(20) });
-  const legacyOverdueCard = buildOperationClientCard(legacyOverdueClient, TODAY);
-  check(
-    "legado — sem reviewIsOverdue, 20 dias corridos dispara o alerta antigo normalmente",
-    legacyOverdueCard.alerts.some((a) => a.kind === "otimizacao"),
-    true,
-  );
+  const client = minimalRawClient({ lastReviewAt: isoDaysAgo(8), reviewIsOverdue: isOverdue });
+  const card = buildOperationClientCard(client, TODAY);
+  check("fechamento — card reflete atraso mesmo com 8 dias corridos (nunca mais 'recente' por estar < 14)", card.alerts.some((a) => a.kind === "otimizacao"), true);
 }
 
 console.log("\nCenário H — performance crítica (sinal mais urgente do motor legado) + revisão em dia -> prioridade não vem da revisão\n");

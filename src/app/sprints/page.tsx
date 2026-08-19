@@ -605,7 +605,10 @@ export default async function SprintsPage({
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
       lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
       lastReviewAt: lastReviewAtByClient.get(client.id) ?? null,
-      reviewIsOverdue: reviewIsOverdueByClient.get(client.id),
+      // `?? false` só cobre a impossibilidade estática do Map.get() (todo
+      // client.id vem do mesmo `clientIds` que populou o mapa) — nunca um
+      // fallback de comportamento de verdade.
+      reviewIsOverdue: reviewIsOverdueByClient.get(client.id) ?? false,
       sprintClosedSnapshots: sprintClosedSnapshotsByClient.get(client.id) ?? new Map(),
       performanceGoal: client.performance_goal,
       targetCostPerResult: resolvedTargetCostByClient.get(client.id) ?? client.target_cost_per_result,
