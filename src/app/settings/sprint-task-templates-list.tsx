@@ -118,7 +118,7 @@ function ClientScopePicker({
           type="checkbox"
           name="applies_to_all"
           defaultChecked={template?.applies_to_all ?? true}
-          className="accent-black dark:accent-white"
+          className="accent-brand"
         />
         Todos os clientes (atuais e futuros)
       </label>
@@ -142,6 +142,7 @@ function ClientScopePicker({
                   name="client_ids"
                   value={client.id}
                   defaultChecked={template?.selectedClientIds.includes(client.id) ?? false}
+                  className="accent-brand"
                 />
                 {client.name}
                 {!isWorkspaceClient(client) && (

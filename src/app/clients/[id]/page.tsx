@@ -1676,7 +1676,7 @@ export default async function ClientPage({
             scroll={false}
             role="tab"
             aria-selected={tab.key === activeArea}
-            className={`-mb-px shrink-0 border-b-2 pb-1.5 font-medium transition-colors ${
+            className={`-mb-px shrink-0 rounded-t border-b-2 pb-1.5 font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
               tab.key === activeArea
                 ? "border-brand text-brand"
                 : "border-transparent text-overview-text-secondary hover:text-overview-text-primary"

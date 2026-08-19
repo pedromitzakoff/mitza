@@ -13,14 +13,20 @@ import type { ReactNode } from "react";
  * fora de propósito (cada chamador tem um tamanho diferente hoje — texto
  * pequeno inline numa lista vs. botão de ação isolado maior) — sempre
  * combinado como `` `${SETTINGS_SECONDARY_BUTTON_CLASSES} px-2 py-1 text-xs` ``
- * no chamador, nunca duplicado aqui. */
+ * no chamador, nunca duplicado aqui.
+ *
+ * Etapa "Padronização Global de Estados de Interação": `mitza-pressable`
+ * (feedback de "pressionado" ao clicar, mesma classe usada em qualquer
+ * outro botão real da plataforma) entra na base das duas variantes —
+ * alguns chamadores já a repetiam manualmente (inofensivo, mesma regra
+ * aplicada duas vezes); os que não repetiam ficavam sem esse feedback. */
 export const SETTINGS_SECONDARY_BUTTON_CLASSES =
-  "rounded-md border border-border font-medium text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900";
+  "mitza-pressable rounded-md border border-border font-medium text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900";
 
 /** Mesma família acima, variante destrutiva (remover/excluir vínculo) —
  * mesma origem duplicada (2 arquivos), mesma correção. */
 export const SETTINGS_DESTRUCTIVE_BUTTON_CLASSES =
-  "rounded-md border border-red-200 font-medium text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950";
+  "mitza-pressable rounded-md border border-red-200 font-medium text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950";
 
 /**
  * Casco padrão de toda subpágina de Configurações (Etapa "Evolução da

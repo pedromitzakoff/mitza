@@ -62,7 +62,7 @@ export function RegisterExecutionForm({
         name="notes"
         rows={2}
         placeholder="Observações (opcional)"
-        className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand"
+        className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:border-zinc-500"
       />
       <div className="flex flex-col items-start gap-1.5">
         <SubmitButton

@@ -42,7 +42,7 @@ function ClientScopePicker({
   return (
     <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
       <label className="flex items-center gap-1.5">
-        <input type="checkbox" name="applies_to_all" defaultChecked={task?.appliesToAll ?? true} className="accent-black dark:accent-white" />
+        <input type="checkbox" name="applies_to_all" defaultChecked={task?.appliesToAll ?? true} className="accent-brand" />
         Todos os clientes (atuais e futuros)
       </label>
 
@@ -57,7 +57,13 @@ function ClientScopePicker({
           <div className="mt-2 grid max-h-40 grid-cols-2 gap-x-3 gap-y-1 overflow-y-auto">
             {clients.map((client) => (
               <label key={client.id} className={`flex items-center gap-1.5 ${isWorkspaceClient(client) ? "" : "text-muted-foreground"}`}>
-                <input type="checkbox" name="client_ids" value={client.id} defaultChecked={task?.selectedClientIds.includes(client.id) ?? false} />
+                <input
+                  type="checkbox"
+                  name="client_ids"
+                  value={client.id}
+                  defaultChecked={task?.selectedClientIds.includes(client.id) ?? false}
+                  className="accent-brand"
+                />
                 {client.name}
                 {!isWorkspaceClient(client) && (
                   <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}>
@@ -172,7 +178,7 @@ function RecurringTaskFields({
               name="has_checklist"
               checked={hasChecklist}
               onChange={(event) => setHasChecklist(event.target.checked)}
-              className="accent-black dark:accent-white"
+              className="accent-brand"
             />
             Tem checklist ao registrar execução
           </label>

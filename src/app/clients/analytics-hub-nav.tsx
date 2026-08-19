@@ -25,7 +25,7 @@ export function AnalyticsHubNav({ baseHref, activeSection }: { baseHref: string;
           scroll={false}
           role="tab"
           aria-selected={section.key === activeSection}
-          className={`-mb-px shrink-0 border-b-2 pb-2 font-medium transition-colors ${
+          className={`-mb-px shrink-0 rounded-t border-b-2 pb-2 font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
             section.key === activeSection
               ? "border-brand text-brand"
               : "border-transparent text-muted-foreground hover:text-foreground"

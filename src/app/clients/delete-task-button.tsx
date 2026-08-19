@@ -5,7 +5,7 @@ import { useFormStatus } from "react-dom";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const DEFAULT_CLASSES =
-  "rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950";
+  "mitza-pressable rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950";
 
 /** Etapa "Padronização Global de Feedback": `window.confirm()` (nativo do
  * navegador, fora da linguagem visual da plataforma) trocado pelo mesmo

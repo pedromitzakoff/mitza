@@ -10,6 +10,10 @@ import { useToast } from "@/app/toast-provider";
  * terminar, dispara o toast único da plataforma ou um erro discreto
  * embaixo do próprio botão. Reaproveitado em vez de cada tela inventar sua
  * própria versão (Platform Continuity System 1.0).
+ *
+ * Etapa "Padronização Global de Estados de Interação": `focus-visible` na
+ * base, mesmo raciocínio de `SubmitButton` — nenhum chamador precisa mais
+ * lembrar de acrescentar isso na própria className.
  */
 export function ToastActionButton({
   action,
@@ -44,7 +48,7 @@ export function ToastActionButton({
         type="button"
         onClick={handleClick}
         disabled={isPending}
-        className={`${className} mitza-pressable disabled:cursor-not-allowed disabled:opacity-60`}
+        className={`${className} mitza-pressable focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60`}
       >
         {isPending ? pendingLabel : children}
       </button>

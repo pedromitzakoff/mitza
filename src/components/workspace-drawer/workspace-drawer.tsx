@@ -542,7 +542,7 @@ function NoteEditor({
           value={note.title}
           onChange={(event) => onTitleChange(event.target.value)}
           placeholder="Título"
-          className="w-full border-none bg-transparent text-base font-semibold text-foreground outline-none placeholder:text-zinc-400"
+          className="w-full rounded border-none bg-transparent px-1 -mx-1 text-base font-semibold text-foreground outline-none transition-colors placeholder:text-zinc-400 focus:bg-zinc-100 dark:focus:bg-zinc-900"
         />
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
           <span className="tabular-nums">{formatRelativeDateTime(note.updated_at, new Date())}</span>

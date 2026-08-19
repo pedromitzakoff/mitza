@@ -35,7 +35,7 @@ function DeleteTeamMemberTrigger({ memberName, onConfirm }: { memberName: string
         type="button"
         disabled={pending}
         onClick={() => setConfirmOpen(true)}
-        className="w-full rounded px-2 py-1 text-left text-xs text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-300 dark:hover:bg-red-950"
+        className="mitza-pressable w-full rounded px-2 py-1 text-left text-xs text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-300 dark:hover:bg-red-950"
       >
         {pending ? "Excluindo..." : "Excluir definitivamente"}
       </button>

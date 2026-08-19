@@ -164,7 +164,7 @@ export function ActivityComposer({
         placeholder="Adicionar atividade..."
         disabled={isPending}
         aria-label="Título da atividade"
-        className="min-w-[160px] flex-1 bg-transparent text-sm text-overview-text-primary outline-none placeholder:text-overview-text-muted disabled:opacity-60"
+        className="min-w-[160px] flex-1 rounded bg-transparent px-1 -mx-1 text-sm text-overview-text-primary outline-none transition-colors placeholder:text-overview-text-muted focus:bg-overview-surface-hover disabled:opacity-60"
       />
 
       <span className="inline-flex shrink-0 items-center rounded-md border border-overview-border px-2 py-1 text-xs text-overview-text-secondary transition-colors focus-within:border-brand">

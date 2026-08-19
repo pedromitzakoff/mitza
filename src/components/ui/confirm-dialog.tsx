@@ -47,8 +47,8 @@ export function ConfirmDialog({
   const titleId = "confirm-dialog-title";
   const confirmClasses =
     tone === "destructive"
-      ? "rounded-md border border-red-200 bg-transparent px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
-      : "rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover";
+      ? "mitza-pressable rounded-md border border-red-200 bg-transparent px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+      : "mitza-pressable rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover";
 
   return (
     <>
@@ -76,7 +76,7 @@ export function ConfirmDialog({
               type="button"
               onClick={onCancel}
               disabled={pending}
-              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900"
+              className="mitza-pressable rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900"
             >
               Cancelar
             </button>
