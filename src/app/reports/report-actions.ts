@@ -10,6 +10,7 @@ import { getOrCreateReport, buildReportViewData } from "./report-data";
 import { OperationalEventType } from "@/lib/operational-events";
 import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
 import { withOriginalDueDate } from "@/lib/task-creation";
+import { toUserFacingError } from "@/lib/user-facing-error";
 import type {
   KpiDirection,
   KpiUnit,
@@ -59,7 +60,11 @@ export async function updateReportFieldsAction(clientId: string, monthStart: str
     .eq("id", reportId);
 
   const returnTo = reportsUrl(clientId, monthStart);
-  if (error) redirect(`${returnTo}&error=${encodeURIComponent(error.message)}`);
+  if (error) {
+    redirect(
+      `${returnTo}&error=${encodeURIComponent(toUserFacingError(error, "Não foi possível salvar as alterações do relatório."))}`,
+    );
+  }
 
   // Platform Continuity System 1.0: sem redirect no sucesso — quem chama já
   // está na própria página de Relatórios, `revalidatePath` já atualiza os
@@ -91,7 +96,9 @@ export async function updateKpiValueAction(
   );
 
   const returnTo = reportsUrl(clientId, monthStart);
-  if (error) redirect(`${returnTo}&error=${encodeURIComponent(error.message)}`);
+  if (error) {
+    redirect(`${returnTo}&error=${encodeURIComponent(toUserFacingError(error, "Não foi possível salvar o valor do KPI."))}`);
+  }
 
   revalidatePath(`/reports/${clientId}`);
 }
@@ -121,7 +128,9 @@ export async function addTimelineEventAction(clientId: string, monthStart: strin
     created_by: profile?.id ?? null,
   });
 
-  if (error) redirect(`${returnTo}&error=${encodeURIComponent(error.message)}`);
+  if (error) {
+    redirect(`${returnTo}&error=${encodeURIComponent(toUserFacingError(error, "Não foi possível registrar o acontecimento."))}`);
+  }
 
   revalidatePath(`/reports/${clientId}`);
 }
@@ -157,7 +166,9 @@ export async function addActionItemAction(clientId: string, monthStart: string, 
     dependency: dependency as ReportActionItemDependency | null,
   });
 
-  if (error) redirect(`${returnTo}&error=${encodeURIComponent(error.message)}`);
+  if (error) {
+    redirect(`${returnTo}&error=${encodeURIComponent(toUserFacingError(error, "Não foi possível criar a pendência."))}`);
+  }
 
   revalidatePath(`/reports/${clientId}`);
 }
@@ -234,7 +245,7 @@ export async function sendActionItemToSprintAction(actionItemId: string, clientI
     .single();
 
   if (error || !createdTask) {
-    redirect(`${returnTo}&error=${encodeURIComponent(error?.message ?? "Erro ao criar tarefa")}`);
+    redirect(`${returnTo}&error=${encodeURIComponent(toUserFacingError(error, "Não foi possível criar a tarefa."))}`);
   }
 
   await supabase.from("report_action_items").update({ sent_to_task_id: createdTask.id }).eq("id", actionItemId);
@@ -362,7 +373,9 @@ export async function finalizeReportAction(clientId: string, monthStart: string)
     })
     .eq("id", reportId);
 
-  if (error) redirect(`${returnTo}&error=${encodeURIComponent(error.message)}`);
+  if (error) {
+    redirect(`${returnTo}&error=${encodeURIComponent(toUserFacingError(error, "Não foi possível finalizar o relatório."))}`);
+  }
 
   await recordOperationalEvent(supabase, actorFromProfile(profile), {
     eventType: OperationalEventType.MONTHLY_REPORT_FINALIZED,
@@ -445,7 +458,7 @@ export async function addClientKpiAction(clientId: string, formData: FormData) {
     display_order: count ?? 0,
   });
 
-  if (error) redirect(`${returnTo}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`${returnTo}?error=${encodeURIComponent(toUserFacingError(error, "Não foi possível adicionar o KPI."))}`);
 
   // Platform Continuity System 1.0: sem redirect — o formulário de KPIs já
   // vive na própria página de edição do cliente; `revalidatePath` mostra o

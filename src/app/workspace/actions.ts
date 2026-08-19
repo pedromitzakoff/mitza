@@ -5,6 +5,7 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import type { WorkspaceNote } from "@/lib/workspace-notes";
 import { sanitizeNoteHtml } from "@/lib/workspace-notes-sanitize";
+import { toUserFacingError } from "@/lib/user-facing-error";
 
 const NOTE_COLUMNS = "id, user_id, title, content, is_pinned, context_path, context_label, created_at, updated_at";
 
@@ -27,7 +28,7 @@ export async function listWorkspaceNotesAction(): Promise<{ notes: WorkspaceNote
     .select(NOTE_COLUMNS)
     .order("updated_at", { ascending: false });
 
-  if (error) return { error: error.message };
+  if (error) return { error: toUserFacingError(error, "Não foi possível carregar suas notas.") };
   return { notes: data ?? [] };
 }
 
@@ -51,7 +52,7 @@ export async function createWorkspaceNoteAction(
     .select(NOTE_COLUMNS)
     .single();
 
-  if (error || !data) return { error: error?.message ?? "Não foi possível criar a nota." };
+  if (error || !data) return { error: toUserFacingError(error, "Não foi possível criar a nota.") };
   return { note: data };
 }
 
@@ -68,7 +69,7 @@ export async function updateWorkspaceNoteAction(
     .update({ title: fields.title, content: sanitizeNoteHtml(fields.content) })
     .eq("id", noteId);
 
-  if (error) return { error: error.message };
+  if (error) return { error: toUserFacingError(error, "Não foi possível salvar a nota.") };
   return {};
 }
 
@@ -79,7 +80,7 @@ export async function toggleWorkspaceNotePinAction(noteId: string, pinned: boole
   const supabase = await createSupabaseClient();
   const { error } = await supabase.from("workspace_notes").update({ is_pinned: pinned }).eq("id", noteId);
 
-  if (error) return { error: error.message };
+  if (error) return { error: toUserFacingError(error, "Não foi possível atualizar a nota.") };
   return {};
 }
 
@@ -97,6 +98,6 @@ export async function deleteWorkspaceNoteAction(noteId: string): Promise<{ error
   const supabase = await createSupabaseClient();
   const { error } = await supabase.from("workspace_notes").delete().eq("id", noteId);
 
-  if (error) return { error: error.message };
+  if (error) return { error: toUserFacingError(error, "Não foi possível excluir a nota.") };
   return {};
 }
