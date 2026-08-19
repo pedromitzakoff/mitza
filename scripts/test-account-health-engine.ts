@@ -429,4 +429,50 @@ console.log(
   );
 }
 
+console.log("\nAuditoria de Frescor/Confiabilidade de Dados — lastDataSyncAt (repasse, sem severidade)\n");
+
+{
+  // Omitir o campo (todo chamador existente antes desta etapa) preserva
+  // exatamente o comportamento de sempre: evaluation.lastDataSyncAt vem
+  // null, e NENHUMA dimensão muda.
+  const withField = evaluateAccountHealth(baseInput());
+  const withoutField = evaluateAccountHealth(baseInput({ lastDataSyncAt: undefined }));
+  check("lastDataSyncAt omitido -> evaluation.lastDataSyncAt é null", withoutField.lastDataSyncAt, null);
+  check("omitir o campo -> healthStatus idêntico ao caso base", withoutField.healthStatus, withField.healthStatus);
+  check("omitir o campo -> dimensions idêntico ao caso base (mesmo objeto, byte a byte)", withoutField.dimensions, withField.dimensions);
+}
+
+{
+  // Repasse puro: o valor passado entra e sai sem nenhuma transformação —
+  // nunca comparado com `now`, nunca lido por nenhuma dimensão.
+  const evaluation = evaluateAccountHealth(baseInput({ lastDataSyncAt: "2020-01-01T00:00:00.000Z" }));
+  check("lastDataSyncAt passado -> repassado sem alteração em evaluation.lastDataSyncAt", evaluation.lastDataSyncAt, "2020-01-01T00:00:00.000Z");
+}
+
+{
+  // O ponto central da auditoria: mesmo um dado ABSURDAMENTE velho (anos)
+  // não muda NENHUMA dimensão/severidade/healthStatus — confirma que esta
+  // etapa é só exposição do fato, nenhuma regra de frescor foi criada.
+  const freshDataInput = baseInput({ lastDataSyncAt: new Date().toISOString() });
+  const staleDataInput = baseInput({ lastDataSyncAt: "2015-01-01T00:00:00.000Z" });
+  const freshEvaluation = evaluateAccountHealth(freshDataInput);
+  const staleEvaluation = evaluateAccountHealth(staleDataInput);
+  check("dado recentíssimo -> healthStatus saudavel (igual ao caso base)", freshEvaluation.healthStatus, "saudavel");
+  check(
+    "dado de anos atrás -> healthStatus AINDA saudavel (nenhuma regra de frescor decidida nesta etapa)",
+    staleEvaluation.healthStatus,
+    "saudavel",
+  );
+  check(
+    "dado de anos atrás -> dimensions idêntico ao de dado recentíssimo (só lastDataSyncAt difere entre os dois)",
+    staleEvaluation.dimensions,
+    freshEvaluation.dimensions,
+  );
+  check(
+    "dado de anos atrás -> dataQuality continua 'nenhum' (existência, não recência, ainda é o único critério)",
+    staleEvaluation.dimensions.dataQuality.status,
+    "nenhum",
+  );
+}
+
 console.log(`\n${passed} verificações passaram.`);

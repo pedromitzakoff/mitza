@@ -1573,7 +1573,7 @@ export default async function ClientPage({
           `getLatestDailySpendDate` sobre por que expor `synced_at` como
           "horário de captura" é redundante/confuso no caso saudável
           (tentativa revertida). */}
-      {stractImportSourceIds.length > 0 && (
+      {stractImportSourceIds.length > 0 ? (
         <div className="rounded-md border border-overview-border bg-overview-surface px-3 py-2 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -1619,6 +1619,21 @@ export default async function ClientPage({
             </details>
           )}
         </div>
+      ) : (
+        // Auditoria de Frescor/Confiabilidade de Dados: cliente sem fonte
+        // Stract (Meta-only, a maioria) não tinha NENHUM indicador manual de
+        // frescor nesta página — o bloco acima é inteiro condicionado a ter
+        // import_sources. `lastDataSyncAt` já existe e já é calculado (mesmo
+        // valor que agora também alimenta `AccountHealthInput`, ver
+        // account-health-engine.ts) — só nunca tinha sido exibido aqui. Sem
+        // badge de status (não existe "success/partial/failed" pro Meta,
+        // só o timestamp cru de `daily_spend.synced_at`/`performance_records.
+        // source_updated_at`) — nenhuma classificação nova, só o fato.
+        clientOperationalState?.lastDataSyncAt && (
+          <p className="text-xs text-overview-text-secondary">
+            Dados sincronizados {formatRelativeDateTime(clientOperationalState.lastDataSyncAt, nowInstant)}
+          </p>
+        )
       )}
 
       {/* Etapa 59, seção 16: ação rápida depois de registrar uma análise —

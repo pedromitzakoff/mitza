@@ -405,6 +405,18 @@ export async function loadClientOperationalStates(
     const cadence = reviewCadenceByClient.get(client.id) ?? null;
     const { reviewBusinessDaysAgo, reviewMaxBusinessDays } = resolveReviewCadenceInputs(lastReviewAt, cadence, today);
 
+    // Auditoria de Frescor/Confiabilidade de Dados: mesma conta que já
+    // alimentava só `ClientOperationalState.lastDataSyncAt` (abaixo) —
+    // calculada aqui, uma vez, agora também repassada pro Motor de Saúde via
+    // `AccountHealthInput.lastDataSyncAt` (etapa "menor intervenção segura":
+    // só expõe o fato já calculado, nenhuma severidade nova).
+    const lastDataSyncAt =
+      spend.lastUpdatedAt && performanceResult.latestUpdatedAt
+        ? spend.lastUpdatedAt > performanceResult.latestUpdatedAt
+          ? spend.lastUpdatedAt
+          : performanceResult.latestUpdatedAt
+        : (spend.lastUpdatedAt ?? performanceResult.latestUpdatedAt ?? null);
+
     const input: AccountHealthInput = {
       investmentActual: spend.actual,
       investmentPlanned: plan.investmentPlanned,
@@ -419,6 +431,7 @@ export async function loadClientOperationalStates(
       monthExpectedPct,
       reviewBusinessDaysAgo,
       reviewMaxBusinessDays,
+      lastDataSyncAt,
     };
 
     // Etapa "Novo Conceito de Monitoramento Operacional": mesmos números
@@ -460,13 +473,6 @@ export async function loadClientOperationalStates(
       pendencias: { openTasksCount: openCountByClient.get(client.id) ?? 0 },
       atividade: { lastActivityAt, hoursSinceLastActivity },
     });
-
-    const lastDataSyncAt =
-      spend.lastUpdatedAt && performanceResult.latestUpdatedAt
-        ? spend.lastUpdatedAt > performanceResult.latestUpdatedAt
-          ? spend.lastUpdatedAt
-          : performanceResult.latestUpdatedAt
-        : (spend.lastUpdatedAt ?? performanceResult.latestUpdatedAt ?? null);
 
     return {
       clientId: client.id,

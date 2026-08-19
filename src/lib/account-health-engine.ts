@@ -180,6 +180,19 @@ export interface AccountHealthEvaluation {
   /** Decorativo — ver `HEALTH_SCORE_BY_STATUS`. Nunca usado por este
    * arquivo pra decidir `healthStatus` (é o inverso: deriva DELE). */
   healthScore: number;
+  /** Auditoria de Frescor/Confiabilidade de Dados — repasse cru de
+   * `AccountHealthInput.lastDataSyncAt`, nunca recalculado aqui. Deliberadamente
+   * NÃO é uma dimensão (não participa de `DIMENSION_PRIORITY_ORDER`, não tem
+   * `status`/severidade própria, não influencia `healthStatus`/`primaryReason`
+   * de forma nenhuma) — a auditoria encontrou o fato (o timestamp já existe,
+   * já calculado em `client-operational-state-data.ts`) mas nenhuma regra
+   * oficial de frescor pro Motor de Saúde ainda foi decidida. Expor aqui é só
+   * o primeiro passo (menor intervenção segura): tornar o fato acessível a
+   * quem consome `AccountHealthEvaluation`, sem inventar severidade no
+   * escuro. `null` = nenhum dado de investimento OU performance sincronizado
+   * ainda pro cliente/mês (mesmo significado de `lastDataSyncAt` em
+   * `ClientOperationalState`). */
+  lastDataSyncAt: string | null;
   primaryReason: string;
   /** Chave de `dimensions` que originou `primaryReason` — `null` só quando
    * `healthStatus === "saudavel"` (nenhuma dimensão tem motivo pra ser
@@ -286,6 +299,19 @@ export interface AccountHealthInput {
    * um segundo motor, a mesma `evaluateAccountHealth` com um contexto a
    * mais. */
   evaluationScope?: "consolidated" | "channel";
+
+  /** Auditoria de Frescor/Confiabilidade de Dados: MAX(`spend.lastUpdatedAt`,
+   * `performanceResult.latestUpdatedAt`) do mês, já calculado por quem chama
+   * (`client-operational-state-data.ts` — mesmo valor que já alimenta
+   * `ClientOperationalState.lastDataSyncAt`, nunca uma segunda conta).
+   * Opcional (padrão `null`, omitir preserva o comportamento de sempre pra
+   * qualquer chamador existente) — este arquivo só REPASSA o valor pra
+   * `AccountHealthEvaluation.lastDataSyncAt`, nunca o lê pra decidir
+   * severidade nenhuma. Nenhuma dimensão, nenhum threshold, nenhuma
+   * classificação muda por causa deste campo — essa é exatamente a etapa
+   * "menor intervenção segura" da auditoria, antes de qualquer política
+   * oficial de frescor ser decidida. */
+  lastDataSyncAt?: string | null;
 }
 
 function evaluateInvestment(input: AccountHealthInput): InvestmentDimension {
@@ -645,6 +671,7 @@ export function evaluateAccountHealth(input: AccountHealthInput): AccountHealthE
   return {
     healthStatus,
     healthScore: HEALTH_SCORE_BY_STATUS[healthStatus],
+    lastDataSyncAt: input.lastDataSyncAt ?? null,
     primaryReason: primaryEntry?.reason ?? "Nenhum sinal de atenção no momento",
     primaryDimension: primaryEntry?.key ?? null,
     dimensions,
