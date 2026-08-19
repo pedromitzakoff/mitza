@@ -12,7 +12,12 @@
  * Rodar: npx tsx scripts/test-account-health-engine.ts
  */
 import assert from "node:assert/strict";
-import { evaluateAccountHealth, collectAccountHealthReasons, type AccountHealthInput } from "../src/lib/account-health-engine";
+import {
+  evaluateAccountHealth,
+  collectAccountHealthReasons,
+  describeSecondaryOperationalContext,
+  type AccountHealthInput,
+} from "../src/lib/account-health-engine";
 
 let passed = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -280,6 +285,94 @@ console.log("\ncollectAccountHealthReasons — todas as issues ativas, ordenadas
 {
   const evaluation = evaluateAccountHealth(baseInput());
   check("nenhum motivo ativo -> lista vazia (nunca inclui o texto genérico 'saudavel')", collectAccountHealthReasons(evaluation), []);
+}
+
+console.log(
+  "\ndescribeSecondaryOperationalContext — achado P0 da auditoria: 'Sem dados' não esconde mais uma dimensão operacional já avaliada\n",
+);
+
+{
+  // Caso 1: dataQuality grave (sem meta de resultado) + investment grave
+  // (755, mesmo caso do teste de desempate acima) -> balde continua 'Sem
+  // dados' (primaryDimension não muda), mas o contexto secundário expõe o
+  // motivo de investimento já calculado.
+  const evaluation = evaluateAccountHealth(baseInput({ resultPlanned: null, investmentActual: 755 }));
+  check("Caso 1 — primaryDimension continua 'dataQuality' (classificação principal não muda)", evaluation.primaryDimension, "dataQuality");
+  check("Caso 1 — healthStatus continua 'acao_necessaria' (nada na severidade geral mudou)", evaluation.healthStatus, "acao_necessaria");
+  check(
+    "Caso 1 — contexto secundário mostra o motivo de investimento, já produzido pela própria dimensão",
+    describeSecondaryOperationalContext(evaluation),
+    "Investimento 51% acima do esperado",
+  );
+}
+
+{
+  // Caso 2: dataQuality grave (sem planejamento) + results relevante
+  // (-0.31, mesmo corte do teste de Resultado acima) -> contexto secundário
+  // mostra o motivo de resultado.
+  const evaluation = evaluateAccountHealth(baseInput({ investmentPlanned: null, resultPlanned: 1000, resultActual: 345 }));
+  check("Caso 2 — primaryDimension continua 'dataQuality'", evaluation.primaryDimension, "dataQuality");
+  check(
+    "Caso 2 — contexto secundário mostra o motivo de resultado (relevante)",
+    describeSecondaryOperationalContext(evaluation),
+    "Resultado 31% abaixo do esperado",
+  );
+}
+
+{
+  // Caso 3: dataQuality grave (sem planejamento) + todas as outras 'nenhum'
+  // (input limpo, só sem plano) -> nenhuma dimensão passa de 'leve', sem
+  // segunda linha.
+  const evaluation = evaluateAccountHealth(baseInput({ investmentPlanned: null }));
+  check("Caso 3 — primaryDimension 'dataQuality'", evaluation.primaryDimension, "dataQuality");
+  check(
+    "Caso 3 — todas as outras dimensões 'nenhum' -> nenhum contexto secundário",
+    describeSecondaryOperationalContext(evaluation),
+    null,
+  );
+}
+
+{
+  // Reforço do Caso 3: dimensão 'leve' sozinha também não deve aparecer
+  // (o pedido é explícito: leve é ruído, não sinal) — investment em 'leve'
+  // (580, mesmo corte do teste de Investimento acima), dataQuality grave
+  // por falta de meta de resultado.
+  const evaluation = evaluateAccountHealth(baseInput({ resultPlanned: null, investmentActual: 580 }));
+  check("dataQuality grave + investment 'leve' -> primaryDimension ainda 'dataQuality'", evaluation.primaryDimension, "dataQuality");
+  check("dimensão só 'leve' nunca aparece como contexto secundário (evita ruído)", describeSecondaryOperationalContext(evaluation), null);
+}
+
+{
+  // Caso 4: conta Crítica "normal" (primaryDimension='cost', nenhuma issue
+  // de dataQuality) -> comportamento idêntico a antes desta etapa, função
+  // nova sempre null quando dataQuality não é a dimensão principal.
+  const evaluation = evaluateAccountHealth(baseInput({ investmentActual: 755, costPlanned: 100, costActual: 151 }));
+  check("Caso 4 — primaryDimension 'cost' (dataQuality nunca entrou nisso)", evaluation.primaryDimension, "cost");
+  check("Caso 4 — describeSecondaryOperationalContext null quando a dimensão principal não é dataQuality", describeSecondaryOperationalContext(evaluation), null);
+}
+
+{
+  // Caso 5: conta Saudável -> comportamento idêntico a antes desta etapa.
+  const evaluation = evaluateAccountHealth(baseInput());
+  check("Caso 5 — healthStatus 'saudavel'", evaluation.healthStatus, "saudavel");
+  check("Caso 5 — describeSecondaryOperationalContext null numa conta saudável", describeSecondaryOperationalContext(evaluation), null);
+}
+
+{
+  // Empate: cost E investment ambos 'grave' ao mesmo tempo que dataQuality
+  // vence a classificação principal -> o desempate reaproveita a MESMA
+  // DIMENSION_PRIORITY_ORDER do motor (cost antes de investment), nunca uma
+  // ordem nova — mesmo padrão já coberto no teste de desempate de
+  // primaryDimension acima, agora pro contexto secundário.
+  const evaluation = evaluateAccountHealth(
+    baseInput({ resultPlanned: null, investmentActual: 755, costPlanned: 100, costActual: 151 }),
+  );
+  check("empate cost/investment ambos 'grave' -> primaryDimension continua 'dataQuality'", evaluation.primaryDimension, "dataQuality");
+  check(
+    "empate resolvido pela mesma ordem de prioridade do motor (cost antes de investment) -> contexto secundário é o de custo",
+    describeSecondaryOperationalContext(evaluation),
+    "Custo por resultado 51% acima da meta",
+  );
 }
 
 console.log(`\n${passed} verificações passaram.`);

@@ -8,6 +8,7 @@ import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { getLatestPerformanceUpdateText } from "@/lib/performance";
 import { formatAtividadeLabel } from "@/lib/metric-diagnostics";
 import { resolveOperationPriorityGroup, type OperationPriorityGroup } from "@/lib/operation-triage";
+import { describeSecondaryOperationalContext } from "@/lib/account-health-engine";
 import type { ClientOperationalState } from "@/lib/client-operational-state";
 
 const countFormatter = new Intl.NumberFormat("pt-BR");
@@ -100,6 +101,12 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
 
   const priorityGroup = resolveOperationPriorityGroup(evaluation);
   const reasonText = evaluation.primaryDimension ? evaluation.primaryReason : null;
+  // Achado P0 da Auditoria do Motor Operacional: "Sem dados" não esconde
+  // mais uma dimensão operacional já avaliada como grave/relevante — texto
+  // já pronto pela própria dimensão (nunca recalculado aqui), null sempre
+  // que não houver nada além de `leve` pra mostrar (ver
+  // `describeSecondaryOperationalContext`, account-health-engine.ts).
+  const secondaryOperationalContext = describeSecondaryOperationalContext(evaluation);
 
   const investmentValue = investment.hasSyncedData ? formatWholeCurrency(investment.actual) : "—";
   const investmentTitle = investment.hasSyncedData ? undefined : "Sem dados de investimento";
@@ -215,6 +222,11 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
                 {emphasizeDeviationText(reasonText, priorityTone)}
               </p>
             )}
+            {secondaryOperationalContext && (
+              <p className="mt-0.5 truncate text-[11px] text-overview-text-muted" title={secondaryOperationalContext}>
+                {secondaryOperationalContext}
+              </p>
+            )}
             {secondaryText && <p className={`mt-0.5 truncate text-[11px] ${secondaryClass}`}>{secondaryText}</p>}
           </div>
         </div>
@@ -234,6 +246,11 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
           {reasonText && (
             <p className="mt-0.5 truncate text-xs text-overview-text-secondary" title={reasonText}>
               {emphasizeDeviationText(reasonText, priorityTone)}
+            </p>
+          )}
+          {secondaryOperationalContext && (
+            <p className="mt-0.5 truncate text-[11px] text-overview-text-muted" title={secondaryOperationalContext}>
+              {secondaryOperationalContext}
             </p>
           )}
           {secondaryText && (

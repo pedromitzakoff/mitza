@@ -541,3 +541,46 @@ export function collectAccountHealthReasons(evaluation: AccountHealthEvaluation)
     .sort((a, b) => DIMENSION_SEVERITY_RANK[b.severity] - DIMENSION_SEVERITY_RANK[a.severity])
     .map((entry) => entry.reason);
 }
+
+/**
+ * Achado P0 da Auditoria do Motor Operacional: quando `dataQuality` vence o
+ * desempate ("Sem dados"), as outras quatro dimensões já foram calculadas
+ * inteiramente — só não venceram porque "sem dado confiável" é sempre a
+ * prioridade estrutural do motor (`DIMENSION_PRIORITY_ORDER`). Essa
+ * severidade real fica descartada hoje: a conta pode estar com investimento
+ * gravemente fora do ritmo e, mesmo assim, aparecer só como "Sem dados",
+ * sem nenhum indício de que já existe uma conclusão operacional pronta.
+ *
+ * Não recalcula nada e não muda `healthStatus`/`primaryReason`/
+ * `primaryDimension` — só olha o que `evaluateAccountHealth` já produziu e
+ * escolhe, entre as quatro dimensões OPERACIONAIS (nunca a própria
+ * `dataQuality`), a pior com severidade `relevante` ou `grave` (`leve`
+ * nunca aparece aqui — ruído, não sinal). Em empate de severidade, usa a
+ * MESMA ordem de `DIMENSION_PRIORITY_ORDER` que todo o resto do motor já
+ * usa para desempate — nenhuma ordem nova. O texto devolvido é sempre o
+ * que a própria dimensão já produz via `describeDimensionReason` (a mesma
+ * função que compõe `primaryReason`/`collectAccountHealthReasons`) — nunca
+ * uma frase nova.
+ *
+ * `null` sempre que `primaryDimension` não é `dataQuality`, ou quando
+ * nenhuma dimensão operacional passa de `leve` — nesses casos não há
+ * contexto secundário a mostrar.
+ */
+export function describeSecondaryOperationalContext(evaluation: AccountHealthEvaluation): string | null {
+  if (evaluation.primaryDimension !== "dataQuality") return null;
+
+  const candidates = DIMENSION_PRIORITY_ORDER.filter((key) => key !== "dataQuality").map((key) => ({
+    key,
+    severity: evaluation.dimensions[key].status,
+  }));
+
+  const worst = candidates.reduce<DimensionRankedEntry["key"] | null>((worstKey, entry) => {
+    if (DIMENSION_SEVERITY_RANK[entry.severity] < DIMENSION_SEVERITY_RANK.relevante) return worstKey;
+    if (worstKey === null) return entry.key;
+    return DIMENSION_SEVERITY_RANK[entry.severity] > DIMENSION_SEVERITY_RANK[evaluation.dimensions[worstKey].status]
+      ? entry.key
+      : worstKey;
+  }, null);
+
+  return worst ? describeDimensionReason(worst, evaluation.dimensions) : null;
+}
