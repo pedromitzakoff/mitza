@@ -1,7 +1,6 @@
 import type { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { todayUTC, todayDateString } from "@/lib/today";
-import { businessDaysSince } from "@/lib/business-days";
 import { effectiveTaskStatus } from "@/lib/task-status";
 import { aggregatePerformanceResults, computeCostPerResult, type PerformanceRecordRow } from "@/lib/performance";
 import { channelToPerformanceSource } from "@/lib/performance-queries";
@@ -16,8 +15,7 @@ import { resolveClientMonthlyPlan, type ClientPlanChangeRow } from "@/lib/client
 import { resolveClientMonthlyActuals } from "@/lib/client-actuals";
 import { resolveCostScopeComparability } from "@/lib/channel-metrics";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
-import { evaluateAccountHealth, type AccountHealthInput } from "@/lib/account-health-engine";
-import { DEFAULT_REVIEW_MAX_BUSINESS_DAYS } from "@/lib/operation-health-thresholds";
+import { evaluateAccountHealth, resolveReviewCadenceInputs, type AccountHealthInput } from "@/lib/account-health-engine";
 import { monthRangeFromOperationParam } from "@/lib/operation-triage";
 import { sortClientOperationalStates, type ClientOperationalState } from "@/lib/client-operational-state";
 import { evaluateClientDiagnostics } from "@/lib/metric-diagnostics";
@@ -404,14 +402,8 @@ export async function loadClientOperationalStates(
     );
 
     const lastReviewAt = latestReviewByClient.get(client.id) ?? null;
-    const reviewBusinessDaysAgo = lastReviewAt ? businessDaysSince(new Date(lastReviewAt), today) : null;
-
-    const cadence = reviewCadenceByClient.get(client.id);
-    const reviewMaxBusinessDays = cadence
-      ? cadence.is_active
-        ? cadence.max_business_days_without_review
-        : null
-      : DEFAULT_REVIEW_MAX_BUSINESS_DAYS;
+    const cadence = reviewCadenceByClient.get(client.id) ?? null;
+    const { reviewBusinessDaysAgo, reviewMaxBusinessDays } = resolveReviewCadenceInputs(lastReviewAt, cadence, today);
 
     const input: AccountHealthInput = {
       investmentActual: spend.actual,

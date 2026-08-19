@@ -107,6 +107,18 @@ export interface OperationClientRawData {
    * migrada pra este sinal, o que deixava "Última otimização"/"Otimizações
    * realizadas" incorretos em toda a Visão Geral/Sprints/Relatório). */
   lastReviewAt: string | null;
+  /** Convergência da Regra de Revisão de Conta: decisão OFICIAL já
+   * resolvida pelo Motor de Saúde (`resolveReviewComplianceStatus`/
+   * `evaluateReview`, account-health-engine.ts — cadência configurável,
+   * `businessDaysSince`, fallback de 10 dias úteis, `is_active`), passada
+   * por quem já a calculou (Dashboard reaproveita `ClientOperationalState`
+   * já carregado; Sprints chama `resolveReviewComplianceStatus` sobre sua
+   * própria busca de `account_review_cadences`). `undefined` (padrão,
+   * nenhuma mudança pra quem não passar este campo — ex.: `clients/page.tsx`)
+   * preserva o cálculo legado abaixo (`OPTIMIZATION_LOOKBACK_DAYS`, 14 dias
+   * corridos fixos); quando presente, substitui esse cálculo inteiramente
+   * pra este cliente. */
+  reviewIsOverdue?: boolean;
   /** Snapshot congelado (Etapa 70) de cada sprint do mês já encerrada — já
    * resolvido por quem chama (`ensureClosedSprintSnapshots`, que faz a
    * escrita no banco antes de montar o card, já que esta função é pura e
@@ -510,8 +522,17 @@ export function buildOperationClientCard(
   // Etapa 74: sinal de "otimização recente" e "última otimização" vêm de
   // account_reviews (revisão estratégica da conta), não mais da tarefa
   // recorrente "otimizacao" (desativada desde a Etapa 57).
+  //
+  // Convergência da Regra de Revisão de Conta: `client.reviewIsOverdue`,
+  // quando presente, é a decisão OFICIAL do Motor de Saúde (cadência
+  // configurável, não 14 dias corridos fixos) — usada no lugar do cálculo
+  // legado abaixo. Só quem não passa esse campo ainda (`clients/page.tsx`)
+  // continua no cálculo antigo, sem nenhuma mudança de comportamento.
   const lookbackStartIso = new Date(today.getTime() - OPTIMIZATION_LOOKBACK_DAYS * 86_400_000).toISOString();
-  const optimizationRecentlyDone = client.lastReviewAt !== null && client.lastReviewAt >= lookbackStartIso;
+  const optimizationRecentlyDone =
+    client.reviewIsOverdue !== undefined
+      ? !client.reviewIsOverdue
+      : client.lastReviewAt !== null && client.lastReviewAt >= lookbackStartIso;
   // `lastOptimizationAt` é consumido como data (`${lastOptimizationAt}T00:00:00Z`)
   // por formatLastOptimizationLabel/sprints/page.tsx — nunca o timestamp
   // completo, só a data civil.

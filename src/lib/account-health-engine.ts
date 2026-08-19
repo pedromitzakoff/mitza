@@ -1,5 +1,6 @@
 import { computeRelativeDeviation } from "@/lib/spend-status";
 import { computeVariationFromTarget } from "@/lib/performance";
+import { businessDaysSince } from "@/lib/business-days";
 import {
   COST_DEVIATION_GRAVE,
   COST_DEVIATION_LEVE,
@@ -14,6 +15,7 @@ import {
   REVIEW_OVERDUE_GRAVE,
   REVIEW_OVERDUE_LEVE,
   REVIEW_OVERDUE_RELEVANTE,
+  DEFAULT_REVIEW_MAX_BUSINESS_DAYS,
 } from "@/lib/operation-health-thresholds";
 
 /**
@@ -407,8 +409,18 @@ function evaluateCost(input: AccountHealthInput): CostDimension {
   };
 }
 
-function evaluateReview(input: AccountHealthInput): ReviewDimension {
-  const { reviewBusinessDaysAgo, reviewMaxBusinessDays } = input;
+/**
+ * Núcleo puro da dimensão de Revisão — extraído (Convergência da Regra de
+ * Revisão de Conta) pra ser a fonte única também FORA do Motor de Saúde
+ * (Dashboard/Sprints, via `resolveReviewComplianceStatus`/`isReviewOverdue`
+ * abaixo), sem duplicar a matemática em outro arquivo. Recebe só os dois
+ * números já resolvidos — nunca sabe de onde vieram (`account_reviews`,
+ * `account_review_cadences`, fallback), mesma separação já usada por
+ * `evaluateCost`/`resolveCostScopeComparability` (channel-metrics.ts).
+ * `evaluateReview`, logo abaixo, é hoje só um repasse de `input` pra cá —
+ * nenhuma segunda cópia desta matemática em lugar nenhum.
+ */
+export function resolveReviewDimension(reviewBusinessDaysAgo: number | null, reviewMaxBusinessDays: number | null): ReviewDimension {
   if (reviewMaxBusinessDays === null) {
     return { status: "nenhum", deviation: null, actual: reviewBusinessDaysAgo, planned: 0, expected: 0, enabled: false };
   }
@@ -440,6 +452,70 @@ function evaluateReview(input: AccountHealthInput): ReviewDimension {
     expected: reviewMaxBusinessDays,
     enabled: true,
   };
+}
+
+function evaluateReview(input: AccountHealthInput): ReviewDimension {
+  return resolveReviewDimension(input.reviewBusinessDaysAgo, input.reviewMaxBusinessDays);
+}
+
+/**
+ * Resposta booleana única pra "esta conta está em dia com a revisão?" —
+ * `true` em qualquer grau de atraso (leve/relevante/grave), `false` tanto
+ * quando está em dia quanto quando a cadência está desativada
+ * (`enabled:false`, ver `ReviewDimension`). Substitui
+ * `optimizationRecentlyDone`/`OPTIMIZATION_LOOKBACK_DAYS` (motor legado,
+ * `attention-alerts.ts`/`operation-data.ts`) onde for consumida — nenhum
+ * consumidor decide "em dia" por conta própria a partir daqui em diante.
+ */
+export function isReviewOverdue(review: ReviewDimension): boolean {
+  return review.status !== "nenhum";
+}
+
+export interface AccountReviewCadenceRow {
+  max_business_days_without_review: number;
+  is_active: boolean;
+}
+
+/**
+ * Resolve os dois números crus que `resolveReviewDimension` consome, a
+ * partir da última revisão (`account_reviews.reviewed_at`) e da cadência
+ * configurada (`account_review_cadences`) — extraído de
+ * `client-operational-state-data.ts` (onde essa conta vivia embutida) pra
+ * qualquer consumidor que não carregue `ClientOperationalState` inteiro
+ * (ex.: Sprints) resolver a MESMA decisão sem reimplementar
+ * `businessDaysSince`/`DEFAULT_REVIEW_MAX_BUSINESS_DAYS`/o fallback.
+ * `cadence: null` = nenhuma linha em `account_review_cadences` pra este
+ * cliente (usa o fallback da agência); `cadence` com `is_active:false` =
+ * cadência desativada (`reviewMaxBusinessDays` vira `null`, dimensão sai do
+ * ar em `resolveReviewDimension`).
+ */
+export function resolveReviewCadenceInputs(
+  lastReviewAt: string | null,
+  cadence: AccountReviewCadenceRow | null,
+  today: Date,
+): { reviewBusinessDaysAgo: number | null; reviewMaxBusinessDays: number | null } {
+  const reviewBusinessDaysAgo = lastReviewAt ? businessDaysSince(new Date(lastReviewAt), today) : null;
+  const reviewMaxBusinessDays = cadence
+    ? cadence.is_active
+      ? cadence.max_business_days_without_review
+      : null
+    : DEFAULT_REVIEW_MAX_BUSINESS_DAYS;
+  return { reviewBusinessDaysAgo, reviewMaxBusinessDays };
+}
+
+/**
+ * Composição de conveniência dos dois helpers acima — a resposta completa
+ * (dimensão graduada + booleano) a partir só dos dados crus, pra quem (ex.:
+ * Sprints) resolve a cadência oficial fora do pipeline do Motor de Saúde.
+ */
+export function resolveReviewComplianceStatus(
+  lastReviewAt: string | null,
+  cadence: AccountReviewCadenceRow | null,
+  today: Date,
+): { review: ReviewDimension; isOverdue: boolean } {
+  const { reviewBusinessDaysAgo, reviewMaxBusinessDays } = resolveReviewCadenceInputs(lastReviewAt, cadence, today);
+  const review = resolveReviewDimension(reviewBusinessDaysAgo, reviewMaxBusinessDays);
+  return { review, isOverdue: isReviewOverdue(review) };
 }
 
 /**

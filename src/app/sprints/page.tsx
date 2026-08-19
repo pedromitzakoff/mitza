@@ -32,6 +32,7 @@ import {
   type OperationClientRawData,
   type OperationTaskItem,
 } from "@/app/operation/operation-data";
+import { resolveReviewComplianceStatus } from "@/lib/account-health-engine";
 import { groupChannelSpendBySprintId, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 import { resolveClientMonthlyPlan, type ClientPlanChangeRow } from "@/lib/client-plan";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
@@ -289,7 +290,7 @@ export default async function SprintsPage({
   const allCommentIds = sprintComments.map((c) => c.id);
 
   const __perfBlock3Start = perfNow();
-  const [lastReviews, sprintReviewRows, reportSelections, recurringTasksBySprintId] = await Promise.all([
+  const [lastReviews, reviewCadences, sprintReviewRows, reportSelections, recurringTasksBySprintId] = await Promise.all([
     // Etapa 74 — "Última otimização"/filtro "optimization": sempre o dado
     // GLOBAL mais recente por cliente (independe do mês selecionado), por
     // isso uma busca própria sem filtro de data — mesma fonte usada na Visão
@@ -302,6 +303,20 @@ export default async function SprintsPage({
             .in("client_id", clientIds)
             .order("reviewed_at", { ascending: false }),
           "account_reviews:last-reviews",
+        )
+      : Promise.resolve([]),
+    // Convergência da Regra de Revisão de Conta: mesma tabela/colunas já
+    // lidas por `client-operational-state-data.ts` (Motor de Saúde) — só
+    // aqui pra Sprints poder chamar `resolveReviewComplianceStatus` (mesmo
+    // helper, nenhuma regra nova) e produzir a MESMA resposta de "está em
+    // dia com a revisão?" que a Operação já dá.
+    clientIds.length > 0
+      ? requireQuery(
+          supabase
+            .from("account_review_cadences")
+            .select("client_id, max_business_days_without_review, is_active")
+            .in("client_id", clientIds),
+          "account_review_cadences",
         )
       : Promise.resolve([]),
     // Sprint UX 2.0 — "Otimizações" (account_reviews) direto na tela Sprints,
@@ -340,6 +355,19 @@ export default async function SprintsPage({
   for (const row of lastReviews) {
     if (!lastReviewAtByClient.has(row.client_id)) lastReviewAtByClient.set(row.client_id, row.reviewed_at);
   }
+
+  // Convergência da Regra de Revisão de Conta: mesma decisão oficial que o
+  // Motor de Saúde produz (`resolveReviewComplianceStatus`), calculada aqui
+  // a partir da última revisão + cadência acabadas de buscar acima — nunca
+  // reimplementada, só chamada com os dados desta tela.
+  const reviewCadenceByClient = new Map(reviewCadences.map((row) => [row.client_id, row]));
+  const reviewIsOverdueByClient = new Map(
+    clientIds.map((clientId) => [
+      clientId,
+      resolveReviewComplianceStatus(lastReviewAtByClient.get(clientId) ?? null, reviewCadenceByClient.get(clientId) ?? null, today)
+        .isOverdue,
+    ]),
+  );
 
   // reviewClientUpdateRows depende de reviewIds (resultado de sprintReviewRows
   // acima) — continua sequencial, não dá pra paralelizar com o bloco anterior.
@@ -577,6 +605,7 @@ export default async function SprintsPage({
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
       lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
       lastReviewAt: lastReviewAtByClient.get(client.id) ?? null,
+      reviewIsOverdue: reviewIsOverdueByClient.get(client.id),
       sprintClosedSnapshots: sprintClosedSnapshotsByClient.get(client.id) ?? new Map(),
       performanceGoal: client.performance_goal,
       targetCostPerResult: resolvedTargetCostByClient.get(client.id) ?? client.target_cost_per_result,

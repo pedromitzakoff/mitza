@@ -25,6 +25,7 @@ import { computeHealthResultsSummary } from "@/lib/agency-health-aggregation";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
 import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
 import { evaluateClientChannelDiagnostics } from "@/lib/client-operational-state";
+import { isReviewOverdue } from "@/lib/account-health-engine";
 import { resolveClientChannelBreakdown, type ClientChannelState } from "@/lib/client-channel-breakdown";
 import {
   buildOverviewPriorityItem,
@@ -515,6 +516,14 @@ export default async function Home({
     }),
   );
 
+  // Convergência da Regra de Revisão de Conta: `clientOperationalStates` já
+  // carrega `evaluation.dimensions.review` (Motor de Saúde, cadência
+  // configurável) — nenhum cálculo novo aqui, só a mesma decisão já
+  // resolvida em paralelo (bloco 1, acima) repassada pro card legado.
+  const reviewOverdueByClient = new Map(
+    clientOperationalStates.map((state) => [state.clientId, isReviewOverdue(state.evaluation.dimensions.review)]),
+  );
+
   const rawClients: OperationClientRawData[] = (clients ?? []).map((client) => {
     const clientSprints = sprintsByClient.get(client.id) ?? [];
     const currentSprint = findSprintForDate(clientSprints, todayStr);
@@ -537,6 +546,7 @@ export default async function Home({
       sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
       lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
       lastReviewAt: lastReviewAtByClient.get(client.id) ?? null,
+      reviewIsOverdue: reviewOverdueByClient.get(client.id),
       performanceGoal: client.performance_goal,
       // Etapa "Planejamento Mensal 1.0": meta de custo VIGENTE (planejamento
       // mensal, com o campo permanente de `clients` só como fallback) —
