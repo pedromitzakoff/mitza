@@ -5,6 +5,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { AppShell } from "./app-shell";
 import { AgencyAccountsTree } from "./agency-accounts-tree";
 import { ToastProvider } from "./toast-provider";
+import { NavigationProgress } from "./navigation-progress";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,6 +35,7 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
+        <NavigationProgress />
         <ToastProvider>
           {profile ? (
             <AppShell profile={profile} agencyTree={<AgencyAccountsTree />}>
