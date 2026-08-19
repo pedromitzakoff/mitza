@@ -85,10 +85,10 @@ function NavigationProgressBar() {
       const nextKey = `${next.pathname}?${next.searchParams.toString()}`;
       if (nextKey === currentUrlRef.current) return;
       // Pequeno atraso só visual: navegação real não espera por isto — se a
-      // rota nova chegar antes dos 100ms, o timeout é cancelado no efeito de
+      // rota nova chegar antes disso, o timeout é cancelado no efeito de
       // conclusão acima e a barra nunca chega a aparecer.
       if (showTimeoutRef.current) clearTimeout(showTimeoutRef.current);
-      showTimeoutRef.current = setTimeout(() => setState("loading"), 100);
+      showTimeoutRef.current = setTimeout(() => setState("loading"), 50);
     }
 
     const originalPushState = window.history.pushState.bind(window.history);
