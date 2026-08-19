@@ -139,6 +139,19 @@ export interface CostDimension {
    * resultados"). O motivo ainda é comunicado ao gestor via
    * `describeCostReason`, só não conta como severidade. */
   hasReliableSample: boolean;
+  /** `false` = o conjunto de canais do planejamento (`costPlanned`) diverge
+   * do conjunto de canais do realizado (`costActual`) — Auditoria de
+   * Comparabilidade de Escopo de Custo: comparar os dois consolidados como
+   * desvio da meta, nesse caso, mistura universos diferentes (ex.: só Meta
+   * tem plano, mas Google também investiu/performou este mês). `status`
+   * fica travado em "nenhum", mesmo padrão de `hasReliableSample` — não é
+   * falta de amostra, é falta de uma base COMPARÁVEL. `true` sempre que
+   * `costPlanned` vem do fallback global (`clients.target_cost_per_result`,
+   * nunca escopado a canal nenhum) ou quando os dois conjuntos batem —
+   * calculado fora deste arquivo (`resolveChannelScopeComparison`,
+   * channel-metrics.ts), o motor nunca decide sozinho quais canais
+   * existem. */
+  hasComparableScope: boolean;
 }
 
 export interface ReviewDimension {
@@ -232,6 +245,16 @@ export interface AccountHealthInput {
    * (`resolveMonthlyPlanSnapshot`) — `null` = nenhuma meta em lugar
    * nenhum. */
   costPlanned: number | null;
+  /** Auditoria de Comparabilidade de Escopo de Custo: `true` (padrão,
+   * omitir preserva o comportamento de sempre) quando o conjunto de canais
+   * que sustenta `costPlanned` bate com o conjunto de canais que sustenta
+   * `costActual` — `false` só quando divergem de verdade. Quem chama
+   * calcula isso com `resolveChannelScopeComparison` (channel-metrics.ts)
+   * sobre `resolveClientMonthlyPlan(...).byChannel`/
+   * `resolveClientMonthlyActuals(...).byChannel`, nunca este arquivo (que
+   * não sabe o que é um "canal"). Opcional pra nenhum chamador existente
+   * precisar mudar se um dia não tiver como calcular isso. */
+  costScopeComparable?: boolean;
 
   /** % do mês já decorrido (`computeMonthlyExpectedPct`), 0–100 — usado só
    * pra prorateamento de investimento/resultado esperado até hoje. */
@@ -319,7 +342,7 @@ function evaluateResults(input: AccountHealthInput): ResultDimension {
 }
 
 function evaluateCost(input: AccountHealthInput): CostDimension {
-  const { costActual, costPlanned, resultActual } = input;
+  const { costActual, costPlanned, resultActual, costScopeComparable = true } = input;
   if (costPlanned === null || costActual === null) {
     return {
       status: "nenhum",
@@ -329,6 +352,7 @@ function evaluateCost(input: AccountHealthInput): CostDimension {
       expected: costPlanned,
       sampleSize: resultActual,
       hasReliableSample: true, // nada a avaliar aqui — falta de dado, não de amostra (ver dataQuality)
+      hasComparableScope: true, // idem — sem os dois números, escopo nem chega a ser a questão
     };
   }
   if (resultActual < MIN_RELIABLE_RESULT_COUNT) {
@@ -340,6 +364,26 @@ function evaluateCost(input: AccountHealthInput): CostDimension {
       expected: costPlanned,
       sampleSize: resultActual,
       hasReliableSample: false,
+      hasComparableScope: true,
+    };
+  }
+  // Auditoria de Comparabilidade de Escopo de Custo: ausência de evidência
+  // COMPARÁVEL nunca é tratada como desempenho ruim — mesmo princípio já
+  // aplicado à amostra insuficiente acima, agora pro escopo de canal.
+  // "Prefiro ausência de diagnóstico de custo a um diagnóstico numericamente
+  // preciso, mas semanticamente incorreto" (pedido explícito): `status`
+  // trava em "nenhum", `deviation` nunca é calculado — a comparação nem
+  // chega a acontecer, não é só escondida.
+  if (!costScopeComparable) {
+    return {
+      status: "nenhum",
+      deviation: null,
+      actual: costActual,
+      planned: costPlanned,
+      expected: costPlanned,
+      sampleSize: resultActual,
+      hasReliableSample: true,
+      hasComparableScope: false,
     };
   }
   const deviation = computeVariationFromTarget(costActual, costPlanned);
@@ -359,6 +403,7 @@ function evaluateCost(input: AccountHealthInput): CostDimension {
     expected: costPlanned,
     sampleSize: resultActual,
     hasReliableSample: true,
+    hasComparableScope: true,
   };
 }
 
@@ -451,6 +496,9 @@ function describeResultReason(dimension: ResultDimension): string | null {
 function describeCostReason(dimension: CostDimension): string | null {
   if (!dimension.hasReliableSample) {
     return `Aguardando amostra suficiente para avaliar custo (${dimension.sampleSize} de ${MIN_RELIABLE_RESULT_COUNT} resultados)`;
+  }
+  if (!dimension.hasComparableScope) {
+    return "Custo por resultado sem base comparável — planejamento e realizado não cobrem os mesmos canais";
   }
   if (dimension.status === "nenhum" || dimension.deviation === null) return null;
   const pct = Math.round(Math.abs(dimension.deviation) * 100);

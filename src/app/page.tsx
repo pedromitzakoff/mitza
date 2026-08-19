@@ -460,14 +460,26 @@ export default async function Home({
   // canal, ver `consolidateChannelMetrics`) — cai pro campo permanente do
   // cliente só quando NENHUM canal tem meta de resultado definida (mesmo
   // fallback de sempre, agora aplicado ao consolidado em vez de só Meta).
-  const resolvedTargetCostByClient = new Map<string, number | null>(
+  //
+  // Etapa "Comparabilidade de Escopo de Custo", Parte 4: guarda o resultado
+  // COMPLETO (`byChannel` + `consolidated`), não só o CPA consolidado — o
+  // recorte por canal de "Prioridades de hoje" (abaixo) precisa da meta
+  // DAQUELE canal específico, nunca da consolidada disfarçada de "meta do
+  // canal" (mesmo padrão já usado pela página do Cliente, `scopedTargetCostPerResult`).
+  const clientMonthlyPlanByClient = new Map(
     (clients ?? []).map((c) => [
       c.id,
       resolveClientMonthlyPlan({
         channels: AVAILABLE_TRAFFIC_CHANNELS,
         changes: targetHistoryByClient.get(c.id) ?? [],
         selectedMonth: monthRange.firstDay,
-      }).consolidated.cpa ?? permanentCostFallbackByClient.get(c.id) ?? null,
+      }),
+    ]),
+  );
+  const resolvedTargetCostByClient = new Map<string, number | null>(
+    (clients ?? []).map((c) => [
+      c.id,
+      clientMonthlyPlanByClient.get(c.id)?.consolidated.cpa ?? permanentCostFallbackByClient.get(c.id) ?? null,
     ]),
   );
 
@@ -703,7 +715,17 @@ export default async function Home({
       if (platformFilter === "consolidado") return [{ state, diagnostics: state.diagnostics }];
       const channelState = (channelBreakdownByClient.get(state.clientId) ?? []).find((c) => c.channel === platformFilter);
       if (!channelState) return [];
-      const diagnostics = evaluateClientChannelDiagnostics(state, channelState, resolvedTargetCostByClient.get(state.clientId) ?? null);
+      // Etapa "Comparabilidade de Escopo de Custo", Parte 4: meta DAQUELE
+      // canal (`byChannel[platformFilter].cpa`), nunca a consolidada — mesmo
+      // padrão já usado pela página do Cliente (`scopedTargetCostPerResult`,
+      // clients/[id]/page.tsx). Cai pra consolidada só quando o canal
+      // selecionado ainda não tem meta própria definida (mesmo fallback de
+      // sempre, nunca um "sem meta" fabricado).
+      const channelTargetCostPerResult =
+        clientMonthlyPlanByClient.get(state.clientId)?.byChannel[platformFilter]?.cpa ??
+        resolvedTargetCostByClient.get(state.clientId) ??
+        null;
+      const diagnostics = evaluateClientChannelDiagnostics(state, channelState, channelTargetCostPerResult);
       return [{ state, diagnostics }];
     })
     .filter(({ diagnostics }) => hasActiveOverviewDiagnostic(diagnostics))

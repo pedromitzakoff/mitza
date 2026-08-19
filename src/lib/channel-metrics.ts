@@ -92,3 +92,80 @@ export function consolidateChannelMetrics(
     roas: tracksRevenue ? computeRoas(revenue ?? null, investment) : undefined,
   };
 }
+
+/** Canais com investimento planejado/realizado de verdade dentro de um
+ * `byChannel` — nunca os canais "considerados mas sem plano" que
+ * `resolveClientMonthlyPlan` preenche com `{investment: null, ...}` (essa
+ * entrada existe pra nunca omitir o canal da estrutura, não significa que
+ * ele tem plano — ver `resolveClientMonthlyPlan`, client-plan.ts). Mesma
+ * regra serve pro lado realizado (`resolveClientMonthlyActuals`): lá todo
+ * canal presente já tem `investment` resolvido como número (nunca `null`),
+ * então o filtro é um no-op nesse lado — um único critério funciona pros
+ * dois formatos. */
+function channelsWithData(byChannel: Partial<Record<TrafficChannel, ChannelMetrics>>): TrafficChannel[] {
+  return (Object.keys(byChannel) as TrafficChannel[])
+    .filter((channel) => byChannel[channel]?.investment !== null && byChannel[channel]?.investment !== undefined)
+    .sort();
+}
+
+export interface ChannelScopeComparison {
+  /** Canais com plano de verdade (nunca os "considerados mas sem plano"). */
+  plannedChannels: TrafficChannel[];
+  /** Canais com investimento ou resultado real neste mês. */
+  actualChannels: TrafficChannel[];
+  /** `true` só quando os dois conjuntos acima são EXATAMENTE iguais — nunca
+   * um subconjunto do outro. Responde à pergunta central da Auditoria de
+   * Comparabilidade de Escopo de Custo: o CPA planejado e o CPA realizado
+   * somam exatamente os mesmos canais? Quando `false`, comparar os dois
+   * consolidados como "desvio da meta" mistura universos diferentes — ver
+   * `account-health-engine.ts`, `evaluateCost`, campo `costScopeComparable`
+   * de `AccountHealthInput`. */
+  scopesMatch: boolean;
+}
+
+/**
+ * Núcleo puro e compartilhável (Etapa "Comparabilidade de Escopo de
+ * Custo") — responde só à pergunta "estes dois `byChannel` (planejado e
+ * realizado) representam o mesmo conjunto de canais?", sem saber nada de
+ * CPA/meta/severidade. Reaproveitada por `client-operational-state-data.ts`
+ * (Motor de Saúde) e pelo recorte por canal do Dashboard — nunca uma
+ * segunda implementação manual de "quais canais existem": os dois lados
+ * já vêm de `resolveClientMonthlyPlan(...).byChannel`/
+ * `resolveClientMonthlyActuals(...).byChannel`, os mesmos resolvedores que
+ * a Auditoria de Comparabilidade de Escopo de Custo confirmou já existirem.
+ */
+export function resolveChannelScopeComparison(
+  plannedByChannel: Partial<Record<TrafficChannel, ChannelMetrics>>,
+  actualByChannel: Partial<Record<TrafficChannel, ChannelMetrics>>,
+): ChannelScopeComparison {
+  const plannedChannels = channelsWithData(plannedByChannel);
+  const actualChannels = channelsWithData(actualByChannel);
+  const scopesMatch =
+    plannedChannels.length === actualChannels.length && plannedChannels.every((channel, index) => channel === actualChannels[index]);
+  return { plannedChannels, actualChannels, scopesMatch };
+}
+
+/**
+ * Regra completa de comparabilidade — o que `client-operational-state-data.ts`
+ * de fato usa pra decidir `costScopeComparable`, nunca o ternário
+ * embutido/duplicado ali. Isola o caso auditado com cuidado (Etapa
+ * "Comparabilidade de Escopo de Custo", Parte 3, "fallback legítimo"):
+ * quando NENHUM canal tem plano, a meta de custo usada é sempre o campo
+ * permanente do cliente (`clients.target_cost_per_result`) — uma meta
+ * GLOBAL, que nunca teve escopo de canal pra começar. Comparar essa meta
+ * contra o realizado consolidado é exatamente o que ela sempre foi feita
+ * pra fazer; não é um "escopo divergente" só porque nenhum canal específico
+ * a originou. `consolidatedTargetCameFromChannelPlan` (`= consolidatedPlan.cpa
+ * !== null` em quem chama) é o único jeito de saber isso sem adivinhar —
+ * `resolveChannelScopeComparison` sozinho não distingue "meta é global de
+ * propósito" de "meta é de canal e só não bate hoje", porque ele só vê os
+ * dois `byChannel`, nunca de onde `costPlanned` veio.
+ */
+export function resolveCostScopeComparability(
+  consolidatedTargetCameFromChannelPlan: boolean,
+  plannedByChannel: Partial<Record<TrafficChannel, ChannelMetrics>>,
+  actualByChannel: Partial<Record<TrafficChannel, ChannelMetrics>>,
+): boolean {
+  if (!consolidatedTargetCameFromChannelPlan) return true;
+  return resolveChannelScopeComparison(plannedByChannel, actualByChannel).scopesMatch;
+}

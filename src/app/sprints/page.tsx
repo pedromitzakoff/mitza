@@ -33,7 +33,8 @@ import {
   type OperationTaskItem,
 } from "@/app/operation/operation-data";
 import { groupChannelSpendBySprintId, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
-import type { TrafficChannel } from "@/lib/traffic-channels";
+import { resolveClientMonthlyPlan, type ClientPlanChangeRow } from "@/lib/client-plan";
+import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-section";
 import { RecordAccountReviewDrawer } from "@/app/clients/record-account-review-drawer";
@@ -199,10 +200,16 @@ export default async function SprintsPage({
     // Consumidores": todos os canais (nunca mais só `channel = 'meta'`) —
     // `resolveConsolidatedMonthlyPlanned` (chamada dentro de
     // `buildOperationClientCard`) soma os canais com plano.
+    // `target_result_count` incluído na mesma consulta de sempre (Etapa
+    // "Comparabilidade de Escopo de Custo", Parte 1) — nenhuma query nova,
+    // só uma coluna a mais: alimenta `resolveClientMonthlyPlan` abaixo, pra
+    // "qual é a meta deste cliente?" responder o mesmo em Sprints/Operação/
+    // página do Cliente (antes: `client.target_cost_per_result` cru, nunca
+    // passava pela resolução mensal por canal).
     requireQuery(
       supabase
         .from("monthly_budget_changes")
-        .select("client_id, channel, month, new_amount, changed_at")
+        .select("client_id, channel, month, new_amount, changed_at, target_result_count")
         .eq("month", monthRange.firstDay),
       "monthly_budget_changes",
     ),
@@ -455,11 +462,46 @@ export default async function SprintsPage({
   }
 
   const budgetChangesByClient = new Map<string, OperationClientRawData["monthlyBudgetChanges"]>();
+  // Etapa "Comparabilidade de Escopo de Custo", Parte 1: mesmas linhas de
+  // `monthly_budget_changes` já buscadas acima, só reempacotadas no formato
+  // que `resolveClientMonthlyPlan` espera (`ClientPlanChangeRow`) — nenhuma
+  // segunda consulta, nenhuma terceira forma de resolver meta.
+  const planChangesByClient = new Map<string, ClientPlanChangeRow[]>();
   for (const c of budgetChanges ?? []) {
     const list = budgetChangesByClient.get(c.client_id) ?? [];
     list.push({ channel: c.channel as TrafficChannel, month: c.month, newAmount: c.new_amount, changedAt: c.changed_at });
     budgetChangesByClient.set(c.client_id, list);
+
+    const planList = planChangesByClient.get(c.client_id) ?? [];
+    planList.push({
+      channel: c.channel as TrafficChannel,
+      month: c.month,
+      changedAt: c.changed_at,
+      investment: c.new_amount,
+      targetResultCount: c.target_result_count,
+    });
+    planChangesByClient.set(c.client_id, planList);
   }
+
+  // Etapa "Comparabilidade de Escopo de Custo", Parte 1: "qual é a meta
+  // deste cliente?" passa a ter a mesma resposta em Sprints, Operação e
+  // página do Cliente — planejamento mensal por canal/consolidado vigente
+  // (`resolveClientMonthlyPlan`, o mesmo resolvedor central de sempre),
+  // caindo pro campo permanente do cliente só quando nenhum canal tem meta
+  // de resultado definida (mesmo fallback de sempre). Antes desta etapa,
+  // Sprints usava `client.target_cost_per_result` direto, nunca passando
+  // pela resolução mensal — divergindo de Operação/página do Cliente sempre
+  // que existisse um planejamento por canal vigente.
+  const resolvedTargetCostByClient = new Map<string, number | null>(
+    (clients ?? []).map((c) => [
+      c.id,
+      resolveClientMonthlyPlan({
+        channels: AVAILABLE_TRAFFIC_CHANNELS,
+        changes: planChangesByClient.get(c.id) ?? [],
+        selectedMonth: monthRange.firstDay,
+      }).consolidated.cpa ?? c.target_cost_per_result,
+    ]),
+  );
 
   const performanceRecordsByClient = new Map<string, OperationClientRawData["performanceRecords"]>();
   for (const r of performanceRecords ?? []) {
@@ -537,7 +579,7 @@ export default async function SprintsPage({
       lastReviewAt: lastReviewAtByClient.get(client.id) ?? null,
       sprintClosedSnapshots: sprintClosedSnapshotsByClient.get(client.id) ?? new Map(),
       performanceGoal: client.performance_goal,
-      targetCostPerResult: client.target_cost_per_result,
+      targetCostPerResult: resolvedTargetCostByClient.get(client.id) ?? client.target_cost_per_result,
       performanceRecords: performanceRecordsByClient.get(client.id) ?? [],
       channelSpendOverrides: channelOverridesByClient.get(client.id) ?? [],
     };

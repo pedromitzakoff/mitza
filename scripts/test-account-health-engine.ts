@@ -113,6 +113,7 @@ console.log("\nDimensão Custo por Resultado — 'menor é melhor', só desvio A
     expected: null,
     sampleSize: 10,
     hasReliableSample: true,
+    hasComparableScope: true,
   });
   check("costActual=null -> 'nenhum', hasReliableSample=true", evaluateAccountHealth(baseInput({ costActual: null })).dimensions.cost.hasReliableSample, true);
   check(
@@ -132,6 +133,59 @@ console.log("\nDimensão Custo por Resultado — 'menor é melhor', só desvio A
   check("deviation 0.31 -> 'relevante'", evaluateAccountHealth(baseInput({ costPlanned: 100, costActual: 131 })).dimensions.cost.status, "relevante");
   check("deviation exatamente 0.50 (borda) -> ainda 'relevante'", evaluateAccountHealth(baseInput({ costPlanned: 100, costActual: 150 })).dimensions.cost.status, "relevante");
   check("deviation 0.51 -> 'grave'", evaluateAccountHealth(baseInput({ costPlanned: 100, costActual: 151 })).dimensions.cost.status, "grave");
+}
+
+console.log(
+  "\nCusto por Resultado — costScopeComparable (Etapa 'Comparabilidade de Escopo de Custo', Parte 3): escopo divergente nunca vira severidade\n",
+);
+
+{
+  // Mesmo desvio grave de sempre (0.51, custo 151 vs meta 100) — a única
+  // diferença é `costScopeComparable: false`. Continua travado em 'nenhum',
+  // mesmo padrão de `hasReliableSample=false`: ausência de uma base
+  // COMPARÁVEL nunca é tratada como desempenho ruim.
+  const evaluation = evaluateAccountHealth(baseInput({ costPlanned: 100, costActual: 151, costScopeComparable: false }));
+  check("escopo divergente -> status 'nenhum', nunca 'grave' mesmo com desvio de 51%", evaluation.dimensions.cost.status, "nenhum");
+  check("escopo divergente -> deviation nunca chega a ser calculado (null, não escondido)", evaluation.dimensions.cost.deviation, null);
+  check("escopo divergente -> hasReliableSample continua true (não é problema de amostra)", evaluation.dimensions.cost.hasReliableSample, true);
+  check("escopo divergente -> hasComparableScope false", evaluation.dimensions.cost.hasComparableScope, false);
+  check(
+    "motivo é semanticamente 'sem base comparável', nunca um percentual de desvio",
+    evaluation.primaryReason,
+    "Custo por resultado sem base comparável — planejamento e realizado não cobrem os mesmos canais",
+  );
+  check("healthStatus não sobe por causa de um diagnóstico de custo que nem chegou a existir", evaluation.healthStatus, "saudavel");
+}
+
+{
+  // costScopeComparable omitido (não passado) -> preserva o comportamento
+  // de sempre (default true) — nenhum chamador existente que ainda não
+  // sabe calcular isso quebra ou muda de resultado.
+  const evaluation = evaluateAccountHealth(baseInput({ costPlanned: 100, costActual: 151 }));
+  check("costScopeComparable omitido -> default true, comportamento de sempre preservado", evaluation.dimensions.cost.status, "grave");
+  check("costScopeComparable omitido -> hasComparableScope true", evaluation.dimensions.cost.hasComparableScope, true);
+}
+
+{
+  // costScopeComparable explicitamente true -> idêntico a omitir.
+  const evaluation = evaluateAccountHealth(baseInput({ costPlanned: 100, costActual: 111, costScopeComparable: true }));
+  check("costScopeComparable=true explícito -> thresholds de sempre, sem nenhuma mudança", evaluation.dimensions.cost.status, "leve");
+}
+
+{
+  // Amostra insuficiente E escopo divergente ao mesmo tempo -> amostra vence
+  // (checada primeiro), mesmo resultado final ('nenhum'), mas o motivo
+  // reflete a causa mais fundamental. `resultPlanned: 2` (expected=1 com
+  // monthExpectedPct=50) mantém a dimensão de Resultado em 'nenhum'
+  // (resultActual=1 bate exatamente o esperado) — isola só o comportamento
+  // de `cost` que este teste quer comprovar, sem a dimensão de resultado
+  // nem `dataQuality` competindo pelo motivo principal.
+  const evaluation = evaluateAccountHealth(
+    baseInput({ resultPlanned: 2, resultActual: 1, costPlanned: 100, costActual: 300, costScopeComparable: false }),
+  );
+  check("amostra insuficiente + escopo divergente -> ainda 'nenhum'", evaluation.dimensions.cost.status, "nenhum");
+  check("amostra insuficiente vence a checagem (ordem preservada) -> motivo é o de amostra, não o de escopo", evaluation.dimensions.cost.hasReliableSample, false);
+  check("primaryReason cita amostra, não escopo, quando os dois problemas coexistem", evaluation.primaryReason, "Aguardando amostra suficiente para avaliar custo (1 de 3 resultados)");
 }
 
 console.log("\nDimensão Revisão — nunca revisada é sempre o pior caso; cadência desativada não participa\n");

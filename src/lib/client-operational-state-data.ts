@@ -6,13 +6,15 @@ import { effectiveTaskStatus } from "@/lib/task-status";
 import { aggregatePerformanceResults, computeCostPerResult, type PerformanceRecordRow } from "@/lib/performance";
 import { channelToPerformanceSource } from "@/lib/performance-queries";
 import { resolveManualActualSpend, sumEffectiveSpendForMonth, type SprintSpendSource, type DailySpendRow } from "@/lib/effective-spend";
-import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
+import { groupChannelSpendBySprintId, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 import {
   computeMonthlyExpectedPct,
   computeMonthlyExpectedToDateByCalendar,
   resolvePlanningHorizon,
 } from "@/lib/monthly-budget";
 import { resolveClientMonthlyPlan, type ClientPlanChangeRow } from "@/lib/client-plan";
+import { resolveClientMonthlyActuals } from "@/lib/client-actuals";
+import { resolveCostScopeComparability } from "@/lib/channel-metrics";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { evaluateAccountHealth, type AccountHealthInput } from "@/lib/account-health-engine";
 import { DEFAULT_REVIEW_MAX_BUSINESS_DAYS } from "@/lib/operation-health-thresholds";
@@ -80,7 +82,17 @@ export async function loadClientOperationalStates(
     .gte("end_date", monthStart);
   if (clientId) sprintsQuery = sprintsQuery.eq("client_id", clientId);
 
-  let dailySpendQuery = supabase.from("daily_spend").select("client_id, date, spend, synced_at").gte("date", monthStart).lte("date", monthEnd);
+  // `channel` incluído na mesma consulta de sempre (Etapa "Comparabilidade
+  // de Escopo de Custo") — nenhuma query nova, só uma coluna a mais: usado
+  // só pra montar `dailySpendChannelByClient` abaixo, que alimenta
+  // `resolveClientMonthlyActuals` (o mesmo resolvedor já usado pelo
+  // Dashboard/página do Cliente pro realizado por canal, nunca uma segunda
+  // implementação).
+  let dailySpendQuery = supabase
+    .from("daily_spend")
+    .select("client_id, date, spend, synced_at, channel")
+    .gte("date", monthStart)
+    .lte("date", monthEnd);
   if (clientId) dailySpendQuery = dailySpendQuery.eq("client_id", clientId);
 
   let latestReviewsQuery = supabase.from("account_reviews").select("client_id, reviewed_at").order("reviewed_at", { ascending: false });
@@ -166,10 +178,19 @@ export async function loadClientOperationalStates(
   const allSprintIds = sprints.map((s) => s.id);
 
   const dailySpendByClient = new Map<string, { date: string; spend: number; synced_at: string }[]>();
+  // Etapa "Comparabilidade de Escopo de Custo": mesma linha de `daily_spend`
+  // já buscada acima, só reagrupada com a dimensão de canal — alimenta
+  // `resolveClientMonthlyActuals` abaixo (realizado por canal), nunca uma
+  // segunda consulta.
+  const dailySpendChannelByClient = new Map<string, { date: string; channel: TrafficChannel; spend: number }[]>();
   for (const row of dailySpendRows) {
     const list = dailySpendByClient.get(row.client_id) ?? [];
     list.push(row);
     dailySpendByClient.set(row.client_id, list);
+
+    const channelList = dailySpendChannelByClient.get(row.client_id) ?? [];
+    channelList.push({ date: row.date, channel: row.channel, spend: row.spend });
+    dailySpendChannelByClient.set(row.client_id, channelList);
   }
 
   const performanceRows =
@@ -332,16 +353,55 @@ export async function loadClientOperationalStates(
     // quando NENHUM canal tem meta de resultado definida ainda (mesmo
     // fallback de sempre, ver `resolveMonthlyPlanSnapshot`, agora aplicado
     // ao consolidado em vez de só Meta).
-    const consolidatedPlan = resolveClientMonthlyPlan({
+    const clientMonthlyPlan = resolveClientMonthlyPlan({
       channels: AVAILABLE_TRAFFIC_CHANNELS,
       changes: planChangesByClient.get(client.id) ?? [],
       selectedMonth: monthRange.firstDay,
-    }).consolidated;
+    });
+    const consolidatedPlan = clientMonthlyPlan.consolidated;
     const plan = {
       investmentPlanned: consolidatedPlan.investment,
       targetResultCount: consolidatedPlan.resultCount,
       targetCostPerResult: consolidatedPlan.cpa ?? client.target_cost_per_result,
     };
+
+    // Etapa "Comparabilidade de Escopo de Custo": `costPlanned` acima só
+    // representa fielmente o CPA consolidado quando o conjunto de canais do
+    // PLANO bate com o conjunto de canais do REALIZADO — a auditoria
+    // confirmou que hoje eles podem divergir (ex.: só Meta tem plano, mas
+    // Google também gerou investimento/resultado real este mês). Realizado
+    // por canal vem do mesmo resolvedor já usado pelo Dashboard/página do
+    // Cliente (`resolveClientMonthlyActuals`, lib/client-actuals.ts) sobre
+    // os MESMOS dados brutos já buscados acima pra este cliente (sprints,
+    // `daily_spend` com canal, overrides, registros de performance) —
+    // nenhuma query nova, nenhum segundo cálculo de "quais canais existem".
+    //
+    // `consolidatedPlan.cpa === null` significa que `targetCostPerResult`
+    // acima veio do FALLBACK global (`client.target_cost_per_result`), não
+    // de nenhum canal específico — uma meta global nunca teve escopo de
+    // canal pra começar, então ela continua comparável contra o consolidado
+    // como sempre foi (nunca tratar fallback legítimo como escopo
+    // divergente sem evidência).
+    const clientSprintIds = new Set((sprintsByClient.get(client.id) ?? []).map((sprint) => sprint.id));
+    const clientChannelSpendOverrides: SprintChannelSpendOverrideRow[] = Array.from(clientSprintIds).flatMap(
+      (sprintId) => channelSpendBySprintId.get(sprintId) ?? [],
+    );
+    const actualByChannel = resolveClientMonthlyActuals({
+      sprints: (sprintsByClient.get(client.id) ?? []).map((sprint) => ({
+        sprintId: sprint.id,
+        start_date: sprint.start_date,
+        end_date: sprint.end_date,
+      })),
+      dailySpendChannel: dailySpendChannelByClient.get(client.id) ?? [],
+      channelSpendOverrides: clientChannelSpendOverrides,
+      performanceRecords: performanceRowsByClient.get(client.id) ?? [],
+      performanceGoal: client.performance_goal,
+    }).byChannel;
+    const costScopeComparable = resolveCostScopeComparability(
+      consolidatedPlan.cpa !== null,
+      clientMonthlyPlan.byChannel,
+      actualByChannel,
+    );
 
     const lastReviewAt = latestReviewByClient.get(client.id) ?? null;
     const reviewBusinessDaysAgo = lastReviewAt ? businessDaysSince(new Date(lastReviewAt), today) : null;
@@ -363,6 +423,7 @@ export async function loadClientOperationalStates(
       performanceGoalConfigured: client.performance_goal !== null,
       costActual,
       costPlanned: plan.targetCostPerResult,
+      costScopeComparable,
       monthExpectedPct,
       reviewBusinessDaysAgo,
       reviewMaxBusinessDays,
