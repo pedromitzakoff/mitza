@@ -23,6 +23,8 @@
  * essa decisão — só consomem o resultado.
  */
 
+import { MIN_RELIABLE_RESULT_COUNT } from "@/lib/operation-health-thresholds";
+
 export type MetricDirection = "up" | "down" | "flat";
 export type MetricTone = "normal" | "attention" | "critical";
 /** Qual direção do desvio conta como "fora do esperado" pro indicador —
@@ -83,12 +85,31 @@ export function evaluateMetricDiagnostic(
 
 /** CPA/CPL — só desvio ACIMA da meta conta (custo abaixo da meta é sempre
  * melhora, nunca alerta). Régua de magnitude (10%/20%) igual à de
- * qualquer outro indicador quando o desvio conta. */
+ * qualquer outro indicador quando o desvio conta.
+ *
+ * Amostra mínima (Etapa "Auditoria do Motor Operacional", achado P0):
+ * abaixo de `MIN_RELIABLE_RESULT_COUNT` resultados, o desvio nunca vira
+ * `attention`/`critical` — mesma constante e mesmo critério que
+ * `evaluateCost` (`account-health-engine.ts`) já usa pro Motor de Saúde,
+ * nunca um segundo número mágico "3" duplicado aqui. Antes desta etapa,
+ * o Motor de Saúde já suprimia CPA sem amostra suficiente, mas o Motor de
+ * Diagnóstico Único (filtros/badges da Operação, "Prioridades de hoje")
+ * classificava o mesmo CPA como crítico sem essa proteção — a mesma conta
+ * podia aparecer como "sem amostra" num lugar e "CPA crítico" em outro.
+ * `expected` continua populado (mesmo padrão de `CostDimension` quando
+ * `hasReliableSample` é falso: a meta em si não desaparece, só o
+ * julgamento do desvio fica em suspenso) — só `deviationPct`/`tone`
+ * ficam neutros, igual ao caso "sem meta pra comparar" logo acima em
+ * `evaluateMetricDiagnostic`. */
 export function evaluateCpaDiagnostic(
   costPerResult: number | null,
   targetCostPerResult: number | null,
+  resultCount: number,
 ): MetricDiagnostic | null {
   if (costPerResult === null) return null;
+  if (resultCount < MIN_RELIABLE_RESULT_COUNT) {
+    return { value: costPerResult, expected: targetCostPerResult, deviationPct: null, direction: "flat", tone: "normal", isOutOfRange: false };
+  }
   return evaluateMetricDiagnostic(costPerResult, targetCostPerResult, "increase");
 }
 
@@ -257,7 +278,10 @@ export function formatAtividadeLabel(diagnostic: AtividadeDiagnostic): string | 
 
 export interface ClientDiagnosticsInput {
   planejamento: { hasPerformanceGoal: boolean; targetCostPerResult: number | null; investmentPlanned: number | null };
-  cpa: { costPerResult: number | null; targetCostPerResult: number | null };
+  /** `resultCount`: mesma contagem que alimenta `MIN_RELIABLE_RESULT_COUNT`
+   * no Motor de Saúde (`AccountHealthInput.resultActual`) — nunca uma
+   * segunda fonte, ver `evaluateCpaDiagnostic`. */
+  cpa: { costPerResult: number | null; targetCostPerResult: number | null; resultCount: number };
   investment: { actualSpend: number; expectedToDate: number | null };
   pendencias: { openTasksCount: number };
   atividade: { lastActivityAt: string | null; hoursSinceLastActivity: number | null };
@@ -274,7 +298,7 @@ export interface ClientDiagnostics {
 export function evaluateClientDiagnostics(input: ClientDiagnosticsInput): ClientDiagnostics {
   return {
     planejamento: evaluatePlanejamento(input.planejamento),
-    cpa: evaluateCpaDiagnostic(input.cpa.costPerResult, input.cpa.targetCostPerResult),
+    cpa: evaluateCpaDiagnostic(input.cpa.costPerResult, input.cpa.targetCostPerResult, input.cpa.resultCount),
     investment: evaluateInvestmentDiagnostic(input.investment.actualSpend, input.investment.expectedToDate),
     pendencias: evaluatePendencias(input.pendencias),
     atividade: evaluateAtividade(input.atividade),

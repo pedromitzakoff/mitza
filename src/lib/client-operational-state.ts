@@ -146,6 +146,10 @@ export function evaluateClientChannelDiagnostics(
     pendencias: state.diagnostics.pendencias,
     atividade: state.diagnostics.atividade,
     investment: evaluateInvestmentDiagnostic(channelState.investmentActual, null),
-    cpa: evaluateCpaDiagnostic(channelState.performanceSummary?.costPerResult ?? null, targetCostPerResult),
+    cpa: evaluateCpaDiagnostic(
+      channelState.performanceSummary?.costPerResult ?? null,
+      targetCostPerResult,
+      channelState.performanceSummary?.resultCount ?? 0,
+    ),
   };
 }

@@ -402,7 +402,7 @@ export async function loadClientOperationalStates(
         targetCostPerResult: plan.targetCostPerResult,
         investmentPlanned: plan.investmentPlanned,
       },
-      cpa: { costPerResult: costActual, targetCostPerResult: plan.targetCostPerResult },
+      cpa: { costPerResult: costActual, targetCostPerResult: plan.targetCostPerResult, resultCount: performanceResult.resultCount },
       investment: { actualSpend: spend.actual, expectedToDate: investmentExpectedToDate },
       pendencias: { openTasksCount: openCountByClient.get(client.id) ?? 0 },
       atividade: { lastActivityAt, hoursSinceLastActivity },
