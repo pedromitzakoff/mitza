@@ -36,6 +36,14 @@
  * As duas continuam ativas no cron diário — só não entram no backfill.
  * ---------------------------------------------------------------------
  */
+import { config } from "dotenv";
+
+// Scripts rodados via `tsx` (fora do Next.js) não carregam `.env.local`
+// sozinhos — precisa ser explícito, mesmo padrão já usado por
+// `scripts/sync-meta.ts`. Tem que rodar ANTES de `createAdminClient` ser
+// chamada (dentro de `runBackfill`), então entra logo no topo do arquivo.
+config({ path: ".env.local" });
+
 import { createAdminClient } from "../src/lib/supabase/admin";
 import { todayDateString } from "../src/lib/today";
 import { lastNClosedDaysEndingYesterday } from "../src/lib/achievement-dates";
