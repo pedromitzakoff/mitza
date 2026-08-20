@@ -6,6 +6,7 @@ import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "rea
 import { Tooltip } from "@/components/ui/tooltip";
 import {
   Clock,
+  History,
   LayoutGrid,
   ListChecks,
   LogOut,
@@ -140,9 +141,15 @@ interface NavItem {
  * principal — o relatório individual agora é a aba "Relatórios" do Cliente
  * (`/clients/[id]?area=relatorios`) e a visibilidade de pendência migrou pro
  * filtro rápido "Relatório pendente" da Operação. `/reports` continua
- * existindo (mesmo padrão acima), só sem porta de entrada aqui. A
- * constituição do produto (Painel Geral → Operação → Cliente) não deixa
- * espaço pra um quarto pilar de navegação. */
+ * existindo (mesmo padrão acima), só sem porta de entrada aqui.
+ *
+ * Etapa "Timeline Geral da Agência": terceiro pilar principal, ao lado de
+ * Visão Geral e Operação — a tríade responde três perguntas distintas que
+ * nunca competem entre si (Visão Geral: "como está a agência?"; Operação:
+ * "qual cliente precisa de atenção?"; Timeline: "o que aconteceu?"). A
+ * constituição do produto passa a ser Visão Geral → Operação → Timeline →
+ * Cliente — ainda sem espaço pra um quinto pilar (Relatórios/Clientes/
+ * Sprints continuam cobertos por outros fluxos, mesmo raciocínio de sempre). */
 const NAV_ITEMS: NavItem[] = [
   { label: "Visão Geral", href: "/", icon: LayoutGrid, isActive: (p) => p === "/", group: "principal" },
   {
@@ -150,6 +157,13 @@ const NAV_ITEMS: NavItem[] = [
     href: "/operation",
     icon: ListChecks,
     isActive: (p) => p === "/operation",
+    group: "principal",
+  },
+  {
+    label: "Timeline",
+    href: "/timeline",
+    icon: History,
+    isActive: (p) => p.startsWith("/timeline"),
     group: "principal",
   },
   { label: "Equipe", href: "/team", icon: Users, isActive: (p) => p.startsWith("/team"), group: "flexivel" },

@@ -56,7 +56,10 @@ const HISTORY_PAGE_SIZE = 15;
  * `account_review_recorded` (outcome + tipos de alteração já gravados ali,
  * ver record_account_review em supabase/account-reviews.sql) — nunca uma
  * segunda consulta a account_optimizations só pra isso. */
-function buildReviewDetail(metadata: Record<string, unknown>): string | null {
+/** Exportado (Timeline Geral da Agência, `lib/agency-timeline.ts`) — mesmo
+ * detalhe de revisão/otimização usado aqui, nenhuma segunda leitura de
+ * metadata pra chegar no mesmo texto. */
+export function buildReviewDetail(metadata: Record<string, unknown>): string | null {
   const outcome = metadata.outcome;
   if (typeof outcome !== "string" || !(outcome in ACCOUNT_REVIEW_OUTCOME_LABEL)) return null;
   const outcomeLabel = ACCOUNT_REVIEW_OUTCOME_LABEL[outcome as AccountReviewOutcome];

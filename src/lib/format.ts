@@ -203,6 +203,29 @@ export function formatRelativeShortDateTime(value: string, today: Date): string 
   return formatDateTime(value);
 }
 
+/** "14:03" — só o horário, no fuso da agência (`APP_TIMEZONE`). Usado onde a
+ * data já aparece separada (ex.: cabeçalho de dia da Timeline Geral da
+ * Agência), pra nunca repetir "Hoje"/a data na mesma linha do horário. */
+export function formatTimeOnly(value: string): string {
+  return timeOnlyFormatter.format(new Date(value));
+}
+
+/** "Hoje" / "Ontem" / "12 de julho" — rótulo de cabeçalho de dia (nunca um
+ * horário junto, ver `formatTimeOnly` acima), reaproveitando a MESMA regra
+ * de dia civil no fuso da agência que já vale pra `formatRelativeDateTime`/
+ * `formatRelativeShortDateTime` (`diffCalendarDaysInAppTimezone`) — nunca
+ * uma segunda comparação de datas. `today` precisa ser sempre `new Date()`,
+ * nunca `todayUTC()` (mesma ressalva das duas funções acima). */
+export function formatTimelineDayLabel(value: string, today: Date): string {
+  const diffDays = diffCalendarDaysInAppTimezone(value, today);
+  if (diffDays <= 0) return "Hoje";
+  if (diffDays === 1) return "Ontem";
+  // `todayDateString`, nunca `value.slice(0, 10)` — o dia civil precisa vir
+  // do fuso da agência (mesma regra de `diffCalendarDaysInAppTimezone`
+  // acima), nunca do dia civil em UTC do timestamp bruto.
+  return formatDayMonthLong(todayDateString(new Date(value)));
+}
+
 /** Mesmo bug de `dateTimeFormatter` (faltava `timeZone`) — corrigido junto. */
 const dateTimeWithYearFormatter = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
