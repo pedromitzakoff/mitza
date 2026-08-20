@@ -1,7 +1,5 @@
 import { Search } from "lucide-react";
-import type { OperationTriageSummary } from "@/lib/operation-triage";
-
-export type OperationQuickFilter = "todos" | "planejamento" | "cpa" | "investimento" | "pendencias";
+import type { OperationTriageSummary, OperationQuickFilter } from "@/lib/operation-triage";
 
 function CounterTile({
   count,
@@ -29,22 +27,20 @@ function CounterTile({
 }
 
 /**
- * Cabeçalho da Operação (Etapa "Novo Conceito de Monitoramento
- * Operacional") — substitui os filtros por dimensão do Motor de Saúde
- * (pendências/revisões/sem sincronização/relatório pendente) pelos
- * diagnósticos objetivos do Motor Único. "Revisão" deixou de existir como
- * filtro independente — vira só um tipo de Pendência (ver
- * metric-diagnostics.ts). Cada contador funciona como filtro rápido
- * (clique alterna, um único ativo por vez).
- *
- * Ordem deliberada (Etapa "Planejamento como eixo estrutural"): Planejamento
- * vem logo depois de Todos porque é um problema de outra NATUREZA — a
- * conta ainda não tem configuração mínima (meta de CPA/CPL, plano mensal
- * de investimento) pro motor conseguir avaliá-la — não um problema
- * operacional como os três seguintes (Investimento, CPA/CPL, Pendências).
- * Só depois que uma conta sai da fila de Planejamento ela é de fato
- * "acompanhada" pelos outros quatro eixos (o quinto, Atividade, ainda não
- * tem filtro nesta tela).
+ * Cabeçalho da Operação (Etapa "Unificação da Leitura da Operação") — o topo
+ * deixa de filtrar por EIXO de diagnóstico (Planejamento/Investimento/CPA/
+ * Pendências, uma pergunta) e passa a filtrar pela mesma GRAVIDADE que já
+ * organiza o corpo da lista (Crítico/Atenção/Saudável/Sem dados, outra
+ * pergunta) — antes disso, o gestor precisava pensar em dois eixos ao mesmo
+ * tempo pra ler a tela. Os quatro conceitos de eixo (Planejamento,
+ * Investimento, CPA, Pendências) continuam existindo — só migraram pra
+ * dentro do próprio card, como motivo (`primaryReason`/`diagnostics`, ver
+ * `operation-client-card.tsx`), nunca mais como um segundo filtro aqui.
+ * Cada contador funciona como filtro rápido (clique alterna, um único ativo
+ * por vez) — mesma interação de sempre, só a pergunta que ele responde
+ * mudou. Contagens vêm de `summarizeOperationTriage`, que usa exatamente
+ * `resolveOperationPriorityGroup` — a mesma fonte que agrupa a lista
+ * abaixo, nunca um score paralelo.
  */
 export function OperationFilterBar({
   summary,
@@ -78,28 +74,28 @@ export function OperationFilterBar({
           onClick={() => onQuickFilterChange("todos")}
         />
         <CounterTile
-          count={summary.withPlanejamentoIncompleto}
-          label="Planejamento"
-          active={quickFilter === "planejamento"}
-          onClick={() => onQuickFilterChange(quickFilter === "planejamento" ? "todos" : "planejamento")}
+          count={summary.critico}
+          label="Críticas"
+          active={quickFilter === "critico"}
+          onClick={() => onQuickFilterChange(quickFilter === "critico" ? "todos" : "critico")}
         />
         <CounterTile
-          count={summary.withInvestmentOff}
-          label="Investimento"
-          active={quickFilter === "investimento"}
-          onClick={() => onQuickFilterChange(quickFilter === "investimento" ? "todos" : "investimento")}
+          count={summary.atencao}
+          label="Atenção"
+          active={quickFilter === "atencao"}
+          onClick={() => onQuickFilterChange(quickFilter === "atencao" ? "todos" : "atencao")}
         />
         <CounterTile
-          count={summary.withCpaOff}
-          label="CPA"
-          active={quickFilter === "cpa"}
-          onClick={() => onQuickFilterChange(quickFilter === "cpa" ? "todos" : "cpa")}
+          count={summary.saudavel}
+          label="Saudáveis"
+          active={quickFilter === "saudavel"}
+          onClick={() => onQuickFilterChange(quickFilter === "saudavel" ? "todos" : "saudavel")}
         />
         <CounterTile
-          count={summary.withPendencias}
-          label="Pendências"
-          active={quickFilter === "pendencias"}
-          onClick={() => onQuickFilterChange(quickFilter === "pendencias" ? "todos" : "pendencias")}
+          count={summary.semDados}
+          label="Sem dados"
+          active={quickFilter === "sem_dados"}
+          onClick={() => onQuickFilterChange(quickFilter === "sem_dados" ? "todos" : "sem_dados")}
         />
       </div>
 
@@ -115,15 +111,14 @@ export function OperationFilterBar({
           />
         </div>
         {/* Gestor (Etapa "Central de Decisão Diária", item "Filtros
-            adicionais") — único filtro novo adicionado: responde direto
-            "quais contas críticas estão comigo?" sem precisar digitar o
-            próprio nome na busca. Severidade/revisão/qualidade de dado já
-            têm caminho próprio (agrupamento Crítico/Atenção/Saudável/Sem
-            dados da fila, ver operation-triage-view.tsx) — um segundo
-            controle pra isso duplicaria a mesma pergunta, então não foi
-            adicionado, pra manter a barra enxuta. Canal não entrou por não
-            existir hoje como fato consolidado e confiável por cliente neste
-            pipeline (ver relatório da etapa). */}
+            adicionais") — responde direto "quais contas críticas estão
+            comigo?" sem precisar digitar o próprio nome na busca. A lógica
+            final da tela (Etapa "Unificação da Leitura da Operação") é só
+            Gravidade + Gestor + Busca — nenhum filtro por eixo de
+            diagnóstico (Planejamento/Investimento/CPA/Pendências) aqui,
+            esses viraram motivo dentro do próprio card. Canal não entrou
+            por não existir hoje como fato consolidado e confiável por
+            cliente neste pipeline (ver relatório da etapa original). */}
         {managers.length > 0 && (
           <select
             value={managerFilter}

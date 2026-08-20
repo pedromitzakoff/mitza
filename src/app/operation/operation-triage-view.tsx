@@ -7,13 +7,14 @@ import {
   shiftOperationMonth,
   groupClientsByOperationPriority,
   resolveOperationPriorityGroup,
+  filterOperationTriageClients,
   type OperationTriageSummary,
   type OperationPriorityGroup,
+  type OperationQuickFilter,
 } from "@/lib/operation-triage";
-import { getActiveDiagnosticFilters } from "@/lib/metric-diagnostics";
 import type { ClientOperationalState } from "@/lib/client-operational-state";
 import { OperationClientCard } from "./operation-client-card";
-import { OperationFilterBar, type OperationQuickFilter } from "./operation-filter-bar";
+import { OperationFilterBar } from "./operation-filter-bar";
 
 /** Plural/gramática de seção — mesmo rótulo de `PRIORITY_GROUP_LABEL`
  * (operation-client-card.tsx) só ajustado pro cabeçalho de grupo em vez do
@@ -26,18 +27,31 @@ const PRIORITY_GROUP_SECTION_LABEL: Record<OperationPriorityGroup, string> = {
   sem_dados: "Sem dados",
 };
 
+/** Forma adjetiva de cada balde, pro estado vazio de um filtro de gravidade
+ * específico ("Nenhuma conta {x} neste recorte.") — nunca o mesmo texto
+ * genérico de "sem filtro nenhum", pra ficar claro QUAL recorte não achou
+ * nada (Etapa "Unificação da Leitura da Operação", item "Empty state de
+ * filtro"). */
+const PRIORITY_GROUP_EMPTY_LABEL: Record<OperationPriorityGroup, string> = {
+  critico: "crítica",
+  atencao: "em atenção",
+  saudavel: "saudável",
+  sem_dados: "sem dados",
+};
+
 /**
- * Centro de Triagem da Operação (Etapa "Central de Decisão Diária") —
- * pergunta que a tela responde: "qual conta merece minha atenção agora, e
- * por quê". A fila é reagrupada (`groupClientsByOperationPriority`) por
- * Crítico → Atenção → Saudável → Sem dados — 100% derivado do
- * `evaluation`/Motor de Saúde da Conta que `sortClientOperationalStates` já
- * calcula (fora deste componente); os filtros rápidos do topo continuam
- * vindo do Motor de Diagnóstico Único (`metric-diagnostics.ts`, preservados
- * desta etapa — ver `OperationFilterBar`), já que respondem uma pergunta
- * diferente ("qual EIXO está fora do esperado", não "qual a gravidade
- * geral"). As duas classificações convivem: o quick filter reduz a lista,
- * o agrupamento decide a ordem/os divisores dentro do que sobrou.
+ * Centro de Triagem da Operação (Etapa "Unificação da Leitura da Operação")
+ * — pergunta que a tela responde: "qual conta merece minha atenção agora, e
+ * por quê". Uma única lógica mental, do topo ao corpo: os cards rápidos do
+ * topo e o agrupamento da fila usam exatamente a mesma classificação
+ * (`resolveOperationPriorityGroup`, derivada só do `evaluation`/Motor de
+ * Saúde da Conta) — o filtro rápido reduz a lista pela MESMA gravidade que
+ * os divisores (Crítico → Atenção → Saudável → Sem dados) já usam pra
+ * ordenar o que sobrou. Os eixos de diagnóstico do Motor Único
+ * (Planejamento/Investimento/CPA/Pendências) deixaram de ser filtro — agora
+ * só aparecem como motivo dentro do próprio card
+ * (`OperationClientCard`/`primaryReason`). A lógica final da tela é
+ * Gravidade + Gestor + Busca, nada além disso.
  */
 export function OperationTriageView({
   clients,
@@ -74,19 +88,10 @@ export function OperationTriageView({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [clients]);
 
-  const filteredClients = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return groupedClients.filter((card) => {
-      if (quickFilter !== "todos" && !getActiveDiagnosticFilters(card.diagnostics).includes(quickFilter)) return false;
-      if (managerFilter !== "todos" && card.managerId !== managerFilter) return false;
-      if (normalizedQuery) {
-        const matchesName = card.clientName.toLowerCase().includes(normalizedQuery);
-        const matchesManager = (card.managerName ?? "").toLowerCase().includes(normalizedQuery);
-        if (!matchesName && !matchesManager) return false;
-      }
-      return true;
-    });
-  }, [groupedClients, quickFilter, managerFilter, query]);
+  const filteredClients = useMemo(
+    () => filterOperationTriageClients(groupedClients, { severity: quickFilter, managerId: managerFilter, query }),
+    [groupedClients, quickFilter, managerFilter, query],
+  );
 
   const prevMonthHref = `/operation?month=${shiftOperationMonth(monthParam, -1)}`;
   const nextMonthHref = `/operation?month=${shiftOperationMonth(monthParam, 1)}`;
@@ -153,7 +158,11 @@ export function OperationTriageView({
         </ul>
       ) : (
         <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-          {summary.totalClients === 0 ? "Nenhum cliente ativo neste mês." : "Nenhum cliente encontrado com esse filtro."}
+          {summary.totalClients === 0
+            ? "Nenhum cliente ativo neste mês."
+            : quickFilter !== "todos"
+              ? `Nenhuma conta ${PRIORITY_GROUP_EMPTY_LABEL[quickFilter]} neste recorte.`
+              : "Nenhum cliente encontrado com esse filtro."}
         </p>
       )}
     </div>

@@ -1,5 +1,4 @@
 import type { ClientOperationalState } from "@/lib/client-operational-state";
-import { getActiveDiagnosticFilters } from "@/lib/metric-diagnostics";
 import type { AccountHealthEvaluation } from "@/lib/account-health-engine";
 
 /**
@@ -27,40 +26,48 @@ import type { AccountHealthEvaluation } from "@/lib/account-health-engine";
 
 export interface OperationTriageSummary {
   totalClients: number;
-  /** Clientes sem as configurações mínimas pro motor conseguir avaliá-los
-   * (meta de CPA/CPL e/ou plano mensal de investimento) — problema
-   * ESTRUTURAL, diferente dos quatro abaixo (que são operacionais). */
-  withPlanejamentoIncompleto: number;
-  /** Clientes com CPA fora da meta (Motor de Diagnóstico Único). */
-  withCpaOff: number;
-  /** Clientes com investimento fora do ritmo esperado (qualquer direção). */
-  withInvestmentOff: number;
-  /** Clientes com ao menos 1 pendência operacional (tarefa aberta). */
-  withPendencias: number;
+  /** Contagem por balde de gravidade — SEMPRE derivada de
+   * `resolveOperationPriorityGroup` (abaixo), a mesma fonte que decide o
+   * agrupamento da fila. Nunca um score novo: é só a contagem do que o
+   * motor de saúde já classificou. */
+  critico: number;
+  atencao: number;
+  saudavel: number;
+  semDados: number;
 }
 
 /**
- * Contadores operacionais do cabeçalho da Operação (Etapa "Novo Conceito de
- * Monitoramento Operacional") — substitui os antigos contadores
- * (pendências/revisões/sem sincronização/relatório pendente, que
- * misturavam critérios de naturezas diferentes) pelos diagnósticos
- * objetivos do Motor Único: Planejamento, CPA, Investimento, Pendências.
- * Nunca reimplementa o critério de "fora do esperado"/"incompleto" aqui —
- * sempre via `getActiveDiagnosticFilters` (metric-diagnostics.ts).
+ * Contadores operacionais do cabeçalho da Operação (Etapa "Unificação da
+ * Leitura da Operação") — o topo passa a falar a mesma língua do corpo da
+ * tela: gravidade, não eixo de diagnóstico. Substitui os antigos contadores
+ * por dimensão (Planejamento/CPA/Investimento/Pendências, Motor de
+ * Diagnóstico Único) pelos MESMOS 4 baldes que `groupClientsByOperationPriority`
+ * já usa pra ordenar a fila — nenhuma severidade nova, nenhum score
+ * paralelo: `resolveOperationPriorityGroup` é chamado aqui exatamente como
+ * é chamado lá embaixo pra cada card.
  */
 export function summarizeOperationTriage(cards: ClientOperationalState[]): OperationTriageSummary {
-  let withPlanejamentoIncompleto = 0;
-  let withCpaOff = 0;
-  let withInvestmentOff = 0;
-  let withPendencias = 0;
+  let critico = 0;
+  let atencao = 0;
+  let saudavel = 0;
+  let semDados = 0;
   for (const card of cards) {
-    const active = getActiveDiagnosticFilters(card.diagnostics);
-    if (active.includes("planejamento")) withPlanejamentoIncompleto++;
-    if (active.includes("cpa")) withCpaOff++;
-    if (active.includes("investimento")) withInvestmentOff++;
-    if (active.includes("pendencias")) withPendencias++;
+    switch (resolveOperationPriorityGroup(card.evaluation)) {
+      case "critico":
+        critico++;
+        break;
+      case "atencao":
+        atencao++;
+        break;
+      case "saudavel":
+        saudavel++;
+        break;
+      case "sem_dados":
+        semDados++;
+        break;
+    }
   }
-  return { totalClients: cards.length, withPlanejamentoIncompleto, withCpaOff, withInvestmentOff, withPendencias };
+  return { totalClients: cards.length, critico, atencao, saudavel, semDados };
 }
 
 /** Desloca um parâmetro de mês (`YYYY-MM-01`) em N meses — helper local e
@@ -135,5 +142,45 @@ export function groupClientsByOperationPriority(cards: ClientOperationalState[])
   return [...cards].sort(
     (a, b) => OPERATION_PRIORITY_GROUP_RANK[resolveOperationPriorityGroup(a.evaluation)] - OPERATION_PRIORITY_GROUP_RANK[resolveOperationPriorityGroup(b.evaluation)],
   );
+}
+
+/** Filtro rápido do topo da Operação (Etapa "Unificação da Leitura da
+ * Operação") — `"todos"` ou um dos 4 baldes de `OperationPriorityGroup`.
+ * Deliberadamente o MESMO tipo (mais `"todos"`), nunca um enum paralelo de
+ * "tipo de problema" — o topo da tela só sabe falar de gravidade, a mesma
+ * língua do corpo. */
+export type OperationQuickFilter = "todos" | OperationPriorityGroup;
+
+export interface OperationTriageFilters {
+  severity: OperationQuickFilter;
+  /** `"todos"` ou o id de um gestor — mesmo valor de sempre (ver
+   * `operation-triage-view.tsx`). */
+  managerId: string;
+  query: string;
+}
+
+/**
+ * Núcleo puro de filtragem da fila da Operação — gravidade (via
+ * `resolveOperationPriorityGroup`, nunca uma segunda regra) + gestor +
+ * busca por nome de cliente/gestor. Extraído do componente (Etapa
+ * "Unificação da Leitura da Operação") pra ser testável sem React — os três
+ * critérios são independentes e compõem por E lógico, na mesma ordem que já
+ * valia antes desta etapa.
+ */
+export function filterOperationTriageClients(
+  cards: ClientOperationalState[],
+  filters: OperationTriageFilters,
+): ClientOperationalState[] {
+  const normalizedQuery = filters.query.trim().toLowerCase();
+  return cards.filter((card) => {
+    if (filters.severity !== "todos" && resolveOperationPriorityGroup(card.evaluation) !== filters.severity) return false;
+    if (filters.managerId !== "todos" && card.managerId !== filters.managerId) return false;
+    if (normalizedQuery) {
+      const matchesName = card.clientName.toLowerCase().includes(normalizedQuery);
+      const matchesManager = (card.managerName ?? "").toLowerCase().includes(normalizedQuery);
+      if (!matchesName && !matchesManager) return false;
+    }
+    return true;
+  });
 }
 

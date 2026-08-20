@@ -166,8 +166,25 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
   // competindo) — atividade parada tem prioridade por ser um fato mais
   // acionável ("ninguém mexeu nisso"); sem isso, cai pra "quando os
   // números foram atualizados pela última vez".
-  const secondaryText = atividadeLabel ?? (performanceUpdateText ? `Performance: ${performanceUpdateText}` : null);
-  const secondaryClass = atividadeLabel ? "text-overview-danger" : "text-overview-text-muted";
+  //
+  // Etapa "Unificação da Leitura da Operação": quando a própria revisão já é
+  // o `primaryReason` (primaryDimension === "review" — "Revisão atrasada
+  // há..."/"Nenhuma revisão registrada ainda"), o rótulo de atividade abaixo
+  // repetiria o mesmo fato duas vezes na hierarquia do card. Omitido só
+  // nesse caso (cai pro texto de performance, se houver) — nunca removido
+  // quando é uma informação genuinamente adicional.
+  const activityAlreadyIsPrimaryReason = evaluation.primaryDimension === "review";
+  const secondaryText =
+    atividadeLabel && !activityAlreadyIsPrimaryReason
+      ? atividadeLabel
+      : performanceUpdateText
+        ? `Performance: ${performanceUpdateText}`
+        : null;
+  // Nunca vermelho forte aqui — o motivo principal (linha acima) já carrega
+  // o alerta, com a cor certa por tom (`emphasizeDeviationText`); o
+  // contexto secundário fica sempre discreto, pra não competir
+  // visualmente com ele.
+  const secondaryClass = "text-overview-text-muted";
 
   const priorityTone = PRIORITY_GROUP_TONE[priorityGroup];
   const priorityLabel = PRIORITY_GROUP_LABEL[priorityGroup];
