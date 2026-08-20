@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, OperationalEventType } from "@/lib/supabase/database.types";
+import type { Database, OperationalEventType, TaskType } from "@/lib/supabase/database.types";
 import { OperationalEventType as EventType, OPERATIONAL_EVENT_TYPE_LABEL } from "@/lib/operational-events";
-import { buildReviewDetail } from "@/lib/client-operational-history";
+import { buildReviewDetail, fetchOptimizationActionsByReviewId } from "@/lib/client-operational-history";
 
 /**
  * Timeline Geral da Agência — "o que aconteceu na operação da agência hoje/
@@ -65,18 +65,53 @@ export interface AgencyTimelineFilters {
   clientId: string | null;
 }
 
-/** Só o que cada `event_type` já carrega de detalhe (metadata) sem
- * reimplementar nenhuma leitura nova — revisão/otimização reaproveita
- * `buildReviewDetail` (a mesma função que já monta esse texto na Timeline
- * por Cliente); conclusão de tarefa mostra o título (mesmo campo já lido em
- * `team-member-activity.ts`). Os demais tipos ficam só com o rótulo — v1
- * deliberadamente simples, sem inventar leitura de metadata nova por tipo. */
-function buildDetail(eventType: OperationalEventType, metadata: Record<string, unknown>): string | null {
-  if (eventType === EventType.ACCOUNT_REVIEW_RECORDED) return buildReviewDetail(metadata);
-  if (eventType === EventType.TASK_COMPLETED) {
-    return typeof metadata.task_title === "string" ? metadata.task_title : null;
-  }
-  return null;
+/** Rótulo humano de `task_completed` a partir de `metadata.task_type`
+ * (Auditoria da Timeline — "task_completed mais humano"): deixa claro que a
+ * conclusão veio de uma tarefa avulsa, nunca reaproveita o rótulo de
+ * "Otimização"/"Report" usado pelos fluxos estruturados (revisão/
+ * `client_reports`) — confundiria os dois caminhos que a própria auditoria
+ * identificou como paralelos. `reuniao`/`entrega_criativo` não entram neste
+ * mapa de propósito: esse `task_completed` é removido antes de chegar aqui
+ * (ver dedupe em `fetchAgencyTimeline`) porque o evento específico
+ * (`meeting_completed`/`creative_delivery_completed`) já representa a mesma
+ * conclusão — mostrar os dois duplicaria a mesma ação. `outro` (e qualquer
+ * tipo ausente/desconhecido, ex. evento histórico) cai no rótulo genérico de
+ * sempre, com o título como detalhe — comportamento inalterado. */
+const TASK_COMPLETED_TYPE_LABEL: Partial<Record<TaskType, string>> = {
+  verificacao_saldo: "Saldo conferido",
+  report: "Tarefa de report concluída",
+  otimizacao: "Tarefa de otimização concluída",
+};
+
+/** Exportado só pra teste (`scripts/test-timeline-detail.ts`) — lógica pura,
+ * sem I/O, cobre os cenários E-H do pedido de humanização de `task_completed`. */
+export function buildTaskCompletedPresentation(metadata: Record<string, unknown>): { label: string; detail: string | null } {
+  const taskType = typeof metadata.task_type === "string" ? (metadata.task_type as TaskType) : null;
+  const title = typeof metadata.task_title === "string" ? metadata.task_title : null;
+  const typeLabel = taskType ? TASK_COMPLETED_TYPE_LABEL[taskType] : undefined;
+
+  if (!typeLabel) return { label: OPERATIONAL_EVENT_TYPE_LABEL[EventType.TASK_COMPLETED], detail: title };
+
+  // Evita repetir a mesma informação duas vezes quando o título não passa do
+  // nome do próprio tipo (ex.: tarefa recorrente antiga nunca renomeada).
+  const isTitleRedundant = title !== null && title.trim().toLowerCase() === typeLabel.trim().toLowerCase();
+  return { label: typeLabel, detail: isTitleRedundant ? null : title };
+}
+
+/** Exportado só pra teste (`scripts/test-timeline-detail.ts`) — decide se
+ * uma linha `task_completed` de reunião/entrega de criativo deve ser
+ * suprimida porque o evento específico correlacionado
+ * (`meeting_completed`/`creative_delivery_completed`) já está no mesmo lote
+ * (mesmo `correlation_id`, ver `complete_task_and_record_event`). Os demais
+ * `task_type` (`verificacao_saldo`/`report`/`otimizacao`/`outro`) nunca têm
+ * um evento específico correlacionado — nunca são suprimidos aqui. */
+export function shouldSuppressDuplicateTaskCompleted(
+  metadata: Record<string, unknown>,
+  correlationId: string | null,
+  siblingCorrelationIds: Set<string>,
+): boolean {
+  if (metadata.task_type !== "reuniao" && metadata.task_type !== "entrega_criativo") return false;
+  return correlationId !== null && siblingCorrelationIds.has(correlationId);
 }
 
 const AGENCY_TIMELINE_PAGE_SIZE = 20;
@@ -98,7 +133,9 @@ export async function fetchAgencyTimeline(
 
   let query = supabase
     .from("operational_events")
-    .select("id, event_type, occurred_at, entity_id, metadata, actor:team_members(name), client:clients(id, name)")
+    .select(
+      "id, event_type, occurred_at, entity_id, correlation_id, metadata, actor:team_members(name), client:clients(id, name)",
+    )
     .eq("organization_id", organizationId)
     .in("event_type", AGENCY_TIMELINE_EVENT_TYPES)
     .order("occurred_at", { ascending: false })
@@ -108,25 +145,60 @@ export async function fetchAgencyTimeline(
   if (filters.clientId) query = query.eq("client_id", filters.clientId);
 
   const { data } = await query;
-  const rows = data ?? [];
-  const hasMore = rows.length > pageSize;
-  const visible = rows.slice(0, pageSize);
+  const rawRows = data ?? [];
+  const hasMore = rawRows.length > pageSize;
+  const pageRows = rawRows.slice(0, pageSize);
+
+  // Reunião/entrega de criativo concluídas emitem `task_completed` +
+  // `meeting_completed`/`creative_delivery_completed` correlacionados na
+  // mesma transação (ver `complete_task_and_record_event`, ambos já dentro
+  // de `AGENCY_TIMELINE_EVENT_TYPES`) — sem isso, a mesma conclusão vira
+  // duas linhas. Checa contra `rawRows` (inclui a linha "a mais" da
+  // paginação) pra pegar até um par que caia bem na borda da página; a
+  // exclusão em si só corta de `pageRows`, nunca muda `range`/offset.
+  const completedSiblingCorrelationIds = new Set(
+    rawRows
+      .filter((row) => row.event_type === EventType.MEETING_COMPLETED || row.event_type === EventType.CREATIVE_DELIVERY_COMPLETED)
+      .map((row) => row.correlation_id)
+      .filter((id): id is string => id != null),
+  );
+
+  const visible = pageRows.filter((row) => {
+    if (row.event_type !== EventType.TASK_COMPLETED) return true;
+    const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+    return !shouldSuppressDuplicateTaskCompleted(metadata, row.correlation_id, completedSiblingCorrelationIds);
+  });
+
+  const reviewIds = visible
+    .filter((row) => row.event_type === EventType.ACCOUNT_REVIEW_RECORDED)
+    .map((row) => row.entity_id);
+  const optimizationActionsByReviewId = await fetchOptimizationActionsByReviewId(supabase, reviewIds);
 
   return {
     hasMore,
     rows: visible.map((row) => {
       const eventType = row.event_type as OperationalEventType;
       const metadata = (row.metadata ?? {}) as Record<string, unknown>;
-
-      return {
+      const base = {
         id: row.id,
         eventType,
         occurredAt: row.occurred_at,
         clientId: row.client?.id ?? null,
         clientName: row.client?.name ?? null,
         actorName: row.actor?.name ?? null,
+      };
+
+      if (eventType === EventType.TASK_COMPLETED) {
+        return { ...base, ...buildTaskCompletedPresentation(metadata) };
+      }
+
+      return {
+        ...base,
         label: OPERATIONAL_EVENT_TYPE_LABEL[eventType],
-        detail: buildDetail(eventType, metadata),
+        detail:
+          eventType === EventType.ACCOUNT_REVIEW_RECORDED
+            ? buildReviewDetail(metadata, optimizationActionsByReviewId.get(row.entity_id ?? ""))
+            : null,
       };
     }),
   };
