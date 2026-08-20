@@ -61,7 +61,9 @@ export interface ClientMonthlyGoalInfo {
 export interface ClientAchievementContext {
   clientId: string;
   clientName: string;
-  /** Dia fechado sendo avaliado (ontem, fuso da agência) — nunca "hoje". */
+  /** Dia fechado sendo avaliado — "ontem" no cron diário, uma data
+   * histórica arbitrária no backfill (Etapa "Backfill 30 dias") — nunca
+   * "hoje" em nenhum dos dois casos. */
   yesterday: string;
   performanceGoal: PerformanceGoal | null;
   tracksRevenue: boolean;

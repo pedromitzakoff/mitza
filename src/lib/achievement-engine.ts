@@ -12,16 +12,25 @@ import {
   listOrganizationIds,
 } from "@/lib/achievement-metrics";
 import { CLIENT_RULES } from "@/lib/achievement-client-rules";
-import { AGENCY_RULES } from "@/lib/achievement-agency-rules";
-import { PERSON_RULES } from "@/lib/achievement-person-rules";
+import { AGENCY_RULES, type AgencyAchievementContext } from "@/lib/achievement-agency-rules";
+import { PERSON_RULES, type PersonAchievementContext } from "@/lib/achievement-person-rules";
 import type { AchievementCandidate } from "@/lib/achievement-types";
 
 /**
  * Orquestração do motor de Conquistas — a única função que liga leitura
  * (`achievement-metrics.ts`), avaliação (regras puras) e persistência
- * (`record_achievement_event`). Chamada 1x/dia pelo cron
- * `/api/cron/evaluate-achievements`, sempre com o client ADMIN (nunca
- * depende de sessão de usuário).
+ * (`record_achievement_event`). `evaluateAchievementsForDate` é o núcleo,
+ * parametrizado por uma data de avaliação explícita — nunca depende
+ * internamente de "ontem" (Etapa "Backfill 30 dias": `evaluateAchievements({
+ * evaluationDate })` em vez do motor decidir a data sozinho). Duas portas
+ * de entrada:
+ *
+ * - `runAchievementEvaluation` — cron diário (`/api/cron/evaluate-achievements`),
+ *   sempre "ontem". Nenhuma mudança de comportamento nesta etapa.
+ * - `scripts/backfill-achievements.ts` — execução manual explícita, chama
+ *   `evaluateAchievementsForDate` uma vez por dia dos últimos 30 dias
+ *   fechados, em ordem cronológica. MESMAS regras, MESMA função — nenhuma
+ *   segunda versão.
  *
  * Isolamento (salvaguarda de aprovação nº3 — "falha do motor não pode
  * afetar sync nem operação"): cada cliente/organização/pessoa é avaliado
@@ -29,11 +38,20 @@ import type { AchievementCandidate } from "@/lib/achievement-types";
  * demais, e o motor inteiro roda numa rota própria, sem tocar nas rotas de
  * sincronização existentes.
  *
- * Reprocessamento (salvaguarda nº2): rodar esta função de novo pro mesmo
- * dia nunca duplica nada — cada candidato vira uma `idempotency_key`
+ * Reprocessamento (salvaguarda nº2): rodar esta função de novo pra mesma
+ * data nunca duplica nada — cada candidato vira uma `idempotency_key`
  * determinística (`achievement:{scope}:{subjectId}:{type}:{windowKey}`),
- * e a RPC já faz `ON CONFLICT ... DO NOTHING`.
+ * e a RPC já faz `ON CONFLICT ... DO NOTHING`. Isso vale igualmente pro
+ * backfill: rodar os mesmos 30 dias de novo (ou dez vezes) produz
+ * exatamente os mesmos eventos, nunca duplicados.
  */
+
+export interface CreatedAchievementSummary {
+  occurredOnDate: string;
+  scope: AchievementCandidate["scope"];
+  type: string;
+  headline: string;
+}
 
 export interface AchievementRunSummary {
   evaluatedOnDate: string;
@@ -49,6 +67,9 @@ export interface AchievementRunSummary {
   personCandidates: number;
   personInserted: number;
   errors: string[];
+  /** Só as que foram REALMENTE inseridas nesta execução (não as que já
+   * existiam por idempotência) — pra auditoria/validação manual. */
+  createdAchievements: CreatedAchievementSummary[];
 }
 
 function emptySummary(evaluatedOnDate: string): AchievementRunSummary {
@@ -66,6 +87,7 @@ function emptySummary(evaluatedOnDate: string): AchievementRunSummary {
     personCandidates: 0,
     personInserted: 0,
     errors: [],
+    createdAchievements: [],
   };
 }
 
@@ -73,6 +95,16 @@ function subjectIdFor(candidate: AchievementCandidate, organizationId: string): 
   if (candidate.scope === "client") return candidate.clientId ?? "unknown-client";
   if (candidate.scope === "person") return candidate.actorTeamMemberId ?? "unknown-person";
   return organizationId;
+}
+
+/** Exportada só pra teste (`scripts/test-achievement-backfill.ts`) — prova
+ * de determinismo sem precisar de banco: o mesmo candidato sempre produz a
+ * mesma chave, é essa determinística que garante reprocessar (rerun
+ * manual, backfill rodado duas vezes) nunca duplicar (a garantia real —
+ * `ON CONFLICT ... DO NOTHING` — é no banco, mesmo padrão já usado por
+ * `complete_task_and_record_event`). */
+export function buildIdempotencyKey(candidate: AchievementCandidate, organizationId: string): string {
+  return `achievement:${candidate.scope}:${subjectIdFor(candidate, organizationId)}:${candidate.type}:${candidate.windowKey}`;
 }
 
 /** Persiste 1 candidato — devolve `true` só quando REALMENTE inseriu (um
@@ -83,7 +115,7 @@ async function persistCandidate(
   organizationId: string,
   candidate: AchievementCandidate,
 ): Promise<boolean> {
-  const idempotencyKey = `achievement:${candidate.scope}:${subjectIdFor(candidate, organizationId)}:${candidate.type}:${candidate.windowKey}`;
+  const idempotencyKey = buildIdempotencyKey(candidate, organizationId);
 
   const { data, error } = await supabase.rpc("record_achievement_event", {
     p_organization_id: organizationId,
@@ -111,10 +143,37 @@ async function persistCandidate(
   return Boolean((data as { inserted?: boolean } | null)?.inserted);
 }
 
-export async function runAchievementEvaluation(now: Date = new Date()): Promise<AchievementRunSummary> {
-  const supabase = createAdminClient();
-  const yesterday = addDays(todayDateString(now), -1);
-  const summary = emptySummary(yesterday);
+export interface EvaluateAchievementsOptions {
+  /** Regras de Agência a rodar — `AGENCY_RULES` (todas) por padrão. O
+   * backfill passa `AGENCY_BACKFILL_SAFE_RULES` (exclui as que dependem de
+   * estado sem histórico — ver `achievement-agency-rules.ts`). Mesmas
+   * funções em ambos os casos, nunca uma segunda implementação. */
+  agencyRules?: ((ctx: AgencyAchievementContext) => AchievementCandidate | null)[];
+  personRules?: ((ctx: PersonAchievementContext) => AchievementCandidate | null)[];
+}
+
+/** Núcleo do motor — avalia TODOS os clientes/organizações/pessoas pra UMA
+ * data explícita (`evaluationDate`). Chamado 1x pelo cron diário (sempre
+ * "ontem") e 30x pelo backfill (uma vez por dia da janela, em ordem
+ * cronológica) — sem diferença de comportamento entre os dois, exceto o
+ * subconjunto de regras de Agência quando `options.agencyRules` é passado. */
+export async function evaluateAchievementsForDate(
+  supabase: SupabaseClient<Database>,
+  evaluationDate: string,
+  options: EvaluateAchievementsOptions = {},
+): Promise<AchievementRunSummary> {
+  const agencyRules = options.agencyRules ?? AGENCY_RULES;
+  const personRules = options.personRules ?? PERSON_RULES;
+  const summary = emptySummary(evaluationDate);
+
+  function recordCreated(candidate: AchievementCandidate) {
+    summary.createdAchievements.push({
+      occurredOnDate: candidate.occurredOnDate,
+      scope: candidate.scope,
+      type: candidate.type,
+      headline: candidate.headline,
+    });
+  }
 
   // Cliente
   const clients = await listEligibleClientsForAchievements(supabase);
@@ -125,7 +184,7 @@ export async function runAchievementEvaluation(now: Date = new Date()): Promise<
         continue;
       }
 
-      const { context, syncTrust } = await buildClientAchievementContext(supabase, client, yesterday);
+      const { context, syncTrust } = await buildClientAchievementContext(supabase, client, evaluationDate);
       summary.clientsEvaluated++;
 
       if (!syncTrust.trusted) {
@@ -137,7 +196,10 @@ export async function runAchievementEvaluation(now: Date = new Date()): Promise<
         const candidate = rule(context);
         if (!candidate) continue;
         summary.clientCandidates++;
-        if (await persistCandidate(supabase, client.organizationId, candidate)) summary.clientInserted++;
+        if (await persistCandidate(supabase, client.organizationId, candidate)) {
+          summary.clientInserted++;
+          recordCreated(candidate);
+        }
       }
     } catch (err) {
       summary.errors.push(`cliente ${client.id}: ${err instanceof Error ? err.message : String(err)}`);
@@ -150,12 +212,15 @@ export async function runAchievementEvaluation(now: Date = new Date()): Promise<
     summary.organizationsEvaluated++;
 
     try {
-      const agencyContext = await fetchAgencyMetrics(supabase, organizationId, yesterday);
-      for (const rule of AGENCY_RULES) {
+      const agencyContext = await fetchAgencyMetrics(supabase, organizationId, evaluationDate);
+      for (const rule of agencyRules) {
         const candidate = rule(agencyContext);
         if (!candidate) continue;
         summary.agencyCandidates++;
-        if (await persistCandidate(supabase, organizationId, candidate)) summary.agencyInserted++;
+        if (await persistCandidate(supabase, organizationId, candidate)) {
+          summary.agencyInserted++;
+          recordCreated(candidate);
+        }
       }
     } catch (err) {
       summary.errors.push(`agência ${organizationId}: ${err instanceof Error ? err.message : String(err)}`);
@@ -164,14 +229,17 @@ export async function runAchievementEvaluation(now: Date = new Date()): Promise<
     const members = await listEligibleTeamMembersForAchievements(supabase, organizationId);
     for (const member of members) {
       try {
-        const personContext = await fetchPersonMetrics(supabase, member, yesterday);
+        const personContext = await fetchPersonMetrics(supabase, member, evaluationDate);
         summary.personEvaluated++;
 
-        for (const rule of PERSON_RULES) {
+        for (const rule of personRules) {
           const candidate = rule(personContext);
           if (!candidate) continue;
           summary.personCandidates++;
-          if (await persistCandidate(supabase, organizationId, candidate)) summary.personInserted++;
+          if (await persistCandidate(supabase, organizationId, candidate)) {
+            summary.personInserted++;
+            recordCreated(candidate);
+          }
         }
       } catch (err) {
         summary.errors.push(`pessoa ${member.id}: ${err instanceof Error ? err.message : String(err)}`);
@@ -180,4 +248,13 @@ export async function runAchievementEvaluation(now: Date = new Date()): Promise<
   }
 
   return summary;
+}
+
+/** Cron diário — sempre avalia só o dia fechado mais recente (ontem, fuso
+ * da agência). Nunca varre retroativamente (baseline serve só de
+ * comparação dentro de cada regra, ver `achievement-client-rules.ts`). */
+export async function runAchievementEvaluation(now: Date = new Date()): Promise<AchievementRunSummary> {
+  const supabase = createAdminClient();
+  const yesterday = addDays(todayDateString(now), -1);
+  return evaluateAchievementsForDate(supabase, yesterday);
 }

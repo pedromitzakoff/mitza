@@ -29,7 +29,8 @@ import { formatCurrency, formatPercent } from "@/lib/format";
 
 export interface AgencyAchievementContext {
   organizationId: string;
-  /** Dia fechado sendo avaliado (ontem, fuso da agência). */
+  /** Dia fechado sendo avaliado — "ontem" no cron diário, uma data
+   * histórica arbitrária no backfill (Etapa "Backfill 30 dias"). */
   evaluatedOnDate: string;
   activeClientsCount: number;
   /** `null` = nenhum cliente ativo (nada a avaliar). */
@@ -39,11 +40,23 @@ export interface AgencyAchievementContext {
    * clientes críticos"). */
   noCriticalWallet: boolean;
   totalReviewsCount: number;
+  /** Mesma contagem, mas com corte em `evaluatedOnDate - 1` — usada só pra
+   * detectar CRUZAMENTO (o patamar mudou entre ontem e hoje), nunca pra
+   * exibição. Essencial pro backfill: sem isso, um patamar já atingido
+   * ANTES da janela de 30 dias voltaria a "disparar" artificialmente no
+   * primeiro dia processado (Etapa "Backfill 30 dias" — "não recriar
+   * marco cumulativo já atingido antes da janela"). Pro cron diário isso é
+   * redundante com a idempotência (nunca dispara duas vezes de qualquer
+   * forma), mas é a MESMA regra nos dois contextos — nenhuma versão
+   * paralela. */
+  totalReviewsCountPreviousDay: number;
   /** `account_optimization_recorded` reais — nunca o indicador
    * "Otimizações no mês" (que conta revisões, não otimizações de verdade;
    * achado da Auditoria de Atividades Operacionais). */
   totalOptimizationsCount: number;
+  totalOptimizationsCountPreviousDay: number;
   totalReportsSentCount: number;
+  totalReportsSentCountPreviousDay: number;
   /** Soma de `daily_spend` de todos os clientes ativos no mês que ACABOU
    * de fechar — só presente quando `evaluatedOnDate` é o último dia do
    * mês (mesmo padrão do recorde de mês fechado do Cliente). */
@@ -52,6 +65,14 @@ export interface AgencyAchievementContext {
 
 function highestMilestoneCrossed(current: number, milestones: number[]): number | undefined {
   return milestones.find((m) => current >= m);
+}
+
+/** `true` quando o patamar de hoje já era o mesmo ontem — ou seja, NÃO é
+ * um cruzamento novo (é sustentado, não recém-atingido). Usado pelas
+ * regras cumulativas de Agência/Pessoa; ver comentário de
+ * `totalReviewsCountPreviousDay`. */
+function isSameMilestoneAsYesterday(current: number, previousDay: number, milestones: number[]): boolean {
+  return highestMilestoneCrossed(current, milestones) === highestMilestoneCrossed(previousDay, milestones);
 }
 
 export function ruleAgencyActiveClientsMilestone(ctx: AgencyAchievementContext): AchievementCandidate | null {
@@ -101,6 +122,7 @@ export function ruleAgencyHealthyWalletMilestone(ctx: AgencyAchievementContext):
 export function ruleAgencyReviewsMilestone(ctx: AgencyAchievementContext): AchievementCandidate | null {
   const milestone = highestMilestoneCrossed(ctx.totalReviewsCount, AGENCY_REVIEWS_MILESTONES);
   if (!milestone) return null;
+  if (isSameMilestoneAsYesterday(ctx.totalReviewsCount, ctx.totalReviewsCountPreviousDay, AGENCY_REVIEWS_MILESTONES)) return null;
 
   return {
     type: "agency_reviews_milestone",
@@ -118,6 +140,7 @@ export function ruleAgencyReviewsMilestone(ctx: AgencyAchievementContext): Achie
 export function ruleAgencyOptimizationsMilestone(ctx: AgencyAchievementContext): AchievementCandidate | null {
   const milestone = highestMilestoneCrossed(ctx.totalOptimizationsCount, AGENCY_OPTIMIZATIONS_MILESTONES);
   if (!milestone) return null;
+  if (isSameMilestoneAsYesterday(ctx.totalOptimizationsCount, ctx.totalOptimizationsCountPreviousDay, AGENCY_OPTIMIZATIONS_MILESTONES)) return null;
 
   return {
     type: "agency_optimizations_milestone",
@@ -135,6 +158,7 @@ export function ruleAgencyOptimizationsMilestone(ctx: AgencyAchievementContext):
 export function ruleAgencyReportsMilestone(ctx: AgencyAchievementContext): AchievementCandidate | null {
   const milestone = highestMilestoneCrossed(ctx.totalReportsSentCount, AGENCY_REPORTS_MILESTONES);
   if (!milestone) return null;
+  if (isSameMilestoneAsYesterday(ctx.totalReportsSentCount, ctx.totalReportsSentCountPreviousDay, AGENCY_REPORTS_MILESTONES)) return null;
 
   return {
     type: "agency_reports_milestone",
@@ -175,4 +199,25 @@ export const AGENCY_RULES: ((ctx: AgencyAchievementContext) => AchievementCandid
   ruleAgencyOptimizationsMilestone,
   ruleAgencyReportsMilestone,
   ruleAgencyMediaScaleMilestone,
+];
+
+/** Subconjunto seguro pra reexecução histórica (`scripts/backfill-achievements.ts`)
+ * — exclui as duas regras que dependem de um snapshot que o banco não
+ * versiona:
+ *
+ * - `ruleAgencyActiveClientsMilestone` lê `clients.status` (estado ATUAL,
+ *   sem histórico — não existe "estava ativo em tal data"). Reconstruir
+ *   isso pra uma data de 20 dias atrás seria inventar dado que não existe.
+ * - `ruleAgencyMediaScaleMilestone` teria que comparar o mês fechado
+ *   contra TODO mês fechado anterior (mesmo espírito do recorde de mês
+ *   fechado do Cliente) pra não recriar artificialmente um patamar já
+ *   superado por um mês fora da janela de 30 dias — fora do escopo desta
+ *   etapa (ver relatório do backfill).
+ *
+ * Ambas continuam rodando normalmente no cron diário (`AGENCY_RULES`,
+ * acima) — não são removidas do produto, só do backfill retroativo. */
+export const AGENCY_BACKFILL_SAFE_RULES: ((ctx: AgencyAchievementContext) => AchievementCandidate | null)[] = [
+  ruleAgencyReviewsMilestone,
+  ruleAgencyOptimizationsMilestone,
+  ruleAgencyReportsMilestone,
 ];

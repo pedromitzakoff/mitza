@@ -78,6 +78,17 @@ export async function listEligibleClientsForAchievements(supabase: SupabaseClien
   }));
 }
 
+/** Início do dia SEGUINTE a `date`, meio-dia fixo do fuso da agência
+ * (UTC-3, sem DST) — usado como limite superior EXCLUSIVO ao filtrar
+ * `operational_events.occurred_at`, pra "contagem como estava no fim
+ * daquele dia" (essencial pro backfill: sem isso, avaliar uma data
+ * histórica leria eventos que só aconteceram DEPOIS dela, do ponto de
+ * vista de "hoje"). Mesmo padrão de offset fixo já usado em
+ * `achievement-engine.ts` (`p_occurred_at`). */
+function endOfDayExclusiveBound(date: string): string {
+  return `${addDays(date, 1)}T00:00:00-03:00`;
+}
+
 export async function resolveClientActiveChannels(supabase: SupabaseClient<Database>, clientId: string): Promise<TrafficChannelDb[]> {
   const { data } = await supabase.from("import_sources").select("channel").eq("client_id", clientId).eq("enabled", true);
   return Array.from(new Set((data ?? []).map((r) => r.channel)));
@@ -96,10 +107,29 @@ export interface ClientSyncTrust {
  * dele), nunca por dia individual: "Meta entrou, Google não entrou" vira
  * `partial` numa das fontes e já invalida o consolidado inteiro daquele
  * ciclo. */
+/** Núcleo puro da decisão de frescor — separado da busca (`resolveClientSyncTrust`,
+ * abaixo) só pra ser testável sem banco (`scripts/test-achievement-backfill.ts`).
+ * `latestStatusPerSource` já deve vir reduzido a 1 status por fonte (o mais
+ * recente) — esta função só aplica a régua da determinação de aprovação
+ * nº3: `success`/`empty` liberam, qualquer outra coisa (inclusive fonte
+ * sem nenhum run ainda) trava. */
+export function resolveTrustFromLatestStatuses(activeSourceCount: number, latestStatusPerSource: DataSyncRunStatusDb[]): ClientSyncTrust {
+  if (activeSourceCount === 0) return { trusted: false, reason: "no_active_source" };
+  if (latestStatusPerSource.length < activeSourceCount) return { trusted: false, reason: "no_run_yet" };
+
+  for (const status of latestStatusPerSource) {
+    if (status === "running") return { trusted: false, reason: "running" };
+    if (status === "partial") return { trusted: false, reason: "partial" };
+    if (status === "failed") return { trusted: false, reason: "failed" };
+  }
+
+  return { trusted: true, reason: "success" };
+}
+
 export async function resolveClientSyncTrust(supabase: SupabaseClient<Database>, clientId: string): Promise<ClientSyncTrust> {
   const { data: sources } = await supabase.from("import_sources").select("id").eq("client_id", clientId).eq("enabled", true);
   const importSourceIds = (sources ?? []).map((r) => r.id);
-  if (importSourceIds.length === 0) return { trusted: false, reason: "no_active_source" };
+  if (importSourceIds.length === 0) return resolveTrustFromLatestStatuses(0, []);
 
   const { data: runs } = await supabase
     .from("data_sync_runs")
@@ -112,15 +142,7 @@ export async function resolveClientSyncTrust(supabase: SupabaseClient<Database>,
     if (!latestStatusBySource.has(run.import_source_id)) latestStatusBySource.set(run.import_source_id, run.status);
   }
 
-  if (latestStatusBySource.size < importSourceIds.length) return { trusted: false, reason: "no_run_yet" };
-
-  for (const status of latestStatusBySource.values()) {
-    if (status === "running") return { trusted: false, reason: "running" };
-    if (status === "partial") return { trusted: false, reason: "partial" };
-    if (status === "failed") return { trusted: false, reason: "failed" };
-  }
-
-  return { trusted: true, reason: "success" };
+  return resolveTrustFromLatestStatuses(importSourceIds.length, Array.from(latestStatusBySource.values()));
 }
 
 /** Pontos diários consolidados (soma dos canais ATIVOS do cliente) —
@@ -270,23 +292,35 @@ export interface ClientAchievementBundle {
   syncTrust: ClientSyncTrust;
 }
 
-/** Monta o `ClientAchievementContext` completo de UM cliente pra UM dia
- * fechado — a única função que `achievement-engine.ts` chama por cliente.
- * `null` quando o cliente não passa no gate de frescor (determinação de
- * aprovação nº3): nenhuma regra roda sobre dado não confiável. */
+/** Monta o `ClientAchievementContext` completo de UM cliente pra UMA data
+ * fechada — a única função que `achievement-engine.ts` chama por cliente.
+ * `evaluationDate` é "ontem" no cron diário, mas pode ser qualquer data
+ * histórica fechada no backfill (`scripts/backfill-achievements.ts`) — a
+ * função é genérica desde a implementação original, nenhuma mudança de
+ * comportamento aqui além do nome do parâmetro. `null` quando o cliente
+ * não passa no gate de frescor (determinação de aprovação nº3): nenhuma
+ * regra roda sobre dado não confiável.
+ *
+ * Frescor (`resolveClientSyncTrust`) é sempre o estado ATUAL da última
+ * sincronização, mesmo pra datas históricas do backfill — decisão
+ * deliberada, não uma limitação: o Import Service relê o histórico inteiro
+ * a cada sincronização (nunca um dia isolado), então "a fonte está
+ * confiável agora" já significa "todo o histórico, incluindo a janela de
+ * backfill, acabou de ser revalidado" — não existe (nem faria sentido
+ * inventar) um "estava confiável em tal dia" separado. */
 export async function buildClientAchievementContext(
   supabase: SupabaseClient<Database>,
   client: EligibleClient,
-  yesterday: string,
+  evaluationDate: string,
 ): Promise<ClientAchievementBundle> {
   const syncTrust = await resolveClientSyncTrust(supabase, client.id);
 
   const activeChannels = await resolveClientActiveChannels(supabase, client.id);
-  const fromDate = addDays(yesterday, -(HISTORY_LOOKBACK_DAYS - 1));
-  const dailyPoints = syncTrust.trusted ? await fetchClientDailyPoints(supabase, client.id, activeChannels, fromDate, yesterday) : [];
+  const fromDate = addDays(evaluationDate, -(HISTORY_LOOKBACK_DAYS - 1));
+  const dailyPoints = syncTrust.trusted ? await fetchClientDailyPoints(supabase, client.id, activeChannels, fromDate, evaluationDate) : [];
 
-  const currentMonth = yearMonthOf(yesterday);
-  const previousMonth = yearMonthOf(addDays(firstDayOfMonth(yesterday), -1));
+  const currentMonth = yearMonthOf(evaluationDate);
+  const previousMonth = yearMonthOf(addDays(firstDayOfMonth(evaluationDate), -1));
   const goalByMonth = new Map<string, ClientMonthlyGoalInfo>();
   if (syncTrust.trusted) {
     const [currentGoal, previousGoal] = await Promise.all([
@@ -302,7 +336,7 @@ export async function buildClientAchievementContext(
     context: {
       clientId: client.id,
       clientName: client.name,
-      yesterday,
+      yesterday: evaluationDate,
       performanceGoal: client.performanceGoal,
       tracksRevenue: client.performanceGoal === "sales",
       dailyPoints,
@@ -328,17 +362,32 @@ export interface AgencyMetricsBundle {
   healthyWalletFraction: null;
   noCriticalWallet: false;
   totalReviewsCount: number;
+  totalReviewsCountPreviousDay: number;
   totalOptimizationsCount: number;
+  totalOptimizationsCountPreviousDay: number;
   totalReportsSentCount: number;
+  totalReportsSentCountPreviousDay: number;
   closedMonthTotalSpend: number | null;
 }
 
-async function countOperationalEvents(supabase: SupabaseClient<Database>, organizationId: string, eventType: OperationalEventTypeValue): Promise<number> {
+/** Contagem de um `event_type` até (e incluindo) `asOfDate`, no fuso da
+ * agência — nunca "todos os eventos até agora": pro cron diário isso já
+ * era, na prática, a mesma coisa (não existe evento futuro), mas pro
+ * backfill (`scripts/backfill-achievements.ts`) essa fronteira é essencial
+ * — sem ela, avaliar um dia de 20 dias atrás contaria eventos que só
+ * aconteceram depois, do ponto de vista de "hoje". */
+async function countOperationalEvents(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  eventType: OperationalEventTypeValue,
+  asOfDate: string,
+): Promise<number> {
   const { count } = await supabase
     .from("operational_events")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", organizationId)
-    .eq("event_type", eventType);
+    .eq("event_type", eventType)
+    .lt("occurred_at", endOfDayExclusiveBound(asOfDate));
   return count ?? 0;
 }
 
@@ -347,8 +396,8 @@ async function countOperationalEvents(supabase: SupabaseClient<Database>, organi
  * via client normal; aqui, rodando com client admin, o filtro equivalente
  * é simplesmente "todos os clientes ativos", mesmo padrão de todo o resto
  * do produto). */
-async function fetchClosedMonthTotalSpend(supabase: SupabaseClient<Database>, yesterday: string): Promise<number | null> {
-  if (!isLastDayOfMonth(yesterday)) return null;
+async function fetchClosedMonthTotalSpend(supabase: SupabaseClient<Database>, evaluationDate: string): Promise<number | null> {
+  if (!isLastDayOfMonth(evaluationDate)) return null;
 
   const { data: clients } = await supabase.from("clients").select("id").is("deleted_at", null).eq("status", "ativo");
   const clientIds = (clients ?? []).map((c) => c.id);
@@ -358,31 +407,48 @@ async function fetchClosedMonthTotalSpend(supabase: SupabaseClient<Database>, ye
     .from("daily_spend")
     .select("spend")
     .in("client_id", clientIds)
-    .gte("date", firstDayOfMonth(yesterday))
-    .lte("date", yesterday);
+    .gte("date", firstDayOfMonth(evaluationDate))
+    .lte("date", evaluationDate);
 
   if (!spendRows || spendRows.length === 0) return null;
   return spendRows.reduce((sum, r) => sum + r.spend, 0);
 }
 
-export async function fetchAgencyMetrics(supabase: SupabaseClient<Database>, organizationId: string, yesterday: string): Promise<AgencyMetricsBundle> {
-  const [{ count: activeClientsCount }, totalReviewsCount, totalOptimizationsCount, totalReportsSentCount, closedMonthTotalSpend] = await Promise.all([
+export async function fetchAgencyMetrics(supabase: SupabaseClient<Database>, organizationId: string, evaluationDate: string): Promise<AgencyMetricsBundle> {
+  const previousDay = addDays(evaluationDate, -1);
+
+  const [
+    { count: activeClientsCount },
+    totalReviewsCount,
+    totalReviewsCountPreviousDay,
+    totalOptimizationsCount,
+    totalOptimizationsCountPreviousDay,
+    totalReportsSentCount,
+    totalReportsSentCountPreviousDay,
+    closedMonthTotalSpend,
+  ] = await Promise.all([
     supabase.from("clients").select("id", { count: "exact", head: true }).is("deleted_at", null).eq("status", "ativo"),
-    countOperationalEvents(supabase, organizationId, "account_review_recorded"),
-    countOperationalEvents(supabase, organizationId, "account_optimization_recorded"),
-    countOperationalEvents(supabase, organizationId, "client_report_sent"),
-    fetchClosedMonthTotalSpend(supabase, yesterday),
+    countOperationalEvents(supabase, organizationId, "account_review_recorded", evaluationDate),
+    countOperationalEvents(supabase, organizationId, "account_review_recorded", previousDay),
+    countOperationalEvents(supabase, organizationId, "account_optimization_recorded", evaluationDate),
+    countOperationalEvents(supabase, organizationId, "account_optimization_recorded", previousDay),
+    countOperationalEvents(supabase, organizationId, "client_report_sent", evaluationDate),
+    countOperationalEvents(supabase, organizationId, "client_report_sent", previousDay),
+    fetchClosedMonthTotalSpend(supabase, evaluationDate),
   ]);
 
   return {
     organizationId,
-    evaluatedOnDate: yesterday,
+    evaluatedOnDate: evaluationDate,
     activeClientsCount: activeClientsCount ?? 0,
     healthyWalletFraction: null,
     noCriticalWallet: false,
     totalReviewsCount,
+    totalReviewsCountPreviousDay,
     totalOptimizationsCount,
+    totalOptimizationsCountPreviousDay,
     totalReportsSentCount,
+    totalReportsSentCountPreviousDay,
     closedMonthTotalSpend,
   };
 }
@@ -411,72 +477,111 @@ export interface PersonMetricsBundle {
   teamMemberName: string;
   evaluatedOnDate: string;
   reviewsCount: number;
+  reviewsCountPreviousDay: number;
   optimizationsCount: number;
+  optimizationsCountPreviousDay: number;
   distinctClientsServedCount: number;
+  distinctClientsServedCountPreviousDay: number;
   reportsSentCount: number;
+  reportsSentCountPreviousDay: number;
   tenureMonths: number;
+  tenureMonthsPreviousDay: number;
   firstMeetingCompleted: boolean;
   firstCreativeDeliveryCompleted: boolean;
 }
 
-async function countOperationalEventsByActor(supabase: SupabaseClient<Database>, teamMemberId: string, eventType: OperationalEventTypeValue): Promise<number> {
+async function countOperationalEventsByActor(
+  supabase: SupabaseClient<Database>,
+  teamMemberId: string,
+  eventType: OperationalEventTypeValue,
+  asOfDate: string,
+): Promise<number> {
   const { count } = await supabase
     .from("operational_events")
     .select("id", { count: "exact", head: true })
     .eq("actor_team_member_id", teamMemberId)
-    .eq("event_type", eventType);
+    .eq("event_type", eventType)
+    .lt("occurred_at", endOfDayExclusiveBound(asOfDate));
   return count ?? 0;
 }
 
-async function hasAnyOperationalEventByActor(supabase: SupabaseClient<Database>, teamMemberId: string, eventType: OperationalEventTypeValue): Promise<boolean> {
+async function hasAnyOperationalEventByActor(
+  supabase: SupabaseClient<Database>,
+  teamMemberId: string,
+  eventType: OperationalEventTypeValue,
+  asOfDate: string,
+): Promise<boolean> {
   const { data } = await supabase
     .from("operational_events")
     .select("id")
     .eq("actor_team_member_id", teamMemberId)
     .eq("event_type", eventType)
+    .lt("occurred_at", endOfDayExclusiveBound(asOfDate))
     .limit(1)
     .maybeSingle();
   return data !== null;
 }
 
-function tenureMonthsSince(createdAt: string, today: string): number {
+function tenureMonthsSince(createdAt: string, asOfDate: string): number {
   const created = new Date(createdAt);
-  const now = new Date(`${today}T00:00:00Z`);
+  const now = new Date(`${asOfDate}T00:00:00Z`);
   const months = (now.getUTCFullYear() - created.getUTCFullYear()) * 12 + (now.getUTCMonth() - created.getUTCMonth());
   return Math.max(0, months);
 }
 
-export async function fetchPersonMetrics(supabase: SupabaseClient<Database>, member: EligibleTeamMember, yesterday: string): Promise<PersonMetricsBundle> {
-  const [reviewsCount, optimizationsCount, reportsSentCount, firstMeetingCompleted, firstCreativeDeliveryCompleted, distinctClientsServedCount] =
-    await Promise.all([
-      countOperationalEventsByActor(supabase, member.id, "account_review_recorded"),
-      countOperationalEventsByActor(supabase, member.id, "account_optimization_recorded"),
-      countOperationalEventsByActor(supabase, member.id, "client_report_sent"),
-      hasAnyOperationalEventByActor(supabase, member.id, "meeting_completed"),
-      hasAnyOperationalEventByActor(supabase, member.id, "creative_delivery_completed"),
-      countDistinctClientsForActorReviews(supabase, member.id),
-    ]);
+export async function fetchPersonMetrics(supabase: SupabaseClient<Database>, member: EligibleTeamMember, evaluationDate: string): Promise<PersonMetricsBundle> {
+  const previousDay = addDays(evaluationDate, -1);
+
+  const [
+    reviewsCount,
+    reviewsCountPreviousDay,
+    optimizationsCount,
+    optimizationsCountPreviousDay,
+    reportsSentCount,
+    reportsSentCountPreviousDay,
+    firstMeetingCompleted,
+    firstCreativeDeliveryCompleted,
+    distinctClientsServedCount,
+    distinctClientsServedCountPreviousDay,
+  ] = await Promise.all([
+    countOperationalEventsByActor(supabase, member.id, "account_review_recorded", evaluationDate),
+    countOperationalEventsByActor(supabase, member.id, "account_review_recorded", previousDay),
+    countOperationalEventsByActor(supabase, member.id, "account_optimization_recorded", evaluationDate),
+    countOperationalEventsByActor(supabase, member.id, "account_optimization_recorded", previousDay),
+    countOperationalEventsByActor(supabase, member.id, "client_report_sent", evaluationDate),
+    countOperationalEventsByActor(supabase, member.id, "client_report_sent", previousDay),
+    hasAnyOperationalEventByActor(supabase, member.id, "meeting_completed", evaluationDate),
+    hasAnyOperationalEventByActor(supabase, member.id, "creative_delivery_completed", evaluationDate),
+    countDistinctClientsForActorReviews(supabase, member.id, evaluationDate),
+    countDistinctClientsForActorReviews(supabase, member.id, previousDay),
+  ]);
 
   return {
     teamMemberId: member.id,
     teamMemberName: member.name,
-    evaluatedOnDate: yesterday,
+    evaluatedOnDate: evaluationDate,
     reviewsCount,
+    reviewsCountPreviousDay,
     optimizationsCount,
+    optimizationsCountPreviousDay,
     distinctClientsServedCount,
+    distinctClientsServedCountPreviousDay,
     reportsSentCount,
-    tenureMonths: tenureMonthsSince(member.createdAt, yesterday),
+    reportsSentCountPreviousDay,
+    tenureMonths: tenureMonthsSince(member.createdAt, evaluationDate),
+    tenureMonthsPreviousDay: tenureMonthsSince(member.createdAt, previousDay),
     firstMeetingCompleted,
     firstCreativeDeliveryCompleted,
   };
 }
 
-async function countDistinctClientsForActorReviews(supabase: SupabaseClient<Database>, teamMemberId: string): Promise<number> {
+async function countDistinctClientsForActorReviews(supabase: SupabaseClient<Database>, teamMemberId: string, asOfDate: string): Promise<number> {
   const { data } = await supabase
     .from("operational_events")
     .select("client_id")
     .eq("actor_team_member_id", teamMemberId)
     .eq("event_type", "account_review_recorded")
+    .lt("occurred_at", endOfDayExclusiveBound(asOfDate))
     .not("client_id", "is", null);
   return new Set((data ?? []).map((r) => r.client_id)).size;
 }

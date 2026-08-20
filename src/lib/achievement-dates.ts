@@ -72,3 +72,17 @@ export function isLastDayOfMonth(date: string): boolean {
 export function daysElapsedInMonth(date: string): number {
   return listDatesInclusive(firstDayOfMonth(date), date).length;
 }
+
+/** Últimos `days` dias civis FECHADOS terminando ontem, a partir de
+ * `todayStr` (a data de hoje já resolvida por `lib/today.ts` — este
+ * arquivo nunca decide sozinho "que dia é hoje", só faz aritmética a
+ * partir do que já foi resolvido). Nunca inclui `todayStr` (hoje ainda
+ * está em andamento). Ordem cronológica crescente (mais antigo primeiro),
+ * a mesma ordem exigida pelo backfill de Conquistas
+ * (`scripts/backfill-achievements.ts`) pra recordes/streaks/milestones
+ * progressivos fazerem sentido. */
+export function lastNClosedDaysEndingYesterday(days: number, todayStr: string): string[] {
+  const yesterday = addDays(todayStr, -1);
+  const start = addDays(yesterday, -(days - 1));
+  return listDatesInclusive(start, yesterday);
+}
