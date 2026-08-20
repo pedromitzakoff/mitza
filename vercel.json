@@ -3,6 +3,7 @@
   "crons": [
     { "path": "/api/cron/sync-meta", "schedule": "0 10 * * *" },
     { "path": "/api/cron/sync-stract", "schedule": "0 11 * * *" },
+    { "path": "/api/cron/evaluate-achievements", "schedule": "30 11 * * *" },
     { "path": "/api/cron/ensure-sprints", "schedule": "0 3 * * *" }
   ]
 }

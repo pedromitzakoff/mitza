@@ -130,7 +130,8 @@ export type OperationalEventType =
   | "client_update_marked_unsent"
   | "client_report_generated"
   | "client_report_edited"
-  | "client_report_sent";
+  | "client_report_sent"
+  | "achievement_unlocked";
 
 export type OperationalEntityType =
   | "task"
@@ -141,7 +142,8 @@ export type OperationalEntityType =
   | "account_review"
   | "account_optimization"
   | "client_update"
-  | "client_report";
+  | "client_report"
+  | "achievement";
 export type OperationalEventSource = "web" | "server" | "system" | "integration" | "migration" | "automation";
 
 /** Etapa 57 — Análises da Conta e Otimizações (taxonomias). Rótulos em
@@ -2796,6 +2798,20 @@ export interface Database {
           correlationId: string;
           wasOnTime: boolean;
           delaySeconds: number;
+        };
+      };
+      record_achievement_event: {
+        Args: {
+          p_organization_id: string;
+          p_client_id: string | null;
+          p_actor_team_member_id: string | null;
+          p_occurred_at: string;
+          p_idempotency_key: string;
+          p_metadata: Record<string, unknown>;
+        };
+        Returns: {
+          eventId: string | null;
+          inserted: boolean;
         };
       };
       mark_task_not_done_and_record_event: {
