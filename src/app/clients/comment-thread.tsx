@@ -8,6 +8,7 @@ import { useToast } from "@/app/toast-provider";
 import { isRedirectSignal } from "@/lib/next-redirect";
 import { formatDateTime } from "@/lib/format";
 import { SubmitButton } from "@/app/submit-button";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export interface CommentItem {
   id: string;
@@ -66,6 +67,8 @@ export function CommentThread({
 
   return (
     <div className="mt-2 border-t border-overview-border pt-2">
+      {comments.length === 0 && <EmptyState size="xs">Nenhum comentário ainda.</EmptyState>}
+
       {comments.length > 0 && (
         <ul className="flex flex-col gap-1.5">
           {comments.map((comment) => (

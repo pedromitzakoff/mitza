@@ -63,6 +63,10 @@ export default async function ReportsPage({
     .sort((a, b) => a.name.localeCompare(b.name));
 
   let states = clientStates;
+  // Auditoria de Estados Vazios: distingue "não existe cliente nenhum" de
+  // "os filtros não encontraram nada" — capturado ANTES de gestor/cliente
+  // filtrarem `states` abaixo.
+  const hasAnyClients = clientStates.length > 0;
   if (managerFilter === "me") {
     states = states.filter((s) => s.managerId === profile.id);
   } else if (managerFilter !== "all") {
@@ -220,7 +224,7 @@ export default async function ReportsPage({
             ) : (
               <tr>
                 <td colSpan={7} className="py-4 px-3 text-center">
-                  <EmptyState>Nenhum cliente encontrado com esses filtros.</EmptyState>
+                  <EmptyState>{hasAnyClients ? "Nenhum cliente encontrado com esses filtros." : "Nenhum cliente cadastrado ainda."}</EmptyState>
                 </td>
               </tr>
             )}

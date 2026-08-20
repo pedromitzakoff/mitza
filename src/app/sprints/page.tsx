@@ -1012,7 +1012,10 @@ export default async function SprintsPage({
           )
         ) : (
           <div className="rounded-lg border border-overview-border bg-overview-surface p-4">
-            <EmptyState>Nenhum cliente encontrado com esses filtros.</EmptyState>
+            {/* Auditoria de Estados Vazios: distingue "não existe cliente
+                nenhum" (allCards, antes de qualquer filtro) de "os filtros
+                não encontraram nada" (cards, já filtrado). */}
+            <EmptyState>{allCards.length > 0 ? "Nenhum cliente encontrado com esses filtros." : "Nenhum cliente ativo neste mês."}</EmptyState>
           </div>
         )}
       </div>

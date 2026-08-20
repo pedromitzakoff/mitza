@@ -64,6 +64,10 @@ export default async function SettingsClientsPage({
   ]);
 
   let rows = clients ?? [];
+  // Auditoria de Estados Vazios: distingue "não existe cliente nenhum" de
+  // "os filtros não encontraram nada" — capturado ANTES de search/status
+  // filtrarem `rows` abaixo.
+  const hasAnyClients = rows.length > 0;
 
   if (search) {
     rows = rows.filter((c) => {
@@ -185,7 +189,7 @@ export default async function SettingsClientsPage({
             ) : (
               <tr>
                 <td colSpan={9} className="px-3 py-6 text-center">
-                  <EmptyState>Nenhum cliente encontrado com esses filtros.</EmptyState>
+                  <EmptyState>{hasAnyClients ? "Nenhum cliente encontrado com esses filtros." : "Nenhum cliente cadastrado ainda."}</EmptyState>
                 </td>
               </tr>
             )}

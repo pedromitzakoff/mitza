@@ -102,7 +102,7 @@ export function ScopeSelector({
                 />
               ))
             ) : (
-              <p className="px-2 py-1 text-[11px] text-overview-text-muted">Nenhum gestor encontrado.</p>
+              <p className="px-2 py-1 text-[11px] text-overview-text-secondary">Nenhum gestor encontrado.</p>
             )}
           </ScopeGroup>
 
@@ -117,7 +117,7 @@ export function ScopeSelector({
                 />
               ))
             ) : (
-              <p className="px-2 py-1 text-[11px] text-overview-text-muted">Nenhum cliente encontrado.</p>
+              <p className="px-2 py-1 text-[11px] text-overview-text-secondary">Nenhum cliente encontrado.</p>
             )}
           </ScopeGroup>
         </div>

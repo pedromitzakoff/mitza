@@ -273,6 +273,10 @@ export default async function ClientsPage({
   let cards = rawClients.map((client) =>
     buildOperationClientCard(client, today, currentRange, resolvePlanningHorizon(currentRange, monthHorizonsByClient.get(client.id) ?? null)),
   );
+  // Auditoria de Estados Vazios: distingue "não existe cliente nenhum" de
+  // "os filtros não encontraram nada" — capturado ANTES de search/manager/
+  // status filtrarem `cards` abaixo, nunca recalculado depois.
+  const hasAnyClients = cards.length > 0;
 
   // Dados estruturais (Etapa 27) — status contratual, início de contrato e
   // gestor principal não fazem parte de buildOperationClientCard (que é só
@@ -373,7 +377,9 @@ export default async function ClientsPage({
             })}
           </ul>
         ) : (
-          <EmptyState className="bg-card p-4">Nenhum cliente encontrado com esses filtros.</EmptyState>
+          <EmptyState className="bg-card p-4">
+            {hasAnyClients ? "Nenhum cliente encontrado com esses filtros." : "Nenhum cliente cadastrado ainda."}
+          </EmptyState>
         )}
       </div>
     </div>
