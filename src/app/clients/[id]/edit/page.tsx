@@ -33,7 +33,7 @@ export default async function EditClientPage({
   const returnTo = return_to && return_to.startsWith("/") ? return_to : `/clients/${id}`;
 
   const supabase = await createSupabaseClient();
-  const [{ data: client }, allManagers, assigned, kpis, cadence, clientGoals, campaignsForAssignment] = await Promise.all([
+  const [{ data: client }, allManagers, assigned, kpis, cadence, clientGoals, campaignsForAssignment, recentSprints] = await Promise.all([
     // `.single()` já conflita "cliente não encontrado" (RLS filtrou, ou id
     // inexistente) com "consulta falhou" — mesmo assim, distinção
     // deliberada e pré-existente (não é o bug de ignorar erro): aqui não
@@ -59,6 +59,20 @@ export default async function EditClientPage({
     ),
     listClientGoals(supabase, id),
     listCampaignsForAssignment(supabase, id, todayDateString()),
+    // Sprints recentes (últimas 8) pro lançamento manual de resultado por
+    // objetivo secundário (ex.: Seguidores) — reaproveita a sprint como
+    // unidade do lançamento (ver goal-actions.ts), então o formulário
+    // precisa oferecer qual sprint escolher.
+    requireQuery(
+      supabase
+        .from("sprints")
+        .select("id, start_date, end_date")
+        .eq("client_id", id)
+        .lte("start_date", todayDateString())
+        .order("start_date", { ascending: false })
+        .limit(8),
+      "sprints:manual-goal-result",
+    ),
   ]);
 
   if (!client) notFound();
@@ -237,6 +251,7 @@ export default async function EditClientPage({
             goals={clientGoals}
             summaries={goalSummaries}
             campaigns={campaignsForAssignment}
+            recentSprints={(recentSprints ?? []).map((s) => ({ id: s.id, startDate: s.start_date, endDate: s.end_date }))}
           />
         </Block>
       )}

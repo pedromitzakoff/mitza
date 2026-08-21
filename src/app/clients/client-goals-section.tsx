@@ -5,14 +5,22 @@ import { PERFORMANCE_GOALS, PERFORMANCE_GOAL_OPTIONS, type PerformanceGoal } fro
 import { AVAILABLE_TRAFFIC_CHANNELS, TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import type { ClientGoal } from "@/lib/client-goals";
 import type { CampaignForAssignment } from "@/lib/campaign-goal-assignments";
+import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { saveCampaignAssignmentsAction } from "./campaign-assignment-actions";
 import {
   createClientGoalAction,
   deleteClientGoalAction,
+  recordManualGoalResultAction,
   setClientGoalPrimaryAction,
   updateClientGoalAction,
 } from "./goal-actions";
 import { SubmitButton } from "@/app/submit-button";
+
+export interface RecentSprintOption {
+  id: string;
+  startDate: string;
+  endDate: string;
+}
 
 export interface GoalDisplaySummary {
   resultType: PerformanceGoal;
@@ -40,12 +48,14 @@ export function ClientGoalsSection({
   goals,
   summaries,
   campaigns,
+  recentSprints,
 }: {
   clientId: string;
   returnTo: string;
   goals: ClientGoal[];
   summaries: Map<PerformanceGoal, GoalDisplaySummary>;
   campaigns: CampaignForAssignment[];
+  recentSprints: RecentSprintOption[];
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const existingResultTypes = new Set(goals.map((g) => g.resultType));
@@ -158,6 +168,50 @@ export function ClientGoalsSection({
                   </SubmitButton>
                 </form>
               </details>
+
+              {goal.resultSource === "manual" && (
+                <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-900">
+                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Lançar resultado manual</p>
+                  {recentSprints.length === 0 ? (
+                    <p className="mt-1 text-xs text-zinc-500">Nenhuma sprint disponível ainda pra este cliente.</p>
+                  ) : (
+                    <form
+                      action={recordManualGoalResultAction.bind(null, clientId, returnTo)}
+                      className="mt-2 flex flex-wrap items-end gap-2"
+                    >
+                      <input type="hidden" name="result_type" value={goal.resultType} />
+                      <input type="hidden" name="channel" value={goal.channels[0] ?? "meta"} />
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs text-zinc-500">Sprint</label>
+                        <select
+                          name="sprint_id"
+                          className="rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm text-black dark:border-zinc-700 dark:text-zinc-50"
+                        >
+                          {recentSprints.map((sprint) => (
+                            <option key={sprint.id} value={sprint.id}>
+                              {formatSprintPeriodLabel(sprint.startDate, sprint.endDate)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs text-zinc-500">{config.pluralLabel} no período</label>
+                        <input
+                          type="number"
+                          name="result_count"
+                          min={0}
+                          step={1}
+                          required
+                          className="w-28 rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm text-black dark:border-zinc-700 dark:text-zinc-50"
+                        />
+                      </div>
+                      <SubmitButton pendingChildren="Salvando..." className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover">
+                        Registrar
+                      </SubmitButton>
+                    </form>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}

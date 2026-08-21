@@ -172,14 +172,16 @@ export async function setGoalMonthlyTargetAction(clientId: string, returnTo: str
  * resultado de Seguidores entra no mesmo pipeline de leitura que já existe,
  * sem duplicar lógica.
  */
-export async function recordManualGoalResultAction(clientId: string, sprintId: string, returnTo: string, formData: FormData) {
+export async function recordManualGoalResultAction(clientId: string, returnTo: string, formData: FormData) {
   const profile = await requireClientManagerAccess(clientId);
 
+  const sprintId = String(formData.get("sprint_id") ?? "");
   const resultType = parseResultType(formData.get("result_type"));
   const channel = String(formData.get("channel") ?? "meta");
   const resultCountRaw = String(formData.get("result_count") ?? "").trim();
   const resultCount = Number(resultCountRaw);
 
+  if (!sprintId) redirect(withError(returnTo, "Selecione uma sprint"));
   if (!resultType) redirect(withError(returnTo, "Selecione um objetivo válido"));
   if (!(AVAILABLE_TRAFFIC_CHANNELS as string[]).includes(channel)) redirect(withError(returnTo, "Canal inválido"));
   if (!resultCountRaw || !Number.isFinite(resultCount) || resultCount < 0 || !Number.isInteger(resultCount)) {
