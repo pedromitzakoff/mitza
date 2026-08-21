@@ -19,6 +19,7 @@ import { resolveReviewComplianceStatus } from "@/lib/account-health-engine";
 import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
 import type { TrafficChannel } from "@/lib/traffic-channels";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
+import { filterRowsToPrimaryGoal } from "@/lib/client-plan";
 import { ClientsFilters } from "./clients-filters";
 
 /**
@@ -55,7 +56,7 @@ export default async function ClientsPage({
       supabase
         .from("clients")
         .select(
-          "id, name, meta_ad_account_id, status, contract_start_date, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
+          "id, name, meta_ad_account_id, status, contract_start_date, performance_goal, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
         )
         .is("deleted_at", null)
         .order("name"),
@@ -100,7 +101,7 @@ export default async function ClientsPage({
     // mais só `channel = 'meta'`) — `resolveConsolidatedMonthlyPlanned`
     // (dentro de `buildOperationClientCard`) soma os canais com plano.
     requireQuery(
-      supabase.from("monthly_budget_changes").select("client_id, channel, month, new_amount, changed_at").eq("month", firstDay),
+      supabase.from("monthly_budget_changes").select("client_id, channel, month, new_amount, changed_at, result_type").eq("month", firstDay),
       "monthly_budget_changes",
     ),
     // Investimento manual multicanal (`sprint_channel_spend`, adotada como
@@ -232,8 +233,11 @@ export default async function ClientsPage({
     plannedAllocationsByClient.set(a.client_id, list);
   }
 
+  // Etapa "Múltiplos Objetivos": só o objetivo PRINCIPAL — nunca deixa a
+  // linha de um objetivo secundário virar investimento aqui.
+  const primaryGoalByClientId = new Map(clients.map((c) => [c.id, c.performance_goal]));
   const budgetChangesByClient = new Map<string, OperationClientRawData["monthlyBudgetChanges"]>();
-  for (const c of budgetChanges ?? []) {
+  for (const c of filterRowsToPrimaryGoal(budgetChanges ?? [], primaryGoalByClientId)) {
     const list = budgetChangesByClient.get(c.client_id) ?? [];
     list.push({ channel: c.channel as TrafficChannel, month: c.month, newAmount: c.new_amount, changedAt: c.changed_at });
     budgetChangesByClient.set(c.client_id, list);

@@ -8,7 +8,13 @@
  * Rodar: npx tsx scripts/test-client-plan.ts
  */
 import assert from "node:assert/strict";
-import { resolveClientMonthlyPlan, resolveConsolidatedMonthlyPlanned, type ClientPlanChangeRow } from "../src/lib/client-plan";
+import {
+  resolveClientMonthlyPlan,
+  resolveConsolidatedMonthlyPlanned,
+  primaryGoalResultTypeFilter,
+  filterRowsToPrimaryGoal,
+  type ClientPlanChangeRow,
+} from "../src/lib/client-plan";
 
 let passed = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -277,6 +283,35 @@ check(
   "Fallback — nenhum canal com plano definido pra este mês -> usa a soma de sprint_planned_allocations (fallbackPlannedSum)",
   resolveConsolidatedMonthlyPlanned(["meta", "google"], [], "2026-08-01", 4200),
   4200,
+);
+
+console.log("\nprimaryGoalResultTypeFilter / filterRowsToPrimaryGoal (Etapa \"Múltiplos Objetivos\" — proteção dos consumidores legados)\n");
+
+check(
+  "cliente com objetivo configurado -> aceita null OU o próprio objetivo",
+  primaryGoalResultTypeFilter("leads"),
+  "result_type.is.null,result_type.eq.leads",
+);
+check("cliente sem objetivo configurado -> só aceita null", primaryGoalResultTypeFilter(null), "result_type.is.null");
+
+const mixedGoalRows = [
+  { client_id: "c1", result_type: null, value: "legado-c1" },
+  { client_id: "c1", result_type: "leads" as const, value: "leads-c1" },
+  { client_id: "c1", result_type: "followers" as const, value: "followers-c1-NUNCA-deve-passar" },
+  { client_id: "c2", result_type: "sales" as const, value: "sales-c2" },
+  { client_id: "c2", result_type: "followers" as const, value: "followers-c2-NUNCA-deve-passar" },
+  { client_id: "c3", result_type: null, value: "legado-c3-sem-objetivo-configurado" },
+];
+const primaryByClient = new Map<string, "leads" | "sales" | "followers" | null>([
+  ["c1", "leads"],
+  ["c2", "sales"],
+  // c3 nunca configurou objetivo — ausente do mapa, tratado como null.
+]);
+
+check(
+  "filterRowsToPrimaryGoal nunca deixa passar a linha de um objetivo secundário (Seguidores) de nenhum cliente",
+  filterRowsToPrimaryGoal(mixedGoalRows, primaryByClient).map((r) => r.value),
+  ["legado-c1", "leads-c1", "sales-c2", "legado-c3-sem-objetivo-configurado"],
 );
 
 console.log(`\n${passed} verificações passaram.`);

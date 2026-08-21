@@ -56,6 +56,15 @@ export async function applyMonthlyChannelPlanChangeAction(
     return { error: CLOSED_MONTH_MESSAGE };
   }
 
+  // Etapa "Múltiplos Objetivos": esta action edita SEMPRE o plano do
+  // objetivo PRINCIPAL (é o único fluxo com investimento real planejado —
+  // objetivos secundários usam `set_goal_monthly_target`, nunca este). Gravar
+  // `result_type` explícito aqui, em vez de deixar `null`, é o que faz o
+  // sistema convergir com o tempo: toda linha nova já nasce marcada, sem
+  // depender pra sempre da regra "null = objetivo principal" pros
+  // consumidores legados (`primaryGoalResultTypeFilter`, `lib/client-plan.ts`).
+  const { data: client } = await supabase.from("clients").select("performance_goal").eq("id", clientId).maybeSingle();
+
   const { error } = await supabase.rpc("apply_monthly_channel_plan_change", {
     p_client_id: clientId,
     p_channel: channel,
@@ -67,6 +76,7 @@ export async function applyMonthlyChannelPlanChangeAction(
     p_changed_by: profile.id,
     p_reason: reason,
     p_target_result_count: targetResultCount,
+    p_result_type: client?.performance_goal ?? null,
   });
 
   if (error) {

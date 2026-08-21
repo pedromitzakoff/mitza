@@ -14,7 +14,7 @@ import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { getClientMonthHorizon } from "@/lib/client-month-horizons";
-import { resolveConsolidatedMonthlyPlanned } from "@/lib/client-plan";
+import { resolveConsolidatedMonthlyPlanned, primaryGoalResultTypeFilter } from "@/lib/client-plan";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import {
   computeAgencyExecutionSummary,
@@ -175,7 +175,7 @@ export async function buildReportViewData(
 
   const { data: client } = await supabase
     .from("clients")
-    .select("id, name, status, primary_manager:team_members!clients_primary_manager_id_fkey(name)")
+    .select("id, name, status, performance_goal, primary_manager:team_members!clients_primary_manager_id_fkey(name)")
     .eq("id", clientId)
     .is("deleted_at", null)
     .single();
@@ -274,12 +274,15 @@ export async function buildReportViewData(
       // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
       // mais só `channel = 'meta'`) — `resolveConsolidatedMonthlyPlanned`
       // soma os canais com plano.
+      // Etapa "Múltiplos Objetivos": só o objetivo PRINCIPAL — nunca deixa a
+      // meta de um objetivo secundário aparecer no Relatório do principal.
       requireQuery(
         supabase
           .from("monthly_budget_changes")
           .select("channel, month, new_amount, changed_at")
           .eq("client_id", clientId)
-          .eq("month", monthRange.firstDay),
+          .eq("month", monthRange.firstDay)
+          .or(primaryGoalResultTypeFilter(client.performance_goal)),
         "monthly_budget_changes",
       ),
       // Otimizações do mês (Etapa 74) — revisões estratégicas da conta

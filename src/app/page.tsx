@@ -56,7 +56,7 @@ import { SectionHeader } from "@/components/workspace/section-header";
 import type { StatusTone } from "@/components/workspace/status-dot";
 import type { TrafficChannelDb } from "@/lib/supabase/database.types";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
-import { resolveClientMonthlyPlan, type ClientPlanChangeRow } from "@/lib/client-plan";
+import { resolveClientMonthlyPlan, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
 import type { SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 
 /**
@@ -232,7 +232,7 @@ export default async function Home({
     requireQuery(
       supabase
         .from("monthly_budget_changes")
-        .select("client_id, channel, month, new_amount, changed_at")
+        .select("client_id, channel, month, new_amount, changed_at, result_type")
         .eq("month", monthRange.firstDay),
       "monthly_budget_changes:current-month",
     ),
@@ -277,7 +277,7 @@ export default async function Home({
     requireQuery(
       supabase
         .from("monthly_budget_changes")
-        .select("client_id, channel, month, changed_at, new_amount, target_result_count")
+        .select("client_id, channel, month, changed_at, new_amount, target_result_count, result_type")
         .lte("month", monthRange.firstDay)
         .order("month", { ascending: false })
         .order("changed_at", { ascending: false }),
@@ -415,8 +415,13 @@ export default async function Home({
     plannedAllocationsByClient.set(a.client_id, list);
   }
 
+  // Etapa "Múltiplos Objetivos": Dashboard/Operação só conhecem o objetivo
+  // PRINCIPAL de cada cliente — nunca deixa a linha de um objetivo
+  // secundário ser lida como investimento/meta do principal.
+  const primaryGoalByClientId = new Map((clients ?? []).map((c) => [c.id, c.performance_goal]));
+
   const budgetChangesByClient = new Map<string, OperationClientRawData["monthlyBudgetChanges"]>();
-  for (const c of budgetChanges ?? []) {
+  for (const c of filterRowsToPrimaryGoal(budgetChanges ?? [], primaryGoalByClientId)) {
     const list = budgetChangesByClient.get(c.client_id) ?? [];
     list.push({ channel: c.channel as TrafficChannel, month: c.month, newAmount: c.new_amount, changedAt: c.changed_at });
     budgetChangesByClient.set(c.client_id, list);
@@ -444,7 +449,7 @@ export default async function Home({
   // vigente". Fallback pro campo permanente de `clients` fica dentro de
   // `resolveMonthlyPerformanceTargets`, chamado por cliente logo abaixo.
   const targetHistoryByClient = new Map<string, ClientPlanChangeRow[]>();
-  for (const row of performanceTargetHistory ?? []) {
+  for (const row of filterRowsToPrimaryGoal(performanceTargetHistory ?? [], primaryGoalByClientId)) {
     const list = targetHistoryByClient.get(row.client_id) ?? [];
     list.push({
       channel: row.channel as TrafficChannel,

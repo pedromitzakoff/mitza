@@ -4,6 +4,45 @@ import type { PerformanceGoal } from "@/lib/performance-goals";
 import type { ClientGoal } from "@/lib/client-goals";
 import { consolidateChannelMetrics, type ChannelMetrics, type ClientChannelMetrics } from "@/lib/channel-metrics";
 
+/**
+ * Filtro `.or(...)` do Supabase que restringe uma consulta em
+ * `monthly_budget_changes` só ao objetivo PRINCIPAL do cliente — o único
+ * jeito seguro de um consumidor AINDA NÃO migrado pra múltiplos objetivos
+ * (Operação/Saúde/Dashboard/Sprints/Relatórios/Conquistas/Painel Mensal/
+ * Lista de Clientes, ver relatório da Etapa "Múltiplos Objetivos") ler essa
+ * tabela sem risco de pegar a linha de um objetivo SECUNDÁRIO por engano
+ * (ex.: a meta de "Seguidores" sendo lida onde deveria estar a de "Leads").
+ *
+ * Aceita `result_type is null` (linhas históricas de antes desta etapa, ou
+ * de um cliente sem `client_goals` configurado ainda — nunca excluídas) OU
+ * `result_type = primaryResultType` (linhas já gravadas com o objetivo
+ * principal explícito, ver `apply_monthly_channel_plan_change`). Nunca
+ * inclui um `result_type` de outro objetivo.
+ *
+ * ÚNICO lugar que decide esta regra — todo consumidor legado chama esta
+ * função, nenhum duplica o `.or(...)` por conta própria.
+ */
+export function primaryGoalResultTypeFilter(primaryResultType: PerformanceGoal | null): string {
+  return primaryResultType ? `result_type.is.null,result_type.eq.${primaryResultType}` : `result_type.is.null`;
+}
+
+/** Mesma regra de `primaryGoalResultTypeFilter`, em JavaScript — pra
+ * consultas de VÁRIOS clientes de uma vez (Dashboard, Operação, Sprints,
+ * Lista de Clientes, Painel Mensal), onde um único `.or(...)` no banco não
+ * dá pra expressar "o objetivo principal de CADA cliente é diferente".
+ * `primaryResultTypeByClientId` é sempre `clients.performance_goal` (nunca
+ * algo inventado) — mapa vazio/sem entrada pro cliente é tratado como
+ * `null` (mesma regra de "sem objetivo configurado"). */
+export function filterRowsToPrimaryGoal<T extends { client_id: string; result_type?: PerformanceGoal | null }>(
+  rows: T[],
+  primaryResultTypeByClientId: Map<string, PerformanceGoal | null>,
+): T[] {
+  return rows.filter((row) => {
+    const primary = primaryResultTypeByClientId.get(row.client_id) ?? null;
+    return row.result_type == null || row.result_type === primary;
+  });
+}
+
 /** Uma versão de `monthly_budget_changes` já achatada pro resolvedor — `investment`
  * é `new_amount` (o campo já chamado assim em `MonthlyPlanChange`, lib/monthly-budget.ts).
  *

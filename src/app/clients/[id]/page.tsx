@@ -33,7 +33,7 @@ import {
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus } from "@/lib/spend-status";
 import { resolveBudgetEffectiveDate, computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
-import { resolveClientMonthlyPlan } from "@/lib/client-plan";
+import { resolveClientMonthlyPlan, primaryGoalResultTypeFilter } from "@/lib/client-plan";
 import { listClientGoals, fetchGoalDisplaySummaries } from "@/lib/client-goals";
 import { fetchSecondaryGoalsPerformance } from "@/lib/secondary-goal-performance";
 import { SecondaryGoalsPerformance } from "../secondary-goals-performance";
@@ -507,6 +507,12 @@ export default async function ClientPage({
           .lte("date", lastDay),
         "sprint_planned_allocations",
       ),
+      // Etapa "Múltiplos Objetivos": `.or(primaryGoalResultTypeFilter(...))`
+      // em toda consulta a `monthly_budget_changes` desta página — nunca
+      // deixa a meta/histórico de um objetivo SECUNDÁRIO (ex.: Seguidores)
+      // aparecer aqui, que é sempre sobre o objetivo PRINCIPAL. Aceita
+      // `result_type is null` (linhas legadas) OU igual ao `performance_goal`
+      // vigente do cliente.
       requireQuery(
         supabase
           .from("monthly_budget_changes")
@@ -515,6 +521,7 @@ export default async function ClientPage({
           )
           .eq("client_id", id)
           .eq("month", firstDay)
+          .or(primaryGoalResultTypeFilter(client.performance_goal))
           .order("changed_at", { ascending: false }),
         "monthly_budget_changes:current-month",
       ),
@@ -531,6 +538,7 @@ export default async function ClientPage({
           .select("channel, month, changed_at, new_amount, target_result_count, target_cost_per_result")
           .eq("client_id", id)
           .lte("month", firstDay)
+          .or(primaryGoalResultTypeFilter(client.performance_goal))
           .order("month", { ascending: false })
           .order("changed_at", { ascending: false }),
         "monthly_budget_changes:target-history",

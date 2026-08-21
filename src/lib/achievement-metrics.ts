@@ -5,7 +5,7 @@ import { AVAILABLE_TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { safeDivide, computeRoas } from "@/lib/performance";
 import { resolveCostScopeComparability, type ChannelMetrics } from "@/lib/channel-metrics";
-import { resolveClientMonthlyPlan, type ClientPlanChangeRow } from "@/lib/client-plan";
+import { resolveClientMonthlyPlan, primaryGoalResultTypeFilter, type ClientPlanChangeRow } from "@/lib/client-plan";
 import { addDays, firstDayOfMonth, isLastDayOfMonth, lastDayOfMonth, listDatesInclusive, yearMonthOf } from "@/lib/achievement-dates";
 import type { ClientDailyPoint } from "@/lib/achievement-sample";
 import type { ClientAchievementContext, ClientMonthlyGoalInfo } from "@/lib/achievement-client-rules";
@@ -198,12 +198,23 @@ export async function fetchClientDailyPoints(
   }));
 }
 
-async function fetchMonthlyBudgetChangeRows(supabase: SupabaseClient<Database>, clientId: string, uptoYearMonth: string): Promise<ClientPlanChangeRow[]> {
+/** Etapa "Múltiplos Objetivos": `.or(primaryGoalResultTypeFilter(...))` —
+ * Conquistas ainda avalia só o objetivo PRINCIPAL do cliente (não
+ * migrado pra múltiplos objetivos nesta etapa), então nunca pode deixar a
+ * meta de um objetivo secundário (ex.: Seguidores) vazar pra cá e ser
+ * confundida com a meta de Leads/Vendas. */
+async function fetchMonthlyBudgetChangeRows(
+  supabase: SupabaseClient<Database>,
+  clientId: string,
+  uptoYearMonth: string,
+  primaryResultType: PerformanceGoal | null,
+): Promise<ClientPlanChangeRow[]> {
   const { data } = await supabase
     .from("monthly_budget_changes")
     .select("channel, month, changed_at, new_amount, target_result_count")
     .eq("client_id", clientId)
-    .lte("month", firstDayOfMonth(uptoYearMonth));
+    .lte("month", firstDayOfMonth(uptoYearMonth))
+    .or(primaryGoalResultTypeFilter(primaryResultType));
 
   return (data ?? []).map((r) => ({
     channel: r.channel as TrafficChannel,
@@ -267,9 +278,10 @@ export async function resolveClientMonthlyGoalInfo(
   activeChannels: TrafficChannelDb[],
   yearMonth: string,
   fallbackTargetCostPerResult: number | null,
+  primaryResultType: PerformanceGoal | null,
 ): Promise<ClientMonthlyGoalInfo> {
   const channels = (activeChannels.length > 0 ? activeChannels : AVAILABLE_TRAFFIC_CHANNELS) as TrafficChannel[];
-  const changes = await fetchMonthlyBudgetChangeRows(supabase, clientId, yearMonth);
+  const changes = await fetchMonthlyBudgetChangeRows(supabase, clientId, yearMonth, primaryResultType);
   const plan = resolveClientMonthlyPlan({ channels, changes, selectedMonth: firstDayOfMonth(yearMonth) });
 
   const consolidatedTargetCameFromChannelPlan = plan.consolidated.cpa !== null;
@@ -324,8 +336,8 @@ export async function buildClientAchievementContext(
   const goalByMonth = new Map<string, ClientMonthlyGoalInfo>();
   if (syncTrust.trusted) {
     const [currentGoal, previousGoal] = await Promise.all([
-      resolveClientMonthlyGoalInfo(supabase, client.id, activeChannels, currentMonth, client.fallbackTargetCostPerResult),
-      resolveClientMonthlyGoalInfo(supabase, client.id, activeChannels, previousMonth, client.fallbackTargetCostPerResult),
+      resolveClientMonthlyGoalInfo(supabase, client.id, activeChannels, currentMonth, client.fallbackTargetCostPerResult, client.performanceGoal),
+      resolveClientMonthlyGoalInfo(supabase, client.id, activeChannels, previousMonth, client.fallbackTargetCostPerResult, client.performanceGoal),
     ]);
     goalByMonth.set(currentMonth, currentGoal);
     goalByMonth.set(previousMonth, previousGoal);

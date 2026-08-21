@@ -11,7 +11,7 @@ import {
   SPEND_STATUS_MARGIN,
 } from "@/lib/spend-status";
 import { formatCurrency } from "@/lib/format";
-import { resolveConsolidatedMonthlyPlanned } from "@/lib/client-plan";
+import { resolveConsolidatedMonthlyPlanned, filterRowsToPrimaryGoal } from "@/lib/client-plan";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 
@@ -25,7 +25,7 @@ export default async function PainelMensalPage() {
     requireQuery(
       supabase
         .from("clients")
-        .select("id, name")
+        .select("id, name, performance_goal")
         .is("deleted_at", null)
         .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS)
         .order("name"),
@@ -50,7 +50,7 @@ export default async function PainelMensalPage() {
     // "Migração Multicanal dos Consumidores": todos os canais (nunca mais só
     // `channel = 'meta'`) — consolidado real (Meta + Google com plano).
     requireQuery(
-      supabase.from("monthly_budget_changes").select("client_id, channel, month, new_amount, changed_at").eq("month", firstDay),
+      supabase.from("monthly_budget_changes").select("client_id, channel, month, new_amount, changed_at, result_type").eq("month", firstDay),
       "monthly_budget_changes",
     ),
   ]);
@@ -61,8 +61,11 @@ export default async function PainelMensalPage() {
     list.push({ date: row.date, sprintId: "", amount: row.planned_amount });
     allocationsByClient.set(row.client_id, list);
   }
+  // Etapa "Múltiplos Objetivos": só o objetivo PRINCIPAL de cada cliente —
+  // nunca deixa a linha de um objetivo secundário virar investimento aqui.
+  const primaryGoalByClientId = new Map(clients.map((c) => [c.id, c.performance_goal]));
   const budgetChangesByClient = new Map<string, { channel: TrafficChannel; month: string; changedAt: string; investment: number }[]>();
-  for (const row of budgetChanges) {
+  for (const row of filterRowsToPrimaryGoal(budgetChanges, primaryGoalByClientId)) {
     const list = budgetChangesByClient.get(row.client_id) ?? [];
     list.push({ channel: row.channel as TrafficChannel, month: row.month, changedAt: row.changed_at, investment: row.new_amount });
     budgetChangesByClient.set(row.client_id, list);

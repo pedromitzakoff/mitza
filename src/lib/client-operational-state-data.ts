@@ -11,7 +11,7 @@ import {
   computeMonthlyExpectedToDateByCalendar,
   resolvePlanningHorizon,
 } from "@/lib/monthly-budget";
-import { resolveClientMonthlyPlan, type ClientPlanChangeRow } from "@/lib/client-plan";
+import { resolveClientMonthlyPlan, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
 import { resolveClientMonthlyActuals } from "@/lib/client-actuals";
 import { resolveCostScopeComparability } from "@/lib/channel-metrics";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
@@ -113,7 +113,7 @@ export async function loadClientOperationalStates(
   // aditiva (nunca o plano de um canal só).
   let planChangesQuery = supabase
     .from("monthly_budget_changes")
-    .select("client_id, channel, month, changed_at, new_amount, target_result_count")
+    .select("client_id, channel, month, changed_at, new_amount, target_result_count, result_type")
     .lte("month", monthRange.firstDay);
   if (clientId) planChangesQuery = planChangesQuery.eq("client_id", clientId);
 
@@ -278,8 +278,13 @@ export async function loadClientOperationalStates(
     overdueCountByClient.set(task.client_id, (overdueCountByClient.get(task.client_id) ?? 0) + 1);
   }
 
+  // Etapa "Múltiplos Objetivos": Saúde/Operação só conhecem o objetivo
+  // PRINCIPAL — nunca deixa a linha de um objetivo secundário ser lida como
+  // investimento/meta do principal.
+  const primaryGoalByClientId = new Map((clients ?? []).map((c) => [c.id, c.performance_goal]));
+
   const planChangesByClient = new Map<string, ClientPlanChangeRow[]>();
-  for (const row of planChanges ?? []) {
+  for (const row of filterRowsToPrimaryGoal(planChanges ?? [], primaryGoalByClientId)) {
     const list = planChangesByClient.get(row.client_id) ?? [];
     list.push({
       channel: row.channel as TrafficChannel,

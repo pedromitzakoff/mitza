@@ -34,7 +34,7 @@ import {
 } from "@/app/operation/operation-data";
 import { resolveReviewComplianceStatus } from "@/lib/account-health-engine";
 import { groupChannelSpendBySprintId, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
-import { resolveClientMonthlyPlan, type ClientPlanChangeRow } from "@/lib/client-plan";
+import { resolveClientMonthlyPlan, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-section";
@@ -210,7 +210,7 @@ export default async function SprintsPage({
     requireQuery(
       supabase
         .from("monthly_budget_changes")
-        .select("client_id, channel, month, new_amount, changed_at, target_result_count")
+        .select("client_id, channel, month, new_amount, changed_at, target_result_count, result_type")
         .eq("month", monthRange.firstDay),
       "monthly_budget_changes",
     ),
@@ -495,7 +495,12 @@ export default async function SprintsPage({
   // que `resolveClientMonthlyPlan` espera (`ClientPlanChangeRow`) — nenhuma
   // segunda consulta, nenhuma terceira forma de resolver meta.
   const planChangesByClient = new Map<string, ClientPlanChangeRow[]>();
-  for (const c of budgetChanges ?? []) {
+  // Etapa "Múltiplos Objetivos": esta tela só conhece o objetivo PRINCIPAL —
+  // nunca deixa a linha de um objetivo secundário (ex.: meta de Seguidores)
+  // ser lida como se fosse a meta/investimento do principal.
+  const primaryGoalByClientId = new Map((clients ?? []).map((c) => [c.id, c.performance_goal]));
+  const primaryBudgetChanges = filterRowsToPrimaryGoal(budgetChanges ?? [], primaryGoalByClientId);
+  for (const c of primaryBudgetChanges) {
     const list = budgetChangesByClient.get(c.client_id) ?? [];
     list.push({ channel: c.channel as TrafficChannel, month: c.month, newAmount: c.new_amount, changedAt: c.changed_at });
     budgetChangesByClient.set(c.client_id, list);
