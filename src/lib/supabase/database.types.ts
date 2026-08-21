@@ -16,6 +16,12 @@ export type ClientMainObjective = "leads" | "vendas" | "reservas" | "reconhecime
  * Etapa "Objetivo Seguidores") — distinto de `ClientMainObjective`. */
 export type PerformanceGoalDb = "leads" | "sales" | "followers";
 
+/** Fonte do resultado de um objetivo (Etapa "Múltiplos Objetivos") —
+ * "automatic" = daily_performance/performance_records alimentado por
+ * integração ou lançamento por sprint; "manual" = só lançamento manual por
+ * período (hoje, sempre o caso de "followers", ver client_goals.sql). */
+export type GoalResultSourceDb = "automatic" | "manual";
+
 /** Tema visual do AnalyticsReport (Fase 1) — pertence ao domínio do cliente,
  * não é uma preferência de sessão. Sem UI de seleção ainda; hoje todo
  * cliente nasce "mitza". */
@@ -812,6 +818,7 @@ export interface Database {
           channel: TrafficChannelDb;
           date: string;
           campaign_name: string;
+          campaign_id: string | null;
           spend: number;
           impressions: number | null;
           reach: number | null;
@@ -829,6 +836,7 @@ export interface Database {
           channel: TrafficChannelDb;
           date: string;
           campaign_name: string;
+          campaign_id?: string | null;
           spend?: number;
           impressions?: number | null;
           reach?: number | null;
@@ -846,6 +854,7 @@ export interface Database {
           channel?: TrafficChannelDb;
           date?: string;
           campaign_name?: string;
+          campaign_id?: string | null;
           spend?: number;
           impressions?: number | null;
           reach?: number | null;
@@ -887,6 +896,7 @@ export interface Database {
           campaign_name_column: string | null;
           campaign_name_filter: string | null;
           campaign_name_exclude: string | null;
+          campaign_id_column: string | null;
           ad_name_column: string | null;
           creative_permalink_column: string | null;
           preview_image_column: string | null;
@@ -914,6 +924,7 @@ export interface Database {
           campaign_name_column?: string | null;
           campaign_name_filter?: string | null;
           campaign_name_exclude?: string | null;
+          campaign_id_column?: string | null;
           ad_name_column?: string | null;
           creative_permalink_column?: string | null;
           preview_image_column?: string | null;
@@ -941,6 +952,7 @@ export interface Database {
           campaign_name_column?: string | null;
           campaign_name_filter?: string | null;
           campaign_name_exclude?: string | null;
+          campaign_id_column?: string | null;
           ad_name_column?: string | null;
           creative_permalink_column?: string | null;
           preview_image_column?: string | null;
@@ -2285,6 +2297,7 @@ export interface Database {
           target_result_count: number | null;
           target_cost_per_result: number | null;
           channel: string;
+          result_type: PerformanceGoalDb | null;
         };
         Insert: {
           id?: string;
@@ -2303,6 +2316,7 @@ export interface Database {
           target_result_count?: number | null;
           target_cost_per_result?: number | null;
           channel?: string;
+          result_type?: PerformanceGoalDb | null;
         };
         Update: {
           id?: string;
@@ -2321,6 +2335,7 @@ export interface Database {
           target_result_count?: number | null;
           target_cost_per_result?: number | null;
           channel?: string;
+          result_type?: PerformanceGoalDb | null;
         };
         Relationships: [
           {
@@ -2376,6 +2391,95 @@ export interface Database {
             columns: ["client_id"];
             isOneToOne: false;
             referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      client_goals: {
+        Row: {
+          id: string;
+          client_id: string;
+          result_type: PerformanceGoalDb;
+          channels: string[];
+          is_primary: boolean;
+          result_source: GoalResultSourceDb;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          result_type: PerformanceGoalDb;
+          channels?: string[];
+          is_primary?: boolean;
+          result_source?: GoalResultSourceDb;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          result_type?: PerformanceGoalDb;
+          channels?: string[];
+          is_primary?: boolean;
+          result_source?: GoalResultSourceDb;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_goals_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      client_campaign_goal_assignments: {
+        Row: {
+          id: string;
+          client_id: string;
+          channel: TrafficChannelDb;
+          campaign_id: string;
+          result_type: PerformanceGoalDb;
+          assigned_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          channel: TrafficChannelDb;
+          campaign_id: string;
+          result_type: PerformanceGoalDb;
+          assigned_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          channel?: TrafficChannelDb;
+          campaign_id?: string;
+          result_type?: PerformanceGoalDb;
+          assigned_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_campaign_goal_assignments_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_campaign_goal_assignments_assigned_by_fkey";
+            columns: ["assigned_by"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
             referencedColumns: ["id"];
           },
         ];
@@ -2764,6 +2868,7 @@ export interface Database {
           p_changed_by: string;
           p_reason?: string | null;
           p_target_result_count?: number | null;
+          p_result_type?: PerformanceGoalDb | null;
         };
         Returns: {
           consolidatedAmount: number;
@@ -2771,6 +2876,25 @@ export interface Database {
           resultingTotal: number;
           isBelowConsolidated: boolean;
         };
+      };
+      set_client_goal_primary: {
+        Args: {
+          p_client_id: string;
+          p_goal_id: string;
+        };
+        Returns: void;
+      };
+      set_goal_monthly_target: {
+        Args: {
+          p_client_id: string;
+          p_channel: string;
+          p_month: string;
+          p_result_type: PerformanceGoalDb;
+          p_target_result_count: number;
+          p_changed_by: string;
+          p_reason?: string | null;
+        };
+        Returns: void;
       };
       ensure_client_sprints: {
         Args: {

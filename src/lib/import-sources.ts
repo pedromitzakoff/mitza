@@ -519,11 +519,21 @@ export interface AggregateCampaignRowsColumns {
   impressionsColumn?: string | null;
   reachColumn?: string | null;
   clicksColumn?: string | null;
+  /** Etapa "Múltiplos Objetivos": coluna com o ID ESTÁVEL da campanha na
+   * plataforma (nunca o nome) — opcional, só presente quando
+   * `import_sources.campaign_id_column` estiver configurado pra esta fonte.
+   * Sem ela, `campaignId` sai sempre `null` (campanha não fica classificável
+   * por objetivo, mas continua aparecendo normalmente em Campanhas/Criativos
+   * — nenhuma mudança de comportamento existente). */
+  campaignIdColumn?: string | null;
 }
 
 export interface AggregatedCampaignRow {
   date: string;
   campaignName: string;
+  /** `null` quando a fonte não tem `campaignIdColumn` configurado, ou a
+   * linha não trouxe valor pra ela. Nunca derivado do nome. */
+  campaignId: string | null;
   spend: number;
   impressions: number | null;
   reach: number | null;
@@ -532,7 +542,7 @@ export interface AggregatedCampaignRow {
 }
 
 export function aggregateCampaignDailyRows(rows: RawSourceRow[], columns: AggregateCampaignRowsColumns): AggregatedCampaignRow[] {
-  const { dateColumn, campaignNameColumn, spendColumn, impressionsColumn, reachColumn, clicksColumn } = columns;
+  const { dateColumn, campaignNameColumn, spendColumn, impressionsColumn, reachColumn, clicksColumn, campaignIdColumn } = columns;
 
   const groups = new Map<string, AggregatedCampaignRow>();
 
@@ -545,12 +555,21 @@ export function aggregateCampaignDailyRows(rows: RawSourceRow[], columns: Aggreg
     const group = groups.get(key) ?? {
       date: rawDate,
       campaignName,
+      campaignId: null,
       spend: 0,
       impressions: null,
       reach: null,
       clicks: null,
       invalidRowCount: 0,
     };
+
+    // O ID não varia por linha dentro da mesma campanha/dia — só precisa
+    // capturar uma vez; nunca sobrescreve um valor já capturado por um
+    // valor vazio de uma linha subsequente.
+    if (campaignIdColumn && !group.campaignId) {
+      const rawId = toStringColumnValue(row[campaignIdColumn]);
+      if (rawId.length > 0) group.campaignId = rawId;
+    }
 
     const spendValue = parseSourceNumericValue(row[spendColumn]);
     if (spendValue.kind === "ok") group.spend += spendValue.value;
@@ -637,6 +656,7 @@ export interface CampaignDailyMetricsUpsertRow {
   channel: TrafficChannel;
   date: string;
   campaign_name: string;
+  campaign_id: string | null;
   spend: number;
   impressions: number | null;
   reach: number | null;
@@ -671,6 +691,7 @@ export function buildCampaignDailyMetricsUpsertRows(
       channel,
       date: row.date,
       campaign_name: row.campaignName,
+      campaign_id: row.campaignId,
       spend: row.spend,
       impressions: row.impressions,
       reach: row.reach,

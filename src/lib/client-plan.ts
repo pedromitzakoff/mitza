@@ -1,9 +1,18 @@
 import { safeDivide } from "@/lib/performance";
 import type { TrafficChannel } from "@/lib/traffic-channels";
+import type { PerformanceGoal } from "@/lib/performance-goals";
+import type { ClientGoal } from "@/lib/client-goals";
 import { consolidateChannelMetrics, type ChannelMetrics, type ClientChannelMetrics } from "@/lib/channel-metrics";
 
 /** Uma versão de `monthly_budget_changes` já achatada pro resolvedor — `investment`
- * é `new_amount` (o campo já chamado assim em `MonthlyPlanChange`, lib/monthly-budget.ts). */
+ * é `new_amount` (o campo já chamado assim em `MonthlyPlanChange`, lib/monthly-budget.ts).
+ *
+ * `resultType` (Etapa "Múltiplos Objetivos") opcional de propósito: os 8
+ * consumidores legados de `resolveClientMonthlyPlan` continuam montando este
+ * objeto sem essa chave (nunca obrigados a mudar sua query nesta etapa) —
+ * `resolveClientMonthlyPlan` nunca filtra por ela, exatamente o
+ * comportamento de sempre. Só `resolveClientMonthlyGoals` (novo) exige e usa
+ * o valor real. */
 export interface ClientPlanChangeRow {
   channel: TrafficChannel;
   /** Primeiro dia do mês (`YYYY-MM-01`) a que esta versão se refere — nunca `changedAt`. */
@@ -11,6 +20,7 @@ export interface ClientPlanChangeRow {
   changedAt: string;
   investment: number;
   targetResultCount: number | null;
+  resultType?: PerformanceGoal | null;
 }
 
 /**
@@ -100,4 +110,53 @@ export function resolveConsolidatedMonthlyPlanned(
     selectedMonth,
   });
   return plan.consolidated.investment ?? fallbackPlannedSum;
+}
+
+/** Um objetivo já resolvido pro mês selecionado — mesma forma de
+ * `ClientChannelMetrics` (byChannel/consolidated), só que escopada a UM
+ * `resultType`. `isPrimary` é repasse puro de `ClientGoal` (nunca decide
+ * nada aqui — ver comentário da coluna em `client-goals.sql`). */
+export interface ClientGoalPlan {
+  resultType: PerformanceGoal;
+  isPrimary: boolean;
+  byChannel: Partial<Record<TrafficChannel, ChannelMetrics>>;
+  consolidated: ChannelMetrics;
+}
+
+export interface ClientMonthlyGoalsPlan {
+  goals: ClientGoalPlan[];
+}
+
+/**
+ * Versão "múltiplos objetivos" de `resolveClientMonthlyPlan` (Etapa
+ * "Múltiplos Objetivos") — nunca uma segunda implementação da regra de
+ * "vigente = mais recente com month <= selectedMonth": reaproveita
+ * literalmente a mesma lógica, só filtrando `changes` por `resultType` ANTES
+ * de resolver cada objetivo, isolado dos demais. `consolidateChannelMetrics`
+ * roda uma vez POR OBJETIVO, nunca entre objetivos — é isso que garante que
+ * Leads (Meta+Google) e Seguidores (Meta) nunca somam resultado um do outro
+ * (auditoria seção 9/17), mesmo compartilhando o canal Meta.
+ *
+ * `clientGoals` vem de `lib/client-goals.ts` (`listClientGoals`) — a
+ * identidade/config de cada objetivo; este resolvedor nunca decide sozinho
+ * quais objetivos existem, só resolve os números de cada um já configurado.
+ * Canal do objetivo com `channels` vazio (sem restrição) usa a lista
+ * `channels` inteira recebida — mesma convenção de `client_goals.channels`.
+ */
+export function resolveClientMonthlyGoals(input: {
+  channels: TrafficChannel[];
+  changes: ClientPlanChangeRow[];
+  selectedMonth: string;
+  clientGoals: ClientGoal[];
+}): ClientMonthlyGoalsPlan {
+  const { channels, changes, selectedMonth, clientGoals } = input;
+
+  const goals = clientGoals.map((goal): ClientGoalPlan => {
+    const goalChannels = goal.channels.length > 0 ? goal.channels.filter((c) => channels.includes(c)) : channels;
+    const goalChanges = changes.filter((c) => c.resultType === goal.resultType);
+    const plan = resolveClientMonthlyPlan({ channels: goalChannels, changes: goalChanges, selectedMonth });
+    return { resultType: goal.resultType, isPrimary: goal.isPrimary, byChannel: plan.byChannel, consolidated: plan.consolidated };
+  });
+
+  return { goals };
 }

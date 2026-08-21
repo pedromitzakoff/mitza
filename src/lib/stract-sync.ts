@@ -99,7 +99,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
   const { data: importSource, error: importSourceError } = await supabase
     .from("import_sources")
     .select(
-      "id, client_id, provider, channel, external_account_id, table_name, account_id_column, date_column, spend_column, campaign_name_column, campaign_name_filter, campaign_name_exclude, ad_name_column, creative_permalink_column, preview_image_column, preview_image_fallback_column, impressions_column, reach_column, clicks_column",
+      "id, client_id, provider, channel, external_account_id, table_name, account_id_column, date_column, spend_column, campaign_name_column, campaign_name_filter, campaign_name_exclude, campaign_id_column, ad_name_column, creative_permalink_column, preview_image_column, preview_image_fallback_column, impressions_column, reach_column, clicks_column",
     )
     .eq("id", importSourceId)
     .single();
@@ -459,6 +459,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
       impressionsColumn: importSource.impressions_column,
       reachColumn: importSource.reach_column,
       clicksColumn: importSource.clicks_column,
+      campaignIdColumn: importSource.campaign_id_column,
     });
     hadInvalidRows = hadInvalidRows || campaignAggregate.some((row) => row.invalidRowCount > 0);
 

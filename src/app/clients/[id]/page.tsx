@@ -34,6 +34,9 @@ import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus } from "@/lib/spend-status";
 import { resolveBudgetEffectiveDate, computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { resolveClientMonthlyPlan } from "@/lib/client-plan";
+import { listClientGoals, fetchGoalDisplaySummaries } from "@/lib/client-goals";
+import { fetchSecondaryGoalsPerformance } from "@/lib/secondary-goal-performance";
+import { SecondaryGoalsPerformance } from "../secondary-goals-performance";
 import { getClientMonthHorizon } from "@/lib/client-month-horizons";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import {
@@ -644,6 +647,22 @@ export default async function ClientPage({
     })),
     selectedMonth: firstDay,
   });
+  // Etapa "Múltiplos Objetivos": objetivos SECUNDÁRIOS (nunca o principal,
+  // que continua 100% pelo fluxo de sempre acima) — bloco adicional,
+  // sozinho quando o cliente só tem 1 objetivo (caso comum hoje). Await
+  // sequencial deliberado (não entra no Promise.all grande acima) pra
+  // manter o diff desta etapa isolado e fácil de revisar.
+  const allClientGoals = await listClientGoals(supabase, client.id);
+  const secondaryClientGoals = allClientGoals.filter((g) => !g.isPrimary);
+  const secondaryGoalTargets = await fetchGoalDisplaySummaries(supabase, client.id, secondaryClientGoals, firstDay);
+  const secondaryGoalsPerformance = await fetchSecondaryGoalsPerformance(
+    supabase,
+    client.id,
+    secondaryClientGoals,
+    { firstDay, lastDay },
+    new Map(Array.from(secondaryGoalTargets.entries()).map(([goal, summary]) => [goal, summary.targetResultCount])),
+  );
+
   const monthPlanned = clientPlan.consolidated.investment ?? sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay });
   const monthActual = sumActualSpendForMonth(sprints ?? [], { firstDay, lastDay }, dailySpend ?? []);
   // Etapa 73: a camada de planejamento/recomendação POR SPRINT saiu da
@@ -1778,6 +1797,8 @@ export default async function ClientPage({
               currentPlanningEndDate={planningEndDate}
             />
           </div>
+
+          <SecondaryGoalsPerformance goals={secondaryGoalsPerformance} />
 
           {/* Tarefas do mês (Etapa "Tarefas e Sprints separadas") — novo
               módulo principal: substitui "Foco agora" (`SprintFocusBar`,
