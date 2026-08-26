@@ -13,7 +13,6 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
-  Plus,
   RefreshCw,
   Settings,
   Trophy,
@@ -226,12 +225,23 @@ function NavLink({
     );
   }
 
+  // Etapa "Identidade Visual KOFF — Sidebar": o ativo precisa ser o item
+  // mais evidente da nav, nunca o mais apagado — antes usava `text-brand`
+  // (grafite) sobre o fundo preto fixo da Sidebar, quase ilegível depois
+  // que `--brand` deixou de ser azul (ficava com a mesma leitura de um
+  // item desabilitado). Texto branco forte + fundo levemente mais claro
+  // que o preto da Sidebar + barra lateral em areia (o "detalhe sutil" da
+  // marca, nunca um fundo grande) tornam o ativo inconfundível. Hover
+  // (item inativo) fica deliberadamente mais fraco que o ativo
+  // (`bg-white/5` vs. `bg-white/10`) pra nunca ser confundido com ele.
   return (
     <Link
       href={item.href}
       title={item.label}
-      className={`flex items-center gap-2 rounded-md px-2.5 py-1 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center" : ""} ${
-        active ? "bg-brand/15 font-semibold text-brand" : "font-medium text-zinc-200 hover:bg-white/10"
+      className={`flex items-center gap-2 rounded-md border-l-2 py-1 pl-2 pr-2.5 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
+        active
+          ? "border-sand bg-white/10 font-semibold text-white"
+          : "border-transparent font-medium text-zinc-300 hover:bg-white/5 hover:text-zinc-100"
       }`}
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -315,26 +325,20 @@ function SidebarContent({
 
   return (
     <div className="flex h-full flex-col">
-      {/* AÇÃO — Novo cliente e recolher na mesma linha, sem faixa/divisor
-       * próprio pro botão de recolher. */}
-      <div className="flex shrink-0 items-center gap-1.5 p-2">
-        {isAdmin && (
-          <Tooltip label="Novo cliente">
-            <Link
-              href="/clients/new"
-              className={`mitza-pressable flex flex-1 items-center justify-center gap-1.5 rounded-md bg-brand px-2.5 py-1 text-sm font-medium text-white hover:bg-brand-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:px-0" : ""}`}
-            >
-              <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <ItemLabel collapsed={collapsed}>Novo cliente</ItemLabel>
-            </Link>
-          </Tooltip>
-        )}
+      {/* Etapa "Identidade Visual KOFF — Sidebar": "Novo cliente" saiu
+       * daqui — cadastrar cliente é ação rara, não deveria abrir a
+       * Sidebar inteira com um CTA de largura total competindo com a
+       * navegação. Vira um "+" discreto ao lado do rótulo "Contas da
+       * Agência" (ver agency-accounts-tree-client.tsx), disponível sem
+       * roubar atenção. Este topo agora é só o controle de
+       * recolher/expandir (estrutural, não é destino de navegação). */}
+      <div className="flex shrink-0 items-center justify-end p-2">
         <button
           type="button"
           onClick={toggleCollapsed}
           aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
-          className="hidden shrink-0 rounded-md p-1.5 text-zinc-400 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-white/10 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:block"
+          className="hidden shrink-0 rounded-md p-1.5 text-zinc-500 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-white/10 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:block"
         >
           {collapsed ? (
             <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
@@ -374,7 +378,7 @@ function SidebarContent({
                  * "Revisão da Sidebar": "Atualizar Meta (todos)" saiu daqui
                  * — não é uma rota, é uma ação técnica; agora vive no
                  * rodapé, junto do relógio, com peso visual secundário. */}
-                <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 ${collapsed ? "md:hidden" : ""}`}>
+                <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 ${collapsed ? "md:hidden" : ""}`}>
                   Administração
                 </span>
                 <nav className="flex flex-col gap-0.5">
@@ -405,13 +409,16 @@ function SidebarContent({
        * Relógio da agência (data/hora globais, migrados da Top Bar) fica
        * aqui, acima da identidade do usuário — discreto, nunca competindo
        * com a navegação (Etapa Global UX Refinement 1.0). */}
-      <div className="shrink-0 space-y-2 border-t border-white/10 p-2.5">
+      <div className="shrink-0 space-y-1.5 border-t border-white/10 p-2.5">
         <SidebarClock collapsed={collapsed} />
 
         {/* Etapa "Revisão da Sidebar": movido do grupo "Administração" pra
          * cá — não é uma rota, é uma ação técnica (dispara sync manual do
          * Meta), então recebe o mesmo peso visual discreto do relógio
-         * acima (11px, cinza), nunca competindo com Equipe/Configurações. */}
+         * acima (11px, cinza), nunca competindo com Equipe/Configurações.
+         * Etapa "Identidade Visual KOFF — Sidebar": ainda mais apagado
+         * (zinc-600) que o relógio — reforça que isto é rodapé técnico,
+         * não mais um item de navegação. */}
         {isAdmin && (
           <form action={syncAllMetaAction}>
             <Tooltip label="Atualizar Meta (todos)">
@@ -429,7 +436,7 @@ function SidebarContent({
                     <ItemLabel collapsed={collapsed}>Atualizando...</ItemLabel>
                   </>
                 }
-                className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-[11px] text-zinc-500 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-zinc-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center" : ""}`}
+                className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-[11px] text-zinc-600 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-zinc-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center" : ""}`}
               >
                 <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <ItemLabel collapsed={collapsed}>Atualizar Meta (todos)</ItemLabel>
@@ -439,15 +446,24 @@ function SidebarContent({
         )}
 
         <div
-          className={`flex items-center gap-2 ${collapsed ? "md:justify-center" : ""}`}
+          className={`flex items-center gap-2 pt-0.5 ${collapsed ? "md:justify-center" : ""}`}
           title={`${profile.name} · ${profile.role === "admin" ? "Admin" : "Gestor"}`}
         >
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand/15 text-xs font-semibold text-brand">
+          {/* Etapa "Identidade Visual KOFF — Sidebar": era `bg-brand/15
+           * text-brand` — com `--brand` grafite, ficava um círculo quase
+           * invisível sobre o fundo preto fixo da Sidebar. Areia (detalhe
+           * sutil, nunca fundo grande) resolve o contraste e ainda
+           * reforça a assinatura da marca num ponto de baixo risco. */}
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sand/20 text-xs font-semibold text-sand">
             {initial}
           </span>
+          {/* Etapa "Identidade Visual KOFF — Sidebar": nome + papel numa
+           * linha só (era 2 linhas) — rodapé mais compacto, papel como
+           * sufixo discreto em vez de linha própria. */}
           <span className={`min-w-0 ${collapsed ? "md:hidden" : ""}`}>
-            <p className="truncate text-sm font-medium text-zinc-100">{profile.name}</p>
-            <p className="text-xs text-zinc-500">{profile.role === "admin" ? "Admin" : "Gestor"}</p>
+            <p className="truncate text-sm font-medium text-zinc-100">
+              {profile.name} <span className="font-normal text-zinc-500">· {profile.role === "admin" ? "Admin" : "Gestor"}</span>
+            </p>
           </span>
         </div>
         <form action={logout}>

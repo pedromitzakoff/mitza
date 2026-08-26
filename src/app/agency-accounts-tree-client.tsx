@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Folder, Search } from "lucide-react";
+import { Folder, Plus, Search } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -22,6 +22,7 @@ import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalList
 import { CSS } from "@dnd-kit/utilities";
 import { type AgencyTree, type AgencyTreeClient } from "@/lib/agency-accounts-tree";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/app/toast-provider";
 import { getOpenTaskCountForManagerAction, moveClientAction, type ClientTransferMode } from "./agency-accounts-tree-actions";
 import { AgencyTransferDialog } from "./agency-accounts-tree-transfer-dialog";
@@ -126,11 +127,18 @@ function ClientLeaf({
         className={`flex items-center gap-1.5 rounded-md py-1 pl-7 pr-2 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
           disabled ? "" : "cursor-grab touch-none active:cursor-grabbing"
         } ${
+          // Etapa "Identidade Visual KOFF — Sidebar": era `bg-brand/15
+          // text-brand`/`bg-brand/10 text-brand` — grafite sobre o fundo
+          // preto fixo da árvore, quase invisível. Ativo vira o mesmo
+          // branco forte da nav principal (sem barra lateral aqui — item
+          // aninhado, a barra é reservada pros 4 destinos de topo);
+          // combinação em busca usa areia (detalhe sutil), nunca
+          // confundida com o item realmente ativo.
           isActive
-            ? "bg-brand/15 font-semibold text-brand"
+            ? "bg-white/10 font-semibold text-white"
             : isSearchMatch
-              ? "bg-brand/10 font-medium text-brand"
-              : "font-normal text-zinc-300 hover:bg-white/10"
+              ? "bg-sand/15 font-medium text-sand"
+              : "font-normal text-zinc-300 hover:bg-white/5 hover:text-zinc-100"
         } ${isDragging ? "opacity-30" : ""}`}
       >
         <ClientAvatar name={client.name} imageUrl={client.avatarUrl} size="xs" />
@@ -169,7 +177,13 @@ function ManagerFolder({
     <li
       ref={setNodeRef}
       className={`rounded-md transition-[opacity,background-color] duration-[var(--motion-fast)] ease-[var(--ease-enter)] ${
-        isDropTarget ? "bg-brand/10 ring-1 ring-inset ring-brand/40" : ""
+        // Etapa "Identidade Visual KOFF — Sidebar": era `bg-brand/10
+        // ring-brand/40` — mesmo problema de contraste do item ativo
+        // acima (grafite sobre preto). O alvo de "soltar" ao arrastar é
+        // um destaque temporário, não uma seleção — areia (o mesmo
+        // detalhe sutil usado em busca) comunica isso sem reaproveitar o
+        // branco forte do estado ativo.
+        isDropTarget ? "bg-sand/10 ring-1 ring-inset ring-sand/40" : ""
       } ${isDimmed ? "opacity-40" : ""}`}
     >
       <button
@@ -177,18 +191,18 @@ function ManagerFolder({
         onClick={onToggle}
         aria-expanded={isExpanded}
         title={name}
-        className="mitza-pressable flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-[13px] font-medium text-zinc-200 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        className="mitza-pressable flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-[13px] font-medium text-zinc-200 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-white/5 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       >
         <span
-          className={`mitza-chevron shrink-0 text-xs ${isDropTarget ? "text-brand" : "text-zinc-500"} ${isExpanded ? "rotate-90" : ""}`}
+          className={`mitza-chevron shrink-0 text-xs ${isDropTarget ? "text-sand" : "text-zinc-500"} ${isExpanded ? "rotate-90" : ""}`}
           aria-hidden="true"
         >
           ▸
         </span>
-        <Folder className={`h-4 w-4 shrink-0 ${isDropTarget ? "text-brand" : "text-zinc-500"}`} aria-hidden="true" />
+        <Folder className={`h-4 w-4 shrink-0 ${isDropTarget ? "text-sand" : "text-zinc-500"}`} aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate text-left">{name}</span>
         {!isExpanded && clients.length > 0 && (
-          <span className={`shrink-0 text-xs ${isDropTarget ? "text-brand" : "text-zinc-500"}`}>{clients.length}</span>
+          <span className={`shrink-0 text-xs ${isDropTarget ? "text-sand" : "text-zinc-500"}`}>{clients.length}</span>
         )}
       </button>
 
@@ -242,8 +256,10 @@ function ManagerFolder({
  */
 export function AgencyAccountsTreeView({
   tree,
+  isAdmin,
 }: {
   tree: AgencyTree;
+  isAdmin: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -577,8 +593,27 @@ export function AgencyAccountsTreeView({
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div className="mt-2 flex min-h-0 flex-col px-2.5">
-        <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Contas da Agência</p>
+      <div className="mt-1.5 flex min-h-0 flex-col px-2.5">
+        {/* Etapa "Identidade Visual KOFF — Sidebar": "Novo cliente" era um
+         * CTA de largura total no topo da Sidebar inteira — cadastrar
+         * cliente é ação rara e não deveria disputar espaço com a
+         * navegação. Vira um "+" discreto aqui, junto do rótulo da seção
+         * onde a ação faz sentido contextualmente, disponível sem ocupar
+         * espaço nem roubar atenção. */}
+        <div className="flex items-center justify-between pb-1">
+          <p className="px-2.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Contas da Agência</p>
+          {isAdmin && (
+            <Tooltip label="Novo cliente">
+              <Link
+                href="/clients/new"
+                aria-label="Novo cliente"
+                className="mitza-pressable flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
+            </Tooltip>
+          )}
+        </div>
 
         <div className="relative px-0.5 pb-1.5">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" aria-hidden="true" />
