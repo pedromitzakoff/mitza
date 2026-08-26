@@ -1446,85 +1446,44 @@ export default async function ClientPage({
           logo depois. Nenhuma "Semana atual" aqui — já aparece no seletor
           de período, mais abaixo. */}
       <ClientWorkspaceContext name={client.name} />
-      {/* Etapa "Navegação única do cliente": NAVEGAÇÃO ("pra onde eu quero
-          ir" — Visão geral/Analytics/Timeline/Saldo/Fechamento/Relatório,
-          unificadas mais abaixo no `role="tablist"`) e AÇÃO ("o que eu
-          quero fazer" — Dashboard ↗/Editar/Atualizar Meta/Registrar
-          revisão, logo abaixo da identidade) são conceitos diferentes —
-          antes misturados na mesma fileira de botões com borda. As ações
-          continuam PERTO da identidade (é o mesmo princípio de sempre:
-          "ação próxima do contexto onde é usada"), só com peso visual bem
-          mais discreto (`variant="ghost"`) — não devem ser o primeiro
-          elemento que chama atenção ao abrir o cliente.
+      {/* Etapa "Barra única de controles do cliente": as ações (Dashboard
+          ↗/Editar/Atualizar Meta/Registrar revisão) saíram desta área — não
+          vivem mais numa fileira própria abaixo da identidade, agora fazem
+          parte da MESMA barra de navegação, logo abaixo (`role="tablist"`),
+          separadas por uma divisória sutil. Compacta o header verticalmente
+          (uma fileira a menos) sem perder proximidade real: a barra
+          continua logo abaixo desta identidade, só não duplica mais a
+          altura com uma linha de botões inteira só pra isso.
           "Última otimização"/"Última atualização da performance" (bloco à
-          direita) continuam informação de ESTADO, não ação — mesmo texto
-          discreto de sempre. Nenhum href, dado, cálculo ou permissão
-          mudou nesta etapa, só reorganização e peso visual. */}
+          direita) continuam informação de ESTADO, não ação/navegação —
+          mesmo texto discreto de sempre. Nenhum href, dado, cálculo ou
+          permissão mudou nesta etapa, só reorganização e peso visual. */}
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <ClientAvatar name={client.name} imageUrl={client.avatar_url} size="lg" />
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-bold text-overview-text-primary">{client.name}</h1>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}
-                >
-                  {CLIENT_STATUS_LABEL[client.status]}
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-overview-text-secondary">{identitySecondaryLine}</p>
-              {/* Etapa "Motivo da Operação no Cliente": a mesma frase que
-                  justifica o balde Crítico/Atenção na Operação
-                  (`evaluation.primaryReason`, calculado por
-                  `evaluateAccountHealth()` — nenhuma segunda lógica), com o
-                  mesmo destaque discreto (`emphasizeDeviationText`, só o
-                  número em destaque, nunca a frase inteira colorida) já
-                  usado no card da Operação. Ausente quando o cliente está
-                  saudável (`primaryDimension === null`, mesma condição de
-                  lá) — nenhum "Nenhum sinal de atenção" fabricado aqui. */}
-              {primaryReasonText && (
-                <p className="mt-0.5 text-xs text-overview-text-secondary" title={primaryReasonText}>
-                  {emphasizeDeviationText(primaryReasonText, primaryReasonTone)}
-                </p>
-              )}
+        <div className="flex min-w-0 items-center gap-3">
+          <ClientAvatar name={client.name} imageUrl={client.avatar_url} size="lg" />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold text-overview-text-primary">{client.name}</h1>
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}
+              >
+                {CLIENT_STATUS_LABEL[client.status]}
+              </span>
             </div>
-          </div>
-          {/* Etapa "Navegação única do cliente": AÇÕES ("o que eu quero
-              fazer"), separadas de NAVEGAÇÃO ("pra onde eu quero ir" —
-              Saldo/Fechamento/Ver relatório saíram daqui, ver o `<div
-              role="tablist">` mais abaixo, unificados com Visão
-              geral/Analytics/Timeline). Dashboard fica — é a única
-              ferramenta EXTERNA (Looker Studio), nunca uma seção da
-              plataforma, por isso ganha o ícone de link externo. Todas
-              usam `variant="ghost"` (Editar/Registrar revisão) ou a versão
-              ghost de `HEADER_SUBMIT_BUTTON_CLASSES` (Atualizar Meta) —
-              peso visual bem mais discreto que os antigos botões com
-              borda, sem esconder nenhuma ação. Nenhum href, target,
-              permissão ou comportamento mudou. */}
-          <div className="flex flex-wrap items-center gap-1">
-            {client.dashboard_url && (
-              <Button href={client.dashboard_url} target="_blank" rel="noopener noreferrer" variant="ghost" size="sm">
-                <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
-                Dashboard
-              </Button>
-            )}
-            {canManageClient && (
-              <Button href={`/clients/${client.id}/edit`} variant="ghost" size="sm">
-                Editar
-              </Button>
-            )}
-            {canOperate && (
-              <form action={syncClientMetaAction.bind(null, client.id)}>
-                <SubmitButton pendingChildren="Atualizando..." className={HEADER_SUBMIT_BUTTON_CLASSES}>
-                  Atualizar Meta
-                </SubmitButton>
-              </form>
-            )}
-            {canOperate && (
-              <Button href={newReviewHref} scroll={false} variant="ghost" size="sm">
-                Registrar revisão
-              </Button>
+            <p className="mt-1 text-sm text-overview-text-secondary">{identitySecondaryLine}</p>
+            {/* Etapa "Motivo da Operação no Cliente": a mesma frase que
+                justifica o balde Crítico/Atenção na Operação
+                (`evaluation.primaryReason`, calculado por
+                `evaluateAccountHealth()` — nenhuma segunda lógica), com o
+                mesmo destaque discreto (`emphasizeDeviationText`, só o
+                número em destaque, nunca a frase inteira colorida) já
+                usado no card da Operação. Ausente quando o cliente está
+                saudável (`primaryDimension === null`, mesma condição de
+                lá) — nenhum "Nenhum sinal de atenção" fabricado aqui. */}
+            {primaryReasonText && (
+              <p className="mt-0.5 text-xs text-overview-text-secondary" title={primaryReasonText}>
+                {emphasizeDeviationText(primaryReasonText, primaryReasonTone)}
+              </p>
             )}
           </div>
         </div>
@@ -1695,19 +1654,23 @@ export default async function ClientPage({
         </div>
       )}
 
-      {/* Etapa "Navegação única do cliente": as 3 abas de sempre (mesmo
-          padrão visual/estrutural já usado em Sprints: Link + role="tab",
-          nenhum cálculo/prop/comportamento interno alterado) ganham 3
-          destinos que antes eram botões separados no cabeçalho — Saldo,
-          Fechamento (planilha de fechamento mensal) e Relatório. Os 3 são
-          NAVEGAÇÃO ("pra onde eu quero ir"), não ação, por isso migram pra
-          cá — mas não são abas de verdade (não trocam o conteúdo desta
-          mesma página: Saldo/Fechamento abrem uma planilha externa em nova
-          aba, Relatório é outra rota) — por isso não recebem `role="tab"`/
-          `aria-selected`, só a mesma classe visual (`NAV_ITEM_*`), pra
-          serem PERCEBIDOS como destinos equivalentes sem fingir ser algo
-          que não são. Mesmos hrefs/target/rel/condições de sempre, nenhum
-          drawer virou página nem vice-versa. */}
+      {/* Etapa "Barra única de controles do cliente": uma ÚNICA fileira,
+          nunca mais "navegação embaixo + botões em cima". As 3 abas de
+          sempre (mesmo padrão visual/estrutural já usado em Sprints: Link +
+          role="tab", nenhum cálculo/prop/comportamento interno alterado) +
+          Saldo/Fechamento/Relatório (NAVEGAÇÃO — "pra onde eu quero ir";
+          não são abas de verdade, não trocam o conteúdo desta mesma página:
+          Saldo/Fechamento abrem planilha externa em nova aba, Relatório é
+          outra rota — por isso sem `role="tab"`/`aria-selected`, só a mesma
+          classe visual `NAV_ITEM_*`) + uma divisória discreta + Dashboard
+          ↗/Editar/Atualizar Meta/Registrar revisão (AÇÃO — "o que eu quero
+          fazer"; usam a MESMA classe visual `NAV_ITEM_*` — sempre
+          `NAV_ITEM_INACTIVE_CLASSES`, nunca `NAV_ITEM_ACTIVE_CLASSES`, já
+          que ação nunca tem estado "selecionado" — pra ficar na mesma
+          altura/alinhamento da navegação, sem virar um bloco de botões
+          visualmente diferente). Mesmos hrefs/target/rel/condições/
+          permissões de sempre em cada item; nenhum drawer virou página nem
+          vice-versa. */}
       <div role="tablist" className="mt-3 flex items-center gap-4 overflow-x-auto border-b border-overview-border text-sm">
         {AREA_TABS.map((tab) => (
           <Link
@@ -1744,6 +1707,39 @@ export default async function ClientPage({
         <Link href={reportHref} className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
           Relatório
         </Link>
+
+        {/* Divisória — só indica "começa outro grupo" (navegação → ação),
+            nunca um container/background/pill. */}
+        <span aria-hidden="true" className="h-4 w-px shrink-0 bg-overview-border" />
+
+        {client.dashboard_url && (
+          <a
+            href={client.dashboard_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES} inline-flex items-center gap-1`}
+          >
+            <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+            Dashboard
+          </a>
+        )}
+        {canManageClient && (
+          <Link href={`/clients/${client.id}/edit`} className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
+            Editar
+          </Link>
+        )}
+        {canOperate && (
+          <form action={syncClientMetaAction.bind(null, client.id)} className="contents">
+            <SubmitButton pendingChildren="Atualizando..." className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
+              Atualizar Meta
+            </SubmitButton>
+          </form>
+        )}
+        {canOperate && (
+          <Link href={newReviewHref} scroll={false} className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
+            Registrar revisão
+          </Link>
+        )}
       </div>
 
       {/* 0. Seletor de mês (Etapa 62, seção 6) — contexto temporal de toda
