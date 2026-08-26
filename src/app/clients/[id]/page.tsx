@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ClipboardCheck, BarChart3 } from "lucide-react";
+import { ClipboardCheck, BarChart3, ExternalLink } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { Button, IconButton } from "@/components/workspace/button";
@@ -128,8 +128,28 @@ const SYNC_RUN_STATUS_LABEL: Record<SyncRunSummary["status"], string> = {
  * um `<form action>`. Mesma classe visual que `Button` variant="secondary"
  * size="sm" produz, nunca uma aparência nova — só o único jeito de ter um
  * botão de submit com a mesma cara. */
+// Etapa "Navegação única do cliente": mesmo peso visual do `Button
+// variant="ghost"` do design system (sem borda/fundo, só texto + hover
+// discreto) — "Atualizar Meta"/"Sincronizar agora" são ações, não deveriam
+// chamar mais atenção que o nome do cliente. `SubmitButton` não usa
+// `Button` (precisa de `type="submit"`, que `Button` não permite), por isso
+// essa classe existe separada — mesma altura/padding/tipografia do
+// `Button` sm, só copiada aqui em vez de importar as constantes internas
+// de `button.tsx` (não exportadas).
+// Etapa "Navegação única do cliente": mesma linguagem visual pros 6
+// destinos do cliente (Visão geral/Analytics/Timeline — abas de verdade,
+// `role="tab"` — e Saldo/Fechamento/Relatório — links comuns, um deles
+// externo) — texto + indicador de estado ativo por sublinhado, nunca
+// pill/botão com borda (pedido explícito do usuário). Extraído em vez de
+// repetido em cada item pra nunca dessincronizar o visual entre os dois
+// grupos, que precisam parecer EXATAMENTE equivalentes.
+const NAV_ITEM_BASE_CLASSES =
+  "-mb-px shrink-0 rounded-t border-b-2 pb-1.5 font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
+const NAV_ITEM_ACTIVE_CLASSES = "border-brand text-brand";
+const NAV_ITEM_INACTIVE_CLASSES = "border-transparent text-overview-text-secondary hover:text-overview-text-primary";
+
 const HEADER_SUBMIT_BUTTON_CLASSES =
-  "mitza-pressable rounded-md border border-overview-border bg-overview-surface px-2.5 py-1 text-xs font-medium text-overview-text-primary transition-colors hover:bg-overview-surface-hover hover:border-overview-border-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
+  "mitza-pressable inline-flex h-7 shrink-0 items-center justify-center rounded-md px-2.5 text-xs font-medium text-overview-text-secondary transition-colors hover:bg-overview-surface-hover hover:text-overview-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
 
 const SYNC_RUN_STATUS_BADGE_CLASSES: Record<SyncRunSummary["status"], string> = {
   running: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
@@ -1422,34 +1442,24 @@ export default async function ClientPage({
           (subheader sticky compartilhado por toda /clients/[id]/**).
           Hierarquia inspirada no Relatório: avatar + nome em destaque +
           badge de status na mesma linha, contexto secundário (gestor/
-          conta Meta/tempo de relacionamento) abaixo, ações agrupadas à
-          direita. Nenhuma "Semana atual" aqui — já aparece no seletor de
-          período, logo abaixo.
-          Etapa "MITZA 2.0 — Refinamento da Identidade do Cliente": o
-          avatar (foto ou iniciais, ClientAvatar já usado na Operação) e os
-          atalhos "Dashboard"/"Saldo" (links externos configuráveis no
-          cadastro, abrem em nova aba, só aparecem quando configurados)
-          passam a fazer parte desta mesma identificação — nenhum botão
-          solto em outro lugar da página. */}
+          conta Meta/tempo de relacionamento) abaixo, ações agrupadas
+          logo depois. Nenhuma "Semana atual" aqui — já aparece no seletor
+          de período, mais abaixo. */}
       <ClientWorkspaceContext name={client.name} />
-      {/* Etapa "Cabeçalho: hierarquia visual" — três blocos claramente
-          separados (identidade → estado operacional → atualização da
-          performance), reproduzindo a distribuição do mockup aprovado:
-          identidade + ações à esquerda, dois cards compactos à direita.
-          Nenhum dado novo: os dois cards só reempacotam as variáveis
-          lastOptimization e lastPerformanceUpdate (já calculadas acima)
-          num cartão com a mesma borda/cantos/fundo usada no resto da
-          plataforma (ver AccountFollowUpPanel), em vez de texto solto no
-          cabeçalho.
-          Etapa "Unificação visual da página do cliente": tokens migrados
-          pra `overview-*` (mesma família de Operação/Dashboard/
-          Configurações); ações de navegação (Dashboard/Saldo/Ver relatório/
-          Editar) passam a usar o `Button` do design system em vez de
-          `<a>`/`<Link>` com classe escrita à mão — "Atualizar Meta" continua
-          usando `SubmitButton` (precisa de `type="submit"`, que `Button` não
-          permite), mesma aparência exata, agora com "Atualizando..." durante
-          o envio (Etapa "Padronização Global de Feedback"). Nenhum href,
-          ação ou permissão mudou. */}
+      {/* Etapa "Navegação única do cliente": NAVEGAÇÃO ("pra onde eu quero
+          ir" — Visão geral/Analytics/Timeline/Saldo/Fechamento/Relatório,
+          unificadas mais abaixo no `role="tablist"`) e AÇÃO ("o que eu
+          quero fazer" — Dashboard ↗/Editar/Atualizar Meta/Registrar
+          revisão, logo abaixo da identidade) são conceitos diferentes —
+          antes misturados na mesma fileira de botões com borda. As ações
+          continuam PERTO da identidade (é o mesmo princípio de sempre:
+          "ação próxima do contexto onde é usada"), só com peso visual bem
+          mais discreto (`variant="ghost"`) — não devem ser o primeiro
+          elemento que chama atenção ao abrir o cliente.
+          "Última otimização"/"Última atualização da performance" (bloco à
+          direita) continuam informação de ESTADO, não ação — mesmo texto
+          discreto de sempre. Nenhum href, dado, cálculo ou permissão
+          mudou nesta etapa, só reorganização e peso visual. */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -1480,27 +1490,27 @@ export default async function ClientPage({
               )}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Etapa "Navegação única do cliente": AÇÕES ("o que eu quero
+              fazer"), separadas de NAVEGAÇÃO ("pra onde eu quero ir" —
+              Saldo/Fechamento/Ver relatório saíram daqui, ver o `<div
+              role="tablist">` mais abaixo, unificados com Visão
+              geral/Analytics/Timeline). Dashboard fica — é a única
+              ferramenta EXTERNA (Looker Studio), nunca uma seção da
+              plataforma, por isso ganha o ícone de link externo. Todas
+              usam `variant="ghost"` (Editar/Registrar revisão) ou a versão
+              ghost de `HEADER_SUBMIT_BUTTON_CLASSES` (Atualizar Meta) —
+              peso visual bem mais discreto que os antigos botões com
+              borda, sem esconder nenhuma ação. Nenhum href, target,
+              permissão ou comportamento mudou. */}
+          <div className="flex flex-wrap items-center gap-1">
             {client.dashboard_url && (
-              <Button href={client.dashboard_url} target="_blank" rel="noopener noreferrer" variant="secondary" size="sm">
+              <Button href={client.dashboard_url} target="_blank" rel="noopener noreferrer" variant="ghost" size="sm">
+                <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
                 Dashboard
               </Button>
             )}
-            {client.balance_url && (
-              <Button href={client.balance_url} target="_blank" rel="noopener noreferrer" variant="secondary" size="sm">
-                Saldo
-              </Button>
-            )}
-            {client.monthly_closing_sheet_url && (
-              <Button href={client.monthly_closing_sheet_url} target="_blank" rel="noopener noreferrer" variant="secondary" size="sm">
-                Abrir fechamento mensal
-              </Button>
-            )}
-            <Button href={reportHref} variant="secondary" size="sm">
-              Ver relatório
-            </Button>
             {canManageClient && (
-              <Button href={`/clients/${client.id}/edit`} variant="secondary" size="sm">
+              <Button href={`/clients/${client.id}/edit`} variant="ghost" size="sm">
                 Editar
               </Button>
             )}
@@ -1511,15 +1521,8 @@ export default async function ClientPage({
                 </SubmitButton>
               </form>
             )}
-            {/* Etapa "Página do cliente: direção de leitura esquerda→direita":
-                "Registrar revisão" é uma ação operacional recorrente — antes
-                vivia isolada dentro do card "Última otimização", no extremo
-                direito do cabeçalho; passa a fazer parte do mesmo grupo de
-                ações à esquerda (Dashboard/Saldo/Ver relatório/Editar/
-                Atualizar Meta), mesmo `canOperate`/href/`scroll={false}` de
-                sempre (`?review=new`, drawer mais abaixo nesta página). */}
             {canOperate && (
-              <Button href={newReviewHref} scroll={false} variant="secondary" size="sm">
+              <Button href={newReviewHref} scroll={false} variant="ghost" size="sm">
                 Registrar revisão
               </Button>
             )}
@@ -1692,11 +1695,19 @@ export default async function ClientPage({
         </div>
       )}
 
-      {/* Etapa "MITZA 2.0 — Fase F": Cliente como Prontuário — abas (mesmo
+      {/* Etapa "Navegação única do cliente": as 3 abas de sempre (mesmo
           padrão visual/estrutural já usado em Sprints: Link + role="tab",
-          nenhum componente de aba novo). Cada área abaixo é um bloco já
-          existente, só reorganizado — nenhum cálculo, prop ou comportamento
-          interno de componente foi alterado. */}
+          nenhum cálculo/prop/comportamento interno alterado) ganham 3
+          destinos que antes eram botões separados no cabeçalho — Saldo,
+          Fechamento (planilha de fechamento mensal) e Relatório. Os 3 são
+          NAVEGAÇÃO ("pra onde eu quero ir"), não ação, por isso migram pra
+          cá — mas não são abas de verdade (não trocam o conteúdo desta
+          mesma página: Saldo/Fechamento abrem uma planilha externa em nova
+          aba, Relatório é outra rota) — por isso não recebem `role="tab"`/
+          `aria-selected`, só a mesma classe visual (`NAV_ITEM_*`), pra
+          serem PERCEBIDOS como destinos equivalentes sem fingir ser algo
+          que não são. Mesmos hrefs/target/rel/condições de sempre, nenhum
+          drawer virou página nem vice-versa. */}
       <div role="tablist" className="mt-3 flex items-center gap-4 overflow-x-auto border-b border-overview-border text-sm">
         {AREA_TABS.map((tab) => (
           <Link
@@ -1705,15 +1716,34 @@ export default async function ClientPage({
             scroll={false}
             role="tab"
             aria-selected={tab.key === activeArea}
-            className={`-mb-px shrink-0 rounded-t border-b-2 pb-1.5 font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
-              tab.key === activeArea
-                ? "border-brand text-brand"
-                : "border-transparent text-overview-text-secondary hover:text-overview-text-primary"
-            }`}
+            className={`${NAV_ITEM_BASE_CLASSES} ${tab.key === activeArea ? NAV_ITEM_ACTIVE_CLASSES : NAV_ITEM_INACTIVE_CLASSES}`}
           >
             {tab.label}
           </Link>
         ))}
+        {client.balance_url && (
+          <a
+            href={client.balance_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}
+          >
+            Saldo
+          </a>
+        )}
+        {client.monthly_closing_sheet_url && (
+          <a
+            href={client.monthly_closing_sheet_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}
+          >
+            Fechamento
+          </a>
+        )}
+        <Link href={reportHref} className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
+          Relatório
+        </Link>
       </div>
 
       {/* 0. Seletor de mês (Etapa 62, seção 6) — contexto temporal de toda
