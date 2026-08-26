@@ -24,6 +24,11 @@ import { syncAllMetaAction } from "@/app/global-actions";
 import { SubmitButton } from "@/app/submit-button";
 import { formatAgencyDateTime } from "@/lib/format";
 import type { UserRole } from "@/lib/supabase/database.types";
+import {
+  ACTIVE_INDICATOR_ON_DARK_ACTIVE_CLASSES,
+  ACTIVE_INDICATOR_ON_DARK_INACTIVE_CLASSES,
+  ACTIVE_INDICATOR_RAIL_CLASSES,
+} from "@/components/ui/active-indicator";
 import { SIDEBAR_COLLAPSED_WIDTH_CLASS, SIDEBAR_EXPANDED_WIDTH_CLASS, SIDEBAR_HEIGHT_CLASS } from "./app-shell-dimensions";
 
 /**
@@ -225,23 +230,17 @@ function NavLink({
     );
   }
 
-  // Etapa "Identidade Visual KOFF — Sidebar": o ativo precisa ser o item
-  // mais evidente da nav, nunca o mais apagado — antes usava `text-brand`
-  // (grafite) sobre o fundo preto fixo da Sidebar, quase ilegível depois
-  // que `--brand` deixou de ser azul (ficava com a mesma leitura de um
-  // item desabilitado). Texto branco forte + fundo levemente mais claro
-  // que o preto da Sidebar + barra lateral em areia (o "detalhe sutil" da
-  // marca, nunca um fundo grande) tornam o ativo inconfundível. Hover
-  // (item inativo) fica deliberadamente mais fraco que o ativo
-  // (`bg-white/5` vs. `bg-white/10`) pra nunca ser confundido com ele.
+  // Etapa "KOFF Sidebar Polish": estado ativo formalizado como o "KOFF
+  // Active Indicator" (`components/ui/active-indicator.ts`) — mesmas
+  // classes agora nomeadas/centralizadas, nenhuma mudança visual além do
+  // ajuste de espessura da barra (2px -> ~3px, alinhado à especificação
+  // do padrão).
   return (
     <Link
       href={item.href}
       title={item.label}
-      className={`flex items-center gap-2 rounded-md border-l-2 py-1 pl-2 pr-2.5 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
-        active
-          ? "border-sand bg-white/10 font-semibold text-white"
-          : "border-transparent font-medium text-zinc-300 hover:bg-white/5 hover:text-zinc-100"
+      className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
+        active ? ACTIVE_INDICATOR_ON_DARK_ACTIVE_CLASSES : ACTIVE_INDICATOR_ON_DARK_INACTIVE_CLASSES
       }`}
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -331,14 +330,20 @@ function SidebarContent({
        * navegação. Vira um "+" discreto ao lado do rótulo "Contas da
        * Agência" (ver agency-accounts-tree-client.tsx), disponível sem
        * roubar atenção. Este topo agora é só o controle de
-       * recolher/expandir (estrutural, não é destino de navegação). */}
-      <div className="flex shrink-0 items-center justify-end p-2">
+       * recolher/expandir (estrutural, não é destino de navegação).
+       *
+       * Etapa "KOFF Sidebar Polish": padding vertical enxuto de propósito
+       * — sem o CTA de antes, a mesma altura generosa virava vazio puro
+       * entre o botão e "Visão Geral". Ainda sobra um respiro pequeno
+       * (não gruda o botão na borda nem no primeiro item), só não é mais
+       * uma linha inteira ociosa. */}
+      <div className="flex shrink-0 items-center justify-end px-2 pb-1 pt-1.5">
         <button
           type="button"
           onClick={toggleCollapsed}
           aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
-          className="hidden shrink-0 rounded-md p-1.5 text-zinc-500 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-white/10 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:block"
+          className="hidden shrink-0 rounded-md p-1 text-zinc-500 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-white/10 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:block"
         >
           {collapsed ? (
             <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
