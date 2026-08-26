@@ -57,7 +57,6 @@ import { resolveOperationPriorityGroup } from "@/lib/operation-triage";
 import { PRIORITY_GROUP_TONE } from "@/app/operation/operation-client-card";
 import { emphasizeDeviationText } from "@/components/workspace/status-dot";
 import { SubmitButton } from "@/app/submit-button";
-import { syncClientMetaAction } from "../meta-actions";
 import { syncClientStractSourcesAction } from "../stract-sync-actions";
 import { getLatestSyncRunStatusForSources } from "@/lib/stract-sync";
 import { ClientIdentitySticky } from "../client-identity-sticky";
@@ -1732,13 +1731,14 @@ export default async function ClientPage({
             Editar
           </Link>
         )}
-        {canOperate && (
-          <form action={syncClientMetaAction.bind(null, client.id)} className="contents">
-            <SubmitButton pendingChildren="Atualizando..." className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
-              Atualizar Meta
-            </SubmitButton>
-          </form>
-        )}
+        {/* "Atualizar Meta" (syncClientMetaAction, ../meta-actions.ts) fica
+            oculto por enquanto — é a sincronização direta com a API do
+            Meta, e a operação usa a sincronização do Stract
+            ("Sincronizar agora", acima) como fonte de dados por ora. A
+            Server Action continua existindo, só sem porta de entrada
+            aqui (mesmo padrão já usado nesta página pra rotas/ações que
+            saem de navegação sem serem apagadas, ver comentário de
+            "Sprints"/"Clientes" em `sidebar.tsx`). */}
         {canOperate && (
           <Link href={newReviewHref} scroll={false} className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
             Registrar revisão
