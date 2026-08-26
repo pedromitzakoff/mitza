@@ -35,6 +35,12 @@ interface ButtonProps {
    * utilizável dentro de Server Components (sem handler) ou Client
    * Components (com handler). */
   href?: string;
+  /** Repassado direto ao `<Link>` subjacente (só faz sentido com `href`) —
+   * ex.: `scroll={false}` pra ações que abrem um drawer via querystring sem
+   * rolar a página de volta pro topo. Não faz parte de `AnchorHTMLAttributes`
+   * (é uma prop própria do `next/link`), por isso precisa ser declarada
+   * aqui em vez de já vir do `Omit<...>` abaixo. */
+  scroll?: boolean;
   children: ReactNode;
   className?: string;
 }

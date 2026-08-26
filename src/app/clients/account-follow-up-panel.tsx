@@ -78,10 +78,15 @@ export interface LastOptimizationInfo {
  * Refinamento visual (Etapa "Grid e hierarquia da página do cliente"): o
  * seletor "Consolidado | Meta Ads | Google Ads" (`channelSwitch`, montado
  * pela página — este componente nunca conhece `VisaoGeralChannelSwitch`)
- * passou a viver DENTRO da borda deste card, alinhado à direita no topo —
- * antes ficava solto num `<div>` acima do card, lido como um elemento
- * desconectado das métricas que ele controla. Puramente posicional: nenhuma
- * prop, href ou lógica de seleção mudou, só onde o slot é renderizado.
+ * passou a viver DENTRO da borda deste card, no topo — antes ficava solto
+ * num `<div>` acima do card, lido como um elemento desconectado das
+ * métricas que ele controla. Puramente posicional: nenhuma prop, href ou
+ * lógica de seleção mudou, só onde o slot é renderizado.
+ *
+ * Etapa "Página do cliente: direção de leitura esquerda→direita": o
+ * seletor deixou de ficar alinhado à direita (`justify-end`) — hoje começa
+ * na mesma coluna dos KPIs logo abaixo (`MonthlyKpiSummary`), já que ele
+ * controla exatamente esses números. Nenhuma outra mudança nesta etapa.
  */
 export function AccountFollowUpPanel({
   channelSwitch,
@@ -132,7 +137,7 @@ export function AccountFollowUpPanel({
 }) {
   return (
     <>
-      {channelSwitch && <div className="mb-2 flex justify-end">{channelSwitch}</div>}
+      {channelSwitch && <div className="mb-2">{channelSwitch}</div>}
       <MonthlyKpiSummary
         monthActual={monthActual}
         performanceGoal={performanceGoal}

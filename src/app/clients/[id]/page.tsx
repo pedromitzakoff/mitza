@@ -56,7 +56,6 @@ import { loadClientOperationalStates } from "@/lib/client-operational-state-data
 import { resolveOperationPriorityGroup } from "@/lib/operation-triage";
 import { PRIORITY_GROUP_TONE } from "@/app/operation/operation-client-card";
 import { emphasizeDeviationText } from "@/components/workspace/status-dot";
-import { SECONDARY_ACTION_BUTTON_CLASSES } from "@/components/ui/section-header";
 import { SubmitButton } from "@/app/submit-button";
 import { syncClientMetaAction } from "../meta-actions";
 import { syncClientStractSourcesAction } from "../stract-sync-actions";
@@ -1512,44 +1511,43 @@ export default async function ClientPage({
                 </SubmitButton>
               </form>
             )}
+            {/* Etapa "Página do cliente: direção de leitura esquerda→direita":
+                "Registrar revisão" é uma ação operacional recorrente — antes
+                vivia isolada dentro do card "Última otimização", no extremo
+                direito do cabeçalho; passa a fazer parte do mesmo grupo de
+                ações à esquerda (Dashboard/Saldo/Ver relatório/Editar/
+                Atualizar Meta), mesmo `canOperate`/href/`scroll={false}` de
+                sempre (`?review=new`, drawer mais abaixo nesta página). */}
+            {canOperate && (
+              <Button href={newReviewHref} scroll={false} variant="secondary" size="sm">
+                Registrar revisão
+              </Button>
+            )}
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <div className="w-full rounded-lg border border-overview-border bg-overview-surface p-3 sm:w-56">
-            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">
-              <ClipboardCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
-              {lastOptimizationLabel}
-            </p>
-            <p className="mt-1 text-base font-semibold text-overview-text-primary">{lastOptimizationValue}</p>
+        {/* Etapa "Página do cliente: direção de leitura esquerda→direita":
+            "Última otimização"/"Última atualização da performance" são
+            informação de ESTADO, não ações — deixaram de ser dois cards com
+            borda (mesmo peso visual de um KPI) e viraram duas linhas de
+            texto discretas. Nenhum dado, rótulo ou condição mudou, só o
+            peso visual: sem caixa, tipografia menor, cor secundária. */}
+        <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
+          <p className="flex flex-wrap items-center gap-1 text-xs text-overview-text-secondary">
+            <ClipboardCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
+            {lastOptimizationLabel}: <span className="font-medium text-overview-text-primary">{lastOptimizationValue}</span>
             {lastOptimization && (
-              <p className="mt-0.5 text-[11px] text-overview-text-secondary">
-                {ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}
+              <span>
+                · {ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}
                 {lastOptimizationDetail ? ` · ${lastOptimizationDetail}` : ""}
-              </p>
+              </span>
             )}
-            {/* Etapa "Restaurar Registrar Revisão no Cliente": ação de
-                criação junto do card que já lê este mesmo dado — relação
-                semântica direta com "Última otimização", nunca um CTA
-                solto. Mesmo drawer/action de sempre (`?review=new`,
-                renderizado mais abaixo nesta página); `canOperate` é o
-                mesmo gate das outras ações de criação da página. */}
-            {canOperate && (
-              <Link href={newReviewHref} scroll={false} className={`mt-1.5 ${SECONDARY_ACTION_BUTTON_CLASSES}`}>
-                Registrar revisão
-              </Link>
-            )}
-          </div>
-          <div className="w-full rounded-lg border border-overview-border bg-overview-surface p-3 sm:w-56">
-            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">
-              <BarChart3 className="h-3 w-3 shrink-0" aria-hidden="true" />
-              {lastPerformanceUpdateLabel}
-            </p>
-            <p className="mt-1 text-base font-semibold text-overview-text-primary">{lastPerformanceUpdateValue}</p>
-            {lastPerformanceUpdateSourceLabel && (
-              <p className="mt-0.5 text-[11px] text-overview-text-secondary">Origem: {lastPerformanceUpdateSourceLabel}</p>
-            )}
-          </div>
+          </p>
+          <p className="flex flex-wrap items-center gap-1 text-xs text-overview-text-secondary">
+            <BarChart3 className="h-3 w-3 shrink-0" aria-hidden="true" />
+            {lastPerformanceUpdateLabel}: <span className="font-medium text-overview-text-primary">{lastPerformanceUpdateValue}</span>
+            {lastPerformanceUpdateSourceLabel && <span>· Origem: {lastPerformanceUpdateSourceLabel}</span>}
+          </p>
         </div>
       </div>
 
@@ -1606,23 +1604,28 @@ export default async function ClientPage({
           "horário de captura" é redundante/confuso no caso saudável
           (tentativa revertida). */}
       {stractImportSourceIds.length > 0 ? (
-        <div className="rounded-md border border-overview-border bg-overview-surface px-3 py-2 text-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                  latestSyncStatus
-                    ? SYNC_RUN_STATUS_BADGE_CLASSES[latestSyncStatus.status]
-                    : "bg-overview-surface-subtle text-overview-text-secondary"
-                }`}
-              >
-                {latestSyncStatus ? SYNC_RUN_STATUS_LABEL[latestSyncStatus.status] : "Nunca sincronizado"}
-              </span>
-              <span className="text-xs text-overview-text-secondary">
-                Stract{latestSyncStatus ? ` · sincronizado ${formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant)}` : ""}
-                {latestSpendDate ? ` · dados até ${formatShortDate(latestSpendDate)}` : ""}
-              </span>
-            </div>
+        // Etapa "Página do cliente: direção de leitura esquerda→direita":
+        // sem caixa própria (era `rounded-md border ... px-3 py-2`) — vira
+        // uma linha discreta entre o cabeçalho e as abas, mesmo texto/dado
+        // de sempre. "Sincronizar agora" saiu do extremo direito
+        // (`justify-between`) e passou a ficar colado ao status que ele
+        // atualiza (contexto e controle lado a lado, nunca um esticado até
+        // a borda oposta do outro).
+        <div className="text-xs text-overview-text-secondary">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                latestSyncStatus
+                  ? SYNC_RUN_STATUS_BADGE_CLASSES[latestSyncStatus.status]
+                  : "bg-overview-surface-subtle text-overview-text-secondary"
+              }`}
+            >
+              {latestSyncStatus ? SYNC_RUN_STATUS_LABEL[latestSyncStatus.status] : "Nunca sincronizado"}
+            </span>
+            <span>
+              Stract{latestSyncStatus ? ` · sincronizado ${formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant)}` : ""}
+              {latestSpendDate ? ` · dados até ${formatShortDate(latestSpendDate)}` : ""}
+            </span>
             {canOperate && (
               <form action={syncClientStractSourcesAction.bind(null, client.id)}>
                 <SubmitButton pendingChildren="Sincronizando..." className={HEADER_SUBMIT_BUTTON_CLASSES}>
@@ -1632,7 +1635,7 @@ export default async function ClientPage({
             )}
           </div>
           {isAdmin && recentSyncRuns.length > 0 && (
-            <details className="mt-2 border-t border-overview-border pt-2">
+            <details className="mt-1.5">
               <summary className="cursor-pointer select-none text-xs font-medium text-overview-text-primary">Detalhes e histórico</summary>
               <ul className="mt-2 flex flex-col gap-2">
                 {recentSyncRuns.map((run) => (
@@ -1689,27 +1692,6 @@ export default async function ClientPage({
         </div>
       )}
 
-      {/* 0. Seletor de mês (Etapa 62, seção 6) — contexto temporal de toda
-          a página; mesmo padrão de navegação mensal já usado em
-          Relatórios/Visão Geral/Sprints (`?month=YYYY-MM` + shiftMonthParam),
-          nenhum componente novo de seletor. Etapa 75: removido o texto
-          "Período em análise" — o próprio seletor já comunica o período,
-          sem precisar de rótulo. Fica fora das abas — é contexto de toda a
-          página, não de uma área específica.
-          Etapa "Unificação visual da página do cliente": mesmo `IconButton`
-          de navegação de mês já usado na Visão Geral da agência/Operação. */}
-      <div className="mt-3 flex items-center justify-end gap-2">
-        <div className="flex items-center gap-0.5 rounded-md border border-overview-border bg-overview-surface px-1 py-1 text-sm">
-          <IconButton href={prevMonthHref} aria-label="Mês anterior" variant="ghost" size="sm">
-            &lsaquo;
-          </IconButton>
-          <span className="min-w-[6rem] px-1.5 text-center text-sm font-medium text-overview-text-primary">{monthLabel}</span>
-          <IconButton href={nextMonthHref} aria-label="Próximo mês" variant="ghost" size="sm">
-            &rsaquo;
-          </IconButton>
-        </div>
-      </div>
-
       {/* Etapa "MITZA 2.0 — Fase F": Cliente como Prontuário — abas (mesmo
           padrão visual/estrutural já usado em Sprints: Link + role="tab",
           nenhum componente de aba novo). Cada área abaixo é um bloco já
@@ -1732,6 +1714,33 @@ export default async function ClientPage({
             {tab.label}
           </Link>
         ))}
+      </div>
+
+      {/* 0. Seletor de mês (Etapa 62, seção 6) — contexto temporal de toda
+          a página; mesmo padrão de navegação mensal já usado em
+          Relatórios/Visão Geral/Sprints (`?month=YYYY-MM` + shiftMonthParam),
+          nenhum componente novo de seletor. Etapa 75: removido o texto
+          "Período em análise" — o próprio seletor já comunica o período,
+          sem precisar de rótulo. Etapa "Unificação visual da página do
+          cliente": mesmo `IconButton` de navegação de mês já usado na Visão
+          Geral da agência/Operação.
+          Etapa "Página do cliente: direção de leitura esquerda→direita":
+          antes vivia numa faixa própria ACIMA das abas, alinhado à direita
+          (`justify-end`) — um elemento solto no canto oposto de tudo mais.
+          Passa a ficar logo ABAIXO das abas, à esquerda, na mesma coluna
+          delas — segue sendo contexto de toda a página (não muda de mês
+          dentro de uma aba específica), só ganhou relação visual com o que
+          ele contextualiza. Nenhuma navegação, filtro ou estado mudou. */}
+      <div className="mt-2 flex items-center gap-2">
+        <div className="flex items-center gap-0.5 rounded-md border border-overview-border bg-overview-surface px-1 py-1 text-sm">
+          <IconButton href={prevMonthHref} aria-label="Mês anterior" variant="ghost" size="sm">
+            &lsaquo;
+          </IconButton>
+          <span className="min-w-[6rem] px-1.5 text-center text-sm font-medium text-overview-text-primary">{monthLabel}</span>
+          <IconButton href={nextMonthHref} aria-label="Próximo mês" variant="ghost" size="sm">
+            &rsaquo;
+          </IconButton>
+        </div>
       </div>
 
       {/* Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente": a Visão
