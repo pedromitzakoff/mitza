@@ -183,6 +183,21 @@ export function buildAnalyticsKpiCards(
         value: summary.revenue !== null ? formatCurrencyValue(summary.revenue) : "—",
         comparison: summary.revenue !== null ? buildPercentChangeComparison(summary.revenue, previousSummary?.revenue ?? null, "higher_is_better") : null,
       },
+      // Etapa "Visão Geral: decisão em 5 segundos": Ticket médio saiu da
+      // Visão Geral (era ruído numa tela pensada pra decisão em 5 segundos)
+      // e passou a viver só aqui — Analytics é a tela de investigação, o
+      // lugar certo pra mais um dado de contexto sobre a mesma receita já
+      // mostrada acima. Mesmo valor de sempre (`PerformanceSummary.averageTicket`),
+      // nenhum cálculo novo.
+      {
+        key: "averageTicket",
+        label: "Ticket médio",
+        value: summary.averageTicket !== null ? formatCurrencyValue(summary.averageTicket) : "—",
+        comparison:
+          summary.averageTicket !== null
+            ? buildPercentChangeComparison(summary.averageTicket, previousSummary?.averageTicket ?? null, "higher_is_better")
+            : null,
+      },
     ];
   }
 

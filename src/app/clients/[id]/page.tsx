@@ -1745,13 +1745,13 @@ export default async function ClientPage({
           a Fase F já tinha identificado como fragmentação). */}
       {activeArea === "visao-geral" && (
         <>
-          {/* Indicadores do mês — investimento, resultados, custo por
-              resultado e meta (as 4 métricas principais, mesmo peso
-              visual), diagnóstico de meta, resultados por canal, última
-              otimização e tracking operacional. A meta do mês (antes numa
-              aba própria, depois um card "Performance do mês" à parte)
-              agora é só mais uma destas métricas — nunca um fluxo
-              separado.
+          {/* Indicadores do mês — investimento, resultados e custo por
+              resultado (com a meta como texto auxiliar discreto do custo,
+              nunca mais uma métrica própria), progresso da meta mensal,
+              resultados por canal, última otimização e tracking
+              operacional. A meta do mês (antes numa aba própria, depois um
+              card "Performance do mês" à parte) agora é só um dado a mais
+              de contexto do custo por resultado — nunca um fluxo separado.
 
               Seletor "Consolidado | Meta Ads | Google Ads" — pedido
               explícito do usuário: escopa Indicadores do mês, cada Sprint,

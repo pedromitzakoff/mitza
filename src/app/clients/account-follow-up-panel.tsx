@@ -6,7 +6,7 @@ import type { PerformanceGoal } from "@/lib/performance-goals";
 import type { TrafficChannel } from "@/lib/traffic-channels";
 import type { DailyResultSeries } from "@/lib/daily-results";
 import { MonthlyKpiSummary } from "./monthly-kpi-summary";
-import { DailyResultsEvolution } from "./daily-results-evolution";
+import { MonthlyGoalProgress } from "./monthly-goal-progress";
 import { ResultsByChannel } from "./results-by-channel";
 import { CollapsibleAccountHistory } from "./collapsible-account-history";
 
@@ -52,12 +52,15 @@ export interface LastOptimizationInfo {
  * performance muda — os 4 KPIs e o diagnóstico só consomem valores já
  * calculados pela página; nunca recomputados aqui.
  *
- * Etapa "Evolução diária de resultados": novo sub-bloco entre os KPIs e
- * "Resultados por canal" — responde "quantos resultados por dia,
- * recentemente" (granularidade que não existia na Visão Geral antes desta
- * etapa), diferente do "quanto no mês" que a grade acima já responde. Evolui
- * o card já existente (pedido explícito do usuário: nunca um card novo) —
- * `DailyResultsEvolution` é só mais uma seção deste mesmo painel.
+ * Etapa "Visão Geral: decisão em 5 segundos": o sub-bloco entre os KPIs e
+ * "Resultados por canal" deixou de ser a "Evolução diária de resultados"
+ * (gráfico de 7 barras, granularidade de investigação) e virou "Meta
+ * mensal" (`MonthlyGoalProgress`) — quanto já foi feito no mês, qual a
+ * meta, que % isso representa e se o ritmo está adequado. A granularidade
+ * diária não foi removida do produto: continua disponível, com mais
+ * profundidade, no Analytics (`AnalyticsTrendChart`) — só deixou de
+ * competir com a decisão rápida que esta tela precisa responder. Evolui o
+ * card já existente (pedido explícito do usuário: nunca um card novo).
  *
  * Refinamento visual (Etapa "Grid e hierarquia da página do cliente"): o
  * seletor "Consolidado | Meta Ads | Google Ads" (`channelSwitch`, montado
@@ -124,12 +127,13 @@ export function AccountFollowUpPanel({
         configureObjectiveHref={configureObjectiveHref}
       />
 
-      {performanceGoal && dailyResultSeries && (
-        <DailyResultsEvolution
-          series={dailyResultSeries}
-          targetResultCount={targetResultCount ?? null}
-          expectedToDate={expectedResultsToDate ?? null}
+      {performanceGoal && targetResultCount != null && targetResultCount > 0 && expectedResultsToDate != null && (
+        <MonthlyGoalProgress
+          goal={performanceGoal}
           monthResultCount={performanceSummary?.resultCount ?? 0}
+          targetResultCount={targetResultCount}
+          expectedToDate={expectedResultsToDate}
+          series={dailyResultSeries}
         />
       )}
 
