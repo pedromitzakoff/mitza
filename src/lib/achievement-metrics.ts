@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, DataSyncRunStatusDb, OperationalEventType as OperationalEventTypeValue, TrafficChannelDb } from "@/lib/supabase/database.types";
 import type { TrafficChannel } from "@/lib/traffic-channels";
-import { AVAILABLE_TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
+import { AVAILABLE_TRAFFIC_CHANNELS, TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
+import type { AchievementSourceInfo } from "@/lib/achievement-types";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { safeDivide, computeRoas } from "@/lib/performance";
 import { resolveCostScopeComparability, type ChannelMetrics } from "@/lib/channel-metrics";
@@ -97,6 +98,12 @@ export async function resolveClientActiveChannels(supabase: SupabaseClient<Datab
 export interface ClientSyncTrust {
   trusted: boolean;
   reason: "success" | "no_active_source" | "partial" | "failed" | "running" | "no_run_yet";
+  /** `started_at` do run mais recente entre as fontes ativas do cliente —
+   * `null` quando não há nenhum run ainda. Nunca participa da decisão de
+   * confiança (isso é só `resolveTrustFromLatestStatuses`, abaixo, testada
+   * isoladamente em `scripts/test-achievement-backfill.ts`); é metadata de
+   * proveniência pra Conquistas (`AchievementSourceInfo`). */
+  latestRunStartedAt: string | null;
 }
 
 /** Determinação de aprovação nº3: `partial` bloqueia igual a `failed` —
@@ -113,7 +120,10 @@ export interface ClientSyncTrust {
  * recente) — esta função só aplica a régua da determinação de aprovação
  * nº3: `success`/`empty` liberam, qualquer outra coisa (inclusive fonte
  * sem nenhum run ainda) trava. */
-export function resolveTrustFromLatestStatuses(activeSourceCount: number, latestStatusPerSource: DataSyncRunStatusDb[]): ClientSyncTrust {
+export function resolveTrustFromLatestStatuses(
+  activeSourceCount: number,
+  latestStatusPerSource: DataSyncRunStatusDb[],
+): Omit<ClientSyncTrust, "latestRunStartedAt"> {
   if (activeSourceCount === 0) return { trusted: false, reason: "no_active_source" };
   if (latestStatusPerSource.length < activeSourceCount) return { trusted: false, reason: "no_run_yet" };
 
@@ -129,7 +139,7 @@ export function resolveTrustFromLatestStatuses(activeSourceCount: number, latest
 export async function resolveClientSyncTrust(supabase: SupabaseClient<Database>, clientId: string): Promise<ClientSyncTrust> {
   const { data: sources } = await supabase.from("import_sources").select("id").eq("client_id", clientId).eq("enabled", true);
   const importSourceIds = (sources ?? []).map((r) => r.id);
-  if (importSourceIds.length === 0) return resolveTrustFromLatestStatuses(0, []);
+  if (importSourceIds.length === 0) return { ...resolveTrustFromLatestStatuses(0, []), latestRunStartedAt: null };
 
   const { data: runs } = await supabase
     .from("data_sync_runs")
@@ -142,7 +152,11 @@ export async function resolveClientSyncTrust(supabase: SupabaseClient<Database>,
     if (!latestStatusBySource.has(run.import_source_id)) latestStatusBySource.set(run.import_source_id, run.status);
   }
 
-  return resolveTrustFromLatestStatuses(importSourceIds.length, Array.from(latestStatusBySource.values()));
+  // `runs` já vem ordenado por started_at desc — o primeiro elemento é o
+  // run mais recente entre TODAS as fontes ativas, independente de status.
+  const latestRunStartedAt = runs && runs.length > 0 ? runs[0].started_at : null;
+
+  return { ...resolveTrustFromLatestStatuses(importSourceIds.length, Array.from(latestStatusBySource.values())), latestRunStartedAt };
 }
 
 /** Pontos diários consolidados (soma dos canais ATIVOS do cliente) —
@@ -343,6 +357,19 @@ export async function buildClientAchievementContext(
     goalByMonth.set(previousMonth, previousGoal);
   }
 
+  // Etapa "Conquistas Auditáveis": capturado uma vez aqui (nunca recalculado
+  // por regra individual) — o "Origem" que a Página de Detalhes mostra é o
+  // estado da sincronização NO MOMENTO da avaliação, mesmo que o cliente
+  // sincronize de novo depois (a conquista já foi decidida e não muda
+  // retroativamente). `null` quando não confiável — nenhuma conquista nasce
+  // de qualquer forma nesse caso, então `source` nunca chega a ser usado.
+  const sourceInfo: AchievementSourceInfo | null = syncTrust.trusted
+    ? {
+        channelLabel: activeChannels.map((channel) => TRAFFIC_CHANNELS[channel as TrafficChannel].label).join(" + ") || "Sem canal ativo",
+        syncedAt: syncTrust.latestRunStartedAt,
+      }
+    : null;
+
   return {
     syncTrust,
     context: {
@@ -353,6 +380,7 @@ export async function buildClientAchievementContext(
       tracksRevenue: client.performanceGoal === "sales",
       dailyPoints,
       goalByMonth,
+      sourceInfo,
     },
   };
 }

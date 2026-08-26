@@ -25,7 +25,7 @@ import {
   STREAK_LOOKBACK_DAYS,
   WINDOW_SAMPLE_POLICY,
 } from "@/lib/achievement-thresholds";
-import type { AchievementCandidate } from "@/lib/achievement-types";
+import type { AchievementCandidate, AchievementSourceInfo } from "@/lib/achievement-types";
 
 /**
  * As 12 regras de Cliente da V1 — cada função é pura (sem I/O), recebe o
@@ -76,6 +76,21 @@ export interface ClientAchievementContext {
    * corrente + anterior) — resolvido sob demanda por `achievement-metrics.ts`,
    * nunca todo o histórico. */
   goalByMonth: Map<string, ClientMonthlyGoalInfo>;
+  /** Etapa "Conquistas Auditáveis" — capturado uma vez por `achievement-metrics.ts`,
+   * nunca por regra individual (ver `AchievementSourceInfo`). O motor
+   * (`achievement-engine.ts`) anexa isto a todo candidato deste cliente
+   * antes de persistir; as regras abaixo nunca leem nem preenchem este
+   * campo diretamente. */
+  sourceInfo: AchievementSourceInfo | null;
+}
+
+/** Data mais antiga com dado real (`dataPresent`) no histórico carregado —
+ * "desde quando" um recorde vale, nunca "desde sempre" vago. `null` só no
+ * caso teórico de nenhum dia ter dado algum (nunca aconteceria numa regra de
+ * recorde: ela já exigiu amostra válida antes de chegar aqui). */
+function historySinceDate(ctx: ClientAchievementContext): string | undefined {
+  const firstPresent = ctx.dailyPoints.find((p) => p.dataPresent);
+  return firstPresent?.date;
 }
 
 function pointsMap(ctx: ClientAchievementContext): Map<string, ClientDailyPoint> {
@@ -164,6 +179,7 @@ function bestRollingWeekRecord(
 
   const formatted = formatValue(candidateWindow.value);
   const startDate = addDays(candidateWindow.endDate, -6);
+  const comparisonStartDate = addDays(bestPrior.endDate, -6);
 
   return {
     type,
@@ -182,8 +198,15 @@ function bestRollingWeekRecord(
       windowEnd: candidateWindow.endDate,
       windowLabel: "7 dias",
       comparisonActual: bestPrior.value,
+      comparisonWindowStart: comparisonStartDate,
+      comparisonWindowEnd: bestPrior.endDate,
       sampleResultCount: candidateWindow.agg.resultCount,
       sampleSpend: candidateWindow.agg.spend,
+      sampleRevenue: candidateWindow.agg.revenue,
+      comparisonResultCount: bestPrior.agg.resultCount,
+      comparisonSpend: bestPrior.agg.spend,
+      comparisonRevenue: bestPrior.agg.revenue,
+      historySinceDate: historySinceDate(ctx),
     },
     headline,
     detail: detailOf(formatted),
@@ -278,8 +301,15 @@ export function ruleRecordBestMonthClosed(ctx: ClientAchievementContext): Achiev
       windowEnd: ctx.yesterday,
       windowLabel: "mês",
       comparisonActual: best.agg.resultCount,
+      comparisonWindowStart: firstDayOfMonth(best.yearMonth),
+      comparisonWindowEnd: lastDayOfMonth(best.yearMonth),
       sampleResultCount: closedAgg.resultCount,
       sampleSpend: closedAgg.spend,
+      sampleRevenue: closedAgg.revenue,
+      comparisonResultCount: best.agg.resultCount,
+      comparisonSpend: best.agg.spend,
+      comparisonRevenue: best.agg.revenue,
+      historySinceDate: historySinceDate(ctx),
     },
     headline: `${ctx.clientName} teve o melhor mês da história`,
     detail: `${closedAgg.resultCount} resultados no mês, superando o recorde anterior de ${best.agg.resultCount}`,
@@ -305,20 +335,20 @@ export function ruleRecordCurrentMonthPaceBeatsHistory(ctx: ClientAchievementCon
 
   const priorMonths = distinctMonthsBefore(ctx.dailyPoints, currentMonth);
   const priorTotals = priorMonths
-    .map((ym) => aggregateWindow(pointsForMonth(map, ym)))
-    .filter((agg) => windowSampleIsValid(agg, WINDOW_SAMPLE_POLICY.month));
+    .map((ym) => ({ yearMonth: ym, agg: aggregateWindow(pointsForMonth(map, ym)) }))
+    .filter(({ agg }) => windowSampleIsValid(agg, WINDOW_SAMPLE_POLICY.month));
 
   if (priorTotals.length === 0) return null;
 
-  const bestClosed = priorTotals.reduce((b, agg) => (agg.resultCount > b.resultCount ? agg : b));
-  if (currentAgg.resultCount <= bestClosed.resultCount) return null;
+  const bestClosed = priorTotals.reduce((b, m) => (m.agg.resultCount > b.agg.resultCount ? m : b));
+  if (currentAgg.resultCount <= bestClosed.agg.resultCount) return null;
 
   // Só dispara no primeiro dia em que a virada acontece: se ONTEM já tivesse
   // ultrapassado o recorde, não é novidade hoje.
   if (elapsedDays > 1) {
     const previousDayPoints = windowPointsEndingAt(map, addDays(ctx.yesterday, -1), elapsedDays - 1);
     const previousDayAgg = aggregateWindow(previousDayPoints);
-    if (windowSampleIsValid(previousDayAgg, coveragePolicy) && previousDayAgg.resultCount > bestClosed.resultCount) return null;
+    if (windowSampleIsValid(previousDayAgg, coveragePolicy) && previousDayAgg.resultCount > bestClosed.agg.resultCount) return null;
   }
 
   const daysRemaining = listDaysRemainingInMonth(ctx.yesterday);
@@ -339,12 +369,19 @@ export function ruleRecordCurrentMonthPaceBeatsHistory(ctx: ClientAchievementCon
       windowStart: firstDayOfMonth(currentMonth),
       windowEnd: ctx.yesterday,
       windowLabel: "mês em andamento",
-      comparisonActual: bestClosed.resultCount,
+      comparisonActual: bestClosed.agg.resultCount,
+      comparisonWindowStart: firstDayOfMonth(bestClosed.yearMonth),
+      comparisonWindowEnd: lastDayOfMonth(bestClosed.yearMonth),
       sampleResultCount: currentAgg.resultCount,
       sampleSpend: currentAgg.spend,
+      sampleRevenue: currentAgg.revenue,
+      comparisonResultCount: bestClosed.agg.resultCount,
+      comparisonSpend: bestClosed.agg.spend,
+      comparisonRevenue: bestClosed.agg.revenue,
+      historySinceDate: historySinceDate(ctx),
     },
     headline: `Novo recorde mensal em andamento`,
-    detail: `Com ${daysRemaining} dias restantes, ${ctx.clientName} já superou seu maior volume mensal de resultados (recorde anterior: ${bestClosed.resultCount})`,
+    detail: `Com ${daysRemaining} dias restantes, ${ctx.clientName} já superou seu maior volume mensal de resultados (recorde anterior: ${bestClosed.agg.resultCount})`,
   };
 }
 
@@ -421,6 +458,8 @@ export function ruleGoalMonthlyResultReached(ctx: ClientAchievementContext): Ach
       windowStart: firstDayOfMonth(currentMonth),
       windowEnd: ctx.yesterday,
       windowLabel: "mês",
+      sampleSpend: currentAgg.spend,
+      sampleRevenue: currentAgg.revenue,
     },
     headline: thresholdToday > 1 ? `${ctx.clientName} superou a meta mensal` : `${ctx.clientName} atingiu a meta mensal`,
     detail:
@@ -474,6 +513,11 @@ export function ruleConsistencyCpaBelowTarget(ctx: ClientAchievementContext): Ac
   const goal = monthGoal(ctx, ctx.yesterday);
   const point = pointsMap(ctx).get(ctx.yesterday);
   const cpaToday = point ? dailyCpa(point) : null;
+  // Janela de CALENDÁRIO entre o início da sequência e ontem (inclui os dias
+  // "neutro" no meio, que não quebram a sequência mas fazem parte do
+  // período real) — evidência bruta de investimento/resultado por trás do
+  // CPA do dia, nunca uma segunda régua de elegibilidade.
+  const streakWindowAgg = aggregateWindow(ctx.dailyPoints.filter((p) => p.date >= streakStartDate && p.date <= ctx.yesterday));
 
   return {
     type: "client_consistency_cpa_below_target",
@@ -492,6 +536,9 @@ export function ruleConsistencyCpaBelowTarget(ctx: ClientAchievementContext): Ac
       windowStart: streakStartDate,
       windowEnd: ctx.yesterday,
       streakDays: threshold,
+      sampleSpend: streakWindowAgg.spend,
+      sampleResultCount: streakWindowAgg.resultCount,
+      sampleRevenue: streakWindowAgg.revenue,
     },
     headline: `${ctx.clientName} completou ${threshold} dias de mídia consecutivos abaixo da meta de CPA`,
     detail:
@@ -508,18 +555,21 @@ export function ruleConsistencyCpaBelowTarget(ctx: ClientAchievementContext): Ac
 // ontem (evita floodar um patamar sustentado por semanas).
 // ---------------------------------------------------------------------------
 
-function evolutionCpaImprovedAsOf(ctx: ClientAchievementContext, asOfDate: string): { passes: boolean; currentCpa: number | null; previousCpa: number | null } {
+function evolutionCpaImprovedAsOf(
+  ctx: ClientAchievementContext,
+  asOfDate: string,
+): { passes: boolean; currentCpa: number | null; previousCpa: number | null; current: ReturnType<typeof aggregateWindow>; previous: ReturnType<typeof aggregateWindow> } {
   const map = pointsMap(ctx);
   const current = aggregateWindow(windowPointsEndingAt(map, asOfDate, 7));
   const previous = aggregateWindow(windowPointsEndingAt(map, addDays(asOfDate, -7), 7));
   if (!windowSampleIsValid(current, WINDOW_SAMPLE_POLICY.d7) || !windowSampleIsValid(previous, WINDOW_SAMPLE_POLICY.d7)) {
-    return { passes: false, currentCpa: current.cpa, previousCpa: previous.cpa };
+    return { passes: false, currentCpa: current.cpa, previousCpa: previous.cpa, current, previous };
   }
   if (current.cpa === null || previous.cpa === null || previous.cpa === 0) {
-    return { passes: false, currentCpa: current.cpa, previousCpa: previous.cpa };
+    return { passes: false, currentCpa: current.cpa, previousCpa: previous.cpa, current, previous };
   }
   const improvementPct = (previous.cpa - current.cpa) / previous.cpa;
-  return { passes: improvementPct >= EVOLUTION_CPA_IMPROVEMENT_PCT, currentCpa: current.cpa, previousCpa: previous.cpa };
+  return { passes: improvementPct >= EVOLUTION_CPA_IMPROVEMENT_PCT, currentCpa: current.cpa, previousCpa: previous.cpa, current, previous };
 }
 
 export function ruleEvolutionCpaImproved(ctx: ClientAchievementContext): AchievementCandidate | null {
@@ -548,26 +598,35 @@ export function ruleEvolutionCpaImproved(ctx: ClientAchievementContext): Achieve
       windowStart: addDays(ctx.yesterday, -6),
       comparisonWindowStart: addDays(ctx.yesterday, -13),
       comparisonWindowEnd: addDays(ctx.yesterday, -7),
+      sampleSpend: today.current.spend,
+      sampleResultCount: today.current.resultCount,
+      sampleRevenue: today.current.revenue,
+      comparisonSpend: today.previous.spend,
+      comparisonResultCount: today.previous.resultCount,
+      comparisonRevenue: today.previous.revenue,
     },
     headline: `CPA da ${ctx.clientName} melhorou ${formatPercent(improvementPct * 100)} vs. os 7 dias anteriores`,
     detail: `${formatCurrency(today.currentCpa ?? 0)} contra ${formatCurrency(today.previousCpa ?? 0)} no período anterior`,
   };
 }
 
-function evolutionRoasGrowthAsOf(ctx: ClientAchievementContext, asOfDate: string): { passes: boolean; currentRoas: number | null; previousRoas: number | null } {
+function evolutionRoasGrowthAsOf(
+  ctx: ClientAchievementContext,
+  asOfDate: string,
+): { passes: boolean; currentRoas: number | null; previousRoas: number | null; current: ReturnType<typeof aggregateWindow>; previous: ReturnType<typeof aggregateWindow> } {
   const map = pointsMap(ctx);
   const current = aggregateWindow(windowPointsEndingAt(map, asOfDate, 7));
   const previous = aggregateWindow(windowPointsEndingAt(map, addDays(asOfDate, -7), 7));
   if (!windowSampleIsValid(current, WINDOW_SAMPLE_POLICY.d7) || !windowSampleIsValid(previous, WINDOW_SAMPLE_POLICY.d7)) {
-    return { passes: false, currentRoas: current.roas ?? null, previousRoas: previous.roas ?? null };
+    return { passes: false, currentRoas: current.roas ?? null, previousRoas: previous.roas ?? null, current, previous };
   }
   const currentRoas = current.roas ?? null;
   const previousRoas = previous.roas ?? null;
   if (currentRoas === null || previousRoas === null || previousRoas === 0) {
-    return { passes: false, currentRoas, previousRoas };
+    return { passes: false, currentRoas, previousRoas, current, previous };
   }
   const growthPct = (currentRoas - previousRoas) / previousRoas;
-  return { passes: growthPct >= EVOLUTION_ROAS_GROWTH_PCT, currentRoas, previousRoas };
+  return { passes: growthPct >= EVOLUTION_ROAS_GROWTH_PCT, currentRoas, previousRoas, current, previous };
 }
 
 export function ruleEvolutionRoasGrowth(ctx: ClientAchievementContext): AchievementCandidate | null {
@@ -597,6 +656,12 @@ export function ruleEvolutionRoasGrowth(ctx: ClientAchievementContext): Achievem
       windowStart: addDays(ctx.yesterday, -6),
       comparisonWindowStart: addDays(ctx.yesterday, -13),
       comparisonWindowEnd: addDays(ctx.yesterday, -7),
+      sampleSpend: today.current.spend,
+      sampleResultCount: today.current.resultCount,
+      sampleRevenue: today.current.revenue,
+      comparisonSpend: today.previous.spend,
+      comparisonResultCount: today.previous.resultCount,
+      comparisonRevenue: today.previous.revenue,
     },
     headline: `ROAS da ${ctx.clientName} cresceu ${formatPercent(growthPct * 100)} vs. os 7 dias anteriores`,
     detail: `${(today.currentRoas ?? 0).toFixed(2)}x contra ${(today.previousRoas ?? 0).toFixed(2)}x no período anterior`,
@@ -613,20 +678,29 @@ export function ruleEvolutionRoasGrowth(ctx: ClientAchievementContext): Achievem
 function scaleEfficientAsOf(
   ctx: ClientAchievementContext,
   asOfDate: string,
-): { passes: boolean; currentSpend: number; previousSpend: number; currentCpa: number | null; target: number | null } {
+): {
+  passes: boolean;
+  currentSpend: number;
+  previousSpend: number;
+  currentCpa: number | null;
+  target: number | null;
+  currentResultCount: number;
+  previousResultCount: number;
+} {
   const map = pointsMap(ctx);
   const current = aggregateWindow(windowPointsEndingAt(map, asOfDate, 7));
   const previous = aggregateWindow(windowPointsEndingAt(map, addDays(asOfDate, -7), 7));
   const goal = monthGoal(ctx, asOfDate);
+  const base = { currentSpend: current.spend, previousSpend: previous.spend, currentCpa: current.cpa, currentResultCount: current.resultCount, previousResultCount: previous.resultCount };
 
   if (!windowSampleIsValid(current, WINDOW_SAMPLE_POLICY.d7) || !windowSampleIsValid(previous, WINDOW_SAMPLE_POLICY.d7)) {
-    return { passes: false, currentSpend: current.spend, previousSpend: previous.spend, currentCpa: current.cpa, target: goal?.targetCostPerResult ?? null };
+    return { passes: false, ...base, target: goal?.targetCostPerResult ?? null };
   }
   if (!goal || goal.targetCostPerResult === null || !goal.scopeComparable) {
-    return { passes: false, currentSpend: current.spend, previousSpend: previous.spend, currentCpa: current.cpa, target: null };
+    return { passes: false, ...base, target: null };
   }
   if (previous.spend === 0 || current.cpa === null) {
-    return { passes: false, currentSpend: current.spend, previousSpend: previous.spend, currentCpa: current.cpa, target: goal.targetCostPerResult };
+    return { passes: false, ...base, target: goal.targetCostPerResult };
   }
 
   const growthPct = (current.spend - previous.spend) / previous.spend;
@@ -634,9 +708,7 @@ function scaleEfficientAsOf(
 
   return {
     passes: growthPct >= SCALE_MIN_INVESTMENT_GROWTH_PCT && withinTarget,
-    currentSpend: current.spend,
-    previousSpend: previous.spend,
-    currentCpa: current.cpa,
+    ...base,
     target: goal.targetCostPerResult,
   };
 }
@@ -668,6 +740,8 @@ export function ruleScaleInvestmentGrowthWithEfficiency(ctx: ClientAchievementCo
       windowStart: addDays(ctx.yesterday, -6),
       comparisonWindowStart: addDays(ctx.yesterday, -13),
       comparisonWindowEnd: addDays(ctx.yesterday, -7),
+      sampleResultCount: today.currentResultCount,
+      comparisonResultCount: today.previousResultCount,
     },
     headline: `${ctx.clientName} escalou investimento mantendo eficiência`,
     detail:
@@ -712,6 +786,9 @@ export function ruleRecoveryCpaBackWithinTarget(ctx: ClientAchievementContext): 
       target: goal?.targetCostPerResult ?? null,
       windowStart: result.badStreakStartDate ?? undefined,
       windowEnd: ctx.yesterday,
+      sampleSpend: point?.spend,
+      sampleResultCount: point?.resultCount,
+      sampleRevenue: point?.revenue,
     },
     headline: `Performance recuperada`,
     detail:

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
-import type { AchievementMetricSnapshot, AchievementScope, AchievementSeverity } from "@/lib/achievement-types";
+import type { AchievementMetricSnapshot, AchievementScope, AchievementSeverity, AchievementSourceInfo } from "@/lib/achievement-types";
 
 /**
  * Camada de LEITURA da página `/achievements` — só lê conquistas já
@@ -15,6 +15,14 @@ import type { AchievementMetricSnapshot, AchievementScope, AchievementSeverity }
 export interface AchievementRow {
   id: string;
   occurredAt: string;
+  /** Etapa "Conquistas Auditáveis" — `recorded_at` de `operational_events`
+   * (default `now()` no insert, nunca alterado depois): quando o MOTOR
+   * detectou/gravou a conquista, distinto de `occurredAt` (quando ela
+   * aconteceu de fato — meio-dia fixo do dia civil, ver `persistCandidate`).
+   * As duas quase sempre caem no mesmo dia (o cron roda diariamente pro dia
+   * anterior), mas nunca são o mesmo CAMPO — mostrar as duas é o que torna a
+   * conquista auditável ("quando aconteceu" vs. "quando percebemos"). */
+  detectedAt: string;
   scope: AchievementScope;
   family: string;
   severity: AchievementSeverity;
@@ -26,6 +34,7 @@ export interface AchievementRow {
   headline: string;
   detail: string;
   metric: AchievementMetricSnapshot | null;
+  source: AchievementSourceInfo | null;
 }
 
 export interface AchievementFilters {
@@ -40,6 +49,7 @@ const ACHIEVEMENTS_PAGE_SIZE = 20;
 function toRow(row: {
   id: string;
   occurred_at: string;
+  recorded_at: string;
   client_id: string | null;
   actor_team_member_id: string | null;
   metadata: Record<string, unknown> | null;
@@ -51,6 +61,7 @@ function toRow(row: {
   return {
     id: row.id,
     occurredAt: row.occurred_at,
+    detectedAt: row.recorded_at,
     scope: (metadata.scope as AchievementScope) ?? "client",
     family: (metadata.family as string) ?? "",
     severity: (metadata.severity as AchievementSeverity) ?? "milestone",
@@ -62,6 +73,7 @@ function toRow(row: {
     headline: (metadata.headline as string) ?? "",
     detail: (metadata.detail as string) ?? "",
     metric: (metadata.metric as AchievementMetricSnapshot | undefined) ?? null,
+    source: (metadata.source as AchievementSourceInfo | undefined) ?? null,
   };
 }
 
@@ -77,7 +89,7 @@ export async function fetchAchievements(
 
   let query = supabase
     .from("operational_events")
-    .select("id, occurred_at, client_id, actor_team_member_id, metadata, client:clients(name), actor:team_members(name)")
+    .select("id, occurred_at, recorded_at, client_id, actor_team_member_id, metadata, client:clients(name), actor:team_members(name)")
     .eq("organization_id", organizationId)
     .eq("event_type", "achievement_unlocked")
     .eq("metadata->>scope", filters.scope)

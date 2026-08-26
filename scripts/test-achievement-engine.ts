@@ -84,6 +84,7 @@ function makeContext(overrides: Partial<ClientAchievementContext> & { yesterday:
     performanceGoal: "leads",
     tracksRevenue: false,
     goalByMonth: new Map(),
+    sourceInfo: null,
     ...overrides,
   };
 }

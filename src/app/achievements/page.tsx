@@ -3,12 +3,13 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
-import { formatTimeOnly, formatTimelineDayLabel } from "@/lib/format";
+import { formatTimelineDayLabel } from "@/lib/format";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { fetchAchievements, fetchClientAchievementsMonthSummary, type AchievementRow } from "@/lib/achievements-data";
-import { familyLabelFor, ACHIEVEMENT_SCOPE_LABEL, CLIENT_FAMILY_LABEL, AGENCY_FAMILY_LABEL, PERSON_FAMILY_LABEL } from "@/lib/achievement-labels";
+import { ACHIEVEMENT_SCOPE_LABEL, CLIENT_FAMILY_LABEL, AGENCY_FAMILY_LABEL, PERSON_FAMILY_LABEL } from "@/lib/achievement-labels";
 import type { AchievementScope } from "@/lib/achievement-types";
 import { AchievementsFilterBar } from "./achievements-filter-bar";
+import { AchievementsFeed } from "./achievements-feed";
 
 /**
  * `/achievements` — Conquistas: "o que merece ser comemorado", quarto
@@ -137,27 +138,7 @@ export default async function AchievementsPage({
       />
 
       {groups.length > 0 ? (
-        <div className="flex flex-col gap-4">
-          {groups.map((group) => (
-            <div key={group.dayLabel}>
-              <p className="px-1 pb-1 text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">{group.dayLabel}</p>
-              <ul className="flex flex-col gap-1">
-                {group.rows.map((row) => (
-                  <li key={row.id} className="rounded-lg border border-border px-3.5 py-2 text-sm">
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">
-                      🏆 {familyLabelFor(row.scope, row.family)}
-                    </p>
-                    <p className="mt-0.5 font-medium text-foreground">{row.headline}</p>
-                    {row.detail && <p className="mt-0.5 text-overview-text-secondary">{row.detail}</p>}
-                    <p className="mt-1 text-xs text-overview-text-muted">
-                      {formatTimelineDayLabel(row.occurredAt, now)} · {formatTimeOnly(row.occurredAt)}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+        <AchievementsFeed groups={groups} now={now} />
       ) : (
         <EmptyState>
           {hasAnyFilter ? "Nenhuma conquista encontrada com esse filtro." : "Nenhuma conquista registrada neste período."}

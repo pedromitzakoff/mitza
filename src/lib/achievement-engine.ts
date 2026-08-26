@@ -136,6 +136,7 @@ async function persistCandidate(
       headline: candidate.headline,
       detail: candidate.detail,
       metric: candidate.metric,
+      source: candidate.source ?? null,
     },
   });
 
@@ -195,6 +196,11 @@ export async function evaluateAchievementsForDate(
       for (const rule of CLIENT_RULES) {
         const candidate = rule(context);
         if (!candidate) continue;
+        // Etapa "Conquistas Auditáveis": `source` (proveniência/sincronização)
+        // é capturado uma única vez por cliente (`buildClientAchievementContext`),
+        // nunca por regra individual — anexado aqui, no único lugar que já
+        // tem acesso a `context.sourceInfo` E a todo candidato do cliente.
+        candidate.source = context.sourceInfo ?? undefined;
         summary.clientCandidates++;
         if (await persistCandidate(supabase, client.organizationId, candidate)) {
           summary.clientInserted++;

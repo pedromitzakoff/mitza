@@ -1,4 +1,4 @@
-import type { AchievementScope, AchievementSeverity } from "@/lib/achievement-types";
+import type { AchievementMetricSnapshot, AchievementScope, AchievementSeverity } from "@/lib/achievement-types";
 
 /** Rótulos visíveis — nunca "medalha"/"nível"/"XP" na UI (Auditoria, seção
  * 1). Usado pela página `/achievements` e, futuramente, pela Timeline. */
@@ -48,4 +48,15 @@ export const ACHIEVEMENT_SEVERITY_LABEL: Record<AchievementSeverity, string> = {
   milestone: "Marco",
   highlight: "Destaque",
   record: "Recorde",
+};
+
+/** Rótulo curto da métrica por trás de uma conquista — usado pela Página de
+ * Detalhes (`achievement-detail-drawer.tsx`) pra nomear "atual"/"anterior"
+ * sem repetir esse switch em cada tela que já lê `AchievementMetricSnapshot`. */
+export const ACHIEVEMENT_METRIC_LABEL: Record<AchievementMetricSnapshot["metric"], string> = {
+  cpa: "CPA",
+  roas: "ROAS",
+  result_count: "Resultados",
+  investment: "Investimento",
+  count: "Contagem",
 };

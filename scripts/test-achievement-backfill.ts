@@ -69,7 +69,7 @@ function makeGoal(targetCostPerResult: number | null): ClientMonthlyGoalInfo {
   return { targetCostPerResult, targetResultCount: null, scopeComparable: true };
 }
 function makeClientContext(overrides: Partial<ClientAchievementContext> & { yesterday: string; dailyPoints: ClientDailyPoint[] }): ClientAchievementContext {
-  return { clientId: "client-1", clientName: "Pet Fast", performanceGoal: "leads", tracksRevenue: false, goalByMonth: new Map(), ...overrides };
+  return { clientId: "client-1", clientName: "Pet Fast", performanceGoal: "leads", tracksRevenue: false, goalByMonth: new Map(), sourceInfo: null, ...overrides };
 }
 
 // ---------------------------------------------------------------------------
