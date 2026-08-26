@@ -122,8 +122,19 @@ function InvestmentBarWithTooltip({
  * A borda/fundo do "card" saiu daqui — `[id]/page.tsx` agora envolve este
  * componente E `AccountFollowUpPanel` numa ÚNICA superfície (pedido
  * explícito do usuário: "evitar caixa dentro de caixa"); este vira só mais
- * uma SEÇÃO dela (rótulo "Investimento" + divisória sutil no topo), nunca
- * um card próprio empilhado. Nenhuma prop, cálculo ou lógica interna mudou.
+ * uma SEÇÃO dela (rótulo "Investimento"), nunca um card próprio empilhado.
+ * Nenhuma prop, cálculo ou lógica interna mudou.
+ *
+ * Etapa "Primeira dobra: Performance e Investimento lado a lado":
+ * `AccountFollowUpPanel` passou a receber este componente pronto via slot
+ * (`investmentSummary`, um `ReactNode` montado por `[id]/page.tsx` — mesmo
+ * padrão já usado por `channelSwitch`) e a colocá-lo numa coluna ao lado de
+ * "Performance" (`MonthlyGoalProgress`) num grid responsivo — por isso a
+ * divisória/margem superior que existia aqui (`mt-3 border-t ...`, pensada
+ * pra empilhar embaixo dos KPIs) saiu: o espaçamento entre as duas colunas
+ * agora é responsabilidade do grid, nunca deste componente. `%` ganhou mais
+ * destaque tipográfico (era `text-sm`) pra ficar comparável de relance com
+ * o `%` de Performance — mesmo valor de sempre, só maior.
  */
 export function MonthInvestmentSummary({
   planned,
@@ -264,7 +275,7 @@ export function MonthInvestmentSummary({
   const showDiagnosis = planned > 0 && !isFutureMonth && !isClosedMonth && diagnosisText;
 
   return (
-    <div className="mt-3 border-t border-overview-border pt-3">
+    <div>
       <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">Investimento</p>
 
       {/* Badge de evento (Etapa "Horizonte de Planejamento" — impede o
@@ -296,7 +307,7 @@ export function MonthInvestmentSummary({
                 {formatCurrency(actual)} / {formatCurrency(planned)}
               </span>
             </p>
-            {pctRealizado !== null && <p className="text-sm font-semibold text-overview-text-primary">{Math.round(pctRealizado)}%</p>}
+            {pctRealizado !== null && <p className="text-xl font-bold text-overview-text-primary">{Math.round(pctRealizado)}%</p>}
           </div>
 
           {/* Barra + marcador de esperado (mesmo componente pros 3 estados

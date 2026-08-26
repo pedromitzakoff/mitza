@@ -823,6 +823,7 @@ export default async function ClientPage({
   // o resto do painel (`metricsChannel`) — nenhum cálculo paralelo ao de
   // `visaoGeralPerformanceSummary` acima, só a mesma filtragem por canal
   // (`aggregatePerformanceResults`) aplicada dia a dia.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- nenhum componente da Visão Geral lê mais a série diária (a granularidade diária virou responsabilidade só do Analytics); a busca continua intacta, só sem consumidor por enquanto.
   const dailyResultSeries = performanceGoal
     ? buildDailyResultSeries({
         windowDates: dailyResultWindowDates,
@@ -1034,6 +1035,7 @@ export default async function ClientPage({
   // está ativa, não só quando o drawer "Ver todos de {mês}" está aberto.
   const historyPage = Math.max(0, Number(historyPageParam) || 0);
   const shouldLoadFullHistory = Boolean(reviewsHistory) || activeArea === "timeline";
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Etapa "Remover histórico da Visão Geral": o resumo de 5 recentes saiu da apresentação padrão (Timeline/drawer "Histórico" já cobrem o histórico completo); a busca continua intacta, só sem consumidor por enquanto.
   const [{ rows: recentHistoryRows, hasMore: hasMoreHistory }, fullHistory] = await Promise.all([
     fetchClientOperationalHistory(supabase, id, { firstDay, lastDay }, 0, 5),
     shouldLoadFullHistory
@@ -1228,9 +1230,11 @@ export default async function ClientPage({
         : null
     : null;
 
-  const lastPerformanceUpdateLabel = isCurrentMonth
-    ? "Última atualização da performance"
-    : `Atualização da performance em ${monthLabel}`;
+  // Etapa "Primeira dobra": rótulo mais curto ("Dados atualizados" em vez
+  // de "Última atualização da performance") — mesma distinção de sempre
+  // pra mês não-atual, só o texto ficou mais compacto pra caber na linha
+  // técnica única do cabeçalho.
+  const lastPerformanceUpdateLabel = isCurrentMonth ? "Dados atualizados" : `Dados atualizados em ${monthLabel}`;
   const lastPerformanceUpdateValue = monthPerformanceSummary?.latestUpdatedAt
     ? formatRelativeDateTime(monthPerformanceSummary.latestUpdatedAt, nowInstant)
     : "Sem sincronização registrada";
@@ -1454,62 +1458,36 @@ export default async function ClientPage({
           (uma fileira a menos) sem perder proximidade real: a barra
           continua logo abaixo desta identidade, só não duplica mais a
           altura com uma linha de botões inteira só pra isso.
-          "Última otimização"/"Última atualização da performance" (bloco à
-          direita) continuam informação de ESTADO, não ação/navegação —
-          mesmo texto discreto de sempre. Nenhum href, dado, cálculo ou
-          permissão mudou nesta etapa, só reorganização e peso visual. */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <ClientAvatar name={client.name} imageUrl={client.avatar_url} size="lg" />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold text-overview-text-primary">{client.name}</h1>
-              <span
-                className={`rounded-full px-2.5 py-1 text-xs font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}
-              >
-                {CLIENT_STATUS_LABEL[client.status]}
-              </span>
-            </div>
-            <p className="mt-1 text-sm text-overview-text-secondary">{identitySecondaryLine}</p>
-            {/* Etapa "Motivo da Operação no Cliente": a mesma frase que
-                justifica o balde Crítico/Atenção na Operação
-                (`evaluation.primaryReason`, calculado por
-                `evaluateAccountHealth()` — nenhuma segunda lógica), com o
-                mesmo destaque discreto (`emphasizeDeviationText`, só o
-                número em destaque, nunca a frase inteira colorida) já
-                usado no card da Operação. Ausente quando o cliente está
-                saudável (`primaryDimension === null`, mesma condição de
-                lá) — nenhum "Nenhum sinal de atenção" fabricado aqui. */}
-            {primaryReasonText && (
-              <p className="mt-0.5 text-xs text-overview-text-secondary" title={primaryReasonText}>
-                {emphasizeDeviationText(primaryReasonText, primaryReasonTone)}
-              </p>
-            )}
+          Etapa "Primeira dobra": "Última otimização"/"Última atualização da
+          performance" saíram da coluna à direita da identidade — agora
+          fazem parte da MESMA linha compacta do status de sincronização
+          (ver bloco logo abaixo), nunca duas áreas técnicas separadas.
+          Nenhum dado, cálculo ou permissão mudou nesta etapa, só
+          reorganização e peso visual. */}
+      <div className="flex min-w-0 items-center gap-3">
+        <ClientAvatar name={client.name} imageUrl={client.avatar_url} size="lg" />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-overview-text-primary">{client.name}</h1>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}>
+              {CLIENT_STATUS_LABEL[client.status]}
+            </span>
           </div>
-        </div>
-
-        {/* Etapa "Página do cliente: direção de leitura esquerda→direita":
-            "Última otimização"/"Última atualização da performance" são
-            informação de ESTADO, não ações — deixaram de ser dois cards com
-            borda (mesmo peso visual de um KPI) e viraram duas linhas de
-            texto discretas. Nenhum dado, rótulo ou condição mudou, só o
-            peso visual: sem caixa, tipografia menor, cor secundária. */}
-        <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
-          <p className="flex flex-wrap items-center gap-1 text-xs text-overview-text-secondary">
-            <ClipboardCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
-            {lastOptimizationLabel}: <span className="font-medium text-overview-text-primary">{lastOptimizationValue}</span>
-            {lastOptimization && (
-              <span>
-                · {ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}
-                {lastOptimizationDetail ? ` · ${lastOptimizationDetail}` : ""}
-              </span>
-            )}
-          </p>
-          <p className="flex flex-wrap items-center gap-1 text-xs text-overview-text-secondary">
-            <BarChart3 className="h-3 w-3 shrink-0" aria-hidden="true" />
-            {lastPerformanceUpdateLabel}: <span className="font-medium text-overview-text-primary">{lastPerformanceUpdateValue}</span>
-            {lastPerformanceUpdateSourceLabel && <span>· Origem: {lastPerformanceUpdateSourceLabel}</span>}
-          </p>
+          <p className="mt-1 text-sm text-overview-text-secondary">{identitySecondaryLine}</p>
+          {/* Etapa "Motivo da Operação no Cliente": a mesma frase que
+              justifica o balde Crítico/Atenção na Operação
+              (`evaluation.primaryReason`, calculado por
+              `evaluateAccountHealth()` — nenhuma segunda lógica), com o
+              mesmo destaque discreto (`emphasizeDeviationText`, só o
+              número em destaque, nunca a frase inteira colorida) já usado
+              no card da Operação. Ausente quando o cliente está saudável
+              (`primaryDimension === null`, mesma condição de lá) — nenhum
+              "Nenhum sinal de atenção" fabricado aqui. */}
+          {primaryReasonText && (
+            <p className="mt-0.5 text-xs text-overview-text-secondary" title={primaryReasonText}>
+              {emphasizeDeviationText(primaryReasonText, primaryReasonTone)}
+            </p>
+          )}
         </div>
       </div>
 
@@ -1541,97 +1519,123 @@ export default async function ClientPage({
         </div>
       )}
 
-      {/* Etapa "Consolidação do status de sincronização": um bloco só,
-          substituindo o banner vermelho binário + botão longe daqui +
-          histórico sem nenhum resumo antes de abrir (3 pedaços soltos,
-          cada um só contava parte da história). Linha-resumo SEMPRE
-          visível pra quem tem acesso à página (gestor incluso, via
-          `latestSyncStatus` — lido com client admin, ver
-          `getLatestSyncRunStatusForSources`); detalhe técnico (motivo,
-          contagens, execuções anteriores) fica atrás de um `<details>`
-          só pra admin (RLS de `data_sync_runs`, ver
-          `getRecentSyncRunsForClient`).
+      {/* Etapa "Primeira dobra": área técnica UNIFICADA — "Última
+          otimização", "Dados atualizados" (antiga "Última atualização da
+          performance") e o status de sincronização do Stract viviam em 3
+          blocos separados (2 linhas na identidade + 1 faixa própria);
+          viram uma única linha compacta, sempre a MESMA informação, só sem
+          repetição de rótulo/caixa. O detalhe de "Última otimização"
+          (tipo/descrição da alteração) e a origem completa da atualização
+          de performance saem do texto sempre visível e vão pro `title`
+          (tooltip nativo) — informação preservada, só não compete mais por
+          espaço na primeira leitura.
+          Sincronização SAUDÁVEL (`status === "success"`) vira só um
+          check discreto — é o caso comum, não precisa de badge colorido.
+          Qualquer OUTRO estado (parcial/vazio/falha/em andamento/nunca
+          sincronizado) continua com o badge colorido de sempre, sempre
+          visível — nunca escondido (pedido explícito: erro/atraso precisa
+          continuar com destaque semântico). "Sincronizar agora" e
+          "Detalhes e histórico" continuam exatamente com o mesmo
+          comportamento/permissão de sempre, só realocados nesta linha.
+          "Histórico" (Etapa "Remover histórico da Visão Geral") é o mesmo
+          drawer de sempre (`reviewsHistoryHref`, `ClientOperationalHistoryDrawer`
+          — antes aberto via "Ver todos de {mês}" dentro do card de
+          Performance) — vive aqui agora, discreto, já que deixou de ter uma
+          seção própria na Visão Geral (a Timeline já cobre o histórico
+          completo de forma independente). */}
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-overview-text-secondary">
+        <span className="flex items-center gap-1">
+          <ClipboardCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
+          {lastOptimizationLabel}:{" "}
+          <span
+            className="font-medium text-overview-text-primary"
+            title={
+              lastOptimization
+                ? `${ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}${lastOptimizationDetail ? ` · ${lastOptimizationDetail}` : ""}`
+                : undefined
+            }
+          >
+            {lastOptimizationValue}
+          </span>
+        </span>
+        <span aria-hidden="true">·</span>
+        <span className="flex items-center gap-1">
+          <BarChart3 className="h-3 w-3 shrink-0" aria-hidden="true" />
+          {lastPerformanceUpdateLabel}: <span className="font-medium text-overview-text-primary">{lastPerformanceUpdateValue}</span>
+          {lastPerformanceUpdateSourceLabel && <span>· {lastPerformanceUpdateSourceLabel}</span>}
+        </span>
 
-          Etapa "Auditoria Investimento Errado": "dados até DD/MM" somado —
-          `latestSyncStatus` só diz QUANDO a sincronização rodou, nunca até
-          que dia ela trouxe dado real (`latestSpendDate`, data mais recente
-          em `daily_spend`). Uma fonte pode sincronizar "com sucesso" todo
-          dia e mesmo assim só trazer dado até um dia antigo — foi
-          exatamente isso que aconteceu (Baile do Hawai), sem nenhum sinal
-          visível até comparar manualmente com o Meta Ads Manager. Só exibe
-          o dado já existente, sem nenhuma classificação nova (nunca compara
-          com hoje pra decidir "atrasado"/"em dia" — isso fica a critério de
-          quem lê). Deliberadamente SEM horário — ver nota em
-          `getLatestDailySpendDate` sobre por que expor `synced_at` como
-          "horário de captura" é redundante/confuso no caso saudável
-          (tentativa revertida). */}
-      {stractImportSourceIds.length > 0 ? (
-        // Etapa "Página do cliente: direção de leitura esquerda→direita":
-        // sem caixa própria (era `rounded-md border ... px-3 py-2`) — vira
-        // uma linha discreta entre o cabeçalho e as abas, mesmo texto/dado
-        // de sempre. "Sincronizar agora" saiu do extremo direito
-        // (`justify-between`) e passou a ficar colado ao status que ele
-        // atualiza (contexto e controle lado a lado, nunca um esticado até
-        // a borda oposta do outro).
-        <div className="text-xs text-overview-text-secondary">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                latestSyncStatus
-                  ? SYNC_RUN_STATUS_BADGE_CLASSES[latestSyncStatus.status]
-                  : "bg-overview-surface-subtle text-overview-text-secondary"
-              }`}
-            >
-              {latestSyncStatus ? SYNC_RUN_STATUS_LABEL[latestSyncStatus.status] : "Nunca sincronizado"}
-            </span>
-            <span>
-              Stract{latestSyncStatus ? ` · sincronizado ${formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant)}` : ""}
-              {latestSpendDate ? ` · dados até ${formatShortDate(latestSpendDate)}` : ""}
-            </span>
+        {stractImportSourceIds.length > 0 ? (
+          <>
+            <span aria-hidden="true">·</span>
+            {latestSyncStatus?.status === "success" ? (
+              <span className="text-green-600 dark:text-green-400">
+                ✓ Stract sincronizado {formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant)}
+                {latestSpendDate ? ` · dados até ${formatShortDate(latestSpendDate)}` : ""}
+              </span>
+            ) : (
+              <span className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                    latestSyncStatus
+                      ? SYNC_RUN_STATUS_BADGE_CLASSES[latestSyncStatus.status]
+                      : "bg-overview-surface-subtle text-overview-text-secondary"
+                  }`}
+                >
+                  {latestSyncStatus ? SYNC_RUN_STATUS_LABEL[latestSyncStatus.status] : "Nunca sincronizado"}
+                </span>
+                <span>
+                  Stract{latestSyncStatus ? ` · sincronizado ${formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant)}` : ""}
+                  {latestSpendDate ? ` · dados até ${formatShortDate(latestSpendDate)}` : ""}
+                </span>
+              </span>
+            )}
             {canOperate && (
-              <form action={syncClientStractSourcesAction.bind(null, client.id)}>
+              <form action={syncClientStractSourcesAction.bind(null, client.id)} className="contents">
                 <SubmitButton pendingChildren="Sincronizando..." className={HEADER_SUBMIT_BUTTON_CLASSES}>
                   Sincronizar agora
                 </SubmitButton>
               </form>
             )}
-          </div>
-          {isAdmin && recentSyncRuns.length > 0 && (
-            <details className="mt-1.5">
-              <summary className="cursor-pointer select-none text-xs font-medium text-overview-text-primary">Detalhes e histórico</summary>
-              <ul className="mt-2 flex flex-col gap-2">
-                {recentSyncRuns.map((run) => (
-                  <li key={run.id} className="flex flex-col gap-0.5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SYNC_RUN_STATUS_BADGE_CLASSES[run.status]}`}>
-                        {SYNC_RUN_STATUS_LABEL[run.status]}
-                      </span>
-                      <span className="text-xs text-overview-text-secondary">{formatRelativeDateTime(run.startedAt, nowInstant)}</span>
-                    </div>
-                    {formatSyncRunCounts(run) && <p className="text-xs text-overview-text-secondary">{formatSyncRunCounts(run)}</p>}
-                    {run.errorMessage && <p className="text-xs text-overview-danger">{run.errorMessage}</p>}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-        </div>
-      ) : (
-        // Auditoria de Frescor/Confiabilidade de Dados: cliente sem fonte
-        // Stract (Meta-only, a maioria) não tinha NENHUM indicador manual de
-        // frescor nesta página — o bloco acima é inteiro condicionado a ter
-        // import_sources. `lastDataSyncAt` já existe e já é calculado (mesmo
-        // valor que agora também alimenta `AccountHealthInput`, ver
-        // account-health-engine.ts) — só nunca tinha sido exibido aqui. Sem
-        // badge de status (não existe "success/partial/failed" pro Meta,
-        // só o timestamp cru de `daily_spend.synced_at`/`performance_records.
-        // source_updated_at`) — nenhuma classificação nova, só o fato.
-        clientOperationalState?.lastDataSyncAt && (
-          <p className="text-xs text-overview-text-secondary">
-            Dados sincronizados {formatRelativeDateTime(clientOperationalState.lastDataSyncAt, nowInstant)}
-          </p>
-        )
-      )}
+            {isAdmin && recentSyncRuns.length > 0 && (
+              <details className="w-full [&_summary::-webkit-details-marker]:hidden">
+                <summary className="cursor-pointer select-none font-medium text-overview-text-primary">Detalhes e histórico</summary>
+                <ul className="mt-2 flex flex-col gap-2">
+                  {recentSyncRuns.map((run) => (
+                    <li key={run.id} className="flex flex-col gap-0.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SYNC_RUN_STATUS_BADGE_CLASSES[run.status]}`}>
+                          {SYNC_RUN_STATUS_LABEL[run.status]}
+                        </span>
+                        <span>{formatRelativeDateTime(run.startedAt, nowInstant)}</span>
+                      </div>
+                      {formatSyncRunCounts(run) && <p>{formatSyncRunCounts(run)}</p>}
+                      {run.errorMessage && <p className="text-overview-danger">{run.errorMessage}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </>
+        ) : (
+          // Auditoria de Frescor/Confiabilidade de Dados: cliente sem fonte
+          // Stract (Meta-only, a maioria) não tinha NENHUM indicador manual
+          // de frescor nesta página. Sem badge de status (não existe
+          // "success/partial/failed" pro Meta, só o timestamp cru) —
+          // nenhuma classificação nova, só o fato.
+          clientOperationalState?.lastDataSyncAt && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>Dados sincronizados {formatRelativeDateTime(clientOperationalState.lastDataSyncAt, nowInstant)}</span>
+            </>
+          )
+        )}
+
+        <span aria-hidden="true">·</span>
+        <Link href={reviewsHistoryHref} scroll={false} className="font-medium hover:text-overview-text-primary hover:underline">
+          Histórico
+        </Link>
+      </div>
 
       {/* Etapa 59, seção 16: ação rápida depois de registrar uma análise —
           opcional, nunca gera a atualização automaticamente. */}
@@ -1747,26 +1751,28 @@ export default async function ClientPage({
           Relatórios/Visão Geral/Sprints (`?month=YYYY-MM` + shiftMonthParam),
           nenhum componente novo de seletor. Etapa 75: removido o texto
           "Período em análise" — o próprio seletor já comunica o período,
-          sem precisar de rótulo. Etapa "Unificação visual da página do
-          cliente": mesmo `IconButton` de navegação de mês já usado na Visão
-          Geral da agência/Operação.
-          Etapa "Página do cliente: direção de leitura esquerda→direita":
-          antes vivia numa faixa própria ACIMA das abas, alinhado à direita
-          (`justify-end`) — um elemento solto no canto oposto de tudo mais.
-          Passa a ficar logo ABAIXO das abas, à esquerda, na mesma coluna
-          delas — segue sendo contexto de toda a página (não muda de mês
-          dentro de uma aba específica), só ganhou relação visual com o que
-          ele contextualiza. Nenhuma navegação, filtro ou estado mudou. */}
-      <div className="mt-2 flex items-center gap-2">
-        <div className="flex items-center gap-0.5 rounded-md border border-overview-border bg-overview-surface px-1 py-1 text-sm">
+          sem precisar de rótulo.
+          Etapa "Primeira dobra": perde a caixa (era `border ... px-1 py-1`)
+          — só as setas (`IconButton`, clicáveis de sempre) e o mês, sem
+          container visível; menos peso pra um controle que é só contexto,
+          não uma ação. O seletor de canal (`VisaoGeralChannelSwitch`, só
+          existe na Visão Geral) passa a viver na MESMA linha — "período +
+          canal" como contexto único dos dados logo abaixo, em vez de dois
+          elementos em posições diferentes da página. Nenhuma navegação,
+          filtro, href ou estado mudou. */}
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex items-center gap-0.5 text-sm">
           <IconButton href={prevMonthHref} aria-label="Mês anterior" variant="ghost" size="sm">
             &lsaquo;
           </IconButton>
-          <span className="min-w-[6rem] px-1.5 text-center text-sm font-medium text-overview-text-primary">{monthLabel}</span>
+          <span className="min-w-[6rem] px-1 text-center text-sm font-medium text-overview-text-primary">{monthLabel}</span>
           <IconButton href={nextMonthHref} aria-label="Próximo mês" variant="ghost" size="sm">
             &rsaquo;
           </IconButton>
         </div>
+        {activeArea === "visao-geral" && (
+          <VisaoGeralChannelSwitch baseHref={metricsChannelBaseHref} active={metricsChannel} />
+        )}
       </div>
 
       {/* Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente": a Visão
@@ -1782,68 +1788,67 @@ export default async function ClientPage({
         <>
           {/* Indicadores do mês — investimento, resultados e custo por
               resultado (com a meta como texto auxiliar discreto do custo,
-              nunca mais uma métrica própria), progresso da meta mensal,
-              resultados por canal, última otimização e tracking
-              operacional. A meta do mês (antes numa aba própria, depois um
-              card "Performance do mês" à parte) agora é só um dado a mais
-              de contexto do custo por resultado — nunca um fluxo separado.
+              nunca mais uma métrica própria), Performance e Investimento
+              lado a lado (Etapa "Primeira dobra: Performance e Investimento
+              lado a lado" — dois `%` comparáveis de relance, num grid de 2
+              colunas a partir de `md:`, empilhado em telas menores) e
+              resultados por canal. A meta do mês (antes numa aba própria,
+              depois um card "Performance do mês" à parte) agora é só um
+              dado a mais de contexto do custo por resultado — nunca um
+              fluxo separado.
 
               Seletor "Consolidado | Meta Ads | Google Ads" — pedido
               explícito do usuário: escopa Indicadores do mês, cada Sprint,
-              Fechamento do mês e Investimento do mês (`MonthInvestmentSummary`,
-              mais abaixo — QA multicanal: passou a receber
+              Fechamento do mês e Investimento do mês (`MonthInvestmentSummary`
+              — QA multicanal: passou a receber
               `visaoGeralPlanned`/`visaoGeralExpectedToDate`/`visaoGeralStatus`,
               não mais os valores sempre-consolidados) ao canal escolhido.
-              Refinamento visual: vive dentro da borda do card
-              (`channelSwitch`), não mais solto acima dele — mesmo href/estado
-              ativo de sempre, só a posição mudou.
+              Etapa "Primeira dobra": o seletor saiu daqui — agora vive
+              junto do seletor de mês, acima deste bloco ("período + canal"
+              como contexto único) — mesmo href/estado ativo de sempre, só
+              a posição mudou.
 
-              Etapa "Visão Geral: decisão em 5 segundos" (2ª rodada):
-              `AccountFollowUpPanel` (Performance) e `MonthInvestmentSummary`
-              (Investimento) deixaram de ser dois cards empilhados e viraram
-              duas SEÇÕES de uma única superfície — pedido explícito do
-              usuário pra reduzir "caixa dentro de caixa". Nenhuma prop dos
-              dois componentes mudou, só a borda/fundo que os envolvia. */}
+              `MonthInvestmentSummary` é montado aqui com todas as suas
+              props de sempre (nenhuma mudou) e passado pra
+              `AccountFollowUpPanel` como o slot `investmentSummary` — é
+              esse componente quem decide colocá-lo ao lado de "Performance"
+              no grid, nunca duplicando a lógica/props de investimento
+              aqui. */}
           <div className="mt-3 rounded-lg border border-overview-border bg-overview-surface p-3">
             <AccountFollowUpPanel
-              channelSwitch={<VisaoGeralChannelSwitch baseHref={metricsChannelBaseHref} active={metricsChannel} />}
-              monthLabel={monthLabel}
               monthActual={visaoGeralMonthActual}
               performanceGoal={performanceGoal}
               performanceSummary={visaoGeralPerformanceSummary}
               targetCostPerResult={scopedTargetCostPerResult}
-              dailyResultSeries={dailyResultSeries}
               targetResultCount={scopedTargetResultCount}
               expectedResultsToDate={expectedResultsToDate}
               channelBreakdown={monthPerformanceChannelBreakdown}
               configureObjectiveHref={`/clients/${client.id}/edit`}
-              historyRows={recentHistoryRows}
-              hasMoreHistory={hasMoreHistory}
-              historyHref={reviewsHistoryHref}
-              buildReviewDetailHref={buildReviewDetailHref}
-            />
-            <MonthInvestmentSummary
-              planned={visaoGeralPlanned}
-              actual={visaoGeralMonthActual}
-              expectedToDate={visaoGeralExpectedToDate}
-              status={visaoGeralStatus}
-              clientId={client.id}
-              monthParam={monthParam}
-              monthLabel={monthLabel}
-              sprints={budgetSprints}
-              monthRange={planningHorizon}
-              effectiveDate={effectiveDate}
-              isAdmin={isAdmin}
-              isClosedMonth={isClosedMonth}
-              isClosedByHorizonOnly={isClosedByHorizonOnly}
-              isFutureMonth={isFutureMonth}
-              lastChange={lastChange}
-              historyHref={historyDrawerHref}
-              performanceGoal={performanceGoal}
-              channels={AVAILABLE_TRAFFIC_CHANNELS}
-              byChannel={clientPlan.byChannel}
-              calendarMonthRange={{ firstDay, lastDay }}
-              currentPlanningEndDate={planningEndDate}
+              investmentSummary={
+                <MonthInvestmentSummary
+                  planned={visaoGeralPlanned}
+                  actual={visaoGeralMonthActual}
+                  expectedToDate={visaoGeralExpectedToDate}
+                  status={visaoGeralStatus}
+                  clientId={client.id}
+                  monthParam={monthParam}
+                  monthLabel={monthLabel}
+                  sprints={budgetSprints}
+                  monthRange={planningHorizon}
+                  effectiveDate={effectiveDate}
+                  isAdmin={isAdmin}
+                  isClosedMonth={isClosedMonth}
+                  isClosedByHorizonOnly={isClosedByHorizonOnly}
+                  isFutureMonth={isFutureMonth}
+                  lastChange={lastChange}
+                  historyHref={historyDrawerHref}
+                  performanceGoal={performanceGoal}
+                  channels={AVAILABLE_TRAFFIC_CHANNELS}
+                  byChannel={clientPlan.byChannel}
+                  calendarMonthRange={{ firstDay, lastDay }}
+                  currentPlanningEndDate={planningEndDate}
+                />
+              }
             />
           </div>
 

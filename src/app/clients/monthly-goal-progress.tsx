@@ -59,6 +59,16 @@ const RITMO_STATUS_TEXT: Partial<Record<SpendStatus, string>> = {
  * deste card (`RITMO_STATUS_TEXT` acima) — pedido explícito do usuário
  * nessa forma exata, diferente da frase com pontos percentuais que o card
  * de Investimento usa.
+ *
+ * Etapa "Primeira dobra: Performance e Investimento lado a lado": este
+ * componente deixou de empilhar sozinho, sem borda/margem própria, embaixo
+ * dos KPIs (`mt-3 border-t ...`) — quem chama (`AccountFollowUpPanel`) agora
+ * o posiciona numa coluna ao lado de `MonthInvestmentSummary`, então o
+ * espaçamento/divisória entre as duas passou a ser responsabilidade do grid
+ * que as envolve, nunca deste componente. O `%` ganhou mais destaque
+ * tipográfico (era `text-sm`) — é o número que precisa ser comparado
+ * instantaneamente com o do card ao lado ("Performance 70%" x
+ * "Investimento 88%"), mesmo valor de sempre, só maior.
  */
 export function MonthlyGoalProgress({
   goal,
@@ -81,7 +91,7 @@ export function MonthlyGoalProgress({
   const ritmoText = RITMO_STATUS_TEXT[status] ?? null;
 
   return (
-    <div className="mt-3 border-t border-overview-border pt-2">
+    <div>
       <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">Performance</p>
       <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
         <p className="text-sm text-overview-text-secondary">
@@ -90,7 +100,7 @@ export function MonthlyGoalProgress({
           </span>{" "}
           {config.pluralLabel.toLowerCase()}
         </p>
-        <p className="text-sm font-semibold text-overview-text-primary">{pct}%</p>
+        <p className="text-xl font-bold text-overview-text-primary">{pct}%</p>
       </div>
       <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-overview-brand-subtle">
         <div className="h-full rounded-full bg-brand" style={{ width: `${barPct}%` }} />

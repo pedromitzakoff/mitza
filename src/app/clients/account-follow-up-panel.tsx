@@ -1,14 +1,11 @@
 import type { ReactNode } from "react";
-import type { ClientHistoryRow } from "@/lib/client-operational-history";
 import type { AccountReviewOutcome, OptimizationType } from "@/lib/supabase/database.types";
 import type { PerformanceSummary } from "@/lib/performance";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import type { TrafficChannel } from "@/lib/traffic-channels";
-import type { DailyResultSeries } from "@/lib/daily-results";
 import { MonthlyKpiSummary } from "./monthly-kpi-summary";
 import { MonthlyGoalProgress } from "./monthly-goal-progress";
 import { ResultsByChannel } from "./results-by-channel";
-import { CollapsibleAccountHistory } from "./collapsible-account-history";
 
 /**
  * Última otimização (Etapa 74) — substitui os antigos indicadores separados
@@ -29,87 +26,42 @@ export interface LastOptimizationInfo {
 
 /**
  * "ACOMPANHAMENTO DA CONTA" — principal bloco operacional da página do
- * cliente. "Cadência" e "Intervalo atual" foram removidos da interface por
- * pedido explícito — continuam existindo por baixo, intactos, só não são
- * mais exibidos aqui. "Última revisão" (antes exibida aqui, junto de
- * "Próxima reunião"/"Próxima entrega") foi reposicionada pro cabeçalho da
- * conta (`clients/[id]/page.tsx`) — reunião/entrega saíram de vez do fluxo
- * operacional, por pedido explícito.
- *
- * Etapa 62: o histórico (antes só de análises, sempre as 2 mais recentes)
- * virou um histórico unificado (análises + otimizações + reuniões +
- * entregas) escopado ao mês selecionado, no máximo 5 linhas, com "Ver
- * todos de {mês}" pro resto (Etapa 9) — reaproveita `operational_events`
- * (nenhuma tabela nova, ver `lib/client-operational-history.ts`).
- *
- * Refinamento visual (Etapa 75): sem título/subtítulo — o card começa
- * direto pelas métricas (investimento/resultados/custo por resultado/meta),
- * seguido do diagnóstico, de "Resultados por canal" (Etapa "Meta entra no
- * card principal": substitui o antigo card "Performance do mês", removido —
- * meta/comparação migraram pro card principal via `MonthlyKpiSummary`,
- * detalhamento por canal virou este bloco de responsabilidade única) e do
- * histórico do mês, recolhido por padrão. Nenhum cálculo financeiro ou de
- * performance muda — os 4 KPIs e o diagnóstico só consomem valores já
+ * cliente. Nenhum cálculo financeiro ou de performance muda aqui — os KPIs,
+ * o progresso da meta e o detalhamento por canal só consomem valores já
  * calculados pela página; nunca recomputados aqui.
  *
- * Etapa "Visão Geral: decisão em 5 segundos": o sub-bloco entre os KPIs e
- * "Resultados por canal" deixou de ser a "Evolução diária de resultados"
- * (gráfico de 7 barras, granularidade de investigação) e virou
- * "Performance" (`MonthlyGoalProgress`) — quanto já foi feito no mês, qual
- * a meta, que % isso representa e se o ritmo está adequado. A granularidade
- * diária não foi removida do produto: continua disponível, com mais
- * profundidade, no Analytics (`AnalyticsTrendChart`) — só deixou de
- * competir com a decisão rápida que esta tela precisa responder. Evolui o
- * card já existente (pedido explícito do usuário: nunca um card novo).
+ * Etapa "Primeira dobra: Performance e Investimento lado a lado": os KPIs
+ * (`MonthlyKpiSummary`) continuam em largura total, sempre o primeiro
+ * elemento — são o hero da tela. Logo abaixo, "Performance"
+ * (`MonthlyGoalProgress`) e "Investimento" (`investmentSummary`, um
+ * `ReactNode` já pronto — `MonthInvestmentSummary`, montado por
+ * `[id]/page.tsx` com todas as suas próprias props, nenhuma duplicada aqui)
+ * passam a viver lado a lado num grid de 2 colunas a partir de `md:` —
+ * empilhado em telas menores, mesma ordem de sempre. A intenção é permitir
+ * comparar Performance × Investimento (dois `%`) de relance, sem rolar a
+ * página. "Resultados por canal" continua em largura total, logo abaixo do
+ * grid — é detalhe secundário de Performance, não precisa competir por
+ * altura dentro da coluna.
  *
- * 2ª rodada de simplificação: `MonthlyGoalProgress` não lê mais
- * `dailyResultSeries` (a linha "Média 7d" saiu do card) — a prop continua
- * aceita aqui só porque a busca da série (`buildDailyResultSeries`, feita
- * pela página) segue existindo e podendo alimentar outra coisa no futuro;
- * nenhum dado foi apagado, só deixou de ser lido por este card específico.
- *
- * A borda/fundo do "card" saiu daqui: `[id]/page.tsx` agora envolve este
- * componente E `MonthInvestmentSummary` numa ÚNICA superfície (pedido
- * explícito do usuário: "evitar caixa dentro de caixa" — Performance e
- * Investimento são duas SEÇÕES da mesma superfície, não dois cards
- * empilhados). Nenhuma prop, cálculo ou lógica interna mudou, só quem
- * desenha a borda.
- *
- * Refinamento visual (Etapa "Grid e hierarquia da página do cliente"): o
- * seletor "Consolidado | Meta Ads | Google Ads" (`channelSwitch`, montado
- * pela página — este componente nunca conhece `VisaoGeralChannelSwitch`)
- * passou a viver DENTRO da borda deste card, no topo — antes ficava solto
- * num `<div>` acima do card, lido como um elemento desconectado das
- * métricas que ele controla. Puramente posicional: nenhuma prop, href ou
- * lógica de seleção mudou, só onde o slot é renderizado.
- *
- * Etapa "Página do cliente: direção de leitura esquerda→direita": o
- * seletor deixou de ficar alinhado à direita (`justify-end`) — hoje começa
- * na mesma coluna dos KPIs logo abaixo (`MonthlyKpiSummary`), já que ele
- * controla exatamente esses números. Nenhuma outra mudança nesta etapa.
+ * O histórico do mês (antigo `CollapsibleAccountHistory`, um resumo das 5
+ * atividades mais recentes) saiu da apresentação padrão da Visão Geral —
+ * pedido explícito do usuário pra não competir com Performance/Investimento
+ * nesta dobra. Nenhum dado ou funcionalidade foi apagada: a Timeline
+ * (`activeArea === "timeline"`) já mostra o histórico completo de forma
+ * independente, e um link discreto "Histórico" continua acessível na área
+ * técnica do cabeçalho (`[id]/page.tsx`), abrindo o mesmo drawer de sempre.
  */
 export function AccountFollowUpPanel({
-  channelSwitch,
-  monthLabel,
   monthActual,
   performanceGoal,
   performanceSummary,
   targetCostPerResult,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- aceita mas não lida por este card desde a 2ª rodada de simplificação (ver comentário acima); a página continua buscando o dado normalmente.
-  dailyResultSeries,
   targetResultCount,
   expectedResultsToDate,
   channelBreakdown,
   configureObjectiveHref,
-  historyRows,
-  hasMoreHistory,
-  historyHref,
-  buildReviewDetailHref,
+  investmentSummary,
 }: {
-  /** Seletor de canal — `undefined`/`null` quando a tela que usa este card
-   * não tem esse conceito (nunca fabricado aqui). */
-  channelSwitch?: ReactNode;
-  monthLabel: string;
   /** Investimento realizado do mês selecionado — já calculado pela camada
    * financeira (`sumActualSpendForMonth`), nunca recomputado aqui. */
   monthActual: number;
@@ -117,9 +69,6 @@ export function AccountFollowUpPanel({
   performanceSummary: PerformanceSummary | null;
   /** Meta de custo por resultado vigente — `null` quando não configurada. */
   targetCostPerResult: number | null;
-  /** Série dos últimos 7 dias já resolvida (`buildDailyResultSeries`) — só
-   * `undefined` quando `performanceGoal` também é `null` (nada a evoluir). */
-  dailyResultSeries?: DailyResultSeries;
   /** Meta de QUANTIDADE de resultado vigente pro mês selecionado — `null` =
    * sem meta configurada (nunca mostra "X/undefined"). */
   targetResultCount?: number | null;
@@ -130,14 +79,15 @@ export function AccountFollowUpPanel({
    * `ResultsByChannel` só renderiza algo com dado em mais de 1 canal. */
   channelBreakdown: { channel: TrafficChannel; resultCount: number }[];
   configureObjectiveHref: string;
-  historyRows: ClientHistoryRow[];
-  hasMoreHistory: boolean;
-  historyHref: string;
-  buildReviewDetailHref: (reviewId: string) => string;
+  /** `<MonthInvestmentSummary />` já pronto, montado por quem chama — este
+   * componente só decide ONDE ele entra no layout (coluna ao lado de
+   * Performance), nunca conhece suas props internas. `undefined` nunca
+   * acontece na prática (a página sempre monta o investimento), mas fica
+   * opcional pra este componente não depender de um consumidor específico. */
+  investmentSummary?: ReactNode;
 }) {
   return (
     <>
-      {channelSwitch && <div className="mb-2">{channelSwitch}</div>}
       <MonthlyKpiSummary
         monthActual={monthActual}
         performanceGoal={performanceGoal}
@@ -146,24 +96,21 @@ export function AccountFollowUpPanel({
         configureObjectiveHref={configureObjectiveHref}
       />
 
-      {performanceGoal && targetResultCount != null && targetResultCount > 0 && expectedResultsToDate != null && (
-        <MonthlyGoalProgress
-          goal={performanceGoal}
-          monthResultCount={performanceSummary?.resultCount ?? 0}
-          targetResultCount={targetResultCount}
-          expectedToDate={expectedResultsToDate}
-        />
-      )}
+      <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
+        <div>
+          {performanceGoal && targetResultCount != null && targetResultCount > 0 && expectedResultsToDate != null && (
+            <MonthlyGoalProgress
+              goal={performanceGoal}
+              monthResultCount={performanceSummary?.resultCount ?? 0}
+              targetResultCount={targetResultCount}
+              expectedToDate={expectedResultsToDate}
+            />
+          )}
+        </div>
+        {investmentSummary}
+      </div>
 
       {performanceGoal && <ResultsByChannel goal={performanceGoal} channelBreakdown={channelBreakdown} />}
-
-      <CollapsibleAccountHistory
-        monthLabel={monthLabel}
-        historyRows={historyRows}
-        hasMoreHistory={hasMoreHistory}
-        historyHref={historyHref}
-        buildReviewDetailHref={buildReviewDetailHref}
-      />
     </>
   );
 }
