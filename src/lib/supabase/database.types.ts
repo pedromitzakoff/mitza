@@ -322,6 +322,7 @@ export interface Database {
           avatar_url: string | null;
           dashboard_url: string | null;
           balance_url: string | null;
+          monthly_closing_sheet_url: string | null;
           report_theme: ReportThemeDb;
         };
         Insert: {
@@ -371,6 +372,7 @@ export interface Database {
           avatar_url?: string | null;
           dashboard_url?: string | null;
           balance_url?: string | null;
+          monthly_closing_sheet_url?: string | null;
           report_theme?: ReportThemeDb;
         };
         Update: {
@@ -420,6 +422,7 @@ export interface Database {
           avatar_url?: string | null;
           dashboard_url?: string | null;
           balance_url?: string | null;
+          monthly_closing_sheet_url?: string | null;
           report_theme?: ReportThemeDb;
         };
         Relationships: [

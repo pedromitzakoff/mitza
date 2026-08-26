@@ -558,6 +558,17 @@ export function ClientForm({
             <span className="text-xs text-muted-foreground">Usado só pelo atalho &ldquo;Saldo&rdquo; no prontuário do cliente.</span>
           </label>
           <label className={labelClasses}>
+            Planilha de fechamento mensal
+            <input
+              type="url"
+              name="monthly_closing_sheet_url"
+              placeholder="https://docs.google.com/spreadsheets/..."
+              defaultValue={defaults?.monthly_closing_sheet_url ?? ""}
+              className={inputClasses}
+            />
+            <span className="text-xs text-muted-foreground">Usado só pelo atalho &ldquo;Abrir fechamento mensal&rdquo; no prontuário do cliente.</span>
+          </label>
+          <label className={labelClasses}>
             Instagram
             <input
               type="url"

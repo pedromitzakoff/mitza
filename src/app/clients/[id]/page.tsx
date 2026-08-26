@@ -312,7 +312,7 @@ export default async function ClientPage({
   const { data: client } = await supabase
     .from("clients")
     .select(
-      "id, name, meta_ad_account_id, status, contract_start_date, primary_manager_id, primary_manager:team_members!clients_primary_manager_id_fkey(name), main_objective, main_product_or_service, operation_region, primary_audience, client_differentials, client_restrictions, important_seasonal_dates, operational_summary, important_notes, performance_goal, target_cost_per_result, avatar_url, dashboard_url, balance_url",
+      "id, name, meta_ad_account_id, status, contract_start_date, primary_manager_id, primary_manager:team_members!clients_primary_manager_id_fkey(name), main_objective, main_product_or_service, operation_region, primary_audience, client_differentials, client_restrictions, important_seasonal_dates, operational_summary, important_notes, performance_goal, target_cost_per_result, avatar_url, dashboard_url, balance_url, monthly_closing_sheet_url",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -1490,6 +1490,11 @@ export default async function ClientPage({
             {client.balance_url && (
               <Button href={client.balance_url} target="_blank" rel="noopener noreferrer" variant="secondary" size="sm">
                 Saldo
+              </Button>
+            )}
+            {client.monthly_closing_sheet_url && (
+              <Button href={client.monthly_closing_sheet_url} target="_blank" rel="noopener noreferrer" variant="secondary" size="sm">
+                Abrir fechamento mensal
               </Button>
             )}
             <Button href={reportHref} variant="secondary" size="sm">

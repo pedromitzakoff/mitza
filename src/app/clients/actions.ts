@@ -85,6 +85,7 @@ function readStructuralFields(formData: FormData) {
     commercial_whatsapp: optionalText(formData, "commercial_whatsapp"),
     dashboard_url: optionalText(formData, "dashboard_url"),
     balance_url: optionalText(formData, "balance_url"),
+    monthly_closing_sheet_url: optionalText(formData, "monthly_closing_sheet_url"),
     meta_ad_account_name: optionalText(formData, "meta_ad_account_name"),
     main_objective: optionalText(formData, "main_objective") as ClientMainObjective | null,
     monthly_planned_spend: optionalNumber(formData, "monthly_planned_spend"),
