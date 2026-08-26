@@ -62,7 +62,7 @@ import { syncClientStractSourcesAction } from "../stract-sync-actions";
 import { getLatestSyncRunStatusForSources } from "@/lib/stract-sync";
 import { ClientIdentitySticky } from "../client-identity-sticky";
 import { ClientWorkspaceContext } from "../client-workspace-context";
-import { MonthInvestmentSummary } from "../month-investment-summary";
+import { MonthInvestmentSummary, MonthInvestmentActions } from "../month-investment-summary";
 import { SprintCard } from "../sprint-card";
 import { MonthTasksPanel } from "../month-tasks-panel";
 import { Section } from "../section";
@@ -1808,12 +1808,14 @@ export default async function ClientPage({
               como contexto único) — mesmo href/estado ativo de sempre, só
               a posição mudou.
 
-              `MonthInvestmentSummary` é montado aqui com todas as suas
-              props de sempre (nenhuma mudou) e passado pra
-              `AccountFollowUpPanel` como o slot `investmentSummary` — é
-              esse componente quem decide colocá-lo ao lado de "Performance"
-              no grid, nunca duplicando a lógica/props de investimento
-              aqui. */}
+              Etapa "Simetria Performance x Investimento":
+              `MonthInvestmentSummary` (core, montado aqui com as MESMAS
+              props de sempre) vira o slot `investmentSummary`;
+              `MonthInvestmentActions` (disclosure/edição/histórico, extraído
+              do core nesta etapa) vira o slot `investmentActions`, numa
+              linha compartilhada abaixo do grid — é `AccountFollowUpPanel`
+              quem decide o layout, nunca duplicando a lógica/props de
+              investimento aqui. */}
           <div className="mt-3 rounded-lg border border-overview-border bg-overview-surface p-3">
             <AccountFollowUpPanel
               monthActual={visaoGeralMonthActual}
@@ -1826,6 +1828,21 @@ export default async function ClientPage({
               configureObjectiveHref={`/clients/${client.id}/edit`}
               investmentSummary={
                 <MonthInvestmentSummary
+                  planned={visaoGeralPlanned}
+                  actual={visaoGeralMonthActual}
+                  expectedToDate={visaoGeralExpectedToDate}
+                  status={visaoGeralStatus}
+                  monthLabel={monthLabel}
+                  sprints={budgetSprints}
+                  monthRange={planningHorizon}
+                  effectiveDate={effectiveDate}
+                  isClosedMonth={isClosedMonth}
+                  isFutureMonth={isFutureMonth}
+                  currentPlanningEndDate={planningEndDate}
+                />
+              }
+              investmentActions={
+                <MonthInvestmentActions
                   planned={visaoGeralPlanned}
                   actual={visaoGeralMonthActual}
                   expectedToDate={visaoGeralExpectedToDate}

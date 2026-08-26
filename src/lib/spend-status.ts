@@ -93,6 +93,21 @@ export const SPEND_STATUS_LABEL: Record<SpendStatus, string> = {
   em_andamento: SPEND_STATUS_REGISTRY["spend.em_andamento"].label,
 };
 
+/** Texto curto e padronizado do status de ritmo — "Dentro/Abaixo/Acima do
+ * ritmo esperado", sempre a mesma estrutura, qualquer que seja a métrica
+ * (investimento, resultado de performance, etc.). Etapa "Simetria
+ * Performance x Investimento": as duas colunas da Visão Geral do cliente
+ * usam esta MESMA frase pro status principal — nenhuma fórmula de texto
+ * própria por componente. Detalhes específicos (valor em R$, quantidade,
+ * dias restantes) vivem numa linha secundária separada, nunca aqui.
+ * `sem_meta`/`nao_iniciado`/`em_andamento` ficam de fora do mapa de
+ * propósito — sem texto é melhor que um texto inventado sem base real. */
+export const RITMO_STATUS_TEXT: Partial<Record<SpendStatus, string>> = {
+  acima: "Acima do ritmo esperado",
+  dentro: "Dentro do ritmo esperado",
+  abaixo: "Abaixo do ritmo esperado",
+};
+
 export const SPEND_STATUS_BADGE_CLASSES: Record<SpendStatus, string> = {
   dentro: SPEND_STATUS_REGISTRY["spend.dentro"].badgeClassName,
   acima: SPEND_STATUS_REGISTRY["spend.acima"].badgeClassName,

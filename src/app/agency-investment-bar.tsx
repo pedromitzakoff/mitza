@@ -28,12 +28,25 @@ import type { MonthTemporalStatus } from "@/lib/monthly-budget";
  * nunca só uma linha fina sem legenda; o tooltip passou a ter as 4 linhas
  * pedidas (o que é / % do mês / valor em reais / origem do cálculo); e uma
  * legenda compacta identifica as duas cores da trilha.
+ *
+ * Etapa "Simetria Performance x Investimento": ganhou dois parâmetros pra
+ * ser reaproveitada também pelo card "Performance" (`MonthlyGoalProgress`,
+ * uma métrica de CONTAGEM — resultado/meta, nunca R$) em vez de duplicar a
+ * barra/marcador numa segunda implementação: `formatValue` (o tooltip do
+ * marcador mostra o valor formatado do jeito certo pra cada domínio — R$
+ * pro investimento, contagem simples pro resultado) e `overflowIsPositive`
+ * (estourar 100% do PLANEJADO é ruim — vira vermelho; estourar 100% da META
+ * de resultado é bom — nunca vira vermelho). Nenhum comportamento muda pra
+ * quem já usa esta barra sem passar os dois (default = exatamente como
+ * antes).
  */
 export function AgencyInvestmentBar({
   summary,
   showExpectedMarker = true,
   monthTemporalStatus,
   showLegend = true,
+  formatValue = formatCurrency,
+  overflowIsPositive = false,
 }: {
   summary: FinancialPeriodSummary;
   /** Etapa 64: `false` some com o marcador de "esperado até hoje", a
@@ -57,6 +70,15 @@ export function AgencyInvestmentBar({
    * numa única apresentação (nunca duas frases pro mesmo número), dentro de
    * "Ver detalhes do investimento". */
   showLegend?: boolean;
+  /** Formatador do valor numérico dentro do tooltip do marcador (3ª linha
+   * de `formatExpectedMarkerTooltip`) — default `formatCurrency` preserva
+   * 100% o comportamento de sempre pra todo consumidor existente. */
+  formatValue?: (value: number) => string;
+  /** `true` = nunca pinta o preenchimento de vermelho ao passar de 100% do
+   * "planejado" (métrica onde superar a meta é BOM, ex.: resultado de
+   * performance) — default `false` preserva o comportamento de sempre
+   * (investimento: estourar o orçamento é ruim, vira vermelho). */
+  overflowIsPositive?: boolean;
 }) {
   const { planned, actual } = summary;
 
@@ -81,10 +103,10 @@ export function AgencyInvestmentBar({
   // barra) — clamp próprio, só pra posicionamento do texto (seção 7: "em
   // telas pequenas, evitar que o label saia para fora da barra").
   const labelPos = Math.min(Math.max(expectedPct, 14), 86);
-  const isOver = actualPct > 100;
+  const isOver = actualPct > 100 && !overflowIsPositive;
   const deviationText = formatDeviationCurrencyText(summary, formatCurrency);
   const markerLabel = formatExpectedMarkerLabel(expectedPct, formatPercent, monthTemporalStatus);
-  const markerTooltip = formatExpectedMarkerTooltip(summary, formatCurrency, formatPercent);
+  const markerTooltip = formatExpectedMarkerTooltip(summary, formatValue, formatPercent);
 
   if (!showExpectedMarker) {
     return (

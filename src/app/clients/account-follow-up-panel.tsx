@@ -50,6 +50,19 @@ export interface LastOptimizationInfo {
  * (`activeArea === "timeline"`) já mostra o histórico completo de forma
  * independente, e um link discreto "Histórico" continua acessível na área
  * técnica do cabeçalho (`[id]/page.tsx`), abrindo o mesmo drawer de sempre.
+ *
+ * Etapa "Simetria Performance x Investimento": Performance e Investimento
+ * (`investmentSummary`) precisam ser um PAR ESPELHADO — mesma anatomia,
+ * mesma altura aproximada. As ações de investimento ("Ver detalhes do
+ * investimento"/"Editar planejamento"/"Ver histórico", antes dentro da
+ * coluna de Investimento) saíram pra um segundo slot (`investmentActions`,
+ * também um `ReactNode` pronto — `MonthInvestmentActions`) renderizado
+ * numa linha COMPARTILHADA, abaixo das duas colunas — nunca dentro de uma
+ * coluna específica, pra não deformar a altura só de um lado (Performance
+ * não tem ação equivalente, e não devemos inventar uma só pra preencher
+ * espaço). Uma divisória vertical bem sutil (`md:divide-x`, mesmo token
+ * `overview-border` de sempre) reforça o grid entre as duas colunas no
+ * desktop, sem virar dois cards.
  */
 export function AccountFollowUpPanel({
   monthActual,
@@ -61,6 +74,7 @@ export function AccountFollowUpPanel({
   channelBreakdown,
   configureObjectiveHref,
   investmentSummary,
+  investmentActions,
 }: {
   /** Investimento realizado do mês selecionado — já calculado pela camada
    * financeira (`sumActualSpendForMonth`), nunca recomputado aqui. */
@@ -85,6 +99,10 @@ export function AccountFollowUpPanel({
    * acontece na prática (a página sempre monta o investimento), mas fica
    * opcional pra este componente não depender de um consumidor específico. */
   investmentSummary?: ReactNode;
+  /** `<MonthInvestmentActions />` já pronto — disclosure/edição/histórico
+   * do investimento, renderizado numa linha compartilhada abaixo do grid
+   * (nunca dentro da coluna de Performance ou de Investimento). */
+  investmentActions?: ReactNode;
 }) {
   return (
     <>
@@ -96,8 +114,8 @@ export function AccountFollowUpPanel({
         configureObjectiveHref={configureObjectiveHref}
       />
 
-      <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
-        <div>
+      <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2 md:divide-x md:divide-overview-border">
+        <div className="md:pr-3">
           {performanceGoal && targetResultCount != null && targetResultCount > 0 && expectedResultsToDate != null && (
             <MonthlyGoalProgress
               goal={performanceGoal}
@@ -107,8 +125,10 @@ export function AccountFollowUpPanel({
             />
           )}
         </div>
-        {investmentSummary}
+        <div className="md:pl-3">{investmentSummary}</div>
       </div>
+
+      {investmentActions && <div className="mt-2 border-t border-overview-border pt-2">{investmentActions}</div>}
 
       {performanceGoal && <ResultsByChannel goal={performanceGoal} channelBreakdown={channelBreakdown} />}
     </>
