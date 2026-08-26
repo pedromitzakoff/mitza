@@ -57,8 +57,14 @@ const NEUTRAL_MUTED = "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc
 const SUCCESS = "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300";
 const WARNING = "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300";
 const DANGER = "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300";
-const INFO = "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300";
 const BRAND_SOFT = "bg-brand/10 text-brand";
+// Etapa "Identidade Visual KOFF": última classe Tailwind blue-* literal do
+// código (era `bg-blue-100 text-blue-700...`) — "Pronto para revisão" é um
+// estado de fluxo (ação pendente), não saúde/performance, então não é
+// semântica protegida (verde/laranja/vermelho); reaproveita o mesmo tom
+// suave da marca (`BRAND_SOFT`, grafite) em vez de inventar uma 4ª cor de
+// identidade.
+const INFO = BRAND_SOFT;
 
 export const TASK_STATUS_REGISTRY: Record<`task.${TaskStatus}`, StatusEntry> = {
   "task.pendente": { label: "Pendente", badgeClassName: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300", tone: "neutral", order: 0 },

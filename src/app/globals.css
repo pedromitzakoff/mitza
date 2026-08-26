@@ -1,11 +1,27 @@
 @import "tailwindcss";
 
 /*
- * Tokens de marca (MITZA). Componentes novos (header/métricas/painel de
- * atenção/gráfico/sprint) usam essas classes (bg-card, text-muted-foreground,
+ * Tokens de marca (KOFF, Etapa "Identidade Visual KOFF" — migração da
+ * identidade antiga MITZA/azul). Componentes novos (header/métricas/painel
+ * de atenção/gráfico/sprint) usam essas classes (bg-card, text-muted-foreground,
  * border-border, bg-brand...) em vez de zinc-* hardcoded. Componentes mais
  * antigos continuam em zinc-* — as duas paletas são próximas o bastante (não
  * há choque visual) e não valia o risco de retocar tudo que já funciona.
+ *
+ * Etapa "Identidade Visual KOFF": grafite/quase-preto assume o papel que
+ * pertencia ao azul (`--brand`/`--brand-hover`/`--navy`) em toda a
+ * plataforma — item ativo, tab ativa, seleção, progress bar, foco, links —
+ * SEM tocar em nenhum componente individual: os ~100 lugares que já usavam
+ * `bg-brand`/`text-brand`/`border-brand`/`outline-brand` (e os ~8 que usavam
+ * `bg-navy`/`text-navy`) herdam a nova cor automaticamente, porque sempre
+ * consumiram o TOKEN, nunca um hex solto — essa disciplina prévia é o que
+ * torna esta migração uma troca de 2 valores em vez de dezenas de arquivos.
+ * Areia (`--sand`/`--sand-subtle`, novos) é a assinatura KOFF — nunca a cor
+ * estrutural: usada só onde o azul já tinha um papel "sutil" (fundo
+ * selecionado suave, `--overview-brand-subtle`/`--overview-surface-selected`
+ * — nunca a seleção SÓLIDA, que continua grafite+branco via `bg-brand`).
+ * Verde/laranja/vermelho (`--overview-success/warning/danger`) são
+ * significado operacional, não identidade — propositalmente INTOCADOS.
  */
 :root {
   --background: #f7f7f5;
@@ -13,8 +29,12 @@
   --card: #ffffff;
   --muted-foreground: #737373;
   --border-default: #e7e5e4;
-  --brand: #4169e1;
-  --brand-hover: #3151b8;
+  /* Grafite KOFF — era azul (#4169e1). Ponto de partida pedido (#1C1C1C),
+     ajustado 1 unidade pra compartilhar o MESMO preto quente que
+     `--foreground`/`--card` (modo escuro) já usam — nunca um preto "frio"
+     dissonante do resto da paleta neutra que já existia. */
+  --brand: #1c1c1c;
+  --brand-hover: #333333;
 
   /* --authenticated-bg (Etapa "Fundo branco autenticado"): fundo estrutural
      de toda a aplicação autenticada (aplicado em `<main>`, AppShell) — nunca
@@ -27,9 +47,24 @@
      cliente) — ambos retirados; as páginas voltam a consumir só este token
      compartilhado, sem override próprio. */
   --authenticated-bg: #ffffff;
-  --navy: #0f1c42;
+  /* Etapa "Identidade Visual KOFF": `--navy` era um azul-marinho próprio
+     (#0f1c42) pra títulos/valores em destaque e o marcador de "esperado" da
+     barra de progresso (`bg-navy`/`text-navy`, ~8 arquivos) — nunca fazia
+     parte da paleta semântica, sempre foi só "ênfase neutra escura". Vira
+     um alias do grafite: mesmo papel de sempre, cor nova, zero componente
+     tocado. */
+  --navy: #1c1c1c;
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
   --shadow-float: 0 4px 12px rgba(16, 24, 40, 0.10), 0 2px 6px rgba(16, 24, 40, 0.06);
+
+  /* Areia KOFF (novo) — assinatura visual, nunca a cor estrutural (ver
+     comentário acima). `--sand` é o tom de referência; `--sand-subtle` é a
+     derivação bem clara pra uso em UI (fundo selecionado suave, hover,
+     superfícies secundárias institucionais) — o mesmo valor que
+     `--overview-brand-subtle`/`--overview-surface-selected` passam a usar
+     abaixo, em vez do azul-clarinho de antes. */
+  --sand: #c8bead;
+  --sand-subtle: #f1ece4;
 
   /* ---------------------------------------------------------------------
    * Fundação do novo Design System (Etapa 47) — inspirado em densidade de
@@ -42,17 +77,28 @@
    * mesmo verde/laranja/vermelho já usado à mão (bg-green-100 etc.) em
    * badges hoje — não é uma paleta nova, só um nome pra parar de repetir
    * o valor solto em cada componente.
+   *
+   * Etapa "Identidade Visual KOFF": os neutros abaixo (surface/border/text)
+   * tinham uma leve subtonalidade FRIA (azulada) — mesma família do azul
+   * que estamos removendo como identidade, só clara demais pra notar sozinha.
+   * Reformulados com subtonalidade QUENTE (mesma família de --background/
+   * --foreground/--sand), luminosidade praticamente idêntica à anterior —
+   * contraste e hierarquia preservados, só a temperatura da cor mudou.
+   * `--overview-brand-subtle`/`--overview-surface-selected` (fundo
+   * "selecionado" sutil) trocam de azul-clarinho pra `--sand-subtle` — é
+   * exatamente o papel que a areia descreve ("backgrounds selecionados
+   * muito sutis"), nunca a seleção sólida (essa é `bg-brand`, grafite).
    * --------------------------------------------------------------------- */
   --overview-surface: #ffffff;
-  --overview-surface-subtle: #f6f7f9;
-  --overview-surface-hover: #eef0f4;
-  --overview-surface-selected: #e8eefd;
-  --overview-border: #e1e4ea;
-  --overview-border-strong: #c9cedb;
-  --overview-text-primary: #12151c;
-  --overview-text-secondary: #5b6472;
-  --overview-text-muted: #8891a0;
-  --overview-brand-subtle: #e8eefd;
+  --overview-surface-subtle: #f7f5f1;
+  --overview-surface-hover: #efece5;
+  --overview-surface-selected: var(--sand-subtle);
+  --overview-border: #e5e1d9;
+  --overview-border-strong: #c9c3b6;
+  --overview-text-primary: #181714;
+  --overview-text-secondary: #655f56;
+  --overview-text-muted: #8d887d;
+  --overview-brand-subtle: var(--sand-subtle);
   --overview-success: #1a7f4e;
   --overview-success-subtle: #e6f5ec;
   --overview-warning: #a35a00;
@@ -81,6 +127,8 @@
   --color-brand-hover: var(--brand-hover);
   --color-authenticated-bg: var(--authenticated-bg);
   --color-navy: var(--navy);
+  --color-sand: var(--sand);
+  --color-sand-subtle: var(--sand-subtle);
   --color-overview-surface: var(--overview-surface);
   --color-overview-surface-subtle: var(--overview-surface-subtle);
   --color-overview-surface-hover: var(--overview-surface-hover);
@@ -108,24 +156,32 @@
     --card: #1c1c1a;
     --muted-foreground: #9c9a95;
     --border-default: #34332f;
-    --brand: #7b93e8;
-    --brand-hover: #5b78d6;
+    /* Etapa "Identidade Visual KOFF": grafite sólido não funciona como
+       identidade no modo escuro (precisa ser CLARO pra ler contra o fundo
+       escuro) — vira areia clara, o mesmo papel que `--navy` já cumpria
+       aqui antes (`#dde4fb`, um lavanda clarinho) só que na família quente
+       da marca em vez de azulada. */
+    --brand: #d8cfbe;
+    --brand-hover: #e6ddcc;
 
     --authenticated-bg: var(--background);
-    --navy: #dde4fb;
+    --navy: #d8cfbe;
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
     --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
 
-    --overview-surface: #171a21;
-    --overview-surface-subtle: #1c1f28;
-    --overview-surface-hover: #21252f;
-    --overview-surface-selected: #1c2440;
-    --overview-border: #262b35;
-    --overview-border-strong: #333a47;
-    --overview-text-primary: #eef1f6;
-    --overview-text-secondary: #a7afbd;
-    --overview-text-muted: #767f8f;
-    --overview-brand-subtle: #1c2440;
+    --sand: #c8bead;
+    --sand-subtle: #2a2620;
+
+    --overview-surface: #1a1917;
+    --overview-surface-subtle: #201e1a;
+    --overview-surface-hover: #26241f;
+    --overview-surface-selected: var(--sand-subtle);
+    --overview-border: #2c2823;
+    --overview-border-strong: #3a352c;
+    --overview-text-primary: #f0ede6;
+    --overview-text-secondary: #aca597;
+    --overview-text-muted: #847d70;
+    --overview-brand-subtle: var(--sand-subtle);
     --overview-success: #4fbe86;
     --overview-success-subtle: #163224;
     --overview-warning: #dba24a;

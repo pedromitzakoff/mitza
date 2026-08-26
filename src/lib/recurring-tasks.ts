@@ -1,5 +1,13 @@
 import type { OptimizationType } from "@/lib/supabase/database.types";
 
+/** Cor padrão sugerida ao cadastrar uma recorrência nova (`<input
+ * type="color">` sem seleção prévia) — livre escolha do admin depois, nunca
+ * imposta. Etapa "Identidade Visual KOFF": era o azul antigo da marca
+ * (#4169E1, hardcoded em 2 lugares — form e Server Action); centralizado
+ * aqui e atualizado pro grafite novo (mesmo valor de `--brand`), único
+ * lugar que precisa mudar se a cor de marca mudar de novo. */
+export const DEFAULT_RECURRING_TASK_COLOR = "#1C1C1C";
+
 /**
  * Reformulação do sistema de tarefas (28/07): tarefa recorrente é um registro
  * PERMANENTE — nunca "conclui" (nasce e morre), "registra uma execução"

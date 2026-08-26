@@ -28,7 +28,13 @@ export const REPORT_THEMES: Record<ReportThemeDb, ReportTheme> = {
     id: "mitza",
     brandName: "MITZA",
     logoUrl: null,
-    accentColor: "#4169E1",
+    // Etapa "Identidade Visual KOFF": era o azul antigo da marca (#4169E1)
+    // — o relatório exportado (HTML/PDF, renderer isolado, não lê os
+    // tokens de globals.css) precisa da MESMA atualização à parte pra não
+    // ficar com uma identidade desatualizada em relação à plataforma ao
+    // vivo. `id`/`brandName` continuam "mitza"/"MITZA" (renomear a marca é
+    // decisão de produto/schema, fora do escopo desta migração visual).
+    accentColor: "#1C1C1C",
     showCoverBranding: true,
     footerText: "Gerado por MITZA Analytics",
   },

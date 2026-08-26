@@ -12,6 +12,7 @@ import {
 } from "./recurring-tasks-actions";
 import { SubmitButton } from "@/app/submit-button";
 import { SETTINGS_SECONDARY_BUTTON_CLASSES, SETTINGS_DESTRUCTIVE_BUTTON_CLASSES } from "./settings-shell";
+import { DEFAULT_RECURRING_TASK_COLOR } from "@/lib/recurring-tasks";
 
 export interface RecurringTaskItem {
   id: string;
@@ -140,7 +141,7 @@ function RecurringTaskFields({
         <input
           type="color"
           name="color"
-          defaultValue={task?.color ?? "#4169E1"}
+          defaultValue={task?.color ?? DEFAULT_RECURRING_TASK_COLOR}
           className="h-7 w-9 rounded border border-border"
           aria-label="Cor"
         />

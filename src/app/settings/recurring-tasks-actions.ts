@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { toUserFacingError } from "@/lib/user-facing-error";
+import { DEFAULT_RECURRING_TASK_COLOR } from "@/lib/recurring-tasks";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -38,7 +39,7 @@ function slugifyChecklistLabel(label: string, usedKeys: Set<string>): string {
 function readRecurringTaskFields(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const icon = String(formData.get("icon") ?? "🔁").trim() || "🔁";
-  const color = String(formData.get("color") ?? "#4169E1").trim() || "#4169E1";
+  const color = String(formData.get("color") ?? DEFAULT_RECURRING_TASK_COLOR).trim() || DEFAULT_RECURRING_TASK_COLOR;
   const defaultAssigneeId = String(formData.get("default_assignee_id") ?? "") || null;
   const appliesToAll = formData.get("applies_to_all") === "on";
   const clientIds = formData.getAll("client_ids").map(String);
