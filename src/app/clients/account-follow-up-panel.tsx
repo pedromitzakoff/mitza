@@ -54,13 +54,26 @@ export interface LastOptimizationInfo {
  *
  * Etapa "Visão Geral: decisão em 5 segundos": o sub-bloco entre os KPIs e
  * "Resultados por canal" deixou de ser a "Evolução diária de resultados"
- * (gráfico de 7 barras, granularidade de investigação) e virou "Meta
- * mensal" (`MonthlyGoalProgress`) — quanto já foi feito no mês, qual a
- * meta, que % isso representa e se o ritmo está adequado. A granularidade
+ * (gráfico de 7 barras, granularidade de investigação) e virou
+ * "Performance" (`MonthlyGoalProgress`) — quanto já foi feito no mês, qual
+ * a meta, que % isso representa e se o ritmo está adequado. A granularidade
  * diária não foi removida do produto: continua disponível, com mais
  * profundidade, no Analytics (`AnalyticsTrendChart`) — só deixou de
  * competir com a decisão rápida que esta tela precisa responder. Evolui o
  * card já existente (pedido explícito do usuário: nunca um card novo).
+ *
+ * 2ª rodada de simplificação: `MonthlyGoalProgress` não lê mais
+ * `dailyResultSeries` (a linha "Média 7d" saiu do card) — a prop continua
+ * aceita aqui só porque a busca da série (`buildDailyResultSeries`, feita
+ * pela página) segue existindo e podendo alimentar outra coisa no futuro;
+ * nenhum dado foi apagado, só deixou de ser lido por este card específico.
+ *
+ * A borda/fundo do "card" saiu daqui: `[id]/page.tsx` agora envolve este
+ * componente E `MonthInvestmentSummary` numa ÚNICA superfície (pedido
+ * explícito do usuário: "evitar caixa dentro de caixa" — Performance e
+ * Investimento são duas SEÇÕES da mesma superfície, não dois cards
+ * empilhados). Nenhuma prop, cálculo ou lógica interna mudou, só quem
+ * desenha a borda.
  *
  * Refinamento visual (Etapa "Grid e hierarquia da página do cliente"): o
  * seletor "Consolidado | Meta Ads | Google Ads" (`channelSwitch`, montado
@@ -77,6 +90,7 @@ export function AccountFollowUpPanel({
   performanceGoal,
   performanceSummary,
   targetCostPerResult,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- aceita mas não lida por este card desde a 2ª rodada de simplificação (ver comentário acima); a página continua buscando o dado normalmente.
   dailyResultSeries,
   targetResultCount,
   expectedResultsToDate,
@@ -117,7 +131,7 @@ export function AccountFollowUpPanel({
   buildReviewDetailHref: (reviewId: string) => string;
 }) {
   return (
-    <div className="rounded-lg border border-overview-border bg-overview-surface p-3">
+    <>
       {channelSwitch && <div className="mb-2 flex justify-end">{channelSwitch}</div>}
       <MonthlyKpiSummary
         monthActual={monthActual}
@@ -133,7 +147,6 @@ export function AccountFollowUpPanel({
           monthResultCount={performanceSummary?.resultCount ?? 0}
           targetResultCount={targetResultCount}
           expectedToDate={expectedResultsToDate}
-          series={dailyResultSeries}
         />
       )}
 
@@ -146,6 +159,6 @@ export function AccountFollowUpPanel({
         historyHref={historyHref}
         buildReviewDetailHref={buildReviewDetailHref}
       />
-    </div>
+    </>
   );
 }

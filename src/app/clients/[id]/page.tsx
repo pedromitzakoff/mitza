@@ -1761,8 +1761,15 @@ export default async function ClientPage({
               não mais os valores sempre-consolidados) ao canal escolhido.
               Refinamento visual: vive dentro da borda do card
               (`channelSwitch`), não mais solto acima dele — mesmo href/estado
-              ativo de sempre, só a posição mudou. */}
-          <div className="mt-3">
+              ativo de sempre, só a posição mudou.
+
+              Etapa "Visão Geral: decisão em 5 segundos" (2ª rodada):
+              `AccountFollowUpPanel` (Performance) e `MonthInvestmentSummary`
+              (Investimento) deixaram de ser dois cards empilhados e viraram
+              duas SEÇÕES de uma única superfície — pedido explícito do
+              usuário pra reduzir "caixa dentro de caixa". Nenhuma prop dos
+              dois componentes mudou, só a borda/fundo que os envolvia. */}
+          <div className="mt-3 rounded-lg border border-overview-border bg-overview-surface p-3">
             <AccountFollowUpPanel
               channelSwitch={<VisaoGeralChannelSwitch baseHref={metricsChannelBaseHref} active={metricsChannel} />}
               monthLabel={monthLabel}
@@ -1780,12 +1787,6 @@ export default async function ClientPage({
               historyHref={reviewsHistoryHref}
               buildReviewDetailHref={buildReviewDetailHref}
             />
-          </div>
-
-          {/* Financeiro — informação de contexto (orçamento vigente,
-              ritmo, edição de orçamento), não um fluxo de trabalho à
-              parte. */}
-          <div className="mt-3">
             <MonthInvestmentSummary
               planned={visaoGeralPlanned}
               actual={visaoGeralMonthActual}
