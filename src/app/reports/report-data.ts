@@ -10,12 +10,25 @@ import {
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
-import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
+import { groupChannelSpendBySprintId, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { getClientMonthHorizon } from "@/lib/client-month-horizons";
 import { resolveConsolidatedMonthlyPlanned, primaryGoalResultTypeFilter } from "@/lib/client-plan";
-import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+import { resolveClientMonthlyActuals } from "@/lib/client-actuals";
+import { computePerformanceSummary, type PerformanceSummary } from "@/lib/performance";
+import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
+import { getCampaignDailyMetricsForPeriod } from "@/lib/campaign-analytics-data";
+import { buildCampaignSummaries, type CampaignSummary } from "@/lib/campaign-analytics";
+import {
+  AVAILABLE_TRAFFIC_CHANNELS,
+  resolveClientChannelScopeOptions,
+  resolveSelectedChannelScope,
+  type ChannelScope,
+  type TrafficChannel,
+} from "@/lib/traffic-channels";
+import type { PerformanceGoal } from "@/lib/performance-goals";
+import type { PerformanceRecordRawRow } from "@/app/operation/operation-data";
 import {
   computeAgencyExecutionSummary,
   computeSprintBehaviorRows,
@@ -157,6 +170,38 @@ export interface ReportViewData {
   nextMonthOpportunities: string | null;
   nextMonthTests: string | null;
   actionItems: ReportActionItemRow[];
+  /** Etapa "Relatório de Performance das Campanhas": objetivo estruturado do
+   * cliente (`clients.performance_goal`) — `null` = sem objetivo configurado
+   * ainda, `report-view.tsx` mostra o mesmo link "Configurar objetivo" já
+   * usado na Visão Geral, nunca inventa "leads" como padrão. */
+  performanceGoal: PerformanceGoal | null;
+  /** Opções de canal pra este cliente (Meta/Google/Consolidado), já na ordem
+   * certa — mesma fonte única (`resolveClientChannelScopeOptions`,
+   * lib/traffic-channels.ts) que a Visão Geral do cliente usa; nunca uma
+   * segunda regra de "quais canais mostrar". */
+  channelScopeOptions: ChannelScope[];
+  /** Canal efetivamente selecionado (querystring `metricsChannel`, mesmo
+   * nome de param que `VisaoGeralChannelSwitch` já usa — reaproveitado tal
+   * qual, nunca uma segunda convenção de nome). */
+  channelScope: ChannelScope;
+  /** Investimento do canal/consolidado selecionado — alimenta o "Resumo do
+   * período" (`MonthlyKpiSummary`, mesmo componente da Visão Geral do
+   * cliente). Sempre um número (nunca `null`) pelo mesmo motivo de
+   * `resolveClientMonthlyActuals`: um canal sem investimento no escopo não é
+   * um canal presente em `channelScopeOptions`. */
+  scopedInvestment: number;
+  /** `null` só quando `performanceGoal` também é `null` — mesma regra do
+   * `MonthlyKpiSummary` que a Visão Geral do cliente já usa; nenhum cálculo
+   * novo, é a mesma `computePerformanceSummary` (lib/performance.ts). */
+  performanceSummary: PerformanceSummary | null;
+  targetCostPerResult: number | null;
+  /** Campanhas do escopo selecionado (todas as do cliente quando
+   * "consolidated") — nunca misturadas sem identificação: cada
+   * `CampaignSummary` carrega seu próprio `channel`. Fonte:
+   * `campaign_daily_metrics` via `getCampaignDailyMetricsForPeriod` +
+   * `buildCampaignSummaries` (lib/campaign-analytics.ts) — nenhuma métrica
+   * nova derivada aqui, só o que a fonte real já fornece por campanha. */
+  campaigns: CampaignSummary[];
 }
 
 /** Monta os dados completos do relatório individual — ao vivo (dados atuais
@@ -167,6 +212,7 @@ export async function buildReportViewData(
   supabase: Supabase,
   clientId: string,
   monthParam: string | undefined,
+  channelParam: string | undefined,
   today: Date,
   monthLabelFormatter: (firstDay: string) => string,
 ): Promise<ReportViewData | null> {
@@ -175,7 +221,9 @@ export async function buildReportViewData(
 
   const { data: client } = await supabase
     .from("clients")
-    .select("id, name, status, performance_goal, primary_manager:team_members!clients_primary_manager_id_fkey(name)")
+    .select(
+      "id, name, status, performance_goal, media_channels, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(name)",
+    )
     .eq("id", clientId)
     .is("deleted_at", null)
     .single();
@@ -191,6 +239,104 @@ export async function buildReportViewData(
     .eq("client_id", clientId)
     .eq("month_start", monthRange.firstDay)
     .maybeSingle();
+
+  // Etapa "Relatório de Performance das Campanhas": investimento/resultado/
+  // custo por escopo (canal/consolidado) + campanhas do período — SEMPRE
+  // recalculados ao vivo, mesmo pra um relatório "finalizado" (o `snapshot`
+  // dele é de antes desta etapa e nunca teve essa dimensão; congelar isso
+  // também exigiria estender o formato do snapshot, fora do escopo desta
+  // rodada — dado histórico de mídia de um mês encerrado já é estável na
+  // prática, então recalcular ao vivo aqui não diverge do que seria
+  // congelado). Reaproveita EXATAMENTE os mesmos resolvedores da Visão Geral
+  // do cliente (`resolveClientMonthlyActuals`, `computePerformanceSummary`,
+  // `resolveClientChannelScopeOptions`/`resolveSelectedChannelScope`) e da
+  // seção "Campanhas" do Analytics (`getCampaignDailyMetricsForPeriod` +
+  // `buildCampaignSummaries`) — nenhuma fórmula nova.
+  const [sprintsForActuals, dailySpendChannelRows, channelSpendRows, campaignDailyMetricRows] = await Promise.all([
+    requireQuery(
+      supabase
+        .from("sprints")
+        .select("id, start_date, end_date")
+        .eq("client_id", clientId)
+        .lte("start_date", monthRange.lastDay)
+        .gte("end_date", monthRange.firstDay),
+      "sprints:actuals",
+    ),
+    requireQuery(
+      supabase
+        .from("daily_spend")
+        .select("date, spend, channel")
+        .eq("client_id", clientId)
+        .gte("date", monthRange.firstDay)
+        .lte("date", monthRange.lastDay),
+      "daily_spend:channel",
+    ),
+    requireQuery(
+      supabase
+        .from("sprint_channel_spend")
+        .select("sprint_id, channel, spend_source, manual_actual_spend")
+        .eq("client_id", clientId),
+      "sprint_channel_spend",
+    ),
+    getCampaignDailyMetricsForPeriod(supabase, clientId, { start: monthRange.firstDay, end: monthRange.lastDay }),
+  ]);
+
+  const performanceRecordRowsForActuals = await resolvePerformanceRowsForSprints(
+    supabase,
+    sprintsForActuals.map((s) => ({ id: s.id, client_id: clientId, start_date: s.start_date, end_date: s.end_date })),
+  );
+  const performanceRecordsForActuals: PerformanceRecordRawRow[] = performanceRecordRowsForActuals.map((r) => ({
+    sprintId: r.sprint_id,
+    channel: r.channel,
+    resultType: r.result_type,
+    resultCount: r.result_count,
+    revenue: r.revenue,
+    source: r.source,
+    sourceUpdatedAt: r.source_updated_at,
+  }));
+
+  const channelSpendOverrideRowsForActuals: SprintChannelSpendOverrideRow[] = (channelSpendRows ?? []).map((r) => ({
+    sprintId: r.sprint_id,
+    channel: r.channel,
+    spend_source: r.spend_source,
+    manual_actual_spend: r.manual_actual_spend,
+  }));
+
+  const performanceGoal = client.performance_goal;
+  const actuals = resolveClientMonthlyActuals({
+    sprints: sprintsForActuals.map((s) => ({ sprintId: s.id, start_date: s.start_date, end_date: s.end_date })),
+    dailySpendChannel: (dailySpendChannelRows ?? []).map((d) => ({ date: d.date, channel: d.channel as TrafficChannel, spend: d.spend })),
+    channelSpendOverrides: channelSpendOverrideRowsForActuals,
+    performanceRecords: performanceRecordsForActuals,
+    performanceGoal,
+  });
+
+  const channelScopeOptions = resolveClientChannelScopeOptions(client.media_channels);
+  const channelScope = resolveSelectedChannelScope(channelParam, client.media_channels);
+  const scopedMetrics = channelScope === "consolidated" ? actuals.consolidated : actuals.byChannel[channelScope];
+  const scopedInvestment = scopedMetrics?.investment ?? 0;
+  const targetCostPerResult =
+    channelScope === "consolidated"
+      ? client.target_cost_per_result
+      : (actuals.byChannel[channelScope]?.cpa ?? client.target_cost_per_result);
+  const performanceSummary = performanceGoal
+    ? computePerformanceSummary({
+        scope: channelScope,
+        records: performanceRecordsForActuals,
+        resultType: performanceGoal,
+        consolidatedActualSpend: actuals.consolidated.investment ?? 0,
+        targetCostPerResult,
+        channelActualSpend: channelScope !== "consolidated" ? { [channelScope]: scopedInvestment } : undefined,
+      })
+    : null;
+
+  // Campanhas do escopo selecionado — "consolidated" mostra as de TODOS os
+  // canais configurados do cliente (cada uma já badge com seu próprio
+  // `channel`, nunca misturadas sem identificação); um canal específico
+  // filtra só as campanhas daquele canal.
+  const scopedCampaignRows =
+    channelScope === "consolidated" ? campaignDailyMetricRows : campaignDailyMetricRows.filter((r) => r.channel === channelScope);
+  const campaigns = buildCampaignSummaries(scopedCampaignRows);
 
   if (report?.status === "finalizado" && report.snapshot) {
     const snap = report.snapshot as Record<string, unknown>;
@@ -223,6 +369,13 @@ export async function buildReportViewData(
       nextMonthOpportunities: report.next_month_opportunities,
       nextMonthTests: report.next_month_tests,
       actionItems: snap.actionItems as ReportActionItemRow[],
+      performanceGoal,
+      channelScopeOptions,
+      channelScope,
+      scopedInvestment,
+      performanceSummary,
+      targetCostPerResult,
+      campaigns,
     };
   }
 
@@ -231,79 +384,69 @@ export async function buildReportViewData(
   // (`sumActualSpendForMonth`), esperado até hoje
   // (`computeMonthlyExpectedToDateByCalendar`, Etapa 67) e
   // `classifySpendStatus`, nunca uma conta paralela.
-  const [sprints, dailySpend, tasks, plannedAllocations, budgetChanges, { count: optimizationsCount }, channelSpendRows] =
-    await Promise.all([
-      // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
-      // mês precisa ser encontrada mesmo com start_date fora do intervalo.
-      requireQuery(
-        supabase
-          .from("sprints")
-          .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
-          .eq("client_id", clientId)
-          .lte("start_date", monthRange.lastDay)
-          .gte("end_date", monthRange.firstDay),
-        "sprints",
-      ),
-      requireQuery(
-        supabase
-          .from("daily_spend")
-          .select("date, spend")
-          .eq("client_id", clientId)
-          .gte("date", monthRange.firstDay)
-          .lte("date", monthRange.lastDay),
-        "daily_spend",
-      ),
-      requireQuery(
-        supabase
-          .from("tasks")
-          .select("id, type, status, due_date, recurrence, sprint_id")
-          .eq("client_id", clientId)
-          .gte("due_date", monthRange.firstDay)
-          .lte("due_date", monthRange.lastDay),
-        "tasks",
-      ),
-      requireQuery(
-        supabase
-          .from("sprint_planned_allocations")
-          .select("sprint_id, date, planned_amount")
-          .eq("client_id", clientId)
-          .gte("date", monthRange.firstDay)
-          .lte("date", monthRange.lastDay),
-        "sprint_planned_allocations",
-      ),
-      // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
-      // mais só `channel = 'meta'`) — `resolveConsolidatedMonthlyPlanned`
-      // soma os canais com plano.
-      // Etapa "Múltiplos Objetivos": só o objetivo PRINCIPAL — nunca deixa a
-      // meta de um objetivo secundário aparecer no Relatório do principal.
-      requireQuery(
-        supabase
-          .from("monthly_budget_changes")
-          .select("channel, month, new_amount, changed_at")
-          .eq("client_id", clientId)
-          .eq("month", monthRange.firstDay)
-          .or(primaryGoalResultTypeFilter(client.performance_goal)),
-        "monthly_budget_changes",
-      ),
-      // Otimizações do mês (Etapa 74) — revisões estratégicas da conta
-      // (account_reviews.reviewed_at) registradas no período, mesma definição
-      // usada na Visão Geral; `head: true` porque só a contagem importa aqui.
+  const [sprints, dailySpend, tasks, plannedAllocations, budgetChanges, { count: optimizationsCount }] = await Promise.all([
+    // Sobreposição com o mês (não "começa no mês") — sprint que atravessa
+    // mês precisa ser encontrada mesmo com start_date fora do intervalo.
+    requireQuery(
       supabase
-        .from("account_reviews")
-        .select("id", { count: "exact", head: true })
+        .from("sprints")
+        .select("id, start_date, end_date, planned_spend, spend_source, manual_actual_spend")
         .eq("client_id", clientId)
-        .gte("reviewed_at", `${monthRange.firstDay}T00:00:00Z`)
-        .lte("reviewed_at", `${monthRange.lastDay}T23:59:59.999Z`),
-      // Investimento manual multicanal (`sprint_channel_spend`, adotada como
-      // fonte de verdade — ver `resolveManualActualSpend`, lib/effective-spend.ts).
-      requireQuery(
-        supabase
-          .from("sprint_channel_spend")
-          .select("sprint_id, channel, spend_source, manual_actual_spend")
-          .eq("client_id", clientId),
-        "sprint_channel_spend",
-      ),
-    ]);
+        .lte("start_date", monthRange.lastDay)
+        .gte("end_date", monthRange.firstDay),
+      "sprints",
+    ),
+    requireQuery(
+      supabase
+        .from("daily_spend")
+        .select("date, spend")
+        .eq("client_id", clientId)
+        .gte("date", monthRange.firstDay)
+        .lte("date", monthRange.lastDay),
+      "daily_spend",
+    ),
+    requireQuery(
+      supabase
+        .from("tasks")
+        .select("id, type, status, due_date, recurrence, sprint_id")
+        .eq("client_id", clientId)
+        .gte("due_date", monthRange.firstDay)
+        .lte("due_date", monthRange.lastDay),
+      "tasks",
+    ),
+    requireQuery(
+      supabase
+        .from("sprint_planned_allocations")
+        .select("sprint_id, date, planned_amount")
+        .eq("client_id", clientId)
+        .gte("date", monthRange.firstDay)
+        .lte("date", monthRange.lastDay),
+      "sprint_planned_allocations",
+    ),
+    // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
+    // mais só `channel = 'meta'`) — `resolveConsolidatedMonthlyPlanned`
+    // soma os canais com plano.
+    // Etapa "Múltiplos Objetivos": só o objetivo PRINCIPAL — nunca deixa a
+    // meta de um objetivo secundário aparecer no Relatório do principal.
+    requireQuery(
+      supabase
+        .from("monthly_budget_changes")
+        .select("channel, month, new_amount, changed_at")
+        .eq("client_id", clientId)
+        .eq("month", monthRange.firstDay)
+        .or(primaryGoalResultTypeFilter(client.performance_goal)),
+      "monthly_budget_changes",
+    ),
+    // Otimizações do mês (Etapa 74) — revisões estratégicas da conta
+    // (account_reviews.reviewed_at) registradas no período, mesma definição
+    // usada na Visão Geral; `head: true` porque só a contagem importa aqui.
+    supabase
+      .from("account_reviews")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", clientId)
+      .gte("reviewed_at", `${monthRange.firstDay}T00:00:00Z`)
+      .lte("reviewed_at", `${monthRange.lastDay}T23:59:59.999Z`),
+  ]);
 
   // Etapa "Horizonte de Planejamento": cliente de evento (campanha que
   // termina antes do fim do mês) — null (comportamento idêntico a antes
@@ -392,6 +535,13 @@ export async function buildReportViewData(
       nextMonthOpportunities: null,
       nextMonthTests: null,
       actionItems: [],
+      performanceGoal,
+      channelScopeOptions,
+      channelScope,
+      scopedInvestment,
+      performanceSummary,
+      targetCostPerResult,
+      campaigns,
     };
   }
 
@@ -509,5 +659,12 @@ export async function buildReportViewData(
       status: a.status,
       sentToTaskId: a.sent_to_task_id,
     })),
+    performanceGoal,
+    channelScopeOptions,
+    channelScope,
+    scopedInvestment,
+    performanceSummary,
+    targetCostPerResult,
+    campaigns,
   };
 }

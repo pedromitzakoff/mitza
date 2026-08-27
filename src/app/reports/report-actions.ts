@@ -349,7 +349,7 @@ export async function finalizeReportAction(clientId: string, monthStart: string)
   const supabase = await createSupabaseClient();
   const { id: reportId } = await getOrCreateReport(supabase, clientId, monthStart);
 
-  const view = await buildReportViewData(supabase, clientId, monthParamFromStart(monthStart), todayUTC(), formatMonthLabel);
+  const view = await buildReportViewData(supabase, clientId, monthParamFromStart(monthStart), undefined, todayUTC(), formatMonthLabel);
   const returnTo = reportsUrl(clientId, monthStart);
   if (!view) redirect(`${returnTo}&error=${encodeURIComponent("Cliente não encontrado")}`);
 
