@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Filter, X } from "lucide-react";
 import { ScopeSelector, type ScopeValue } from "./scope-selector";
@@ -37,9 +37,10 @@ const RITMO_LABEL: Record<string, string> = {
  * usuário: "parece um formulário de cadastro, não um controle de
  * dashboard"). Lado esquerdo: escopo (substitui os antigos "Carteira" +
  * "Cliente" — nunca coexistem na UI nova, ver `ScopeSelector`) + plataforma.
- * Lado direito: "Filtros" (popover com os 3 critérios que sobram depois do
- * escopo cobrir Gestor/Cliente: Situação da conta/Tipo de resultado/Ritmo
- * de investimento) + "Limpar filtros" (só quando há algo ativo). Chips
+ * Lado direito: navegação de mês (`monthNav`, recebida pronta de `page.tsx`)
+ * + "Filtros" (popover com os 3 critérios que sobram depois do escopo
+ * cobrir Gestor/Cliente: Situação da conta/Tipo de resultado/Ritmo de
+ * investimento) + "Limpar filtros" (só quando há algo ativo). Chips
  * removíveis abaixo da barra espelham cada filtro ativo, incluindo o
  * próprio escopo quando é um gestor ou cliente específico.
  */
@@ -54,6 +55,7 @@ export function AgencyFilters({
   ritmo,
   platform,
   preserved,
+  monthNav,
 }: {
   defaultManager: "all" | "me";
   gestores: { id: string; name: string }[];
@@ -70,6 +72,12 @@ export function AgencyFilters({
    * nenhum. */
   platform: "consolidado" | "meta" | "google" | "tiktok";
   preserved: { month?: string; sprintBucket?: string; sync?: string; meta?: string };
+  /** Navegação de mês (‹ Agosto de 2026 ›) — construída em `page.tsx` (usa
+   * `IconButton`/`Button` de Server Component) e recebida pronta aqui pra
+   * viver na mesma linha de "Filtros", à direita — ver Etapa "Cabeçalho
+   * executivo": o antigo `PageHeader` (título "Visão Geral" + esta nav como
+   * `actions`) saiu, e a nav passou a fazer parte da toolbar. */
+  monthNav: ReactNode;
 }) {
   const router = useRouter();
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -203,8 +211,16 @@ export function AgencyFilters({
         </div>
 
         <div className="ml-auto flex items-center gap-1.5">
-          <span ref={filtersTriggerRef} className="inline-block">
-            <Button variant="secondary" size="sm" onClick={() => setFiltersOpen((v) => !v)}>
+          {monthNav}
+
+          <span ref={filtersTriggerRef} className="relative inline-block">
+            <SandRail />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setFiltersOpen((v) => !v)}
+              style={{ paddingLeft: "1rem" }}
+            >
               <Filter className="h-3.5 w-3.5" aria-hidden="true" />
               Filtros
               {secondaryCount > 0 && (

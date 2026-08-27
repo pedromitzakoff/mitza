@@ -1282,7 +1282,7 @@ quem deve atualizá-lo e quando.
     pills grandes pra severidade/situação), `Badge` (pill discreto, pros
     poucos casos em que uma etiqueta ainda ajuda), `Metric` (label+valor,
     generaliza o antigo `StatItem` local), `ProgressBar` (barra de
-    investimento nova, ver nota abaixo), `PageHeader`, `SectionHeader`,
+    investimento nova, ver nota abaixo), `SectionHeader`,
     `EmptyState`, `Toolbar`.
 
     **`ProgressBar` é uma variante nova, não uma edição de

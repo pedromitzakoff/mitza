@@ -43,8 +43,8 @@ import { ReminderFormDrawer } from "./reminder-form-drawer";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { Button, IconButton } from "@/components/workspace/button";
 import { ProgressBar } from "@/components/workspace/progress-bar";
-import { PageHeader } from "@/components/workspace/page-header";
 import { SectionHeader } from "@/components/workspace/section-header";
+import { SandRail } from "@/components/workspace/sand-rail";
 import type { StatusTone } from "@/components/workspace/status-dot";
 import type { TrafficChannelDb } from "@/lib/supabase/database.types";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
@@ -868,58 +868,62 @@ export default async function Home({
 
   const monthLabel = formatMonthLabel(monthRange.firstDay);
 
+  // Etapa "Cabeçalho executivo": o título "Visão Geral" saiu (redundante com
+  // a Sidebar + o próprio conteúdo da página) e o seletor de mês — antes uma
+  // action do extinto `PageHeader` — virou parte da mesma linha de controles
+  // da `AgencyFilters`, ao lado de "Filtros". A toolbar é agora o cabeçalho
+  // funcional da página; ganhou o mesmo rail em areia (`SandRail`) dos
+  // demais seletores estruturais (escopo/plataforma), consolidando os
+  // quatro controles superiores como uma família visual só.
+  const monthNav = (
+    <div className="relative flex items-center gap-0.5 rounded-md border border-overview-border bg-overview-surface py-1 pl-4 pr-1 text-sm">
+      <SandRail />
+      <IconButton
+        href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
+        aria-label="Mês anterior"
+        variant="ghost"
+        size="sm"
+      >
+        &lsaquo;
+      </IconButton>
+      <span className="min-w-[8rem] text-center text-sm font-medium text-overview-text-primary">{monthLabel}</span>
+      <IconButton
+        href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
+        aria-label="Próximo mês"
+        variant="ghost"
+        size="sm"
+      >
+        &rsaquo;
+      </IconButton>
+      {params.month && (
+        <Button href={buildUrl({ month: "" })} variant="ghost" size="sm" className="ml-0.5">
+          Mês atual
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     <div className={`min-h-[calc(100dvh_-_3rem)] ${inter.variable}`} style={{ fontFamily: "var(--font-overview)" }}>
-      <div className="mx-auto max-w-7xl px-6 py-3">
-        <PageHeader
-          title="Visão Geral"
-          actions={
-            <div className="flex items-center gap-0.5 rounded-md border border-overview-border bg-overview-surface px-1 py-1 text-sm">
-              <IconButton
-                href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
-                aria-label="Mês anterior"
-                variant="ghost"
-                size="sm"
-              >
-                &lsaquo;
-              </IconButton>
-              <span className="min-w-[8rem] text-center text-sm font-medium text-overview-text-primary">{monthLabel}</span>
-              <IconButton
-                href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
-                aria-label="Próximo mês"
-                variant="ghost"
-                size="sm"
-              >
-                &rsaquo;
-              </IconButton>
-              {params.month && (
-                <Button href={buildUrl({ month: "" })} variant="ghost" size="sm" className="ml-0.5">
-                  Mês atual
-                </Button>
-              )}
-            </div>
-          }
+      <div className="mx-auto max-w-7xl px-6 pt-5 pb-3">
+        <AgencyFilters
+          defaultManager={isAdmin ? "all" : "me"}
+          gestores={gestores ?? []}
+          manager={managerFilter}
+          clients={clientOptions}
+          selectedClientId={clientFilter}
+          diagnostico={diagnosticFilter}
+          resultType={resultTypeFilter}
+          ritmo={ritmoFilter === "fora_do_ritmo" ? "todos" : ritmoFilter}
+          platform={platformFilter}
+          preserved={{
+            month: params.month,
+            sprintBucket: sprintBucketFilter,
+            sync: syncFilter,
+            meta: metaFilter,
+          }}
+          monthNav={monthNav}
         />
-
-        <div className="mt-2">
-          <AgencyFilters
-            defaultManager={isAdmin ? "all" : "me"}
-            gestores={gestores ?? []}
-            manager={managerFilter}
-            clients={clientOptions}
-            selectedClientId={clientFilter}
-            diagnostico={diagnosticFilter}
-            resultType={resultTypeFilter}
-            ritmo={ritmoFilter === "fora_do_ritmo" ? "todos" : ritmoFilter}
-            platform={platformFilter}
-            preserved={{
-              month: params.month,
-              sprintBucket: sprintBucketFilter,
-              sync: syncFilter,
-              meta: metaFilter,
-            }}
-          />
-        </div>
 
         {/* Etapa "Refinamento visual da Visão Geral — Síntese": a página
             deixa de misturar panorama executivo com diagnóstico operacional
@@ -939,7 +943,7 @@ export default async function Home({
             (`SectionHeader accent`, padrão compartilhável novo — ver
             `components/workspace/section-header.tsx`) é a única assinatura
             de marca desta seção. */}
-        <div className="mt-4">
+        <div className="mt-6">
           <SectionHeader title="Desempenho da agência" accent />
           <div className="mt-3 grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
             <OperationMetric
