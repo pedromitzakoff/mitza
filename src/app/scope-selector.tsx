@@ -55,13 +55,17 @@ export function ScopeSelector({
 
   return (
     <div className="relative">
+      {/* Etapa "Toolbar editorial KOFF": sem borda/fundo permanente (mesma
+          linguagem já aplicada a Período/Filtros) — o `SandRail` vira a
+          affordance principal, e `hover:bg-sand-subtle` (só no hover/focus,
+          nunca borda) substitui o antigo `border`/`hover:border-*`. */}
       <button
         ref={triggerRef}
         type="button"
         onClick={() => (open ? setOpen(false) : openMenu())}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="mitza-pressable relative flex h-7 max-w-[10rem] items-center gap-1 rounded-md border border-overview-border bg-overview-surface py-1 pl-4 pr-2 text-xs font-medium text-overview-text-primary transition-colors hover:border-overview-border-strong sm:max-w-[15rem]"
+        className="mitza-pressable relative flex h-7 max-w-[10rem] items-center gap-1 rounded-md py-1 pl-5 pr-2 text-xs font-medium text-overview-text-primary transition-colors hover:bg-sand-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand sm:max-w-[15rem]"
       >
         <SandRail />
         <span className="truncate">{label}</span>

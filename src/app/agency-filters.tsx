@@ -2,7 +2,7 @@
 
 import { useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Filter, X } from "lucide-react";
+import { ChevronDown, Filter, X } from "lucide-react";
 import { ScopeSelector, type ScopeValue } from "./scope-selector";
 import type { ClientComboboxOption } from "./client-combobox";
 import { PLATFORM_LABEL } from "./client-objective-table";
@@ -179,34 +179,44 @@ export function AgencyFilters({
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Etapa "Micro-refinamento da barra de filtros": o container
-          (`Toolbar`, borda+fundo envolvendo a linha inteira) saiu — os
-          controles ficam direto sobre o fundo da página, tão abertos quanto
-          o resto da Visão Geral. Cada controle mantém sua própria borda/
-          superfície individual (nada mudou em comportamento/opções/estado),
-          só ganhou o rail em areia (`SandRail`) à esquerda — a mesma
-          assinatura do item ativo da Sidebar e do título "Desempenho da
-          agência" (`SectionHeader accent`), reaproveitada aqui numa técnica
-          diferente (curta e centralizada, não `border-l` de altura
-          inteira) porque estes controles são mais altos que o texto dentro
-          deles. "Filtros" fica de fora de propósito (item 6 do pedido): é
-          uma ação, não um seletor de contexto/escopo. */}
+      {/* Etapa "Toolbar editorial KOFF": nenhum dos 4 controles (escopo,
+          plataforma, mês, Filtros) tem borda/fundo permanente — o container
+          externo já tinha saído numa rodada anterior, e agora a caixa
+          individual de cada um também saiu, pra não parecer "formulário de
+          cadastro". O `SandRail` (mesmo componente, mesma técnica curta e
+          centralizada usada no item ativo da Sidebar e reaproveitada aqui —
+          diferente do `border-l` de altura inteira do título "Desempenho da
+          agência", que é marcador de seção, não controle) passa a ser a
+          affordance principal; `hover:bg-sand-subtle`/`focus-visible:outline`
+          substituem a antiga borda pra sinalizar interatividade sem virar
+          caixa permanente. Nada muda em comportamento/opções/estado. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-3">
           <ScopeSelector value={scopeValue} gestores={gestores} clients={clients} onSelect={handleScopeSelect} />
-          <div className="relative">
+          {/* Select nativo próprio (não o `Select` compartilhado do popover de
+              Filtros logo abaixo) — aqui o pedido é sem borda/fundo
+              permanente, com o mesmo chevron/rail da `ScopeSelector` ao lado;
+              mudar o `Select` compartilhado afetaria os 3 selects de
+              Filtros, que continuam com sua caixa normal. `appearance-none`
+              tira o menulist nativo do navegador pra o `ChevronDown` (ícone,
+              não o nativo) ser o único indicador de dropdown. */}
+          <div className="relative flex h-7 max-w-[10rem] items-center sm:max-w-[15rem]">
             <SandRail />
-            <Select
+            <select
               value={platform}
               onChange={(e) => handlePlatformChange(e.target.value)}
               aria-label="Plataforma"
-              style={{ paddingLeft: "1rem" }}
+              className="h-7 w-full appearance-none rounded-md bg-transparent py-1 pl-5 pr-6 text-xs font-medium text-overview-text-primary transition-colors hover:bg-sand-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
               <option value="consolidado">Consolidado</option>
               <option value="meta">Meta Ads</option>
               <option value="google">Google Ads</option>
               <option value="tiktok">TikTok Ads</option>
-            </Select>
+            </select>
+            <ChevronDown
+              className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-overview-text-muted"
+              aria-hidden="true"
+            />
           </div>
         </div>
 
