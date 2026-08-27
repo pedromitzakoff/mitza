@@ -25,8 +25,8 @@ import { SubmitButton } from "@/app/submit-button";
 import { formatAgencyDateTime } from "@/lib/format";
 import type { UserRole } from "@/lib/supabase/database.types";
 import {
-  ACTIVE_INDICATOR_ON_DARK_ACTIVE_CLASSES,
-  ACTIVE_INDICATOR_ON_DARK_INACTIVE_CLASSES,
+  ACTIVE_INDICATOR_ON_SAND_ACTIVE_CLASSES,
+  ACTIVE_INDICATOR_ON_SAND_INACTIVE_CLASSES,
   ACTIVE_INDICATOR_RAIL_CLASSES,
 } from "@/components/ui/active-indicator";
 import { SIDEBAR_COLLAPSED_WIDTH_CLASS, SIDEBAR_EXPANDED_WIDTH_CLASS, SIDEBAR_HEIGHT_CLASS } from "./app-shell-dimensions";
@@ -90,7 +90,7 @@ function SidebarClock({ collapsed }: { collapsed: boolean }) {
 
   if (nowMs === null) {
     return (
-      <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+      <div className="flex items-center gap-1.5 text-[11px] text-sidebar-foreground-subtle">
         <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span className="invisible">00:00</span>
       </div>
@@ -101,7 +101,7 @@ function SidebarClock({ collapsed }: { collapsed: boolean }) {
 
   return (
     <div
-      className={`flex items-center gap-1.5 text-[11px] text-zinc-500 ${collapsed ? "md:justify-center" : ""}`}
+      className={`flex items-center gap-1.5 text-[11px] text-sidebar-foreground-subtle ${collapsed ? "md:justify-center" : ""}`}
       title={`${weekday} / ${date} / ${time}`}
     >
       <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -219,7 +219,7 @@ function NavLink({
     return (
       <span
         title={item.label}
-        className={`flex items-center justify-between rounded-md px-2.5 py-1 text-[13px] text-zinc-600 ${collapsed ? "md:justify-center" : ""}`}
+        className={`flex items-center justify-between rounded-md px-2.5 py-1 text-[13px] text-sidebar-foreground-subtle ${collapsed ? "md:justify-center" : ""}`}
       >
         <span className="flex items-center gap-2">
           <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -240,7 +240,7 @@ function NavLink({
       href={item.href}
       title={item.label}
       className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
-        active ? ACTIVE_INDICATOR_ON_DARK_ACTIVE_CLASSES : ACTIVE_INDICATOR_ON_DARK_INACTIVE_CLASSES
+        active ? ACTIVE_INDICATOR_ON_SAND_ACTIVE_CLASSES : ACTIVE_INDICATOR_ON_SAND_INACTIVE_CLASSES
       }`}
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -343,7 +343,7 @@ function SidebarContent({
           onClick={toggleCollapsed}
           aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
-          className="hidden shrink-0 rounded-md p-1 text-zinc-500 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-white/10 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:block"
+          className="hidden shrink-0 rounded-md p-1 text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:block"
         >
           {collapsed ? (
             <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
@@ -383,7 +383,7 @@ function SidebarContent({
                  * "Revisão da Sidebar": "Atualizar Meta (todos)" saiu daqui
                  * — não é uma rota, é uma ação técnica; agora vive no
                  * rodapé, junto do relógio, com peso visual secundário. */}
-                <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 ${collapsed ? "md:hidden" : ""}`}>
+                <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
                   Administração
                 </span>
                 <nav className="flex flex-col gap-0.5">
@@ -402,11 +402,11 @@ function SidebarContent({
          * aparece se o conteúdo já couber inteiro. */}
         <div
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-black to-transparent transition-opacity duration-150 ${edges.top ? "opacity-100" : "opacity-0"}`}
+          className={`pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-sidebar-surface to-transparent transition-opacity duration-150 ${edges.top ? "opacity-100" : "opacity-0"}`}
         />
         <div
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-black to-transparent transition-opacity duration-150 ${edges.bottom ? "opacity-100" : "opacity-0"}`}
+          className={`pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-sidebar-surface to-transparent transition-opacity duration-150 ${edges.bottom ? "opacity-100" : "opacity-0"}`}
         />
       </div>
 
@@ -414,16 +414,16 @@ function SidebarContent({
        * Relógio da agência (data/hora globais, migrados da Top Bar) fica
        * aqui, acima da identidade do usuário — discreto, nunca competindo
        * com a navegação (Etapa Global UX Refinement 1.0). */}
-      <div className="shrink-0 space-y-1.5 border-t border-white/10 p-2.5">
+      <div className="shrink-0 space-y-1.5 border-t border-sidebar-border p-2.5">
         <SidebarClock collapsed={collapsed} />
 
         {/* Etapa "Revisão da Sidebar": movido do grupo "Administração" pra
          * cá — não é uma rota, é uma ação técnica (dispara sync manual do
          * Meta), então recebe o mesmo peso visual discreto do relógio
-         * acima (11px, cinza), nunca competindo com Equipe/Configurações.
-         * Etapa "Identidade Visual KOFF — Sidebar": ainda mais apagado
-         * (zinc-600) que o relógio — reforça que isto é rodapé técnico,
-         * não mais um item de navegação. */}
+         * acima (11px), nunca competindo com Equipe/Configurações. Etapa
+         * "Sidebar Areia — Identidade KOFF": mesmo tom `--sidebar-
+         * foreground-subtle` do relógio — reforça que isto é rodapé
+         * técnico, não mais um item de navegação. */}
         {isAdmin && (
           <form action={syncAllMetaAction}>
             <Tooltip label="Atualizar Meta (todos)">
@@ -441,7 +441,7 @@ function SidebarContent({
                     <ItemLabel collapsed={collapsed}>Atualizando...</ItemLabel>
                   </>
                 }
-                className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-[11px] text-zinc-600 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-zinc-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center" : ""}`}
+                className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-[11px] text-sidebar-foreground-subtle transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-sidebar-foreground-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center" : ""}`}
               >
                 <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <ItemLabel collapsed={collapsed}>Atualizar Meta (todos)</ItemLabel>
@@ -454,20 +454,21 @@ function SidebarContent({
           className={`flex items-center gap-2 pt-0.5 ${collapsed ? "md:justify-center" : ""}`}
           title={`${profile.name} · ${profile.role === "admin" ? "Admin" : "Gestor"}`}
         >
-          {/* Etapa "Identidade Visual KOFF — Sidebar": era `bg-brand/15
-           * text-brand` — com `--brand` grafite, ficava um círculo quase
-           * invisível sobre o fundo preto fixo da Sidebar. Areia (detalhe
-           * sutil, nunca fundo grande) resolve o contraste e ainda
-           * reforça a assinatura da marca num ponto de baixo risco. */}
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sand/20 text-xs font-semibold text-sand">
+          {/* Etapa "Sidebar Areia — Identidade KOFF": era `bg-sand/20
+           * text-sand` — com a Sidebar virando areia, um círculo areia
+           * sobre fundo areia some por completo. Grafite em baixa
+           * opacidade (estrutura) resolve o contraste sem introduzir uma
+           * terceira cor no rodapé. */}
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sidebar-hover text-xs font-semibold text-sidebar-foreground">
             {initial}
           </span>
           {/* Etapa "Identidade Visual KOFF — Sidebar": nome + papel numa
            * linha só (era 2 linhas) — rodapé mais compacto, papel como
            * sufixo discreto em vez de linha própria. */}
           <span className={`min-w-0 ${collapsed ? "md:hidden" : ""}`}>
-            <p className="truncate text-sm font-medium text-zinc-100">
-              {profile.name} <span className="font-normal text-zinc-500">· {profile.role === "admin" ? "Admin" : "Gestor"}</span>
+            <p className="truncate text-sm font-medium text-sidebar-foreground">
+              {profile.name}{" "}
+              <span className="font-normal text-sidebar-foreground-muted">· {profile.role === "admin" ? "Admin" : "Gestor"}</span>
             </p>
           </span>
         </div>
@@ -475,7 +476,7 @@ function SidebarContent({
           <Tooltip label="Sair">
             <button
               type="submit"
-              className={`mitza-pressable flex w-full items-center justify-center gap-1.5 rounded-md border border-white/15 px-3 py-1 text-xs font-medium text-zinc-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:px-0" : ""}`}
+              className={`mitza-pressable flex w-full items-center justify-center gap-1.5 rounded-md border border-sidebar-border px-3 py-1 text-xs font-medium text-sidebar-foreground-muted hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:px-0" : ""}`}
             >
               <LogOut className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <ItemLabel collapsed={collapsed}>Sair</ItemLabel>
@@ -494,16 +495,18 @@ function SidebarMode({ onMode }: { onMode: (mode: string | null) => React.ReactN
 
 /**
  * A Sidebar é o único elemento estrutural fixo da plataforma (Decisão 012 —
- * a Top Bar global foi removida): fundo preto permanente (não acompanha o
- * tema claro/escuro do resto da aplicação — por isso as cores aqui usam
- * `zinc-*`/`white/*` fixos em vez dos tokens de tema `foreground`/`border`/
- * `card`), ocupa exatamente 100% da altura da viewport em qualquer
- * breakpoint (`SIDEBAR_HEIGHT_CLASS`) e é o principal elemento de
- * navegação da plataforma. No mobile ela continua sendo um drawer (abrir
- * tudo o tempo todo tomaria a área operacional inteira — Cap. 17 dos
- * Princípios de Arquitetura); como não existe mais Top Bar cujo botão
- * "Menu" a acionava, o próprio componente expõe um gatilho flutuante
- * (`onOpen`) — só visível no mobile e só quando o drawer está fechado.
+ * a Top Bar global foi removida): superfície areia permanente (Etapa
+ * "Sidebar Areia — Identidade KOFF" — não acompanha o tema claro/escuro do
+ * resto da aplicação, por isso as cores aqui usam os tokens fixos
+ * `sidebar-*` — ver bloco dedicado em `globals.css` — em vez dos tokens de
+ * tema `foreground`/`border`/`card`, que trocam de valor no dark mode),
+ * ocupa exatamente 100% da altura da viewport em qualquer breakpoint
+ * (`SIDEBAR_HEIGHT_CLASS`) e é o principal elemento de navegação da
+ * plataforma. No mobile ela continua sendo um drawer (abrir tudo o tempo
+ * todo tomaria a área operacional inteira — Cap. 17 dos Princípios de
+ * Arquitetura); como não existe mais Top Bar cujo botão "Menu" a acionava,
+ * o próprio componente expõe um gatilho flutuante (`onOpen`) — só visível
+ * no mobile e só quando o drawer está fechado.
  */
 export function Sidebar({
   profile,
@@ -529,7 +532,7 @@ export function Sidebar({
           type="button"
           onClick={onOpen}
           aria-label="Abrir menu"
-          className="mitza-pressable fixed left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-black text-zinc-100 shadow-[var(--shadow-float)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:hidden"
+          className="mitza-pressable fixed left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-surface text-sidebar-foreground shadow-[var(--shadow-float)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:hidden"
         >
           <Menu className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -545,7 +548,7 @@ export function Sidebar({
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-black transition-transform duration-200 md:sticky md:top-0 md:z-0 md:translate-x-0 md:border-r md:border-white/10 md:transition-[width] ${SIDEBAR_HEIGHT_CLASS} ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-sidebar-surface transition-transform duration-200 md:sticky md:top-0 md:z-0 md:translate-x-0 md:border-r md:border-sidebar-border md:transition-[width] ${SIDEBAR_HEIGHT_CLASS} ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         } ${collapsed ? SIDEBAR_COLLAPSED_WIDTH_CLASS : SIDEBAR_EXPANDED_WIDTH_CLASS}`}
       >

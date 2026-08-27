@@ -127,18 +127,19 @@ function ClientLeaf({
         className={`flex items-center gap-1.5 rounded-md py-1 pl-7 pr-2 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
           disabled ? "" : "cursor-grab touch-none active:cursor-grabbing"
         } ${
-          // Etapa "Identidade Visual KOFF — Sidebar": era `bg-brand/15
-          // text-brand`/`bg-brand/10 text-brand` — grafite sobre o fundo
-          // preto fixo da árvore, quase invisível. Ativo vira o mesmo
-          // branco forte da nav principal (sem barra lateral aqui — item
-          // aninhado, a barra é reservada pros 4 destinos de topo);
-          // combinação em busca usa areia (detalhe sutil), nunca
-          // confundida com o item realmente ativo.
+          // Etapa "Sidebar Areia — Identidade KOFF": ativo vira o mesmo
+          // bloco grafite sólido + off-white da nav principal (sem barra
+          // lateral aqui — item aninhado, a barra é reservada pros 4
+          // destinos de topo). Combinação em busca não pode mais usar
+          // areia (a própria superfície agora) nem o mesmo tom do ativo —
+          // vira um contorno grafite sutil (`ring` + fundo bem fraco),
+          // reconhecível como "achei isto" sem ser confundido com "estou
+          // nesta página".
           isActive
-            ? "bg-white/10 font-semibold text-white"
+            ? "bg-sidebar-active-surface font-semibold text-sidebar-active-foreground"
             : isSearchMatch
-              ? "bg-sand/15 font-medium text-sand"
-              : "font-normal text-zinc-300 hover:bg-white/5 hover:text-zinc-100"
+              ? "bg-sidebar-match-surface font-medium text-sidebar-foreground ring-1 ring-inset ring-sidebar-match-ring"
+              : "font-normal text-sidebar-foreground-secondary hover:bg-sidebar-hover hover:text-sidebar-foreground"
         } ${isDragging ? "opacity-30" : ""}`}
       >
         <ClientAvatar name={client.name} imageUrl={client.avatarUrl} size="xs" />
@@ -177,13 +178,11 @@ function ManagerFolder({
     <li
       ref={setNodeRef}
       className={`rounded-md transition-[opacity,background-color] duration-[var(--motion-fast)] ease-[var(--ease-enter)] ${
-        // Etapa "Identidade Visual KOFF — Sidebar": era `bg-brand/10
-        // ring-brand/40` — mesmo problema de contraste do item ativo
-        // acima (grafite sobre preto). O alvo de "soltar" ao arrastar é
-        // um destaque temporário, não uma seleção — areia (o mesmo
-        // detalhe sutil usado em busca) comunica isso sem reaproveitar o
-        // branco forte do estado ativo.
-        isDropTarget ? "bg-sand/10 ring-1 ring-inset ring-sand/40" : ""
+        // Etapa "Sidebar Areia — Identidade KOFF": o alvo de "soltar" ao
+        // arrastar é um destaque temporário, não uma seleção — mesmo
+        // contorno grafite sutil usado em busca (nunca a superfície areia
+        // sobre ela mesma, nem o bloco sólido do ativo).
+        isDropTarget ? "bg-sidebar-match-surface ring-1 ring-inset ring-sidebar-match-ring" : ""
       } ${isDimmed ? "opacity-40" : ""}`}
     >
       <button
@@ -191,18 +190,18 @@ function ManagerFolder({
         onClick={onToggle}
         aria-expanded={isExpanded}
         title={name}
-        className="mitza-pressable flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-[13px] font-medium text-zinc-200 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-white/5 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        className="mitza-pressable flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-[13px] font-medium text-sidebar-foreground-secondary transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       >
         <span
-          className={`mitza-chevron shrink-0 text-xs ${isDropTarget ? "text-sand" : "text-zinc-500"} ${isExpanded ? "rotate-90" : ""}`}
+          className={`mitza-chevron shrink-0 text-xs ${isDropTarget ? "text-sidebar-foreground" : "text-sidebar-foreground-muted"} ${isExpanded ? "rotate-90" : ""}`}
           aria-hidden="true"
         >
           ▸
         </span>
-        <Folder className={`h-4 w-4 shrink-0 ${isDropTarget ? "text-sand" : "text-zinc-500"}`} aria-hidden="true" />
+        <Folder className={`h-4 w-4 shrink-0 ${isDropTarget ? "text-sidebar-foreground" : "text-sidebar-foreground-muted"}`} aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate text-left">{name}</span>
         {!isExpanded && clients.length > 0 && (
-          <span className={`shrink-0 text-xs ${isDropTarget ? "text-sand" : "text-zinc-500"}`}>{clients.length}</span>
+          <span className={`shrink-0 text-xs ${isDropTarget ? "text-sidebar-foreground" : "text-sidebar-foreground-muted"}`}>{clients.length}</span>
         )}
       </button>
 
@@ -220,7 +219,7 @@ function ManagerFolder({
                 />
               ))
             ) : (
-              <li className="py-1 pl-7 pr-2 text-xs text-zinc-500">Nenhum cliente</li>
+              <li className="py-1 pl-7 pr-2 text-xs text-sidebar-foreground-subtle">Nenhum cliente</li>
             )}
           </ul>
         </SortableContext>
@@ -601,13 +600,13 @@ export function AgencyAccountsTreeView({
          * onde a ação faz sentido contextualmente, disponível sem ocupar
          * espaço nem roubar atenção. */}
         <div className="flex items-center justify-between pb-1">
-          <p className="px-2.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Contas da Agência</p>
+          <p className="px-2.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted">Contas da Agência</p>
           {isAdmin && (
             <Tooltip label="Novo cliente">
               <Link
                 href="/clients/new"
                 aria-label="Novo cliente"
-                className="mitza-pressable flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                className="mitza-pressable flex h-5 w-5 shrink-0 items-center justify-center rounded text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               >
                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               </Link>
@@ -615,8 +614,15 @@ export function AgencyAccountsTreeView({
           )}
         </div>
 
+        {/* Etapa "Sidebar Areia — Identidade KOFF": nunca uma caixa branca
+         * importada de outro sistema sobre a areia — grafite em baixa
+         * opacidade (fundo e borda) mantém o campo integrado à superfície,
+         * ainda claramente reconhecível como input pelo ícone + borda. */}
         <div className="relative px-0.5 pb-1.5">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" aria-hidden="true" />
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground-muted"
+            aria-hidden="true"
+          />
           <input
             type="text"
             value={searchQuery}
@@ -624,7 +630,7 @@ export function AgencyAccountsTreeView({
             onKeyDown={handleSearchKeyDown}
             placeholder="Abrir cliente..."
             aria-label="Buscar cliente ou gestor"
-            className="w-full rounded-md border border-white/10 bg-white/5 py-1 pl-7 pr-2 text-[13px] text-zinc-100 placeholder:text-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            className="w-full rounded-md border border-sidebar-border bg-sidebar-hover py-1 pl-7 pr-2 text-[13px] text-sidebar-foreground placeholder:text-sidebar-foreground-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
           />
         </div>
 
@@ -677,7 +683,7 @@ export function AgencyAccountsTreeView({
       <DragOverlay dropAnimation={DROP_ANIMATION}>
         {activeId ? (
           <div
-            className="flex cursor-grabbing items-center gap-2 rounded-md bg-zinc-800 px-3 py-1.5 text-[13px] font-medium text-zinc-100 shadow-xl ring-1 ring-white/10"
+            className="flex cursor-grabbing items-center gap-2 rounded-md bg-sidebar-active-surface px-3 py-1.5 text-[13px] font-medium text-sidebar-active-foreground shadow-xl ring-1 ring-sidebar-active-rail"
             style={{ transform: "scale(1.03) rotate(-1deg)" }}
           >
             <span className="min-w-0 truncate">{clientNameById.get(activeId) ?? ""}</span>

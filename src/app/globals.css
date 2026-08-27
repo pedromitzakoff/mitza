@@ -66,6 +66,31 @@
   --sand: #c8bead;
   --sand-subtle: #f1ece4;
 
+  /* Sidebar KOFF — Etapa "Sidebar Areia": a Sidebar é uma superfície FIXA
+     (não acompanha claro/escuro do resto da app — mesma decisão de sempre,
+     ver JSDoc de `Sidebar` em app/sidebar.tsx), então estes tokens vivem só
+     aqui em `:root` e NUNCA são redefinidos no bloco `prefers-color-scheme:
+     dark` abaixo — ao contrário de `--brand`/`--navy`/`--sand`, que trocam
+     de valor no escuro. Areia = superfície/assinatura da marca; grafite =
+     estrutura/contraste; off-white = contraste sobre blocos grafite (item
+     ativo). `--sidebar-graphite-rgb` existe separado de `--brand` de
+     propósito: `--brand` MUDA no dark mode (vira areia clara, ver acima),
+     e a Sidebar precisa do grafite fixo pra compor opacidades (divisórias,
+     hover, texto secundário) sem herdar essa troca. */
+  --sidebar-surface: var(--sand);
+  --sidebar-graphite-rgb: 28, 28, 28;
+  --sidebar-foreground: rgb(var(--sidebar-graphite-rgb));
+  --sidebar-foreground-secondary: rgba(var(--sidebar-graphite-rgb), 0.8);
+  --sidebar-foreground-muted: rgba(var(--sidebar-graphite-rgb), 0.65);
+  --sidebar-foreground-subtle: rgba(var(--sidebar-graphite-rgb), 0.55);
+  --sidebar-border: rgba(var(--sidebar-graphite-rgb), 0.14);
+  --sidebar-hover: rgba(var(--sidebar-graphite-rgb), 0.07);
+  --sidebar-active-surface: rgb(var(--sidebar-graphite-rgb));
+  --sidebar-active-foreground: #f5f1ea;
+  --sidebar-active-rail: rgba(245, 241, 234, 0.4);
+  --sidebar-match-surface: rgba(var(--sidebar-graphite-rgb), 0.06);
+  --sidebar-match-ring: rgba(var(--sidebar-graphite-rgb), 0.22);
+
   /* ---------------------------------------------------------------------
    * Fundação do novo Design System (Etapa 47) — inspirado em densidade de
    * workspace operacional (ClickUp de interação, Meta Ads Manager de
@@ -129,6 +154,18 @@
   --color-navy: var(--navy);
   --color-sand: var(--sand);
   --color-sand-subtle: var(--sand-subtle);
+  --color-sidebar-surface: var(--sidebar-surface);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-foreground-secondary: var(--sidebar-foreground-secondary);
+  --color-sidebar-foreground-muted: var(--sidebar-foreground-muted);
+  --color-sidebar-foreground-subtle: var(--sidebar-foreground-subtle);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-active-surface: var(--sidebar-active-surface);
+  --color-sidebar-active-foreground: var(--sidebar-active-foreground);
+  --color-sidebar-active-rail: var(--sidebar-active-rail);
+  --color-sidebar-match-surface: var(--sidebar-match-surface);
+  --color-sidebar-match-ring: var(--sidebar-match-ring);
   --color-overview-surface: var(--overview-surface);
   --color-overview-surface-subtle: var(--overview-surface-subtle);
   --color-overview-surface-hover: var(--overview-surface-hover);
