@@ -2,6 +2,18 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { StatusTone } from "@/components/workspace/status-dot";
 import { TONE_TEXT_CLASSES } from "./investment-metric";
+import type { AnalyticsKpiComparison } from "@/lib/analytics";
+
+/** Mesma paleta de tom usada pra "↑X%"/"↓X%" no Hero do Analytics do
+ * cliente (`AnalyticsKpiComparisonTone`) — reaproveitada aqui pra "Evolução
+ * no período" da Visão Geral colorir a variação embutida no big number
+ * (Etapa "Refinamento visual da Visão Geral — Síntese"), nunca uma segunda
+ * paleta de verde/vermelho/neutro. */
+export const COMPARISON_TONE_TEXT_CLASSES: Record<AnalyticsKpiComparison["tone"], string> = {
+  positive: "text-overview-success",
+  negative: "text-overview-danger",
+  neutral: "text-overview-text-muted",
+};
 
 /**
  * Um indicador da área "Indicadores da operação" (Etapa 69 — refinamento
@@ -18,10 +30,20 @@ import { TONE_TEXT_CLASSES } from "./investment-metric";
  * Etapa "Refinamento Visão Geral da Agência": `emphasis` dá um destaque a
  * mais pro indicador financeiro principal (Investimento realizado) sem
  * alterar os outros 3 — mesma família tipográfica, só maior/mais pesado.
+ *
+ * Etapa "Refinamento visual da Visão Geral — Síntese": a seção separada
+ * "Evolução no período" foi incorporada aqui — `comparison` (o mesmo objeto
+ * já devolvido por `buildPercentChangeComparison`, `lib/analytics.ts`, sem
+ * nenhum recálculo) renderiza a variação logo abaixo do big number, na
+ * hierarquia label → número → variação → contexto pedida. `context` passa a
+ * aceitar `ReactNode` (era só `string`) pra poder embutir a variação de uma
+ * métrica secundária (ex.: "CPL R$17,54 · ↑49%") sem precisar de uma linha à
+ * parte.
  */
 export function OperationMetric({
   label,
   value,
+  comparison,
   context,
   href,
   title,
@@ -32,7 +54,11 @@ export function OperationMetric({
 }: {
   label: string;
   value: string;
-  context?: string;
+  /** `null`/ausente = sem base de comparação real pra este indicador nesta
+   * ocasião — nunca uma variação fabricada (mesma regra de
+   * `computePercentChange`). */
+  comparison?: AnalyticsKpiComparison | null;
+  context?: ReactNode;
   href?: string;
   title?: string;
   tone?: StatusTone;
@@ -54,7 +80,10 @@ export function OperationMetric({
       >
         {value}
       </p>
-      {context && <p className="mt-1.5 text-[13px] text-overview-text-muted">{context}</p>}
+      {comparison && (
+        <p className={`mt-1 text-[13px] font-medium ${COMPARISON_TONE_TEXT_CLASSES[comparison.tone]}`}>{comparison.text}</p>
+      )}
+      {context && <p className={comparison ? "mt-1 text-[13px] text-overview-text-muted" : "mt-1.5 text-[13px] text-overview-text-muted"}>{context}</p>}
       {linkHref && linkLabel && (
         <Link
           href={linkHref}
@@ -75,37 +104,5 @@ export function OperationMetric({
     >
       {content}
     </a>
-  );
-}
-
-/**
- * Faixa compacta de "Operação" (Facelift "Painel financeiro e operacional"):
- * label pequeno + valor de destaque intermediário — deliberadamente menor
- * que `OperationMetric`/`PrimaryInvestmentMetric` (esses indicadores não
- * disputam atenção com os KPIs de Resultados/Ritmo, só descrevem a execução
- * operacional). `context` é sempre secundário (ex.: o % de execução abaixo
- * da contagem bruta de tarefas), nunca outro número do mesmo peso.
- *
- * Etapa "Revisão da Visão Geral — Evolução no período": `context` aceita
- * `ReactNode` (era só `string`) pra "Evolução no período" poder colorir a
- * variação (`↑8%`/`↓6%`) com a mesma cor semântica de sempre
- * (success/danger/muted) sem precisar de um componente próprio — qualquer
- * `string` já passada continua funcionando, `ReactNode` é um superconjunto.
- */
-export function OperationMiniKpi({
-  label,
-  value,
-  context,
-}: {
-  label: string;
-  value: string;
-  context?: ReactNode;
-}) {
-  return (
-    <div>
-      <p className="text-[10.5px] font-medium uppercase tracking-wide text-overview-text-muted">{label}</p>
-      <p className="mt-0.5 text-[13px] font-semibold leading-none text-overview-text-primary tabular-nums">{value}</p>
-      {context && <p className="mt-1 text-[11px] text-overview-text-muted">{context}</p>}
-    </div>
   );
 }

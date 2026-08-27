@@ -12,10 +12,18 @@ import type { MonthTemporalStatus } from "@/lib/monthly-budget";
  * traço quase invisível) com tooltip nativo.
  *
  * Etapa 68: o marcador ganhou um rótulo visível acima da barra ("Esperado
- * hoje · X%", seção 6) — nunca só o handle sem legenda — mais uma legenda
- * compacta de cores abaixo (seção 8). `monthTemporalStatus` (seção 16) troca
- * o texto do rótulo pra "Período encerrado"/"Período ainda não iniciado"
- * quando o mês navegado não é o corrente.
+ * hoje · X%", seção 6) — nunca só o handle sem legenda. `monthTemporalStatus`
+ * (seção 16) troca o texto do rótulo pra "Período encerrado"/"Período ainda
+ * não iniciado" quando o mês navegado não é o corrente.
+ *
+ * Etapa "Refinamento visual da Visão Geral — Síntese": a legenda "● Realizado
+ * / ● Esperado hoje" que existia abaixo da barra saiu — o rótulo do próprio
+ * marcador já diz "Esperado hoje · X%", e com um único preenchimento
+ * colorido na tela (nenhuma barra concorrente) o "Realizado" já é
+ * autoevidente pelo contexto (rótulo da seção + big number de Investimento
+ * logo acima). Único consumidor deste componente é a Visão Geral
+ * (`app/page.tsx`) — mudança segura, sem impacto em Sprints/Relatórios
+ * (que usam `AgencyInvestmentBar`, intocado).
  */
 export function ProgressBar({
   planned,
@@ -75,18 +83,6 @@ export function ProgressBar({
           title={markerTooltip}
         />
       </div>
-      {/* Legenda compacta (Etapa 69, seção 11) — só os dois pontos + rótulos
-          curtos, sem repetir texto que os números acima já deixam claro. */}
-      <p className="mt-1.5 flex items-center gap-3 text-[11px] text-overview-text-muted">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand" aria-hidden="true" />
-          Realizado
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-navy" aria-hidden="true" />
-          Esperado hoje
-        </span>
-      </p>
     </div>
   );
 }

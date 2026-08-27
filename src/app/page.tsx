@@ -32,7 +32,7 @@ import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals
 import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
-import { OperationMetric, OperationMiniKpi } from "./operation-metric";
+import { OperationMetric, COMPARISON_TONE_TEXT_CLASSES } from "./operation-metric";
 import { PrimaryInvestmentMetric } from "./investment-metric";
 import { PLATFORM_LABEL } from "./client-objective-table";
 import { getCompletedReminders, getOpenReminders, getReminderById } from "@/lib/reminders-data";
@@ -51,7 +51,7 @@ import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-c
 import { resolveClientMonthlyPlan, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
 import type { SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 import { previousEquivalentPeriod } from "@/lib/period-comparison";
-import { buildPercentChangeComparison } from "@/lib/analytics";
+import { buildPercentChangeComparison, type AnalyticsKpiComparison } from "@/lib/analytics";
 
 /**
  * Etapa 47: Inter carregada e aplicada SÓ na Visão Geral (className no
@@ -787,8 +787,15 @@ export default async function Home({
   // `neutral` (gastar mais/menos não é bom ou ruim em si, mesma decisão já
   // tomada pro Analytics); Leads/Vendas são `higher_is_better`; CPL/CPA são
   // `lower_is_better`. `null` sempre que não há base anterior confiável
-  // (`computePercentChange`) — a seção inteira só aparece quando pelo menos
-  // uma comparação é real.
+  // (`computePercentChange`) — cada indicador exibe (ou não) sua própria
+  // variação de forma independente, nunca uma seção inteira condicionada ao
+  // "algum dos cinco tem dado".
+  //
+  // Etapa "Refinamento visual da Visão Geral — Síntese": a variação deixou
+  // de ter uma seção própria ("Evolução no período") e passou a viver dentro
+  // do próprio big number — `OperationMetric` (`comparison` prop) — pra
+  // eliminar a duplicação de mostrar cada indicador duas vezes na mesma
+  // tela. Nenhum dos 5 cálculos abaixo mudou.
   const evolutionInvestment = buildPercentChangeComparison(financial.actual, previousInvestmentTotals.investment, "neutral");
   const evolutionLeads = buildPercentChangeComparison(agencyResults.leads.count, previousInvestmentTotals.leadsCount, "higher_is_better");
   const evolutionLeadsCpl =
@@ -800,14 +807,14 @@ export default async function Home({
     agencyResults.sales.costPerResult !== null
       ? buildPercentChangeComparison(agencyResults.sales.costPerResult, previousInvestmentTotals.salesCostPerResult, "lower_is_better")
       : null;
-  const hasEvolutionData = [evolutionInvestment, evolutionLeads, evolutionLeadsCpl, evolutionSales, evolutionSalesCpa].some(
-    (comparison) => comparison !== null,
-  );
-  const EVOLUTION_TONE_TEXT_CLASSES: Record<"positive" | "negative" | "neutral", string> = {
-    positive: "text-overview-success",
-    negative: "text-overview-danger",
-    neutral: "text-overview-text-muted",
-  };
+  // Versão curta ("↑49%") do mesmo texto já pronto de `comparison.text`
+  // ("↑49% vs período anterior") — só formatação de exibição pra CPL/CPA
+  // não repetirem "vs período anterior" uma segunda vez na mesma linha do
+  // indicador principal (Leads/Vendas já mostram a frase inteira acima).
+  // Nenhum recálculo: mesma variação, mesmo tom, só o texto mais curto.
+  function shortComparisonText(comparison: AnalyticsKpiComparison): string {
+    return comparison.text.replace(" vs período anterior", "");
+  }
 
   // Preserva TODOS os filtros ativos — usado na navegação de mês e na
   // ordenação da tabela, que não devem resetar o resto do contexto. Não
@@ -914,56 +921,93 @@ export default async function Home({
           />
         </div>
 
-        {/* Etapa "Revisão da Visão Geral": a página deixa de misturar
-            panorama executivo com diagnóstico operacional por cliente
-            (Críticas/Atenção/Saudáveis/Sem dados, Fora do ritmo, Gestores
-            vinculados, Tarefas, Revisões e a fila de Prioridades saíram
-            daqui — nenhuma dessas regras foi alterada, todas continuam
-            existindo em Operação, que também é pra onde a ponte no fim
-            desta seção leva). "Desempenho da agência" responde só "como
-            está a agência agora": 4 números executivos, o ritmo agregado de
-            investimento e, quando há base de comparação confiável, a
-            direção (Evolução no período). */}
-        <div className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
-          <div className="px-5 py-3 sm:px-6 sm:py-3.5">
-            <SectionHeader title="Desempenho da agência" />
-            <div className="mt-2 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-              <OperationMetric
-                label="Investimento"
-                value={formatCurrency(financial.actual)}
-                context={financial.planned > 0 ? `de ${formatCurrency(financial.planned)} planejados` : "Nenhum planejamento configurado"}
-              />
-              <OperationMetric
-                label="Leads"
-                value={agencyResults.leads.clientsWithData > 0 ? String(agencyResults.leads.count) : "—"}
-                context={
-                  agencyResults.leads.clientsWithData > 0
-                    ? `${PERFORMANCE_GOALS.leads.costMetricShortLabel} ${
-                        agencyResults.leads.costPerResult !== null ? formatCurrency(agencyResults.leads.costPerResult) : "—"
-                      } · ${agencyResults.leads.clientsWithData} conta${agencyResults.leads.clientsWithData !== 1 ? "s" : ""}`
-                    : "Nenhum cliente com objetivo de leads configurado"
-                }
-              />
-              <OperationMetric
-                label="Vendas"
-                value={agencyResults.sales.clientsWithData > 0 ? String(agencyResults.sales.count) : "—"}
-                context={
-                  agencyResults.sales.clientsWithData > 0
-                    ? `${PERFORMANCE_GOALS.sales.costMetricShortLabel} ${
-                        agencyResults.sales.costPerResult !== null ? formatCurrency(agencyResults.sales.costPerResult) : "—"
-                      } · ${agencyResults.sales.clientsWithData} conta${agencyResults.sales.clientsWithData !== 1 ? "s" : ""}`
-                    : "Nenhum cliente com objetivo de vendas configurado"
-                }
-              />
-              {/* "Contas ativas" reaproveita a mesma fonte central de sempre
-                  (`operationIndicators.activeClientsCount`, contrato
-                  `status = "ativo"`) — antes exibida na faixa "Operação",
-                  agora promovida a indicador executivo. */}
-              <OperationMetric label="Contas ativas" value={String(operationIndicators.activeClientsCount)} />
-            </div>
+        {/* Etapa "Refinamento visual da Visão Geral — Síntese": a página
+            deixa de misturar panorama executivo com diagnóstico operacional
+            por cliente (Críticas/Atenção/Saudáveis/Sem dados, Fora do ritmo,
+            Gestores vinculados, Tarefas, Revisões e a fila de Prioridades
+            saíram daqui — nenhuma dessas regras foi alterada, todas
+            continuam existindo em Operação, que também é pra onde o link em
+            "Contas ativas" leva). "Desempenho da agência" responde só "como
+            está a agência agora": 4 números executivos com sua própria
+            variação embutida (nunca mais uma segunda seção "Evolução no
+            período" repetindo os mesmos 4-5 indicadores) e o ritmo agregado
+            de investimento.
+            Superfície aberta (nem `rounded-lg`/`border`/`bg-overview-surface`
+            do "card" que existia antes) — só um `border-t` bem sutil separa
+            os dois blocos, pedido explícito desta rodada pra reduzir a
+            sensação de "vários cards dentro de cards". Rail em areia
+            (`SectionHeader accent`, padrão compartilhável novo — ver
+            `components/workspace/section-header.tsx`) é a única assinatura
+            de marca desta seção. */}
+        <div className="mt-4">
+          <SectionHeader title="Desempenho da agência" accent />
+          <div className="mt-3 grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
+            <OperationMetric
+              label="Investimento"
+              value={formatCurrency(financial.actual)}
+              comparison={evolutionInvestment}
+              context={financial.planned > 0 ? `de ${formatCurrency(financial.planned)} planejados` : "Nenhum planejamento configurado"}
+            />
+            <OperationMetric
+              label="Leads"
+              value={agencyResults.leads.clientsWithData > 0 ? String(agencyResults.leads.count) : "—"}
+              comparison={agencyResults.leads.clientsWithData > 0 ? evolutionLeads : null}
+              context={
+                agencyResults.leads.clientsWithData > 0 ? (
+                  <>
+                    {PERFORMANCE_GOALS.leads.costMetricShortLabel}{" "}
+                    {agencyResults.leads.costPerResult !== null ? formatCurrency(agencyResults.leads.costPerResult) : "—"}
+                    {evolutionLeadsCpl && (
+                      <>
+                        {" "}
+                        · <span className={COMPARISON_TONE_TEXT_CLASSES[evolutionLeadsCpl.tone]}>{shortComparisonText(evolutionLeadsCpl)}</span>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  "Nenhum cliente com objetivo de leads configurado"
+                )
+              }
+            />
+            <OperationMetric
+              label="Vendas"
+              value={agencyResults.sales.clientsWithData > 0 ? String(agencyResults.sales.count) : "—"}
+              comparison={agencyResults.sales.clientsWithData > 0 ? evolutionSales : null}
+              context={
+                agencyResults.sales.clientsWithData > 0 ? (
+                  <>
+                    {PERFORMANCE_GOALS.sales.costMetricShortLabel}{" "}
+                    {agencyResults.sales.costPerResult !== null ? formatCurrency(agencyResults.sales.costPerResult) : "—"}
+                    {evolutionSalesCpa && (
+                      <>
+                        {" "}
+                        · <span className={COMPARISON_TONE_TEXT_CLASSES[evolutionSalesCpa.tone]}>{shortComparisonText(evolutionSalesCpa)}</span>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  "Nenhum cliente com objetivo de vendas configurado"
+                )
+              }
+            />
+            {/* "Contas ativas" reaproveita a mesma fonte central de sempre
+                (`operationIndicators.activeClientsCount`, contrato
+                `status = "ativo"`) — secundário aos outros 3 (sem
+                `comparison`, mesmo tamanho de fonte, papel de contexto da
+                carteira). O link substitui a antiga seção "Acompanhamento
+                operacional" inteira: mesma contagem (`needsAttentionCount`
+                = Crítico + Atenção, resolveOperationPriorityGroup) e mesmo
+                destino (`operationHref`), sem precisar de uma faixa própria
+                pra uma única linha de informação. */}
+            <OperationMetric
+              label="Contas ativas"
+              value={String(operationIndicators.activeClientsCount)}
+              linkHref={operationHref}
+              linkLabel={`${needsAttentionCount} conta${needsAttentionCount !== 1 ? "s" : ""} precisa${needsAttentionCount !== 1 ? "m" : ""} de atenção →`}
+            />
           </div>
 
-          <div className="border-t border-overview-border px-5 py-2.5 sm:px-6 sm:py-3">
+          <div className="mt-5 border-t border-overview-border pt-3">
             <SectionHeader
               title={
                 platformFilter === "consolidado"
@@ -975,18 +1019,7 @@ export default async function Home({
             {platformFilter === "consolidado" ? (
               financial.planned > 0 ? (
                 <>
-                  {/* Etapa "Refinamento Visão Geral da Agência" (Pontos 3/4):
-                      "Esperado hoje" (valor)/"Orçamento utilizado"/"Sem
-                      planejamento" saíram — a barra já comunica visualmente
-                      o ritmo (preenchimento + marcador + legenda "Realizado"/
-                      "Esperado hoje", renderizados dentro de `ProgressBar`),
-                      então repetir os mesmos números embaixo era redundância
-                      pura. O que antes era só "R$ X abaixo" (um número
-                      isolado) virou uma frase de STATUS em destaque
-                      (`investmentStatusPhrase`) com o valor como apoio
-                      secundário logo abaixo — nenhum cálculo mudou
-                      (`investmentDiff`/`investmentRitmoStatus` intactos). */}
-                  <div className="mt-1.5">
+                  <div className="mt-2">
                     <ProgressBar
                       planned={financial.planned}
                       actual={financial.actual}
@@ -995,32 +1028,29 @@ export default async function Home({
                     />
                   </div>
 
-                  <div className="mt-2">
-                    <p
-                      className={`text-[14px] font-semibold ${
-                        investmentDiffTone === "danger"
-                          ? "text-overview-danger"
-                          : investmentDiffTone === "warning"
-                            ? "text-overview-warning"
-                            : "text-overview-text-primary"
-                      }`}
-                    >
-                      {investmentStatusPhrase}
-                    </p>
-                    {investmentDiffValueText && (
-                      <p
-                        className={`mt-0.5 text-[13px] tabular-nums ${
-                          investmentDiffTone === "danger"
-                            ? "text-overview-danger"
-                            : investmentDiffTone === "warning"
-                              ? "text-overview-warning"
-                              : "text-overview-text-muted"
-                        }`}
-                      >
-                        {investmentDiffValueText}
-                      </p>
-                    )}
-                  </div>
+                  {/* Etapa "Refinamento visual da Visão Geral — Síntese"
+                      (redução de altura do bloco): status + diferença em uma
+                      única linha (era `investmentStatusPhrase` num parágrafo
+                      e `investmentDiffValueText` em outro) e a legenda
+                      "● Realizado"/"● Esperado hoje" do `ProgressBar` saiu —
+                      o rótulo do próprio marcador ("Esperado hoje · X%") já
+                      diz isso, e o preenchimento colorido é a única barra na
+                      tela, não precisa de legenda pra ser lido como
+                      "realizado". Nenhum cálculo mudou (`investmentDiff`/
+                      `investmentRitmoStatus`/`investmentStatusPhrase`/
+                      `investmentDiffValueText` intactos). */}
+                  <p
+                    className={`mt-1.5 text-[13px] font-medium ${
+                      investmentDiffTone === "danger"
+                        ? "text-overview-danger"
+                        : investmentDiffTone === "warning"
+                          ? "text-overview-warning"
+                          : "text-overview-text-secondary"
+                    }`}
+                  >
+                    {investmentStatusPhrase}
+                    {investmentDiffValueText ? ` · ${investmentDiffValueText} de diferença` : null}
+                  </p>
                 </>
               ) : (
                 <EmptyState title="Nenhum cliente do recorte tem planejamento mensal configurado." className="mt-3" />
@@ -1040,74 +1070,12 @@ export default async function Home({
               </>
             )}
           </div>
-
-          {/* Etapa "Revisão da Visão Geral — Evolução no período": só
-              aparece quando existe ao menos uma comparação real contra o
-              período anterior (`hasEvolutionData`) — nunca uma variação
-              fabricada quando não há base confiável (cliente novo, canal sem
-              histórico, etc.). Mesmo período usado por `ProgressBar`/Ritmo
-              acima (o mês selecionado, truncado até hoje quando em
-              andamento — ver `currentPeriodEndForComparison`). */}
-          {hasEvolutionData && (
-            <div className="border-t border-overview-border px-5 py-2.5 sm:px-6 sm:py-3">
-              <SectionHeader title="Evolução no período" />
-              <div className="mt-2 grid grid-cols-2 gap-x-10 gap-y-3 sm:grid-cols-5">
-                {evolutionInvestment && (
-                  <OperationMiniKpi
-                    label="Investimento"
-                    value={formatCurrency(financial.actual)}
-                    context={<span className={EVOLUTION_TONE_TEXT_CLASSES[evolutionInvestment.tone]}>{evolutionInvestment.text}</span>}
-                  />
-                )}
-                {evolutionLeads && (
-                  <OperationMiniKpi
-                    label="Leads"
-                    value={String(agencyResults.leads.count)}
-                    context={<span className={EVOLUTION_TONE_TEXT_CLASSES[evolutionLeads.tone]}>{evolutionLeads.text}</span>}
-                  />
-                )}
-                {evolutionLeadsCpl && (
-                  <OperationMiniKpi
-                    label={PERFORMANCE_GOALS.leads.costMetricShortLabel}
-                    value={agencyResults.leads.costPerResult !== null ? formatCurrency(agencyResults.leads.costPerResult) : "—"}
-                    context={<span className={EVOLUTION_TONE_TEXT_CLASSES[evolutionLeadsCpl.tone]}>{evolutionLeadsCpl.text}</span>}
-                  />
-                )}
-                {evolutionSales && (
-                  <OperationMiniKpi
-                    label="Vendas"
-                    value={String(agencyResults.sales.count)}
-                    context={<span className={EVOLUTION_TONE_TEXT_CLASSES[evolutionSales.tone]}>{evolutionSales.text}</span>}
-                  />
-                )}
-                {evolutionSalesCpa && (
-                  <OperationMiniKpi
-                    label={PERFORMANCE_GOALS.sales.costMetricShortLabel}
-                    value={agencyResults.sales.costPerResult !== null ? formatCurrency(agencyResults.sales.costPerResult) : "—"}
-                    context={<span className={EVOLUTION_TONE_TEXT_CLASSES[evolutionSalesCpa.tone]}>{evolutionSalesCpa.text}</span>}
-                  />
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="border-t border-overview-border px-5 py-2.5 sm:px-6 sm:py-3">
-            <SectionHeader title="Acompanhamento operacional" />
-            <p className="mt-1.5 text-[13px] text-overview-text-secondary">
-              {needsAttentionCount} conta{needsAttentionCount !== 1 ? "s" : ""} precisa{needsAttentionCount !== 1 ? "m" : ""} de atenção
-            </p>
-            <Button href={operationHref} variant="ghost" size="sm" className="mt-1.5 -ml-2">
-              Ver Operação →
-            </Button>
-          </div>
         </div>
 
         {/* Módulo "Pendências": lembretes rápidos e leves (agência/cliente),
-            deliberadamente fora do painel financeiro/operacional acima (que
-            fica atrás do accordion) — como envolve ações (adicionar/concluir/
-            editar), não pode ficar escondido atrás de um toggle. Fica depois
-            de Prioridades (auditoria da Visão Geral: situação real da
-            carteira antes de tarefa administrativa). Nunca mistura com
+            deliberadamente fora de "Desempenho da agência" acima — como
+            envolve ações (adicionar/concluir/editar), não pode ficar
+            misturado com indicadores read-only. Nunca mistura com
             tarefas/sprints: ver `src/lib/reminders.ts`. */}
         <div className="mt-3">
           <RemindersPanel
