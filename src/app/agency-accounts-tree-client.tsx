@@ -124,17 +124,17 @@ function ClientLeaf({
         title={client.name}
         {...attributes}
         {...listeners}
-        className={`flex items-center gap-1.5 rounded-md py-1 pl-7 pr-2 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
+        className={`flex items-center gap-1.5 rounded-md py-1 pl-7 pr-2 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${
           disabled ? "" : "cursor-grab touch-none active:cursor-grabbing"
         } ${
-          // Etapa "Sidebar Areia — Identidade KOFF": ativo vira o mesmo
-          // bloco grafite sólido + off-white da nav principal (sem barra
-          // lateral aqui — item aninhado, a barra é reservada pros 4
-          // destinos de topo). Combinação em busca não pode mais usar
-          // areia (a própria superfície agora) nem o mesmo tom do ativo —
-          // vira um contorno grafite sutil (`ring` + fundo bem fraco),
-          // reconhecível como "achei isto" sem ser confundido com "estou
-          // nesta página".
+          // Etapa "Sidebar Grafite Quente — v2": ativo usa o mesmo overlay
+          // off-white sutil + texto forte da nav principal (sem barra
+          // lateral aqui — item aninhado, a barra em areia é reservada pros
+          // 4 destinos de topo, único lugar da árvore com a cor cheia da
+          // marca). Combinação em busca fica neutra (contorno off-white,
+          // não areia): acontece com frequência ao digitar — pode destacar
+          // várias linhas ao mesmo tempo — e a areia precisa continuar rara
+          // pra funcionar como assinatura.
           isActive
             ? "bg-sidebar-active-surface font-semibold text-sidebar-active-foreground"
             : isSearchMatch
@@ -178,11 +178,12 @@ function ManagerFolder({
     <li
       ref={setNodeRef}
       className={`rounded-md transition-[opacity,background-color] duration-[var(--motion-fast)] ease-[var(--ease-enter)] ${
-        // Etapa "Sidebar Areia — Identidade KOFF": o alvo de "soltar" ao
-        // arrastar é um destaque temporário, não uma seleção — mesmo
-        // contorno grafite sutil usado em busca (nunca a superfície areia
-        // sobre ela mesma, nem o bloco sólido do ativo).
-        isDropTarget ? "bg-sidebar-match-surface ring-1 ring-inset ring-sidebar-match-ring" : ""
+        // Etapa "Sidebar Grafite Quente — v2": o alvo de "soltar" ao
+        // arrastar é raro e transiente (só existe durante um drag) — um dos
+        // poucos momentos em que vale usar a areia como indicador
+        // funcional (item 7 do pedido: "algum pequeno indicador
+        // selecionado"), sem repetir o mesmo destaque neutro da busca.
+        isDropTarget ? "bg-sand/10 ring-1 ring-inset ring-sand/40" : ""
       } ${isDimmed ? "opacity-40" : ""}`}
     >
       <button
@@ -190,18 +191,18 @@ function ManagerFolder({
         onClick={onToggle}
         aria-expanded={isExpanded}
         title={name}
-        className="mitza-pressable flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-[13px] font-medium text-sidebar-foreground-secondary transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        className="mitza-pressable flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-[13px] font-medium text-sidebar-foreground-secondary transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
       >
         <span
-          className={`mitza-chevron shrink-0 text-xs ${isDropTarget ? "text-sidebar-foreground" : "text-sidebar-foreground-muted"} ${isExpanded ? "rotate-90" : ""}`}
+          className={`mitza-chevron shrink-0 text-xs ${isDropTarget ? "text-sand" : "text-sidebar-foreground-muted"} ${isExpanded ? "rotate-90" : ""}`}
           aria-hidden="true"
         >
           ▸
         </span>
-        <Folder className={`h-4 w-4 shrink-0 ${isDropTarget ? "text-sidebar-foreground" : "text-sidebar-foreground-muted"}`} aria-hidden="true" />
+        <Folder className={`h-4 w-4 shrink-0 ${isDropTarget ? "text-sand" : "text-sidebar-foreground-muted"}`} aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate text-left">{name}</span>
         {!isExpanded && clients.length > 0 && (
-          <span className={`shrink-0 text-xs ${isDropTarget ? "text-sidebar-foreground" : "text-sidebar-foreground-muted"}`}>{clients.length}</span>
+          <span className={`shrink-0 text-xs ${isDropTarget ? "text-sand" : "text-sidebar-foreground-muted"}`}>{clients.length}</span>
         )}
       </button>
 
@@ -606,7 +607,7 @@ export function AgencyAccountsTreeView({
               <Link
                 href="/clients/new"
                 aria-label="Novo cliente"
-                className="mitza-pressable flex h-5 w-5 shrink-0 items-center justify-center rounded text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                className="mitza-pressable flex h-5 w-5 shrink-0 items-center justify-center rounded text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
               >
                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               </Link>
@@ -614,10 +615,11 @@ export function AgencyAccountsTreeView({
           )}
         </div>
 
-        {/* Etapa "Sidebar Areia — Identidade KOFF": nunca uma caixa branca
-         * importada de outro sistema sobre a areia — grafite em baixa
+        {/* Etapa "Sidebar Grafite Quente — v2": nunca uma caixa branca
+         * importada de outro sistema sobre o grafite — off-white em baixa
          * opacidade (fundo e borda) mantém o campo integrado à superfície,
-         * ainda claramente reconhecível como input pelo ícone + borda. */}
+         * ainda claramente reconhecível como input pelo ícone + borda; foco
+         * usa o mesmo ring areia do resto da Sidebar, sem glow. */}
         <div className="relative px-0.5 pb-1.5">
           <Search
             className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground-muted"
@@ -630,7 +632,7 @@ export function AgencyAccountsTreeView({
             onKeyDown={handleSearchKeyDown}
             placeholder="Abrir cliente..."
             aria-label="Buscar cliente ou gestor"
-            className="w-full rounded-md border border-sidebar-border bg-sidebar-hover py-1 pl-7 pr-2 text-[13px] text-sidebar-foreground placeholder:text-sidebar-foreground-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            className="w-full rounded-md border border-sidebar-border bg-sidebar-hover py-1 pl-7 pr-2 text-[13px] text-sidebar-foreground placeholder:text-sidebar-foreground-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
           />
         </div>
 
@@ -680,10 +682,15 @@ export function AgencyAccountsTreeView({
         )}
       </div>
 
+      {/* `DragOverlay` sai da árvore da Sidebar via portal (pode flutuar sobre
+       * o conteúdo claro da página) — precisa da própria superfície OPACA
+       * (`bg-sidebar-surface`, não o overlay translúcido do item ativo, que
+       * seria quase invisível fora do contexto grafite da Sidebar). Ring
+       * areia é o único toque de assinatura no chip flutuante. */}
       <DragOverlay dropAnimation={DROP_ANIMATION}>
         {activeId ? (
           <div
-            className="flex cursor-grabbing items-center gap-2 rounded-md bg-sidebar-active-surface px-3 py-1.5 text-[13px] font-medium text-sidebar-active-foreground shadow-xl ring-1 ring-sidebar-active-rail"
+            className="flex cursor-grabbing items-center gap-2 rounded-md bg-sidebar-surface px-3 py-1.5 text-[13px] font-medium text-sidebar-active-foreground shadow-xl ring-1 ring-sidebar-active-rail"
             style={{ transform: "scale(1.03) rotate(-1deg)" }}
           >
             <span className="min-w-0 truncate">{clientNameById.get(activeId) ?? ""}</span>

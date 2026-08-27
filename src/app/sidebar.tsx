@@ -25,8 +25,8 @@ import { SubmitButton } from "@/app/submit-button";
 import { formatAgencyDateTime } from "@/lib/format";
 import type { UserRole } from "@/lib/supabase/database.types";
 import {
-  ACTIVE_INDICATOR_ON_SAND_ACTIVE_CLASSES,
-  ACTIVE_INDICATOR_ON_SAND_INACTIVE_CLASSES,
+  ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES,
+  ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES,
   ACTIVE_INDICATOR_RAIL_CLASSES,
 } from "@/components/ui/active-indicator";
 import { SIDEBAR_COLLAPSED_WIDTH_CLASS, SIDEBAR_EXPANDED_WIDTH_CLASS, SIDEBAR_HEIGHT_CLASS } from "./app-shell-dimensions";
@@ -239,8 +239,8 @@ function NavLink({
     <Link
       href={item.href}
       title={item.label}
-      className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
-        active ? ACTIVE_INDICATOR_ON_SAND_ACTIVE_CLASSES : ACTIVE_INDICATOR_ON_SAND_INACTIVE_CLASSES
+      className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
+        active ? ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES : ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES
       }`}
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -343,7 +343,7 @@ function SidebarContent({
           onClick={toggleCollapsed}
           aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
-          className="hidden shrink-0 rounded-md p-1 text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:block"
+          className="hidden shrink-0 rounded-md p-1 text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand md:block"
         >
           {collapsed ? (
             <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
@@ -420,10 +420,9 @@ function SidebarContent({
         {/* Etapa "Revisão da Sidebar": movido do grupo "Administração" pra
          * cá — não é uma rota, é uma ação técnica (dispara sync manual do
          * Meta), então recebe o mesmo peso visual discreto do relógio
-         * acima (11px), nunca competindo com Equipe/Configurações. Etapa
-         * "Sidebar Areia — Identidade KOFF": mesmo tom `--sidebar-
-         * foreground-subtle` do relógio — reforça que isto é rodapé
-         * técnico, não mais um item de navegação. */}
+         * acima (11px), nunca competindo com Equipe/Configurações. Mesmo
+         * tom `--sidebar-foreground-subtle` do relógio — reforça que isto é
+         * rodapé técnico, não mais um item de navegação. */}
         {isAdmin && (
           <form action={syncAllMetaAction}>
             <Tooltip label="Atualizar Meta (todos)">
@@ -441,7 +440,7 @@ function SidebarContent({
                     <ItemLabel collapsed={collapsed}>Atualizando...</ItemLabel>
                   </>
                 }
-                className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-[11px] text-sidebar-foreground-subtle transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-sidebar-foreground-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:justify-center" : ""}`}
+                className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-[11px] text-sidebar-foreground-subtle transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-sidebar-foreground-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${collapsed ? "md:justify-center" : ""}`}
               >
                 <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <ItemLabel collapsed={collapsed}>Atualizar Meta (todos)</ItemLabel>
@@ -454,11 +453,13 @@ function SidebarContent({
           className={`flex items-center gap-2 pt-0.5 ${collapsed ? "md:justify-center" : ""}`}
           title={`${profile.name} · ${profile.role === "admin" ? "Admin" : "Gestor"}`}
         >
-          {/* Etapa "Sidebar Areia — Identidade KOFF": era `bg-sand/20
-           * text-sand` — com a Sidebar virando areia, um círculo areia
-           * sobre fundo areia some por completo. Grafite em baixa
-           * opacidade (estrutura) resolve o contraste sem introduzir uma
-           * terceira cor no rodapé. */}
+          {/* Etapa "Sidebar Grafite Quente — v2": off-white translúcido
+           * (mesmo tom do hover, `--sidebar-hover`) já contrasta bem
+           * contra o grafite quente da superfície — sem precisar de areia
+           * aqui. Areia fica reservada pro rail do item ativo/indicador de
+           * drop-target/hover do "+" (item 7 do pedido: "pouco o
+           * suficiente pra continuar sendo especial"), nunca um terceiro
+           * bloco de cor no rodapé. */}
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sidebar-hover text-xs font-semibold text-sidebar-foreground">
             {initial}
           </span>
@@ -476,7 +477,7 @@ function SidebarContent({
           <Tooltip label="Sair">
             <button
               type="submit"
-              className={`mitza-pressable flex w-full items-center justify-center gap-1.5 rounded-md border border-sidebar-border px-3 py-1 text-xs font-medium text-sidebar-foreground-muted hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${collapsed ? "md:px-0" : ""}`}
+              className={`mitza-pressable flex w-full items-center justify-center gap-1.5 rounded-md border border-sidebar-border px-3 py-1 text-xs font-medium text-sidebar-foreground-muted hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${collapsed ? "md:px-0" : ""}`}
             >
               <LogOut className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <ItemLabel collapsed={collapsed}>Sair</ItemLabel>
@@ -495,11 +496,16 @@ function SidebarMode({ onMode }: { onMode: (mode: string | null) => React.ReactN
 
 /**
  * A Sidebar é o único elemento estrutural fixo da plataforma (Decisão 012 —
- * a Top Bar global foi removida): superfície areia permanente (Etapa
- * "Sidebar Areia — Identidade KOFF" — não acompanha o tema claro/escuro do
- * resto da aplicação, por isso as cores aqui usam os tokens fixos
+ * a Top Bar global foi removida): superfície grafite quente permanente
+ * (Etapa "Sidebar Grafite Quente — v2" — não acompanha o tema claro/escuro
+ * do resto da aplicação, por isso as cores aqui usam os tokens fixos
  * `sidebar-*` — ver bloco dedicado em `globals.css` — em vez dos tokens de
- * tema `foreground`/`border`/`card`, que trocam de valor no dark mode),
+ * tema `foreground`/`border`/`card`, que trocam de valor no dark mode).
+ * Areia (`--sand`, direto — já é fixo em qualquer tema) aparece só como
+ * assinatura pontual sobre essa base: rail do item ativo, indicador de
+ * drop-target ao arrastar um cliente, hover do "+"; nunca a superfície —
+ * uma v1 anterior desta etapa tentou areia como fundo inteiro e a
+ * assinatura parou de funcionar por dominar a interface. A Sidebar
  * ocupa exatamente 100% da altura da viewport em qualquer breakpoint
  * (`SIDEBAR_HEIGHT_CLASS`) e é o principal elemento de navegação da
  * plataforma. No mobile ela continua sendo um drawer (abrir tudo o tempo
@@ -532,7 +538,7 @@ export function Sidebar({
           type="button"
           onClick={onOpen}
           aria-label="Abrir menu"
-          className="mitza-pressable fixed left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-surface text-sidebar-foreground shadow-[var(--shadow-float)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:hidden"
+          className="mitza-pressable fixed left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-surface text-sidebar-foreground shadow-[var(--shadow-float)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand md:hidden"
         >
           <Menu className="h-4 w-4" aria-hidden="true" />
         </button>

@@ -66,30 +66,38 @@
   --sand: #c8bead;
   --sand-subtle: #f1ece4;
 
-  /* Sidebar KOFF — Etapa "Sidebar Areia": a Sidebar é uma superfície FIXA
-     (não acompanha claro/escuro do resto da app — mesma decisão de sempre,
-     ver JSDoc de `Sidebar` em app/sidebar.tsx), então estes tokens vivem só
-     aqui em `:root` e NUNCA são redefinidos no bloco `prefers-color-scheme:
-     dark` abaixo — ao contrário de `--brand`/`--navy`/`--sand`, que trocam
-     de valor no escuro. Areia = superfície/assinatura da marca; grafite =
-     estrutura/contraste; off-white = contraste sobre blocos grafite (item
-     ativo). `--sidebar-graphite-rgb` existe separado de `--brand` de
-     propósito: `--brand` MUDA no dark mode (vira areia clara, ver acima),
-     e a Sidebar precisa do grafite fixo pra compor opacidades (divisórias,
+  /* Sidebar KOFF — Etapa "Sidebar Grafite Quente — v2": a Sidebar é uma
+     superfície FIXA (não acompanha claro/escuro do resto da app — mesma
+     decisão de sempre, ver JSDoc de `Sidebar` em app/sidebar.tsx), então
+     estes tokens vivem só aqui em `:root` e NUNCA são redefinidos no bloco
+     `prefers-color-scheme: dark` abaixo — ao contrário de
+     `--brand`/`--navy`/`--sand`, que trocam de valor no escuro.
+
+     v1 (Etapa "Sidebar Areia") tentou areia como SUPERFÍCIE inteira — na
+     prática a areia parou de funcionar como assinatura e passou a dominar
+     a interface. v2 inverte: GRAFITE QUENTE é a superfície/estrutura,
+     AREIA (`--sand`, direto, sem token próprio — já é fixo em qualquer
+     tema) é a assinatura PONTUAL (rail do item ativo, indicador de
+     drop-target, hover do "+"), OFF-WHITE é o contraste sobre o grafite.
+     `--sidebar-foreground-rgb` (renomeado de `--sidebar-graphite-rgb`: a
+     base de opacidade agora é o tom OFF-WHITE, não mais grafite — v1 tinha
+     texto grafite sobre superfície clara, v2 é o inverso) existe separado
+     de `--brand`/`--foreground` de propósito: ambos mudam no dark mode, e
+     a Sidebar precisa de uma base fixa pra compor opacidades (divisórias,
      hover, texto secundário) sem herdar essa troca. */
-  --sidebar-surface: var(--sand);
-  --sidebar-graphite-rgb: 28, 28, 28;
-  --sidebar-foreground: rgb(var(--sidebar-graphite-rgb));
-  --sidebar-foreground-secondary: rgba(var(--sidebar-graphite-rgb), 0.8);
-  --sidebar-foreground-muted: rgba(var(--sidebar-graphite-rgb), 0.65);
-  --sidebar-foreground-subtle: rgba(var(--sidebar-graphite-rgb), 0.55);
-  --sidebar-border: rgba(var(--sidebar-graphite-rgb), 0.14);
-  --sidebar-hover: rgba(var(--sidebar-graphite-rgb), 0.07);
-  --sidebar-active-surface: rgb(var(--sidebar-graphite-rgb));
-  --sidebar-active-foreground: #f5f1ea;
-  --sidebar-active-rail: rgba(245, 241, 234, 0.4);
-  --sidebar-match-surface: rgba(var(--sidebar-graphite-rgb), 0.06);
-  --sidebar-match-ring: rgba(var(--sidebar-graphite-rgb), 0.22);
+  --sidebar-surface: #2b2b29;
+  --sidebar-foreground-rgb: 245, 241, 234;
+  --sidebar-foreground: rgb(var(--sidebar-foreground-rgb));
+  --sidebar-foreground-secondary: rgba(var(--sidebar-foreground-rgb), 0.78);
+  --sidebar-foreground-muted: rgba(var(--sidebar-foreground-rgb), 0.6);
+  --sidebar-foreground-subtle: rgba(var(--sidebar-foreground-rgb), 0.45);
+  --sidebar-border: rgba(var(--sidebar-foreground-rgb), 0.1);
+  --sidebar-hover: rgba(var(--sidebar-foreground-rgb), 0.05);
+  --sidebar-active-surface: rgba(var(--sidebar-foreground-rgb), 0.09);
+  --sidebar-active-foreground: rgb(var(--sidebar-foreground-rgb));
+  --sidebar-active-rail: var(--sand);
+  --sidebar-match-surface: rgba(var(--sidebar-foreground-rgb), 0.06);
+  --sidebar-match-ring: rgba(var(--sidebar-foreground-rgb), 0.2);
 
   /* ---------------------------------------------------------------------
    * Fundação do novo Design System (Etapa 47) — inspirado em densidade de
