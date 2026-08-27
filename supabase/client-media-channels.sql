@@ -60,6 +60,21 @@ alter table clients add column if not exists media_channels text[];
 --       'google', em qualquer mês (alguém deliberadamente configurou um
 --       plano de investimento pra esse canal — evento administrativo, não
 --       dado orgânico de sincronização).
+--
+-- `guard_client_manager_update()` (manager-edit-clients.sql) bloqueia
+-- update em qualquer coluna de `clients` fora de `primary_manager_id`/
+-- `wallet_position` quando não há contexto de admin/gestor autenticado
+-- (`auth.uid()`) — que é exatamente o caso rodando esta migration pelo SQL
+-- Editor. `agency-wallet-position.sql` nunca bateu nisso por só tocar uma
+-- das 2 colunas isentas; esta migration toca `media_channels`, que não é
+-- isenta, então o gatilho precisa ser desligado só durante este UPDATE
+-- (nunca permanentemente — religa logo em seguida, dentro da mesma
+-- transação: se algo falhar no meio, tudo desfaz junto, o gatilho nunca
+-- fica desligado de verdade).
+begin;
+
+alter table clients disable trigger clients_guard_manager_update;
+
 update clients c
 set media_channels = array_remove(
   array[
@@ -77,6 +92,10 @@ set media_channels = array_remove(
   null
 )
 where media_channels is null;
+
+alter table clients enable trigger clients_guard_manager_update;
+
+commit;
 
 alter table clients alter column media_channels set default array['meta']::text[];
 alter table clients alter column media_channels set not null;
