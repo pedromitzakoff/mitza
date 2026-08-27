@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { useFloatingMenuPosition, FloatingPortalPanel } from "@/lib/floating-menu";
+import { SandRail } from "@/components/workspace/sand-rail";
 import type { AgencyClientOption } from "./agency-filters";
 
 /** Substitui os antigos controles independentes "Carteira" (gestor) e
@@ -60,8 +61,9 @@ export function ScopeSelector({
         onClick={() => (open ? setOpen(false) : openMenu())}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="mitza-pressable flex h-7 max-w-[10rem] items-center gap-1 rounded-md border border-overview-border bg-overview-surface px-2 text-xs font-medium text-overview-text-primary transition-colors hover:border-overview-border-strong sm:max-w-[15rem]"
+        className="mitza-pressable relative flex h-7 max-w-[10rem] items-center gap-1 rounded-md border border-overview-border bg-overview-surface py-1 pl-4 pr-2 text-xs font-medium text-overview-text-primary transition-colors hover:border-overview-border-strong sm:max-w-[15rem]"
       >
+        <SandRail />
         <span className="truncate">{label}</span>
         <ChevronDown className="h-3.5 w-3.5 shrink-0 text-overview-text-muted" aria-hidden="true" />
       </button>

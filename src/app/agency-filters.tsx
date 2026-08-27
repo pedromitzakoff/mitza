@@ -8,9 +8,9 @@ import type { ClientComboboxOption } from "./client-combobox";
 import { PLATFORM_LABEL } from "./client-objective-table";
 import { PERFORMANCE_GOAL_OPTIONS } from "@/lib/performance-goals";
 import { useFloatingMenuPosition, FloatingPortalPanel } from "@/lib/floating-menu";
-import { Toolbar } from "@/components/workspace/toolbar";
 import { Select } from "@/components/workspace/select";
 import { Button } from "@/components/workspace/button";
+import { SandRail } from "@/components/workspace/sand-rail";
 
 export type AgencyClientOption = ClientComboboxOption;
 
@@ -171,15 +171,35 @@ export function AgencyFilters({
 
   return (
     <div className="flex flex-col gap-2">
-      <Toolbar>
+      {/* Etapa "Micro-refinamento da barra de filtros": o container
+          (`Toolbar`, borda+fundo envolvendo a linha inteira) saiu — os
+          controles ficam direto sobre o fundo da página, tão abertos quanto
+          o resto da Visão Geral. Cada controle mantém sua própria borda/
+          superfície individual (nada mudou em comportamento/opções/estado),
+          só ganhou o rail em areia (`SandRail`) à esquerda — a mesma
+          assinatura do item ativo da Sidebar e do título "Desempenho da
+          agência" (`SectionHeader accent`), reaproveitada aqui numa técnica
+          diferente (curta e centralizada, não `border-l` de altura
+          inteira) porque estes controles são mais altos que o texto dentro
+          deles. "Filtros" fica de fora de propósito (item 6 do pedido): é
+          uma ação, não um seletor de contexto/escopo. */}
+      <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5">
           <ScopeSelector value={scopeValue} gestores={gestores} clients={clients} onSelect={handleScopeSelect} />
-          <Select value={platform} onChange={(e) => handlePlatformChange(e.target.value)} aria-label="Plataforma">
-            <option value="consolidado">Consolidado</option>
-            <option value="meta">Meta Ads</option>
-            <option value="google">Google Ads</option>
-            <option value="tiktok">TikTok Ads</option>
-          </Select>
+          <div className="relative">
+            <SandRail />
+            <Select
+              value={platform}
+              onChange={(e) => handlePlatformChange(e.target.value)}
+              aria-label="Plataforma"
+              style={{ paddingLeft: "1rem" }}
+            >
+              <option value="consolidado">Consolidado</option>
+              <option value="meta">Meta Ads</option>
+              <option value="google">Google Ads</option>
+              <option value="tiktok">TikTok Ads</option>
+            </Select>
+          </div>
         </div>
 
         <div className="ml-auto flex items-center gap-1.5">
@@ -262,7 +282,7 @@ export function AgencyFilters({
             )}
           </div>
         </FloatingPortalPanel>
-      </Toolbar>
+      </div>
 
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 px-0.5">
