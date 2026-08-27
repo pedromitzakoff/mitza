@@ -105,7 +105,13 @@ import { AnalyticsHubNav } from "../analytics-hub-nav";
 import { AnalyticsPlatformSwitch } from "../analytics-platform-switch";
 import { GoogleNotConnectedState } from "../google-not-connected-state";
 import { CREATIVES_NOT_AVAILABLE_FOR_GOOGLE_MESSAGE } from "@/lib/analytics-messages";
-import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel, type ChannelScope } from "@/lib/traffic-channels";
+import {
+  AVAILABLE_TRAFFIC_CHANNELS,
+  resolveClientChannelScopeOptions,
+  resolveSelectedChannelScope,
+  type TrafficChannel,
+  type ChannelScope,
+} from "@/lib/traffic-channels";
 import { VisaoGeralChannelSwitch, type VisaoGeralMetricsChannel } from "../visao-geral-channel-switch";
 
 const SYNC_RUN_STATUS_LABEL: Record<SyncRunSummary["status"], string> = {
@@ -303,12 +309,6 @@ export default async function ClientPage({
   const activeArea = (AREA_TABS.some((t) => t.key === areaParam) ? areaParam : "visao-geral") as ClientArea;
   const buildAreaHref = (area: ClientArea) => `/clients/${id}?area=${area}${monthQueryParam ? `&month=${monthQueryParam}` : ""}`;
 
-  // Seletor "Consolidado | Meta | Google" da Visão Geral (pedido explícito
-  // do usuário) — só vale pra essa aba; nunca lido fora do bloco
-  // `activeArea === "visao-geral"` abaixo. Inválido/ausente cai pro padrão
-  // consolidado, mesmo padrão de `activeArea`/`analyticsPlatform`.
-  const metricsChannel: VisaoGeralMetricsChannel =
-    metricsChannelParam === "meta" || metricsChannelParam === "google" ? metricsChannelParam : "consolidated";
   const metricsChannelBaseHref = `/clients/${id}?area=visao-geral${monthQueryParam ? `&month=${monthQueryParam}` : ""}`;
 
   // RLS já garante que um gestor só recebe o cliente se estiver em
@@ -317,13 +317,26 @@ export default async function ClientPage({
   const { data: client } = await supabase
     .from("clients")
     .select(
-      "id, name, meta_ad_account_id, status, contract_start_date, primary_manager_id, primary_manager:team_members!clients_primary_manager_id_fkey(name), main_objective, main_product_or_service, operation_region, primary_audience, client_differentials, client_restrictions, important_seasonal_dates, operational_summary, important_notes, performance_goal, target_cost_per_result, avatar_url, dashboard_url, balance_url, monthly_closing_sheet_url",
+      "id, name, meta_ad_account_id, status, contract_start_date, primary_manager_id, primary_manager:team_members!clients_primary_manager_id_fkey(name), main_objective, main_product_or_service, operation_region, primary_audience, client_differentials, client_restrictions, important_seasonal_dates, operational_summary, important_notes, performance_goal, target_cost_per_result, avatar_url, dashboard_url, balance_url, monthly_closing_sheet_url, media_channels",
     )
     .eq("id", id)
     .is("deleted_at", null)
     .single();
 
   if (!client) notFound();
+
+  // Etapa "Canais Ativos por Cliente": Seletor "Meta Ads | Google Ads |
+  // Consolidado" da Visão Geral (pedido explícito do usuário) — só vale pra
+  // essa aba; nunca lido fora do bloco `activeArea === "visao-geral"`
+  // abaixo. `clients.media_channels` (fonte única de verdade, ver
+  // `lib/traffic-channels.ts`) decide quais opções existem pra ESTE
+  // cliente e qual é o padrão (Meta > Google > Consolidado, nunca mais
+  // "Consolidado" fixo); a seleção manual do usuário (`metricsChannelParam`)
+  // é respeitada sempre que for uma opção válida pra ele — nunca resetada
+  // a cada render, só cai pro default quando o parâmetro está ausente ou
+  // não é mais válido pra este cliente específico.
+  const metricsChannelOptions = resolveClientChannelScopeOptions(client.media_channels);
+  const metricsChannel: VisaoGeralMetricsChannel = resolveSelectedChannelScope(metricsChannelParam, client.media_channels);
 
   // Princípio "Workspace = só cliente ativo": estado único derivado de
   // `client.status`, passado adiante (nunca recalculado em cada botão)
@@ -1713,7 +1726,7 @@ export default async function ClientPage({
           </IconButton>
         </div>
         {activeArea === "visao-geral" && (
-          <VisaoGeralChannelSwitch baseHref={metricsChannelBaseHref} active={metricsChannel} />
+          <VisaoGeralChannelSwitch baseHref={metricsChannelBaseHref} active={metricsChannel} options={metricsChannelOptions} />
         )}
       </div>
 

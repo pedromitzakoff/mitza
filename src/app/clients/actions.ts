@@ -98,6 +98,12 @@ function readStructuralFields(formData: FormData) {
     contracted_services: formData.getAll("contracted_services").map(String).length
       ? formData.getAll("contracted_services").map(String)
       : null,
+    // Etapa "Canais Ativos por Cliente": fonte única de verdade de "em quais
+    // plataformas este cliente investe" — controla o seletor de canal da
+    // Visão Geral (ver lib/traffic-channels.ts). Validado como "pelo menos 1"
+    // em createClientAction/updateClientAction, nunca aqui (esta função só
+    // lê o formulário, nunca decide se o valor é aceitável).
+    media_channels: formData.getAll("media_channels").map(String),
     notice_period_days: optionalInt(formData, "notice_period_days"),
     main_product_or_service: optionalText(formData, "main_product_or_service"),
     operation_region: optionalText(formData, "operation_region"),
@@ -155,6 +161,14 @@ export async function createClientAction(formData: FormData) {
   // configurado, então esta validação nunca entra em updateClientAction.
   if (!structural.performance_goal) {
     redirect(`/clients/new?error=${encodeURIComponent("Selecione o objetivo principal de performance")}`);
+  }
+
+  // Etapa "Canais Ativos por Cliente": pelo menos 1 canal é obrigatório
+  // (aqui E em updateClientAction, nunca só na criação — diferente do
+  // objetivo de performance acima) — sem nenhum canal ativo não haveria
+  // opção nenhuma pro seletor da Visão Geral mostrar.
+  if (structural.media_channels.length === 0) {
+    redirect(`/clients/new?error=${encodeURIComponent("Selecione pelo menos um canal de mídia")}`);
   }
 
   const supabase = await createSupabaseClient();
@@ -243,6 +257,11 @@ export async function updateClientAction(clientId: string, returnTo: string, for
   // (criar/excluir cliente é mais estrutural, fora do pedido).
   const profile = await requireClientManagerAccess(clientId);
   const { name, meta_ad_account_id, managerIds, ...structural } = readClientFields(formData);
+
+  if (structural.media_channels.length === 0) {
+    redirect(`/clients/${clientId}/edit?error=${encodeURIComponent("Selecione pelo menos um canal de mídia")}`);
+  }
+
   const supabase = await createSupabaseClient();
 
   // Ponto real de crash em produção pra um gestor não-admin (visto em

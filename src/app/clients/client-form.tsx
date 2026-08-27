@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import type { Database } from "@/lib/supabase/database.types";
 import { CONTRACTED_SERVICE_OPTIONS } from "@/lib/client-fields";
+import { AVAILABLE_TRAFFIC_CHANNELS, TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
 import { formatCnpj } from "@/lib/cnpj";
 import { PERFORMANCE_GOAL_OPTIONS, PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { SETTINGS_SECONDARY_BUTTON_CLASSES } from "../settings/settings-shell";
@@ -87,6 +88,11 @@ export function ClientForm({
 }) {
   const assigned = new Set(assignedIds);
   const contractedServices = new Set(defaults?.contracted_services ?? []);
+  // Etapa "Canais Ativos por Cliente": cliente novo (`defaults === undefined`)
+  // nasce com "Meta Ads" pré-marcado — `meta_ad_account_id` já é obrigatório
+  // na criação, então na prática todo cliente novo tem Meta configurado; o
+  // gestor pode desmarcar se este for excepcionalmente um caso só-Google.
+  const mediaChannels = new Set(defaults?.media_channels ?? (defaults === undefined ? ["meta"] : []));
   const [dirty, setDirty] = useState(false);
   // MITZA 2.0 — Refinamento da Identidade do Cliente: preview local do
   // arquivo escolhido (nunca enviado ao servidor até o submit) — `null`
@@ -269,6 +275,34 @@ export function ClientForm({
             <input name="operation_region" defaultValue={defaults?.operation_region ?? ""} className={inputClasses} />
           </label>
         </Subgroup>
+
+        {/* Etapa "Canais Ativos por Cliente": fonte única de verdade de "em
+            quais plataformas este cliente investe" (`clients.media_channels`)
+            — controla diretamente as opções do seletor de canal na Visão
+            Geral (`VisaoGeralChannelSwitch`, via `resolveClientChannelScopeOptions`,
+            lib/traffic-channels.ts). Nunca chamado "Redes sociais" (Google
+            Ads não é uma rede social). Mesmo padrão de checkbox de array já
+            usado em "Serviços contratados" logo abaixo — `formData.getAll`
+            no Server Action, nunca um segundo mecanismo de leitura. Pelo
+            menos 1 canal é obrigatório (validado na Server Action): sem
+            nenhum canal ativo não haveria o que mostrar na Visão Geral. */}
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Canais de mídia</legend>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {AVAILABLE_TRAFFIC_CHANNELS.map((channel) => (
+              <label key={channel} className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  name="media_channels"
+                  value={channel}
+                  defaultChecked={mediaChannels.has(channel)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                {TRAFFIC_CHANNELS[channel].label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         <Subgroup label="Performance">
           <label className={labelClasses}>

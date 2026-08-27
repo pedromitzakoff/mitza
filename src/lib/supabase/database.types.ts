@@ -309,6 +309,7 @@ export interface Database {
           agency_monthly_fee: number | null;
           billing_due_day: number | null;
           contracted_services: string[] | null;
+          media_channels: string[];
           notice_period_days: number | null;
           main_product_or_service: string | null;
           operation_region: string | null;
@@ -359,6 +360,7 @@ export interface Database {
           agency_monthly_fee?: number | null;
           billing_due_day?: number | null;
           contracted_services?: string[] | null;
+          media_channels?: string[];
           notice_period_days?: number | null;
           main_product_or_service?: string | null;
           operation_region?: string | null;
@@ -409,6 +411,7 @@ export interface Database {
           agency_monthly_fee?: number | null;
           billing_due_day?: number | null;
           contracted_services?: string[] | null;
+          media_channels?: string[];
           notice_period_days?: number | null;
           main_product_or_service?: string | null;
           operation_region?: string | null;

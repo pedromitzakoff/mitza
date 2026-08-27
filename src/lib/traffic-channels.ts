@@ -48,3 +48,72 @@ export function getTrafficChannelConfig(channel: TrafficChannel): TrafficChannel
  * `VisaoGeralMetricsChannel` em visao-geral-channel-switch.tsx, cada um
  * reinventando o mesmo union — os dois viraram aliases deste). */
 export type ChannelScope = "consolidated" | TrafficChannel;
+
+/**
+ * Etapa "Canais Ativos por Cliente" — `clients.media_channels` (`text[]`,
+ * validado contra `AVAILABLE_TRAFFIC_CHANNELS`, sempre pelo menos 1 valor)
+ * é a fonte única de verdade de "em quais plataformas este cliente
+ * investe" — nunca confundida com `import_sources.enabled`
+ * (`resolveClientActiveChannels`, achievement-metrics.ts: só diz se há
+ * SINCRONIZAÇÃO automática configurada, um cliente manual pode não ter
+ * nenhuma linha) nem com presença de dado num mês (`daily_spend`/
+ * `daily_performance`: um canal configurado sem investimento neste mês
+ * ainda é um canal configurado — ver `resolveSelectedChannelScope` abaixo).
+ *
+ * As 4 funções desta seção são as únicas que decidem "quais canais este
+ * cliente pode ver"/"qual é o padrão"/"qual está selecionado agora" — nunca
+ * espalhar essa decisão de novo pelos componentes que consomem
+ * `ChannelScope` (Visão Geral do cliente é o único consumidor nesta etapa;
+ * ver auditoria antes de estender a outros pontos que hoje usam
+ * `AVAILABLE_TRAFFIC_CHANNELS` incondicionalmente).
+ */
+
+/** Ordem de exibição padrão do seletor de canal — Meta primeiro (plataforma
+ * predominante na operação), Consolidado sempre por último quando existe. */
+const CHANNEL_SWITCH_ORDER: ChannelScope[] = ["meta", "google", "consolidated"];
+
+/** Normaliza `clients.media_channels` pra uma lista de canais REALMENTE
+ * selecionáveis (`AVAILABLE_TRAFFIC_CHANNELS`) — filtra qualquer valor
+ * inesperado (dado legado antes da migration, edição manual do banco) e
+ * nunca devolve lista vazia: cai pra `["meta"]` como último recurso (nunca
+ * uma tela sem opção nenhuma), mesmo que o dado esperado seja sempre
+ * não-vazio (constraint no banco já garante isso — esta função é a segunda
+ * camada de defesa, não a única). */
+export function resolveClientMediaChannels(mediaChannels: string[] | null | undefined): TrafficChannel[] {
+  const valid = (mediaChannels ?? []).filter((channel): channel is TrafficChannel =>
+    AVAILABLE_TRAFFIC_CHANNELS.includes(channel as TrafficChannel),
+  );
+  return valid.length > 0 ? valid : ["meta"];
+}
+
+/** Opções do seletor de canal pra este cliente, já na ordem certa —
+ * Consolidado só entra quando há MAIS DE UM canal ativo pra consolidar
+ * (consolidar um canal só produziria essencialmente a mesma visão do canal
+ * isolado, controle redundante). */
+export function resolveClientChannelScopeOptions(mediaChannels: string[] | null | undefined): ChannelScope[] {
+  const channels = resolveClientMediaChannels(mediaChannels);
+  return CHANNEL_SWITCH_ORDER.filter((scope) => (scope === "consolidated" ? channels.length > 1 : channels.includes(scope as TrafficChannel)));
+}
+
+/** Canal inicial ao abrir a Visão Geral — Meta se ativo, senão Google,
+ * Consolidado só como fallback final (na prática nunca acontece: um
+ * cliente só chega em "Consolidado" aqui se `media_channels` não incluir
+ * nem "meta" nem "google", o que `resolveClientMediaChannels` já impede). */
+export function resolveDefaultClientChannelScope(mediaChannels: string[] | null | undefined): ChannelScope {
+  const options = resolveClientChannelScopeOptions(mediaChannels);
+  return options.find((scope) => scope === "meta") ?? options.find((scope) => scope === "google") ?? options[0] ?? "consolidated";
+}
+
+/** Único ponto que decide o canal EFETIVAMENTE exibido: honra a seleção
+ * manual do usuário (querystring) sempre que ela for uma opção válida pra
+ * este cliente especificamente — nunca reseta pro default a cada
+ * navegação/troca de mês só porque o componente re-renderizou. Só cai pro
+ * default quando não há parâmetro (primeira visita) OU quando o parâmetro
+ * é inválido pra este cliente (ex.: link antigo pra "google" depois do
+ * cliente ter sido reconfigurado só pra Meta) — nunca por ausência de dado
+ * no mês selecionado, que não é responsabilidade desta função. */
+export function resolveSelectedChannelScope(paramValue: string | null | undefined, mediaChannels: string[] | null | undefined): ChannelScope {
+  const options = resolveClientChannelScopeOptions(mediaChannels);
+  if (paramValue && (options as string[]).includes(paramValue)) return paramValue as ChannelScope;
+  return resolveDefaultClientChannelScope(mediaChannels);
+}
