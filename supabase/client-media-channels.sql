@@ -67,35 +67,39 @@ alter table clients add column if not exists media_channels text[];
 -- (`auth.uid()`) — que é exatamente o caso rodando esta migration pelo SQL
 -- Editor. `agency-wallet-position.sql` nunca bateu nisso por só tocar uma
 -- das 2 colunas isentas; esta migration toca `media_channels`, que não é
--- isenta, então o gatilho precisa ser desligado só durante este UPDATE
--- (nunca permanentemente — religa logo em seguida, dentro da mesma
--- transação: se algo falhar no meio, tudo desfaz junto, o gatilho nunca
--- fica desligado de verdade).
-begin;
+-- isenta, então o gatilho precisa ser desligado só durante este UPDATE.
+--
+-- Um `do $$ ... $$` (bloco PL/pgSQL anônimo) em vez de `begin;`/`commit;`
+-- soltos — é sempre enviado/interpretado como UMA ÚNICA instrução, então
+-- nenhum client SQL (incluindo o SQL Editor do Supabase, que pode
+-- executar um script colado statement a statement) consegue separar o
+-- disable/update/enable em conexões ou transações diferentes. Tudo
+-- acontece atomicamente dentro do bloco: se falhar no meio, desfaz junto,
+-- o gatilho nunca fica desligado de verdade.
+do $$
+begin
+  alter table clients disable trigger clients_guard_manager_update;
 
-alter table clients disable trigger clients_guard_manager_update;
+  update clients c
+  set media_channels = array_remove(
+    array[
+      'meta',
+      case
+        when exists (
+          select 1 from import_sources i
+          where i.client_id = c.id and i.channel = 'google' and i.enabled = true
+        ) or exists (
+          select 1 from monthly_budget_changes b
+          where b.client_id = c.id and b.channel = 'google'
+        ) then 'google'
+      end
+    ],
+    null
+  )
+  where media_channels is null;
 
-update clients c
-set media_channels = array_remove(
-  array[
-    'meta',
-    case
-      when exists (
-        select 1 from import_sources i
-        where i.client_id = c.id and i.channel = 'google' and i.enabled = true
-      ) or exists (
-        select 1 from monthly_budget_changes b
-        where b.client_id = c.id and b.channel = 'google'
-      ) then 'google'
-    end
-  ],
-  null
-)
-where media_channels is null;
-
-alter table clients enable trigger clients_guard_manager_update;
-
-commit;
+  alter table clients enable trigger clients_guard_manager_update;
+end $$;
 
 alter table clients alter column media_channels set default array['meta']::text[];
 alter table clients alter column media_channels set not null;
