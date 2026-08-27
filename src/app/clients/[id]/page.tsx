@@ -314,7 +314,11 @@ export default async function ClientPage({
   // RLS já garante que um gestor só recebe o cliente se estiver em
   // client_managers; para quem não tem acesso o select simplesmente não
   // retorna linha, o que aqui vira 404 (sem revelar que o cliente existe).
-  const { data: client } = await supabase
+  // `error` é logada (nunca exposta ao usuário) antes do 404 — sem isso, um
+  // erro real de query (ex.: coluna nova referenciada antes da migration
+  // rodar) fica indistinguível de "sem acesso", 404 silencioso pra TODO
+  // cliente sem nenhuma pista no cliente de onde procurar.
+  const { data: client, error: clientQueryError } = await supabase
     .from("clients")
     .select(
       "id, name, meta_ad_account_id, status, contract_start_date, primary_manager_id, primary_manager:team_members!clients_primary_manager_id_fkey(name), main_objective, main_product_or_service, operation_region, primary_audience, client_differentials, client_restrictions, important_seasonal_dates, operational_summary, important_notes, performance_goal, target_cost_per_result, avatar_url, dashboard_url, balance_url, monthly_closing_sheet_url, media_channels",
@@ -323,6 +327,7 @@ export default async function ClientPage({
     .is("deleted_at", null)
     .single();
 
+  if (clientQueryError) console.error(`[ClientPage] falha ao buscar cliente ${id}:`, clientQueryError);
   if (!client) notFound();
 
   // Etapa "Canais Ativos por Cliente": Seletor "Meta Ads | Google Ads |
