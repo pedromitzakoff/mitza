@@ -6,13 +6,12 @@ import { formatCurrency } from "@/lib/format";
 
 function Kpi({ label, value, auxiliary }: { label: string; value: string; auxiliary?: string | null }) {
   return (
-    <div className="flex min-w-[7rem] flex-col gap-0.5">
+    <div className="flex flex-col gap-0.5">
       <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">{label}</p>
       <p className="text-xl font-semibold tracking-tight text-overview-text-primary">{value}</p>
       {/* Linha reservada mesmo vazia: nem todo Kpi tem auxiliar (ex.:
           "Investimento"), mas os que estão na mesma linha precisam da mesma
-          altura pra não ficar com a base desalinhada num `flex` que estica
-          os itens (`align-items: stretch`, o padrão). */}
+          altura pra não ficar com a base desalinhada. */}
       <p className="min-h-[1em] text-xs text-overview-text-secondary">{auxiliary}</p>
     </div>
   );
@@ -92,15 +91,15 @@ export function MonthlyKpiSummary({
 
   return (
     <div>
-      {/* Uma única linha, sem grid nem divisor entre "linhas" (Etapa "Visão
-          Geral: decisão em 5 segundos") — `flex-wrap` deixa cada KPI ocupar
-          só o espaço que precisa e quebrar pro mobile sozinho, em vez do
-          grid fixo de antes que reservava colunas vazias. Mesma composição
-          do `AnalyticsKpiGrid` (Analytics), de propósito: a Visão Geral e o
-          Analytics agora falam a mesma linguagem visual de "linha de KPIs",
-          só com tipografia maior aqui (é a tela de decisão, não a de
-          investigação). */}
-      <div className="flex flex-wrap gap-x-8 gap-y-4">
+      {/* Etapa "Refinamento Visual 2.0 — Distribuição dos KPIs": ainda uma
+          única fileira, sem virar o grid fixo 4x2 de cards já rejeitado
+          antes (Etapa "Visão Geral: decisão em 5 segundos") — `auto-fit` +
+          `minmax` distribui os KPIs disponíveis pela largura toda do
+          container (em vez de `flex-wrap` empacotando tudo no início e
+          deixando espaço morto à direita), sem virar caixas/cards e sem
+          alterar nenhum valor: cada KPI continua alinhado à esquerda,
+          mesma hierarquia tipográfica de sempre. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-x-8 gap-y-4">
         <Kpi label="Investimento" value={formatCurrency(monthActual)} />
         <Kpi label="Resultados" value={resultsValue} auxiliary={resultsAuxiliary} />
         <Kpi label="Custo por resultado" value={costValue} auxiliary={costAuxiliary} />

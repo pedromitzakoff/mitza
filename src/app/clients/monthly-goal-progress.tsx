@@ -99,14 +99,19 @@ export function MonthlyGoalProgress({
 
   return (
     <div>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">Performance</p>
+      {/* Etapa "Refinamento Visual 2.0 — Indicador real no título": era o
+          rótulo genérico "Performance" — agora é o próprio indicador
+          principal configurado pro cliente (`config.pluralLabel`, mesmo
+          conceito de `PERFORMANCE_GOALS` já usado em todo o resto da
+          plataforma, nenhuma segunda regra pra descobrir o nome). Como o
+          indicador já nomeia o card, a unidade repetida depois da fração
+          ("75/100 leads") saiu — a fração sozinha já é auto-explicativa
+          logo abaixo do título. */}
+      <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">{config.pluralLabel.toUpperCase()}</p>
       <div className="mt-1.5">
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-          <p className="text-sm text-overview-text-secondary">
-            <span className="font-semibold text-overview-text-primary">
-              {formatCount(monthResultCount)}/{formatCount(targetResultCount)}
-            </span>{" "}
-            {config.pluralLabel.toLowerCase()}
+          <p className="text-sm font-semibold text-overview-text-primary">
+            {formatCount(monthResultCount)}/{formatCount(targetResultCount)}
           </p>
           <p className="text-xl font-bold text-overview-text-primary">{pct}%</p>
         </div>

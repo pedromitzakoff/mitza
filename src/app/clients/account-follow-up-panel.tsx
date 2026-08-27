@@ -48,8 +48,9 @@ export interface LastOptimizationInfo {
  * pedido explícito do usuário pra não competir com Performance/Investimento
  * nesta dobra. Nenhum dado ou funcionalidade foi apagada: a Timeline
  * (`activeArea === "timeline"`) já mostra o histórico completo de forma
- * independente, e um link discreto "Histórico" continua acessível na área
- * técnica do cabeçalho (`[id]/page.tsx`), abrindo o mesmo drawer de sempre.
+ * independente, e um link "Ver histórico completo de atividades" continua
+ * acessível dentro do disclosure "Informações da conta" (fim da página,
+ * `[id]/page.tsx`), abrindo o mesmo drawer de sempre.
  *
  * Etapa "Simetria Performance x Investimento": Performance e Investimento
  * (`investmentSummary`) precisam ser um PAR ESPELHADO — mesma anatomia,

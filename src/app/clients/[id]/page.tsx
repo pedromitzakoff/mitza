@@ -1044,14 +1044,18 @@ export default async function ClientPage({
 
   const contractBannerText = contractStatusBannerText(client.status);
 
-  // O status da integração Stract deixou de ser um banner solto aqui —
-  // virou a linha-resumo do bloco "Sincronização" (ver render mais abaixo,
-  // usa `latestSyncStatus`), visível pra qualquer pessoa com acesso à
-  // página, sempre (não só quando há erro). Pelo mesmo motivo, o toast
-  // verde pós-clique de "Sincronizar agora" (`stractSynced`) foi removido —
-  // ele podia contradizer o bloco (dizia "sucesso" mesmo quando alguma
-  // fonte terminava "partial"); o bloco já mostra o estado real assim que a
-  // página recarrega depois do clique.
+  // Etapa "Refinamento Visual 2.0 — Progressive Disclosure": estado normal
+  // fica silencioso, exceção fica visível. Sincronização SAUDÁVEL
+  // (`status === "success"`) não aparece mais aqui nem em nenhum outro
+  // lugar de destaque — vive só, sempre disponível, dentro do disclosure
+  // "Informações da conta" (fim da página). Qualquer OUTRO estado (parcial/
+  // vazio/falha/em andamento/nunca sincronizado) continua exatamente tão
+  // visível quanto sempre foi — mesma classificação de sempre
+  // (`SYNC_RUN_STATUS_LABEL`/`SYNC_RUN_STATUS_BADGE_CLASSES`, nenhuma regra
+  // nova), só que agora reaproveitando a MESMA superfície de banners de
+  // exceção já usada pro resto da página, em vez de uma faixa técnica
+  // própria sempre presente.
+  const stractSyncNeedsAttention = stractImportSourceIds.length > 0 && latestSyncStatus?.status !== "success";
   const banners = [
     contractBannerText && {
       tone: "amber",
@@ -1062,6 +1066,12 @@ export default async function ClientPage({
     reviewError && { tone: "red", text: reviewError },
     recurringTaskError && { tone: "red", text: recurringTaskError },
     clientUpdateError && { tone: "red", text: clientUpdateError },
+    stractSyncNeedsAttention && {
+      tone: latestSyncStatus?.status === "failed" ? "red" : "amber",
+      text: latestSyncStatus
+        ? `Sincronização com o Stract: ${SYNC_RUN_STATUS_LABEL[latestSyncStatus.status]}${latestSpendDate ? ` · dados até ${formatShortDate(latestSpendDate)}` : ""}.`
+        : "Esta conta ainda não teve nenhuma sincronização com o Stract.",
+    },
     synced && { tone: "green", text: `${synced} dia(s) de spend sincronizado(s) com o Meta.` },
     saved && { tone: "green", text: "Dados do cliente atualizados." },
   ].filter((banner): banner is { tone: "red" | "green" | "amber"; text: string } => Boolean(banner));
@@ -1457,12 +1467,16 @@ export default async function ClientPage({
           (uma fileira a menos) sem perder proximidade real: a barra
           continua logo abaixo desta identidade, só não duplica mais a
           altura com uma linha de botões inteira só pra isso.
-          Etapa "Primeira dobra": "Última otimização"/"Última atualização da
-          performance" saíram da coluna à direita da identidade — agora
-          fazem parte da MESMA linha compacta do status de sincronização
-          (ver bloco logo abaixo), nunca duas áreas técnicas separadas.
-          Nenhum dado, cálculo ou permissão mudou nesta etapa, só
-          reorganização e peso visual. */}
+          Etapa "Refinamento Visual 2.0 — Progressive Disclosure": a
+          identidade agora emenda direto na navegação (`role="tablist"`,
+          logo abaixo) — "Última otimização"/"Dados atualizados"/status de
+          sincronização saudável não aparecem mais aqui nem em nenhuma faixa
+          própria; viraram informação disponível sob demanda no disclosure
+          "Informações da conta" (fim da página). Só a EXCEÇÃO (sincronização
+          com problema real) continua visível perto do topo, junto dos
+          demais banners (`stractSyncNeedsAttention`, acima). Nenhum dado,
+          cálculo ou permissão mudou nesta etapa, só reorganização e peso
+          visual. */}
       <div className="flex min-w-0 items-center gap-3">
         <ClientAvatar name={client.name} imageUrl={client.avatar_url} size="lg" />
         <div className="min-w-0">
@@ -1517,124 +1531,6 @@ export default async function ClientPage({
           ))}
         </div>
       )}
-
-      {/* Etapa "Primeira dobra": área técnica UNIFICADA — "Última
-          otimização", "Dados atualizados" (antiga "Última atualização da
-          performance") e o status de sincronização do Stract viviam em 3
-          blocos separados (2 linhas na identidade + 1 faixa própria);
-          viram uma única linha compacta, sempre a MESMA informação, só sem
-          repetição de rótulo/caixa. O detalhe de "Última otimização"
-          (tipo/descrição da alteração) e a origem completa da atualização
-          de performance saem do texto sempre visível e vão pro `title`
-          (tooltip nativo) — informação preservada, só não compete mais por
-          espaço na primeira leitura.
-          Sincronização SAUDÁVEL (`status === "success"`) vira só um
-          check discreto — é o caso comum, não precisa de badge colorido.
-          Qualquer OUTRO estado (parcial/vazio/falha/em andamento/nunca
-          sincronizado) continua com o badge colorido de sempre, sempre
-          visível — nunca escondido (pedido explícito: erro/atraso precisa
-          continuar com destaque semântico). "Sincronizar agora" e
-          "Detalhes e histórico" continuam exatamente com o mesmo
-          comportamento/permissão de sempre, só realocados nesta linha.
-          "Histórico" (Etapa "Remover histórico da Visão Geral") é o mesmo
-          drawer de sempre (`reviewsHistoryHref`, `ClientOperationalHistoryDrawer`
-          — antes aberto via "Ver todos de {mês}" dentro do card de
-          Performance) — vive aqui agora, discreto, já que deixou de ter uma
-          seção própria na Visão Geral (a Timeline já cobre o histórico
-          completo de forma independente). */}
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-overview-text-secondary">
-        <span className="flex items-center gap-1">
-          <ClipboardCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
-          {lastOptimizationLabel}:{" "}
-          <span
-            className="font-medium text-overview-text-primary"
-            title={
-              lastOptimization
-                ? `${ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}${lastOptimizationDetail ? ` · ${lastOptimizationDetail}` : ""}`
-                : undefined
-            }
-          >
-            {lastOptimizationValue}
-          </span>
-        </span>
-        <span aria-hidden="true">·</span>
-        <span className="flex items-center gap-1">
-          <BarChart3 className="h-3 w-3 shrink-0" aria-hidden="true" />
-          {lastPerformanceUpdateLabel}: <span className="font-medium text-overview-text-primary">{lastPerformanceUpdateValue}</span>
-          {lastPerformanceUpdateSourceLabel && <span>· {lastPerformanceUpdateSourceLabel}</span>}
-        </span>
-
-        {stractImportSourceIds.length > 0 ? (
-          <>
-            <span aria-hidden="true">·</span>
-            {latestSyncStatus?.status === "success" ? (
-              <span className="text-green-600 dark:text-green-400">
-                ✓ Stract sincronizado {formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant)}
-                {latestSpendDate ? ` · dados até ${formatShortDate(latestSpendDate)}` : ""}
-              </span>
-            ) : (
-              <span className="flex flex-wrap items-center gap-2">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                    latestSyncStatus
-                      ? SYNC_RUN_STATUS_BADGE_CLASSES[latestSyncStatus.status]
-                      : "bg-overview-surface-subtle text-overview-text-secondary"
-                  }`}
-                >
-                  {latestSyncStatus ? SYNC_RUN_STATUS_LABEL[latestSyncStatus.status] : "Nunca sincronizado"}
-                </span>
-                <span>
-                  Stract{latestSyncStatus ? ` · sincronizado ${formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant)}` : ""}
-                  {latestSpendDate ? ` · dados até ${formatShortDate(latestSpendDate)}` : ""}
-                </span>
-              </span>
-            )}
-            {canOperate && (
-              <form action={syncClientStractSourcesAction.bind(null, client.id)} className="contents">
-                <SubmitButton pendingChildren="Sincronizando..." className={HEADER_SUBMIT_BUTTON_CLASSES}>
-                  Sincronizar agora
-                </SubmitButton>
-              </form>
-            )}
-            {isAdmin && recentSyncRuns.length > 0 && (
-              <details className="w-full [&_summary::-webkit-details-marker]:hidden">
-                <summary className="cursor-pointer select-none font-medium text-overview-text-primary">Detalhes e histórico</summary>
-                <ul className="mt-2 flex flex-col gap-2">
-                  {recentSyncRuns.map((run) => (
-                    <li key={run.id} className="flex flex-col gap-0.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SYNC_RUN_STATUS_BADGE_CLASSES[run.status]}`}>
-                          {SYNC_RUN_STATUS_LABEL[run.status]}
-                        </span>
-                        <span>{formatRelativeDateTime(run.startedAt, nowInstant)}</span>
-                      </div>
-                      {formatSyncRunCounts(run) && <p>{formatSyncRunCounts(run)}</p>}
-                      {run.errorMessage && <p className="text-overview-danger">{run.errorMessage}</p>}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-          </>
-        ) : (
-          // Auditoria de Frescor/Confiabilidade de Dados: cliente sem fonte
-          // Stract (Meta-only, a maioria) não tinha NENHUM indicador manual
-          // de frescor nesta página. Sem badge de status (não existe
-          // "success/partial/failed" pro Meta, só o timestamp cru) —
-          // nenhuma classificação nova, só o fato.
-          clientOperationalState?.lastDataSyncAt && (
-            <>
-              <span aria-hidden="true">·</span>
-              <span>Dados sincronizados {formatRelativeDateTime(clientOperationalState.lastDataSyncAt, nowInstant)}</span>
-            </>
-          )
-        )}
-
-        <span aria-hidden="true">·</span>
-        <Link href={reviewsHistoryHref} scroll={false} className="font-medium hover:text-overview-text-primary hover:underline">
-          Histórico
-        </Link>
-      </div>
 
       {/* Etapa 59, seção 16: ação rápida depois de registrar uma análise —
           opcional, nunca gera a atualização automaticamente. */}
@@ -1726,11 +1622,6 @@ export default async function ClientPage({
             Dashboard
           </a>
         )}
-        {canManageClient && (
-          <Link href={`/clients/${client.id}/edit`} className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
-            Editar
-          </Link>
-        )}
         {/* "Atualizar Meta" (syncClientMetaAction, ../meta-actions.ts) fica
             oculto por enquanto — é a sincronização direta com a API do
             Meta, e a operação usa a sincronização do Stract
@@ -1742,6 +1633,15 @@ export default async function ClientPage({
         {canOperate && (
           <Link href={newReviewHref} scroll={false} className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
             Registrar revisão
+          </Link>
+        )}
+        {/* Etapa "Refinamento Visual 2.0": Editar por último — é a ação
+            administrativa menos frequente do grupo, não deveria abrir a
+            hierarquia de ações (mesmo href/permissão de sempre, só a
+            posição mudou). */}
+        {canManageClient && (
+          <Link href={`/clients/${client.id}/edit`} className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
+            Editar
           </Link>
         )}
       </div>
@@ -2061,6 +1961,106 @@ export default async function ClientPage({
           </Section>
         </div>
       )}
+
+      {/* Etapa "Refinamento Visual 2.0 — Progressive Disclosure": única
+          superfície pra contexto técnico operacional — antes fragmentado em
+          "Última otimização"/"Dados atualizados"/sincronização (uma faixa
+          própria no topo do cabeçalho) + "Detalhes e histórico" (sync runs)
+          + "Histórico" (drawer de atividades), cada um num lugar diferente.
+          Sempre a MESMA informação de sempre (nenhum dado/cálculo/permissão
+          novo), só reunida, discreta e FORA do fluxo principal — depois de
+          todo o conteúdo prioritário de qualquer aba, nunca competindo com
+          KPIs/Performance/Investimento na primeira leitura. Compartilhada
+          entre todas as abas (não só Visão Geral) — nenhuma aba perdeu
+          acesso a "Sincronizar agora"/histórico, só pararam de aparecer
+          sempre abertos por padrão. Estado saudável mora só aqui, silencioso
+          — a exceção (sincronização com problema) já apareceu antes, junto
+          dos demais banners no topo (ver `stractSyncNeedsAttention`). */}
+      <div className="mt-4 border-t border-overview-border pt-3">
+        <details className="text-xs text-overview-text-secondary [&_summary::-webkit-details-marker]:hidden">
+          <summary className="cursor-pointer select-none font-medium text-overview-text-primary">Informações da conta</summary>
+          <div className="mt-2 flex flex-col items-start gap-2">
+            <span className="flex items-center gap-1">
+              <ClipboardCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
+              {lastOptimizationLabel}:{" "}
+              <span
+                className="font-medium text-overview-text-primary"
+                title={
+                  lastOptimization
+                    ? `${ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}${lastOptimizationDetail ? ` · ${lastOptimizationDetail}` : ""}`
+                    : undefined
+                }
+              >
+                {lastOptimizationValue}
+              </span>
+            </span>
+            <span className="flex items-center gap-1">
+              <BarChart3 className="h-3 w-3 shrink-0" aria-hidden="true" />
+              {lastPerformanceUpdateLabel}: <span className="font-medium text-overview-text-primary">{lastPerformanceUpdateValue}</span>
+              {lastPerformanceUpdateSourceLabel && <span>· {lastPerformanceUpdateSourceLabel}</span>}
+            </span>
+
+            {stractImportSourceIds.length > 0 ? (
+              <>
+                <span className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      latestSyncStatus
+                        ? SYNC_RUN_STATUS_BADGE_CLASSES[latestSyncStatus.status]
+                        : "bg-overview-surface-subtle text-overview-text-secondary"
+                    }`}
+                  >
+                    {latestSyncStatus ? SYNC_RUN_STATUS_LABEL[latestSyncStatus.status] : "Nunca sincronizado"}
+                  </span>
+                  <span>
+                    Stract{latestSyncStatus ? ` · sincronizado ${formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant)}` : ""}
+                    {latestSpendDate ? ` · dados até ${formatShortDate(latestSpendDate)}` : ""}
+                  </span>
+                </span>
+                {canOperate && (
+                  <form action={syncClientStractSourcesAction.bind(null, client.id)}>
+                    <SubmitButton pendingChildren="Sincronizando..." className={HEADER_SUBMIT_BUTTON_CLASSES}>
+                      Sincronizar agora
+                    </SubmitButton>
+                  </form>
+                )}
+                {isAdmin && recentSyncRuns.length > 0 && (
+                  <details className="w-full [&_summary::-webkit-details-marker]:hidden">
+                    <summary className="cursor-pointer select-none font-medium text-overview-text-primary">Detalhes técnicos de sincronização</summary>
+                    <ul className="mt-2 flex flex-col gap-2">
+                      {recentSyncRuns.map((run) => (
+                        <li key={run.id} className="flex flex-col gap-0.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SYNC_RUN_STATUS_BADGE_CLASSES[run.status]}`}>
+                              {SYNC_RUN_STATUS_LABEL[run.status]}
+                            </span>
+                            <span>{formatRelativeDateTime(run.startedAt, nowInstant)}</span>
+                          </div>
+                          {formatSyncRunCounts(run) && <p>{formatSyncRunCounts(run)}</p>}
+                          {run.errorMessage && <p className="text-overview-danger">{run.errorMessage}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </>
+            ) : (
+              // Auditoria de Frescor/Confiabilidade de Dados: cliente sem
+              // fonte Stract (Meta-only, a maioria) não tinha nenhum
+              // indicador manual de frescor nesta página. Sem badge de
+              // status (não existe "success/partial/failed" pro Meta, só o
+              // timestamp cru) — nenhuma classificação nova, só o fato.
+              clientOperationalState?.lastDataSyncAt && (
+                <span>Dados sincronizados {formatRelativeDateTime(clientOperationalState.lastDataSyncAt, nowInstant)}</span>
+              )
+            )}
+
+            <Link href={reviewsHistoryHref} scroll={false} className="font-medium text-brand hover:underline">
+              Ver histórico completo de atividades
+            </Link>
+          </div>
+        </details>
+      </div>
 
       {openTask && (
         <TaskDrawerPanel
