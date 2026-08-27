@@ -875,8 +875,14 @@ export default async function Home({
   // funcional da página; ganhou o mesmo rail em areia (`SandRail`) dos
   // demais seletores estruturais (escopo/plataforma), consolidando os
   // quatro controles superiores como uma família visual só.
+  //
+  // Etapa "Microajuste: aliviar Período/Filtros": container/borda/fundo
+  // saíram — só a esquerda (escopo/plataforma) continua com superfície
+  // própria; mês e Filtros ficam direto sobre o fundo da página, mais leves,
+  // com o rail como única assinatura (os `IconButton`/`Button` ghost por
+  // baixo já trazem seu próprio hover sutil, então nada muda em interação).
   const monthNav = (
-    <div className="relative flex items-center gap-0.5 rounded-md border border-overview-border bg-overview-surface py-1 pl-4 pr-1 text-sm">
+    <div className="relative flex items-center gap-0.5 pl-4">
       <SandRail />
       <IconButton
         href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}

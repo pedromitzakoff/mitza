@@ -216,7 +216,7 @@ export function AgencyFilters({
           <span ref={filtersTriggerRef} className="relative inline-block">
             <SandRail />
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
               onClick={() => setFiltersOpen((v) => !v)}
               style={{ paddingLeft: "1rem" }}
