@@ -100,8 +100,11 @@ export interface AnalyticsKpiCard {
  * (`lower_is_better`, ex.: custo por resultado) ou nem uma coisa nem outra
  * (`neutral`, ex.: investimento — gastar mais/menos não é em si bom ou
  * ruim). `null` sempre que não há período anterior comparável (mesma regra
- * de `computePercentChange`: nunca uma variação fabricada). */
-function buildPercentChangeComparison(
+ * de `computePercentChange`: nunca uma variação fabricada). Exportada
+ * (Etapa "Revisão da Visão Geral"): "Evolução no período" reaproveita esta
+ * mesma função pros KPIs executivos da agência — nenhuma segunda versão do
+ * texto/tom "↑X% vs período anterior". */
+export function buildPercentChangeComparison(
   current: number,
   previous: number | null,
   direction: "higher_is_better" | "lower_is_better" | "neutral",

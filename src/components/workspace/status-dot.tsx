@@ -46,9 +46,8 @@ export function StatusDot({
 
 /** Destaca só o primeiro percentual dentro de um motivo ("CPL 58% acima da
  * meta") — o número é o fato acionável, o resto da frase continua no mesmo
- * peso neutro de sempre. Extraído do padrão já usado nas Prioridades da
- * Visão Geral (`app/priorities-panel.tsx`) pra qualquer outra tela (ex.:
- * Operação) reaproveitar sem duplicar o regex. */
+ * peso neutro de sempre. Utilitário compartilhado (ex.: Operação) pra
+ * qualquer tela reaproveitar sem duplicar o regex. */
 export function emphasizeDeviationText(reason: string, tone: StatusTone): ReactNode {
   const match = reason.match(/\d+%/);
   if (!match || match.index === undefined) return reason;

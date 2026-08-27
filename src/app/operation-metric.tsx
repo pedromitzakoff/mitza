@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { StatusTone } from "@/components/workspace/status-dot";
 import { TONE_TEXT_CLASSES } from "./investment-metric";
 
@@ -84,6 +85,12 @@ export function OperationMetric({
  * disputam atenção com os KPIs de Resultados/Ritmo, só descrevem a execução
  * operacional). `context` é sempre secundário (ex.: o % de execução abaixo
  * da contagem bruta de tarefas), nunca outro número do mesmo peso.
+ *
+ * Etapa "Revisão da Visão Geral — Evolução no período": `context` aceita
+ * `ReactNode` (era só `string`) pra "Evolução no período" poder colorir a
+ * variação (`↑8%`/`↓6%`) com a mesma cor semântica de sempre
+ * (success/danger/muted) sem precisar de um componente próprio — qualquer
+ * `string` já passada continua funcionando, `ReactNode` é um superconjunto.
  */
 export function OperationMiniKpi({
   label,
@@ -92,7 +99,7 @@ export function OperationMiniKpi({
 }: {
   label: string;
   value: string;
-  context?: string;
+  context?: ReactNode;
 }) {
   return (
     <div>

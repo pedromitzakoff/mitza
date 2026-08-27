@@ -11,7 +11,7 @@ import {
   monthRangeFromParam,
   shiftMonthParam,
 } from "@/lib/sprint-financials";
-import { formatCurrency, formatMonthLabel, formatPercent } from "@/lib/format";
+import { formatCurrency, formatMonthLabel } from "@/lib/format";
 import { getMonthTemporalStatus, resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { getClientMonthHorizons } from "@/lib/client-month-horizons";
 import {
@@ -20,26 +20,18 @@ import {
   type SprintFilterBucket,
 } from "@/app/operation/operation-data";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import { computeFinancialSummary, computeSpendRhythmCounts } from "@/lib/agency-metrics";
+import { computeFinancialSummary, computeAgencyPeriodTotals } from "@/lib/agency-metrics";
 import { computeHealthResultsSummary } from "@/lib/agency-health-aggregation";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
 import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
-import { evaluateClientChannelDiagnostics } from "@/lib/client-operational-state";
 import { isReviewOverdue } from "@/lib/account-health-engine";
-import { resolveClientChannelBreakdown, type ClientChannelState } from "@/lib/client-channel-breakdown";
-import {
-  buildOverviewPriorityItem,
-  hasActiveOverviewDiagnostic,
-  type OverviewPriorityFilter,
-  type OverviewPriorityItem,
-} from "./overview-client-view";
-import { getActiveDiagnosticFilters, getDiagnosticPriorityRank } from "@/lib/metric-diagnostics";
+import { type OverviewPriorityFilter } from "./overview-client-view";
+import { getActiveDiagnosticFilters } from "@/lib/metric-diagnostics";
 import { resolveOperationPriorityGroup, type OperationPriorityGroup } from "@/lib/operation-triage";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
-import { PrioritiesDrawer, PrioritiesPanel } from "./priorities-panel";
 import { OperationMetric, OperationMiniKpi } from "./operation-metric";
 import { PrimaryInvestmentMetric } from "./investment-metric";
 import { PLATFORM_LABEL } from "./client-objective-table";
@@ -58,6 +50,8 @@ import type { TrafficChannelDb } from "@/lib/supabase/database.types";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { resolveClientMonthlyPlan, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
 import type { SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
+import { previousEquivalentPeriod } from "@/lib/period-comparison";
+import { buildPercentChangeComparison } from "@/lib/analytics";
 
 /**
  * Etapa 47: Inter carregada e aplicada SÓ na Visão Geral (className no
@@ -99,8 +93,6 @@ export default async function Home({
     sprintBucket?: string;
     sync?: string;
     meta?: string;
-    prioridades?: string;
-    prioridadeSeveridade?: string;
     platform?: string;
     pendenciaFiltro?: string;
     pendenciaModal?: string;
@@ -347,7 +339,65 @@ export default async function Home({
     getClientMonthHorizons(supabase, clientIds, monthRange.firstDay),
   ]);
   perfLog("visão geral bloco 2 fundido (atividade/performance/lastReviews, antes lastReviews era sequencial à parte)", __perfBlock2Start);
+
+  // Etapa "Revisão da Visão Geral — Evolução no período": período anterior
+  // de MESMA DURAÇÃO (`lib/period-comparison.ts`, escrita desde o início
+  // pra ser reaproveitada aqui — nunca uma segunda lógica temporal). Quando
+  // o mês selecionado está em andamento (hoje cai dentro dele), o período
+  // ATUAL usado na comparação é truncado até hoje antes de calcular o
+  // anterior — comparar 1-27 de agosto contra agosto INTEIRO de julho seria
+  // uma leitura enganosa. Mês já encerrado ou ainda no futuro usam o mês
+  // inteiro (não há "hoje" no meio do intervalo pra truncar).
+  const currentPeriodEndForComparison =
+    todayStr >= monthRange.firstDay && todayStr < monthRange.lastDay ? todayStr : monthRange.lastDay;
+  const previousPeriod = previousEquivalentPeriod({ start: monthRange.firstDay, end: currentPeriodEndForComparison });
+
+  // Consulta ENXUTA (soma direta, mesmas tabelas de sempre) — nunca
+  // reconstrói sprint/orçamento/saúde pra um segundo período só pra tirar
+  // uma comparação (dobraria o carregamento da página). `resolvePerformanceRowsForSprints`
+  // é a mesma função já usada acima pro mês atual, só que sobre as sprints
+  // que se sobrepõem ao período anterior.
+  const __perfBlock3Start = perfNow();
+  const [previousSprintsForPerformance, previousDailySpend] = await Promise.all([
+    clientIds.length > 0
+      ? requireQuery(
+          supabase
+            .from("sprints")
+            .select("id, client_id, start_date, end_date")
+            .in("client_id", clientIds)
+            .lte("start_date", previousPeriod.end)
+            .gte("end_date", previousPeriod.start),
+          "sprints:previous-period",
+        )
+      : Promise.resolve([]),
+    clientIds.length > 0
+      ? requireQuery(
+          supabase
+            .from("daily_spend")
+            .select("client_id, spend")
+            .in("client_id", clientIds)
+            .gte("date", previousPeriod.start)
+            .lte("date", previousPeriod.end),
+          "daily_spend:previous-period",
+        )
+      : Promise.resolve([]),
+  ]);
+  const previousPerformanceRowsRaw = await resolvePerformanceRowsForSprints(
+    supabase,
+    (previousSprintsForPerformance ?? []).map((s) => ({
+      id: s.id,
+      client_id: s.client_id,
+      start_date: s.start_date,
+      end_date: s.end_date,
+    })),
+  );
+  perfLog("visão geral — evolução no período (período anterior)", __perfBlock3Start);
   perfLog("visão geral — dados totais carregados (auth + queries)", __perfPageStart);
+
+  const previousSpendByClientId = new Map<string, number>();
+  for (const row of previousDailySpend ?? []) {
+    previousSpendByClientId.set(row.client_id, (previousSpendByClientId.get(row.client_id) ?? 0) + row.spend);
+  }
 
   const lastReviewAtByClient = new Map<string, string>();
   for (const row of lastReviews ?? []) {
@@ -491,35 +541,6 @@ export default async function Home({
 
   const clientActivityById = new Map((clientActivity ?? []).map((r) => [r.client_id, r.last_activity_at]));
   const sprintActivityById = new Map((sprintActivity ?? []).map((r) => [r.sprint_id, r.last_activity_at]));
-  const primaryManagerNameByClient = new Map(
-    (clients ?? []).map((c) => [c.id, c.primary_manager?.name ?? null]),
-  );
-
-  // Etapa "Consolidação da Arquitetura — Fase B" (Prioridade 5): recorte por
-  // canal (`client-channel-breakdown.ts`) — reaproveita os mesmos dados
-  // brutos já buscados acima (`sprintsByClient`/`dailySpendChannelByClient`/
-  // `channelOverridesByClient`/`performanceRecordsByClient`), nenhuma query
-  // nova só pra canal. Usado hoje pelo diagnóstico do Core recortado por
-  // canal de "Prioridades de hoje" (`evaluateClientChannelDiagnostics`,
-  // abaixo).
-  const channelBreakdownByClient = new Map<string, ClientChannelState[]>(
-    (clients ?? []).map((client) => {
-      const clientSprintsForChannel = (sprintsByClient.get(client.id) ?? []).map((s) => ({
-        sprintId: s.id,
-        start_date: s.start_date,
-        end_date: s.end_date,
-      }));
-      const breakdown = resolveClientChannelBreakdown({
-        sprints: clientSprintsForChannel,
-        dailySpendChannel: dailySpendChannelByClient.get(client.id) ?? [],
-        channelSpendOverrides: channelOverridesByClient.get(client.id) ?? [],
-        performanceRecords: performanceRecordsByClient.get(client.id) ?? [],
-        performanceGoal: client.performance_goal,
-        targetCostPerResult: resolvedTargetCostByClient.get(client.id) ?? null,
-      });
-      return [client.id, breakdown];
-    }),
-  );
 
   // Convergência da Regra de Revisão de Conta: `clientOperationalStates` já
   // carrega `evaluation.dimensions.review` (Motor de Saúde, cadência
@@ -686,6 +707,23 @@ export default async function Home({
   }
   const agencyResults = computeHealthResultsSummary(indicatorStates);
 
+  // Etapa "Revisão da Visão Geral — Evolução no período": totais REALIZADOS
+  // do período anterior (dado bruto já buscado acima). Escopo de
+  // investimento = mesmo de `financial`/`computeFinancialSummary` (`cards`,
+  // com os filtros de recorte); escopo de leads/vendas = mesmo de
+  // `agencyResults`/`computeHealthResultsSummary` (`indicatorCards`, só
+  // mês/carteira/cliente) — cada métrica compara contra o período anterior
+  // no MESMO escopo do seu próprio valor absoluto, nunca uma segunda lógica
+  // de recorte.
+  const previousPerformanceRows = filterRowsToPrimaryGoal(previousPerformanceRowsRaw, primaryGoalByClientId);
+  const previousInvestmentTotals = computeAgencyPeriodTotals({
+    investmentClientIds: new Set(cards.map((c) => c.clientId)),
+    resultsClientIds: new Set(indicatorCards.map((c) => c.clientId)),
+    spendByClientId: previousSpendByClientId,
+    performanceRows: previousPerformanceRows,
+    primaryGoalByClientId,
+  });
+
   // Etapa "Saúde da carteira" (auditoria da Visão Geral): "como está minha
   // carteira agora", um número por balde — mesmo agrupamento de 4 baldes já
   // construído e testado pra Operação (`resolveOperationPriorityGroup`,
@@ -707,60 +745,12 @@ export default async function Home({
   // certo, onde Crítico já aparece primeiro na fila, nunca um filtro
   // fabricado que a tela de destino não suporta.
   const operationHref = `/operation?month=${monthRange.firstDay}`;
+  // Etapa "Revisão da Visão Geral": ponte compacta pra Operação — "precisa
+  // de atenção" é Crítico + Atenção do mesmo agrupamento acima (nunca um
+  // score novo), os 2 baldes que de fato pedem uma ação; Saudável/Sem dados
+  // não entram na contagem.
+  const needsAttentionCount = portfolioHealthCounts.critico + portfolioHealthCounts.atencao;
 
-  // Etapa "Visão Geral + Reports no Core": "Prioridades de hoje" passa a vir
-  // do Motor de Diagnóstico Único (`metric-diagnostics.ts`) — uma linha por
-  // CLIENTE, restrito a quem tem ao menos 1 diagnóstico ativo (Planejamento/
-  // Investimento/CPA/Pendências; "nenhum diagnóstico" nunca gera prioridade,
-  // mesmo espírito do antigo "sem problema não gera item"). Recorte: mesmo
-  // conjunto de clientes de `cards` (todos os filtros de recorte já
-  // aplicados).
-  //
-  // Fora do Consolidado, o diagnóstico não pode continuar sendo o
-  // CONSOLIDADO disfarçado de "recorte por canal" — Investimento/CPA são
-  // reavaliados com `evaluateClientChannelDiagnostics` (mesmas funções do
-  // Core, `evaluateInvestmentDiagnostic`/`evaluateCpaDiagnostic`, nunca uma
-  // regra nova), usando o investimento/resultado/custo do canal selecionado
-  // (`channelBreakdownByClient`, Prioridade 5 da Fase B). Um cliente que não
-  // usa o canal selecionado simplesmente não entra (mesma regra que já
-  // filtra `cards` pra fora do Consolidado). Planejamento/Pendências são
-  // fatos de conta, não de canal — vêm de `state.diagnostics` sem
-  // reavaliação em ambos os casos.
-  const cardsClientIds = new Set(cards.map((card) => card.clientId));
-  const priorityCandidates = clientOperationalStates
-    .filter((state) => cardsClientIds.has(state.clientId))
-    .flatMap((state) => {
-      if (platformFilter === "consolidado") return [{ state, diagnostics: state.diagnostics }];
-      const channelState = (channelBreakdownByClient.get(state.clientId) ?? []).find((c) => c.channel === platformFilter);
-      if (!channelState) return [];
-      // Etapa "Comparabilidade de Escopo de Custo", Parte 4: meta DAQUELE
-      // canal (`byChannel[platformFilter].cpa`), nunca a consolidada — mesmo
-      // padrão já usado pela página do Cliente (`scopedTargetCostPerResult`,
-      // clients/[id]/page.tsx). Cai pra consolidada só quando o canal
-      // selecionado ainda não tem meta própria definida (mesmo fallback de
-      // sempre, nunca um "sem meta" fabricado).
-      const channelTargetCostPerResult =
-        clientMonthlyPlanByClient.get(state.clientId)?.byChannel[platformFilter]?.cpa ??
-        resolvedTargetCostByClient.get(state.clientId) ??
-        null;
-      const diagnostics = evaluateClientChannelDiagnostics(state, channelState, channelTargetCostPerResult);
-      return [{ state, diagnostics }];
-    })
-    .filter(({ diagnostics }) => hasActiveOverviewDiagnostic(diagnostics))
-    .sort(
-      (a, b) =>
-        getDiagnosticPriorityRank(a.diagnostics) - getDiagnosticPriorityRank(b.diagnostics) ||
-        a.state.clientName.localeCompare(b.state.clientName),
-    );
-  const priorityQueue = priorityCandidates
-    .map(({ state, diagnostics }) => buildOverviewPriorityItem(state, diagnostics))
-    .filter((item): item is OverviewPriorityItem => item !== null);
-  const prioritiesTop = priorityQueue.slice(0, 6);
-  const prioritiesOpen = params.prioridades === "1";
-  const prioritySeverity = (params.prioridadeSeveridade ?? "todos") as OverviewPriorityFilter | "todos";
-
-  const spendRhythm = computeSpendRhythmCounts(cards);
-  const outOfRhythmCount = spendRhythm.abaixo + spendRhythm.acima;
   const financial = computeFinancialSummary(cards);
   // Etapa 3: realizado do canal selecionado, somado sobre os clientes já
   // filtrados (que, fora de Consolidado, já são só os que usam essa
@@ -790,6 +780,35 @@ export default async function Home({
   const investmentDiffValueText = investmentDiff !== 0 ? formatCurrency(Math.abs(investmentDiff)) : null;
   const monthTemporalStatus = getMonthTemporalStatus(monthRange, todayStr);
 
+  // Etapa "Revisão da Visão Geral — Evolução no período": "↑X% vs período
+  // anterior" pra cada KPI executivo, reaproveitando a mesma função já usada
+  // pelo Hero do Analytics do cliente (`buildPercentChangeComparison`,
+  // `lib/analytics.ts`) — nenhuma segunda versão do texto/tom. Investimento é
+  // `neutral` (gastar mais/menos não é bom ou ruim em si, mesma decisão já
+  // tomada pro Analytics); Leads/Vendas são `higher_is_better`; CPL/CPA são
+  // `lower_is_better`. `null` sempre que não há base anterior confiável
+  // (`computePercentChange`) — a seção inteira só aparece quando pelo menos
+  // uma comparação é real.
+  const evolutionInvestment = buildPercentChangeComparison(financial.actual, previousInvestmentTotals.investment, "neutral");
+  const evolutionLeads = buildPercentChangeComparison(agencyResults.leads.count, previousInvestmentTotals.leadsCount, "higher_is_better");
+  const evolutionLeadsCpl =
+    agencyResults.leads.costPerResult !== null
+      ? buildPercentChangeComparison(agencyResults.leads.costPerResult, previousInvestmentTotals.leadsCostPerResult, "lower_is_better")
+      : null;
+  const evolutionSales = buildPercentChangeComparison(agencyResults.sales.count, previousInvestmentTotals.salesCount, "higher_is_better");
+  const evolutionSalesCpa =
+    agencyResults.sales.costPerResult !== null
+      ? buildPercentChangeComparison(agencyResults.sales.costPerResult, previousInvestmentTotals.salesCostPerResult, "lower_is_better")
+      : null;
+  const hasEvolutionData = [evolutionInvestment, evolutionLeads, evolutionLeadsCpl, evolutionSales, evolutionSalesCpa].some(
+    (comparison) => comparison !== null,
+  );
+  const EVOLUTION_TONE_TEXT_CLASSES: Record<"positive" | "negative" | "neutral", string> = {
+    positive: "text-overview-success",
+    negative: "text-overview-danger",
+    neutral: "text-overview-text-muted",
+  };
+
   // Preserva TODOS os filtros ativos — usado na navegação de mês e na
   // ordenação da tabela, que não devem resetar o resto do contexto. Não
   // inclui prioridades/prioridadeSeveridade de propósito — abrir/fechar o
@@ -815,33 +834,6 @@ export default async function Home({
 
     return `/?${next.toString()}`;
   };
-
-  // Drill-down "de uma casa só": zera os filtros de recorte (mantendo só
-  // mês, gestor e plataforma) e aplica exatamente o filtro clicado — usado
-  // pelos indicadores de "Investimento em mídia dos clientes" (os "Indicadores da
-  // operação" não têm drill-down de propósito, ver comentário acima do
-  // bloco).
-  const drillDownUrl = (overrides: Record<string, string>) => {
-    const next = new URLSearchParams();
-    if (params.month) next.set("month", params.month);
-    next.set("manager", managerFilter);
-    if (clientFilter) next.set("client", clientFilter);
-    if (platformFilter !== "consolidado") next.set("platform", platformFilter);
-    for (const [key, value] of Object.entries(overrides)) {
-      next.set(key, value);
-    }
-    return `/?${next.toString()}`;
-  };
-
-  // Abre/fecha o drawer "Ver todas" das Prioridades por cima do que já está
-  // na URL (filtros, mês, ordenação) — igual ao drawer de tarefa já usado
-  // em Sprints, só que os parâmetros são próprios daqui.
-  const prioritiesUrl = (overrides: { prioridades?: string; prioridadeSeveridade?: string }) =>
-    buildUrl({ prioridades: overrides.prioridades ?? "", prioridadeSeveridade: overrides.prioridadeSeveridade ?? "" });
-  const openPrioritiesHref = prioritiesUrl({ prioridades: "1" });
-  const closePrioritiesHref = prioritiesUrl({});
-  const prioritiesSeverityHref = (severity: OverviewPriorityFilter | "todos") =>
-    prioritiesUrl({ prioridades: "1", prioridadeSeveridade: severity === "todos" ? "" : severity });
 
   // Módulo "Pendências" — independente de mês/gestor/plataforma de
   // propósito (são registros rápidos, não parte do recorte financeiro/
@@ -922,109 +914,52 @@ export default async function Home({
           />
         </div>
 
-        {/* Refinamento Visual da Visão Geral: o Painel financeiro e
-            operacional volta a vir ANTES de Prioridades — o dashboard
-            apresenta primeiro a saúde geral da agência (Resultados →
-            Investimento → Indicadores) e só depois a fila operacional do
-            dia. Por isso passa a abrir expandido por padrão (`open`): o
-            que vem primeiro na leitura precisa estar visível sem clique.
-            Nenhum dado, cálculo ou link mudou, só a ordem e o estado
-            inicial. */}
-        <details open className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface [&_summary]:cursor-pointer [&_summary]:list-none">
-          <summary className="flex items-center justify-between px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted hover:text-brand sm:px-6">
-            Painel financeiro e operacional da agência
-            <span className="text-sm">▾</span>
-          </summary>
-
-          {/* Etapa "Saúde da carteira" (auditoria da Visão Geral): a
-              primeira coisa dentro do painel, antes até dos 4 KPIs
-              financeiros — resposta mais direta e mais macro pra "como está
-              minha agência hoje", que a auditoria encontrou ausente da
-              Home (o Motor de Saúde da Conta, já usado inteiro na Operação,
-              não alimentava nada aqui). 4 números, mesmo agrupamento já
-              testado da Operação (`portfolioHealthCounts`, acima) — nenhuma
-              lista de cliente, nenhum score novo. "Sem dados" nunca ganha
-              tom de alerta (mesma decisão da Operação: não é um problema de
-              performance, só ausência de configuração). */}
+        {/* Etapa "Revisão da Visão Geral": a página deixa de misturar
+            panorama executivo com diagnóstico operacional por cliente
+            (Críticas/Atenção/Saudáveis/Sem dados, Fora do ritmo, Gestores
+            vinculados, Tarefas, Revisões e a fila de Prioridades saíram
+            daqui — nenhuma dessas regras foi alterada, todas continuam
+            existindo em Operação, que também é pra onde a ponte no fim
+            desta seção leva). "Desempenho da agência" responde só "como
+            está a agência agora": 4 números executivos, o ritmo agregado de
+            investimento e, quando há base de comparação confiável, a
+            direção (Evolução no período). */}
+        <div className="mt-3 overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
           <div className="px-5 py-3 sm:px-6 sm:py-3.5">
-            <div className="flex items-center justify-between">
-              <SectionHeader title="Saúde da carteira" />
-              <Button href={operationHref} variant="ghost" size="sm">
-                Ver em Operação
-              </Button>
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-x-10 gap-y-3 sm:grid-cols-4">
+            <SectionHeader title="Desempenho da agência" />
+            <div className="mt-2 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
               <OperationMetric
-                label="Críticas"
-                value={String(portfolioHealthCounts.critico)}
-                tone={portfolioHealthCounts.critico > 0 ? "danger" : "neutral"}
-              />
-              <OperationMetric
-                label="Atenção"
-                value={String(portfolioHealthCounts.atencao)}
-                tone={portfolioHealthCounts.atencao > 0 ? "warning" : "neutral"}
-              />
-              <OperationMetric label="Saudáveis" value={String(portfolioHealthCounts.saudavel)} tone="success" />
-              <OperationMetric label="Sem dados" value={String(portfolioHealthCounts.sem_dados)} tone="neutral" />
-            </div>
-          </div>
-
-          {/* Facelift "Painel financeiro e operacional": só 4 KPIs de
-              destaque máximo (nunca mais números grandes competindo pelo
-              mesmo peso visual) — investimento realizado, leads, vendas e
-              contas fora do ritmo. CPL/CPA e a contagem de clientes com dado
-              (que antes eram KPIs próprios) viraram contexto auxiliar sob o
-              KPI de resultado correspondente — mesmo dado de sempre
-              (`agencyResults`, `costMetricShortLabel`), só uma apresentação
-              por linha em vez de um card à parte. Planejado aparece aqui só
-              como auxiliar (nunca no mesmo destaque do realizado) — o
-              detalhamento do orçamento vive inteiro em "Ritmo de
-              investimento", nunca duplicado com o mesmo peso visual.
-              Etapa "Refinamento Visão Geral da Agência": o subtítulo
-              "Resultados do mês" saiu — a página já tem título próprio, o
-              título desta seção ("Painel financeiro e operacional da
-              agência") e o seletor de mês no topo; repetir "do mês" aqui não
-              acrescentava contexto novo. Investimento realizado ganhou
-              `emphasis` (maior/mais pesado) por ser o indicador financeiro
-              principal — os outros 3 continuam equilibrados entre si. */}
-          <div className="border-t border-overview-border px-5 py-3 sm:px-6 sm:py-3.5">
-            <div className="grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-              <OperationMetric
-                emphasis
-                label="Investimento realizado"
+                label="Investimento"
                 value={formatCurrency(financial.actual)}
                 context={financial.planned > 0 ? `de ${formatCurrency(financial.planned)} planejados` : "Nenhum planejamento configurado"}
               />
               <OperationMetric
-                label="Leads gerados"
+                label="Leads"
                 value={agencyResults.leads.clientsWithData > 0 ? String(agencyResults.leads.count) : "—"}
                 context={
                   agencyResults.leads.clientsWithData > 0
                     ? `${PERFORMANCE_GOALS.leads.costMetricShortLabel} ${
                         agencyResults.leads.costPerResult !== null ? formatCurrency(agencyResults.leads.costPerResult) : "—"
-                      } · ${agencyResults.leads.clientsWithData} cliente${agencyResults.leads.clientsWithData !== 1 ? "s" : ""}`
+                      } · ${agencyResults.leads.clientsWithData} conta${agencyResults.leads.clientsWithData !== 1 ? "s" : ""}`
                     : "Nenhum cliente com objetivo de leads configurado"
                 }
               />
               <OperationMetric
-                label="Vendas geradas"
+                label="Vendas"
                 value={agencyResults.sales.clientsWithData > 0 ? String(agencyResults.sales.count) : "—"}
                 context={
                   agencyResults.sales.clientsWithData > 0
                     ? `${PERFORMANCE_GOALS.sales.costMetricShortLabel} ${
                         agencyResults.sales.costPerResult !== null ? formatCurrency(agencyResults.sales.costPerResult) : "—"
-                      } · ${agencyResults.sales.clientsWithData} cliente${agencyResults.sales.clientsWithData !== 1 ? "s" : ""}`
+                      } · ${agencyResults.sales.clientsWithData} conta${agencyResults.sales.clientsWithData !== 1 ? "s" : ""}`
                     : "Nenhum cliente com objetivo de vendas configurado"
                 }
               />
-              <OperationMetric
-                label="Fora do ritmo"
-                value={`${outOfRhythmCount} conta${outOfRhythmCount !== 1 ? "s" : ""}`}
-                tone={outOfRhythmCount > 0 ? "warning" : "neutral"}
-                title={`${spendRhythm.abaixo} abaixo · ${spendRhythm.acima} acima`}
-                linkHref={outOfRhythmCount > 0 ? drillDownUrl({ ritmo: "fora_do_ritmo" }) : undefined}
-                linkLabel={outOfRhythmCount > 0 ? "Ver contas" : undefined}
-              />
+              {/* "Contas ativas" reaproveita a mesma fonte central de sempre
+                  (`operationIndicators.activeClientsCount`, contrato
+                  `status = "ativo"`) — antes exibida na faixa "Operação",
+                  agora promovida a indicador executivo. */}
+              <OperationMetric label="Contas ativas" value={String(operationIndicators.activeClientsCount)} />
             </div>
           </div>
 
@@ -1106,67 +1041,66 @@ export default async function Home({
             )}
           </div>
 
-          <div className="border-t border-overview-border bg-overview-surface-subtle px-5 py-2 sm:px-6 sm:py-2.5">
-            {/* Facelift "Painel financeiro e operacional": os 4 indicadores
-                deixam de ser big numbers (22px, mesmo peso de
-                Resultados/Ritmo) e viram uma faixa compacta de mini-KPIs —
-                a operação é contexto de apoio, não outro conjunto de
-                números competindo por destaque. Mesmos 4 dados de sempre
-                (`operationIndicators`), só reagrupados: tarefas concluídas/
-                previstas juntas num único valor ("121/140"), com o % de
-                execução como texto secundário abaixo (nunca um KPI à
-                parte).
-                Etapa "Refinamento Visão Geral da Agência" (Ponto 6): fundo
-                sutilmente diferenciado + padding/gap reduzidos + tipografia
-                de `OperationMiniKpi` um pouco menor — reforça a leitura de
-                "rodapé da seção", nunca competindo com os KPIs financeiros
-                acima. Nenhum dado mudou. */}
-            <SectionHeader title="Operação" />
-            <div className="mt-2 grid grid-cols-2 gap-x-10 gap-y-2 sm:grid-cols-4">
-              <OperationMiniKpi label="Clientes ativos" value={String(operationIndicators.activeClientsCount)} />
-              {/* Rótulo fixo "Gestores vinculados" (em vez de
-                  `operationIndicators.managersLabel`, que alterna com
-                  "Gestores ativos"): reduz a impressão de erro quando o
-                  número é 0 — hoje alguns responsáveis principais são
-                  `admin`, não `gestor`, e por isso ficam fora da contagem
-                  por regra deliberada (nunca contar admin como gestor). Só
-                  o texto mudou; `activeManagersCount` continua exatamente o
-                  mesmo cálculo. Decisão sobre incluir admins responsáveis
-                  por conta fica para uma etapa separada. */}
-              <OperationMiniKpi label="Gestores vinculados" value={String(operationIndicators.activeManagersCount)} />
-              <OperationMiniKpi
-                label="Tarefas"
-                value={`${operationIndicators.completedTasksCount}/${operationIndicators.tasksTotalCount}`}
-                context={operationIndicators.completionRatePct !== null ? `${formatPercent(operationIndicators.completionRatePct)} concluídas` : undefined}
-              />
-              <OperationMiniKpi label="Revisões" value={String(operationIndicators.optimizationsCount)} />
+          {/* Etapa "Revisão da Visão Geral — Evolução no período": só
+              aparece quando existe ao menos uma comparação real contra o
+              período anterior (`hasEvolutionData`) — nunca uma variação
+              fabricada quando não há base confiável (cliente novo, canal sem
+              histórico, etc.). Mesmo período usado por `ProgressBar`/Ritmo
+              acima (o mês selecionado, truncado até hoje quando em
+              andamento — ver `currentPeriodEndForComparison`). */}
+          {hasEvolutionData && (
+            <div className="border-t border-overview-border px-5 py-2.5 sm:px-6 sm:py-3">
+              <SectionHeader title="Evolução no período" />
+              <div className="mt-2 grid grid-cols-2 gap-x-10 gap-y-3 sm:grid-cols-5">
+                {evolutionInvestment && (
+                  <OperationMiniKpi
+                    label="Investimento"
+                    value={formatCurrency(financial.actual)}
+                    context={<span className={EVOLUTION_TONE_TEXT_CLASSES[evolutionInvestment.tone]}>{evolutionInvestment.text}</span>}
+                  />
+                )}
+                {evolutionLeads && (
+                  <OperationMiniKpi
+                    label="Leads"
+                    value={String(agencyResults.leads.count)}
+                    context={<span className={EVOLUTION_TONE_TEXT_CLASSES[evolutionLeads.tone]}>{evolutionLeads.text}</span>}
+                  />
+                )}
+                {evolutionLeadsCpl && (
+                  <OperationMiniKpi
+                    label={PERFORMANCE_GOALS.leads.costMetricShortLabel}
+                    value={agencyResults.leads.costPerResult !== null ? formatCurrency(agencyResults.leads.costPerResult) : "—"}
+                    context={<span className={EVOLUTION_TONE_TEXT_CLASSES[evolutionLeadsCpl.tone]}>{evolutionLeadsCpl.text}</span>}
+                  />
+                )}
+                {evolutionSales && (
+                  <OperationMiniKpi
+                    label="Vendas"
+                    value={String(agencyResults.sales.count)}
+                    context={<span className={EVOLUTION_TONE_TEXT_CLASSES[evolutionSales.tone]}>{evolutionSales.text}</span>}
+                  />
+                )}
+                {evolutionSalesCpa && (
+                  <OperationMiniKpi
+                    label={PERFORMANCE_GOALS.sales.costMetricShortLabel}
+                    value={agencyResults.sales.costPerResult !== null ? formatCurrency(agencyResults.sales.costPerResult) : "—"}
+                    context={<span className={EVOLUTION_TONE_TEXT_CLASSES[evolutionSalesCpa.tone]}>{evolutionSalesCpa.text}</span>}
+                  />
+                )}
+              </div>
             </div>
+          )}
+
+          <div className="border-t border-overview-border px-5 py-2.5 sm:px-6 sm:py-3">
+            <SectionHeader title="Acompanhamento operacional" />
+            <p className="mt-1.5 text-[13px] text-overview-text-secondary">
+              {needsAttentionCount} conta{needsAttentionCount !== 1 ? "s" : ""} precisa{needsAttentionCount !== 1 ? "m" : ""} de atenção
+            </p>
+            <Button href={operationHref} variant="ghost" size="sm" className="mt-1.5 -ml-2">
+              Ver Operação →
+            </Button>
           </div>
-        </details>
-
-        {/* Refinamento "Saúde da carteira" (auditoria da Visão Geral):
-            Prioridades passa a vir ANTES de Pendências — primeiro "como está
-            a carteira" (o pulso real dos clientes), só depois os lembretes
-            administrativos avulsos. Nenhum dado, cálculo ou link mudou, só a
-            posição na página. */}
-        <div className="mt-3">
-          <PrioritiesPanel
-            priorities={prioritiesTop}
-            managerNameByClient={primaryManagerNameByClient}
-            totalCount={priorityQueue.length}
-            viewAllHref={openPrioritiesHref}
-          />
         </div>
-
-        {prioritiesOpen && (
-          <PrioritiesDrawer
-            priorities={priorityQueue}
-            managerNameByClient={primaryManagerNameByClient}
-            severity={prioritySeverity}
-            closeHref={closePrioritiesHref}
-            buildSeverityHref={prioritiesSeverityHref}
-          />
-        )}
 
         {/* Módulo "Pendências": lembretes rápidos e leves (agência/cliente),
             deliberadamente fora do painel financeiro/operacional acima (que

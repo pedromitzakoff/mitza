@@ -1,4 +1,5 @@
 import type { OperationClientCard } from "@/app/operation/operation-data";
+import type { PerformanceGoal } from "@/lib/performance-goals";
 
 /**
  * Agregações do dashboard da agência — tudo derivado dos cards já montados
@@ -76,6 +77,90 @@ export function computeFinancialSummary(cards: OperationClientCard[]): Financial
   const expectedToDate = withGoal.reduce((sum, c) => sum + c.monthExpectedToDate, 0);
   const semMeta = cards.filter((c) => !c.hasMonthGoal).length;
   return { planned, actual, pct, expectedToDate, semMeta };
+}
+
+export interface AgencyPeriodTotals {
+  investment: number;
+  leadsCount: number;
+  leadsCostPerResult: number | null;
+  salesCount: number;
+  salesCostPerResult: number | null;
+}
+
+/**
+ * Totais REALIZADOS da agência num período arbitrário (não necessariamente
+ * um mês calendário) — Etapa "Revisão da Visão Geral": alimenta SÓ a
+ * comparação "Evolução no período" contra o período anterior
+ * (`lib/period-comparison.ts`), nunca os KPIs absolutos do período atual
+ * (esses continuam vindo de `computeFinancialSummary`/
+ * `computeHealthResultsSummary`, sobre cards completos). Mesmas regras de
+ * sempre, só que sobre dado bruto (soma direta de `daily_spend`/registros de
+ * performance) em vez de `OperationClientCard`/`ClientOperationalState`,
+ * porque montar o card completo (sprint, orçamento, saúde) pra um segundo
+ * período só pra tirar uma comparação dobraria o carregamento da página:
+ *
+ *   - investimento = soma direta de `daily_spend` dos clientes do escopo,
+ *     sem depender de plano/meta configurados (mesma fonte usada em
+ *     qualquer outro lugar do produto);
+ *   - leads/vendas = soma do resultado dos clientes cujo OBJETIVO PRINCIPAL
+ *     é aquele (`primaryGoalByClientId` = `clients.performance_goal`, nunca
+ *     um objetivo secundário — `performanceRows` já deve vir filtrada por
+ *     `filterRowsToPrimaryGoal`, `lib/client-plan.ts`); custo por resultado
+ *     = investimento SÓ desses clientes ÷ resultado somado (nunca média de
+ *     custos já calculados por cliente) — mesmo princípio de
+ *     `agency-health-aggregation.ts`'s `summarizeGoal` ("clientsWithData" =
+ *     tem ao menos 1 registro de performance no período), adaptado pra
+ *     trabalhar sobre linhas brutas multi-cliente em vez de
+ *     `ClientOperationalState[]`.
+ */
+export function computeAgencyPeriodTotals(input: {
+  /** Escopo pro qual o investimento é somado — mesmo recorte de clientes já
+   * usado por quem chamou `computeFinancialSummary` pro período atual
+   * (mês/carteira/cliente + filtros de recorte), pra "Evolução no período"
+   * comparar exatamente o mesmo conjunto de clientes do KPI absoluto. */
+  investmentClientIds: Set<string>;
+  /** Escopo pra leads/vendas — mesmo recorte já usado por
+   * `computeHealthResultsSummary` pro período atual (mês/carteira/cliente,
+   * sem os filtros de recorte). */
+  resultsClientIds: Set<string>;
+  /** Soma de `daily_spend.spend` por cliente no período anterior (todos os
+   * canais, mesma soma "investimento" de sempre). */
+  spendByClientId: Map<string, number>;
+  /** Linhas de performance do período anterior, já filtradas por
+   * `filterRowsToPrimaryGoal` (nunca um objetivo secundário contaminando a
+   * soma). */
+  performanceRows: { client_id: string; result_count: number }[];
+  primaryGoalByClientId: Map<string, PerformanceGoal | null>;
+}): AgencyPeriodTotals {
+  const { investmentClientIds, resultsClientIds, spendByClientId, performanceRows, primaryGoalByClientId } = input;
+
+  let investment = 0;
+  for (const clientId of investmentClientIds) investment += spendByClientId.get(clientId) ?? 0;
+
+  function summarizeGoal(goal: PerformanceGoal): { count: number; costPerResult: number | null } {
+    const clientIdsWithData = new Set<string>();
+    let count = 0;
+    for (const row of performanceRows) {
+      if (!resultsClientIds.has(row.client_id)) continue;
+      if (primaryGoalByClientId.get(row.client_id) !== goal) continue;
+      count += row.result_count;
+      clientIdsWithData.add(row.client_id);
+    }
+    let spend = 0;
+    for (const clientId of clientIdsWithData) spend += spendByClientId.get(clientId) ?? 0;
+    return { count, costPerResult: count > 0 ? spend / count : null };
+  }
+
+  const leads = summarizeGoal("leads");
+  const sales = summarizeGoal("sales");
+
+  return {
+    investment,
+    leadsCount: leads.count,
+    leadsCostPerResult: leads.costPerResult,
+    salesCount: sales.count,
+    salesCostPerResult: sales.costPerResult,
+  };
 }
 
 export interface SprintOpsSummary {
