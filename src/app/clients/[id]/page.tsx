@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ClipboardCheck, BarChart3, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { Button, IconButton } from "@/components/workspace/button";
@@ -61,6 +61,7 @@ import { syncClientStractSourcesAction } from "../stract-sync-actions";
 import { getLatestSyncRunStatusForSources } from "@/lib/stract-sync";
 import { ClientIdentitySticky } from "../client-identity-sticky";
 import { ClientWorkspaceContext } from "../client-workspace-context";
+import { AccountInfoDrawer } from "../account-info-drawer";
 import { MonthInvestmentSummary, MonthInvestmentActions } from "../month-investment-summary";
 import { SprintCard } from "../sprint-card";
 import { MonthTasksPanel } from "../month-tasks-panel";
@@ -120,35 +121,21 @@ const SYNC_RUN_STATUS_LABEL: Record<SyncRunSummary["status"], string> = {
   failed: "Falha",
 };
 
-/** Etapa "Unificação visual da página do cliente": botão secundário compacto
- * pros dois únicos casos que não podem usar o `Button` do design system
- * (`@/components/workspace/button`) — ele renderiza `type="button"` fixo, e
- * "Sincronizar agora"/"Atualizar Meta" precisam de `type="submit"` dentro de
- * um `<form action>`. Mesma classe visual que `Button` variant="secondary"
- * size="sm" produz, nunca uma aparência nova — só o único jeito de ter um
- * botão de submit com a mesma cara. */
-// Etapa "Navegação única do cliente": mesmo peso visual do `Button
-// variant="ghost"` do design system (sem borda/fundo, só texto + hover
-// discreto) — "Atualizar Meta"/"Sincronizar agora" são ações, não deveriam
-// chamar mais atenção que o nome do cliente. `SubmitButton` não usa
-// `Button` (precisa de `type="submit"`, que `Button` não permite), por isso
-// essa classe existe separada — mesma altura/padding/tipografia do
-// `Button` sm, só copiada aqui em vez de importar as constantes internas
-// de `button.tsx` (não exportadas).
 // Etapa "Navegação única do cliente": mesma linguagem visual pros 6
 // destinos do cliente (Visão geral/Analytics/Timeline — abas de verdade,
 // `role="tab"` — e Saldo/Fechamento/Relatório — links comuns, um deles
 // externo) — texto + indicador de estado ativo por sublinhado, nunca
 // pill/botão com borda (pedido explícito do usuário). Extraído em vez de
 // repetido em cada item pra nunca dessincronizar o visual entre os dois
-// grupos, que precisam parecer EXATAMENTE equivalentes.
+// grupos, que precisam parecer EXATAMENTE equivalentes. "Informações da
+// conta" (Etapa "Refinamento Visual 2.0 — Ajuste de Arquitetura") também
+// usa esta mesma classe pro seu próprio gatilho — mesmo peso visual dos
+// demais itens da linha, mesmo sem ser `role="tab"` nem um `<Link>` de
+// verdade (abre um drawer local, ver `account-info-drawer.tsx`).
 const NAV_ITEM_BASE_CLASSES =
   "-mb-px shrink-0 rounded-t border-b-2 pb-1.5 font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
 const NAV_ITEM_ACTIVE_CLASSES = "border-brand text-brand";
 const NAV_ITEM_INACTIVE_CLASSES = "border-transparent text-overview-text-secondary hover:text-overview-text-primary";
-
-const HEADER_SUBMIT_BUTTON_CLASSES =
-  "mitza-pressable inline-flex h-7 shrink-0 items-center justify-center rounded-md px-2.5 text-xs font-medium text-overview-text-secondary transition-colors hover:bg-overview-surface-hover hover:text-overview-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
 
 const SYNC_RUN_STATUS_BADGE_CLASSES: Record<SyncRunSummary["status"], string> = {
   running: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
@@ -1238,6 +1225,13 @@ export default async function ClientPage({
         ? lastOptimization.issueDescription
         : null
     : null;
+  // Etapa "Refinamento Visual 2.0 — Ajuste de Arquitetura": mesmo texto que
+  // já era usado como `title` (tooltip nativo) na antiga linha técnica do
+  // cabeçalho — agora vira uma linha própria dentro do drawer "Informações
+  // da conta" (`account-info-drawer.tsx`), nunca escondido atrás de um hover.
+  const lastOptimizationTooltip = lastOptimization
+    ? `${ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}${lastOptimizationDetail ? ` · ${lastOptimizationDetail}` : ""}`
+    : null;
 
   // Etapa "Primeira dobra": rótulo mais curto ("Dados atualizados" em vez
   // de "Última atualização da performance") — mesma distinção de sempre
@@ -1255,6 +1249,30 @@ export default async function ClientPage({
         : monthPerformanceSummary?.latestSource === "google"
           ? "Google"
           : null;
+
+  // Etapa "Refinamento Visual 2.0 — Ajuste de Arquitetura": mesmos valores
+  // que já alimentavam a linha técnica do cabeçalho (`latestSyncStatus`/
+  // `latestSpendDate`/`recentSyncRuns`/`clientOperationalState`, todos já
+  // calculados acima) — só pré-formatados aqui pra virarem props simples do
+  // drawer `AccountInfoDrawer` (client component: recebe strings/booleans
+  // prontos, nunca as constantes/funções de classificação em si).
+  const accountInfoSyncStatusLabel = latestSyncStatus ? SYNC_RUN_STATUS_LABEL[latestSyncStatus.status] : "Nunca sincronizado";
+  const accountInfoSyncStatusBadgeClassName = latestSyncStatus
+    ? SYNC_RUN_STATUS_BADGE_CLASSES[latestSyncStatus.status]
+    : "bg-overview-surface-subtle text-overview-text-secondary";
+  const accountInfoSyncStartedAtLabel = latestSyncStatus ? formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant) : null;
+  const accountInfoLatestDataDateLabel = latestSpendDate ? formatShortDate(latestSpendDate) : null;
+  const accountInfoMetaOnlyLastSyncLabel = clientOperationalState?.lastDataSyncAt
+    ? formatRelativeDateTime(clientOperationalState.lastDataSyncAt, nowInstant)
+    : null;
+  const accountInfoRecentSyncRuns = recentSyncRuns.map((run) => ({
+    id: run.id,
+    statusLabel: SYNC_RUN_STATUS_LABEL[run.status],
+    statusBadgeClassName: SYNC_RUN_STATUS_BADGE_CLASSES[run.status],
+    startedAtLabel: formatRelativeDateTime(run.startedAt, nowInstant),
+    countsLabel: formatSyncRunCounts(run),
+    errorMessage: run.errorMessage,
+  }));
 
   // Etapa "Resumo Executivo": Analytics é o hub único de inteligência da
   // conta, com 4 sub-seções (Resumo/Criativos/Campanhas/Insights) navegadas
@@ -1625,16 +1643,40 @@ export default async function ClientPage({
         {/* "Atualizar Meta" (syncClientMetaAction, ../meta-actions.ts) fica
             oculto por enquanto — é a sincronização direta com a API do
             Meta, e a operação usa a sincronização do Stract
-            ("Sincronizar agora", acima) como fonte de dados por ora. A
-            Server Action continua existindo, só sem porta de entrada
-            aqui (mesmo padrão já usado nesta página pra rotas/ações que
-            saem de navegação sem serem apagadas, ver comentário de
-            "Sprints"/"Clientes" em `sidebar.tsx`). */}
+            ("Sincronizar agora", dentro de "Informações da conta") como
+            fonte de dados por ora. A Server Action continua existindo, só
+            sem porta de entrada aqui (mesmo padrão já usado nesta página
+            pra rotas/ações que saem de navegação sem serem apagadas, ver
+            comentário de "Sprints"/"Clientes" em `sidebar.tsx`). */}
         {canOperate && (
           <Link href={newReviewHref} scroll={false} className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
             Registrar revisão
           </Link>
         )}
+        {/* Etapa "Refinamento Visual 2.0 — Ajuste de Arquitetura": ação
+            secundária (nunca aba — não troca conteúdo, não mexe na URL),
+            abre o drawer `AccountInfoDrawer` com o contexto operacional
+            saudável (dados/sincronização/otimização/histórico) que saiu do
+            cabeçalho. Ver definição completa em `account-info-drawer.tsx`. */}
+        <AccountInfoDrawer
+          triggerClassName={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}
+          lastPerformanceUpdateLabel={lastPerformanceUpdateLabel}
+          lastPerformanceUpdateValue={lastPerformanceUpdateValue}
+          lastPerformanceUpdateSourceLabel={lastPerformanceUpdateSourceLabel}
+          latestDataDateLabel={accountInfoLatestDataDateLabel}
+          hasStractSource={stractImportSourceIds.length > 0}
+          syncStatusLabel={accountInfoSyncStatusLabel}
+          syncStatusBadgeClassName={accountInfoSyncStatusBadgeClassName}
+          syncStartedAtLabel={accountInfoSyncStartedAtLabel}
+          metaOnlyLastSyncLabel={accountInfoMetaOnlyLastSyncLabel}
+          lastOptimizationLabel={lastOptimizationLabel}
+          lastOptimizationValue={lastOptimizationValue}
+          lastOptimizationTooltip={lastOptimizationTooltip}
+          canOperate={canOperate}
+          syncAction={syncClientStractSourcesAction.bind(null, client.id)}
+          recentSyncRuns={accountInfoRecentSyncRuns}
+          reviewsHistoryHref={reviewsHistoryHref}
+        />
         {/* Etapa "Refinamento Visual 2.0": Editar por último — é a ação
             administrativa menos frequente do grupo, não deveria abrir a
             hierarquia de ações (mesmo href/permissão de sempre, só a
@@ -1961,106 +2003,6 @@ export default async function ClientPage({
           </Section>
         </div>
       )}
-
-      {/* Etapa "Refinamento Visual 2.0 — Progressive Disclosure": única
-          superfície pra contexto técnico operacional — antes fragmentado em
-          "Última otimização"/"Dados atualizados"/sincronização (uma faixa
-          própria no topo do cabeçalho) + "Detalhes e histórico" (sync runs)
-          + "Histórico" (drawer de atividades), cada um num lugar diferente.
-          Sempre a MESMA informação de sempre (nenhum dado/cálculo/permissão
-          novo), só reunida, discreta e FORA do fluxo principal — depois de
-          todo o conteúdo prioritário de qualquer aba, nunca competindo com
-          KPIs/Performance/Investimento na primeira leitura. Compartilhada
-          entre todas as abas (não só Visão Geral) — nenhuma aba perdeu
-          acesso a "Sincronizar agora"/histórico, só pararam de aparecer
-          sempre abertos por padrão. Estado saudável mora só aqui, silencioso
-          — a exceção (sincronização com problema) já apareceu antes, junto
-          dos demais banners no topo (ver `stractSyncNeedsAttention`). */}
-      <div className="mt-4 border-t border-overview-border pt-3">
-        <details className="text-xs text-overview-text-secondary [&_summary::-webkit-details-marker]:hidden">
-          <summary className="cursor-pointer select-none font-medium text-overview-text-primary">Informações da conta</summary>
-          <div className="mt-2 flex flex-col items-start gap-2">
-            <span className="flex items-center gap-1">
-              <ClipboardCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
-              {lastOptimizationLabel}:{" "}
-              <span
-                className="font-medium text-overview-text-primary"
-                title={
-                  lastOptimization
-                    ? `${ACCOUNT_REVIEW_OUTCOME_LABEL[lastOptimization.outcome]}${lastOptimizationDetail ? ` · ${lastOptimizationDetail}` : ""}`
-                    : undefined
-                }
-              >
-                {lastOptimizationValue}
-              </span>
-            </span>
-            <span className="flex items-center gap-1">
-              <BarChart3 className="h-3 w-3 shrink-0" aria-hidden="true" />
-              {lastPerformanceUpdateLabel}: <span className="font-medium text-overview-text-primary">{lastPerformanceUpdateValue}</span>
-              {lastPerformanceUpdateSourceLabel && <span>· {lastPerformanceUpdateSourceLabel}</span>}
-            </span>
-
-            {stractImportSourceIds.length > 0 ? (
-              <>
-                <span className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                      latestSyncStatus
-                        ? SYNC_RUN_STATUS_BADGE_CLASSES[latestSyncStatus.status]
-                        : "bg-overview-surface-subtle text-overview-text-secondary"
-                    }`}
-                  >
-                    {latestSyncStatus ? SYNC_RUN_STATUS_LABEL[latestSyncStatus.status] : "Nunca sincronizado"}
-                  </span>
-                  <span>
-                    Stract{latestSyncStatus ? ` · sincronizado ${formatRelativeDateTime(latestSyncStatus.startedAt, nowInstant)}` : ""}
-                    {latestSpendDate ? ` · dados até ${formatShortDate(latestSpendDate)}` : ""}
-                  </span>
-                </span>
-                {canOperate && (
-                  <form action={syncClientStractSourcesAction.bind(null, client.id)}>
-                    <SubmitButton pendingChildren="Sincronizando..." className={HEADER_SUBMIT_BUTTON_CLASSES}>
-                      Sincronizar agora
-                    </SubmitButton>
-                  </form>
-                )}
-                {isAdmin && recentSyncRuns.length > 0 && (
-                  <details className="w-full [&_summary::-webkit-details-marker]:hidden">
-                    <summary className="cursor-pointer select-none font-medium text-overview-text-primary">Detalhes técnicos de sincronização</summary>
-                    <ul className="mt-2 flex flex-col gap-2">
-                      {recentSyncRuns.map((run) => (
-                        <li key={run.id} className="flex flex-col gap-0.5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SYNC_RUN_STATUS_BADGE_CLASSES[run.status]}`}>
-                              {SYNC_RUN_STATUS_LABEL[run.status]}
-                            </span>
-                            <span>{formatRelativeDateTime(run.startedAt, nowInstant)}</span>
-                          </div>
-                          {formatSyncRunCounts(run) && <p>{formatSyncRunCounts(run)}</p>}
-                          {run.errorMessage && <p className="text-overview-danger">{run.errorMessage}</p>}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
-              </>
-            ) : (
-              // Auditoria de Frescor/Confiabilidade de Dados: cliente sem
-              // fonte Stract (Meta-only, a maioria) não tinha nenhum
-              // indicador manual de frescor nesta página. Sem badge de
-              // status (não existe "success/partial/failed" pro Meta, só o
-              // timestamp cru) — nenhuma classificação nova, só o fato.
-              clientOperationalState?.lastDataSyncAt && (
-                <span>Dados sincronizados {formatRelativeDateTime(clientOperationalState.lastDataSyncAt, nowInstant)}</span>
-              )
-            )}
-
-            <Link href={reviewsHistoryHref} scroll={false} className="font-medium text-brand hover:underline">
-              Ver histórico completo de atividades
-            </Link>
-          </div>
-        </details>
-      </div>
 
       {openTask && (
         <TaskDrawerPanel
