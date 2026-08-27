@@ -99,8 +99,13 @@
      texto/ícone) e `--sidebar-graphite-rgb` (base grafite pro bloco ativo,
      em mais de uma intensidade) existem separados de `--brand`/
      `--foreground` de propósito: ambos mudam no dark mode, e a Sidebar
-     precisa de bases fixas pra compor opacidades sem herdar essa troca. */
-  --sidebar-surface: #8c8579;
+     precisa de bases fixas pra compor opacidades sem herdar essa troca.
+
+     Micro-calibração v3.1: `--sidebar-surface` clareado de `#8c8579` pra
+     `#989083` (~+19% de luminância, mesma proporção R:G:B) — a v3 original
+     tinha ficado escura/pesada demais numa superfície que ocupa a tela
+     inteira; só este valor mudou, nenhum outro token. */
+  --sidebar-surface: #989083;
   --sidebar-foreground-rgb: 245, 241, 234;
   --sidebar-foreground: rgb(var(--sidebar-foreground-rgb));
   --sidebar-foreground-secondary: rgba(var(--sidebar-foreground-rgb), 0.8);
