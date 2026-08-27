@@ -66,38 +66,56 @@
   --sand: #c8bead;
   --sand-subtle: #f1ece4;
 
-  /* Sidebar KOFF — Etapa "Sidebar Grafite Quente — v2": a Sidebar é uma
-     superfície FIXA (não acompanha claro/escuro do resto da app — mesma
-     decisão de sempre, ver JSDoc de `Sidebar` em app/sidebar.tsx), então
-     estes tokens vivem só aqui em `:root` e NUNCA são redefinidos no bloco
-     `prefers-color-scheme: dark` abaixo — ao contrário de
+  /* Sidebar KOFF — Etapa "Sidebar Areia + Ativo Grafite — v3": a Sidebar é
+     uma superfície FIXA (não acompanha claro/escuro do resto da app —
+     mesma decisão de sempre, ver JSDoc de `Sidebar` em app/sidebar.tsx),
+     então estes tokens vivem só aqui em `:root` e NUNCA são redefinidos no
+     bloco `prefers-color-scheme: dark` abaixo — ao contrário de
      `--brand`/`--navy`/`--sand`, que trocam de valor no escuro.
 
-     v1 (Etapa "Sidebar Areia") tentou areia como SUPERFÍCIE inteira — na
-     prática a areia parou de funcionar como assinatura e passou a dominar
-     a interface. v2 inverte: GRAFITE QUENTE é a superfície/estrutura,
-     AREIA (`--sand`, direto, sem token próprio — já é fixo em qualquer
-     tema) é a assinatura PONTUAL (rail do item ativo, indicador de
-     drop-target, hover do "+"), OFF-WHITE é o contraste sobre o grafite.
-     `--sidebar-foreground-rgb` (renomeado de `--sidebar-graphite-rgb`: a
-     base de opacidade agora é o tom OFF-WHITE, não mais grafite — v1 tinha
-     texto grafite sobre superfície clara, v2 é o inverso) existe separado
-     de `--brand`/`--foreground` de propósito: ambos mudam no dark mode, e
-     a Sidebar precisa de uma base fixa pra compor opacidades (divisórias,
-     hover, texto secundário) sem herdar essa troca. */
-  --sidebar-surface: #2b2b29;
+     Histórico (mesma Sidebar, 3 tentativas de equilíbrio):
+     v1 "Sidebar Areia": areia inteira + texto grafite — virou
+     monocromático/lavado, pouco contraste. v2 "Grafite Quente": fundo
+     grafite + texto off-white + areia só de assinatura pontual — ficou
+     legível, mas perdeu a personalidade KOFF (leu como SaaS genérico). v3
+     (esta): AREIA de novo como superfície (é a marca), mas texto/ícone em
+     OFF-WHITE (nunca mais grafite sobre areia) e GRAFITE reservado pro
+     bloco do item ativo — o contraponto de maior contraste da tela.
+
+     `--sidebar-surface` NÃO é `var(--sand)`: o `--sand` institucional
+     (#c8bead) é claro demais pra sustentar texto off-white em cima (testado
+     visualmente — ver relatório da etapa) — precisaria de opacidades tão
+     altas pra ficar legível que a hierarquia normal/secundário/muted/
+     subtle colapsava toda em "quase branco". `--sidebar-surface` é um tom
+     PRÓPRIO da Sidebar, mesma família cromática do areia (mesma proporção
+     R:G:B, só mais escura/fechada — nunca um marrom nem um cinza: a
+     saturação do institucional é preservada), pensado especificamente pra
+     sustentar texto off-white em 4 níveis de opacidade. `--sand` global
+     nunca muda — continua reaparecendo aqui só como ASSINATURA pontual
+     (rail do ativo, indicador de drop-target, hover do "+"), agora um tom
+     visivelmente mais CLARO que a superfície (antes era o contrário).
+
+     `--sidebar-foreground-rgb` (base off-white pra toda a hierarquia de
+     texto/ícone) e `--sidebar-graphite-rgb` (base grafite pro bloco ativo,
+     em mais de uma intensidade) existem separados de `--brand`/
+     `--foreground` de propósito: ambos mudam no dark mode, e a Sidebar
+     precisa de bases fixas pra compor opacidades sem herdar essa troca. */
+  --sidebar-surface: #8c8579;
   --sidebar-foreground-rgb: 245, 241, 234;
   --sidebar-foreground: rgb(var(--sidebar-foreground-rgb));
-  --sidebar-foreground-secondary: rgba(var(--sidebar-foreground-rgb), 0.78);
-  --sidebar-foreground-muted: rgba(var(--sidebar-foreground-rgb), 0.6);
-  --sidebar-foreground-subtle: rgba(var(--sidebar-foreground-rgb), 0.45);
-  --sidebar-border: rgba(var(--sidebar-foreground-rgb), 0.1);
-  --sidebar-hover: rgba(var(--sidebar-foreground-rgb), 0.05);
-  --sidebar-active-surface: rgba(var(--sidebar-foreground-rgb), 0.09);
+  --sidebar-foreground-secondary: rgba(var(--sidebar-foreground-rgb), 0.8);
+  --sidebar-foreground-muted: rgba(var(--sidebar-foreground-rgb), 0.65);
+  --sidebar-foreground-subtle: rgba(var(--sidebar-foreground-rgb), 0.5);
+  --sidebar-border: rgba(var(--sidebar-foreground-rgb), 0.12);
+  --sidebar-hover: rgba(var(--sidebar-foreground-rgb), 0.08);
+  --sidebar-graphite-rgb: 28, 28, 28;
+  --sidebar-active-surface: rgb(var(--sidebar-graphite-rgb));
+  --sidebar-active-surface-secondary: rgba(var(--sidebar-graphite-rgb), 0.6);
   --sidebar-active-foreground: rgb(var(--sidebar-foreground-rgb));
   --sidebar-active-rail: var(--sand);
-  --sidebar-match-surface: rgba(var(--sidebar-foreground-rgb), 0.06);
-  --sidebar-match-ring: rgba(var(--sidebar-foreground-rgb), 0.2);
+  --sidebar-search-surface: rgba(var(--sidebar-graphite-rgb), 0.1);
+  --sidebar-match-surface: rgba(var(--sidebar-foreground-rgb), 0.1);
+  --sidebar-match-ring: rgba(var(--sidebar-foreground-rgb), 0.3);
 
   /* ---------------------------------------------------------------------
    * Fundação do novo Design System (Etapa 47) — inspirado em densidade de
@@ -170,8 +188,10 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-hover: var(--sidebar-hover);
   --color-sidebar-active-surface: var(--sidebar-active-surface);
+  --color-sidebar-active-surface-secondary: var(--sidebar-active-surface-secondary);
   --color-sidebar-active-foreground: var(--sidebar-active-foreground);
   --color-sidebar-active-rail: var(--sidebar-active-rail);
+  --color-sidebar-search-surface: var(--sidebar-search-surface);
   --color-sidebar-match-surface: var(--sidebar-match-surface);
   --color-sidebar-match-ring: var(--sidebar-match-ring);
   --color-overview-surface: var(--overview-surface);

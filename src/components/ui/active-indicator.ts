@@ -1,13 +1,13 @@
 /**
  * KOFF Active Indicator — Design System oficial (Etapa "Identidade Visual
  * KOFF"). O padrão de seleção/navegação ESTRUTURAL da marca: barra
- * vertical fina (~3px) na lateral esquerda, fundo ligeiramente mais claro
- * que a superfície e texto off-white forte quando ativo; hover sempre mais
- * fraco que o ativo (nunca confundido com ele), disabled sempre
- * claramente diferente de ambos. Nasceu como a solução do item ativo da
- * Sidebar (Visão Geral/Operação/Timeline/Conquistas) e é formalizado aqui
- * pra virar uma linguagem repetível, em vez de um efeito que cada tela
- * nova reinventa com valores levemente diferentes.
+ * vertical fina (~3px) na lateral esquerda, bloco grafite sólido e texto
+ * off-white forte quando ativo; hover sempre mais fraco que o ativo (nunca
+ * confundido com ele), disabled sempre claramente diferente de ambos.
+ * Nasceu como a solução do item ativo da Sidebar (Visão Geral/Operação/
+ * Timeline/Conquistas) e é formalizado aqui pra virar uma linguagem
+ * repetível, em vez de um efeito que cada tela nova reinventa com valores
+ * levemente diferentes.
  *
  * Reservado pra seleção/navegação ESTRUTURAL (aba ativa, item de menu
  * selecionado, eventualmente um card/painel em estado ativo) — nunca em
@@ -18,22 +18,27 @@
  *
  * As classes abaixo assumem a superfície FIXA da Sidebar (ver JSDoc de
  * `Sidebar` em `app/sidebar.tsx`) e consomem só os tokens `--sidebar-*`
- * (`globals.css`) — nunca um valor solto. Nome trocado de ON_DARK (v1,
- * preto) pra ON_SAND (v2, areia) pra ON_SIDEBAR (v3, grafite quente com
- * areia só de assinatura): a cor de fundo real da Sidebar já mudou duas
- * vezes desde que este arquivo nasceu, e um nome amarrado à cor do momento
- * vira resíduo a cada iteração. `ACTIVE_INDICATOR_SIDEBAR_*` sempre vai
- * estar certo porque descreve ONDE é usado (a Sidebar), não a cor de fundo
- * dela — se essa cor mudar nas próximas etapas, só o valor dos tokens em
- * `globals.css` precisa mudar, nunca este arquivo.
+ * (`globals.css`) — nunca um valor solto. Nome ON_DARK (v1, preto) → ON_SAND
+ * (v2, areia) → ON_SIDEBAR (v3, grafite quente) → `ACTIVE_INDICATOR_SIDEBAR_*`
+ * (v4, areia de novo, agora com texto off-white): a cor de fundo real da
+ * Sidebar já mudou três vezes desde que este arquivo nasceu, e um nome
+ * amarrado à cor do momento vira resíduo a cada iteração — por isso o nome
+ * final descreve ONDE é usado (a Sidebar), não a cor de fundo dela. Se essa
+ * cor mudar de novo, só o valor dos tokens em `globals.css` precisa mudar,
+ * nunca este arquivo.
  *
- * Etapa "Sidebar Grafite Quente — v2": o bloco sólido do ativo (v2 da
- * areia, `bg-sidebar-active-surface` = grafite 100%) virou "grafite sobre
- * grafite" com a nova superfície — passa a ser um overlay off-white bem
- * sutil (`--sidebar-active-surface`, ~9%) em vez de um bloco opaco. O rail
- * (`--sidebar-active-rail`) passa a ser literalmente `--sand` — a
- * assinatura da marca concentrada no elemento mais "editorial" da
- * Sidebar, único lugar onde a cor cheia aparece.
+ * Etapa "Sidebar Areia + Ativo Grafite — v4": terceira tentativa de
+ * equilíbrio pra esta mesma Sidebar. v1 era areia com texto grafite (pouco
+ * contraste); v2 inverteu pra fundo grafite com areia só de assinatura
+ * (perdeu personalidade); v4 volta a areia como superfície, mas com
+ * texto/ícone off-white (nunca mais grafite sobre areia) e reserva o
+ * grafite pro bloco do item ativo — `bg-sidebar-active-surface` volta a
+ * ser um bloco 100% sólido (não mais um overlay translúcido, que só fazia
+ * sentido quando a própria superfície já era grafite). O rail
+ * (`--sidebar-active-rail`) continua `--sand`, só que agora é um tom mais
+ * CLARO que a superfície ao redor (antes era o oposto) — o mesmo papel de
+ * sempre (assinatura no elemento mais "editorial" da Sidebar), só invertido
+ * em relação a quem é mais claro que quem.
  *
  * Cada consumidor combina estas classes com seu próprio layout (flex,
  * padding, tamanho de fonte, ícone) — isto aqui é só o miolo do estado,

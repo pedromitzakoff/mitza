@@ -239,7 +239,7 @@ function NavLink({
     <Link
       href={item.href}
       title={item.label}
-      className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
+      className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sidebar-active-surface ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
         active ? ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES : ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES
       }`}
     >
@@ -343,7 +343,7 @@ function SidebarContent({
           onClick={toggleCollapsed}
           aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
-          className="hidden shrink-0 rounded-md p-1 text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand md:block"
+          className="hidden shrink-0 rounded-md p-1 text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sidebar-active-surface md:block"
         >
           {collapsed ? (
             <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
@@ -440,7 +440,7 @@ function SidebarContent({
                     <ItemLabel collapsed={collapsed}>Atualizando...</ItemLabel>
                   </>
                 }
-                className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-[11px] text-sidebar-foreground-subtle transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-sidebar-foreground-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${collapsed ? "md:justify-center" : ""}`}
+                className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-[11px] text-sidebar-foreground-subtle transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-sidebar-foreground-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sidebar-active-surface ${collapsed ? "md:justify-center" : ""}`}
               >
                 <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <ItemLabel collapsed={collapsed}>Atualizar Meta (todos)</ItemLabel>
@@ -453,14 +453,13 @@ function SidebarContent({
           className={`flex items-center gap-2 pt-0.5 ${collapsed ? "md:justify-center" : ""}`}
           title={`${profile.name} · ${profile.role === "admin" ? "Admin" : "Gestor"}`}
         >
-          {/* Etapa "Sidebar Grafite Quente — v2": off-white translúcido
-           * (mesmo tom do hover, `--sidebar-hover`) já contrasta bem
-           * contra o grafite quente da superfície — sem precisar de areia
-           * aqui. Areia fica reservada pro rail do item ativo/indicador de
-           * drop-target/hover do "+" (item 7 do pedido: "pouco o
-           * suficiente pra continuar sendo especial"), nunca um terceiro
-           * bloco de cor no rodapé. */}
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sidebar-hover text-xs font-semibold text-sidebar-foreground">
+          {/* Etapa "Sidebar Areia + Ativo Grafite — v3": grafite de baixa
+           * intensidade (`-search-surface`, mesmo tom recortado do campo de
+           * busca) em vez do bloco 100% grafite do item ativo — um círculo
+           * grafite pesado no rodapé competiria com a navegação. O overlay
+           * off-white simples (hover) não teria definição suficiente contra
+           * a areia por si só. */}
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sidebar-search-surface text-xs font-semibold text-sidebar-foreground">
             {initial}
           </span>
           {/* Etapa "Identidade Visual KOFF — Sidebar": nome + papel numa
@@ -477,7 +476,7 @@ function SidebarContent({
           <Tooltip label="Sair">
             <button
               type="submit"
-              className={`mitza-pressable flex w-full items-center justify-center gap-1.5 rounded-md border border-sidebar-border px-3 py-1 text-xs font-medium text-sidebar-foreground-muted hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${collapsed ? "md:px-0" : ""}`}
+              className={`mitza-pressable flex w-full items-center justify-center gap-1.5 rounded-md border border-sidebar-border px-3 py-1 text-xs font-medium text-sidebar-foreground-secondary hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sidebar-active-surface ${collapsed ? "md:px-0" : ""}`}
             >
               <LogOut className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <ItemLabel collapsed={collapsed}>Sair</ItemLabel>
@@ -496,16 +495,20 @@ function SidebarMode({ onMode }: { onMode: (mode: string | null) => React.ReactN
 
 /**
  * A Sidebar é o único elemento estrutural fixo da plataforma (Decisão 012 —
- * a Top Bar global foi removida): superfície grafite quente permanente
- * (Etapa "Sidebar Grafite Quente — v2" — não acompanha o tema claro/escuro
+ * a Top Bar global foi removida): superfície areia permanente (Etapa
+ * "Sidebar Areia + Ativo Grafite — v3" — não acompanha o tema claro/escuro
  * do resto da aplicação, por isso as cores aqui usam os tokens fixos
- * `sidebar-*` — ver bloco dedicado em `globals.css` — em vez dos tokens de
- * tema `foreground`/`border`/`card`, que trocam de valor no dark mode).
- * Areia (`--sand`, direto — já é fixo em qualquer tema) aparece só como
- * assinatura pontual sobre essa base: rail do item ativo, indicador de
- * drop-target ao arrastar um cliente, hover do "+"; nunca a superfície —
- * uma v1 anterior desta etapa tentou areia como fundo inteiro e a
- * assinatura parou de funcionar por dominar a interface. A Sidebar
+ * `sidebar-*` — ver bloco dedicado em `globals.css`, incluindo por que
+ * `--sidebar-surface` NÃO é `var(--sand)` — em vez dos tokens de tema
+ * `foreground`/`border`/`card`, que trocam de valor no dark mode). Texto e
+ * ícone são off-white (nunca grafite sobre a areia — 2 rodadas anteriores
+ * já tentaram, respectivamente, areia+texto grafite e fundo grafite+areia
+ * de assinatura pontual; nenhuma sustentou identidade E legibilidade ao
+ * mesmo tempo). Grafite entra só como o bloco sólido do item ativo — o
+ * contraponto de maior contraste da tela — e areia (`--sand`, direto)
+ * continua reaparecendo como assinatura pontual mais clara que a
+ * superfície (rail do ativo, indicador de drop-target, hover do "+"). A
+ * Sidebar
  * ocupa exatamente 100% da altura da viewport em qualquer breakpoint
  * (`SIDEBAR_HEIGHT_CLASS`) e é o principal elemento de navegação da
  * plataforma. No mobile ela continua sendo um drawer (abrir tudo o tempo
@@ -538,7 +541,7 @@ export function Sidebar({
           type="button"
           onClick={onOpen}
           aria-label="Abrir menu"
-          className="mitza-pressable fixed left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-surface text-sidebar-foreground shadow-[var(--shadow-float)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand md:hidden"
+          className="mitza-pressable fixed left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-surface text-sidebar-foreground shadow-[var(--shadow-float)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sidebar-active-surface md:hidden"
         >
           <Menu className="h-4 w-4" aria-hidden="true" />
         </button>
