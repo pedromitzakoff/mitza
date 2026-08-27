@@ -124,21 +124,20 @@ function ClientLeaf({
         title={client.name}
         {...attributes}
         {...listeners}
-        className={`flex items-center gap-1.5 rounded-md py-1 pl-7 pr-2 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sidebar-active-surface ${
+        className={`flex items-center gap-1.5 rounded-md py-1 pl-7 pr-2 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${
           disabled ? "" : "cursor-grab touch-none active:cursor-grabbing"
         } ${
-          // Etapa "Sidebar Areia + Ativo Grafite — v3": mesma linguagem de
-          // seleção da nav principal (bloco grafite + texto off-white),
-          // mas na intensidade SECUNDÁRIA (`-active-surface-secondary`,
-          // grafite a 60%) — pedido explícito do item 6: um cliente
+          // Mesma linguagem de seleção da nav principal (bloco grafite +
+          // texto off-white), mas na intensidade SECUNDÁRIA
+          // (`-active-surface-secondary`, grafite a 60%) — um cliente
           // selecionado na árvore não deve competir com o item de
           // navegação principal, e vários blocos 100% grafite ao mesmo
           // tempo (nav + pasta + cliente) pesaria demais na tela. Sem
-          // barra lateral aqui — item aninhado, a barra em areia clara é
+          // barra lateral aqui — item aninhado, a barra em areia é
           // reservada pros 4 destinos de topo. Combinação em busca fica
-          // neutra (contorno off-white, não areia): acontece com
-          // frequência ao digitar — pode destacar várias linhas ao mesmo
-          // tempo.
+          // neutra (contorno grafite, não areia): acontece com frequência
+          // ao digitar — pode destacar várias linhas ao mesmo tempo, e a
+          // areia precisa continuar rara pra funcionar como assinatura.
           isActive
             ? "bg-sidebar-active-surface-secondary font-semibold text-sidebar-active-foreground"
             : isSearchMatch
@@ -183,11 +182,14 @@ function ManagerFolder({
       ref={setNodeRef}
       className={`rounded-md transition-[opacity,background-color] duration-[var(--motion-fast)] ease-[var(--ease-enter)] ${
         // O alvo de "soltar" ao arrastar é raro e transiente (só existe
-        // durante um drag) — um dos poucos momentos em que vale usar a
-        // areia INSTITUCIONAL (`--sand`, mais clara que `--sidebar-surface`
-        // agora) como indicador funcional, sem repetir o mesmo destaque
-        // neutro da busca.
-        isDropTarget ? "bg-sand/10 ring-1 ring-inset ring-sand/40" : ""
+        // durante um drag) — um dos poucos momentos sancionados pro pedido
+        // pra usar a areia institucional (`--sand`) como indicador
+        // funcional, sem repetir o mesmo destaque neutro da busca. Opacidade
+        // um pouco mais alta que os outros micro-acentos porque a superfície
+        // agora é clara (`--sidebar-surface`, off-white) — sand é mais
+        // ESCURA que ela, o oposto da v3, e precisa de mais peso pra não
+        // sumir num drag em andamento.
+        isDropTarget ? "bg-sand/15 ring-1 ring-inset ring-sand/45" : ""
       } ${isDimmed ? "opacity-40" : ""}`}
     >
       <button
@@ -195,15 +197,15 @@ function ManagerFolder({
         onClick={onToggle}
         aria-expanded={isExpanded}
         title={name}
-        className="mitza-pressable flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-[13px] font-medium text-sidebar-foreground-secondary transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sidebar-active-surface"
+        className="mitza-pressable flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-[13px] font-medium text-sidebar-foreground-secondary transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
       >
         <span
-          className={`mitza-chevron shrink-0 text-xs ${isDropTarget ? "text-sand" : "text-sidebar-foreground-secondary"} ${isExpanded ? "rotate-90" : ""}`}
+          className={`mitza-chevron shrink-0 text-xs ${isDropTarget ? "text-sand" : "text-sidebar-foreground-muted"} ${isExpanded ? "rotate-90" : ""}`}
           aria-hidden="true"
         >
           ▸
         </span>
-        <Folder className={`h-4 w-4 shrink-0 ${isDropTarget ? "text-sand" : "text-sidebar-foreground-secondary"}`} aria-hidden="true" />
+        <Folder className={`h-4 w-4 shrink-0 ${isDropTarget ? "text-sand" : "text-sidebar-foreground-muted"}`} aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate text-left">{name}</span>
         {!isExpanded && clients.length > 0 && (
           <span className={`shrink-0 text-xs ${isDropTarget ? "text-sand" : "text-sidebar-foreground-muted"}`}>{clients.length}</span>
@@ -611,7 +613,7 @@ export function AgencyAccountsTreeView({
               <Link
                 href="/clients/new"
                 aria-label="Novo cliente"
-                className="mitza-pressable flex h-5 w-5 shrink-0 items-center justify-center rounded text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sidebar-active-surface"
+                className="mitza-pressable flex h-5 w-5 shrink-0 items-center justify-center rounded text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
               >
                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               </Link>
@@ -619,13 +621,13 @@ export function AgencyAccountsTreeView({
           )}
         </div>
 
-        {/* Etapa "Sidebar Areia + Ativo Grafite — v3": nunca uma caixa
-         * branca importada de outro sistema sobre a areia — `-search-
-         * surface` (grafite em baixa intensidade, um pouco mais escuro que
-         * o overlay de hover) recorta o campo da superfície sem introduzir
-         * uma quarta cor; borda e placeholder off-white de baixa opacidade
-         * mantêm o campo reconhecível como input; foco usa o mesmo ring
-         * grafite do bloco ativo, sem glow. */}
+        {/* Etapa "Sidebar Off-White + Grafite + Areia Assinatura — v4":
+         * nunca uma caixa branca importada de outro sistema sobre o
+         * off-white — `-search-surface` (grafite em opacidade bem baixa)
+         * recorta o campo da superfície sem introduzir uma quarta cor;
+         * borda e placeholder grafite de baixa opacidade mantêm o campo
+         * reconhecível como input; foco usa areia (item 8 do pedido —
+         * "focus ring areia"), sem glow. */}
         <div className="relative px-0.5 pb-1.5">
           <Search
             className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground-muted"
@@ -638,7 +640,7 @@ export function AgencyAccountsTreeView({
             onKeyDown={handleSearchKeyDown}
             placeholder="Abrir cliente..."
             aria-label="Buscar cliente ou gestor"
-            className="w-full rounded-md border border-sidebar-border bg-sidebar-search-surface py-1 pl-7 pr-2 text-[13px] text-sidebar-foreground placeholder:text-sidebar-foreground-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sidebar-active-surface"
+            className="w-full rounded-md border border-sidebar-border bg-sidebar-search-surface py-1 pl-7 pr-2 text-[13px] text-sidebar-foreground placeholder:text-sidebar-foreground-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
           />
         </div>
 
@@ -688,12 +690,12 @@ export function AgencyAccountsTreeView({
         )}
       </div>
 
-      {/* `DragOverlay` sai da árvore da Sidebar via portal (pode flutuar sobre
-       * o conteúdo claro da página, não só sobre a areia da Sidebar) —
-       * usa o bloco grafite sólido do item ativo (`-active-surface`, nunca
-       * a superfície areia) justamente pra garantir contraste bom em
-       * qualquer fundo por baixo. Ring areia é o toque de assinatura no
-       * chip flutuante. */}
+      {/* `DragOverlay` sai da árvore da Sidebar via portal (pode flutuar
+       * sobre o conteúdo branco da página, não só sobre a superfície da
+       * Sidebar) — usa o bloco grafite sólido do item ativo
+       * (`-active-surface`, nunca a superfície off-white) justamente pra
+       * garantir contraste bom em qualquer fundo por baixo. Ring areia é o
+       * toque de assinatura no chip flutuante. */}
       <DragOverlay dropAnimation={DROP_ANIMATION}>
         {activeId ? (
           <div

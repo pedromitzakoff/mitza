@@ -18,27 +18,28 @@
  *
  * As classes abaixo assumem a superfície FIXA da Sidebar (ver JSDoc de
  * `Sidebar` em `app/sidebar.tsx`) e consomem só os tokens `--sidebar-*`
- * (`globals.css`) — nunca um valor solto. Nome ON_DARK (v1, preto) → ON_SAND
- * (v2, areia) → ON_SIDEBAR (v3, grafite quente) → `ACTIVE_INDICATOR_SIDEBAR_*`
- * (v4, areia de novo, agora com texto off-white): a cor de fundo real da
- * Sidebar já mudou três vezes desde que este arquivo nasceu, e um nome
- * amarrado à cor do momento vira resíduo a cada iteração — por isso o nome
- * final descreve ONDE é usado (a Sidebar), não a cor de fundo dela. Se essa
- * cor mudar de novo, só o valor dos tokens em `globals.css` precisa mudar,
- * nunca este arquivo.
+ * (`globals.css`) — nunca um valor solto. O fundo real da Sidebar já
+ * mudou várias vezes (preto → areia clara → grafite quente → taupe médio →
+ * off-white, esta rodada) e um nome amarrado à cor do momento vira resíduo
+ * a cada iteração — por isso `ACTIVE_INDICATOR_SIDEBAR_*` descreve ONDE é
+ * usado (a Sidebar), não a cor de fundo dela. Se essa cor mudar de novo, só
+ * o valor dos tokens em `globals.css` precisa mudar, nunca este arquivo —
+ * e de fato não mudou nesta rodada: `bg-sidebar-active-surface` continua o
+ * mesmo bloco grafite 100% sólido de sempre.
  *
- * Etapa "Sidebar Areia + Ativo Grafite — v4": terceira tentativa de
- * equilíbrio pra esta mesma Sidebar. v1 era areia com texto grafite (pouco
- * contraste); v2 inverteu pra fundo grafite com areia só de assinatura
- * (perdeu personalidade); v4 volta a areia como superfície, mas com
- * texto/ícone off-white (nunca mais grafite sobre areia) e reserva o
- * grafite pro bloco do item ativo — `bg-sidebar-active-surface` volta a
- * ser um bloco 100% sólido (não mais um overlay translúcido, que só fazia
- * sentido quando a própria superfície já era grafite). O rail
- * (`--sidebar-active-rail`) continua `--sand`, só que agora é um tom mais
- * CLARO que a superfície ao redor (antes era o oposto) — o mesmo papel de
- * sempre (assinatura no elemento mais "editorial" da Sidebar), só invertido
- * em relação a quem é mais claro que quem.
+ * Etapa "Sidebar Off-White + Grafite + Areia Assinatura": a Sidebar deixa
+ * de tentar carregar identidade através da SUPERFÍCIE (as 3 rodadas
+ * anteriores tentaram areia clara, grafite quente e taupe médio — a
+ * primeira ficou lavada, a segunda genérica, a terceira virou uma massa de
+ * cor grande demais) e passa a ser off-white, quase a mesma família clara
+ * do conteúdo principal. Isso torna o item ativo AINDA mais evidente (bloco
+ * grafite sólido sobre uma superfície agora bem mais clara — a maior
+ * diferença de contraste que este componente já teve). O rail
+ * (`--sidebar-active-rail`, `--sand`) sempre foi um tom intermediário entre
+ * grafite e off-white — antes ficava mais claro que a superfície escura ao
+ * redor, agora fica mais escuro que a superfície clara ao redor; nos dois
+ * casos ele lê como um terceiro acento distinto, nem a cor do bloco nem a
+ * da superfície.
  *
  * Cada consumidor combina estas classes com seu próprio layout (flex,
  * padding, tamanho de fonte, ícone) — isto aqui é só o miolo do estado,
