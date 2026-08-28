@@ -94,7 +94,7 @@ export function ClientReportView({
       <div className="mt-8 border-t border-overview-border pt-6">
         <SectionHeader title="Campanhas" accent />
         <div className="mt-3">
-          <ReportCampaignsList summaries={data.campaigns} />
+          <ReportCampaignsList summaries={data.campaigns} channelScope={data.channelScope} />
         </div>
       </div>
 
