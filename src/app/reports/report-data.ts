@@ -20,6 +20,8 @@ import { computePerformanceSummary, type PerformanceSummary } from "@/lib/perfor
 import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
 import { getCampaignDailyMetricsForPeriod } from "@/lib/campaign-analytics-data";
 import { buildCampaignSummaries, type CampaignSummary } from "@/lib/campaign-analytics";
+import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
+import { buildCreativeSummaries, type CreativeSummary } from "@/lib/creative-analytics";
 import {
   AVAILABLE_TRAFFIC_CHANNELS,
   resolveClientChannelScopeOptions,
@@ -202,6 +204,18 @@ export interface ReportViewData {
    * `buildCampaignSummaries` (lib/campaign-analytics.ts) — nenhuma métrica
    * nova derivada aqui, só o que a fonte real já fornece por campanha. */
   campaigns: CampaignSummary[];
+  /** Etapa "Três níveis de análise": criativos do período — fonte
+   * (`ad_creative_daily_metrics` via `getAdCreativeDailyMetricsForPeriod`,
+   * mesma usada pela seção "Criativos" do Analytics) NÃO tem coluna de
+   * canal (é implicitamente só Meta — `creative_name` = `ad_name` do Meta,
+   * ver `lib/creative-analytics.ts`). Por isso: escopo "google" sempre
+   * devolve `[]` aqui (nunca atribui um criativo Meta a uma visão Google);
+   * "meta"/"consolidated" devolvem o mesmo conjunto (não há o que
+   * filtrar). `report-view.tsx` usa `channelScope === "google"` (não
+   * `creatives.length === 0`) pra decidir entre a mensagem "Criativos do
+   * Google ainda não estão disponíveis" e um EmptyState genérico — mesma
+   * distinção que a Analytics já faz. */
+  creatives: CreativeSummary[];
 }
 
 /** Monta os dados completos do relatório individual — ao vivo (dados atuais
@@ -252,34 +266,36 @@ export async function buildReportViewData(
   // `resolveClientChannelScopeOptions`/`resolveSelectedChannelScope`) e da
   // seção "Campanhas" do Analytics (`getCampaignDailyMetricsForPeriod` +
   // `buildCampaignSummaries`) — nenhuma fórmula nova.
-  const [sprintsForActuals, dailySpendChannelRows, channelSpendRows, campaignDailyMetricRows] = await Promise.all([
-    requireQuery(
-      supabase
-        .from("sprints")
-        .select("id, start_date, end_date")
-        .eq("client_id", clientId)
-        .lte("start_date", monthRange.lastDay)
-        .gte("end_date", monthRange.firstDay),
-      "sprints:actuals",
-    ),
-    requireQuery(
-      supabase
-        .from("daily_spend")
-        .select("date, spend, channel")
-        .eq("client_id", clientId)
-        .gte("date", monthRange.firstDay)
-        .lte("date", monthRange.lastDay),
-      "daily_spend:channel",
-    ),
-    requireQuery(
-      supabase
-        .from("sprint_channel_spend")
-        .select("sprint_id, channel, spend_source, manual_actual_spend")
-        .eq("client_id", clientId),
-      "sprint_channel_spend",
-    ),
-    getCampaignDailyMetricsForPeriod(supabase, clientId, { start: monthRange.firstDay, end: monthRange.lastDay }),
-  ]);
+  const [sprintsForActuals, dailySpendChannelRows, channelSpendRows, campaignDailyMetricRows, adCreativeDailyMetricRows] =
+    await Promise.all([
+      requireQuery(
+        supabase
+          .from("sprints")
+          .select("id, start_date, end_date")
+          .eq("client_id", clientId)
+          .lte("start_date", monthRange.lastDay)
+          .gte("end_date", monthRange.firstDay),
+        "sprints:actuals",
+      ),
+      requireQuery(
+        supabase
+          .from("daily_spend")
+          .select("date, spend, channel")
+          .eq("client_id", clientId)
+          .gte("date", monthRange.firstDay)
+          .lte("date", monthRange.lastDay),
+        "daily_spend:channel",
+      ),
+      requireQuery(
+        supabase
+          .from("sprint_channel_spend")
+          .select("sprint_id, channel, spend_source, manual_actual_spend")
+          .eq("client_id", clientId),
+        "sprint_channel_spend",
+      ),
+      getCampaignDailyMetricsForPeriod(supabase, clientId, { start: monthRange.firstDay, end: monthRange.lastDay }),
+      getAdCreativeDailyMetricsForPeriod(supabase, clientId, { start: monthRange.firstDay, end: monthRange.lastDay }),
+    ]);
 
   const performanceRecordRowsForActuals = await resolvePerformanceRowsForSprints(
     supabase,
@@ -338,6 +354,13 @@ export async function buildReportViewData(
     channelScope === "consolidated" ? campaignDailyMetricRows : campaignDailyMetricRows.filter((r) => r.channel === channelScope);
   const campaigns = buildCampaignSummaries(scopedCampaignRows);
 
+  // Criativos: `ad_creative_daily_metrics` não tem coluna de canal (só
+  // Meta, ver comentário de `ReportViewData.creatives`) — escopo "google"
+  // nunca atribui um criativo Meta a essa visão, então devolve `[]` aqui em
+  // vez de deixar `report-view.tsx` inferir isso de uma lista vazia por
+  // acaso (que também aconteceria com um cliente Meta sem nenhum criativo).
+  const creatives = channelScope === "google" ? [] : buildCreativeSummaries(adCreativeDailyMetricRows);
+
   if (report?.status === "finalizado" && report.snapshot) {
     const snap = report.snapshot as Record<string, unknown>;
     return {
@@ -376,6 +399,7 @@ export async function buildReportViewData(
       performanceSummary,
       targetCostPerResult,
       campaigns,
+      creatives,
     };
   }
 
@@ -542,6 +566,7 @@ export async function buildReportViewData(
       performanceSummary,
       targetCostPerResult,
       campaigns,
+      creatives,
     };
   }
 
@@ -666,5 +691,6 @@ export async function buildReportViewData(
     performanceSummary,
     targetCostPerResult,
     campaigns,
+    creatives,
   };
 }

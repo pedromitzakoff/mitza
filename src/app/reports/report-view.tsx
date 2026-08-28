@@ -11,18 +11,25 @@ import { VisaoGeralChannelSwitch } from "@/app/clients/visao-geral-channel-switc
 import { MonthlyKpiSummary } from "@/app/clients/monthly-kpi-summary";
 import type { ReportViewData } from "./report-data";
 import { ReportCampaignsList } from "./report-campaigns";
+import { ReportCreativesList } from "./report-creatives";
 import { finalizeReportAction, reopenReportAction, updateReportStatusAction } from "./report-actions";
 
 /**
- * Etapa "Relatório de Performance das Campanhas": o Relatório deixa de ser
- * um relatório de acompanhamento interno da agência (Performance/Execução
- * da agência/Acontecimentos e decisões/Análise do gestor/Pendências/
- * Próximos passos/Comportamento por sprint, além dos KPIs customizados e do
- * resumo executivo em texto livre do antigo Bloco 1 — todos removidos desta
- * tela) e passa a responder só o que um relatório de mídia responde:
- * quanto foi investido, quantos resultados, a que custo, e quais campanhas
- * formaram esse número — sempre respeitando o objetivo estruturado do
- * cliente (`performance_goal`) e nunca misturando Meta com Google.
+ * Etapa "Relatório de Performance das Campanhas" → "Três níveis de
+ * análise": o Relatório deixa de ser um relatório de acompanhamento
+ * interno da agência (Performance/Execução da agência/Acontecimentos e
+ * decisões/Análise do gestor/Pendências/Próximos passos/Comportamento por
+ * sprint, além dos KPIs customizados e do resumo executivo em texto livre
+ * do antigo Bloco 1 — todos removidos desta tela) e passa a responder só o
+ * que um relatório de mídia responde, em leitura progressiva: Resumo do
+ * período → Campanhas → Criativos — sempre respeitando o objetivo
+ * estruturado do cliente (`performance_goal`) e nunca misturando Meta com
+ * Google.
+ *
+ * "Públicos" (o nível do meio da arquitetura pedida) NÃO existe aqui —
+ * auditoria confirmou que a fonte de dados não tem nenhuma dimensão de ad
+ * set/audiência hoje (só campanha e criativo); ver resumo entregue ao
+ * usuário nesta etapa.
  *
  * "Status do relatório" (não iniciado/em andamento/pronto para revisão/
  * finalizado) É MANTIDO — não é execução operacional, é workflow de
@@ -70,7 +77,7 @@ export function ClientReportView({
       {data.status === "finalizado" && (
         <p className="mt-2 text-xs text-overview-text-secondary">
           Finalizado por {data.finalizedByName ?? "—"} em {data.finalizedAt ? formatShortDate(data.finalizedAt.slice(0, 10)) : "—"} —
-          o resumo e as campanhas abaixo continuam ao vivo (histórico de mídia de um mês encerrado não muda).
+          o resumo, as campanhas e os criativos abaixo continuam ao vivo (histórico de mídia de um mês encerrado não muda).
         </p>
       )}
 
@@ -92,9 +99,24 @@ export function ClientReportView({
       </div>
 
       <div className="mt-8 border-t border-overview-border pt-6">
-        <SectionHeader title="Campanhas" accent />
+        <SectionHeader title={`Campanhas · ${data.campaigns.length}`} accent />
         <div className="mt-3">
           <ReportCampaignsList summaries={data.campaigns} channelScope={data.channelScope} />
+        </div>
+      </div>
+
+      {/* "Públicos" (conjunto de anúncios/audiência) NÃO existe nesta
+          rodada — auditoria não encontrou nenhuma dimensão de ad
+          set/audiência na fonte de dados (só `campaign_daily_metrics` e
+          `ad_creative_daily_metrics`, nenhuma das duas tem essa coluna).
+          Renderizar uma seção vazia/fabricada violaria o pedido explícito
+          de nunca inventar informação que a fonte não suporta — ver
+          resumo entregue ao usuário. */}
+
+      <div className="mt-8 border-t border-overview-border pt-6">
+        <SectionHeader title={data.channelScope === "google" ? "Criativos" : `Criativos · ${data.creatives.length}`} accent />
+        <div className="mt-3">
+          <ReportCreativesList summaries={data.creatives} channelScope={data.channelScope} />
         </div>
       </div>
 
