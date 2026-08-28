@@ -1,3 +1,5 @@
+"use client";
+
 import { formatCurrency } from "@/lib/format";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { TRAFFIC_CHANNELS, type ChannelScope } from "@/lib/traffic-channels";
@@ -6,6 +8,13 @@ import type { CampaignSummary } from "@/lib/campaign-analytics";
 import { ReportTable, type ReportTableColumn } from "./report-table";
 
 /**
+ * `"use client"` obrigatório: `columns` carrega funções (`render`/
+ * `sortValue`) que `ReportTable` (Client Component) recebe como prop —
+ * Server Component não pode passar função pra Client Component (só dá pra
+ * serializar dado, nunca closure), então este arquivo precisa estar do
+ * mesmo lado da fronteira que `ReportTable`. `report-view.tsx` (Server
+ * Component) só passa dado puro pra cá (`summaries`/`channelScope`).
+ *
  * Etapa "Três níveis de análise": Campanhas é o primeiro nível — mesma
  * fonte/agregação de sempre (`CampaignSummary`, `buildCampaignSummaries`,
  * lib/campaign-analytics.ts), TODAS as campanhas continuam disponíveis

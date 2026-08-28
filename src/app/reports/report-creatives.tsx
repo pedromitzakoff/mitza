@@ -1,3 +1,5 @@
+"use client";
+
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { NO_CREATIVES_MESSAGE, CREATIVES_NOT_AVAILABLE_FOR_GOOGLE_MESSAGE } from "@/lib/analytics-messages";
@@ -7,6 +9,13 @@ import type { ChannelScope } from "@/lib/traffic-channels";
 import { ReportTable, type ReportTableColumn } from "./report-table";
 
 /**
+ * `"use client"` obrigatório: `columns` carrega funções (`render`/
+ * `sortValue`) que `ReportTable` (Client Component) recebe como prop —
+ * Server Component não pode passar função pra Client Component (só dá pra
+ * serializar dado, nunca closure), então este arquivo precisa estar do
+ * mesmo lado da fronteira que `ReportTable`. `report-view.tsx` (Server
+ * Component) só passa dado puro pra cá (`summaries`/`channelScope`).
+ *
  * Etapa "Três níveis de análise": Criativos é o terceiro nível (Campanhas →
  * Públicos → Criativos, seção 1 do pedido) — mesma fonte/agregação de
  * sempre (`CreativeSummary`, `buildCreativeSummaries`,
