@@ -1204,15 +1204,6 @@ export default async function ClientPage({
     ? `Gestor: ${client.primary_manager.name}`
     : "Sem gestor atribuído";
 
-  // Etapa "Restaurar Registrar Revisão no Cliente": mesmo drawer/Server
-  // Action que `/sprints` já usa (`RecordAccountReviewDrawer`/
-  // `recordAccountReviewAction`, abertos via `?review=new`, já renderizados
-  // mais abaixo nesta própria página) — aqui só falta o link de entrada,
-  // que nunca existiu na página individual. Nenhum formulário novo, nenhuma
-  // permissão nova: mesmo gate (`canOperate`) que já protege as outras
-  // ações de criação desta página (Atualizar Meta, comentários, tarefas).
-  const newReviewHref = withParam(returnTo, "review=new");
-
   // Cabeçalho da conta — dois indicadores independentes (Etapa "Dois
   // relógios no cabeçalho"): "Última otimização" responde "a operação está
   // sendo acompanhada?" (evento do GESTOR, mesma fonte de sempre,
@@ -1666,11 +1657,13 @@ export default async function ClientPage({
             sem porta de entrada aqui (mesmo padrão já usado nesta página
             pra rotas/ações que saem de navegação sem serem apagadas, ver
             comentário de "Sprints"/"Clientes" em `sidebar.tsx`). */}
-        {canOperate && (
-          <Link href={newReviewHref} scroll={false} className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
-            Registrar revisão
-          </Link>
-        )}
+        {/* "Registrar revisão" (RecordAccountReviewDrawer/recordAccountReviewAction,
+            abertos via `?review=new`) fica oculto por pedido do usuário — não
+            usamos mais esse fluxo na página individual do cliente. Drawer/
+            Server Action continuam existindo (mesmo par que `/sprints` ainda
+            usa), só sem porta de entrada aqui — mesmo padrão já usado nesta
+            página pra ações que saem de navegação sem serem apagadas (ver
+            "Atualizar Meta", acima). */}
         {/* Etapa "Refinamento Visual 2.0 — Ajuste de Arquitetura": ação
             secundária (nunca aba — não troca conteúdo, não mexe na URL),
             abre o drawer `AccountInfoDrawer` com o contexto operacional
