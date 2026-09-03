@@ -650,6 +650,199 @@ export function combineCampaignGroupValues(aggregates: AggregatedCampaignGroupVa
   return Array.from(groups.values());
 }
 
+/**
+ * Núcleo puro da camada de AD SET (`ad_set_daily_metrics`, "Públicos") —
+ * achado da inspeção somente leitura de uma fonte real (Ateliê): o grão de
+ * origem já é dia×campanha×ad set×anúncio (`insights_adset_name` chega na
+ * MESMA linha que alimenta campanha/criativo hoje). Esta camada agrega por
+ * `(date, campaignName, adSetName)` — SEM `creativeName` — somando TODAS as
+ * linhas de anúncio daquele ad set naquele dia, exatamente como
+ * `aggregateCampaignDailyRows` soma por campanha sem guardar criativo. Só
+ * disparada quando `ad_set_name_column` E `campaign_name_column` existirem
+ * (campanha é obrigatória na tabela, mesma exigência de ad_creative_daily_metrics).
+ * Sem `ad_set_id` — hoje só existe o nome no Stract, nunca fabricado.
+ */
+export interface AggregateAdSetRowsColumns {
+  dateColumn: string;
+  campaignNameColumn: string;
+  adSetNameColumn: string;
+  spendColumn: string;
+  impressionsColumn?: string | null;
+  reachColumn?: string | null;
+  clicksColumn?: string | null;
+}
+
+export interface AggregatedAdSetRow {
+  date: string;
+  campaignName: string;
+  adSetName: string;
+  spend: number;
+  impressions: number | null;
+  reach: number | null;
+  clicks: number | null;
+  invalidRowCount: number;
+}
+
+export function aggregateAdSetDailyRows(rows: RawSourceRow[], columns: AggregateAdSetRowsColumns): AggregatedAdSetRow[] {
+  const { dateColumn, campaignNameColumn, adSetNameColumn, spendColumn, impressionsColumn, reachColumn, clicksColumn } = columns;
+
+  const groups = new Map<string, AggregatedAdSetRow>();
+
+  for (const row of rows) {
+    const rawDate = row[dateColumn];
+    if (typeof rawDate !== "string" || rawDate.length === 0) continue;
+
+    const campaignName = toStringColumnValue(row[campaignNameColumn]);
+    const adSetName = toStringColumnValue(row[adSetNameColumn]);
+    const key = `${rawDate} ${campaignName} ${adSetName}`;
+    const group = groups.get(key) ?? {
+      date: rawDate,
+      campaignName,
+      adSetName,
+      spend: 0,
+      impressions: null,
+      reach: null,
+      clicks: null,
+      invalidRowCount: 0,
+    };
+
+    const spendValue = parseSourceNumericValue(row[spendColumn]);
+    if (spendValue.kind === "ok") group.spend += spendValue.value;
+    if (spendValue.kind === "invalid") group.invalidRowCount += 1;
+
+    if (impressionsColumn) {
+      const value = parseSourceNumericValue(row[impressionsColumn]);
+      if (value.kind === "ok") group.impressions = (group.impressions ?? 0) + value.value;
+      if (value.kind === "invalid") group.invalidRowCount += 1;
+    }
+    if (reachColumn) {
+      const value = parseSourceNumericValue(row[reachColumn]);
+      if (value.kind === "ok") group.reach = (group.reach ?? 0) + value.value;
+      if (value.kind === "invalid") group.invalidRowCount += 1;
+    }
+    if (clicksColumn) {
+      const value = parseSourceNumericValue(row[clicksColumn]);
+      if (value.kind === "ok") group.clicks = (group.clicks ?? 0) + value.value;
+      if (value.kind === "invalid") group.invalidRowCount += 1;
+    }
+
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values()).sort(
+    (a, b) => a.date.localeCompare(b.date) || a.campaignName.localeCompare(b.campaignName) || a.adSetName.localeCompare(b.adSetName),
+  );
+}
+
+export interface AggregatedAdSetGroupValue {
+  date: string;
+  campaignName: string;
+  adSetName: string;
+  value: number;
+  invalidRowCount: number;
+}
+
+/** Soma uma coluna por `(date, campaignName, adSetName)` — irmã de
+ * `aggregateColumnByCampaignGroup`/`aggregateColumnByAdCreativeGroup`, usada
+ * pra resolver `result_column`/`value_column` de `metric_mappings` no grão
+ * de ad set. */
+export function aggregateColumnByAdSetGroup(
+  rows: RawSourceRow[],
+  dateColumn: string,
+  campaignNameColumn: string,
+  adSetNameColumn: string,
+  valueColumn: string,
+): AggregatedAdSetGroupValue[] {
+  const groups = new Map<string, AggregatedAdSetGroupValue>();
+
+  for (const row of rows) {
+    const rawDate = row[dateColumn];
+    if (typeof rawDate !== "string" || rawDate.length === 0) continue;
+
+    const campaignName = toStringColumnValue(row[campaignNameColumn]);
+    const adSetName = toStringColumnValue(row[adSetNameColumn]);
+    const key = `${rawDate} ${campaignName} ${adSetName}`;
+    const group = groups.get(key) ?? { date: rawDate, campaignName, adSetName, value: 0, invalidRowCount: 0 };
+
+    const parsed = parseSourceNumericValue(row[valueColumn]);
+    if (parsed.kind === "ok") group.value += parsed.value;
+    if (parsed.kind === "invalid") group.invalidRowCount += 1;
+
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values());
+}
+
+export function combineAdSetGroupValues(aggregates: AggregatedAdSetGroupValue[][]): AggregatedAdSetGroupValue[] {
+  const groups = new Map<string, AggregatedAdSetGroupValue>();
+
+  for (const aggregate of aggregates) {
+    for (const row of aggregate) {
+      const key = `${row.date} ${row.campaignName} ${row.adSetName}`;
+      const group = groups.get(key) ?? { date: row.date, campaignName: row.campaignName, adSetName: row.adSetName, value: 0, invalidRowCount: 0 };
+      group.value += row.value;
+      group.invalidRowCount += row.invalidRowCount;
+      groups.set(key, group);
+    }
+  }
+
+  return Array.from(groups.values());
+}
+
+export interface AdSetDailyMetricsUpsertRow {
+  client_id: string;
+  import_source_id: string;
+  channel: TrafficChannel;
+  date: string;
+  campaign_name: string;
+  ad_set_name: string;
+  spend: number;
+  impressions: number | null;
+  reach: number | null;
+  clicks: number | null;
+  result_type: PerformanceGoal | null;
+  result_count: number | null;
+  revenue: number | null;
+}
+
+/**
+ * Monta as linhas prontas pro upsert em `ad_set_daily_metrics` — chave
+ * `(import_source_id, date, channel, campaign_name, ad_set_name)`. `channel`
+ * nunca inferido, sempre o mesmo de `import_sources.channel` da fonte.
+ */
+export function buildAdSetDailyMetricsUpsertRows(
+  clientId: string,
+  importSourceId: string,
+  channel: TrafficChannel,
+  aggregated: AggregatedAdSetRow[],
+  options?: {
+    resultType?: PerformanceGoal | null;
+    resultByGroup?: Map<string, number> | null;
+    revenueByGroup?: Map<string, number> | null;
+  },
+): AdSetDailyMetricsUpsertRow[] {
+  return aggregated.map((row) => {
+    const key = `${row.date} ${row.campaignName} ${row.adSetName}`;
+    const resultCount = options?.resultByGroup?.get(key);
+    return {
+      client_id: clientId,
+      import_source_id: importSourceId,
+      channel,
+      date: row.date,
+      campaign_name: row.campaignName,
+      ad_set_name: row.adSetName,
+      spend: row.spend,
+      impressions: row.impressions,
+      reach: row.reach,
+      clicks: row.clicks,
+      result_type: resultCount !== undefined ? (options?.resultType ?? null) : null,
+      result_count: resultCount !== undefined ? Math.round(resultCount) : null,
+      revenue: options?.revenueByGroup?.get(key) ?? null,
+    };
+  });
+}
+
 export interface CampaignDailyMetricsUpsertRow {
   client_id: string;
   import_source_id: string;

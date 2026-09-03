@@ -904,6 +904,7 @@ export interface Database {
           campaign_name_exclude: string | null;
           campaign_id_column: string | null;
           ad_name_column: string | null;
+          ad_set_name_column: string | null;
           creative_permalink_column: string | null;
           preview_image_column: string | null;
           preview_image_fallback_column: string | null;
@@ -932,6 +933,7 @@ export interface Database {
           campaign_name_exclude?: string | null;
           campaign_id_column?: string | null;
           ad_name_column?: string | null;
+          ad_set_name_column?: string | null;
           creative_permalink_column?: string | null;
           preview_image_column?: string | null;
           preview_image_fallback_column?: string | null;
@@ -960,6 +962,7 @@ export interface Database {
           campaign_name_exclude?: string | null;
           campaign_id_column?: string | null;
           ad_name_column?: string | null;
+          ad_set_name_column?: string | null;
           creative_permalink_column?: string | null;
           preview_image_column?: string | null;
           preview_image_fallback_column?: string | null;
@@ -979,6 +982,78 @@ export interface Database {
             columns: ["client_id"];
             isOneToOne: false;
             referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ad_set_daily_metrics: {
+        Row: {
+          id: string;
+          client_id: string;
+          import_source_id: string;
+          channel: TrafficChannelDb;
+          date: string;
+          campaign_name: string;
+          ad_set_name: string;
+          spend: number;
+          impressions: number | null;
+          reach: number | null;
+          clicks: number | null;
+          result_type: PerformanceGoalDb | null;
+          result_count: number | null;
+          revenue: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          import_source_id: string;
+          channel: TrafficChannelDb;
+          date: string;
+          campaign_name: string;
+          ad_set_name: string;
+          spend?: number;
+          impressions?: number | null;
+          reach?: number | null;
+          clicks?: number | null;
+          result_type?: PerformanceGoalDb | null;
+          result_count?: number | null;
+          revenue?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          import_source_id?: string;
+          channel?: TrafficChannelDb;
+          date?: string;
+          campaign_name?: string;
+          ad_set_name?: string;
+          spend?: number;
+          impressions?: number | null;
+          reach?: number | null;
+          clicks?: number | null;
+          result_type?: PerformanceGoalDb | null;
+          result_count?: number | null;
+          revenue?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ad_set_daily_metrics_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ad_set_daily_metrics_import_source_id_fkey";
+            columns: ["import_source_id"];
+            isOneToOne: false;
+            referencedRelation: "import_sources";
             referencedColumns: ["id"];
           },
         ];
@@ -1033,6 +1108,7 @@ export interface Database {
           performance_rows_written: number | null;
           creative_rows_written: number | null;
           campaign_rows_written: number | null;
+          ad_set_rows_written: number | null;
           error_message: string | null;
           created_at: string;
         };
@@ -1047,6 +1123,7 @@ export interface Database {
           performance_rows_written?: number | null;
           creative_rows_written?: number | null;
           campaign_rows_written?: number | null;
+          ad_set_rows_written?: number | null;
           error_message?: string | null;
           created_at?: string;
         };
@@ -1061,6 +1138,7 @@ export interface Database {
           performance_rows_written?: number | null;
           creative_rows_written?: number | null;
           campaign_rows_written?: number | null;
+          ad_set_rows_written?: number | null;
           error_message?: string | null;
           created_at?: string;
         };

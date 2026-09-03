@@ -33,6 +33,7 @@ export function AnalyticsHubHeader({
   customStart,
   customEnd,
   exportHref,
+  performanceReportHref,
   platformSwitch,
 }: {
   baseHref: string;
@@ -42,6 +43,12 @@ export function AnalyticsHubHeader({
   customStart: string;
   customEnd: string;
   exportHref: string;
+  /** Gerador de Relatório de Performance (Meta Ads) — mesmo período do hub,
+   * abre em nova aba (é uma página HTML pra visualizar, não um download
+   * direto como `exportHref`; o botão "Baixar PDF" fica dentro da própria
+   * página gerada). `undefined` = fora de escopo desta tela (nenhum caso
+   * hoje — a rota existe pra qualquer cliente). */
+  performanceReportHref?: string;
   platformSwitch?: ReactNode;
 }) {
   return (
@@ -51,6 +58,17 @@ export function AnalyticsHubHeader({
         {platformSwitch}
       </div>
       <div className="flex items-center gap-2">
+        {performanceReportHref && (
+          <a
+            href={performanceReportHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          >
+            <FileDown className="h-3.5 w-3.5" aria-hidden="true" />
+            Relatório de Performance
+          </a>
+        )}
         <a
           href={exportHref}
           className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"

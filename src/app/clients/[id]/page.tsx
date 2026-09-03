@@ -161,6 +161,7 @@ function formatSyncRunCounts(run: SyncRunSummary): string {
   if (run.performanceRowsWritten !== null) parts.push(`${run.performanceRowsWritten} performance`);
   if (run.creativeRowsWritten !== null) parts.push(`${run.creativeRowsWritten} criativos`);
   if (run.campaignRowsWritten !== null) parts.push(`${run.campaignRowsWritten} campanhas`);
+  if (run.adSetRowsWritten !== null) parts.push(`${run.adSetRowsWritten} públicos`);
   return parts.join(" · ");
 }
 
@@ -1367,6 +1368,11 @@ export default async function ClientPage({
   // hub, nunca um segundo seletor pro relatório; o download é um `<a>`
   // normal, o navegador trata o `Content-Disposition: attachment` nativamente.
   const exportHref = `/api/clients/${id}/analytics-report?${analyticsPeriodQuery}&${analyticsPlatformQuery}`;
+  // Gerador de Relatório de Performance — mesmo período do hub, Meta-only
+  // (v1, "Priorize Meta Ads"), nunca o parâmetro de plataforma consolidada/
+  // Google (não existe seletor nesta rota). Abre em nova aba (é uma página
+  // HTML pra visualizar/navegar, não um download direto).
+  const performanceReportHref = `/api/clients/${id}/performance-report?${analyticsPeriodQuery}`;
 
   // Módulo de Criativos (Creative Analytics) — mesmo período único do hub
   // acima (antes tinha seletor próprio). Nunca gated por
@@ -1923,6 +1929,7 @@ export default async function ClientPage({
             customStart={analyticsStartParam ?? analyticsPeriod.start}
             customEnd={analyticsEndParam ?? analyticsPeriod.end}
             exportHref={exportHref}
+            performanceReportHref={performanceReportHref}
             platformSwitch={
               <AnalyticsPlatformSwitch baseHref={analyticsPlatformSwitchBaseHref} activePlatform={analyticsPlatform} />
             }
