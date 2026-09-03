@@ -5,25 +5,35 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { todayUTC } from "@/lib/today";
 import { monthRangeFromParam, shiftMonthParam } from "@/lib/sprint-financials";
-import { formatCurrency, formatMonthLabel } from "@/lib/format";
+import { formatMonthLabel } from "@/lib/format";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
 import { getActiveDiagnosticFilters } from "@/lib/metric-diagnostics";
-import { classifySpendStatus, SPEND_STATUS_BADGE_CLASSES, type SpendStatus } from "@/lib/spend-status";
 import { MONTHLY_REPORT_STATUS_BADGE_CLASSES, MONTHLY_REPORT_STATUS_LABEL } from "@/lib/monthly-reports";
 import type { MonthlyReportStatus } from "@/lib/supabase/database.types";
+import { SubmitButton } from "@/app/submit-button";
+import { finalizeReportAction, reopenReportAction, updateReportStatusAction } from "./report-actions";
+import { buildPerformanceReportHref, resolveMonthlyReportRow, type MonthlyReportRow } from "./report-panel";
+import { ReportStatusSelect } from "./report-status-select";
 import { ReportsFilters } from "./reports-filters";
 
-/** Mesmo rótulo/cor de "Situação do mês" já usado na Visão Geral
- * (`card.monthStatus`) — texto local só pra não importar um componente de
- * outra tela, mesma classificação central (classifySpendStatus). */
-const SITUATION_LABEL: Record<SpendStatus, string> = {
-  dentro: "Dentro do esperado",
-  acima: "Acima do esperado",
-  abaixo: "Abaixo do esperado",
-  sem_meta: "Sem planejamento",
-  nao_iniciado: "Ainda não iniciada",
-  em_andamento: "Em andamento",
-};
+/**
+ * Etapa "Separação Relatório Operacional × Documento de Performance":
+ * `/reports` deixa de tentar ser um segundo documento de performance
+ * (Campanhas/Criativos/KPIs saíram — isso é 100% do Relatório de
+ * Performance agora, `/api/clients/[id]/performance-report`) e vira só o
+ * painel de FECHAMENTO — a pergunta que esta tela responde é sempre "quais
+ * relatórios deste mês ainda faltam fechar?", nunca "como foi a
+ * performance?". Status/finalizar/reabrir continuam as MESMAS 3 Server
+ * Actions de sempre (`report-actions.ts`), só que chamadas direto da linha
+ * da tabela em vez de uma página própria por cliente — `/reports/[clientId]`
+ * (aposentada, ver esse arquivo) nunca teve nenhuma regra própria, só
+ * apresentação.
+ */
+const STATUS_OPTIONS: { value: MonthlyReportStatus; label: string }[] = [
+  { value: "nao_iniciado", label: "Não iniciado" },
+  { value: "em_andamento", label: "Em andamento" },
+  { value: "pronto_revisao", label: "Pronto para revisão" },
+];
 
 export default async function ReportsPage({
   searchParams,
@@ -38,25 +48,40 @@ export default async function ReportsPage({
 
   const today = todayUTC();
   const monthRange = monthRangeFromParam(params.month, today);
+  const monthStart = monthRange.firstDay;
 
   const managerFilter = params.manager ?? (isAdmin ? "all" : "me");
 
   const supabase = await createSupabaseClient();
 
-  // Etapa "Consolidação da Arquitetura — Fase C": a lista migrou pra
+  // Etapa "Consolidação da Arquitetura — Fase C": a lista já migrou pra
   // `ClientOperationalState` (mesmo pipeline que Operação e Visão Geral já
   // usam) — nenhuma query própria de sprints/daily_spend/tasks/planejamento
   // aqui, `loadClientOperationalStates` já resolve tudo internamente.
+  // Investimento/situação do mês SAÍRAM desta tela (Etapa "Separação..." —
+  // isso é conteúdo de performance, pertence só ao Relatório de Performance
+  // agora); por isso não busca mais nada disso, só o que a tabela mostra.
   const [clientStates, gestores, reports] = await Promise.all([
-    loadClientOperationalStates(supabase, monthRange.firstDay),
+    loadClientOperationalStates(supabase, monthStart),
     requireQuery(supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"), "team_members"),
     requireQuery(
-      supabase.from("monthly_reports").select("client_id, status").eq("month_start", monthRange.firstDay),
+      supabase
+        .from("monthly_reports")
+        .select(
+          "client_id, status, updated_at, finalized_at, finalized_by_profile:team_members!monthly_reports_finalized_by_fkey(name)",
+        )
+        .eq("month_start", monthStart),
       "monthly_reports",
     ),
   ]);
 
-  const reportStatusByClient = new Map<string, MonthlyReportStatus>((reports ?? []).map((r) => [r.client_id, r.status]));
+  const reportRowByClient = new Map<string, MonthlyReportRow>(
+    (reports ?? []).map((r) => [
+      r.client_id,
+      { status: r.status, updated_at: r.updated_at, finalized_at: r.finalized_at, finalized_by_profile: r.finalized_by_profile },
+    ]),
+  );
+  const resolvedReportFor = (clientId: string) => resolveMonthlyReportRow(reportRowByClient.get(clientId));
 
   const clientOptions = [...clientStates]
     .map((s) => ({ id: s.clientId, name: s.clientName }))
@@ -78,9 +103,7 @@ export default async function ReportsPage({
 
   // Ordenação alfabética por nome — decisão de APRESENTAÇÃO (a lista é pra
   // encontrar um cliente, não pra priorizar atenção), preservada da versão
-  // legada sem alteração. Nunca `sortClientOperationalStates`: esta tela não
-  // ordena por severidade/prioridade — quem precisa dessa ordem canônica é
-  // Operação e Visão Geral (Prioridades de hoje/tabelas por objetivo).
+  // legada sem alteração.
   states = [...states].sort((a, b) => a.clientName.localeCompare(b.clientName));
 
   const buildUrl = (overrides: Record<string, string>) => {
@@ -95,26 +118,17 @@ export default async function ReportsPage({
     return `/reports?${next.toString()}`;
   };
 
-  const monthLabel = formatMonthLabel(monthRange.firstDay);
-  const reportStatusFor = (clientId: string): MonthlyReportStatus => reportStatusByClient.get(clientId) ?? "nao_iniciado";
+  const monthLabel = formatMonthLabel(monthStart);
 
-  const completeCount = states.filter((s) => reportStatusFor(s.clientId) === "finalizado").length;
+  const completeCount = states.filter((s) => resolvedReportFor(s.clientId).status === "finalizado").length;
   const pendingCount = states.length - completeCount;
-  // Etapa "Visão Geral + Reports no Core": "N contas exigem atenção" passa a
-  // vir do Motor de Diagnóstico Único (Planejamento/Investimento/CPA/
-  // Pendências — nunca Atividade, que não é um dos 4 diagnósticos do
-  // Workspace) em vez do Sistema A (`evaluation.healthStatus`) — a frase
-  // exibida nunca usou vocabulário Saudável/Atenção/Crítico, só o critério
-  // de contagem mudou de fonte.
   const attentionCount = states.filter((s) => getActiveDiagnosticFilters(s.diagnostics).some((f) => f !== "atividade")).length;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Relatórios</h1>
-        <p className="text-sm text-muted-foreground">
-          Acompanhamento mensal da gestão, execução e evolução das contas.
-        </p>
+        <p className="text-sm text-muted-foreground">Controle de fechamento mensal por cliente.</p>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -159,71 +173,82 @@ export default async function ReportsPage({
       </p>
 
       <div className="mt-3 overflow-x-auto rounded-xl border border-border">
-        <table className="w-full min-w-[820px] text-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-border bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-muted-foreground dark:bg-zinc-900">
               <th className="py-2 px-3">Cliente</th>
-              <th className="py-2 px-3 text-right">Investimento</th>
-              <th className="py-2 px-3 text-right">% realizado</th>
-              <th className="py-2 px-3">Situação do mês</th>
-              <th className="py-2 px-3">Gestor</th>
-              <th className="py-2 px-3">Status do relatório</th>
+              <th className="py-2 px-3">Responsável</th>
+              <th className="py-2 px-3">Status</th>
+              <th className="py-2 px-3">Atualizado</th>
               <th className="py-2 px-3 text-right">Ação</th>
             </tr>
           </thead>
           <tbody>
             {states.length > 0 ? (
               states.map((state) => {
-                const investment = state.evaluation.dimensions.investment;
-                const monthPlanned = investment.planned ?? 0;
-                const monthActual = investment.actual;
-                // Etapa "Consolidação da Arquitetura — Fase C": "Situação do
-                // mês" continua vindo da MESMA `classifySpendStatus` de
-                // sempre (FinancialPace, Prioridade 4 da Fase B — nunca
-                // substituída pela severidade de investimento do Motor de
-                // Saúde), só que aplicada sobre o investimento já resolvido
-                // por `ClientOperationalState` (que usa `resolveMonthlyPlanSnapshot`,
-                // a regra de VIGÊNCIA — ver relatório de paridade: isso é uma
-                // divergência conhecida e esperada em relação a
-                // `/reports/[clientId]`, que ainda usa `resolveMonthlyBudget`,
-                // a regra de mês exato; a unificação é uma PR futura).
-                const monthStatus = classifySpendStatus(monthActual, investment.expected ?? 0, monthPlanned);
-                const pct = monthPlanned > 0 ? Math.round((monthActual / monthPlanned) * 100) : null;
-                const reportStatus = reportStatusFor(state.clientId);
+                const resolved = resolvedReportFor(state.clientId);
+                const isFinalized = resolved.status === "finalizado";
                 return (
                   <tr key={state.clientId} className="border-b border-border/60 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
                     <td className="py-2 px-3 font-bold text-foreground">{state.clientName}</td>
-                    <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
-                      {formatCurrency(monthActual)} / {formatCurrency(monthPlanned)}
-                    </td>
-                    <td className="py-2 px-3 text-right font-semibold tabular-nums text-foreground">{pct !== null ? `${pct}%` : "—"}</td>
-                    <td className="py-2 px-3">
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SPEND_STATUS_BADGE_CLASSES[monthStatus]}`}>
-                        {SITUATION_LABEL[monthStatus]}
-                      </span>
-                    </td>
                     <td className="py-2 px-3 text-muted-foreground">{state.managerName ?? "Sem gestor"}</td>
                     <td className="py-2 px-3">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${MONTHLY_REPORT_STATUS_BADGE_CLASSES[reportStatus]}`}
-                      >
-                        {MONTHLY_REPORT_STATUS_LABEL[reportStatus]}
-                      </span>
+                      {isFinalized ? (
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className={`w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ${MONTHLY_REPORT_STATUS_BADGE_CLASSES[resolved.status]}`}
+                          >
+                            {MONTHLY_REPORT_STATUS_LABEL[resolved.status]}
+                          </span>
+                          {resolved.finalizedLabel && <span className="text-[11px] text-muted-foreground">{resolved.finalizedLabel}</span>}
+                          {isAdmin && (
+                            <form action={reopenReportAction.bind(null, state.clientId, monthStart)}>
+                              <SubmitButton className="text-[11px] font-medium text-brand hover:underline" pendingChildren="Reabrindo...">
+                                Reabrir
+                              </SubmitButton>
+                            </form>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <form action={updateReportStatusAction.bind(null, state.clientId, monthStart)}>
+                            <ReportStatusSelect
+                              name="status"
+                              defaultValue={resolved.status}
+                              options={STATUS_OPTIONS}
+                              className={`rounded-full border-0 px-2 py-0.5 text-[11px] font-medium ${MONTHLY_REPORT_STATUS_BADGE_CLASSES[resolved.status]}`}
+                            />
+                          </form>
+                          {isAdmin && resolved.status === "pronto_revisao" && (
+                            <form action={finalizeReportAction.bind(null, state.clientId, monthStart)}>
+                              <SubmitButton
+                                className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                                pendingChildren="Finalizando..."
+                              >
+                                Finalizar
+                              </SubmitButton>
+                            </form>
+                          )}
+                        </div>
+                      )}
                     </td>
+                    <td className="py-2 px-3 text-muted-foreground">{resolved.updatedAtLabel}</td>
                     <td className="py-2 px-3 text-right">
-                      <Link
-                        href={`/reports/${state.clientId}${params.month ? `?month=${params.month}` : ""}`}
+                      <a
+                        href={buildPerformanceReportHref(state.clientId, monthRange)}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="rounded-md border border-transparent px-2 py-1 text-xs font-medium text-brand transition-colors hover:border-border hover:bg-zinc-100 dark:hover:bg-zinc-900"
                       >
                         Abrir relatório
-                      </Link>
+                      </a>
                     </td>
                   </tr>
                 );
               })
             ) : (
               <tr>
-                <td colSpan={7} className="py-4 px-3 text-center">
+                <td colSpan={5} className="py-4 px-3 text-center">
                   <EmptyState>{hasAnyClients ? "Nenhum cliente encontrado com esses filtros." : "Nenhum cliente cadastrado ainda."}</EmptyState>
                 </td>
               </tr>
