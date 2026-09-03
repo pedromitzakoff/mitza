@@ -33,9 +33,7 @@ export interface ClientAnalyticsData {
    * (`lib/period-comparison.ts`) — alimenta a variação do Hero (Etapa
    * "Analytics Instagramável"). `null` só quando `performanceGoal` também é
    * `null` (sem objetivo, nada a comparar) — nunca uma segunda consulta
-   * feita por quem consome este dado (a orquestração, `AnalyticsSection`,
-   * chama `buildAnalyticsHero`/`buildExecutiveSummaryNarrative` com isso já
-   * pronto, mesmo padrão de `summary`). */
+   * feita por quem consome este dado, mesmo padrão de `summary`. */
   previousSummary: PerformanceSummary | null;
 }
 

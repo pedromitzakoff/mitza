@@ -5,14 +5,17 @@ import { todayDateString } from "@/lib/today";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
 import { buildPerformanceReportDocument } from "@/lib/performance-report/report-document";
 import { renderPerformanceReportHtml } from "@/lib/performance-report/renderers/html-renderer";
-import { renderReportPdf } from "@/lib/analytics-report/renderers/pdf-renderer";
+import { renderReportPdf } from "@/lib/performance-report/renderers/pdf-renderer";
 
 /**
- * Gerador de Relatório de Performance — Route Handler (não Server Action),
- * mesmo padrão de `/api/clients/[id]/analytics-report`: sem auth manual
- * (`createClient()` cookie-based já escopa `clients` via RLS). Pipeline
- * idêntico ao aprovado na auditoria: dado → documento → HTML → PDF, cada
- * camada só conhecendo a de baixo.
+ * Gerador de Relatório de Performance — Route Handler (não Server Action):
+ * sem auth manual (`createClient()` cookie-based já escopa `clients` via
+ * RLS). Pipeline: dado → documento → HTML → PDF, cada camada só conhecendo a
+ * de baixo. Etapa "Relatório Único": única implementação de relatório de
+ * performance da plataforma — o antigo `/api/clients/[id]/analytics-report`
+ * (Exportar relatório do Analytics) foi aposentado, e `renderReportPdf`
+ * (`renderers/pdf-renderer.ts`) migrou pra dentro deste módulo porque só
+ * esta rota ainda o usa.
  *
  * `format=html` (padrão) devolve a página pra visualização inline no
  * navegador (o botão "Baixar PDF" já embutido no próprio HTML — ver

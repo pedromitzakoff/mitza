@@ -3,28 +3,41 @@ import {
   aggregatePerformanceResults,
   computeCostPerResult,
   type PerformanceRecordRow,
-  type PerformanceStatus,
   type PerformanceSummary,
 } from "@/lib/performance";
 import { computePercentChange } from "@/lib/period-comparison";
-import { TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+import type { TrafficChannel } from "@/lib/traffic-channels";
 
 /**
- * Lógica pura do MVP de Analytics (aba dentro do cliente, nunca visível na
- * visão global da agência) — mesmo princípio central do pedido do usuário:
- * UMA estrutura única, que recebe as métricas disponíveis e decide o que
- * renderizar; nenhum `if (objective === "leads") return <LeadsDashboard />`
- * em lugar nenhum. Reaproveita 100% do núcleo de performance já existente
+ * Núcleo puro de período/KPI reaproveitado pelo Relatório de Performance
+ * (`lib/performance-report/`, via `app/clients/analytics-data.ts`) — mesmo
+ * princípio de sempre: UMA estrutura única, que recebe as métricas
+ * disponíveis e decide o que renderizar; nenhum
+ * `if (objective === "leads") return <LeadsDashboard />` em lugar nenhum.
+ * Reaproveita 100% do núcleo de performance já existente
  * (`lib/performance.ts`, `lib/performance-goals.ts`) — nenhum cálculo de
- * custo/ROAS/agregação é reimplementado aqui.
+ * custo/ROAS/agregação é reimplementado aqui. Etapa "Relatório Único": o
+ * antigo hub Analytics (aba própria dentro do cliente) que originou este
+ * arquivo foi aposentado — o que resta aqui é só o que ainda alimenta o
+ * Relatório de Performance e a tela de seleção de período
+ * (`/clients/[id]/relatorio`).
  */
 
-export type AnalyticsPeriodPreset = "last_7_days" | "last_30_days" | "this_month" | "last_month" | "custom";
+export type AnalyticsPeriodPreset = "today" | "yesterday" | "last_7_days" | "last_30_days" | "this_month" | "last_month" | "custom";
 
+/**
+ * Etapa "Relatório Único": "today"/"yesterday" entraram pra alimentar o
+ * seletor de período do Relatório de Performance (`/clients/[id]/relatorio`)
+ * — o Analytics MVP (aposentado nesta mesma etapa) nunca precisou de
+ * granularidade diária aqui, mas o Relatório de Performance passou a ser
+ * gerado sob demanda a qualquer momento, não só no fechamento mensal.
+ */
 export const ANALYTICS_PERIOD_PRESET_OPTIONS: { value: Exclude<AnalyticsPeriodPreset, "custom">; label: string }[] = [
+  { value: "today", label: "Hoje" },
+  { value: "yesterday", label: "Ontem" },
   { value: "last_7_days", label: "Últimos 7 dias" },
   { value: "last_30_days", label: "Últimos 30 dias" },
-  { value: "this_month", label: "Este mês" },
+  { value: "this_month", label: "Mês atual" },
   { value: "last_month", label: "Mês anterior" },
 ];
 
@@ -47,11 +60,14 @@ function monthRange(year: number, month: number): AnalyticsPeriod {
 }
 
 /**
- * Resolve o período do Analytics a partir do preset da URL — SEMPRE
- * independente de sprint (pedido explícito do usuário: "não vincular o
- * Analytics a uma sprint"). "custom" exige as duas datas preenchidas (o
- * formulário de período personalizado só submete com elas); qualquer preset
- * desconhecido ou ausente cai no padrão ("this_month"), nunca lança erro.
+ * Resolve o período a partir do preset da URL — SEMPRE independente de
+ * sprint. "custom" exige as duas datas preenchidas (o formulário de período
+ * personalizado só submete com elas); qualquer preset desconhecido ou
+ * ausente cai no padrão ("this_month"), nunca lança erro. Fonte única de
+ * verdade de semântica de data pro Relatório de Performance — a tela de
+ * seleção de período do cliente (`/clients/[id]/relatorio`) e o painel
+ * `/reports` (`app/reports/report-panel.ts`) sempre reaproveitam esta mesma
+ * função, nunca uma segunda implementação de período.
  */
 export function resolveAnalyticsPeriod(
   preset: string | undefined,
@@ -63,6 +79,14 @@ export function resolveAnalyticsPeriod(
   const month = todayDate.getUTCMonth();
 
   switch (preset) {
+    case "today":
+      return { start: today, end: today };
+    case "yesterday": {
+      const yesterday = new Date(todayDate);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      const yesterdayStr = yesterday.toISOString().slice(0, 10);
+      return { start: yesterdayStr, end: yesterdayStr };
+    }
     case "last_7_days":
       return lastNDaysRange(today, 7);
     case "last_30_days":
@@ -226,16 +250,12 @@ export interface AnalyticsChannelRow {
 
 /**
  * Detalhamento por CANAL (Meta/Google/etc.) — granularidade mais alta que
- * campanha/criativo (essas duas hoje vivem em `ad_creative_daily_metrics`,
- * ver `lib/creative-analytics.ts`/`lib/campaign-analytics.ts` e as
- * sub-seções Criativos/Campanhas do hub). Este agregado por canal continua
- * existindo só como INSUMO da frase de concentração de canal em
- * `buildLearningsNarrative` (ex.: "o Meta concentrou X% do investimento") —
- * Etapa "Resumo Executivo" removeu a tabela visual por canal do Resumo
- * (Capítulo antigo "Onde aconteceu?"), porque a sub-seção Campanhas já
- * responde essa pergunta com muito mais profundidade. Só inclui canais com
- * pelo menos investimento ou resultado real registrado no período (nunca
- * uma linha "zerada" por completo).
+ * campanha/criativo (essas duas vivem em `ad_creative_daily_metrics`, ver
+ * `lib/creative-analytics.ts`/`lib/campaign-analytics.ts`). Consumido por
+ * `fetchClientAnalyticsData` (`app/clients/analytics-data.ts`) como parte de
+ * `ClientAnalyticsData.channelRows`. Só inclui canais com pelo menos
+ * investimento ou resultado real registrado no período (nunca uma linha
+ * "zerada" por completo).
  *
  * `instagram` nunca entra aqui (Etapa Integração Instagram) — é uma fonte
  * de RESULTADO orgânico, nunca um canal de investimento próprio; uma linha
@@ -272,170 +292,6 @@ export function buildAnalyticsChannelRows(
       };
     })
     .sort((a, b) => b.resultCount - a.resultCount);
-}
-
-export interface AnalyticsHero {
-  /** Já formatado ("438", "R$ 247.000") — nunca um número bruto. */
-  value: string;
-  label: string;
-  /** Variação vs. período anterior de mesma duração — `null` quando não há
-   * base anterior confiável pra comparar (sem dado no período anterior, ou
-   * período anterior zerado/negativo): nunca uma seta fabricada. */
-  percentChange: number | null;
-}
-
-/**
- * Métrica principal do Hero — Etapa "Analytics Instagramável": UM número
- * central por objetivo (pedido explícito: "a métrica principal deve
- * depender do objetivo da conta", nunca uma lista). Pra `sales` com receita
- * configurada, o destaque é o faturamento (o exemplo do usuário: "R$
- * 247.000 em vendas"); sem receita mapeada, cai pra contagem de vendas —
- * nunca finge ter receita que a integração não fornece.
- */
-export function buildAnalyticsHero(input: {
-  goal: PerformanceGoal;
-  summary: PerformanceSummary;
-  /** Resumo do mesmo cálculo pro período anterior de mesma duração — `null`
-   * quando ainda não há essa consulta feita (nunca inventa comparação). */
-  previousSummary: PerformanceSummary | null;
-  formatCurrencyValue: (value: number) => string;
-}): AnalyticsHero {
-  const { goal, summary, previousSummary, formatCurrencyValue } = input;
-  const config = PERFORMANCE_GOALS[goal];
-
-  if (!summary.hasAnyRecord) {
-    return { value: "—", label: config.resultMetricLabel, percentChange: null };
-  }
-
-  const usesRevenue = goal === "sales" && summary.revenue !== null;
-  const currentValue = usesRevenue ? summary.revenue! : summary.resultCount;
-  const previousValue = !previousSummary ? null : usesRevenue ? previousSummary.revenue : previousSummary.resultCount;
-
-  return {
-    value: usesRevenue ? formatCurrencyValue(currentValue) : String(currentValue),
-    label: usesRevenue ? "em vendas" : config.resultMetricLabel,
-    percentChange: computePercentChange(currentValue, previousValue),
-  };
-}
-
-/**
- * Capítulo I do relatório ("Como foi o resultado?") — Etapa "Analytics como
- * Relatório": manchete em prosa em vez de um número isolado. Sem base de
- * comparação real (`hero.percentChange === null`) ou sem nenhum registro no
- * período (`hasAnyRecord === false`), cai num enunciado neutro — nunca
- * afirma "cresceu"/"caiu" sem uma base real por trás.
- */
-export function buildResultHeadline(goal: PerformanceGoal, hero: AnalyticsHero, hasAnyRecord: boolean): string {
-  const config = PERFORMANCE_GOALS[goal];
-  if (!hasAnyRecord || hero.percentChange === null) return `${config.resultMetricLabel} no período`;
-  const direction = hero.percentChange >= 0 ? "cresceram" : "caíram";
-  return `${config.resultMetricLabel} ${direction} ${Math.abs(hero.percentChange).toFixed(0)}% no período`;
-}
-
-/** Lide do Capítulo I — a frase logo abaixo da manchete, com o número real
- * embutido na prosa (nunca um número solto do lado de um rótulo). */
-export function buildResultLede(input: {
-  goal: PerformanceGoal;
-  hero: AnalyticsHero;
-  hasAnyRecord: boolean;
-  actualSpend: number;
-  formatCurrencyValue: (value: number) => string;
-}): string {
-  const { goal, hero, hasAnyRecord, actualSpend, formatCurrencyValue } = input;
-  if (!hasAnyRecord) {
-    return `Ainda não há ${PERFORMANCE_GOALS[goal].resultMetricLabel.toLowerCase()} registrados neste período.`;
-  }
-  const comparisonClause =
-    hero.percentChange !== null
-      ? ` (${hero.percentChange >= 0 ? "alta" : "queda"} de ${Math.abs(hero.percentChange).toFixed(0)}% vs. período anterior)`
-      : "";
-  return `O período fechou em ${hero.value} ${hero.label}${comparisonClause} — resultado de ${formatCurrencyValue(actualSpend)} investidos.`;
-}
-
-/**
- * Resumo Executivo — Etapa "Analytics Instagramável": mesmas regras
- * determinísticas que antes alimentavam `AnalyticsInsight` (nenhum dado
- * novo, nenhuma IA), reescritas como frases corridas em vez de um grid de
- * mini-cards (pedido explícito do usuário: "parecer uma apresentação, não
- * um dashboard técnico"). Cada frase só entra quando há uma base real pra
- * afirmá-la — sem dado suficiente, a frase correspondente simplesmente não
- * existe (nunca um texto genérico tipo "dados insuficientes" no lugar).
- *
- * Etapa "Resumo Executivo": renomeada de `buildExecutiveSummaryNarrative` —
- * alimenta o bloco "O que aprendemos" (pedido explícito do usuário: "esse
- * talvez seja o bloco mais importante do Analytics"). Ganhou a frase de
- * investimento vs. eficiência (`previousSummary`); frases sobre tipo de
- * criativo (vídeo/estático) ou estabilidade de CPA entre canais ficaram de
- * fora desta primeira versão — a MITZA não guarda tipo de mídia por
- * criativo hoje, e estabilidade exigiria uma métrica de variância que ainda
- * não existe. Nunca fabricar essas frases sem o dado real por trás.
- */
-export function buildLearningsNarrative(input: {
-  goal: PerformanceGoal;
-  summary: PerformanceSummary;
-  previousSummary: PerformanceSummary | null;
-  channelRows: AnalyticsChannelRow[];
-  totalActualSpend: number;
-  heroPercentChange: number | null;
-}): string[] {
-  const { goal, summary, previousSummary, channelRows, totalActualSpend, heroPercentChange } = input;
-  const config = PERFORMANCE_GOALS[goal];
-  const resultLabel = config.resultMetricLabel.toLowerCase();
-  const sentences: string[] = [];
-
-  if (heroPercentChange !== null) {
-    const direction = heroPercentChange >= 0 ? "crescimento" : "queda";
-    sentences.push(
-      `O período apresentou ${direction} de ${Math.abs(heroPercentChange).toFixed(0)}% em ${resultLabel} em relação ao período anterior.`,
-    );
-  }
-
-  if (channelRows.length >= 2 && totalActualSpend > 0) {
-    const topSpend = [...channelRows].sort((a, b) => b.spend - a.spend)[0];
-    const topVolume = [...channelRows].sort((a, b) => b.resultCount - a.resultCount)[0];
-    const share = Math.round((topSpend.spend / totalActualSpend) * 100);
-    const topSpendLabel = TRAFFIC_CHANNELS[topSpend.channel].label;
-
-    if (topSpend.channel === topVolume.channel && topVolume.resultCount > 0) {
-      sentences.push(`${topSpendLabel} concentrou ${share}% do investimento e foi responsável pelo maior volume de ${resultLabel}.`);
-    } else {
-      sentences.push(`${topSpendLabel} concentrou ${share}% do investimento no período.`);
-      if (topVolume.resultCount > 0) {
-        sentences.push(`${TRAFFIC_CHANNELS[topVolume.channel].label} foi responsável pelo maior volume de ${resultLabel}.`);
-      }
-    }
-  }
-
-  if (summary.costPerResult !== null && summary.targetCostPerResult !== null) {
-    const statusText: Partial<Record<PerformanceStatus, string>> = {
-      better: `${config.costMetricLabel} permaneceu abaixo da meta durante o período.`,
-      worse: `${config.costMetricLabel} ficou acima da meta durante o período.`,
-      on_target: `${config.costMetricLabel} ficou dentro da meta durante o período.`,
-    };
-    const sentence = statusText[summary.comparison.status];
-    if (sentence) sentences.push(sentence);
-  }
-
-  // Investimento vs. eficiência — só com período anterior comparável (ambos
-  // com gasto e custo por resultado reais). "Aumentou sem perda de
-  // eficiência" quando o gasto cresceu e o custo por resultado não piorou
-  // na mesma proporção (piorou menos da metade do quanto o gasto cresceu,
-  // ou até melhorou); nunca a leitura inversa fabricada quando os números
-  // não sustentam essa conclusão.
-  if (
-    previousSummary?.actualSpend &&
-    previousSummary.actualSpend > 0 &&
-    previousSummary.costPerResult !== null &&
-    summary.costPerResult !== null
-  ) {
-    const spendChange = computePercentChange(totalActualSpend, previousSummary.actualSpend);
-    const costChange = computePercentChange(summary.costPerResult, previousSummary.costPerResult);
-    if (spendChange !== null && costChange !== null && spendChange > 5 && costChange <= spendChange / 2) {
-      sentences.push("O investimento aumentou sem perda proporcional de eficiência.");
-    }
-  }
-
-  return sentences;
 }
 
 export interface AnalyticsTrendSeries {
@@ -482,24 +338,4 @@ export function buildAnalyticsTrend(
   };
 
   return { spend, result };
-}
-
-/**
- * Legenda em prosa do Capítulo IV ("O que mudou?") — Etapa "Analytics como
- * Relatório": aponta a direção observada na própria série diária do
- * período atual (primeiro dia vs. último dia), DIFERENTE da comparação do
- * Capítulo II (que compara PERÍODOS inteiros) — nunca o mesmo dado
- * reaproveitado como se fosse uma segunda evidência. `null` sem pelo menos
- * 2 pontos na série (nada a descrever).
- */
-export function buildTrendCaption(trend: AnalyticsTrend): string | null {
-  const series = trend.result ?? trend.spend;
-  if (series.points.length < 2) return null;
-
-  const first = series.points[0].value;
-  const last = series.points[series.points.length - 1].value;
-  if (first === last) return `${series.label} se manteve estável ao longo do período.`;
-
-  const direction = last > first ? "cresceu" : "caiu";
-  return `${series.label} ${direction} entre o início e o fim do período.`;
 }

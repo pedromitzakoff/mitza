@@ -25,12 +25,12 @@ const RITMO_TONE_CLASSES: Partial<Record<SpendStatus, string>> = {
 
 /**
  * "Performance" — Etapa "Visão Geral: decisão em 5 segundos". Substitui a
- * antiga "Evolução diária de resultados" (gráfico de 7 barras) nesta tela:
- * aquela granularidade dia a dia é informação de INVESTIGAÇÃO e continua
- * disponível, com mais profundidade (hover, tendência), no Analytics
- * (`AnalyticsTrendChart`) — nunca removida do produto, só reposicionada.
- * Aqui a pergunta é outra, de DECISÃO: quanto já foi feito, qual a meta, que
- * % isso representa e se o ritmo está adequado pra bater a meta do mês.
+ * antiga "Evolução diária de resultados" (gráfico de 7 barras) nesta tela —
+ * aquela granularidade dia a dia era informação de INVESTIGAÇÃO (o gráfico
+ * de tendência do Analytics, aposentado na Etapa "Relatório Único" junto do
+ * resto do hub). Aqui a pergunta é outra, de DECISÃO: quanto já foi feito,
+ * qual a meta, que % isso representa e se o ritmo está adequado pra bater a
+ * meta do mês.
  *
  * A CLASSIFICAÇÃO de ritmo reaproveita 100% a régua central já usada pro
  * investimento (`classifySpendStatus`, de `spend-status.ts`, mesma margem de

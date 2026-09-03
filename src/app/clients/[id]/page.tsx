@@ -8,9 +8,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import {
-  getActiveImportSourceChannelsForClient,
   getClientIdsWithActiveImportSource,
-  getDailyPerformanceForPeriod,
   getDailyPerformanceRowsForPeriod,
   getDailySpendRowsForPeriod,
   getEnabledImportSourceIdsForClient,
@@ -90,27 +88,11 @@ import { RecurringTaskDrawer } from "../recurring-task-drawer";
 import { defaultReportPeriod } from "@/lib/client-reports";
 import { fetchClientReportDetail } from "../client-report-data";
 import { ClientReportWizard } from "../client-report-wizard";
-import { resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
-import { fetchClientAnalyticsData } from "../analytics-data";
-import { AnalyticsSection } from "../analytics-section";
-import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
-import { buildCreativeDetail, buildCreativeSummaries } from "@/lib/creative-analytics";
-import { CreativeAnalyticsSection } from "../creative-analytics-section";
-import { buildCampaignSummaries } from "@/lib/campaign-analytics";
-import { getCampaignDailyMetricsForPeriod } from "@/lib/campaign-analytics-data";
-import { AnalyticsCampaignsSection } from "../analytics-campaigns-section";
-import { AnalyticsInsightsSection } from "../analytics-insights-section";
-import { AnalyticsHubHeader } from "../analytics-hub-header";
-import { AnalyticsHubNav } from "../analytics-hub-nav";
-import { AnalyticsPlatformSwitch } from "../analytics-platform-switch";
-import { GoogleNotConnectedState } from "../google-not-connected-state";
-import { CREATIVES_NOT_AVAILABLE_FOR_GOOGLE_MESSAGE } from "@/lib/analytics-messages";
 import {
   AVAILABLE_TRAFFIC_CHANNELS,
   resolveClientChannelScopeOptions,
   resolveSelectedChannelScope,
   type TrafficChannel,
-  type ChannelScope,
 } from "@/lib/traffic-channels";
 import { VisaoGeralChannelSwitch, type VisaoGeralMetricsChannel } from "../visao-geral-channel-switch";
 
@@ -128,7 +110,7 @@ const SYNC_RUN_STATUS_LABEL: Record<SyncRunSummary["status"], string> = {
 };
 
 // Etapa "Navegação única do cliente": mesma linguagem visual pros 6
-// destinos do cliente (Visão geral/Analytics/Timeline — abas de verdade,
+// destinos do cliente (Visão geral/Timeline — abas de verdade,
 // `role="tab"` — e Saldo/Fechamento/Relatório — links comuns, um deles
 // externo) — texto + indicador de estado ativo por sublinhado, nunca
 // pill/botão com borda (pedido explícito do usuário). Extraído em vez de
@@ -247,12 +229,6 @@ export default async function ClientPage({
     reportRecurringTaskId?: string;
     reportPeriodStart?: string;
     reportPeriodEnd?: string;
-    analyticsPreset?: string;
-    analyticsStart?: string;
-    analyticsEnd?: string;
-    analyticsSection?: string;
-    analyticsPlatform?: string;
-    creative?: string;
     metricsChannel?: string;
   }>;
 }) {
@@ -280,12 +256,6 @@ export default async function ClientPage({
     reportRecurringTaskId,
     reportPeriodStart: reportPeriodStartParam,
     reportPeriodEnd: reportPeriodEndParam,
-    analyticsPreset: analyticsPresetParam,
-    analyticsStart: analyticsStartParam,
-    analyticsEnd: analyticsEndParam,
-    analyticsSection: analyticsSectionParam,
-    analyticsPlatform: analyticsPlatformParam,
-    creative: creativeParam,
     metricsChannel: metricsChannelParam,
   } = await searchParams;
   const profile = await getCurrentProfile();
@@ -294,17 +264,17 @@ export default async function ClientPage({
 
   // Etapa "Reorganização do hub de Analytics": a plataforma deixou de ser
   // "um lugar pra ver relatórios" e virou "um lugar pra entender a
-  // operação" (pedido explícito do usuário). Analytics agora é o hub
-  // central de inteligência — absorveu a antiga aba "Relatórios" (pendências
-  // + linha do tempo curada + fechar/reabrir mês, sub-seção "Ações") e a
-  // antiga aba "Criativos" (sub-seção "Criativos"), além de ganhar duas
-  // sub-seções novas ("Campanhas" e "Insights"). Só restam 3 áreas de nível
-  // superior: Visão Geral (trabalho operacional do dia a dia), Analytics
-  // (hub de inteligência) e Timeline (consulta ao histórico automático).
-  type ClientArea = "visao-geral" | "analytics" | "timeline";
+  // operação" (pedido explícito do usuário). Etapa "Relatório Único":
+  // Analytics (o hub Resumo/Criativos/Campanhas/Insights) foi aposentado —
+  // toda a inteligência de performance mora agora só no Relatório de
+  // Performance (`/clients/[id]/relatorio` → `/api/clients/[id]/performance-report`),
+  // acessível pelo link "Relatório" da barra de navegação, nunca mais uma
+  // aba própria desta página. Só restam 2 áreas de nível superior: Visão
+  // Geral (trabalho operacional do dia a dia) e Timeline (consulta ao
+  // histórico automático).
+  type ClientArea = "visao-geral" | "timeline";
   const AREA_TABS: { key: ClientArea; label: string }[] = [
     { key: "visao-geral", label: "Visão geral" },
-    { key: "analytics", label: "Analytics" },
     { key: "timeline", label: "Timeline" },
   ];
   const activeArea = (AREA_TABS.some((t) => t.key === areaParam) ? areaParam : "visao-geral") as ClientArea;
@@ -1188,13 +1158,15 @@ export default async function ClientPage({
   // (subheader sticky compartilhado por toda /clients/[id]/**, removido).
   // Status já aparece como badge ao lado do nome, por isso não se repete
   // na linha secundária abaixo.
-  // Etapa "Resumo Executivo": "Ver relatório" volta a apontar pra
-  // `/reports/${client.id}` (pendências/timeline/fechamento de mês) — a
-  // sub-seção "Ações" do Analytics foi removida (pedido explícito do
-  // usuário: "ela não representa inteligência, pertence a outro lugar da
-  // plataforma"). A rota nunca deixou de existir; só deixou de ser
-  // alcançável a partir do hub por um tempo, entre as duas reorganizações.
-  const reportHref = `/reports/${client.id}${monthQueryParam ? `?month=${monthQueryParam}` : ""}`;
+  // Etapa "Relatório Único": "Relatório" agora leva direto pra tela mínima
+  // de seleção de período (`/clients/[id]/relatorio`) — nunca mais um
+  // Analytics intermediário no meio do caminho. Sempre independente do mês
+  // selecionado no resto da página (mesmo princípio de sempre do período do
+  // Analytics MVP, aposentado nesta etapa: "sempre independente de sprint e
+  // do mês selecionado no resto da página") — a própria tela de período
+  // decide o intervalo, com seus próprios presets (Hoje/Ontem/Últimos 7
+  // dias/.../Personalizado).
+  const reportHref = `/clients/${client.id}/relatorio`;
   // Etapa "Cabeçalho enxuto": a segunda linha do cabeçalho responde só
   // "quem é o responsável?" — conta Meta (`meta_ad_account_id`) e tempo de
   // relacionamento (`contract_start_date`) são dados técnicos/administrativos
@@ -1284,25 +1256,10 @@ export default async function ClientPage({
     errorMessage: run.errorMessage,
   }));
 
-  // Etapa "Resumo Executivo": Analytics é o hub único de inteligência da
-  // conta, com 4 sub-seções (Resumo/Criativos/Campanhas/Insights) navegadas
-  // por `analyticsSection` — nunca abas irmãs próprias. A antiga sub-seção
-  // "Ações" (pendências/timeline/histórico de report) foi removida daqui:
-  // pedido explícito do usuário ("ela não representa inteligência, pertence
-  // a outro lugar da plataforma"; no futuro, uma área própria de Pendências
-  // e Operação). O módulo `client_reports` (Report/WhatsApp) continua
-  // existindo sem alteração, só não é mais alcançável a partir do Analytics
-  // — permanece acessível pelo drawer "Reportar cliente" da recorrência.
-  // Todo dado abaixo só é buscado quando `activeArea === "analytics"`
-  // (nenhuma query extra fora do hub); dentro do hub, cada busca é recortada
-  // pela sub-seção que realmente precisa dela.
-  const ANALYTICS_HUB_SECTIONS = ["resumo", "criativos", "campanhas", "insights"] as const;
-  type AnalyticsHubSectionValue = (typeof ANALYTICS_HUB_SECTIONS)[number];
-  const analyticsSection = (
-    ANALYTICS_HUB_SECTIONS.includes(analyticsSectionParam as AnalyticsHubSectionValue) ? analyticsSectionParam : "resumo"
-  ) as AnalyticsHubSectionValue;
-  const isAnalyticsArea = activeArea === "analytics";
-
+  // O módulo `client_reports` (Report/WhatsApp) é independente do Analytics
+  // aposentado (Etapa "Relatório Único") — nunca foi alcançável a partir
+  // dele, permanece acessível só pelo drawer "Reportar cliente" da
+  // recorrência, sem nenhuma alteração aqui.
   // O wizard do `client_reports` (novo report ou reabertura de um existente)
   // é independente da área/sub-seção ativa — só é aberto a partir do drawer
   // da recorrência ("Reportar cliente"), em qualquer lugar da página, por
@@ -1315,168 +1272,6 @@ export default async function ClientPage({
     reportPeriodStartParam && reportPeriodEndParam
       ? { start: reportPeriodStartParam, end: reportPeriodEndParam }
       : defaultReportPeriod(todayStr);
-
-  // Analytics MVP — leitura pura dos dados já existentes (nenhuma tabela
-  // nova, nenhum snapshot salvo); período ÚNICO do hub inteiro (Resumo,
-  // Criativos e Campanhas compartilham o mesmo seletor — antes cada
-  // sub-seção tinha o seu próprio, redundância eliminada nesta
-  // reorganização), sempre independente de sprint e do mês selecionado no
-  // resto da página.
-  const analyticsPreset = (analyticsPresetParam ?? "this_month") as AnalyticsPeriodPreset;
-  const analyticsPeriod = resolveAnalyticsPeriod(analyticsPresetParam, todayStr, {
-    start: analyticsStartParam,
-    end: analyticsEndParam,
-  });
-
-  // Integração Google Ads — seletor de plataforma "Consolidado | Meta Ads |
-  // Google Ads" (Etapa "Migração Multicanal dos Consumidores": mesma regra
-  // de escopo da Visão Geral, `VisaoGeralChannelSwitch`). Meta continua o
-  // padrão quando o parâmetro está ausente/inválido (pedido explícito do
-  // usuário original: "manter a experiência atual") — `consolidated` é um
-  // valor explícito, nunca o fallback silencioso. Controla TODA a aba de
-  // Analytics (Resumo, gráfico, Campanhas, PDF exportado), nunca só uma
-  // sub-seção.
-  const analyticsPlatform: ChannelScope =
-    analyticsPlatformParam === "google" ? "google" : analyticsPlatformParam === "consolidated" ? "consolidated" : "meta";
-  // "Conectado" só é uma pergunta real pra Google (Meta pode vir de
-  // performance_records manual, sem nenhuma import_sources — sempre
-  // continua funcionando como hoje). `import_sources` é a única fonte de
-  // verdade pra essa pergunta, nunca inferida de daily_spend/daily_performance.
-  const activeImportChannels = isAnalyticsArea ? await getActiveImportSourceChannelsForClient(supabase, id) : new Set<string>();
-  const showPlatformNotConnected = isAnalyticsArea && analyticsPlatform === "google" && !activeImportChannels.has("google");
-
-  const analyticsData =
-    isAnalyticsArea && analyticsSection === "resumo" && !showPlatformNotConnected
-      ? await fetchClientAnalyticsData(supabase, id, analyticsPeriod, analyticsPlatform === "consolidated" ? undefined : analyticsPlatform)
-      : null;
-  const analyticsBaseHref = buildAreaHref("analytics");
-  // Hrefs derivados do mesmo `analyticsBaseHref`, cada um preservando os
-  // parâmetros que o OUTRO controle vai mudar: a navegação entre sub-seções
-  // preserva período+plataforma (nunca reseta pra "this_month"/Meta ao
-  // trocar de aba dentro do hub), o seletor de período preserva
-  // seção+plataforma, e o seletor de plataforma preserva período+seção.
-  const analyticsPeriodQuery = `analyticsPreset=${analyticsPreset}${
-    analyticsPreset === "custom"
-      ? `&analyticsStart=${analyticsStartParam ?? analyticsPeriod.start}&analyticsEnd=${analyticsEndParam ?? analyticsPeriod.end}`
-      : ""
-  }`;
-  const analyticsPlatformQuery = `analyticsPlatform=${analyticsPlatform}`;
-  const analyticsNavBaseHref = `${analyticsBaseHref}&${analyticsPeriodQuery}&${analyticsPlatformQuery}`;
-  const analyticsHeaderBaseHref = `${analyticsBaseHref}&analyticsSection=${analyticsSection}&${analyticsPlatformQuery}`;
-  const analyticsPlatformSwitchBaseHref = `${analyticsBaseHref}&${analyticsPeriodQuery}&analyticsSection=${analyticsSection}`;
-  // AnalyticsReport (Fase 3) — mesmo período E plataforma selecionados no
-  // hub, nunca um segundo seletor pro relatório; o download é um `<a>`
-  // normal, o navegador trata o `Content-Disposition: attachment` nativamente.
-  const exportHref = `/api/clients/${id}/analytics-report?${analyticsPeriodQuery}&${analyticsPlatformQuery}`;
-  // Gerador de Relatório de Performance — mesmo período do hub, Meta-only
-  // (v1, "Priorize Meta Ads"), nunca o parâmetro de plataforma consolidada/
-  // Google (não existe seletor nesta rota). Abre em nova aba (é uma página
-  // HTML pra visualizar/navegar, não um download direto).
-  const performanceReportHref = `/api/clients/${id}/performance-report?${analyticsPeriodQuery}`;
-
-  // Módulo de Criativos (Creative Analytics) — mesmo período único do hub
-  // acima (antes tinha seletor próprio). Nunca gated por
-  // `client.performance_goal` (pedido explícito do usuário) — a
-  // consolidação por criativo roda igual pra qualquer cliente, mostrando só
-  // os indicadores que a fonte entrega. Buscado uma vez só, reaproveitado
-  // por Criativos E Resumo (Destaques do período reaproveita os mesmos
-  // agregados — ver `lib/period-highlights.ts`). Integração Google Ads:
-  // Criativos continua exclusivamente Meta (pedido explícito do usuário:
-  // "não implementar criativos Google") — `ad_creative_daily_metrics` nunca
-  // ganha canal, então "Consolidado" aqui é sempre igual a "Meta" (não há
-  // dado de Google pra somar); só a visão Google explícita busca nada.
-  // Campanhas NÃO depende mais desta busca (ver bloco abaixo).
-  const needsAdCreativeRows =
-    isAnalyticsArea &&
-    (analyticsPlatform === "meta" || analyticsPlatform === "consolidated") &&
-    (analyticsSection === "resumo" || analyticsSection === "criativos");
-  const adCreativeRows = needsAdCreativeRows ? await getAdCreativeDailyMetricsForPeriod(supabase, id, analyticsPeriod) : [];
-  const creativeSummaries =
-    analyticsSection === "resumo" || analyticsSection === "criativos" ? buildCreativeSummaries(adCreativeRows) : [];
-  // Achado no QA de produção: o total de vendas da Visão Geral/Resumo
-  // Executivo (`daily_performance`, `getDailyPerformanceForPeriod` — soma
-  // TODA linha do período) pode ser maior que a soma das vendas por
-  // criativo aqui. Investigado com dado real (cliente Ateliê): a causa
-  // usual NÃO é "anúncio sem nome" (`aggregateAdCreativeDailyRows`,
-  // lib/import-sources.ts, ainda existe como possibilidade, mas não foi o
-  // caso observado) — é o histórico de `ad_creative_daily_metrics` COMEÇAR
-  // DEPOIS do início do período selecionado: a coluna de nome de anúncio
-  // de uma fonte pode ser configurada bem depois do cliente já ter
-  // histórico de resultado em `daily_performance`, então os dias
-  // anteriores à configuração nunca tiveram (e nunca terão
-  // retroativamente) nenhuma linha de criativo — não é uma venda "perdida
-  // por falta de nome", é um dia que nunca foi sincronizado com
-  // detalhamento de criativo. A diferença é real, nunca um erro de soma;
-  // só ficava invisível — parecia que a Análise de Criativos "perdia"
-  // vendas sem explicação nenhuma.
-  const unattributedCreativeResultCount = await (async () => {
-    if (!needsAdCreativeRows || analyticsSection !== "criativos" || !client.performance_goal) return null;
-    const dailyPerformanceForPeriod = await getDailyPerformanceForPeriod(supabase, id, {
-      firstDay: analyticsPeriod.start,
-      lastDay: analyticsPeriod.end,
-    });
-    // "meta" — Criativos é exclusivamente Meta (mesma regra de
-    // `needsAdCreativeRows`, ver comentário acima dele); comparar contra o
-    // total consolidado inflaria o gap com vendas de Google que nunca
-    // poderiam aparecer aqui de qualquer forma.
-    const accountLevel = aggregatePerformanceResults(dailyPerformanceForPeriod, client.performance_goal, "meta");
-    if (!accountLevel.hasAnyRecord) return null;
-    const attributedResultCount = creativeSummaries.reduce((sum, s) => sum + (s.totalResultCount ?? 0), 0);
-    const gap = accountLevel.resultCount - attributedResultCount;
-    return gap > 0 ? gap : null;
-  })();
-  // Só é relevante quando REALMENTE explica o gap acima (posterior ao
-  // início do período) — `adCreativeRows` já é a mesma busca que alimenta
-  // `creativeSummaries`, nenhuma consulta nova.
-  const earliestCreativeDate = adCreativeRows.reduce<string | null>(
-    (min, row) => (min === null || row.date < min ? row.date : min),
-    null,
-  );
-  const creativeHistoryStartsLaterThanPeriod =
-    unattributedCreativeResultCount !== null && earliestCreativeDate !== null && earliestCreativeDate > analyticsPeriod.start
-      ? earliestCreativeDate
-      : null;
-  const creativeDetail =
-    isAnalyticsArea && analyticsSection === "criativos" && creativeParam ? buildCreativeDetail(adCreativeRows, creativeParam) : null;
-  // Preserva período+plataforma (nunca reseta ao entrar no detalhe de um
-  // criativo) — mesmo cuidado de `customStart`/`customEnd` já usado pro
-  // seletor de período em si. Só o PREFIXO do href (sem `creative=<nome>`
-  // ainda) — `CreativeAnalyticsList` (Client Component) monta o href final
-  // de cada criativo, porque uma função não pode atravessar a fronteira
-  // Server→Client (só este prefixo, uma string serializável).
-  const creativeDetailHrefBase = (() => {
-    const params = new URLSearchParams({ analyticsPreset, analyticsSection: "criativos", analyticsPlatform });
-    if (analyticsPreset === "custom") {
-      params.set("analyticsStart", analyticsStartParam ?? analyticsPeriod.start);
-      params.set("analyticsEnd", analyticsEndParam ?? analyticsPeriod.end);
-    }
-    return `${analyticsBaseHref}&${params.toString()}`;
-  })();
-
-  // Seção "Campanhas" — Integração Google Ads: camada independente de
-  // Criativos desde a origem (`campaign_daily_metrics`, channel-aware,
-  // populada sempre que `campaign_name_column` existir, nunca condicionada
-  // a `ad_name_column`). Etapa "Resumo Executivo": sem variação % vs
-  // período anterior (removida a pedido do usuário), por isso não busca
-  // mais um segundo período aqui. Filtragem por `analyticsPlatform` ocorre
-  // aqui, na camada de dados, antes das funções puras de agregação — Meta e
-  // Google nunca se misturam numa mesma LINHA (identidade de campanha já é
-  // `(channel, campaignName)`, ver `lib/campaign-analytics.ts`), mas
-  // "Consolidado" (Etapa "Migração Multicanal dos Consumidores") passa as
-  // linhas dos dois canais juntas de propósito — a agregação por
-  // `(channel, campaignName)` já soma investimento/resultado corretamente
-  // sem duplicar lógica aqui.
-  const needsCampaignRows =
-    isAnalyticsArea && (analyticsSection === "resumo" || analyticsSection === "campanhas") && !showPlatformNotConnected;
-  const campaignDailyMetricRows = needsCampaignRows
-    ? (await getCampaignDailyMetricsForPeriod(supabase, id, analyticsPeriod)).filter(
-        (row) => analyticsPlatform === "consolidated" || row.channel === analyticsPlatform,
-      )
-    : [];
-  const campaignSummaries =
-    (analyticsSection === "resumo" || analyticsSection === "campanhas") && !showPlatformNotConnected
-      ? buildCampaignSummaries(campaignDailyMetricRows)
-      : [];
 
   const monthTaskRows = [...sortedSprints.flatMap((sprint) => tasksBySprintId.get(sprint.sprintId) ?? []), ...unlinkedTasks];
 
@@ -1587,9 +1382,11 @@ export default async function ClientPage({
       )}
 
       {/* Etapa "Barra única de controles do cliente": uma ÚNICA fileira,
-          nunca mais "navegação embaixo + botões em cima". As 3 abas de
+          nunca mais "navegação embaixo + botões em cima". As abas de
           sempre (mesmo padrão visual/estrutural já usado em Sprints: Link +
-          role="tab", nenhum cálculo/prop/comportamento interno alterado) +
+          role="tab", nenhum cálculo/prop/comportamento interno alterado —
+          Etapa "Relatório Único": Analytics aposentado, restam Visão
+          geral/Timeline) +
           Saldo/Fechamento/Relatório (NAVEGAÇÃO — "pra onde eu quero ir";
           não são abas de verdade, não trocam o conteúdo desta mesma página:
           Saldo/Fechamento abrem planilha externa em nova aba, Relatório é
@@ -1912,69 +1709,6 @@ export default async function ClientPage({
           </div>
 
         </>
-      )}
-
-      {/* Etapa "Resumo Executivo": Analytics é o único centro de inteligência
-          da conta — Resumo Executivo/Criativos/Campanhas/Insights vivem
-          aqui dentro, navegados por `analyticsSection`, nunca abas irmãs
-          próprias. Cabeçalho e período são ÚNICOS pra todo o hub — nenhuma
-          sub-seção tem seletor de período próprio. */}
-      {isAnalyticsArea && (
-        <div className="mt-3">
-          <AnalyticsHubHeader
-            baseHref={analyticsHeaderBaseHref}
-            activePreset={analyticsPreset}
-            periodStart={analyticsPeriod.start}
-            periodEnd={analyticsPeriod.end}
-            customStart={analyticsStartParam ?? analyticsPeriod.start}
-            customEnd={analyticsEndParam ?? analyticsPeriod.end}
-            exportHref={exportHref}
-            performanceReportHref={performanceReportHref}
-            platformSwitch={
-              <AnalyticsPlatformSwitch baseHref={analyticsPlatformSwitchBaseHref} activePlatform={analyticsPlatform} />
-            }
-          />
-          <AnalyticsHubNav baseHref={analyticsNavBaseHref} activeSection={analyticsSection} />
-
-          {analyticsSection === "resumo" &&
-            (showPlatformNotConnected ? (
-              <GoogleNotConnectedState />
-            ) : analyticsData ? (
-              <AnalyticsSection
-                data={analyticsData}
-                creativeSummaries={creativeSummaries}
-                campaignSummaries={campaignSummaries}
-                configureObjectiveHref={`/clients/${client.id}/edit`}
-              />
-            ) : (
-              <EmptyState>Não foi possível carregar o Analytics deste cliente.</EmptyState>
-            ))}
-
-          {analyticsSection === "criativos" &&
-            (analyticsPlatform === "google" ? (
-              <div className="mx-auto max-w-2xl">
-                <EmptyState>{CREATIVES_NOT_AVAILABLE_FOR_GOOGLE_MESSAGE}</EmptyState>
-              </div>
-            ) : (
-              <CreativeAnalyticsSection
-                summaries={creativeSummaries}
-                detail={creativeDetail}
-                baseHref={analyticsBaseHref}
-                creativeDetailHrefBase={creativeDetailHrefBase}
-                unattributedResultCount={unattributedCreativeResultCount}
-                creativeHistoryStartsLaterThanPeriod={creativeHistoryStartsLaterThanPeriod}
-              />
-            ))}
-
-          {analyticsSection === "campanhas" &&
-            (showPlatformNotConnected ? (
-              <GoogleNotConnectedState />
-            ) : (
-              <AnalyticsCampaignsSection summaries={campaignSummaries} />
-            ))}
-
-          {analyticsSection === "insights" && <AnalyticsInsightsSection />}
-        </div>
       )}
 
       {/* Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente": a

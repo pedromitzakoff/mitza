@@ -21,9 +21,8 @@ const CHANNEL_SCOPE_LABEL: Record<VisaoGeralMetricsChannel, string> = {
  * Seletor "Meta Ads | Google Ads | Consolidado" da aba Visão Geral — pedido
  * explícito do usuário: "eu quero que na visão do cliente eu tenha um botão
  * tipo google ou meta e quando eu clico em cada um, toda página seja
- * atualizada para as métricas do canal". Escopo combinado: só a aba Visão
- * Geral (o Analytics já tem o seletor dele, `AnalyticsPlatformSwitch`,
- * independente deste), e só as métricas que de fato existem por canal
+ * atualizada para as métricas do canal". Escopo: só a aba Visão Geral, e só
+ * as métricas que de fato existem por canal
  * (Investido/Resultados/Custo por resultado) — nunca Planejado/ritmo/status
  * do orçamento, que não têm uma meta separada por canal no modelo de dados
  * (ver `MonthInvestmentSummary`, que continua sempre consolidado).
@@ -36,10 +35,9 @@ const CHANNEL_SCOPE_LABEL: Record<VisaoGeralMetricsChannel, string> = {
  * apenas 1 opção, não existe nada pra "trocar" — vira um rótulo estático,
  * sem pill/borda, pra não sugerir um controle interativo que não faz nada.
  *
- * Server Component puro (Link + querystring, mesmo padrão de navegação de
- * `AnalyticsPlatformSwitch`) — sem `sessionStorage`/JS de cliente aqui, já
- * que este seletor não precisa lembrar a escolha entre sessões (diferente
- * do Analytics, onde isso foi pedido explicitamente).
+ * Server Component puro (Link + querystring) — sem `sessionStorage`/JS de
+ * cliente aqui, já que este seletor não precisa lembrar a escolha entre
+ * sessões.
  */
 export function VisaoGeralChannelSwitch({
   baseHref,

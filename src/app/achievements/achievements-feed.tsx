@@ -9,10 +9,9 @@ import { AchievementDetailDrawer } from "./achievement-detail-drawer";
 /**
  * Feed de Conquistas (Etapa "Conquistas Auditáveis") — extraído de
  * `page.tsx` só pra poder segurar o estado "qual conquista está com o
- * detalhamento aberto" (client-state efêmero, mesmo padrão de
- * `CreativeComparisonDrawer`/`CreativeAnalyticsList`: nunca querystring,
- * fechar o painel não deveria mudar a URL nem perder a posição de scroll da
- * lista). Os cards continuam exatamente tão enxutos quanto antes — clicar
+ * detalhamento aberto" (client-state efêmero: nunca querystring, fechar o
+ * painel não deveria mudar a URL nem perder a posição de scroll da lista).
+ * Os cards continuam exatamente tão enxutos quanto antes — clicar
  * é o que abre o "comprovante" (`AchievementDetailDrawer`), a listagem em
  * si não ganhou nenhuma informação nova.
  */

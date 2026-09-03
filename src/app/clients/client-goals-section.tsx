@@ -39,8 +39,7 @@ const RESULT_TYPE_OPTIONS = [...PERFORMANCE_GOAL_OPTIONS, { value: "unassigned" 
  * Cadastro do Cliente + drawer único "Classificar campanhas" (auditoria
  * seção 18/19: uma tabela só pra todas as campanhas, nunca um drawer por
  * objetivo). Client component porque o drawer é estado local compartilhado
- * entre vários botões "Gerenciar campanhas" — mesmo padrão de
- * `CreativeComparisonDrawer`.
+ * entre vários botões "Gerenciar campanhas".
  */
 export function ClientGoalsSection({
   clientId,

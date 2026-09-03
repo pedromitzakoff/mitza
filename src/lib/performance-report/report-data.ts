@@ -16,18 +16,17 @@ type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 /**
  * Camada 1 do Gerador de Relatório de Performance — dado puro, nenhum
  * cálculo novo: TUDO aqui vem de uma função já usada/auditada em outro lugar
- * da MITZA (`fetchClientAnalyticsData` + `buildAnalyticsKpiCards`, as MESMAS
- * do hub de Analytics; `buildCampaignSummaries`/`buildAdSetSummaries`/
- * `buildCreativeSummaries`, os MESMOS agregadores canônicos das respectivas
- * seções). v1 é deliberadamente Meta-only (pedido explícito do usuário,
- * "Priorize Meta Ads") — nenhuma lógica de seletor de plataforma/Google
- * Ads aqui, ao contrário de `analytics-report/report-data.ts`.
+ * da MITZA (`fetchClientAnalyticsData` + `buildAnalyticsKpiCards`;
+ * `buildCampaignSummaries`/`buildAdSetSummaries`/`buildCreativeSummaries`,
+ * os MESMOS agregadores canônicos das respectivas seções). v1 é
+ * deliberadamente Meta-only (pedido explícito do usuário, "Priorize Meta
+ * Ads") — nenhuma lógica de seletor de plataforma/Google Ads aqui.
  *
- * `summary` espelha os 2 estados reais de `AnalyticsSection` sem objetivo
- * configurado (`no_goal`) ou sem nenhum dado no período (`no_data`) — nunca
- * um 3º estado "platform_not_connected" (não existe seletor de plataforma
- * nesta v1). Campanhas/Públicos/Criativos são buscados INDEPENDENTE do
- * status do objetivo — um cliente sem `performance_goal` configurado ainda
+ * `summary` reflete 2 estados: sem objetivo configurado (`no_goal`) ou sem
+ * nenhum dado no período (`no_data`) — nunca um 3º estado
+ * "platform_not_connected" (não existe seletor de plataforma nesta v1).
+ * Campanhas/Públicos/Criativos são buscados INDEPENDENTE do status do
+ * objetivo — um cliente sem `performance_goal` configurado ainda
  * pode ter investimento/campanhas reais no período.
  */
 export type PerformanceReportSummary = { status: "no_goal" } | { status: "no_data" } | { status: "ok"; kpis: AnalyticsKpiCard[] };
