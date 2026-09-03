@@ -331,10 +331,17 @@ export async function buildReportViewData(
   const channelScope = resolveSelectedChannelScope(channelParam, client.media_channels);
   const scopedMetrics = channelScope === "consolidated" ? actuals.consolidated : actuals.byChannel[channelScope];
   const scopedInvestment = scopedMetrics?.investment ?? 0;
-  const targetCostPerResult =
-    channelScope === "consolidated"
-      ? client.target_cost_per_result
-      : (actuals.byChannel[channelScope]?.cpa ?? client.target_cost_per_result);
+  // Fase 1 "Confiabilidade dos Dados" — bug confirmado: fora do escopo
+  // consolidado, esta linha substituía a META (planejada) pelo CPA REALIZADO
+  // daquele canal (`actuals.byChannel[channelScope].cpa`, vindo do resolvedor
+  // canônico de ACTUALS, `resolveClientMonthlyActuals`) — fazendo "Meta" e
+  // "Realizado" mostrarem exatamente o mesmo número sempre que o canal tinha
+  // investimento/resultado real. Meta de custo é fato de CONTA, não de canal
+  // (mesmo princípio já registrado em `evaluateClientChannelDiagnostics`,
+  // `lib/client-operational-state.ts`, e no uso correto de
+  // `resolveClientChannelBreakdown`) — o valor nunca muda com o canal
+  // selecionado.
+  const targetCostPerResult = client.target_cost_per_result;
   const performanceSummary = performanceGoal
     ? computePerformanceSummary({
         scope: channelScope,
@@ -453,11 +460,16 @@ export async function buildReportViewData(
     // Etapa "Múltiplos Objetivos": só o objetivo PRINCIPAL — nunca deixa a
     // meta de um objetivo secundário aparecer no Relatório do principal.
     requireQuery(
+      // Fase 1 "Confiabilidade dos Dados" — bug confirmado: `.eq` excluía o
+      // orçamento vigente de um cliente cuja última mudança foi num mês
+      // anterior — `.lte` traz o histórico completo (escopo já é um único
+      // cliente via `.eq("client_id", ...)`, custo desprezível),
+      // `resolveConsolidatedMonthlyPlanned` reduz à versão vigente por canal.
       supabase
         .from("monthly_budget_changes")
         .select("channel, month, new_amount, changed_at")
         .eq("client_id", clientId)
-        .eq("month", monthRange.firstDay)
+        .lte("month", monthRange.firstDay)
         .or(primaryGoalResultTypeFilter(client.performance_goal)),
       "monthly_budget_changes",
     ),

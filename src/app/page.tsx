@@ -20,7 +20,7 @@ import {
   type SprintFilterBucket,
 } from "@/app/operation/operation-data";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import { computeFinancialSummary, computeAgencyPeriodTotals } from "@/lib/agency-metrics";
+import { computeFinancialSummary, computeAgencyPeriodTotals, computeAgencyResultsByChannel } from "@/lib/agency-metrics";
 import { computeHealthResultsSummary } from "@/lib/agency-health-aggregation";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
 import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
@@ -214,18 +214,33 @@ export default async function Home({
         .lte("date", rangeEnd),
       "sprint_planned_allocations",
     ),
-    // Orçamento vigente (Etapa 66) — só do mês SELECIONADO (`monthRange`),
-    // não da janela união com o mês corrente: `buildOperationClientCard` só
-    // usa `monthRange` pra montar o card, nunca `rangeStart`/`rangeEnd`.
-    // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
-    // mais só `channel = 'meta'`) — esta query alimenta tanto os cards do
-    // Dashboard quanto `buildOperationClientCard` (Operação), os dois via
+    // Orçamento vigente (Etapa 66) pro mês SELECIONADO (`monthRange`) —
+    // `buildOperationClientCard` só usa `monthRange` pra montar o card,
+    // nunca `rangeStart`/`rangeEnd`. Etapa "Migração Multicanal dos
+    // Consumidores": todos os canais (nunca mais só `channel = 'meta'`) —
+    // esta query alimenta tanto os cards do Dashboard quanto
+    // `buildOperationClientCard` (Operação), os dois via
     // `resolveConsolidatedMonthlyPlanned` (soma real dos canais com plano).
+    //
+    // Fase 1 "Confiabilidade dos Dados" — bug confirmado: `.eq` só trazia a
+    // linha de um canal se o orçamento tivesse sido ALTERADO neste mês
+    // exato. Um cliente cujo orçamento foi definido num mês anterior e
+    // nunca mudou de novo (o caso comum — a maioria dos clientes não muda
+    // de orçamento todo mês) vinha com ZERO linhas aqui, resolvendo
+    // `monthPlanned = 0`/`hasMonthGoal = false` mesmo tendo um orçamento
+    // vigente real — excluindo esse cliente do total da agência
+    // (`computeFinancialSummary`) sem nenhuma base semântica. `.lte` (mesma
+    // regra já usada pela query "target-history" abaixo, e pelo Motor de
+    // Saúde em `client-operational-state-data.ts`) traz todo o histórico
+    // até o mês selecionado — `resolveConsolidatedMonthlyPlanned`/
+    // `resolveClientMonthlyPlan` já sabem reduzir isso à versão mais
+    // recente POR CANAL (`month <= selectedMonth`), nunca soma histórico
+    // por engano.
     requireQuery(
       supabase
         .from("monthly_budget_changes")
         .select("client_id, channel, month, new_amount, changed_at, result_type")
-        .eq("month", monthRange.firstDay),
+        .lte("month", monthRange.firstDay),
       "monthly_budget_changes:current-month",
     ),
     // Consulta própria (independente de `gestores`, que serve o dropdown de
@@ -705,7 +720,25 @@ export default async function Home({
   if (clientFilter) {
     indicatorStates = indicatorStates.filter((state) => state.clientId === clientFilter);
   }
-  const agencyResults = computeHealthResultsSummary(indicatorStates);
+  // Fase 1 "Confiabilidade dos Dados" — bug confirmado: `ClientOperationalState`
+  // não tem nenhuma dimensão por canal, então `computeHealthResultsSummary`
+  // sempre somava Leads/Vendas de TODOS os canais do cliente, mesmo com o
+  // filtro de plataforma ativo (a plataforma só filtrava QUAIS clientes
+  // entravam — via `filteredBase`/`cards` — nunca o resultado em si). Fora
+  // de Consolidado, usa `computeAgencyResultsByChannel` sobre o motor legado
+  // (`OperationClientCard`, que já tem `monthPerformanceSummaryByChannel`/
+  // `monthActualByChannel` por canal, Etapa 3) — mesmo recorte de
+  // mês/carteira/cliente de `indicatorStates` (nunca os filtros de recorte
+  // de `cards`), só reaplicando o mesmo critério de "usa este canal"
+  // (`clientUsesChannel`) já usado por `filteredBase`.
+  let indicatorCardsForResults = indicatorCards;
+  if (platformFilter !== "consolidado") {
+    indicatorCardsForResults = indicatorCardsForResults.filter((card) => card.clientUsesChannel[platformFilter] === true);
+  }
+  const agencyResults =
+    platformFilter === "consolidado"
+      ? computeHealthResultsSummary(indicatorStates)
+      : computeAgencyResultsByChannel(indicatorCardsForResults, platformFilter);
 
   // Etapa "Revisão da Visão Geral — Evolução no período": totais REALIZADOS
   // do período anterior (dado bruto já buscado acima). Escopo de
@@ -796,15 +829,32 @@ export default async function Home({
   // do próprio big number — `OperationMetric` (`comparison` prop) — pra
   // eliminar a duplicação de mostrar cada indicador duas vezes na mesma
   // tela. Nenhum dos 5 cálculos abaixo mudou.
-  const evolutionInvestment = buildPercentChangeComparison(financial.actual, previousInvestmentTotals.investment, "neutral");
-  const evolutionLeads = buildPercentChangeComparison(agencyResults.leads.count, previousInvestmentTotals.leadsCount, "higher_is_better");
+  // Fase 1 "Confiabilidade dos Dados": `previousInvestmentTotals` (período
+  // anterior) é sempre CONSOLIDADO — a query de `daily_spend`/performance do
+  // período anterior nunca filtrou por canal (só existe pra alimentar esta
+  // comparação, nunca os KPIs absolutos). Comparar um valor ATUAL agora
+  // corretamente escopado por canal (ver `agencyResults`/`channelActualTotal`
+  // acima) contra um "período anterior" sempre consolidado produziria uma
+  // variação sem sentido (dois escopos diferentes) — pior que não mostrar
+  // nada. Fora de Consolidado, nenhuma das 5 comparações é exibida (`null`,
+  // nunca uma % fabricada); ficam como estavam só no recorte Consolidado, o
+  // único onde as duas pontas realmente comparam o mesmo escopo.
+  const evolutionInvestment =
+    platformFilter === "consolidado" ? buildPercentChangeComparison(financial.actual, previousInvestmentTotals.investment, "neutral") : null;
+  const evolutionLeads =
+    platformFilter === "consolidado"
+      ? buildPercentChangeComparison(agencyResults.leads.count, previousInvestmentTotals.leadsCount, "higher_is_better")
+      : null;
   const evolutionLeadsCpl =
-    agencyResults.leads.costPerResult !== null
+    platformFilter === "consolidado" && agencyResults.leads.costPerResult !== null
       ? buildPercentChangeComparison(agencyResults.leads.costPerResult, previousInvestmentTotals.leadsCostPerResult, "lower_is_better")
       : null;
-  const evolutionSales = buildPercentChangeComparison(agencyResults.sales.count, previousInvestmentTotals.salesCount, "higher_is_better");
+  const evolutionSales =
+    platformFilter === "consolidado"
+      ? buildPercentChangeComparison(agencyResults.sales.count, previousInvestmentTotals.salesCount, "higher_is_better")
+      : null;
   const evolutionSalesCpa =
-    agencyResults.sales.costPerResult !== null
+    platformFilter === "consolidado" && agencyResults.sales.costPerResult !== null
       ? buildPercentChangeComparison(agencyResults.sales.costPerResult, previousInvestmentTotals.salesCostPerResult, "lower_is_better")
       : null;
   // Versão curta ("↑49%") do mesmo texto já pronto de `comparison.text`
@@ -950,13 +1000,33 @@ export default async function Home({
             `components/workspace/section-header.tsx`) é a única assinatura
             de marca desta seção. */}
         <div className="mt-6">
-          <SectionHeader title="Desempenho da agência" accent />
+          <SectionHeader
+            title={platformFilter === "consolidado" ? "Desempenho da agência" : `Desempenho da agência · ${PLATFORM_LABEL[platformFilter]}`}
+            accent
+          />
           <div className="mt-3 grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Fase 1 "Confiabilidade dos Dados" — bug confirmado: este card
+                sempre mostrava `financial.actual` (soma de `monthActual`,
+                SEMPRE consolidado — todos os canais do cliente), mesmo com
+                o filtro de plataforma ativo — divergindo do "Realizado ·
+                Plataforma" corretamente escopado por canal mais abaixo
+                (`channelActualTotal`), na MESMA tela. Fora de Consolidado,
+                reaproveita esse mesmo `channelActualTotal` (nenhum cálculo
+                novo) — "planejado"/comparação vs. período anterior não
+                existem por canal ainda (mesma limitação já documentada na
+                seção "Ritmo de investimento" abaixo), por isso ficam de
+                fora em vez de mostrar uma base errada. */}
             <OperationMetric
               label="Investimento"
-              value={formatCurrency(financial.actual)}
+              value={formatCurrency(platformFilter === "consolidado" ? financial.actual : (channelActualTotal ?? 0))}
               comparison={evolutionInvestment}
-              context={financial.planned > 0 ? `de ${formatCurrency(financial.planned)} planejados` : "Nenhum planejamento configurado"}
+              context={
+                platformFilter !== "consolidado"
+                  ? "Planejamento disponível só no recorte Consolidado"
+                  : financial.planned > 0
+                    ? `de ${formatCurrency(financial.planned)} planejados`
+                    : "Nenhum planejamento configurado"
+              }
             />
             <OperationMetric
               label="Leads"

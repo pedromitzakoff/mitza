@@ -207,11 +207,18 @@ export default async function SprintsPage({
     // "qual é a meta deste cliente?" responder o mesmo em Sprints/Operação/
     // página do Cliente (antes: `client.target_cost_per_result` cru, nunca
     // passava pela resolução mensal por canal).
+    // Fase 1 "Confiabilidade dos Dados" — bug confirmado: `.eq` só trazia o
+    // orçamento se ele tivesse mudado NESTE mês exato; um cliente com plano
+    // vigente definido num mês anterior (sem mudança desde então) vinha com
+    // zero linhas, resolvendo "sem meta" incorretamente. `.lte` (mesma regra
+    // já usada por `client-operational-state-data.ts`) traz o histórico
+    // completo — `resolveClientMonthlyPlan` já reduz à versão mais recente
+    // por canal (`month <= selectedMonth`).
     requireQuery(
       supabase
         .from("monthly_budget_changes")
         .select("client_id, channel, month, new_amount, changed_at, target_result_count, result_type")
-        .eq("month", monthRange.firstDay),
+        .lte("month", monthRange.firstDay),
       "monthly_budget_changes",
     ),
     // Investimento manual multicanal (`sprint_channel_spend`, adotada como

@@ -1,5 +1,7 @@
 import type { OperationClientCard } from "@/app/operation/operation-data";
 import type { PerformanceGoal } from "@/lib/performance-goals";
+import type { TrafficChannel } from "@/lib/traffic-channels";
+import type { HealthResultsMetric, HealthResultsSummary } from "@/lib/agency-health-aggregation";
 
 /**
  * Agregações do dashboard da agência — tudo derivado dos cards já montados
@@ -77,6 +79,39 @@ export function computeFinancialSummary(cards: OperationClientCard[]): Financial
   const expectedToDate = withGoal.reduce((sum, c) => sum + c.monthExpectedToDate, 0);
   const semMeta = cards.filter((c) => !c.hasMonthGoal).length;
   return { planned, actual, pct, expectedToDate, semMeta };
+}
+
+/**
+ * Fase 1 "Confiabilidade dos Dados" — Bug confirmado: os cards "Leads"/
+ * "Vendas" da Visão Geral (`computeHealthResultsSummary`, sobre
+ * `ClientOperationalState[]`) sempre somam TODOS os canais do cliente,
+ * mesmo quando o filtro de plataforma (Meta/Google/TikTok) está ativo —
+ * `ClientOperationalState` não tem nenhuma dimensão por canal. Esta função
+ * usa o ingrediente por canal que já existe (Etapa 3, `OperationClientCard.
+ * monthPerformanceSummaryByChannel`/`monthActualByChannel`, já calculado com
+ * a MESMA `resolvePerformanceSummaryForGoal` central) — nunca uma segunda
+ * lógica de custo-por-resultado. Mesmo formato de retorno
+ * (`HealthResultsSummary`) e mesma regra de soma de
+ * `agency-health-aggregation.ts`'s `summarizeGoal` (custo = investimento
+ * somado ÷ resultado somado, nunca média de custos por cliente) — só a
+ * fonte do dado muda (por canal, não consolidada).
+ */
+function summarizeGoalByChannel(cards: OperationClientCard[], goal: PerformanceGoal, channel: TrafficChannel): HealthResultsMetric {
+  const withData = cards.filter(
+    (c) => c.performanceGoal === goal && (c.monthPerformanceSummaryByChannel[channel]?.hasAnyRecord ?? false),
+  );
+  const count = withData.reduce((sum, c) => sum + (c.monthPerformanceSummaryByChannel[channel]?.resultCount ?? 0), 0);
+  const spend = withData.reduce((sum, c) => sum + (c.monthActualByChannel[channel] ?? 0), 0);
+  return { count, clientsWithData: withData.length, costPerResult: count > 0 ? spend / count : null };
+}
+
+/** Equivalente a `computeHealthResultsSummary` (mesmo shape de retorno),
+ * mas escopado a UM canal — usado pela Visão Geral quando o filtro de
+ * plataforma não é "Consolidado". `cards` já deve vir filtrado a quem usa
+ * o canal (mesmo critério de `clientUsesChannel` já usado pro resto da
+ * página) — esta função não filtra por conta própria. */
+export function computeAgencyResultsByChannel(cards: OperationClientCard[], channel: TrafficChannel): HealthResultsSummary {
+  return { leads: summarizeGoalByChannel(cards, "leads", channel), sales: summarizeGoalByChannel(cards, "sales", channel) };
 }
 
 export interface AgencyPeriodTotals {

@@ -49,8 +49,12 @@ export default async function PainelMensalPage() {
     // diárias persistidas (ver resolveConsolidatedMonthlyPlanned). Etapa
     // "Migração Multicanal dos Consumidores": todos os canais (nunca mais só
     // `channel = 'meta'`) — consolidado real (Meta + Google com plano).
+    // Fase 1 "Confiabilidade dos Dados" — bug confirmado: `.eq` excluía
+    // clientes cujo orçamento vigente foi definido num mês anterior (sem
+    // mudança neste mês) — `.lte` traz o histórico completo,
+    // `resolveConsolidatedMonthlyPlanned` reduz à versão vigente por canal.
     requireQuery(
-      supabase.from("monthly_budget_changes").select("client_id, channel, month, new_amount, changed_at, result_type").eq("month", firstDay),
+      supabase.from("monthly_budget_changes").select("client_id, channel, month, new_amount, changed_at, result_type").lte("month", firstDay),
       "monthly_budget_changes",
     ),
   ]);
