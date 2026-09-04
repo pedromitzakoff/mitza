@@ -100,6 +100,18 @@ function sumNullable(a: number | null, b: number | null): number | null {
   return (a ?? 0) + (b ?? 0);
 }
 
+/** Normalização MÍNIMA do nome — só remove espaços acidentais no início/fim
+ * (nunca fuzzy match, nunca mudança de caixa): "VIDEO - LAST TICKETS" e
+ * " VIDEO - LAST TICKETS " são o MESMO criativo (espaçamento acidental na
+ * origem), mas "VIDEO - LAST TICKETS" e "VIDEO - LAST TICKETS 2" continuam
+ * sendo criativos diferentes. O nome normalizado também é o nome exibido —
+ * determinístico por construção, nunca depende de qual linha chegou
+ * primeiro (todo registro do mesmo grupo, por definição, produz o mesmo
+ * nome normalizado). */
+function normalizeCreativeName(creativeName: string): string {
+  return creativeName.trim();
+}
+
 export interface CreativeSummary {
   /** Creative Identity — client_id (implícito no escopo da consulta) +
    * creative_name. A ÚNICA responsabilidade que nunca pode ficar `null`
@@ -211,18 +223,19 @@ function finishSummary(acc: CreativeAccumulator): CreativeSummary {
   };
 }
 
-/** `GROUP BY client_id, creative_name` em tempo de consulta — as linhas de
- * entrada já vêm filtradas por cliente e período; aqui só agrupa por
- * criativo, somando totais. Ordenado por investimento decrescente (mesmo
- * critério de prioridade usado no resto da plataforma: quem consome mais
- * verba aparece primeiro). */
+/** `GROUP BY client_id, TRIM(creative_name)` em tempo de consulta — as
+ * linhas de entrada já vêm filtradas por cliente e período; aqui só agrupa
+ * por criativo, somando totais. Ordenado por investimento decrescente
+ * (mesmo critério de prioridade usado no resto da plataforma: quem consome
+ * mais verba aparece primeiro). */
 export function buildCreativeSummaries(rows: AdCreativeDailyMetricRow[]): CreativeSummary[] {
   const byCreative = new Map<string, CreativeAccumulator>();
 
   for (const row of rows) {
-    const acc = byCreative.get(row.creativeName) ?? newAccumulator(row.creativeName);
+    const creativeName = normalizeCreativeName(row.creativeName);
+    const acc = byCreative.get(creativeName) ?? newAccumulator(creativeName);
     accumulateRow(acc, row);
-    byCreative.set(row.creativeName, acc);
+    byCreative.set(creativeName, acc);
   }
 
   return Array.from(byCreative.values())

@@ -97,21 +97,34 @@ function accumulateRow(acc: AdSetAccumulator, row: AdSetDailyMetricRow): void {
   if (row.resultType) acc.resultType = row.resultType;
 }
 
-/** Chave de agrupamento = canal + nome do ad set — nunca campanha (ver
- * comentário do arquivo: um público pode rodar em várias campanhas). */
-function adSetGroupKey(channel: TrafficChannel, adSetName: string): string {
-  return `${channel}::${adSetName}`;
+/** Normalização MÍNIMA do nome — só remove espaços acidentais no início/fim
+ * (nunca fuzzy match, nunca mudança de caixa): "Público A" e " Público A "
+ * são o MESMO público (espaçamento acidental na origem), mas "Público A" e
+ * "Público A - Variante" continuam sendo públicos diferentes. O nome
+ * normalizado também é o nome exibido — determinístico por construção,
+ * nunca depende de qual linha chegou primeiro (todo registro do mesmo
+ * grupo, por definição, produz o mesmo nome normalizado). */
+function normalizeAdSetName(adSetName: string): string {
+  return adSetName.trim();
 }
 
-/** `GROUP BY client_id, channel, ad_set_name` em tempo de consulta —
+/** Chave de agrupamento = canal + nome do ad set (já normalizado) — nunca
+ * campanha (ver comentário do arquivo: um público pode rodar em várias
+ * campanhas). */
+function adSetGroupKey(channel: TrafficChannel, normalizedAdSetName: string): string {
+  return `${channel}::${normalizedAdSetName}`;
+}
+
+/** `GROUP BY client_id, channel, TRIM(ad_set_name)` em tempo de consulta —
  * ordenado por investimento decrescente, mesmo critério de Campanhas/
  * Criativos. */
 export function buildAdSetSummaries(rows: AdSetDailyMetricRow[]): AdSetSummary[] {
   const byAdSet = new Map<string, AdSetAccumulator>();
 
   for (const row of rows) {
-    const key = adSetGroupKey(row.channel, row.adSetName);
-    const acc = byAdSet.get(key) ?? newAccumulator(row.channel, row.adSetName);
+    const adSetName = normalizeAdSetName(row.adSetName);
+    const key = adSetGroupKey(row.channel, adSetName);
+    const acc = byAdSet.get(key) ?? newAccumulator(row.channel, adSetName);
     accumulateRow(acc, row);
     byAdSet.set(key, acc);
   }
