@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runImportForAllEnabledSources } from "@/lib/stract-sync";
+import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 
 // Integração Stract (arquitetura aprovada — ver DECISIONS.md /
 // docs/STRACT_INTEGRATION_ARCHITECTURE.md). Validação manual completa (2
@@ -15,13 +16,8 @@ import { runImportForAllEnabledSources } from "@/lib/stract-sync";
 // Uma hora depois do horário em que o Stract já busca os dados do Meta (7h
 // local), garantindo que o Import Service sempre leia dado fresco.
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (cronSecret) {
-    const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!isAuthorizedCronRequest(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const results = await runImportForAllEnabledSources();

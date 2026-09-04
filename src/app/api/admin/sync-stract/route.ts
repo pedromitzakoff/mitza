@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runImportForSource, type ImportDateRange } from "@/lib/stract-sync";
+import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 
 /**
  * Gatilho manual do Import Service (integração Stract — arquitetura
@@ -17,13 +18,8 @@ import { runImportForSource, type ImportDateRange } from "@/lib/stract-sync";
  * Body: { "importSourceId": "uuid", "since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD" }
  */
 export async function POST(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (cronSecret) {
-    const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!isAuthorizedCronRequest(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const body = await request.json().catch(() => ({}));

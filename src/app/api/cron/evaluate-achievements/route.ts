@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runAchievementEvaluation } from "@/lib/achievement-engine";
+import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 
 // Sistema de Conquistas — motor de avaliação (aprovado após a Auditoria +
 // as 4 determinações de amostra/recorde-mensal/frescor/streak). Roda
@@ -19,13 +20,8 @@ import { runAchievementEvaluation } from "@/lib/achievement-engine";
 // cliente/pessoa/organização é isolado dentro de `runAchievementEvaluation`
 // (um cliente com problema nunca aborta os demais).
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (cronSecret) {
-    const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!isAuthorizedCronRequest(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {

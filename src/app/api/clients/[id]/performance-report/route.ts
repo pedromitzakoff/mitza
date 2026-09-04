@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth";
 import { resolveAnalyticsPeriod } from "@/lib/analytics";
 import { todayDateString } from "@/lib/today";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
@@ -9,11 +10,31 @@ import { renderReportPdf } from "@/lib/performance-report/renderers/pdf-renderer
 
 /**
  * Gerador do PDF do Relatório de Performance — Route Handler (não Server
- * Action): sem auth manual (`createClient()` cookie-based já escopa
- * `clients` via RLS). Pipeline: dado → documento → HTML → PDF, cada camada
- * só conhecendo a de baixo — mesma Camada 1/2 (`report-data`/
- * `report-document`) usada pela página nativa (`/clients/[id]/relatorio`),
- * nunca um segundo cálculo de métricas.
+ * Action). Pipeline: dado → documento → HTML → PDF, cada camada só
+ * conhecendo a de baixo — mesma Camada 1/2 (`report-data`/`report-document`)
+ * usada pela página nativa (`/clients/[id]/relatorio`), nunca um segundo
+ * cálculo de métricas.
+ *
+ * Etapa 2A (Auditoria de Segurança — correções prioritárias): esta rota não
+ * está sob o `proxy.ts` (que só cobre páginas, nunca `/api/**` — decisão
+ * documentada em `src/proxy.ts`), então até aqui ela dependia inteiramente
+ * da RLS de `clients` pra negar acesso sem sessão — funcionava (RLS nega
+ * `auth.uid()` nulo corretamente), mas sem nenhuma camada própria: uma
+ * mudança futura na RLS de `clients` (inclusive pra viabilizar um link
+ * externo do relatório) poderia abrir esta rota sem que o diff daquela
+ * mudança parecesse tocá-la. `getCurrentProfile()` (mesmo helper canônico
+ * de toda página/Server Action da MITZA, `lib/auth.ts`) adiciona a camada
+ * que faltava — defesa em profundidade, nunca substitui a RLS abaixo:
+ *   - sem sessão → 401, ANTES de qualquer consulta a `clients` ou início do
+ *     Chromium (nunca gasta o custo de renderização sem usuário nenhum);
+ *   - sessão válida mas sem acesso a este `clientId` → 404 "Cliente não
+ *     encontrado", exatamente como já acontecia (mesmo texto/status de
+ *     sempre, resolvido pela RLS de `clients` — is_admin()/is_client_manager()
+ *     continuam sendo a autoridade sobre QUAL cliente cada gestor acessa,
+ *     esta rota nunca reimplementa essa regra);
+ *   - sessão válida com acesso → relatório normal, sem mudança nenhuma.
+ * Nunca usa `createAdminClient()`/service role aqui — o client continua
+ * sendo o cookie-bound de sempre, RLS continua valendo por baixo.
  *
  * Etapa "Relatório Nativo": esta rota deixou de servir HTML pra visualização
  * (`format=html`) — a experiência principal agora é a página nativa; aqui
@@ -38,6 +59,9 @@ export function buildPerformanceReportFileName(clientName: string, period: { sta
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const profile = await getCurrentProfile();
+  if (!profile) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+
   const { id } = await params;
   const supabase = await createSupabaseClient();
 

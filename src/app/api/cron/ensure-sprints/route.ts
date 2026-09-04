@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ensureAllClientsSprints } from "@/lib/sprint-generation";
+import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 
 // Etapa 50 (correção): a geração de sprints deixou de rodar durante o
 // carregamento de página (causava geração duplicada) — agora só acontece
@@ -13,13 +14,8 @@ import { ensureAllClientsSprints } from "@/lib/sprint-generation";
 // periodicamente, um cliente já existente parava de ganhar sprint nova
 // conforme os meses passavam — corrigido registrando o cron aqui.
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (cronSecret) {
-    const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!isAuthorizedCronRequest(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const results = await ensureAllClientsSprints();
