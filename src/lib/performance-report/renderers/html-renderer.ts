@@ -13,6 +13,12 @@ import type { PerformanceReportDocument, PerformanceReportRow, PerformanceReport
  * (creme/areia/grafite/branco/verde-limão) — SEM branding fixo (nunca
  * "KOFF"/"MITZA"), relatório visualmente neutro pra qualquer cliente.
  *
+ * Etapa "Resultado Diário": `table.disclosure === false` (só a tabela
+ * Resultado Diário) nunca colapsa nenhuma linha; `table.totalRow` (idem)
+ * renderiza uma linha fixa (`.total-row`) sempre por último, excluída do
+ * sort do `SCRIPT` abaixo; `row.rowNote` (dia sem nenhum sinal de
+ * sincronização) vira uma única célula com colspan no lugar das métricas.
+ *
  * Toda string dinâmica (nome de campanha/ad set/criativo, vinda do Stract)
  * passa por `escapeHtml` — nunca interpolada crua. URL de imagem/link só é
  * emitida quando começa com http(s) (`isSafeHttpUrl`) — nunca um esquema
@@ -53,13 +59,32 @@ function renderPreviewCell(row: PerformanceReportRow): string {
     : `<td class="preview muted">—</td>`;
 }
 
-function renderRow(row: PerformanceReportRow, table: PerformanceReportTable, index: number): string {
-  const collapsedClass = index >= INITIAL_VISIBLE_ROWS ? " row-collapsed" : "";
+function renderMetricCells(row: PerformanceReportRow, table: PerformanceReportTable): string {
+  if (row.rowNote) {
+    const span = table.metricColumns.length + (table.hasPreviewColumn ? 1 : 0);
+    return `<td class="muted" colspan="${span}">${escapeHtml(row.rowNote)}</td>`;
+  }
   const cells = row.metrics
     .map((cell) => `<td data-sort="${cell.sortValue === null ? "-1" : cell.sortValue}">${escapeHtml(cell.display)}</td>`)
     .join("");
   const preview = table.hasPreviewColumn ? renderPreviewCell(row) : "";
-  return `<tr class="${collapsedClass.trim()}">${renderNameCell(row)}${cells}${preview}</tr>`;
+  return `${cells}${preview}`;
+}
+
+function renderRow(row: PerformanceReportRow, table: PerformanceReportTable, index: number): string {
+  // Etapa "Resultado Diário": `table.disclosure === false` nunca colapsa
+  // nenhuma linha (pedido explícito do usuário pra essa tabela específica —
+  // as demais continuam colapsando a partir da linha 10).
+  const collapsedClass = table.disclosure && index >= INITIAL_VISIBLE_ROWS ? " row-collapsed" : "";
+  return `<tr class="${collapsedClass.trim()}">${renderNameCell(row)}${renderMetricCells(row, table)}</tr>`;
+}
+
+/** Total — sempre por último, fora da ordenação/disclosure das demais
+ * linhas (nunca ganha `row-collapsed`, nunca participa do sort do
+ * `SCRIPT`). Visualmente distinto (classe `total-row`, ver `STYLE`). */
+function renderTotalRow(table: PerformanceReportTable): string {
+  if (!table.totalRow) return "";
+  return `<tr class="total-row">${renderNameCell(table.totalRow)}${renderMetricCells(table.totalRow, table)}</tr>`;
 }
 
 function renderTableSection(table: PerformanceReportTable): string {
@@ -75,9 +100,10 @@ function renderTableSection(table: PerformanceReportTable): string {
           ${table.hasPreviewColumn ? "<th>Prévia</th>" : ""}
         </tr></thead><tbody>
           ${table.rows.map((row, index) => renderRow(row, table, index)).join("")}
+          ${renderTotalRow(table)}
         </tbody></table></div>
         ${
-          count > INITIAL_VISIBLE_ROWS
+          table.disclosure && count > INITIAL_VISIBLE_ROWS
             ? `<button type="button" class="disclosure-toggle" data-table="table-${table.id}" data-total="${count}" data-label-singular="item" data-label-plural="itens">Ver todos os ${count} itens ↓</button>`
             : ""
         }`;
@@ -129,6 +155,7 @@ td.name{text-align:left;font-weight:650;color:var(--graphite);max-width:390px;wh
 tbody tr:hover{background:#FAF8F4}
 .preview{text-align:left}.preview a{display:inline-block;text-decoration:none;color:var(--graphite);font-weight:800;border-bottom:2px solid var(--lime);padding-bottom:1px}
 .muted{color:var(--muted)}
+.total-row{font-weight:800;background:#FAF8F4;border-top:2px solid var(--graphite)}
 .row-collapsed{display:none}
 .disclosure-toggle{margin-top:12px;background:none;border:none;padding:0;font-size:13px;font-weight:700;color:var(--graphite);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .footer{padding:34px 0 60px;color:var(--muted);font-size:12px}
@@ -141,16 +168,19 @@ const SCRIPT = `
 document.querySelectorAll('table.sortable th').forEach((th,index)=>{
   th.addEventListener('click',()=>{
     const table=th.closest('table'), tbody=table.querySelector('tbody');
-    const rows=[...tbody.querySelectorAll('tr')];
+    const totalRow=tbody.querySelector('tr.total-row');
+    const rows=[...tbody.querySelectorAll('tr:not(.total-row)')];
     const asc=th.dataset.order!=='asc'; th.dataset.order=asc?'asc':'desc';
     rows.sort((a,b)=>{
       const A=a.children[index],B=b.children[index];
+      if(!A||!B) return 0;
       const av=A.dataset.sort!==undefined?parseFloat(A.dataset.sort):A.innerText.trim().toLowerCase();
       const bv=B.dataset.sort!==undefined?parseFloat(B.dataset.sort):B.innerText.trim().toLowerCase();
       if(typeof av==='number'&&!Number.isNaN(av)) return asc?av-bv:bv-av;
       return asc?String(av).localeCompare(String(bv),'pt-BR'):String(bv).localeCompare(String(av),'pt-BR');
     });
     rows.forEach(r=>tbody.appendChild(r));
+    if(totalRow) tbody.appendChild(totalRow);
   });
 });
 document.querySelectorAll('.disclosure-toggle').forEach((btn)=>{
@@ -181,7 +211,7 @@ export function renderPerformanceReportHtml(doc: PerformanceReportDocument, opti
 <p>Leitura consolidada da conta, com visão executiva e detalhamento por campanha, público e criativo.</p>
 <div class="meta-row"><span class="meta-pill">${escapeHtml(doc.clientName)}</span><span class="meta-pill">Período: ${escapeHtml(doc.periodLabel)}</span><span class="meta-pill">${escapeHtml(metaCounts)}</span></div>
 </div></header>
-<nav class="nav"><div class="container"><a href="#resumo">Resumo</a><a href="#campanhas">Campanhas</a><a href="#publicos">Públicos</a><a href="#criativos">Criativos</a></div></nav>
+<nav class="nav"><div class="container"><a href="#resumo">Resumo</a><a href="#resultado-diario">Resultado diário</a><a href="#campanhas">Campanhas</a><a href="#publicos">Públicos</a><a href="#criativos">Criativos</a></div></nav>
 <main class="container">
 <section id="resumo" class="section">
   <div class="section-head"><div><div class="eyebrow">RESUMO EXECUTIVO</div><h2>Visão geral da performance</h2><p>CPA e ROAS recalculados a partir dos totais do período, nunca pela média das linhas.</p></div></div>

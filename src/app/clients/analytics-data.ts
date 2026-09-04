@@ -16,6 +16,70 @@ import type { TrafficChannel } from "@/lib/traffic-channels";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
+/**
+ * Uma linha por DATA com pelo menos um sinal real (investimento OU
+ * resultado) no período — Etapa "Resultado Diário" (Relatório de
+ * Performance). Nunca fabrica dado: cada campo é `null` quando a linha de
+ * origem correspondente simplesmente não existe pra aquela data.
+ *
+ * `resultCount` tem uma exceção deliberada, MESMA regra já usada por
+ * `lib/daily-results.ts` (`buildDailyResultSeries`, Visão Geral): quando a
+ * fonte tem integração ativa e a data JÁ TEM uma linha de `daily_spend`
+ * (sinal de que o pipeline sincronizou aquele dia) mas nenhuma linha de
+ * `daily_performance` pro objetivo, o resultado vira `0` CONFIRMADO — não
+ * "sem dado", porque o dia foi sincronizado e simplesmente não teve
+ * resultado. Sem esse sinal de sincronização, o dia fica genuinamente
+ * desconhecido e `resultCount` é `null`. `revenue` NUNCA usa essa mesma
+ * inferência (fica `null` sempre que não houver uma linha explícita com
+ * receita) — receita é opcional mesmo em dias confirmadamente sincronizados
+ * (nem todo objetivo/fonte rastreia receita), então um `0` aqui seria uma
+ * fabricação, não uma confirmação.
+ */
+export interface ClientAnalyticsDailyRow {
+  date: string;
+  /** `null` = nenhuma linha de `daily_spend` pra essa data (nunca `0`
+   * fabricado — dia sem sinal de sincronização). */
+  spend: number | null;
+  /** Ver regra completa no comentário da interface. */
+  resultCount: number | null;
+  /** `null` = nenhuma linha com receita pra essa data (nunca inferido a
+   * partir de `resultCount`). */
+  revenue: number | null;
+}
+
+/**
+ * Núcleo PURO de `ClientAnalyticsDailyRow` — extraído de
+ * `fetchClientAnalyticsData` pra ser testável sem banco (Etapa "Resultado
+ * Diário"). Recebe os MESMOS mapas por data que `fetchClientAnalyticsData`
+ * já monta a partir de `dailySpendRows`/`dailyPerformanceRows` (nunca uma
+ * segunda consulta) e devolve uma linha esparsa por data com pelo menos um
+ * sinal. Ver o comentário completo da regra de "zero confirmado vs. sem
+ * dado" em `ClientAnalyticsDailyRow`.
+ */
+export function buildClientAnalyticsDailyRows(
+  dailySpendByDate: Map<string, number>,
+  dailyResultByDate: Map<string, number> | null,
+  dailyRevenueByDate: Map<string, number> | null,
+): ClientAnalyticsDailyRow[] {
+  const dailyDates = new Set<string>([...dailySpendByDate.keys(), ...(dailyResultByDate?.keys() ?? [])]);
+  return Array.from(dailyDates)
+    .sort()
+    .map((date): ClientAnalyticsDailyRow => {
+      const hasSpendSignal = dailySpendByDate.has(date);
+      let resultCount: number | null = null;
+      if (dailyResultByDate) {
+        if (dailyResultByDate.has(date)) resultCount = dailyResultByDate.get(date)!;
+        else if (hasSpendSignal) resultCount = 0;
+      }
+      return {
+        date,
+        spend: hasSpendSignal ? dailySpendByDate.get(date)! : null,
+        resultCount,
+        revenue: dailyRevenueByDate?.has(date) ? dailyRevenueByDate.get(date)! : null,
+      };
+    });
+}
+
 export interface ClientAnalyticsData {
   performanceGoal: PerformanceGoal | null;
   actualSpend: number;
@@ -35,6 +99,13 @@ export interface ClientAnalyticsData {
    * `null` (sem objetivo, nada a comparar) — nunca uma segunda consulta
    * feita por quem consome este dado, mesmo padrão de `summary`. */
   previousSummary: PerformanceSummary | null;
+  /** Etapa "Resultado Diário": as MESMAS linhas de `daily_spend`/
+   * `daily_performance` já buscadas acima pra `actualSpend`/`summary`, só
+   * reagrupadas por data em vez de somadas num total só — nunca uma segunda
+   * consulta. Esparso (só datas com algum sinal); quem consome decide se
+   * preenche os dias faltantes do intervalo (isso é decisão de
+   * apresentação, não de dado). Ordenado por data crescente. */
+  dailyRows: ClientAnalyticsDailyRow[];
 }
 
 /**
@@ -118,15 +189,20 @@ export async function fetchClientAnalyticsData(
   const channelRows = performanceGoal ? buildAnalyticsChannelRows(performanceGoal, records, spendByChannel) : [];
 
   let dailyResultByDate: Map<string, number> | null = null;
+  let dailyRevenueByDate: Map<string, number> | null = null;
   if (hasActiveIntegration && performanceGoal) {
     dailyResultByDate = new Map();
+    dailyRevenueByDate = new Map();
     for (const row of dailyPerformanceRows) {
       if (row.resultType !== performanceGoal) continue;
       dailyResultByDate.set(row.date, (dailyResultByDate.get(row.date) ?? 0) + row.resultCount);
+      if (row.revenue !== null) dailyRevenueByDate.set(row.date, (dailyRevenueByDate.get(row.date) ?? 0) + row.revenue);
     }
   }
 
   const trend = buildAnalyticsTrend(performanceGoal, dailySpendByDate, dailyResultByDate);
+
+  const dailyRows = buildClientAnalyticsDailyRows(dailySpendByDate, dailyResultByDate, dailyRevenueByDate);
 
   // Etapa "Analytics Instagramável": comparação vs. período anterior de
   // MESMA duração — só buscada quando existe objetivo configurado (sem
@@ -175,5 +251,5 @@ export async function fetchClientAnalyticsData(
     });
   }
 
-  return { performanceGoal, actualSpend, summary, channelRows, trend, previousSummary };
+  return { performanceGoal, actualSpend, summary, channelRows, trend, previousSummary, dailyRows };
 }

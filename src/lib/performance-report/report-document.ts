@@ -1,11 +1,12 @@
-import { formatCurrency, formatDateWithYear, formatDateTimeWithYear, formatPercent } from "@/lib/format";
+import { formatCurrency, formatDateWithYear, formatDateTimeWithYear, formatPercent, formatShortDate } from "@/lib/format";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
+import { computeCostPerResult, computeRoas } from "@/lib/performance";
 import { NO_ANALYTICS_DATA_MESSAGE, NO_CAMPAIGNS_MESSAGE, NO_CREATIVES_MESSAGE, NO_PERFORMANCE_GOAL_MESSAGE } from "@/lib/analytics-messages";
 import type { AnalyticsKpiCard } from "@/lib/analytics";
 import type { CampaignSummary } from "@/lib/campaign-analytics";
 import type { AdSetSummary } from "@/lib/ad-set-analytics";
 import type { CreativeSummary } from "@/lib/creative-analytics";
-import type { PerformanceReportData } from "./report-data";
+import type { PerformanceReportData, PerformanceReportDailyRow } from "./report-data";
 
 /**
  * Camada 2 — ESTRUTURA (KPIs + tabelas), independente de HTML/PDF. Cada
@@ -40,6 +41,16 @@ export interface PerformanceReportRow {
    * (`hasPreviewColumn`) — `undefined`/`null` = sem link pra ESTE criativo
    * especificamente, mesmo que outros da mesma tabela tenham. */
   previewUrl?: string | null;
+  /** Etapa "Resultado Diário": quando definido, o renderer mostra este
+   * texto no lugar de TODAS as células de métrica (célula única, em vez de
+   * uma por coluna) — usado só pra dias sem NENHUM sinal de sincronização
+   * (nem investimento, nem resultado). `metrics` continua preenchido
+   * normalmente mesmo nesse caso (todas as células `null`/"—"), pra
+   * ordenação por coluna continuar funcionando igual — só a APRESENTAÇÃO
+   * muda. Nunca usado pelas outras tabelas (uma campanha/público/criativo só
+   * existe na tabela se teve alguma linha real no período, então nunca
+   * "sem dado nenhum"). */
+  rowNote?: string | null;
   metrics: PerformanceReportMetricCell[];
 }
 
@@ -53,6 +64,17 @@ export interface PerformanceReportTable {
   hasPreviewColumn: boolean;
   rows: PerformanceReportRow[];
   emptyMessage: string;
+  /** `false` só na tabela de Resultado Diário (pedido explícito do usuário:
+   * "quero todos os dias visíveis, não aplique progressive disclosure
+   * nesta rodada") — as demais tabelas continuam com a disclosure de
+   * sempre (10 linhas + "ver todas"). */
+  disclosure: boolean;
+  /** Linha de total — só a tabela de Resultado Diário preenche (soma das
+   * aditivas, derivadas recalculadas do total, nunca média dos dias).
+   * Renderizada sempre por último, fora da ordenação/disclosure das outras
+   * linhas. `null` nas demais tabelas (Campanhas/Públicos/Criativos nunca
+   * tiveram um total agregado pedido). */
+  totalRow: PerformanceReportRow | null;
 }
 
 export type PerformanceReportSummaryBlock =
@@ -129,6 +151,8 @@ function buildCampaignsTable(campaigns: CampaignSummary[]): PerformanceReportTab
     hasPreviewColumn: false,
     rows,
     emptyMessage: NO_CAMPAIGNS_MESSAGE,
+    disclosure: true,
+    totalRow: null,
   };
 }
 
@@ -169,6 +193,8 @@ function buildAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTable {
     hasPreviewColumn: false,
     rows,
     emptyMessage: "Nenhum dado de público encontrado no período selecionado.",
+    disclosure: true,
+    totalRow: null,
   };
 }
 
@@ -216,6 +242,102 @@ function buildCreativesTable(creatives: CreativeSummary[]): PerformanceReportTab
     hasPreviewColumn: hasAnyPermalink,
     rows,
     emptyMessage: NO_CREATIVES_MESSAGE,
+    disclosure: true,
+    totalRow: null,
+  };
+}
+
+/**
+ * Resultado Diário — uma linha por dia civil do período (já preenchido pra
+ * TODOS os dias por `buildDailyRows`, `report-data.ts`; nunca recorta aqui).
+ * "Resultado"/"Custo por resultado" usam o MESMO objetivo do cliente do
+ * Resumo Executivo (`performanceGoal`) — nunca uma segunda definição de
+ * resultado principal. Receita/ROAS só aparecem quando pelo menos um dia
+ * tiver o dado (mesmo padrão `hasRevenue`/`hasRoas` das outras 3 tabelas).
+ *
+ * Dias sem NENHUM sinal (nem investimento, nem resultado) ganham
+ * `rowNote: "Sem dados"` — só quando os dois lados são genuinamente
+ * desconhecidos (nunca quando há investimento real mas só falta o
+ * resultado, ou vice-versa: nesse caso cada célula mostra seu próprio
+ * valor/"—" normalmente, mesmo padrão de qualquer métrica ausente no resto
+ * do relatório).
+ *
+ * Total: aditivas somadas ignorando dias sem dado (nunca contam como zero),
+ * derivadas recalculadas do total via os MESMOS helpers canônicos
+ * (`computeCostPerResult`/`computeRoas`) — nunca média dos dias. Este total
+ * reconcilia exatamente com o Resumo Executivo pra investimento/resultado/
+ * receita, porque vem das MESMAS linhas de origem (`ClientAnalyticsData`),
+ * só reagrupadas por data em vez de somadas direto — ver
+ * `scripts/test-performance-report-daily.ts`.
+ */
+function buildDailyTable(daily: PerformanceReportDailyRow[], performanceGoal: PerformanceGoal | null): PerformanceReportTable {
+  const config = performanceGoal ? PERFORMANCE_GOALS[performanceGoal] : null;
+  const resultLabel = config?.resultMetricLabel ?? "Resultado";
+  const costLabel = config?.costMetricShortLabel ?? "Custo por resultado";
+  const hasRevenue = daily.some((d) => d.revenue !== null);
+  const hasRoas = daily.some((d) => d.roas !== null);
+
+  const metricColumns: PerformanceReportColumn[] = [
+    { key: "investment", header: "Investimento" },
+    { key: "result", header: resultLabel },
+    { key: "cost", header: costLabel },
+    ...(hasRevenue ? [{ key: "revenue", header: "Receita" }] : []),
+    ...(hasRoas ? [{ key: "roas", header: "ROAS" }] : []),
+  ];
+
+  function buildMetrics(spend: number | null, resultCount: number | null, costPerResult: number | null, revenue: number | null, roas: number | null): PerformanceReportMetricCell[] {
+    const metrics: PerformanceReportMetricCell[] = [
+      metricCell(spend !== null ? formatCurrency(spend) : null, spend),
+      metricCell(resultCount !== null ? String(resultCount) : null, resultCount),
+      metricCell(costPerResult !== null ? formatCurrency(costPerResult) : null, costPerResult),
+    ];
+    if (hasRevenue) metrics.push(metricCell(revenue !== null ? formatCurrency(revenue) : null, revenue));
+    if (hasRoas) metrics.push(metricCell(roas !== null ? `${roas.toFixed(2)}x` : null, roas));
+    return metrics;
+  }
+
+  const rows: PerformanceReportRow[] = daily.map((d) => {
+    const hasNoSignalAtAll = d.spend === null && d.resultCount === null;
+    return {
+      id: d.date,
+      name: formatShortDate(d.date),
+      rowNote: hasNoSignalAtAll ? "Sem dados" : null,
+      metrics: buildMetrics(d.spend, d.resultCount, d.costPerResult, d.revenue, d.roas),
+    };
+  });
+
+  // Total — aditivas somadas (dias sem dado nunca contam como 0 na soma),
+  // derivadas recalculadas do total.
+  const daysWithSpend = daily.filter((d) => d.spend !== null);
+  const totalSpend = daysWithSpend.length > 0 ? daysWithSpend.reduce((sum, d) => sum + d.spend!, 0) : null;
+
+  const daysWithResult = daily.filter((d) => d.resultCount !== null);
+  const totalResultCount = daysWithResult.length > 0 ? daysWithResult.reduce((sum, d) => sum + d.resultCount!, 0) : null;
+
+  const daysWithRevenue = daily.filter((d) => d.revenue !== null);
+  const totalRevenue = daysWithRevenue.length > 0 ? daysWithRevenue.reduce((sum, d) => sum + d.revenue!, 0) : null;
+
+  const totalCostPerResult = computeCostPerResult(totalSpend, totalResultCount ?? 0, totalResultCount !== null);
+  const totalRoas = computeRoas(totalRevenue, totalSpend);
+
+  const totalRow: PerformanceReportRow = {
+    id: "total",
+    name: "Total",
+    metrics: buildMetrics(totalSpend, totalResultCount, totalCostPerResult, totalRevenue, totalRoas),
+  };
+
+  return {
+    id: "resultado-diario",
+    eyebrow: "RESULTADO DIÁRIO",
+    title: "Resultado diário",
+    description: "Investimento e resultado de cada dia do período selecionado — mesmos números e regras do Resumo Executivo, abertos por dia.",
+    nameColumnHeader: "Data",
+    metricColumns,
+    hasPreviewColumn: false,
+    rows,
+    emptyMessage: "Nenhum dado disponível para os dias do período selecionado.",
+    disclosure: false,
+    totalRow,
   };
 }
 
@@ -234,6 +356,14 @@ export function buildPerformanceReportDocument(data: PerformanceReportData): Per
     totalAdSets: data.adSets.length,
     totalCreatives: data.creatives.length,
     summary: buildSummaryBlock(data),
-    tables: [buildCampaignsTable(data.campaigns), buildAdSetsTable(data.adSets), buildCreativesTable(data.creatives)],
+    // Ordem = ordem de renderização: Resultado Diário → Campanhas →
+    // Públicos → Criativos (Resumo Executivo é renderizado à parte, fora
+    // deste array, por quem consome o documento).
+    tables: [
+      buildDailyTable(data.dailyRows, data.performanceGoal),
+      buildCampaignsTable(data.campaigns),
+      buildAdSetsTable(data.adSets),
+      buildCreativesTable(data.creatives),
+    ],
   };
 }

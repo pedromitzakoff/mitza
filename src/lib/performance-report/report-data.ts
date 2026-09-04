@@ -2,7 +2,7 @@ import type { createClient as createSupabaseClient } from "@/lib/supabase/server
 import { requireQuery } from "@/lib/require-query";
 import { formatCurrency, formatDateRange } from "@/lib/format";
 import { buildAnalyticsKpiCards, type AnalyticsKpiCard } from "@/lib/analytics";
-import type { ClientAnalyticsData } from "@/app/clients/analytics-data";
+import type { ClientAnalyticsData, ClientAnalyticsDailyRow } from "@/app/clients/analytics-data";
 import { fetchClientAnalyticsData } from "@/app/clients/analytics-data";
 import { getCampaignDailyMetricsForPeriod } from "@/lib/campaign-analytics-data";
 import { buildCampaignSummaries, type CampaignSummary } from "@/lib/campaign-analytics";
@@ -10,6 +10,9 @@ import { getAdSetDailyMetricsForPeriod } from "@/lib/ad-set-analytics-data";
 import { buildAdSetSummaries, type AdSetSummary } from "@/lib/ad-set-analytics";
 import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
 import { buildCreativeSummaries, type CreativeSummary } from "@/lib/creative-analytics";
+import { computeCostPerResult, computeRoas } from "@/lib/performance";
+import { listDatesInclusive } from "@/lib/monthly-budget";
+import type { PerformanceGoal } from "@/lib/performance-goals";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -31,14 +34,76 @@ type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
  */
 export type PerformanceReportSummary = { status: "no_goal" } | { status: "no_data" } | { status: "ok"; kpis: AnalyticsKpiCard[] };
 
+/**
+ * Uma linha por DIA CIVIL do período (Etapa "Resultado Diário") — sempre
+ * uma linha por data do intervalo inteiro, mesmo sem nenhum sinal (isso é
+ * decidido aqui, nunca em `report-document.ts`/componente de apresentação).
+ * Aditivas (`spend`/`resultCount`/`revenue`) vêm direto de
+ * `ClientAnalyticsData.dailyRows` (já explicado lá: `null` = sem sinal pra
+ * essa data, nunca `0` fabricado — exceto `resultCount`, que pode ser `0`
+ * CONFIRMADO quando há sinal de sincronização). Derivadas
+ * (`costPerResult`/`roas`) recalculadas aqui a partir das aditivas do MESMO
+ * dia, via os MESMOS helpers canônicos de `lib/performance.ts` usados pelo
+ * resto da MITZA — nunca uma segunda fórmula.
+ */
+export interface PerformanceReportDailyRow {
+  date: string;
+  spend: number | null;
+  resultCount: number | null;
+  revenue: number | null;
+  costPerResult: number | null;
+  roas: number | null;
+}
+
 export interface PerformanceReportData {
   client: { id: string; name: string };
   period: { start: string; end: string; label: string };
   summary: PerformanceReportSummary;
+  /** Objetivo principal do cliente — mesma fonte de `summary`
+   * (`ClientAnalyticsData.performanceGoal`), exposto aqui porque
+   * `report-document.ts` precisa dele pra rotular a coluna "Resultado" da
+   * seção Resultado Diário com o MESMO nome de objetivo usado no Resumo
+   * Executivo (Leads/Vendas/Seguidores) — nunca uma segunda definição de
+   * resultado principal. */
+  performanceGoal: PerformanceGoal | null;
+  dailyRows: PerformanceReportDailyRow[];
   campaigns: CampaignSummary[];
   adSets: AdSetSummary[];
   creatives: CreativeSummary[];
   generatedAt: string;
+}
+
+/**
+ * Preenche TODOS os dias civis do período (`listDatesInclusive`, mesma
+ * função já usada por `lib/daily-results.ts` pro mesmo tipo de janela —
+ * nenhuma segunda semântica de data), mesmo os que não têm nenhuma linha em
+ * `dailyRows` — é isso que permite a tabela mostrar "sem dado" pro dia 3 de
+ * um período 1-3 quando só o dia 1 sincronizou, em vez de a tabela
+ * simplesmente terminar cedo. `dailyRows` (esparso) vem de
+ * `ClientAnalyticsData`, já com a mesma soma que alimenta o Resumo
+ * Executivo — Σ dos dias aqui reconcilia exatamente com `actualSpend`/
+ * `summary.resultCount`/`summary.revenue` (mesmas linhas de origem, só
+ * reagrupadas por data em vez de somadas num total só).
+ */
+export function buildDailyRows(period: { start: string; end: string }, dailyRows: ClientAnalyticsDailyRow[]): PerformanceReportDailyRow[] {
+  const byDate = new Map(dailyRows.map((row) => [row.date, row]));
+
+  return listDatesInclusive(period.start, period.end).map((date): PerformanceReportDailyRow => {
+    const row = byDate.get(date);
+    const spend = row?.spend ?? null;
+    const resultCount = row?.resultCount ?? null;
+    const revenue = row?.revenue ?? null;
+    const hasAnyRecord = resultCount !== null;
+
+    return {
+      date,
+      spend,
+      resultCount,
+      revenue,
+      costPerResult: computeCostPerResult(spend, resultCount ?? 0, hasAnyRecord),
+      roas: computeRoas(revenue, spend),
+    };
+  });
 }
 
 function buildReportSummary(data: ClientAnalyticsData): PerformanceReportSummary {
@@ -84,6 +149,8 @@ export async function buildPerformanceReportData(
     client: { id: client.id, name: client.name },
     period: { start: period.start, end: period.end, label: formatDateRange(period.start, period.end) },
     summary: buildReportSummary(analyticsData),
+    performanceGoal: analyticsData.performanceGoal,
+    dailyRows: buildDailyRows(period, analyticsData.dailyRows),
     campaigns,
     adSets,
     creatives,

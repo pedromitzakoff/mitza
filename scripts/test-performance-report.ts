@@ -93,6 +93,8 @@ function fakeData(overrides: Partial<PerformanceReportData> = {}): PerformanceRe
     client: { id: "client-1", name: "Cliente Teste" },
     period: { start: "2026-08-01", end: "2026-08-31", label: "01/08 – 31/08" },
     summary: { status: "ok", kpis: [{ key: "investment", label: "Investimento", value: "R$ 1.000,00" }] },
+    performanceGoal: "sales",
+    dailyRows: [],
     campaigns: [],
     adSets: [],
     creatives: [],
