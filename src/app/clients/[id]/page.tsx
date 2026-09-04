@@ -264,14 +264,15 @@ export default async function ClientPage({
 
   // Etapa "Reorganização do hub de Analytics": a plataforma deixou de ser
   // "um lugar pra ver relatórios" e virou "um lugar pra entender a
-  // operação" (pedido explícito do usuário). Etapa "Relatório Único":
-  // Analytics (o hub Resumo/Criativos/Campanhas/Insights) foi aposentado —
-  // toda a inteligência de performance mora agora só no Relatório de
-  // Performance (`/clients/[id]/relatorio` → `/api/clients/[id]/performance-report`),
-  // acessível pelo link "Relatório" da barra de navegação, nunca mais uma
-  // aba própria desta página. Só restam 2 áreas de nível superior: Visão
-  // Geral (trabalho operacional do dia a dia) e Timeline (consulta ao
-  // histórico automático).
+  // operação" (pedido explícito do usuário). Etapa "Relatório Único"/
+  // "Relatório Nativo": Analytics (o hub Resumo/Criativos/Campanhas/
+  // Insights) foi aposentado — toda a inteligência de performance mora
+  // agora só na página nativa do Relatório de Performance
+  // (`/clients/[id]/relatorio`, dados carregados direto — PDF é só a opção
+  // de exportação dentro dela), acessível pelo link "Relatório" da barra de
+  // navegação, nunca mais uma aba própria desta página. Só restam 2 áreas
+  // de nível superior: Visão Geral (trabalho operacional do dia a dia) e
+  // Timeline (consulta ao histórico automático).
   type ClientArea = "visao-geral" | "timeline";
   const AREA_TABS: { key: ClientArea; label: string }[] = [
     { key: "visao-geral", label: "Visão geral" },
@@ -1158,14 +1159,15 @@ export default async function ClientPage({
   // (subheader sticky compartilhado por toda /clients/[id]/**, removido).
   // Status já aparece como badge ao lado do nome, por isso não se repete
   // na linha secundária abaixo.
-  // Etapa "Relatório Único": "Relatório" agora leva direto pra tela mínima
-  // de seleção de período (`/clients/[id]/relatorio`) — nunca mais um
-  // Analytics intermediário no meio do caminho. Sempre independente do mês
-  // selecionado no resto da página (mesmo princípio de sempre do período do
-  // Analytics MVP, aposentado nesta etapa: "sempre independente de sprint e
-  // do mês selecionado no resto da página") — a própria tela de período
-  // decide o intervalo, com seus próprios presets (Hoje/Ontem/Últimos 7
-  // dias/.../Personalizado).
+  // Etapa "Relatório Nativo": "Relatório" agora leva direto pro Relatório de
+  // Performance já carregado (padrão: mês atual) — nunca mais um Analytics
+  // intermediário nem uma tela própria de seleção de período no meio do
+  // caminho. Sempre independente do mês selecionado no resto da página
+  // (mesmo princípio de sempre do período do Analytics MVP, aposentado na
+  // Etapa "Relatório Único": "sempre independente de sprint e do mês
+  // selecionado no resto da página") — o próprio Relatório de Performance
+  // tem seu controle de período embutido (Hoje/Ontem/Últimos 7 dias/.../
+  // Personalizado), sem parâmetro nenhum aqui.
   const reportHref = `/clients/${client.id}/relatorio`;
   // Etapa "Cabeçalho enxuto": a segunda linha do cabeçalho responde só
   // "quem é o responsável?" — conta Meta (`meta_ad_account_id`) e tempo de

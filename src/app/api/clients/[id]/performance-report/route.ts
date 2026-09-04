@@ -8,23 +8,21 @@ import { renderPerformanceReportHtml } from "@/lib/performance-report/renderers/
 import { renderReportPdf } from "@/lib/performance-report/renderers/pdf-renderer";
 
 /**
- * Gerador de Relatório de Performance — Route Handler (não Server Action):
- * sem auth manual (`createClient()` cookie-based já escopa `clients` via
- * RLS). Pipeline: dado → documento → HTML → PDF, cada camada só conhecendo a
- * de baixo. Etapa "Relatório Único": única implementação de relatório de
- * performance da plataforma — o antigo `/api/clients/[id]/analytics-report`
- * (Exportar relatório do Analytics) foi aposentado, e `renderReportPdf`
- * (`renderers/pdf-renderer.ts`) migrou pra dentro deste módulo porque só
- * esta rota ainda o usa.
+ * Gerador do PDF do Relatório de Performance — Route Handler (não Server
+ * Action): sem auth manual (`createClient()` cookie-based já escopa
+ * `clients` via RLS). Pipeline: dado → documento → HTML → PDF, cada camada
+ * só conhecendo a de baixo — mesma Camada 1/2 (`report-data`/
+ * `report-document`) usada pela página nativa (`/clients/[id]/relatorio`),
+ * nunca um segundo cálculo de métricas.
  *
- * `format=html` (padrão) devolve a página pra visualização inline no
- * navegador (o botão "Baixar PDF" já embutido no próprio HTML — ver
- * `renderers/html-renderer.ts` — reaponta pra esta mesma rota com
- * `format=pdf`); `format=pdf` devolve o binário com
- * `Content-Disposition: attachment`, reaproveitando `renderReportPdf` sem
- * NENHUMA alteração (mesma técnica Chromium/`puppeteer-core` já validada em
- * produção pelo AnalyticsReport). v1 é Meta-only — nenhum parâmetro de
- * plataforma aqui.
+ * Etapa "Relatório Nativo": esta rota deixou de servir HTML pra visualização
+ * (`format=html`) — a experiência principal agora é a página nativa; aqui
+ * sobra só a exportação em PDF, sempre binário com
+ * `Content-Disposition: attachment`. `renderPerformanceReportHtml`
+ * (`renderers/html-renderer.ts`) continua existindo como infraestrutura
+ * interna — o PDF é gerado renderizando esse HTML em Chromium headless
+ * (`renderers/pdf-renderer.ts`), nunca visível diretamente ao usuário. v1 é
+ * Meta-only — nenhum parâmetro de plataforma aqui.
  */
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -51,21 +49,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     start: url.searchParams.get("analyticsStart") ?? undefined,
     end: url.searchParams.get("analyticsEnd") ?? undefined,
   });
-  const format = url.searchParams.get("format") === "pdf" ? "pdf" : "html";
 
   try {
     const data = await buildPerformanceReportData(supabase, id, period);
     const document = buildPerformanceReportDocument(data);
-
-    if (format === "html") {
-      const pdfUrl = new URL(request.url);
-      pdfUrl.searchParams.set("format", "pdf");
-      const html = renderPerformanceReportHtml(document, { pdfHref: `${pdfUrl.pathname}${pdfUrl.search}` });
-      return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-    }
-
     const html = renderPerformanceReportHtml(document);
-
     const pdf = await renderReportPdf(html, null);
     return new NextResponse(Buffer.from(pdf), {
       headers: {

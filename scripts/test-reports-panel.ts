@@ -29,7 +29,7 @@ const septemberHref = buildPerformanceReportHref("client-1", { firstDay: "2026-0
 ok("usa analyticsPreset=custom (obrigatório pra resolveAnalyticsPeriod respeitar start/end)", septemberHref.includes("analyticsPreset=custom"));
 ok("start = primeiro dia do mês selecionado", septemberHref.includes("analyticsStart=2026-09-01"));
 ok("end = último dia do mês selecionado", septemberHref.includes("analyticsEnd=2026-09-30"));
-ok("aponta pra rota existente do Relatório de Performance, nunca uma nova", septemberHref.startsWith("/api/clients/client-1/performance-report?"));
+ok("aponta pra página nativa existente do Relatório de Performance, nunca uma nova", septemberHref.startsWith("/clients/client-1/relatorio?"));
 
 const februaryHref = buildPerformanceReportHref("client-2", { firstDay: "2026-02-01", lastDay: "2026-02-28" });
 ok("mês diferente (fevereiro, ano não bissexto) usa exatamente o lastDay recebido, nunca recalculado", februaryHref.includes("analyticsEnd=2026-02-28"));

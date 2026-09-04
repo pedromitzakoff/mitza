@@ -11,13 +11,13 @@ import type { MonthlyReportStatus } from "@/lib/supabase/database.types";
  */
 
 /**
- * "Abrir relatório" — sempre o Relatório de Performance já existente
- * (`/api/clients/[id]/performance-report`), NUNCA uma segunda
- * implementação de Campanhas/Criativos. `analyticsPreset=custom` é
- * obrigatório: sem ele, `resolveAnalyticsPeriod` (lib/analytics.ts) ignora
- * `analyticsStart`/`analyticsEnd` e cai no mês corrente por padrão — o
- * período exato selecionado em `/reports` só chega ao relatório se o preset
- * for explicitamente "custom".
+ * "Abrir relatório" — sempre a página NATIVA do Relatório de Performance
+ * (`/clients/[id]/relatorio`, Etapa "Relatório Nativo"), nunca o endpoint
+ * de PDF nem uma segunda implementação de Campanhas/Criativos.
+ * `analyticsPreset=custom` é obrigatório: sem ele, `resolveAnalyticsPeriod`
+ * (lib/analytics.ts) ignora `analyticsStart`/`analyticsEnd` e cai no mês
+ * corrente por padrão — o período exato selecionado em `/reports` só chega
+ * ao relatório se o preset for explicitamente "custom".
  */
 export function buildPerformanceReportHref(clientId: string, monthRange: { firstDay: string; lastDay: string }): string {
   const params = new URLSearchParams({
@@ -25,7 +25,7 @@ export function buildPerformanceReportHref(clientId: string, monthRange: { first
     analyticsStart: monthRange.firstDay,
     analyticsEnd: monthRange.lastDay,
   });
-  return `/api/clients/${clientId}/performance-report?${params.toString()}`;
+  return `/clients/${clientId}/relatorio?${params.toString()}`;
 }
 
 /** Aposentadoria de `/reports/[clientId]` (Etapa "Separação..."): nunca

@@ -20,8 +20,8 @@ import { ReportsFilters } from "./reports-filters";
  * Etapa "Separação Relatório Operacional × Documento de Performance":
  * `/reports` deixa de tentar ser um segundo documento de performance
  * (Campanhas/Criativos/KPIs saíram — isso é 100% do Relatório de
- * Performance agora, `/api/clients/[id]/performance-report`) e vira só o
- * painel de FECHAMENTO — a pergunta que esta tela responde é sempre "quais
+ * Performance agora, `/clients/[id]/relatorio`) e vira só o painel de
+ * FECHAMENTO — a pergunta que esta tela responde é sempre "quais
  * relatórios deste mês ainda faltam fechar?", nunca "como foi a
  * performance?". Status/finalizar/reabrir continuam as MESMAS 3 Server
  * Actions de sempre (`report-actions.ts`), só que chamadas direto da linha
@@ -234,14 +234,12 @@ export default async function ReportsPage({
                     </td>
                     <td className="py-2 px-3 text-muted-foreground">{resolved.updatedAtLabel}</td>
                     <td className="py-2 px-3 text-right">
-                      <a
+                      <Link
                         href={buildPerformanceReportHref(state.clientId, monthRange)}
-                        target="_blank"
-                        rel="noopener noreferrer"
                         className="rounded-md border border-transparent px-2 py-1 text-xs font-medium text-brand transition-colors hover:border-border hover:bg-zinc-100 dark:hover:bg-zinc-900"
                       >
                         Abrir relatório
-                      </a>
+                      </Link>
                     </td>
                   </tr>
                 );
