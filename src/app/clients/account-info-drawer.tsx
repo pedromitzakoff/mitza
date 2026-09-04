@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { SubmitButton } from "@/app/submit-button";
+import { ReportShareLinkPanel } from "./report-share-link-panel";
 
 const SYNC_SUBMIT_BUTTON_CLASSES =
   "mitza-pressable inline-flex h-7 shrink-0 items-center justify-center rounded-md px-2.5 text-xs font-medium text-overview-text-secondary transition-colors hover:bg-overview-surface-hover hover:text-overview-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
@@ -80,6 +81,10 @@ export function AccountInfoDrawer({
   syncAction,
   recentSyncRuns,
   reviewsHistoryHref,
+  clientId,
+  isAdmin,
+  hasActiveReportShareLink,
+  reportShareLinkCreatedAtLabel,
 }: {
   triggerClassName: string;
   lastPerformanceUpdateLabel: string;
@@ -107,6 +112,12 @@ export function AccountInfoDrawer({
    * chama — vazio pra qualquer outro perfil. */
   recentSyncRuns: AccountInfoSyncRun[];
   reviewsHistoryHref: string;
+  clientId: string;
+  /** Etapa "Link Externo V1": gerar/revogar o link é admin-only — a seção
+   * "Compartilhamento" nem aparece pra gestor. */
+  isAdmin: boolean;
+  hasActiveReportShareLink: boolean;
+  reportShareLinkCreatedAtLabel: string | null;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -181,6 +192,19 @@ export function AccountInfoDrawer({
                   ) : (
                     metaOnlyLastSyncLabel && <Row label="Dados sincronizados" value={metaOnlyLastSyncLabel} />
                   )}
+                </Section>
+              )}
+
+              {isAdmin && (
+                <Section title="Compartilhamento">
+                  <p className="text-[11px] text-overview-text-muted">
+                    Link do cliente — acesso somente leitura ao Relatório de Performance, sem login.
+                  </p>
+                  <ReportShareLinkPanel
+                    clientId={clientId}
+                    initialActive={hasActiveReportShareLink}
+                    initialCreatedAtLabel={reportShareLinkCreatedAtLabel}
+                  />
                 </Section>
               )}
 

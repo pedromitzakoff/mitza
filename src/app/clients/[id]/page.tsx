@@ -57,6 +57,7 @@ import { emphasizeDeviationText } from "@/components/workspace/status-dot";
 import { SubmitButton } from "@/app/submit-button";
 import { syncClientStractSourcesAction } from "../stract-sync-actions";
 import { getLatestSyncRunStatusForSources } from "@/lib/stract-sync";
+import { getReportShareLinkStatus } from "@/lib/report-share-links";
 import { ClientIdentitySticky } from "../client-identity-sticky";
 import { ClientWorkspaceContext } from "../client-workspace-context";
 import { AccountInfoDrawer } from "../account-info-drawer";
@@ -347,6 +348,10 @@ export default async function ClientPage({
   // (ver nota lá sobre por que `synced_at` não serve pra isso).
   const latestSpendDate = stractImportSourceIds.length > 0 ? await getLatestDailySpendDate(supabase, id) : null;
   const recentSyncRuns = isAdmin && stractImportSourceIds.length > 0 ? await getRecentSyncRunsForClient(supabase, stractImportSourceIds) : [];
+
+  // Etapa "Link Externo V1" — só admin gerencia o link (`account-info-drawer.tsx`),
+  // mesmo critério de `recentSyncRuns` acima: nem consulta pra outro perfil.
+  const reportShareLinkStatus = isAdmin ? await getReportShareLinkStatus(id) : { active: false, createdAt: null };
 
   // Habilitar Gestores 1.0: "Atualizar performance" (investimento realizado
   // + resultados da sprint) deixou de ser admin-only — o gestor responsável
@@ -1254,6 +1259,9 @@ export default async function ClientPage({
   const accountInfoMetaOnlyLastSyncLabel = clientOperationalState?.lastDataSyncAt
     ? formatRelativeDateTime(clientOperationalState.lastDataSyncAt, nowInstant)
     : null;
+  const accountInfoReportShareLinkCreatedAtLabel = reportShareLinkStatus.createdAt
+    ? formatRelativeDateTime(reportShareLinkStatus.createdAt, nowInstant)
+    : null;
   const accountInfoRecentSyncRuns = recentSyncRuns.map((run) => ({
     id: run.id,
     statusLabel: SYNC_RUN_STATUS_LABEL[run.status],
@@ -1497,6 +1505,10 @@ export default async function ClientPage({
           syncAction={syncClientStractSourcesAction.bind(null, client.id)}
           recentSyncRuns={accountInfoRecentSyncRuns}
           reviewsHistoryHref={reviewsHistoryHref}
+          clientId={client.id}
+          isAdmin={isAdmin}
+          hasActiveReportShareLink={reportShareLinkStatus.active}
+          reportShareLinkCreatedAtLabel={accountInfoReportShareLinkCreatedAtLabel}
         />
         {/* Etapa "Refinamento Visual 2.0": Editar por último — é a ação
             administrativa menos frequente do grupo, não deveria abrir a

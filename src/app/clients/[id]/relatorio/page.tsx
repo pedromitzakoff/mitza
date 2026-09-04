@@ -7,8 +7,7 @@ import { buildPerformanceReportData } from "@/lib/performance-report/report-data
 import { buildPerformanceReportDocument } from "@/lib/performance-report/report-document";
 import { ReportPeriodControl } from "./report-period-control";
 import { buildReportPdfHref } from "./report-period-nav";
-import { ReportKpiGrid } from "./report-kpi-grid";
-import { ReportTableSection } from "./report-table-section";
+import { ReportBody } from "./report-body";
 
 /**
  * Etapa "Relatório Nativo": "Cliente → Relatório → relatório" — esta rota É
@@ -69,7 +68,7 @@ export default async function ClientPerformanceReportPage({
         <h1 className="text-2xl font-bold text-overview-text-primary">Relatório de Performance</h1>
         <div className="flex flex-wrap items-center gap-3">
           <ReportPeriodControl
-            clientId={client.id}
+            basePath={`/clients/${client.id}/relatorio`}
             activePreset={activePreset}
             periodLabel={document.periodLabel}
             customStart={period.start}
@@ -88,27 +87,9 @@ export default async function ClientPerformanceReportPage({
           (paleta fixa creme/areia/grafite/branco/verde-limão) — preservada
           tal como no HTML/PDF, só sem os elementos exclusivos de documento
           (hero/marca/nav sticky/impressão): dentro da aplicação, o cabeçalho
-          acima já cumpre esse papel. */}
-      <div className="mt-5 rounded-2xl border border-[#D9D3C9] bg-[#EFE9E0] px-4 py-6 sm:px-8">
-        <section id="resumo" className="pb-9">
-          <div className="text-[11px] font-extrabold tracking-[0.15em] text-[#6F6B65]">RESUMO EXECUTIVO</div>
-          <h2 className="mt-1 text-2xl font-bold tracking-tight text-[#17171A]">Visão geral da performance</h2>
-          <p className="mt-1 max-w-xl text-sm text-[#6F6B65]">
-            CPA e ROAS recalculados a partir dos totais do período, nunca pela média das linhas.
-          </p>
-          <div className="mt-5">
-            <ReportKpiGrid summary={document.summary} />
-          </div>
-        </section>
-
-        {document.tables.map((table) => (
-          <ReportTableSection key={table.id} table={table} />
-        ))}
-
-        <p className="border-t border-[#D9D3C9] pt-5 text-xs text-[#6F6B65]">
-          Relatório de Performance · Meta Ads — gerado em {document.generatedAtLabel}.
-        </p>
-      </div>
+          acima já cumpre esse papel. Corpo compartilhado com `/r/[token]`
+          (Etapa "Link Externo V1") via `ReportBody`, nunca duplicado. */}
+      <ReportBody document={document} />
     </div>
   );
 }

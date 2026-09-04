@@ -19,11 +19,13 @@ function buildPeriodParams(preset: AnalyticsPeriodPreset, custom?: { start: stri
   return params;
 }
 
-/** Navegação dentro da própria página nativa (`/clients/[id]/relatorio`) —
- * trocar de período nunca é um link pra fora, sempre a MESMA rota com outra
- * querystring. */
-export function buildReportPeriodHref(clientId: string, preset: AnalyticsPeriodPreset, custom?: { start: string; end: string }): string {
-  return `/clients/${clientId}/relatorio?${buildPeriodParams(preset, custom).toString()}`;
+/** Navegação dentro da própria página do relatório — trocar de período
+ * nunca é um link pra fora, sempre a MESMA rota com outra querystring.
+ * `basePath` já resolvido por quem chama (`/clients/<id>/relatorio` na
+ * página interna, `/r/<token>` na Etapa "Link Externo V1") — este helper
+ * nunca sabe se está montando o link pra dentro ou pra fora da plataforma. */
+export function buildReportPeriodHref(basePath: string, preset: AnalyticsPeriodPreset, custom?: { start: string; end: string }): string {
+  return `${basePath}?${buildPeriodParams(preset, custom).toString()}`;
 }
 
 /** "Baixar PDF" — mesmo período em exibição, mesma rota de geração de PDF

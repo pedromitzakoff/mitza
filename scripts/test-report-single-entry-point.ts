@@ -73,7 +73,7 @@ ok(
 console.log("\n4 — buildReportPeriodHref: troca de período navega dentro da MESMA página nativa, URL reflete o período\n");
 
 for (const preset of ["today", "yesterday", "last_7_days", "last_30_days", "this_month", "last_month"] as const) {
-  const href = buildReportPeriodHref("client-1", preset);
+  const href = buildReportPeriodHref("/clients/client-1/relatorio", preset);
   ok(`preset "${preset}": aponta pra página nativa (/clients/[id]/relatorio), nunca pro endpoint de PDF`, href.startsWith("/clients/client-1/relatorio?"));
   ok(`preset "${preset}": carrega o preset na querystring (refresh/back/forward reproduzem o mesmo período)`, href.includes(`analyticsPreset=${preset}`));
   ok(`preset "${preset}": nunca inclui analyticsStart/analyticsEnd (a semântica já está no preset)`, !href.includes("analyticsStart") && !href.includes("analyticsEnd"));
@@ -82,7 +82,7 @@ for (const preset of ["today", "yesterday", "last_7_days", "last_30_days", "this
 // ---------------------------------------------------------------------------
 console.log("\n5 — buildReportPeriodHref: período personalizado (data inicial/final)\n");
 
-const customHref = buildReportPeriodHref("client-2", "custom", { start: "2026-03-05", end: "2026-03-20" });
+const customHref = buildReportPeriodHref("/clients/client-2/relatorio", "custom", { start: "2026-03-05", end: "2026-03-20" });
 ok("usa analyticsPreset=custom", customHref.includes("analyticsPreset=custom"));
 ok("data inicial chega intacta", customHref.includes("analyticsStart=2026-03-05"));
 ok("data final chega intacta", customHref.includes("analyticsEnd=2026-03-20"));
@@ -100,7 +100,7 @@ check("round-trip do período personalizado: mesma data inicial/final que o usu�
 // ---------------------------------------------------------------------------
 console.log("\n6 — buildReportPeriodHref: período de 7 dias chega corretamente\n");
 
-const last7Href = buildReportPeriodHref("client-3", "last_7_days");
+const last7Href = buildReportPeriodHref("/clients/client-3/relatorio", "last_7_days");
 const last7Url = new URL(`https://mitza.test${last7Href}`);
 const last7Period = resolveAnalyticsPeriod(last7Url.searchParams.get("analyticsPreset") ?? undefined, "2026-09-15");
 check("últimos 7 dias terminando hoje, 7 dias corridos", last7Period, { start: "2026-09-09", end: "2026-09-15" });
@@ -108,12 +108,12 @@ check("últimos 7 dias terminando hoje, 7 dias corridos", last7Period, { start: 
 // ---------------------------------------------------------------------------
 console.log("\n7 — buildReportPeriodHref: período mensal chega corretamente\n");
 
-const thisMonthHref = buildReportPeriodHref("client-4", "this_month");
+const thisMonthHref = buildReportPeriodHref("/clients/client-4/relatorio", "this_month");
 const thisMonthUrl = new URL(`https://mitza.test${thisMonthHref}`);
 const thisMonthPeriod = resolveAnalyticsPeriod(thisMonthUrl.searchParams.get("analyticsPreset") ?? undefined, "2026-09-15");
 check("mês atual: 1º ao último dia de setembro/2026", thisMonthPeriod, { start: "2026-09-01", end: "2026-09-30" });
 
-const lastMonthHref = buildReportPeriodHref("client-5", "last_month");
+const lastMonthHref = buildReportPeriodHref("/clients/client-5/relatorio", "last_month");
 const lastMonthUrl = new URL(`https://mitza.test${lastMonthHref}`);
 const lastMonthPeriod = resolveAnalyticsPeriod(lastMonthUrl.searchParams.get("analyticsPreset") ?? undefined, "2026-09-15");
 check("mês anterior: 1º ao último dia de agosto/2026", lastMonthPeriod, { start: "2026-08-01", end: "2026-08-31" });

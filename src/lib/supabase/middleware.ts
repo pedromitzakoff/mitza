@@ -1,9 +1,17 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login"];
+// Etapa "Link Externo V1": `/r/[token]` é o Performance Report somente
+// leitura enviado ao cliente — nunca exige sessão MITZA. A autorização real
+// não é esta lista (que só evita o redirect pro `/login`); é a resolução do
+// token contra `report_share_links`, feita dentro da própria rota
+// (`resolveClientIdFromShareToken`, `lib/report-share-links.ts`).
+const PUBLIC_PATHS = ["/login", "/r"];
 
-function isPublicPath(pathname: string) {
+/** Exportado só pra `scripts/test-report-share-links.ts` exercitar a lógica
+ * real de "esta rota exige sessão?" sem precisar montar um `NextRequest`/
+ * Supabase de verdade (`updateSession` chama rede). */
+export function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 

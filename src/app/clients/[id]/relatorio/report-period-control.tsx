@@ -16,13 +16,15 @@ import { buildReportPeriodHref, isValidCustomRange } from "./report-period-nav";
  * (`lib/analytics.ts`) — nenhuma semântica de data nova.
  */
 export function ReportPeriodControl({
-  clientId,
+  basePath,
   activePreset,
   periodLabel,
   customStart,
   customEnd,
 }: {
-  clientId: string;
+  /** Rota atual do relatório já resolvida por quem chama — `/clients/<id>/relatorio`
+   * na página interna, `/r/<token>` no link externo (Etapa "Link Externo V1"). */
+  basePath: string;
   activePreset: AnalyticsPeriodPreset;
   /** Já formatado (`PerformanceReportDocument.periodLabel`) — mostrado ao
    * lado do seletor pra qualquer preset, inclusive fora de "custom". */
@@ -41,15 +43,15 @@ export function ReportPeriodControl({
 
   function handlePresetChange(value: string) {
     if (value === "custom") {
-      router.push(buildReportPeriodHref(clientId, "custom", { start, end }));
+      router.push(buildReportPeriodHref(basePath, "custom", { start, end }));
       return;
     }
-    router.push(buildReportPeriodHref(clientId, value as AnalyticsPeriodPreset));
+    router.push(buildReportPeriodHref(basePath, value as AnalyticsPeriodPreset));
   }
 
   function applyCustomRange() {
     if (!customIsValid) return;
-    router.push(buildReportPeriodHref(clientId, "custom", { start, end }));
+    router.push(buildReportPeriodHref(basePath, "custom", { start, end }));
   }
 
   return (

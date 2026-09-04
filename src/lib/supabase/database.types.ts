@@ -2890,6 +2890,38 @@ export interface Database {
           },
         ];
       };
+      report_share_links: {
+        Row: {
+          id: string;
+          client_id: string;
+          token_hash: string;
+          created_at: string;
+          revoked_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          token_hash: string;
+          created_at?: string;
+          revoked_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          token_hash?: string;
+          created_at?: string;
+          revoked_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "report_share_links_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       client_last_operational_activity: {
