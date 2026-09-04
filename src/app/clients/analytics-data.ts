@@ -13,6 +13,10 @@ import { buildAnalyticsChannelRows, buildAnalyticsTrend, type AnalyticsChannelRo
 import { previousEquivalentPeriod } from "@/lib/period-comparison";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import type { TrafficChannel } from "@/lib/traffic-channels";
+import { AVAILABLE_TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
+import { resolveClientMonthlyPlan, resolveTargetCostPerResult, type ClientPlanChangeRow } from "@/lib/client-plan";
+import { firstDayOfMonth } from "@/lib/achievement-dates";
+import { todayDateString } from "@/lib/today";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -130,19 +134,57 @@ export async function fetchClientAnalyticsData(
    * (comportamento anterior, inalterado). */
   channel?: TrafficChannel,
 ): Promise<ClientAnalyticsData> {
-  const [clientRows, dailySpendRowsAllChannels, activeImportClientIds] = await Promise.all([
+  const [clientRows, dailySpendRowsAllChannels, activeImportClientIds, planChangeRows] = await Promise.all([
     requireQuery(
       supabase.from("clients").select("performance_goal, target_cost_per_result").eq("id", clientId),
       "clients:analytics",
     ),
     getDailySpendRowsForPeriod(supabase, clientId, { firstDay: period.start, lastDay: period.end }),
     getClientIdsWithActiveImportSource(supabase, [clientId]),
+    // Etapa "Meta/Custo-Alvo: Centralizar a Regra" — `targetCostPerResult`
+    // deixa de vir só de `clients.target_cost_per_result` (fallback legado
+    // sem plano por canal) e passa a checar primeiro o planejamento mensal
+    // vigente, mesma regra de `clients/[id]/page.tsx`/Sprints/Motor de
+    // Saúde/Conquistas (`resolveTargetCostPerResult`). `.lte` (não `.eq`):
+    // carry-forward do mês vigente, nunca uma segunda regra de vigência.
+    // Sem filtro de `result_type` no SQL (o objetivo principal só é
+    // conhecido depois que `clientRows` resolve, abaixo) — filtrado em
+    // JavaScript com a mesma semântica de `primaryGoalResultTypeFilter`.
+    requireQuery(
+      supabase
+        .from("monthly_budget_changes")
+        .select("channel, result_type, month, changed_at, new_amount, target_result_count")
+        .eq("client_id", clientId)
+        .lte("month", firstDayOfMonth(todayDateString())),
+      "monthly_budget_changes:target",
+    ),
   ]);
 
   const dailySpendRows = channel ? dailySpendRowsAllChannels.filter((row) => row.channel === channel) : dailySpendRowsAllChannels;
 
   const performanceGoal = clientRows[0]?.performance_goal ?? null;
-  const targetCostPerResult = clientRows[0]?.target_cost_per_result ?? null;
+  // Meta de custo é fato de CONTA (Analytics/Performance Report nunca têm
+  // seletor de canal separado do Consolidado/Meta/Google já embutido em
+  // `channel` acima) — nunca CPA REALIZADO (auditoria "Fase 1", Bug 4).
+  const planChanges: ClientPlanChangeRow[] = planChangeRows
+    .filter((row) => row.result_type == null || row.result_type === performanceGoal)
+    .map((row) => ({
+      channel: row.channel as TrafficChannel,
+      month: row.month,
+      changedAt: row.changed_at,
+      investment: row.new_amount,
+      targetResultCount: row.target_result_count,
+    }));
+  const clientMonthlyPlan = resolveClientMonthlyPlan({
+    channels: AVAILABLE_TRAFFIC_CHANNELS,
+    changes: planChanges,
+    selectedMonth: firstDayOfMonth(todayDateString()),
+  });
+  const targetCostPerResult = resolveTargetCostPerResult({
+    channel: channel ?? "consolidated",
+    plan: clientMonthlyPlan,
+    legacyFallback: clientRows[0]?.target_cost_per_result ?? null,
+  });
   const hasActiveIntegration = activeImportClientIds.has(clientId);
   const actualSpend = dailySpendRows.reduce((sum, row) => sum + row.spend, 0);
 

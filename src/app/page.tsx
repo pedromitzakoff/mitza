@@ -48,7 +48,7 @@ import { SandRail } from "@/components/workspace/sand-rail";
 import type { StatusTone } from "@/components/workspace/status-dot";
 import type { TrafficChannelDb } from "@/lib/supabase/database.types";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
-import { resolveClientMonthlyPlan, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
+import { resolveClientMonthlyPlan, resolveTargetCostPerResult, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
 import type { SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 import { previousEquivalentPeriod } from "@/lib/period-comparison";
 import { buildPercentChangeComparison, type AnalyticsKpiComparison } from "@/lib/analytics";
@@ -550,7 +550,11 @@ export default async function Home({
   const resolvedTargetCostByClient = new Map<string, number | null>(
     (clients ?? []).map((c) => [
       c.id,
-      clientMonthlyPlanByClient.get(c.id)?.consolidated.cpa ?? permanentCostFallbackByClient.get(c.id) ?? null,
+      resolveTargetCostPerResult({
+        channel: "consolidated",
+        plan: clientMonthlyPlanByClient.get(c.id) ?? { byChannel: {}, consolidated: { investment: null, resultCount: null, cpa: null } },
+        legacyFallback: permanentCostFallbackByClient.get(c.id) ?? null,
+      }),
     ]),
   );
 
@@ -791,9 +795,13 @@ export default async function Home({
   const channelActualTotal =
     platformFilter !== "consolidado" ? cards.reduce((sum, c) => sum + (c.monthActualByChannel[platformFilter] ?? 0), 0) : null;
 
-  const investmentDiff = financial.actual - financial.expectedToDate;
+  // AJUSTE 1: ritmo compara SÓ o realizado dos clientes com meta
+  // (`actualForPacing`) contra planejado/esperado — os dois já são a mesma
+  // base de clientes. `financial.actual` (total da agência, todos os
+  // clientes) alimenta só o KPI "Investimento" abaixo, nunca o ritmo.
+  const investmentDiff = financial.actualForPacing - financial.expectedToDate;
   const investmentRitmoStatus =
-    financial.planned > 0 ? classifySpendStatus(financial.actual, financial.expectedToDate, financial.planned) : "sem_meta";
+    financial.planned > 0 ? classifySpendStatus(financial.actualForPacing, financial.expectedToDate, financial.planned) : "sem_meta";
   const investmentDiffTone: StatusTone =
     investmentRitmoStatus === "acima" ? "danger" : investmentRitmoStatus === "abaixo" ? "warning" : "neutral";
   // Etapa "Refinamento Visão Geral da Agência" (Ponto 4): o diagnóstico de
@@ -1102,7 +1110,7 @@ export default async function Home({
                   <div className="mt-2">
                     <ProgressBar
                       planned={financial.planned}
-                      actual={financial.actual}
+                      actual={financial.actualForPacing}
                       expectedToDate={financial.expectedToDate}
                       monthTemporalStatus={monthTemporalStatus}
                     />

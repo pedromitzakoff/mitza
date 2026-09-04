@@ -1,5 +1,5 @@
 import { safeDivide } from "@/lib/performance";
-import type { TrafficChannel } from "@/lib/traffic-channels";
+import type { TrafficChannel, ChannelScope } from "@/lib/traffic-channels";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import type { ClientGoal } from "@/lib/client-goals";
 import { consolidateChannelMetrics, type ChannelMetrics, type ClientChannelMetrics } from "@/lib/channel-metrics";
@@ -121,15 +121,19 @@ export function resolveClientMonthlyPlan(input: {
  * Wrapper de `resolveClientMonthlyPlan` pros consumidores que só precisam
  * do INVESTIMENTO consolidado do mês (Sprints, Dashboard, lista de
  * Clientes, Painel Mensal, Relatórios — Etapa "Migração Multicanal dos
- * Consumidores") — nunca uma soma local reimplementada por tela. Esses
- * consumidores historicamente buscam `monthly_budget_changes` já filtrado
- * `month = selectedMonth` (nunca `month <= selectedMonth`) — passar essas
- * linhas direto aqui preserva esse comportamento de sempre, porque toda
- * linha do input já satisfaz `month <= selectedMonth` trivialmente (são
- * todas do mesmo mês); a regra de "versão vigente carregada de um mês
- * anterior" de `resolveClientMonthlyPlan` só ativa se o chamador decidir
- * ampliar a própria query — nenhuma mudança de comportamento pra quem
- * continuar buscando só o mês exato.
+ * Consumidores") — nunca uma soma local reimplementada por tela. Todo
+ * consumidor atual já busca `monthly_budget_changes` com `month <=
+ * selectedMonth` (nunca `month = selectedMonth`), exatamente pra este
+ * resolvedor poder aplicar o carry-forward (a versão vigente de um mês sem
+ * alteração própria é a mais recente dentre os meses anteriores) — ver
+ * `page.tsx`/`painel-mensal/page.tsx`/`clients/page.tsx`/`sprints/page.tsx`.
+ * Passar um `changes` já restrito a `month = selectedMonth` (equivalente a
+ * um cliente que nunca teve orçamento configurado num mês anterior) ainda
+ * funciona — `eligible.length === 0` nesse caso e o canal cai pro estado
+ * "sem plano" normalmente — mas NUNCA construa uma query nova assim de
+ * propósito: `.lte` é a única forma correta de "plano vigente" e é
+ * responsabilidade do CHAMADOR buscar o histórico completo, nunca desta
+ * função reimplementar a regra de vigência a partir de dado incompleto.
  *
  * `fallbackPlannedSum` é o mesmo fallback de sempre (`resolveMonthlyBudget`,
  * lib/monthly-budget.ts): só usado quando NENHUM canal tem nenhuma versão
@@ -198,4 +202,45 @@ export function resolveClientMonthlyGoals(input: {
   });
 
   return { goals };
+}
+
+/**
+ * Custo-alvo por resultado (CPA/CPL) VIGENTE — Etapa "Meta/Custo-Alvo:
+ * Centralizar a Regra". Única definição de "qual é a meta de custo agora"
+ * na plataforma: plano do canal/objetivo selecionado (`plan.byChannel`) →
+ * plano consolidado (`plan.consolidated.cpa`) → `clients.target_cost_per_result`
+ * como fallback legado (cliente que nunca passou pelo editor de
+ * planejamento por canal). Extraída de dentro da Visão Geral do Cliente
+ * (`clients/[id]/page.tsx`, `targetCostPerResult`/`scopedTargetCostPerResult`)
+ * — a única implementação que já fazia essa ordem certa — pra virar a
+ * função central que todo consumidor (Sprints, Motor de Saúde, Conquistas,
+ * Dashboard, Analytics, Performance Report, client_reports) chama, em vez de
+ * cada tela reimplementar seu próprio `?? ` encadeado.
+ *
+ * NUNCA usar CPA REALIZADO como meta (auditoria "Fase 1", Bug 4 — "Relatório
+ * Meta mirrors Realizado"): `plan` aqui é sempre o resultado de
+ * `resolveClientMonthlyPlan`/`resolveClientMonthlyGoals` (PLANEJADO), nunca
+ * de `resolveClientMonthlyActuals`/`resolveClientChannelBreakdown`
+ * (REALIZADO) — passar o resolvedor errado é um erro de quem chama, esta
+ * função não tem como detectar isso pelo tipo (`ChannelMetrics.cpa` é a
+ * mesma forma nos dois mundos).
+ */
+export function resolveTargetCostPerResult(input: {
+  /** Canal específico, ou `"consolidated"` pra meta de conta (nunca uma
+   * segunda meta por canal quando o chamador não tem seletor de canal). */
+  channel: ChannelScope;
+  /** Sempre um resultado de `resolveClientMonthlyPlan`/um `ClientGoalPlan`
+   * de `resolveClientMonthlyGoals` — nunca de um resolvedor de REALIZADO. */
+  plan: { byChannel: Partial<Record<TrafficChannel, ChannelMetrics>>; consolidated: ChannelMetrics };
+  /** `clients.target_cost_per_result` — campo permanente, único fallback
+   * legado aceito. */
+  legacyFallback: number | null;
+}): number | null {
+  const { channel, plan, legacyFallback } = input;
+  const consolidated = plan.consolidated.cpa ?? legacyFallback;
+  if (channel === "consolidated") return consolidated;
+  // Cai pro consolidado (que já cai pro fallback legado) só quando o canal
+  // selecionado ainda não tem meta própria definida — nunca pula direto pro
+  // fallback legado ignorando um consolidado que já existe.
+  return plan.byChannel[channel]?.cpa ?? consolidated;
 }

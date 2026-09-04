@@ -31,7 +31,7 @@ import {
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus } from "@/lib/spend-status";
 import { resolveBudgetEffectiveDate, computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
-import { resolveClientMonthlyPlan, primaryGoalResultTypeFilter } from "@/lib/client-plan";
+import { resolveClientMonthlyPlan, resolveTargetCostPerResult, primaryGoalResultTypeFilter } from "@/lib/client-plan";
 import { listClientGoals, fetchGoalDisplaySummaries } from "@/lib/client-goals";
 import { fetchSecondaryGoalsPerformance } from "@/lib/secondary-goal-performance";
 import { SecondaryGoalsPerformance } from "../secondary-goals-performance";
@@ -757,8 +757,10 @@ export default async function ClientPage({
   // mesmo objeto agora, nunca dois resolvedores separados) — soma dos
   // canais pro resultado, custo por resultado sempre derivado (nunca uma
   // coluna própria). `clients.target_cost_per_result` como fallback só
-  // quando nenhum canal tem plano nenhum ainda.
-  const targetCostPerResult = clientPlan.consolidated.cpa ?? client.target_cost_per_result;
+  // quando nenhum canal tem plano nenhum ainda. Etapa "Meta/Custo-Alvo:
+  // Centralizar a Regra": via `resolveTargetCostPerResult` (lib/client-plan.ts)
+  // — esta era a implementação de referência que virou a função central.
+  const targetCostPerResult = resolveTargetCostPerResult({ channel: "consolidated", plan: clientPlan, legacyFallback: client.target_cost_per_result });
   const monthPerformanceSummary = performanceGoal
     ? computePerformanceSummary({
         scope: "consolidated",
@@ -775,8 +777,11 @@ export default async function ClientPage({
   // o CPA-alvo combinado enquanto todo o resto do painel já está escopado a
   // um canal só). Cai pra `targetCostPerResult` consolidado só quando o
   // canal selecionado ainda não tem meta própria definida.
-  const scopedTargetCostPerResult =
-    metricsChannel === "consolidated" ? targetCostPerResult : (clientPlan.byChannel[metricsChannel]?.cpa ?? targetCostPerResult);
+  const scopedTargetCostPerResult = resolveTargetCostPerResult({
+    channel: metricsChannel,
+    plan: clientPlan,
+    legacyFallback: client.target_cost_per_result,
+  });
   // Versão do resumo do mês escopada ao seletor Consolidado/Meta/Google —
   // alimenta só `AccountFollowUpPanel`/"Fechamento do mês" (abaixo, dentro
   // do bloco `visao-geral`); `monthPerformanceSummary` acima continua

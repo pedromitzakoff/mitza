@@ -6,7 +6,7 @@ import type { AchievementSourceInfo } from "@/lib/achievement-types";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { safeDivide, computeRoas } from "@/lib/performance";
 import { resolveCostScopeComparability, type ChannelMetrics } from "@/lib/channel-metrics";
-import { resolveClientMonthlyPlan, primaryGoalResultTypeFilter, type ClientPlanChangeRow } from "@/lib/client-plan";
+import { resolveClientMonthlyPlan, resolveTargetCostPerResult, primaryGoalResultTypeFilter, type ClientPlanChangeRow } from "@/lib/client-plan";
 import { addDays, firstDayOfMonth, isLastDayOfMonth, lastDayOfMonth, listDatesInclusive, yearMonthOf } from "@/lib/achievement-dates";
 import type { ClientDailyPoint } from "@/lib/achievement-sample";
 import type { ClientAchievementContext, ClientMonthlyGoalInfo } from "@/lib/achievement-client-rules";
@@ -299,7 +299,7 @@ export async function resolveClientMonthlyGoalInfo(
   const plan = resolveClientMonthlyPlan({ channels, changes, selectedMonth: firstDayOfMonth(yearMonth) });
 
   const consolidatedTargetCameFromChannelPlan = plan.consolidated.cpa !== null;
-  const targetCostPerResult = plan.consolidated.cpa ?? fallbackTargetCostPerResult;
+  const targetCostPerResult = resolveTargetCostPerResult({ channel: "consolidated", plan, legacyFallback: fallbackTargetCostPerResult });
 
   if (!consolidatedTargetCameFromChannelPlan) {
     // Meta global (sem plano por canal nenhum) — sempre comparável, mesma

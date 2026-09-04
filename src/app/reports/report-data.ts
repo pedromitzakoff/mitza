@@ -14,7 +14,13 @@ import { groupChannelSpendBySprintId, type SprintChannelSpendOverrideRow } from 
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import { computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { getClientMonthHorizon } from "@/lib/client-month-horizons";
-import { resolveConsolidatedMonthlyPlanned, primaryGoalResultTypeFilter } from "@/lib/client-plan";
+import {
+  resolveConsolidatedMonthlyPlanned,
+  resolveClientMonthlyPlan,
+  resolveTargetCostPerResult,
+  primaryGoalResultTypeFilter,
+  type ClientPlanChangeRow,
+} from "@/lib/client-plan";
 import { resolveClientMonthlyActuals } from "@/lib/client-actuals";
 import { computePerformanceSummary, type PerformanceSummary } from "@/lib/performance";
 import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
@@ -266,7 +272,7 @@ export async function buildReportViewData(
   // `resolveClientChannelScopeOptions`/`resolveSelectedChannelScope`) e da
   // seção "Campanhas" do Analytics (`getCampaignDailyMetricsForPeriod` +
   // `buildCampaignSummaries`) — nenhuma fórmula nova.
-  const [sprintsForActuals, dailySpendChannelRows, channelSpendRows, campaignDailyMetricRows, adCreativeDailyMetricRows] =
+  const [sprintsForActuals, dailySpendChannelRows, channelSpendRows, campaignDailyMetricRows, adCreativeDailyMetricRows, targetPlanChangeRows] =
     await Promise.all([
       requireQuery(
         supabase
@@ -295,6 +301,23 @@ export async function buildReportViewData(
       ),
       getCampaignDailyMetricsForPeriod(supabase, clientId, { start: monthRange.firstDay, end: monthRange.lastDay }),
       getAdCreativeDailyMetricsForPeriod(supabase, clientId, { start: monthRange.firstDay, end: monthRange.lastDay }),
+      // Etapa "Meta/Custo-Alvo: Centralizar a Regra" — mesma regra canônica
+      // de `resolveTargetCostPerResult` (plano do mês vigente antes do
+      // fallback `clients.target_cost_per_result`), substituindo a leitura
+      // crua do campo permanente abaixo. `.lte` = carry-forward (mesma
+      // convenção já usada pela query "target-history" da página do
+      // Cliente). Consultada aqui (fora do bloco condicional "dados ao
+      // vivo") porque `targetCostPerResult` é usado tanto no retorno do
+      // snapshot finalizado quanto no retorno ao vivo, mais abaixo.
+      requireQuery(
+        supabase
+          .from("monthly_budget_changes")
+          .select("channel, month, changed_at, new_amount, target_result_count")
+          .eq("client_id", clientId)
+          .lte("month", monthRange.firstDay)
+          .or(primaryGoalResultTypeFilter(client.performance_goal)),
+        "monthly_budget_changes:target",
+      ),
     ]);
 
   const performanceRecordRowsForActuals = await resolvePerformanceRowsForSprints(
@@ -341,7 +364,28 @@ export async function buildReportViewData(
   // `lib/client-operational-state.ts`, e no uso correto de
   // `resolveClientChannelBreakdown`) — o valor nunca muda com o canal
   // selecionado.
-  const targetCostPerResult = client.target_cost_per_result;
+  // Etapa "Meta/Custo-Alvo: Centralizar a Regra" — `resolveTargetCostPerResult`
+  // (lib/client-plan.ts): plano do mês vigente primeiro, `clients.target_cost_per_result`
+  // como fallback só quando nenhum canal tem plano ainda. Sempre consolidado
+  // (nunca por canal, mesmo com `channelScope` != "consolidated" — Meta de
+  // custo é fato de CONTA, não de canal, ver comentário histórico abaixo).
+  const targetPlanChanges: ClientPlanChangeRow[] = targetPlanChangeRows.map((row) => ({
+    channel: row.channel as TrafficChannel,
+    month: row.month,
+    changedAt: row.changed_at,
+    investment: row.new_amount,
+    targetResultCount: row.target_result_count,
+  }));
+  const targetClientPlan = resolveClientMonthlyPlan({
+    channels: AVAILABLE_TRAFFIC_CHANNELS,
+    changes: targetPlanChanges,
+    selectedMonth: monthRange.firstDay,
+  });
+  const targetCostPerResult = resolveTargetCostPerResult({
+    channel: "consolidated",
+    plan: targetClientPlan,
+    legacyFallback: client.target_cost_per_result,
+  });
   const performanceSummary = performanceGoal
     ? computePerformanceSummary({
         scope: channelScope,

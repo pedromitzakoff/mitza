@@ -46,8 +46,23 @@ export function computeSpendRhythmCounts(cards: OperationClientCard[]): SpendRhy
 
 export interface FinancialSummary {
   planned: number;
+  /** Investimento REALIZADO total da agência — soma de TODOS os clientes do
+   * recorte, independente de `hasMonthGoal` (Etapa "Separação Realizado ×
+   * Ritmo", AJUSTE 1). Um cliente sem planejamento mensal continua com a
+   * conta de anúncios rodando de verdade — excluí-lo daqui subestimaria o
+   * investimento real da agência sem nenhuma base semântica. Nunca usar este
+   * campo como numerador de `pct` (ver `actualForPacing`). */
   actual: number;
-  /** % realizado sobre o planejado, ou null se ninguém no recorte tem meta. */
+  /** Realizado só dos clientes COM meta — a única base comparável ao
+   * `planned` (que também só soma quem tem meta). Numerador de `pct`; nunca
+   * exposto como "o Realizado" isolado (isso é `actual`), só como o termo
+   * interno do ritmo. `actual === actualForPacing` sempre que `semMeta` é 0
+   * (nenhum cliente sem meta no recorte). */
+  actualForPacing: number;
+  /** % realizado sobre o planejado (`actualForPacing / planned`), ou null se
+   * ninguém no recorte tem meta. NUNCA `actual / planned` — misturaria
+   * investimento de clientes sem meta num percentual cujo denominador não os
+   * contém. */
   pct: number | null;
   /** Soma do esperado até hoje (proporcional às sprints do mês) de todos os
    * clientes filtrados — mesma conta de `computeSprintExpectedToDate`. */
@@ -61,24 +76,29 @@ export interface FinancialSummary {
  * (planejado = 0) não distorcem o percentual agregado, só reduzem o
  * denominador corretamente.
  *
- * Etapa 68, seção 14: cliente sem orçamento mensal vigente (`!hasMonthGoal`)
- * nunca entra nestas somas — nem no planejado (já contribuiria 0), nem no
- * REALIZADO consolidado, nem no esperado, nem no % realizado. Sem esse
- * filtro, um cliente sem meta configurada mas com gasto real já sincronizado
- * (a conta de anúncios continua rodando mesmo sem orçamento definido no
- * sistema) infla o "Realizado" consolidado sem nenhuma base de comparação —
- * exatamente o cenário que a seção 14 pede pra excluir. `semMeta` continua
- * contando esses clientes à parte, nunca escondidos, só fora da agregação de
- * ritmo.
+ * AJUSTE 1 (correção da Etapa 68/seção 14): "Investimento realizado da
+ * agência" e "Ritmo de investimento" são dois conceitos diferentes, cada um
+ * com sua própria base de clientes — nunca a mesma soma reaproveitada pras
+ * duas coisas. `actual` (realizado total) soma TODOS os clientes do recorte,
+ * COM ou SEM meta — um cliente sem orçamento mensal vigente não pode
+ * desaparecer do investimento real da agência, a conta de anúncios continua
+ * rodando de verdade mesmo sem plano configurado no sistema. `planned` e
+ * `actualForPacing` (o realizado usado SÓ pra calcular `pct`) continuam
+ * escopados a quem tem meta (`hasMonthGoal`) — nunca misturar investimento de
+ * quem não tem meta no numerador de uma porcentagem cujo denominador não os
+ * contém (senão o ritmo mostraria, por exemplo, 100% quando o correto é
+ * 80%). `semMeta` continua contando esses clientes à parte, nunca escondidos,
+ * só fora da agregação de ritmo.
  */
 export function computeFinancialSummary(cards: OperationClientCard[]): FinancialSummary {
   const withGoal = cards.filter((c) => c.hasMonthGoal);
   const planned = withGoal.reduce((sum, c) => sum + c.monthPlanned, 0);
-  const actual = withGoal.reduce((sum, c) => sum + c.monthActual, 0);
-  const pct = planned > 0 ? (actual / planned) * 100 : null;
+  const actualForPacing = withGoal.reduce((sum, c) => sum + c.monthActual, 0);
+  const actual = cards.reduce((sum, c) => sum + c.monthActual, 0);
+  const pct = planned > 0 ? (actualForPacing / planned) * 100 : null;
   const expectedToDate = withGoal.reduce((sum, c) => sum + c.monthExpectedToDate, 0);
   const semMeta = cards.filter((c) => !c.hasMonthGoal).length;
-  return { planned, actual, pct, expectedToDate, semMeta };
+  return { planned, actual, actualForPacing, pct, expectedToDate, semMeta };
 }
 
 /**

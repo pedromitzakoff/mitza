@@ -16,6 +16,10 @@ import {
 } from "@/lib/client-reports";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import type { TrafficChannel } from "@/lib/traffic-channels";
+import { AVAILABLE_TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
+import { resolveClientMonthlyPlan, resolveTargetCostPerResult, type ClientPlanChangeRow } from "@/lib/client-plan";
+import { firstDayOfMonth } from "@/lib/achievement-dates";
+import { todayDateString } from "@/lib/today";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -42,17 +46,48 @@ export async function fetchClientReportMetrics(
   clientId: string,
   period: { start: string; end: string },
 ): Promise<ClientReportMetricsResult> {
-  const [client, dailySpendRows, activeImportClientIds] = await Promise.all([
+  const [client, dailySpendRows, activeImportClientIds, planChangeRows] = await Promise.all([
     requireQuery(
       supabase.from("clients").select("performance_goal, target_cost_per_result").eq("id", clientId),
       "clients:report-metrics",
     ),
     getDailySpendRowsForPeriod(supabase, clientId, { firstDay: period.start, lastDay: period.end }),
     getClientIdsWithActiveImportSource(supabase, [clientId]),
+    // Etapa "Meta/Custo-Alvo: Centralizar a Regra" — mesma resolução
+    // canônica de `resolveTargetCostPerResult` (plano do mês vigente antes
+    // do fallback legado), nunca mais só `clients.target_cost_per_result`
+    // cru. `.lte` (carry-forward), filtro de objetivo em JS abaixo (o
+    // objetivo principal só é conhecido depois que `client` resolve).
+    requireQuery(
+      supabase
+        .from("monthly_budget_changes")
+        .select("channel, result_type, month, changed_at, new_amount, target_result_count")
+        .eq("client_id", clientId)
+        .lte("month", firstDayOfMonth(todayDateString())),
+      "monthly_budget_changes:target",
+    ),
   ]);
 
   const performanceGoal = client[0]?.performance_goal ?? null;
-  const targetCostPerResult = client[0]?.target_cost_per_result ?? null;
+  const planChanges: ClientPlanChangeRow[] = planChangeRows
+    .filter((row) => row.result_type == null || row.result_type === performanceGoal)
+    .map((row) => ({
+      channel: row.channel as TrafficChannel,
+      month: row.month,
+      changedAt: row.changed_at,
+      investment: row.new_amount,
+      targetResultCount: row.target_result_count,
+    }));
+  const clientMonthlyPlan = resolveClientMonthlyPlan({
+    channels: AVAILABLE_TRAFFIC_CHANNELS,
+    changes: planChanges,
+    selectedMonth: firstDayOfMonth(todayDateString()),
+  });
+  const targetCostPerResult = resolveTargetCostPerResult({
+    channel: "consolidated",
+    plan: clientMonthlyPlan,
+    legacyFallback: client[0]?.target_cost_per_result ?? null,
+  });
   const actualSpend = dailySpendRows.reduce((sum, row) => sum + row.spend, 0);
 
   const metrics: ClientReportMetric[] = [

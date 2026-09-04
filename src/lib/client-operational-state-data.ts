@@ -11,7 +11,7 @@ import {
   computeMonthlyExpectedToDateByCalendar,
   resolvePlanningHorizon,
 } from "@/lib/monthly-budget";
-import { resolveClientMonthlyPlan, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
+import { resolveClientMonthlyPlan, resolveTargetCostPerResult, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
 import { resolveClientMonthlyActuals } from "@/lib/client-actuals";
 import { resolveCostScopeComparability } from "@/lib/channel-metrics";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
@@ -365,7 +365,11 @@ export async function loadClientOperationalStates(
     const plan = {
       investmentPlanned: consolidatedPlan.investment,
       targetResultCount: consolidatedPlan.resultCount,
-      targetCostPerResult: consolidatedPlan.cpa ?? client.target_cost_per_result,
+      targetCostPerResult: resolveTargetCostPerResult({
+        channel: "consolidated",
+        plan: clientMonthlyPlan,
+        legacyFallback: client.target_cost_per_result,
+      }),
     };
 
     // Etapa "Comparabilidade de Escopo de Custo": `costPlanned` acima só

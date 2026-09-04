@@ -34,7 +34,7 @@ import {
 } from "@/app/operation/operation-data";
 import { resolveReviewComplianceStatus } from "@/lib/account-health-engine";
 import { groupChannelSpendBySprintId, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
-import { resolveClientMonthlyPlan, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
+import { resolveClientMonthlyPlan, resolveTargetCostPerResult, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import type { AccountReviewSummaryItem } from "@/app/clients/account-reviews-section";
@@ -535,11 +535,15 @@ export default async function SprintsPage({
   const resolvedTargetCostByClient = new Map<string, number | null>(
     (clients ?? []).map((c) => [
       c.id,
-      resolveClientMonthlyPlan({
-        channels: AVAILABLE_TRAFFIC_CHANNELS,
-        changes: planChangesByClient.get(c.id) ?? [],
-        selectedMonth: monthRange.firstDay,
-      }).consolidated.cpa ?? c.target_cost_per_result,
+      resolveTargetCostPerResult({
+        channel: "consolidated",
+        plan: resolveClientMonthlyPlan({
+          channels: AVAILABLE_TRAFFIC_CHANNELS,
+          changes: planChangesByClient.get(c.id) ?? [],
+          selectedMonth: monthRange.firstDay,
+        }),
+        legacyFallback: c.target_cost_per_result,
+      }),
     ]),
   );
 
