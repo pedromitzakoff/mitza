@@ -19,7 +19,7 @@ import { toUserFacingError } from "@/lib/user-facing-error";
  * Body: { "importSourceId": "uuid", "since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD" }
  */
 export async function POST(request: Request) {
-  const rejection = guardCronRequest(request, "admin-sync-stract");
+  const rejection = await guardCronRequest(request, "admin-sync-stract");
   if (rejection) return rejection;
 
   const body = await request.json().catch(() => ({}));

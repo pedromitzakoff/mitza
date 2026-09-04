@@ -14,7 +14,7 @@ import { guardCronRequest } from "@/lib/cron-auth";
 // periodicamente, um cliente já existente parava de ganhar sprint nova
 // conforme os meses passavam — corrigido registrando o cron aqui.
 export async function GET(request: Request) {
-  const rejection = guardCronRequest(request, "ensure-sprints");
+  const rejection = await guardCronRequest(request, "ensure-sprints");
   if (rejection) return rejection;
 
   const results = await ensureAllClientsSprints();

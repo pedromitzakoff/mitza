@@ -21,7 +21,7 @@ import { guardCronRequest } from "@/lib/cron-auth";
 // esse é o sinal de que o plano precisa de upgrade antes de continuar —
 // nunca reduzir silenciosamente pra um schedule mais raro sem avisar.
 export async function GET(request: Request) {
-  const rejection = guardCronRequest(request, "sync-meta");
+  const rejection = await guardCronRequest(request, "sync-meta");
   if (rejection) return rejection;
 
   const results = await syncAllClientsMetaSpend();

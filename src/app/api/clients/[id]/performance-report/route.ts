@@ -7,7 +7,7 @@ import { buildPerformanceReportData } from "@/lib/performance-report/report-data
 import { buildPerformanceReportDocument } from "@/lib/performance-report/report-document";
 import { renderPerformanceReportHtml } from "@/lib/performance-report/renderers/html-renderer";
 import { renderReportPdf } from "@/lib/performance-report/renderers/pdf-renderer";
-import { checkRateLimit, rateLimitedResponse } from "@/lib/rate-limit";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * Gerador do PDF do Relatório de Performance — Route Handler (não Server
@@ -87,29 +87,30 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // já validado por getCurrentProfile() acima) combinado com o cliente —
   // nunca o `id` da URL sozinho, que qualquer um pode trocar (a checagem de
   // acesso de verdade continua sendo a RLS de `clients`, abaixo; o rate
-  // limit é só defesa contra volume, não autorização).
-  const perClient = checkRateLimit({
+  // limit é só defesa contra volume, não autorização). `enforceRateLimit`
+  // (lib/rate-limit.ts) já trata tanto limite excedido (429) quanto o
+  // rate limiter distribuído estar indisponível (503, fail-closed em
+  // produção) — nenhuma rota reimplementa esse `try/catch`.
+  const perClientRejection = await enforceRateLimit({
     bucket: "performance-report:user-client",
     key: `${profile.id}:${id}`,
     limit: PER_USER_CLIENT_LIMIT,
     windowMs: PER_USER_CLIENT_WINDOW_MS,
   });
-  if (!perClient.allowed) {
-    const res = rateLimitedResponse(perClient);
-    for (const [k, v] of Object.entries(NO_STORE_HEADERS)) res.headers.set(k, v);
-    return res;
+  if (perClientRejection) {
+    for (const [k, v] of Object.entries(NO_STORE_HEADERS)) perClientRejection.headers.set(k, v);
+    return perClientRejection;
   }
 
-  const perUser = checkRateLimit({
+  const perUserRejection = await enforceRateLimit({
     bucket: "performance-report:user",
     key: profile.id,
     limit: PER_USER_LIMIT,
     windowMs: PER_USER_WINDOW_MS,
   });
-  if (!perUser.allowed) {
-    const res = rateLimitedResponse(perUser);
-    for (const [k, v] of Object.entries(NO_STORE_HEADERS)) res.headers.set(k, v);
-    return res;
+  if (perUserRejection) {
+    for (const [k, v] of Object.entries(NO_STORE_HEADERS)) perUserRejection.headers.set(k, v);
+    return perUserRejection;
   }
 
   const supabase = await createSupabaseClient();

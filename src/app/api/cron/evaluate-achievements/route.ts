@@ -21,7 +21,7 @@ import { toUserFacingError } from "@/lib/user-facing-error";
 // cliente/pessoa/organização é isolado dentro de `runAchievementEvaluation`
 // (um cliente com problema nunca aborta os demais).
 export async function GET(request: Request) {
-  const rejection = guardCronRequest(request, "evaluate-achievements");
+  const rejection = await guardCronRequest(request, "evaluate-achievements");
   if (rejection) return rejection;
 
   try {

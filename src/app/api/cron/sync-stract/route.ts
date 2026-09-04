@@ -16,7 +16,7 @@ import { guardCronRequest } from "@/lib/cron-auth";
 // Uma hora depois do horário em que o Stract já busca os dados do Meta (7h
 // local), garantindo que o Import Service sempre leia dado fresco.
 export async function GET(request: Request) {
-  const rejection = guardCronRequest(request, "sync-stract");
+  const rejection = await guardCronRequest(request, "sync-stract");
   if (rejection) return rejection;
 
   const results = await runImportForAllEnabledSources();

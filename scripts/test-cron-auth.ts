@@ -7,11 +7,15 @@
  * `Bearer` incorreto, o resultado é sempre negar — nunca "deixa passar
  * porque não tinha o que comparar".
  *
+ * Etapa 2C: `guardCronRequest` agora é async (rate limit distribuído via
+ * Upstash é uma chamada de rede) — os testes injetam
+ * `InMemorySlidingWindowRateLimitBackend` (nunca tocam Upstash real).
+ *
  * Rodar: npx tsx scripts/test-cron-auth.ts
  */
 import assert from "node:assert/strict";
 import { isAuthorizedCronRequest, guardCronRequest } from "../src/lib/cron-auth";
-import { __resetRateLimitStateForTests } from "../src/lib/rate-limit";
+import { InMemorySlidingWindowRateLimitBackend, __setRateLimitBackendForTests } from "../src/lib/rate-limit";
 
 let passed = 0;
 function ok(name: string, condition: boolean) {
@@ -31,6 +35,12 @@ function requestWithAuth(authHeader: string | null): Request {
   if (authHeader !== null) headers.set("authorization", authHeader);
   return new Request("https://example.com/api/cron/sync-meta", { headers });
 }
+
+function freshRateLimitBackend() {
+  __setRateLimitBackendForTests(new InMemorySlidingWindowRateLimitBackend());
+}
+
+async function main() {
 
 console.log("\n1 — CRON_SECRET ausente (env não configurada) → bloqueia, mesmo com header correto\n");
 {
@@ -81,48 +91,72 @@ console.log("\n6 — formato de chamada da Vercel Cron continua compatível\n");
 
 console.log("\n7 — guardCronRequest: sem CRON_SECRET, nega com 401 (nunca chega a checar rate limit)\n");
 {
-  __resetRateLimitStateForTests();
+  freshRateLimitBackend();
   setSecret(undefined);
-  const rejection = guardCronRequest(requestWithAuth("Bearer qualquer-coisa"), "test-route-1");
+  const rejection = await guardCronRequest(requestWithAuth("Bearer qualquer-coisa"), "test-route-1");
   ok("rejeição existe (não é null)", rejection !== null);
   ok("status 401 (auth falha primeiro, não 429)", rejection?.status === 401);
 }
 
 console.log("\n8 — guardCronRequest: Bearer correto e dentro do limite → autoriza (retorna null)\n");
 {
-  __resetRateLimitStateForTests();
+  freshRateLimitBackend();
   setSecret("segredo-de-teste-123");
-  const rejection = guardCronRequest(requestWithAuth("Bearer segredo-de-teste-123"), "test-route-2");
+  const rejection = await guardCronRequest(requestWithAuth("Bearer segredo-de-teste-123"), "test-route-2");
   ok("null = pode prosseguir", rejection === null);
 }
 
-console.log("\n9 — guardCronRequest: chamadas SEM o segredo nunca consomem a cota do bucket de rate limit\n");
+console.log("\n9 — guardCronRequest: chamadas SEM o segredo (correto ou errado) nunca consomem a cota do bucket de rate limit\n");
 {
   // Prova a ordem auth→rate-limit: um flood de requisições sem CRON_SECRET
   // correto nunca deve conseguir bloquear a chamada legítima que vem depois
   // (senão seria uma auto-negação de serviço contra a própria Vercel Cron).
-  __resetRateLimitStateForTests();
+  freshRateLimitBackend();
   setSecret("segredo-de-teste-123");
   for (let i = 0; i < 50; i++) {
-    const rejection = guardCronRequest(requestWithAuth("Bearer errado"), "test-route-3");
+    const rejection = await guardCronRequest(requestWithAuth("Bearer errado"), "test-route-3");
     assert.equal(rejection?.status, 401, `chamada ${i} sem segredo deveria ser 401`);
   }
-  const legitimate = guardCronRequest(requestWithAuth("Bearer segredo-de-teste-123"), "test-route-3");
-  ok("depois de 50 tentativas SEM o segredo, a chamada legítima ainda passa", legitimate === null);
+  const legitimate = await guardCronRequest(requestWithAuth("Bearer segredo-de-teste-123"), "test-route-3");
+  ok("depois de 50 tentativas com Bearer ERRADO, a chamada legítima ainda passa (cota intacta)", legitimate === null);
+
+  // Idem pra "sem header nenhum" — não só "Bearer errado".
+  freshRateLimitBackend();
+  for (let i = 0; i < 50; i++) {
+    const rejection = await guardCronRequest(requestWithAuth(null), "test-route-3b");
+    assert.equal(rejection?.status, 401, `chamada ${i} sem header deveria ser 401`);
+  }
+  const legitimateNoHeader = await guardCronRequest(requestWithAuth("Bearer segredo-de-teste-123"), "test-route-3b");
+  ok("depois de 50 tentativas SEM header nenhum, a chamada legítima ainda passa (cota intacta)", legitimateNoHeader === null);
 }
 
 console.log("\n10 — guardCronRequest: acima do limite (já autenticado) → 429 com Retry-After\n");
 {
-  __resetRateLimitStateForTests();
+  freshRateLimitBackend();
   setSecret("segredo-de-teste-123");
   let lastRejection: Response | null = null;
   for (let i = 0; i < 6; i++) {
-    lastRejection = guardCronRequest(requestWithAuth("Bearer segredo-de-teste-123"), "test-route-4");
+    lastRejection = await guardCronRequest(requestWithAuth("Bearer segredo-de-teste-123"), "test-route-4");
   }
   ok("6ª chamada autenticada em sequência é bloqueada", lastRejection !== null);
   ok("status 429 (rate limit, não auth)", lastRejection?.status === 429);
   ok("Retry-After presente", Number(lastRejection?.headers.get("Retry-After")) > 0);
 }
 
+console.log("\n11 — guardCronRequest: rotas diferentes (buckets diferentes) não compartilham cota\n");
+{
+  freshRateLimitBackend();
+  setSecret("segredo-de-teste-123");
+  for (let i = 0; i < 5; i++) await guardCronRequest(requestWithAuth("Bearer segredo-de-teste-123"), "sync-meta");
+  const syncMetaBlocked = await guardCronRequest(requestWithAuth("Bearer segredo-de-teste-123"), "sync-meta");
+  const syncStractStillFree = await guardCronRequest(requestWithAuth("Bearer segredo-de-teste-123"), "sync-stract");
+  ok("sync-meta esgotado: bloqueado", syncMetaBlocked !== null);
+  ok("sync-stract, rota diferente, cota própria: autorizado", syncStractStillFree === null);
+}
+
 setSecret(ORIGINAL_SECRET);
 console.log(`\nTodos os ${passed} testes passaram.`);
+
+}
+
+main();

@@ -22,6 +22,8 @@
     "@tiptap/react": "^2.27.2",
     "@tiptap/starter-kit": "^2.27.2",
     "@types/sanitize-html": "^2.16.1",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.4",
     "lucide-react": "^1.24.0",
     "next": "16.2.10",
     "puppeteer-core": "^25.4.0",

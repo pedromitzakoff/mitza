@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { checkRateLimit, rateLimitedResponse } from "@/lib/rate-limit";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * Etapa 2A (Auditoria de Segurança — correções prioritárias): única
@@ -53,10 +53,13 @@ const CRON_RATE_LIMIT_WINDOW_MS = 60_000;
  * `routeName` é só o rótulo do bucket (ex.: "sync-meta") — nunca aparece em
  * nenhuma resposta.
  *
- * Retorna a `Response` de rejeição pronta (401 ou 429) quando a chamada deve
- * ser barrada, ou `null` quando pode prosseguir.
+ * Retorna a `Response` de rejeição pronta (401, 429 ou 503 — ver
+ * `enforceRateLimit`) quando a chamada deve ser barrada, ou `null` quando
+ * pode prosseguir. Async desde a Etapa 2C: o rate limit distribuído
+ * (Upstash) é uma chamada de rede, nunca mais uma checagem síncrona em
+ * memória.
  */
-export function guardCronRequest(request: Request, routeName: string): Response | null {
+export async function guardCronRequest(request: Request, routeName: string): Promise<Response | null> {
   if (!isAuthorizedCronRequest(request)) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
@@ -64,13 +67,10 @@ export function guardCronRequest(request: Request, routeName: string): Response 
     });
   }
 
-  const result = checkRateLimit({
+  return enforceRateLimit({
     bucket: `cron:${routeName}`,
     key: "global",
     limit: CRON_RATE_LIMIT,
     windowMs: CRON_RATE_LIMIT_WINDOW_MS,
   });
-  if (!result.allowed) return rateLimitedResponse(result);
-
-  return null;
 }
