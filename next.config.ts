@@ -48,7 +48,7 @@ const nextConfig: NextConfig = {
   // exist"). Escopo só nesta rota (o binário é grande; nunca incluir
   // globalmente com "/*").
   outputFileTracingIncludes: {
-    "/api/clients/\\[id\\]/analytics-report": ["./node_modules/@sparticuz/chromium/bin/**/*"],
+    "/api/clients/\\[id\\]/performance-report": ["./node_modules/@sparticuz/chromium/bin/**/*"],
   },
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
