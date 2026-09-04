@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { checkRateLimit, rateLimitedResponse } from "@/lib/rate-limit";
 
 /**
  * Etapa 2A (Auditoria de Segurança — correções prioritárias): única
@@ -31,4 +32,45 @@ export function isAuthorizedCronRequest(request: Request): boolean {
   if (expected.length !== received.length) return false;
 
   return timingSafeEqual(expected, received);
+}
+
+/** Generoso o bastante pro uso legítimo (1x/dia via Vercel Cron + eventuais
+ * disparos manuais durante debug) e conservador o bastante pra travar um
+ * replay/loop de quem tiver o `CRON_SECRET` (vazado ou não). */
+const CRON_RATE_LIMIT = 5;
+const CRON_RATE_LIMIT_WINDOW_MS = 60_000;
+
+/**
+ * Guarda única das 5 rotas de cron/admin — auth SEMPRE primeiro, rate limit
+ * depois: se checássemos o limite antes da autenticação, uma enxurrada de
+ * chamadas SEM o segredo (nunca autorizadas de qualquer forma) consumiria a
+ * cota do bucket e poderia bloquear a chamada legítima da Vercel Cron
+ * chegando logo em seguida — uma auto-negação de serviço. Como só chamadas
+ * já autenticadas contam pro limite, o "abuso" que o rate limit trava aqui é
+ * sempre de quem já tem (ou roubou) o `CRON_SECRET`, nunca tráfego aleatório
+ * da internet (esse já é rejeitado de graça pelo 401, sem custo nenhum).
+ *
+ * `routeName` é só o rótulo do bucket (ex.: "sync-meta") — nunca aparece em
+ * nenhuma resposta.
+ *
+ * Retorna a `Response` de rejeição pronta (401 ou 429) quando a chamada deve
+ * ser barrada, ou `null` quando pode prosseguir.
+ */
+export function guardCronRequest(request: Request, routeName: string): Response | null {
+  if (!isAuthorizedCronRequest(request)) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const result = checkRateLimit({
+    bucket: `cron:${routeName}`,
+    key: "global",
+    limit: CRON_RATE_LIMIT,
+    windowMs: CRON_RATE_LIMIT_WINDOW_MS,
+  });
+  if (!result.allowed) return rateLimitedResponse(result);
+
+  return null;
 }

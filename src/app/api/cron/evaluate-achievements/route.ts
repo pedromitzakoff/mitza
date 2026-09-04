@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runAchievementEvaluation } from "@/lib/achievement-engine";
-import { isAuthorizedCronRequest } from "@/lib/cron-auth";
+import { guardCronRequest } from "@/lib/cron-auth";
+import { toUserFacingError } from "@/lib/user-facing-error";
 
 // Sistema de Conquistas — motor de avaliação (aprovado após a Auditoria +
 // as 4 determinações de amostra/recorde-mensal/frescor/streak). Roda
@@ -20,9 +21,8 @@ import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 // cliente/pessoa/organização é isolado dentro de `runAchievementEvaluation`
 // (um cliente com problema nunca aborta os demais).
 export async function GET(request: Request) {
-  if (!isAuthorizedCronRequest(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const rejection = guardCronRequest(request, "evaluate-achievements");
+  if (rejection) return rejection;
 
   try {
     const summary = await runAchievementEvaluation();
@@ -31,6 +31,13 @@ export async function GET(request: Request) {
     // Falha catastrófica (ex.: banco fora do ar) — isolada aqui, nunca
     // propagada além desta rota. Erros por cliente/pessoa/organização
     // individual já são capturados dentro de `runAchievementEvaluation`.
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Falha desconhecida ao avaliar conquistas." }, { status: 500 });
+    // Etapa 2B: erro completo continua logado server-side
+    // (toUserFacingError), a resposta HTTP nunca mais devolve `err.message`
+    // cru (poderia vazar detalhe de schema/infra pra quem tiver o
+    // CRON_SECRET vazado) — status 500 preservado, só a mensagem mudou.
+    return NextResponse.json(
+      { error: toUserFacingError(err, "Falha desconhecida ao avaliar conquistas.") },
+      { status: 500 },
+    );
   }
 }

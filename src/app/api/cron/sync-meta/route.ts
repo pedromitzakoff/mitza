@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { syncAllClientsMetaSpend } from "@/lib/meta-sync";
-import { isAuthorizedCronRequest } from "@/lib/cron-auth";
+import { guardCronRequest } from "@/lib/cron-auth";
 
 // Achado real: sem este cron, `daily_spend` de qualquer cliente SEM
 // integração Stract ativa (`import_sources.enabled`) só atualizava quando
@@ -21,9 +21,8 @@ import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 // esse é o sinal de que o plano precisa de upgrade antes de continuar —
 // nunca reduzir silenciosamente pra um schedule mais raro sem avisar.
 export async function GET(request: Request) {
-  if (!isAuthorizedCronRequest(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const rejection = guardCronRequest(request, "sync-meta");
+  if (rejection) return rejection;
 
   const results = await syncAllClientsMetaSpend();
   return NextResponse.json({ results });

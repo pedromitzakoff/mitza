@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runImportForSource, type ImportDateRange } from "@/lib/stract-sync";
-import { isAuthorizedCronRequest } from "@/lib/cron-auth";
+import { guardCronRequest } from "@/lib/cron-auth";
+import { toUserFacingError } from "@/lib/user-facing-error";
 
 /**
  * Gatilho manual do Import Service (integração Stract — arquitetura
@@ -18,9 +19,8 @@ import { isAuthorizedCronRequest } from "@/lib/cron-auth";
  * Body: { "importSourceId": "uuid", "since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD" }
  */
 export async function POST(request: Request) {
-  if (!isAuthorizedCronRequest(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const rejection = guardCronRequest(request, "admin-sync-stract");
+  if (rejection) return rejection;
 
   const body = await request.json().catch(() => ({}));
   const { importSourceId, since, until } = body as { importSourceId?: string; since?: string; until?: string };
@@ -35,6 +35,10 @@ export async function POST(request: Request) {
     const result = await runImportForSource(importSourceId, dateRange);
     return NextResponse.json({ result });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+    // Etapa 2B: nunca mais devolve err.message/String(err) cru (poderia
+    // vazar erro do Postgres/Stract com detalhe de schema/coluna pra quem
+    // tiver o CRON_SECRET) — status 500 preservado, erro completo continua
+    // logado server-side via toUserFacingError.
+    return NextResponse.json({ error: toUserFacingError(err, "Não foi possível sincronizar esta fonte agora.") }, { status: 500 });
   }
 }

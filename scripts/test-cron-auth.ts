@@ -10,7 +10,8 @@
  * Rodar: npx tsx scripts/test-cron-auth.ts
  */
 import assert from "node:assert/strict";
-import { isAuthorizedCronRequest } from "../src/lib/cron-auth";
+import { isAuthorizedCronRequest, guardCronRequest } from "../src/lib/cron-auth";
+import { __resetRateLimitStateForTests } from "../src/lib/rate-limit";
 
 let passed = 0;
 function ok(name: string, condition: boolean) {
@@ -76,6 +77,51 @@ console.log("\n6 — formato de chamada da Vercel Cron continua compatível\n");
     headers: { Authorization: "Bearer valor-real-de-producao" },
   });
   ok("requisição no formato exato da Vercel Cron é autorizada", isAuthorizedCronRequest(vercelStyleRequest));
+}
+
+console.log("\n7 — guardCronRequest: sem CRON_SECRET, nega com 401 (nunca chega a checar rate limit)\n");
+{
+  __resetRateLimitStateForTests();
+  setSecret(undefined);
+  const rejection = guardCronRequest(requestWithAuth("Bearer qualquer-coisa"), "test-route-1");
+  ok("rejeição existe (não é null)", rejection !== null);
+  ok("status 401 (auth falha primeiro, não 429)", rejection?.status === 401);
+}
+
+console.log("\n8 — guardCronRequest: Bearer correto e dentro do limite → autoriza (retorna null)\n");
+{
+  __resetRateLimitStateForTests();
+  setSecret("segredo-de-teste-123");
+  const rejection = guardCronRequest(requestWithAuth("Bearer segredo-de-teste-123"), "test-route-2");
+  ok("null = pode prosseguir", rejection === null);
+}
+
+console.log("\n9 — guardCronRequest: chamadas SEM o segredo nunca consomem a cota do bucket de rate limit\n");
+{
+  // Prova a ordem auth→rate-limit: um flood de requisições sem CRON_SECRET
+  // correto nunca deve conseguir bloquear a chamada legítima que vem depois
+  // (senão seria uma auto-negação de serviço contra a própria Vercel Cron).
+  __resetRateLimitStateForTests();
+  setSecret("segredo-de-teste-123");
+  for (let i = 0; i < 50; i++) {
+    const rejection = guardCronRequest(requestWithAuth("Bearer errado"), "test-route-3");
+    assert.equal(rejection?.status, 401, `chamada ${i} sem segredo deveria ser 401`);
+  }
+  const legitimate = guardCronRequest(requestWithAuth("Bearer segredo-de-teste-123"), "test-route-3");
+  ok("depois de 50 tentativas SEM o segredo, a chamada legítima ainda passa", legitimate === null);
+}
+
+console.log("\n10 — guardCronRequest: acima do limite (já autenticado) → 429 com Retry-After\n");
+{
+  __resetRateLimitStateForTests();
+  setSecret("segredo-de-teste-123");
+  let lastRejection: Response | null = null;
+  for (let i = 0; i < 6; i++) {
+    lastRejection = guardCronRequest(requestWithAuth("Bearer segredo-de-teste-123"), "test-route-4");
+  }
+  ok("6ª chamada autenticada em sequência é bloqueada", lastRejection !== null);
+  ok("status 429 (rate limit, não auth)", lastRejection?.status === 429);
+  ok("Retry-After presente", Number(lastRejection?.headers.get("Retry-After")) > 0);
 }
 
 setSecret(ORIGINAL_SECRET);

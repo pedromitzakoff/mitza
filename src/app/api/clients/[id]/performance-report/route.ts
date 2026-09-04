@@ -7,6 +7,7 @@ import { buildPerformanceReportData } from "@/lib/performance-report/report-data
 import { buildPerformanceReportDocument } from "@/lib/performance-report/report-document";
 import { renderPerformanceReportHtml } from "@/lib/performance-report/renderers/html-renderer";
 import { renderReportPdf } from "@/lib/performance-report/renderers/pdf-renderer";
+import { checkRateLimit, rateLimitedResponse } from "@/lib/rate-limit";
 
 /**
  * Gerador do PDF do Relatório de Performance — Route Handler (não Server
@@ -48,6 +49,24 @@ import { renderReportPdf } from "@/lib/performance-report/renderers/pdf-renderer
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
+/** Nunca cacheável por proxy/CDN/browser intermediário — cada resposta
+ * (PDF de verdade ou erro) carrega dado específico da sessão/cliente que
+ * fez a chamada. Aplicado a TODA resposta desta rota, não só ao 200 —
+ * mesmo um 404 cacheado por engano poderia confundir "sem acesso agora"
+ * com "nunca vai ter acesso" pra um cache compartilhado. */
+const NO_STORE_HEADERS = { "Cache-Control": "private, no-store, max-age=0" };
+
+/** Limite por (usuário, cliente): a Chromium sobe uma vez por PDF — 6 a
+ * cada 60s cobre folgadamente alguém revisando/baixando o mesmo relatório
+ * (trocar período, gerar de novo) sem abrir espaço pra um loop de abuso. */
+const PER_USER_CLIENT_LIMIT = 6;
+const PER_USER_CLIENT_WINDOW_MS = 60_000;
+/** Limite mais amplo por usuário (todos os clientes somados) — cobre um
+ * gestor/admin revisando vários relatórios em sequência (fim de mês, por
+ * exemplo) sem deixar uma única identidade gerar Chromium sem limite. */
+const PER_USER_LIMIT = 30;
+const PER_USER_WINDOW_MS = 5 * 60_000;
+
 export function buildPerformanceReportFileName(clientName: string, period: { start: string; end: string }): string {
   const safeName = clientName
     .normalize("NFD")
@@ -60,13 +79,43 @@ export function buildPerformanceReportFileName(clientName: string, period: { sta
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentProfile();
-  if (!profile) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  if (!profile) return NextResponse.json({ error: "Não autenticado." }, { status: 401, headers: NO_STORE_HEADERS });
 
   const { id } = await params;
+
+  // Identidade do rate limit é sempre o usuário AUTENTICADO (profile.id,
+  // já validado por getCurrentProfile() acima) combinado com o cliente —
+  // nunca o `id` da URL sozinho, que qualquer um pode trocar (a checagem de
+  // acesso de verdade continua sendo a RLS de `clients`, abaixo; o rate
+  // limit é só defesa contra volume, não autorização).
+  const perClient = checkRateLimit({
+    bucket: "performance-report:user-client",
+    key: `${profile.id}:${id}`,
+    limit: PER_USER_CLIENT_LIMIT,
+    windowMs: PER_USER_CLIENT_WINDOW_MS,
+  });
+  if (!perClient.allowed) {
+    const res = rateLimitedResponse(perClient);
+    for (const [k, v] of Object.entries(NO_STORE_HEADERS)) res.headers.set(k, v);
+    return res;
+  }
+
+  const perUser = checkRateLimit({
+    bucket: "performance-report:user",
+    key: profile.id,
+    limit: PER_USER_LIMIT,
+    windowMs: PER_USER_WINDOW_MS,
+  });
+  if (!perUser.allowed) {
+    const res = rateLimitedResponse(perUser);
+    for (const [k, v] of Object.entries(NO_STORE_HEADERS)) res.headers.set(k, v);
+    return res;
+  }
+
   const supabase = await createSupabaseClient();
 
   const { data: client } = await supabase.from("clients").select("id").eq("id", id).is("deleted_at", null).maybeSingle();
-  if (!client) return NextResponse.json({ error: "Cliente não encontrado" }, { status: 404 });
+  if (!client) return NextResponse.json({ error: "Cliente não encontrado" }, { status: 404, headers: NO_STORE_HEADERS });
 
   const url = new URL(request.url);
   const period = resolveAnalyticsPeriod(url.searchParams.get("analyticsPreset") ?? undefined, todayDateString(), {
@@ -83,10 +132,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${buildPerformanceReportFileName(data.client.name, period)}"`,
+        ...NO_STORE_HEADERS,
       },
     });
   } catch (err) {
     console.error("[performance-report]", err);
-    return NextResponse.json({ error: "Não foi possível gerar o relatório." }, { status: 500 });
+    return NextResponse.json({ error: "Não foi possível gerar o relatório." }, { status: 500, headers: NO_STORE_HEADERS });
   }
 }
