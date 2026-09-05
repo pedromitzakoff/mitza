@@ -7,6 +7,7 @@ import { resolveClientIdFromShareToken } from "@/lib/report-share-links";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ReportPeriodControl } from "@/app/clients/[id]/relatorio/report-period-control";
 import { ReportBody } from "@/app/clients/[id]/relatorio/report-body";
+import { ReportHeader } from "@/app/clients/[id]/relatorio/report-header";
 
 /**
  * Etapa "Link Externo V1" — Performance Report somente leitura, sem login,
@@ -52,17 +53,19 @@ export default async function PublicPerformanceReportPage({
   const document = buildPerformanceReportDocument(data);
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-overview-text-primary">Relatório de Performance</h1>
-        <ReportPeriodControl
-          basePath={`/r/${token}`}
-          activePreset={activePreset}
-          customStart={period.start}
-          customEnd={period.end}
-          today={today}
-        />
-      </div>
+    <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 sm:py-6">
+      <ReportHeader
+        clientName={document.clientName}
+        periodControl={
+          <ReportPeriodControl
+            basePath={`/r/${token}`}
+            activePreset={activePreset}
+            customStart={period.start}
+            customEnd={period.end}
+            today={today}
+          />
+        }
+      />
 
       <ReportBody document={document} />
     </div>

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayDateString } from "@/lib/today";
@@ -8,6 +7,7 @@ import { buildPerformanceReportDocument } from "@/lib/performance-report/report-
 import { ReportPeriodControl } from "./report-period-control";
 import { buildReportPdfHref } from "./report-period-nav";
 import { ReportBody } from "./report-body";
+import { ReportHeader } from "./report-header";
 
 /**
  * Etapa "Relatório Nativo": "Cliente → Relatório → relatório" — esta rota É
@@ -59,14 +59,19 @@ export default async function ClientPerformanceReportPage({
   const pdfHref = buildReportPdfHref(client.id, activePreset, { start: period.start, end: period.end });
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-6">
-      <Link href={`/clients/${client.id}`} className="text-sm font-medium text-brand hover:underline">
-        &larr; {client.name}
-      </Link>
-
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-overview-text-primary">Relatório de Performance</h1>
-        <div className="flex flex-wrap items-center gap-3">
+    <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 sm:py-6">
+      {/* Identidade visual do Relatório de Performance aprovada anteriormente
+          (paleta fixa creme/areia/grafite/branco/verde-limão) — preservada
+          tal como no HTML/PDF, só sem os elementos exclusivos de documento
+          (hero/marca/nav sticky/impressão): dentro da aplicação, o cabeçalho
+          abaixo já cumpre esse papel. Corpo compartilhado com `/r/[token]`
+          (Etapa "Link Externo V1") via `ReportBody`, nunca duplicado. */}
+      <ReportHeader
+        clientName={client.name}
+        backHref={`/clients/${client.id}`}
+        pdfHref={pdfHref}
+        clearsMobileMenuButton
+        periodControl={
           <ReportPeriodControl
             basePath={`/clients/${client.id}/relatorio`}
             activePreset={activePreset}
@@ -74,21 +79,9 @@ export default async function ClientPerformanceReportPage({
             customEnd={period.end}
             today={today}
           />
-          <a
-            href={pdfHref}
-            className="rounded-md bg-brand px-3.5 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
-          >
-            Baixar PDF
-          </a>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Identidade visual do Relatório de Performance aprovada anteriormente
-          (paleta fixa creme/areia/grafite/branco/verde-limão) — preservada
-          tal como no HTML/PDF, só sem os elementos exclusivos de documento
-          (hero/marca/nav sticky/impressão): dentro da aplicação, o cabeçalho
-          acima já cumpre esse papel. Corpo compartilhado com `/r/[token]`
-          (Etapa "Link Externo V1") via `ReportBody`, nunca duplicado. */}
       <ReportBody document={document} />
     </div>
   );
