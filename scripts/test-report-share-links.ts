@@ -274,6 +274,22 @@ console.log("\n15 — nenhuma service role chega ao client bundle (checagem estr
   ok("Server Actions ficam num arquivo 'use server' (nunca embutidas no client component)", /^"use server";/.test(actionsSource));
 }
 
+console.log("\n16 — URL do link é montada no servidor via VERCEL_PROJECT_PRODUCTION_URL, nunca via window.location.origin do admin\n");
+{
+  const actionsSource = readFileSync(join(__dirname, "..", "src", "app", "clients", "report-share-link-actions.ts"), "utf8");
+  const panelSource = readFileSync(join(__dirname, "..", "src", "app", "clients", "report-share-link-panel.tsx"), "utf8");
+
+  // Achado real: gerar o link enquanto o admin navega numa URL de deployment
+  // (protegida por "Vercel Authentication") produzia um link inacessível
+  // pra qualquer cliente real — a correção é nunca depender de onde o
+  // browser do admin está, sempre usar o domínio de produção real do
+  // projeto (env var que a própria Vercel injeta).
+  ok("generateReportShareLinkAction usa VERCEL_PROJECT_PRODUCTION_URL", /VERCEL_PROJECT_PRODUCTION_URL/.test(actionsSource));
+  ok("a Server Action retorna a URL completa (`url`), não só um path pro cliente montar", /return \{ url: `\$\{resolvePublicBaseUrl\(\)\}\/r\/\$\{token\}` \}/.test(actionsSource));
+  ok("painel client nunca usa window.location.origin pra montar a URL do link", !/window\.location\.origin/.test(panelSource));
+  ok("painel client usa result.url diretamente (a URL já vem pronta do servidor)", /setRevealedUrl\(result\.url\)/.test(panelSource));
+}
+
 __setReportShareLinkStoreForTests(null);
 __setRateLimitBackendForTests(null);
 console.log(`\nTodos os ${passed} testes passaram.`);

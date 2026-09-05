@@ -45,7 +45,7 @@ export function ReportShareLinkPanel({
         setError(result.error);
         return;
       }
-      setRevealedUrl(`${window.location.origin}${result.path}`);
+      setRevealedUrl(result.url);
       setCopyLabel("Copiar link");
       setActive(true);
       setCreatedAtLabel("agora");

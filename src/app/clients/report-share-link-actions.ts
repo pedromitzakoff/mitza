@@ -28,15 +28,35 @@ async function assertAdminCanAccessClient(clientId: string): Promise<void> {
   }
 }
 
-/** Retorna só o PATH (`/r/<token>`) — a URL absoluta é montada no cliente
- * (`window.location.origin`), nunca aqui: evita confiar em qualquer header
- * de host pra algo que vai ser copiado e enviado pra fora da plataforma. */
-export async function generateReportShareLinkAction(clientId: string): Promise<{ path: string } | { error: string }> {
+/**
+ * Achado real em produção: a Vercel protege por padrão a URL única de CADA
+ * deployment (`mitza-<hash>-mitza.vercel.app`) com login da própria Vercel
+ * ("Deployment Protection") — só o domínio de produção alocado ao projeto
+ * (`mitza.vercel.app`) fica público de verdade. Se a URL fosse montada no
+ * cliente via `window.location.origin`, um admin gerando o link enquanto
+ * navega numa URL de deployment com hash geraria um link OK pra ele (já
+ * logado na Vercel), mas inacessível pra qualquer cliente real.
+ *
+ * `VERCEL_PROJECT_PRODUCTION_URL` é uma env var que a própria Vercel injeta
+ * automaticamente (sem precisar configurar nada) em todo build/runtime,
+ * sempre com o domínio de produção real do projeto — nunca a URL do
+ * deployment atual. Por isso a URL final é montada aqui, no servidor, nunca
+ * no browser: garante que "Gerar link" sempre produz a mesma URL pública,
+ * não importa de onde o admin estava navegando quando clicou.
+ */
+function resolvePublicBaseUrl(): string {
+  const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (productionUrl) return `https://${productionUrl}`;
+  // Fora da Vercel (ex.: next dev local) essa env var não existe.
+  return "http://localhost:3000";
+}
+
+export async function generateReportShareLinkAction(clientId: string): Promise<{ url: string } | { error: string }> {
   try {
     await assertAdminCanAccessClient(clientId);
     const token = await rotateReportShareLink(clientId);
     revalidatePath(`/clients/${clientId}`);
-    return { path: `/r/${token}` };
+    return { url: `${resolvePublicBaseUrl()}/r/${token}` };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Não foi possível gerar o link." };
   }
