@@ -217,6 +217,12 @@ console.log("\n9 — checagens estruturais: draft/Cancelar/Aplicar/URL (sem runn
   ok("Escape fecha o painel", /event\.key === "Escape"/.test(componentSource));
   ok("clique fora fecha o painel (listener global de mousedown)", /addEventListener\("mousedown"/.test(componentSource));
   ok("popover não estoura viewport no mobile (largura via calc(100vw...))", /calc\(100vw/.test(componentSource));
+  // Achado real em produção: `calc(100vw-2rem)` (sem espaços ao redor do
+  // `-`) é CSS inválido — o navegador descarta o valor inteiro, deixando o
+  // popover sem limite de largura nenhum, estourando a viewport. `calc()`
+  // exige espaço dos dois lados do operador `+`/`-`; em valor arbitrário do
+  // Tailwind, espaço literal vira `_`.
+  ok("calc() usa espaços (via '_') ao redor do operador — nunca 'calc(100vw-2rem)', que é CSS inválido", /calc\(100vw_-_2rem\)/.test(componentSource) && !/calc\(100vw-2rem\)/.test(componentSource));
   ok("segundo mês do calendário fica oculto em telas estreitas (`hidden sm:flex`)", /hidden sm:flex/.test(componentSource));
 
   ok("ReportPeriodControl aplica navegando pra URL (`router.push`), nunca outro mecanismo de estado", /router\.push\(/.test(controlSource));

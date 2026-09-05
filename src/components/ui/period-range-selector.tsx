@@ -97,7 +97,7 @@ function CalendarMonthGrid({
   );
 
   return (
-    <div className={`flex w-full flex-col gap-2 sm:w-[260px] ${className ?? ""}`}>
+    <div className={`flex w-full flex-col gap-2 sm:w-56 ${className ?? ""}`}>
       <div className="flex items-center justify-between px-1">
         {onPrev ? (
           <button
@@ -272,7 +272,7 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
           ref={panelRef}
           role="dialog"
           aria-label="Selecionar período"
-          className="absolute right-0 z-50 mt-2 w-[min(37.5rem,calc(100vw-2rem))] overflow-auto rounded-xl border border-[#C8BEAD] bg-white shadow-lg"
+          className="absolute right-0 z-50 mt-2 max-w-[calc(100vw_-_2rem)] overflow-auto rounded-xl border border-[#C8BEAD] bg-white shadow-lg"
         >
           <div className="flex flex-col sm:flex-row">
             <div className="flex shrink-0 flex-row gap-1 overflow-x-auto border-b border-[#EFE9E0] p-2 sm:w-40 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r sm:p-3">
@@ -290,8 +290,8 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
               ))}
             </div>
 
-            <div className="flex flex-1 flex-col gap-3 p-3">
-              <div className="flex flex-col gap-4 sm:flex-row">
+            <div className="flex flex-1 flex-col gap-3 p-2.5">
+              <div className="flex flex-col gap-3 sm:flex-row">
                 <CalendarMonthGrid
                   month={leftMonth}
                   draft={draft}
