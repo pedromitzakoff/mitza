@@ -2,6 +2,23 @@ import type { PerformanceReportDocument } from "@/lib/performance-report/report-
 import { ReportKpiGrid } from "./report-kpi-grid";
 import { ReportTableSection } from "./report-table-section";
 
+/** "Leitura do período": bloco 100% determinístico (nunca IA generativa) —
+ * ver `report-derivatives.ts#buildPeriodReading`. Cada frase já vem pronta
+ * no documento; aqui só é apresentada. */
+function PeriodReading({ document }: { document: PerformanceReportDocument }) {
+  if (!document.periodReading || document.periodReading.length === 0) return null;
+  return (
+    <div className="mt-4 border-l-[3px] border-[#D8F238] bg-white/55 px-4 py-3.5">
+      <div className="mb-1.5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#6F6B65]">Leitura do período</div>
+      {document.periodReading.map((sentence, index) => (
+        <p key={index} className="max-w-xl text-sm text-[#1E1E20]">
+          {sentence}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Corpo do Relatório de Performance nativo — identidade visual aprovada
  * (paleta fixa creme/areia/grafite/branco/verde-limão), extraída de
@@ -14,14 +31,12 @@ export function ReportBody({ document }: { document: PerformanceReportDocument }
   return (
     <div className="mt-5 rounded-2xl border border-[#D9D3C9] bg-[#EFE9E0] px-4 py-6 sm:px-8">
       <section id="resumo" className="pb-9">
-        <div className="text-[11px] font-extrabold tracking-[0.15em] text-[#6F6B65]">RESUMO EXECUTIVO</div>
-        <h2 className="mt-1 text-2xl font-bold tracking-tight text-[#17171A]">Visão geral da performance</h2>
-        <p className="mt-1 max-w-xl text-sm text-[#6F6B65]">
-          CPA e ROAS recalculados a partir dos totais do período, nunca pela média das linhas.
-        </p>
+        <div className="text-[11px] font-extrabold tracking-[0.15em] text-[#6F6B65]">RESUMO DO PERÍODO</div>
+        <h2 className="mt-1 text-2xl font-bold tracking-tight text-[#17171A]">Resumo do período</h2>
         <div className="mt-5">
           <ReportKpiGrid summary={document.summary} />
         </div>
+        <PeriodReading document={document} />
       </section>
 
       {document.tables.map((table) => (

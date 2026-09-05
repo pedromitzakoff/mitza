@@ -10,7 +10,7 @@ import { getAdSetDailyMetricsForPeriod } from "@/lib/ad-set-analytics-data";
 import { buildAdSetSummaries, type AdSetSummary } from "@/lib/ad-set-analytics";
 import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
 import { buildCreativeSummaries, type CreativeSummary } from "@/lib/creative-analytics";
-import { computeCostPerResult, computeRoas } from "@/lib/performance";
+import { computeCostPerResult, computeRoas, type PerformanceSummary } from "@/lib/performance";
 import { listDatesInclusive } from "@/lib/monthly-budget";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 
@@ -31,8 +31,17 @@ type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
  * Campanhas/Públicos/Criativos são buscados INDEPENDENTE do status do
  * objetivo — um cliente sem `performance_goal` configurado ainda
  * pode ter investimento/campanhas reais no período.
+ *
+ * `performanceSummary` (Etapa "Otimização do Performance Report"): o MESMO
+ * `PerformanceSummary` que `data.summary` (`ClientAnalyticsData`) já
+ * calculava — só agora também exposto pra Camada 2 (`report-document.ts`)
+ * derivar a variação vs. meta e a "Leitura do período"
+ * (`report-derivatives.ts`), sem recalcular nada nem consultar de novo.
  */
-export type PerformanceReportSummary = { status: "no_goal" } | { status: "no_data" } | { status: "ok"; kpis: AnalyticsKpiCard[] };
+export type PerformanceReportSummary =
+  | { status: "no_goal" }
+  | { status: "no_data" }
+  | { status: "ok"; kpis: AnalyticsKpiCard[]; performanceSummary: PerformanceSummary };
 
 /**
  * Uma linha por DIA CIVIL do período (Etapa "Resultado Diário") — sempre
@@ -119,7 +128,9 @@ function buildReportSummary(data: ClientAnalyticsData): PerformanceReportSummary
   // `previousSummary: null` como "sem base de comparação", omitindo a linha
   // de contexto sem nenhuma mudança na função em si.
   const kpis = buildAnalyticsKpiCards(data.performanceGoal, data.actualSpend, data.summary, null, formatCurrency);
-  return { status: "ok", kpis };
+  // `hasAnyData` já garante `data.summary !== null` aqui (só é `null` quando
+  // `performanceGoal` também é `null`, que já retornou "no_goal" acima).
+  return { status: "ok", kpis, performanceSummary: data.summary! };
 }
 
 export async function buildPerformanceReportData(

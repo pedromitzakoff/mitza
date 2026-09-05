@@ -1,12 +1,19 @@
 import { formatCurrency, formatDateWithYear, formatDateTimeWithYear, formatPercent, formatShortDate } from "@/lib/format";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
-import { computeCostPerResult, computeRoas } from "@/lib/performance";
+import { computeCostPerResult, computeRoas, type PerformanceSummary } from "@/lib/performance";
 import { NO_ANALYTICS_DATA_MESSAGE, NO_CAMPAIGNS_MESSAGE, NO_CREATIVES_MESSAGE, NO_PERFORMANCE_GOAL_MESSAGE } from "@/lib/analytics-messages";
-import type { AnalyticsKpiCard } from "@/lib/analytics";
+import type { AnalyticsKpiCard, AnalyticsKpiComparisonTone } from "@/lib/analytics";
 import type { CampaignSummary } from "@/lib/campaign-analytics";
 import type { AdSetSummary } from "@/lib/ad-set-analytics";
 import type { CreativeSummary } from "@/lib/creative-analytics";
 import type { PerformanceReportData, PerformanceReportDailyRow } from "./report-data";
+import {
+  buildCampaignBadges,
+  buildPeriodReading,
+  buildTargetVariationLabel,
+  findBestCostCampaign,
+  findHighestVolumeCampaign,
+} from "./report-derivatives";
 
 /**
  * Camada 2 — ESTRUTURA (KPIs + tabelas), independente de HTML/PDF. Cada
@@ -51,6 +58,13 @@ export interface PerformanceReportRow {
    * existe na tabela se teve alguma linha real no período, então nunca
    * "sem dado nenhum"). */
   rowNote?: string | null;
+  /** Etapa "Otimização do Performance Report": só a tabela de Campanhas
+   * preenche isso (`report-derivatives.ts`, `buildCampaignBadges`) — rótulos
+   * curtos e discretos ("Melhor custo", "Maior volume", "Acima da meta",
+   * "Abaixo da meta"), nunca mais de um por categoria (global vs. meta), e
+   * NUNCA alteram `metrics`/`sortValue`/ordenação — puramente decoração da
+   * linha já pronta. `undefined`/`[]` nas demais tabelas. */
+  badges?: string[];
   metrics: PerformanceReportMetricCell[];
 }
 
@@ -75,6 +89,11 @@ export interface PerformanceReportTable {
    * linhas. `null` nas demais tabelas (Campanhas/Públicos/Criativos nunca
    * tiveram um total agregado pedido). */
   totalRow: PerformanceReportRow | null;
+  /** `false` só na tabela de Resultado Diário (Etapa "Otimização do
+   * Performance Report", item 7 — "5 itens" não agrega valor numa tabela
+   * que já é sempre o período inteiro, dia a dia). As demais continuam
+   * mostrando a contagem, mesmo padrão de sempre. */
+  showItemCount: boolean;
 }
 
 export type PerformanceReportSummaryBlock =
@@ -90,11 +109,20 @@ export interface PerformanceReportDocument {
   totalAdSets: number;
   totalCreatives: number;
   summary: PerformanceReportSummaryBlock;
+  /** Etapa "Otimização do Performance Report" — 1 a 3 frases curtas,
+   * determinísticas (`report-derivatives.ts`, `buildPeriodReading`), nunca
+   * texto livre/IA generativa. `null` quando não há objetivo configurado ou
+   * nenhum dado no período (mesmos estados de `summary`) — sem base
+   * nenhuma pra qualquer leitura. */
+  periodReading: string[] | null;
   tables: PerformanceReportTable[];
 }
 
-const METHODOLOGY_NOTE =
-  "Investimento, resultado e receita são somados a partir dos totais de cada agrupamento — CPA e ROAS são sempre recalculados por total÷total, nunca pela média das linhas individuais. Valores não numéricos na origem são tratados como ausência de dado desde a importação, nunca convertidos em zero.";
+// Etapa "Otimização do Performance Report": nota de metodologia reduzida a
+// uma linha discreta (pedido explícito — a regra de engenharia completa
+// continua documentada no código, só não ocupa mais espaço de destaque no
+// relatório do cliente).
+const METHODOLOGY_NOTE = "Indicadores calculados a partir dos totais consolidados do período.";
 
 /** Rótulo de resultado/custo — como é UMA coluna compartilhada por todas as
  * linhas da tabela, usa o objetivo comum quando todas as linhas do período o
@@ -114,11 +142,22 @@ function metricCell(display: string | null, sortValue: number | null): Performan
   return { display: display ?? "—", sortValue };
 }
 
-function buildCampaignsTable(campaigns: CampaignSummary[]): PerformanceReportTable {
+/**
+ * Badges de Campanhas (Etapa "Otimização do Performance Report", item 5) —
+ * calculados uma única vez sobre a lista inteira (`findBestCostCampaign`/
+ * `findHighestVolumeCampaign`, `report-derivatives.ts`) e aplicados por
+ * linha; nunca recalculado por linha, nunca altera `totalSpend`/ordenação
+ * (a lista continua ordenada por investimento, mesmo critério de sempre).
+ * `targetCostPerResult` vem do MESMO `PerformanceSummary` do Resumo
+ * Executivo — nunca uma meta diferente pro badge "Acima/Abaixo da meta".
+ */
+function buildCampaignsTable(campaigns: CampaignSummary[], targetCostPerResult: number | null): PerformanceReportTable {
   const { resultLabel, costLabel } = resolveResultLabels(campaigns.map((c) => c.resultType));
   const hasRevenue = campaigns.some((c) => c.totalRevenue !== null);
   const hasRoas = campaigns.some((c) => c.roas !== null);
   const hasImpressions = campaigns.some((c) => c.totalImpressions !== null);
+  const bestCostCampaign = findBestCostCampaign(campaigns);
+  const highestVolumeCampaign = findHighestVolumeCampaign(campaigns);
 
   const metricColumns: PerformanceReportColumn[] = [
     { key: "investment", header: "Investimento" },
@@ -138,14 +177,19 @@ function buildCampaignsTable(campaigns: CampaignSummary[]): PerformanceReportTab
     if (hasRevenue) metrics.push(metricCell(c.totalRevenue !== null ? formatCurrency(c.totalRevenue) : null, c.totalRevenue));
     if (hasRoas) metrics.push(metricCell(c.roas !== null ? `${c.roas.toFixed(2)}x` : null, c.roas));
     if (hasImpressions) metrics.push(metricCell(c.totalImpressions !== null ? String(c.totalImpressions) : null, c.totalImpressions));
-    return { id: `${c.channel}-${c.campaignName}`, name: c.campaignName, metrics };
+    return {
+      id: `${c.channel}-${c.campaignName}`,
+      name: c.campaignName,
+      badges: buildCampaignBadges(c, bestCostCampaign, highestVolumeCampaign, targetCostPerResult),
+      metrics,
+    };
   });
 
   return {
     id: "campanhas",
-    eyebrow: "PERFORMANCE POR CAMPANHA",
-    title: "Performance por campanha",
-    description: "Visão consolidada de investimento, resultado e eficiência de cada campanha — maior investimento primeiro.",
+    eyebrow: "CAMPANHAS",
+    title: "Campanhas",
+    description: "Desempenho das campanhas no período.",
     nameColumnHeader: "Campanha",
     metricColumns,
     hasPreviewColumn: false,
@@ -153,6 +197,7 @@ function buildCampaignsTable(campaigns: CampaignSummary[]): PerformanceReportTab
     emptyMessage: NO_CAMPAIGNS_MESSAGE,
     disclosure: true,
     totalRow: null,
+    showItemCount: true,
   };
 }
 
@@ -185,16 +230,17 @@ function buildAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTable {
 
   return {
     id: "publicos",
-    eyebrow: "PERFORMANCE POR PÚBLICO",
-    title: "Performance por público",
-    description: "Consolidação no nível de conjunto de anúncios (ad set) — um público pode aparecer em mais de uma campanha, somado como uma linha só.",
+    eyebrow: "PÚBLICOS",
+    title: "Públicos",
+    description: "Desempenho por público no período.",
     nameColumnHeader: "Público",
     metricColumns,
     hasPreviewColumn: false,
     rows,
-    emptyMessage: "Nenhum dado de público encontrado no período selecionado.",
+    emptyMessage: "Dados não disponíveis neste período.",
     disclosure: true,
     totalRow: null,
+    showItemCount: true,
   };
 }
 
@@ -234,9 +280,9 @@ function buildCreativesTable(creatives: CreativeSummary[]): PerformanceReportTab
 
   return {
     id: "criativos",
-    eyebrow: "PERFORMANCE POR CRIATIVO",
-    title: "Performance por criativo",
-    description: "Cada criativo é apresentado individualmente, com miniatura quando disponível e link direto pra peça quando informado.",
+    eyebrow: "CRIATIVOS",
+    title: "Criativos",
+    description: "Desempenho por criativo, com miniatura e link quando disponíveis.",
     nameColumnHeader: "Criativo",
     metricColumns,
     hasPreviewColumn: hasAnyPermalink,
@@ -244,6 +290,7 @@ function buildCreativesTable(creatives: CreativeSummary[]): PerformanceReportTab
     emptyMessage: NO_CREATIVES_MESSAGE,
     disclosure: true,
     totalRow: null,
+    showItemCount: true,
   };
 }
 
@@ -330,7 +377,7 @@ function buildDailyTable(daily: PerformanceReportDailyRow[], performanceGoal: Pe
     id: "resultado-diario",
     eyebrow: "RESULTADO DIÁRIO",
     title: "Resultado diário",
-    description: "Investimento e resultado de cada dia do período selecionado — mesmos números e regras do Resumo Executivo, abertos por dia.",
+    description: "Investimento e resultado de cada dia do período.",
     nameColumnHeader: "Data",
     metricColumns,
     hasPreviewColumn: false,
@@ -338,16 +385,52 @@ function buildDailyTable(daily: PerformanceReportDailyRow[], performanceGoal: Pe
     emptyMessage: "Nenhum dado disponível para os dias do período selecionado.",
     disclosure: false,
     totalRow,
+    // Etapa "Otimização do Performance Report", item 7: a contagem de itens
+    // não agrega valor numa tabela que já é sempre "todo o período, dia a
+    // dia" — omitida só aqui, a estrutura de dados (`rows`) continua igual.
+    showItemCount: false,
   };
+}
+
+/** Enriquece o card de custo (`key: "cost"`, sempre o único que
+ * `buildAnalyticsKpiCards` popula com "Meta: R$X") com a variação
+ * percentual — nunca recalcula a meta nem o custo, só troca o texto de
+ * exibição usando `performanceSummary.comparison`/`targetCostPerResult`,
+ * já canônicos. `tone` reaproveita `comparison.status` (mesma classificação
+ * de `getPerformanceStatus`, ±10% de margem) — nunca uma segunda régua de
+ * "isso está bom ou ruim". */
+function enrichCostKpiWithTargetVariation(kpis: AnalyticsKpiCard[], performanceSummary: PerformanceSummary): AnalyticsKpiCard[] {
+  const variationText = buildTargetVariationLabel(performanceSummary.comparison, performanceSummary.targetCostPerResult);
+  if (!variationText) return kpis;
+
+  const tone: AnalyticsKpiComparisonTone =
+    performanceSummary.comparison.status === "worse" ? "negative" : performanceSummary.comparison.status === "better" ? "positive" : "neutral";
+
+  return kpis.map((kpi) => (kpi.key === "cost" ? { ...kpi, comparison: { text: variationText, tone } } : kpi));
 }
 
 function buildSummaryBlock(data: PerformanceReportData): PerformanceReportSummaryBlock {
   if (data.summary.status === "no_goal") return { status: "no_goal", message: NO_PERFORMANCE_GOAL_MESSAGE };
   if (data.summary.status === "no_data") return { status: "no_data", message: NO_ANALYTICS_DATA_MESSAGE };
-  return { status: "ok", kpis: data.summary.kpis, note: METHODOLOGY_NOTE };
+  const kpis = enrichCostKpiWithTargetVariation(data.summary.kpis, data.summary.performanceSummary);
+  return { status: "ok", kpis, note: METHODOLOGY_NOTE };
+}
+
+/** `null` sem objetivo configurado ou sem dado no período — mesmos dois
+ * estados de `buildSummaryBlock`, nenhuma leitura possível sem base
+ * (`report-derivatives.ts`, `buildPeriodReading`). */
+function buildPeriodReadingForDocument(data: PerformanceReportData): string[] | null {
+  if (data.summary.status !== "ok" || !data.performanceGoal) return null;
+  return buildPeriodReading({
+    performanceGoal: data.performanceGoal,
+    performanceSummary: data.summary.performanceSummary,
+    campaigns: data.campaigns,
+  });
 }
 
 export function buildPerformanceReportDocument(data: PerformanceReportData): PerformanceReportDocument {
+  const targetCostPerResult = data.summary.status === "ok" ? data.summary.performanceSummary.targetCostPerResult : null;
+
   return {
     clientName: data.client.name,
     periodLabel: `${formatDateWithYear(data.period.start)} → ${formatDateWithYear(data.period.end)}`,
@@ -356,12 +439,13 @@ export function buildPerformanceReportDocument(data: PerformanceReportData): Per
     totalAdSets: data.adSets.length,
     totalCreatives: data.creatives.length,
     summary: buildSummaryBlock(data),
+    periodReading: buildPeriodReadingForDocument(data),
     // Ordem = ordem de renderização: Resultado Diário → Campanhas →
     // Públicos → Criativos (Resumo Executivo é renderizado à parte, fora
     // deste array, por quem consome o documento).
     tables: [
       buildDailyTable(data.dailyRows, data.performanceGoal),
-      buildCampaignsTable(data.campaigns),
+      buildCampaignsTable(data.campaigns, targetCostPerResult),
       buildAdSetsTable(data.adSets),
       buildCreativesTable(data.creatives),
     ],

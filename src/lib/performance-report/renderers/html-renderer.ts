@@ -31,6 +31,15 @@ function isSafeHttpUrl(value: string | null | undefined): value is string {
   return typeof value === "string" && /^https?:\/\//i.test(value);
 }
 
+/** "Leitura do período": bloco 100% determinístico (nunca IA generativa),
+ * ver `report-derivatives.ts#buildPeriodReading` — cada frase já vem pronta
+ * do documento, aqui só é escapada e colocada em parágrafos. */
+function renderPeriodReading(doc: PerformanceReportDocument): string {
+  if (!doc.periodReading || doc.periodReading.length === 0) return "";
+  const paragraphs = doc.periodReading.map((sentence) => `<p>${escapeHtml(sentence)}</p>`).join("");
+  return `<div class="reading"><div class="reading-label">Leitura do período</div>${paragraphs}</div>`;
+}
+
 function renderKpiGrid(doc: PerformanceReportDocument): string {
   if (doc.summary.status !== "ok") {
     return `<p class="muted" style="padding:12px 0 0;">${escapeHtml(doc.summary.message)}</p>`;
@@ -48,9 +57,14 @@ function renderKpiGrid(doc: PerformanceReportDocument): string {
   return `<div class="kpis">${cards}</div><div class="note">${escapeHtml(doc.summary.note)}</div>`;
 }
 
+function renderBadges(row: PerformanceReportRow): string {
+  if (!row.badges || row.badges.length === 0) return "";
+  return row.badges.map((badge) => `<span class="badge">${escapeHtml(badge)}</span>`).join("");
+}
+
 function renderNameCell(row: PerformanceReportRow): string {
   const thumb = isSafeHttpUrl(row.thumbnailUrl) ? `<img class="thumb" src="${escapeHtml(row.thumbnailUrl)}" alt="" loading="lazy">` : "";
-  return `<td class="name">${thumb}${escapeHtml(row.name)}</td>`;
+  return `<td class="name">${thumb}${escapeHtml(row.name)}${renderBadges(row)}</td>`;
 }
 
 function renderPreviewCell(row: PerformanceReportRow): string {
@@ -87,14 +101,23 @@ function renderTotalRow(table: PerformanceReportTable): string {
   return `<tr class="total-row">${renderNameCell(table.totalRow)}${renderMetricCells(table.totalRow, table)}</tr>`;
 }
 
+/** Etapa "Otimização do Performance Report", item 6: seção sem NENHUMA
+ * linha vira um bloco compacto de uma linha só (nome + mensagem), nunca o
+ * cabeçalho completo (eyebrow grande + h2 + descrição + pill de contagem)
+ * seguido de um parágrafo vazio no meio da página — a seção continua
+ * identificável (nunca escondida), só não ocupa espaço à toa. Especialmente
+ * relevante pro PDF (menos espaço em branco na última página). */
 function renderTableSection(table: PerformanceReportTable): string {
   const count = table.rows.length;
-  const countLabel = `${count} ${count === 1 ? "item" : "itens"}`;
 
-  const body =
-    count === 0
-      ? `<p class="muted" style="padding:24px 0;">${escapeHtml(table.emptyMessage)}</p>`
-      : `<div class="table-wrap"><table class="sortable" id="table-${table.id}"><thead><tr>
+  if (count === 0) {
+    return `<section id="${table.id}" class="section section-compact">
+      <div class="empty-row"><strong>${escapeHtml(table.title)}</strong><span class="muted">${escapeHtml(table.emptyMessage)}</span></div>
+    </section>`;
+  }
+
+  const countLabel = `${count} ${count === 1 ? "item" : "itens"}`;
+  const body = `<div class="table-wrap"><table class="sortable" id="table-${table.id}"><thead><tr>
           <th>${escapeHtml(table.nameColumnHeader)}</th>
           ${table.metricColumns.map((c) => `<th>${escapeHtml(c.header)}</th>`).join("")}
           ${table.hasPreviewColumn ? "<th>Prévia</th>" : ""}
@@ -111,7 +134,7 @@ function renderTableSection(table: PerformanceReportTable): string {
   return `<section id="${table.id}" class="section">
     <div class="section-head">
       <div><div class="eyebrow">${escapeHtml(table.eyebrow)}</div><h2>${escapeHtml(table.title)}</h2><p>${escapeHtml(table.description)}</p></div>
-      <div class="count">${countLabel}</div>
+      ${table.showItemCount ? `<div class="count">${countLabel}</div>` : ""}
     </div>
     ${body}
   </section>`;
@@ -147,6 +170,13 @@ h2{font-size:31px;letter-spacing:-.035em;margin:5px 0 6px}.section-head p{max-wi
 .kpi-label{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:10px}.kpi.accent .kpi-label{color:#B9B9BA}
 .kpi-value{font-size:30px;font-weight:850;letter-spacing:-.04em}.kpi-sub{font-size:12px;color:var(--muted);margin-top:8px}.kpi.accent .kpi-sub{color:#BCBCBD}
 .note{font-size:12px;color:var(--muted);padding:14px 16px;background:rgba(255,255,255,.38);border-left:3px solid var(--sand);margin-top:16px}
+.reading{margin-top:16px;padding:16px 18px;background:rgba(255,255,255,.55);border-left:3px solid var(--lime)}
+.reading-label{font-size:11px;letter-spacing:.12em;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+.reading p{margin:0;font-size:14px;color:var(--ink);max-width:680px}.reading p+p{margin-top:4px}
+.badge{display:inline-block;margin-left:7px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:750;background:var(--cream);color:var(--graphite);border:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+.section-compact{padding:22px 0}
+.empty-row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.empty-row strong{font-size:15px;color:var(--graphite)}
 .table-wrap{background:var(--white);border:1px solid var(--line);border-radius:14px;overflow:auto;max-height:620px}
 table{border-collapse:collapse;width:100%;font-size:12px}th{position:sticky;top:0;background:var(--graphite);color:white;text-align:right;padding:12px 11px;white-space:nowrap;cursor:pointer;z-index:1}
 th:first-child{text-align:left;min-width:285px}td{padding:11px;border-bottom:1px solid #ECE8E1;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -214,8 +244,9 @@ export function renderPerformanceReportHtml(doc: PerformanceReportDocument, opti
 <nav class="nav"><div class="container"><a href="#resumo">Resumo</a><a href="#resultado-diario">Resultado diário</a><a href="#campanhas">Campanhas</a><a href="#publicos">Públicos</a><a href="#criativos">Criativos</a></div></nav>
 <main class="container">
 <section id="resumo" class="section">
-  <div class="section-head"><div><div class="eyebrow">RESUMO EXECUTIVO</div><h2>Visão geral da performance</h2><p>CPA e ROAS recalculados a partir dos totais do período, nunca pela média das linhas.</p></div></div>
+  <div class="section-head"><div><div class="eyebrow">RESUMO DO PERÍODO</div><h2>Resumo do período</h2></div></div>
   ${renderKpiGrid(doc)}
+  ${renderPeriodReading(doc)}
 </section>
 ${doc.tables.map(renderTableSection).join("\n")}
 </main>

@@ -15,6 +15,28 @@ import type { PerformanceReportData } from "../src/lib/performance-report/report
 import type { CampaignSummary } from "../src/lib/campaign-analytics";
 import type { AdSetSummary } from "../src/lib/ad-set-analytics";
 import type { CreativeSummary } from "../src/lib/creative-analytics";
+import type { PerformanceSummary } from "../src/lib/performance";
+
+// Etapa "Otimização do Performance Report": `PerformanceReportSummary`
+// (status "ok") passou a exigir o `PerformanceSummary` canônico também —
+// fixture neutro (sem meta, sem resultado), nunca influencia as asserções
+// deste arquivo (sorting/disclosure/thumbnail/permalink/zero-vs-ausência).
+const NEUTRAL_PERFORMANCE_SUMMARY: PerformanceSummary = {
+  scope: "consolidated",
+  resultType: "leads",
+  resultCount: 0,
+  hasAnyRecord: false,
+  actualSpend: null,
+  costPerResult: null,
+  costUnavailableReason: "no_performance_data",
+  targetCostPerResult: null,
+  comparison: { variation: null, status: "not_available" },
+  revenue: null,
+  roas: null,
+  averageTicket: null,
+  latestSource: null,
+  latestUpdatedAt: null,
+};
 
 let passed = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -92,7 +114,7 @@ function fakeData(overrides: Partial<PerformanceReportData> = {}): PerformanceRe
   return {
     client: { id: "client-1", name: "Cliente Teste" },
     period: { start: "2026-08-01", end: "2026-08-31", label: "01/08 – 31/08" },
-    summary: { status: "ok", kpis: [{ key: "investment", label: "Investimento", value: "R$ 1.000,00" }] },
+    summary: { status: "ok", kpis: [{ key: "investment", label: "Investimento", value: "R$ 1.000,00" }], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
     performanceGoal: "sales",
     dailyRows: [],
     campaigns: [],
@@ -250,6 +272,66 @@ ok(
     '<a class="pdf-button" href="/api/clients/1/performance-report?format=pdf"',
   ),
 );
+
+// ---------------------------------------------------------------------------
+console.log("\n12 — Etapa 'Otimização do Performance Report': seções vazias viram bloco compacto\n");
+
+const docEmptyCampaigns = buildPerformanceReportDocument(fakeData({ campaigns: [] }));
+const htmlEmptyCampaigns = renderPerformanceReportHtml(docEmptyCampaigns);
+const emptyCampaignsSection = htmlEmptyCampaigns.match(/id="campanhas"[\s\S]*?<\/section>/)![0];
+ok("seção vazia usa a classe compacta", emptyCampaignsSection.includes("section-compact"));
+ok("seção vazia mostra o título e a mensagem numa linha só", emptyCampaignsSection.includes("Campanhas") && emptyCampaignsSection.includes("Dados não disponíveis neste período."));
+ok("seção vazia NUNCA renderiza o cabeçalho completo (sem pill de contagem)", !emptyCampaignsSection.includes('class="count"'));
+ok("seção vazia NUNCA renderiza a tabela", !emptyCampaignsSection.includes("<table"));
+
+// ---------------------------------------------------------------------------
+console.log("\n13 — Etapa 'Otimização do Performance Report': badges de campanha aparecem no HTML\n");
+
+const badgeCampaigns = [
+  campaign("Melhor", 200, { totalResultCount: 5, cpa: 20 }),
+  campaign("MaiorVolume", 500, { totalResultCount: 50, cpa: 25 }),
+  campaign("Comum", 100, { totalResultCount: 3, cpa: 60 }),
+];
+const docBadges = buildPerformanceReportDocument(fakeData({ campaigns: badgeCampaigns, summary: { status: "ok", kpis: [], performanceSummary: { ...NEUTRAL_PERFORMANCE_SUMMARY, targetCostPerResult: 30 } } }));
+const campanhasTable = docBadges.tables.find((t) => t.id === "campanhas")!;
+ok("campanha de melhor custo ganha o badge 'Melhor custo'", campanhasTable.rows.find((r) => r.name === "Melhor")!.badges!.includes("Melhor custo"));
+ok("campanha de maior volume ganha o badge 'Maior volume'", campanhasTable.rows.find((r) => r.name === "MaiorVolume")!.badges!.includes("Maior volume"));
+check(
+  "campanha comum (nem melhor custo, nem maior volume), acima da meta, ganha só 'Acima da meta'",
+  campanhasTable.rows.find((r) => r.name === "Comum")!.badges,
+  ["Acima da meta"],
+);
+const htmlBadges = renderPerformanceReportHtml(docBadges);
+ok("badge aparece no HTML como <span class=\"badge\">", htmlBadges.includes('<span class="badge">Melhor custo</span>'));
+ok("badge 'Maior volume' aparece no HTML", htmlBadges.includes('<span class="badge">Maior volume</span>'));
+ok("badge 'Acima da meta' também aparece no HTML", htmlBadges.includes('<span class="badge">Acima da meta</span>'));
+
+// ---------------------------------------------------------------------------
+console.log("\n14 — Etapa 'Otimização do Performance Report': 'Leitura do período' — presente/ausente conforme o estado\n");
+
+const docWithReading = buildPerformanceReportDocument(
+  fakeData({ summary: { status: "ok", kpis: [], performanceSummary: { ...NEUTRAL_PERFORMANCE_SUMMARY, resultCount: 5, hasAnyRecord: true, costPerResult: 20 } } }),
+);
+ok("com objetivo e dado no período, periodReading não é null", docWithReading.periodReading !== null);
+const htmlWithReading = renderPerformanceReportHtml(docWithReading);
+ok("bloco 'Leitura do período' aparece no HTML", htmlWithReading.includes("Leitura do período"));
+
+const docNoGoalReading = buildPerformanceReportDocument(fakeData({ summary: { status: "no_goal" } }));
+check("sem objetivo configurado, periodReading é null", docNoGoalReading.periodReading, null);
+const htmlNoGoalReading = renderPerformanceReportHtml(docNoGoalReading);
+ok("sem objetivo, o bloco 'Leitura do período' NUNCA aparece", !htmlNoGoalReading.includes('class="reading"'));
+
+// ---------------------------------------------------------------------------
+console.log("\n15 — Regressão: nenhuma métrica canônica mudou (mesmos valores de sempre)\n");
+
+const regressionCampaigns = [campaign("Regressão", 4830.68, { totalResultCount: 186, cpa: 25.97, totalRevenue: 60821.51, roas: 12.59 })];
+const docRegression = buildPerformanceReportDocument(fakeData({ campaigns: regressionCampaigns }));
+const regressionRow = docRegression.tables.find((t) => t.id === "campanhas")!.rows[0];
+check("investimento inalterado", regressionRow.metrics[0].sortValue, 4830.68);
+check("resultado inalterado", regressionRow.metrics[1].sortValue, 186);
+check("CPA inalterado", regressionRow.metrics[2].sortValue, 25.97);
+check("receita inalterada", regressionRow.metrics[3].sortValue, 60821.51);
+check("ROAS inalterado", regressionRow.metrics[4].sortValue, 12.59);
 
 // ---------------------------------------------------------------------------
 console.log(`\nTodos os ${passed} testes passaram.`);

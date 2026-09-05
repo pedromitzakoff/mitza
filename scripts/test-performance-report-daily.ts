@@ -32,9 +32,31 @@ import { buildPerformanceReportDocument } from "../src/lib/performance-report/re
 import type { PerformanceReportData } from "../src/lib/performance-report/report-data";
 import { renderPerformanceReportHtml } from "../src/lib/performance-report/renderers/html-renderer";
 import { buildCampaignSummaries } from "../src/lib/campaign-analytics";
-import { aggregatePerformanceResults, type PerformanceRecordRow } from "../src/lib/performance";
+import { aggregatePerformanceResults, type PerformanceRecordRow, type PerformanceSummary } from "../src/lib/performance";
 import { resolveAnalyticsPeriod } from "../src/lib/analytics";
 import { formatCurrency, formatShortDate } from "../src/lib/format";
+
+// Etapa "Otimização do Performance Report": `PerformanceReportSummary`
+// (status "ok") passou a exigir o `PerformanceSummary` canônico também —
+// estes testes cobrem só a tabela de Resultado Diário, nunca o Resumo
+// Executivo/Leitura do período, então um fixture neutro (sem meta, sem
+// resultado) é suficiente — nunca influencia as asserções deste arquivo.
+const NEUTRAL_PERFORMANCE_SUMMARY: PerformanceSummary = {
+  scope: "consolidated",
+  resultType: "leads",
+  resultCount: 0,
+  hasAnyRecord: false,
+  actualSpend: null,
+  costPerResult: null,
+  costUnavailableReason: "no_performance_data",
+  targetCostPerResult: null,
+  comparison: { variation: null, status: "not_available" },
+  revenue: null,
+  roas: null,
+  averageTicket: null,
+  latestSource: null,
+  latestUpdatedAt: null,
+};
 
 let passed = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -203,7 +225,7 @@ console.log("\n6 — Total: aditivas somadas, derivadas recalculadas do total (n
   const data: PerformanceReportData = {
     client: { id: "client-1", name: "Cliente Teste" },
     period: { start: "2026-09-01", end: "2026-09-02", label: "01 set 2026 → 02 set 2026" },
-    summary: { status: "ok", kpis: [] },
+    summary: { status: "ok", kpis: [], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
     performanceGoal: "sales",
     dailyRows,
     campaigns: [],
@@ -240,7 +262,7 @@ console.log("\n6 — Total: aditivas somadas, derivadas recalculadas do total (n
   const data: PerformanceReportData = {
     client: { id: "client-2", name: "Cliente Teste 2" },
     period: { start: "2026-09-01", end: "2026-09-02", label: "" },
-    summary: { status: "ok", kpis: [] },
+    summary: { status: "ok", kpis: [], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
     performanceGoal: "leads",
     dailyRows,
     campaigns: [],
@@ -289,7 +311,7 @@ console.log("\n8 — 'Resultado' respeita o objetivo do cliente (nunca uma segun
   const baseData: Omit<PerformanceReportData, "performanceGoal"> = {
     client: { id: "client-4", name: "Cliente Teste 4" },
     period: { start: "2026-09-01", end: "2026-09-01", label: "" },
-    summary: { status: "ok", kpis: [] },
+    summary: { status: "ok", kpis: [], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
     dailyRows,
     campaigns: [],
     adSets: [],
@@ -315,7 +337,7 @@ console.log("\n9 — Receita/ROAS só aparecem quando aplicáveis (preserva a l�
   const data: PerformanceReportData = {
     client: { id: "client-5", name: "Cliente Teste 5" },
     period: { start: "2026-09-01", end: "2026-09-01", label: "" },
-    summary: { status: "ok", kpis: [] },
+    summary: { status: "ok", kpis: [], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
     performanceGoal: "leads",
     dailyRows: dailyRowsNoRevenue,
     campaigns: [],
@@ -336,7 +358,7 @@ console.log("\n10 — Integração: posição/estrutura da seção, sem progress
   const data: PerformanceReportData = {
     client: { id: "client-6", name: "Cliente Teste 6" },
     period: { start: "2026-09-01", end: "2026-09-01", label: "01 set 2026 → 01 set 2026" },
-    summary: { status: "ok", kpis: [{ key: "investment", label: "Investimento", value: formatCurrency(777) }] },
+    summary: { status: "ok", kpis: [{ key: "investment", label: "Investimento", value: formatCurrency(777) }], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
     performanceGoal: "leads",
     dailyRows,
     campaigns: buildCampaignSummaries([]),
@@ -373,7 +395,7 @@ console.log("\n11 — Campanhas: nenhuma mudança de comportamento nesta etapa (
   const data: PerformanceReportData = {
     client: { id: "client-7", name: "Cliente Teste 7" },
     period: { start: "2026-09-01", end: "2026-09-01", label: "" },
-    summary: { status: "ok", kpis: [] },
+    summary: { status: "ok", kpis: [], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
     performanceGoal: "leads",
     dailyRows: [],
     campaigns,
