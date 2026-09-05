@@ -58,9 +58,9 @@ export default async function PublicPerformanceReportPage({
         <ReportPeriodControl
           basePath={`/r/${token}`}
           activePreset={activePreset}
-          periodLabel={document.periodLabel}
           customStart={period.start}
           customEnd={period.end}
+          today={today}
         />
       </div>
 

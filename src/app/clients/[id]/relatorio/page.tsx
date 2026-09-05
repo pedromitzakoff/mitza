@@ -70,9 +70,9 @@ export default async function ClientPerformanceReportPage({
           <ReportPeriodControl
             basePath={`/clients/${client.id}/relatorio`}
             activePreset={activePreset}
-            periodLabel={document.periodLabel}
             customStart={period.start}
             customEnd={period.end}
+            today={today}
           />
           <a
             href={pdfHref}

@@ -23,7 +23,7 @@ import type { TrafficChannel } from "@/lib/traffic-channels";
  * (`/clients/[id]/relatorio`).
  */
 
-export type AnalyticsPeriodPreset = "today" | "yesterday" | "last_7_days" | "last_30_days" | "this_month" | "last_month" | "custom";
+export type AnalyticsPeriodPreset = "today" | "yesterday" | "last_7_days" | "last_14_days" | "last_30_days" | "this_month" | "last_month" | "custom";
 
 /**
  * Etapa "Relatório Único": "today"/"yesterday" entraram pra alimentar o
@@ -31,11 +31,18 @@ export type AnalyticsPeriodPreset = "today" | "yesterday" | "last_7_days" | "las
  * — o Analytics MVP (aposentado nesta mesma etapa) nunca precisou de
  * granularidade diária aqui, mas o Relatório de Performance passou a ser
  * gerado sob demanda a qualquer momento, não só no fechamento mensal.
+ *
+ * "last_14_days" (Etapa "Padronização Global dos Seletores de Período"):
+ * adicionado só porque `lastNDaysRange` já é genérico o bastante pra
+ * suportar qualquer N sem nenhuma mudança de contrato — nunca uma segunda
+ * forma de calcular período; puramente um novo preset na mesma
+ * infraestrutura já existente.
  */
 export const ANALYTICS_PERIOD_PRESET_OPTIONS: { value: Exclude<AnalyticsPeriodPreset, "custom">; label: string }[] = [
   { value: "today", label: "Hoje" },
   { value: "yesterday", label: "Ontem" },
   { value: "last_7_days", label: "Últimos 7 dias" },
+  { value: "last_14_days", label: "Últimos 14 dias" },
   { value: "last_30_days", label: "Últimos 30 dias" },
   { value: "this_month", label: "Mês atual" },
   { value: "last_month", label: "Mês anterior" },
@@ -89,6 +96,8 @@ export function resolveAnalyticsPeriod(
     }
     case "last_7_days":
       return lastNDaysRange(today, 7);
+    case "last_14_days":
+      return lastNDaysRange(today, 14);
     case "last_30_days":
       return lastNDaysRange(today, 30);
     case "last_month":

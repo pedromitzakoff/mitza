@@ -60,9 +60,17 @@ check(
 console.log("\n3 — ANALYTICS_PERIOD_PRESET_OPTIONS: presets exigidos, na ordem pedida\n");
 
 check(
-  "ordem exata: Hoje, Ontem, Últimos 7 dias, Últimos 30 dias, Mês atual, Mês anterior",
+  "ordem exata: Hoje, Ontem, Últimos 7 dias, Últimos 14 dias, Últimos 30 dias, Mês atual, Mês anterior",
   ANALYTICS_PERIOD_PRESET_OPTIONS.map((o) => o.value),
-  ["today", "yesterday", "last_7_days", "last_30_days", "this_month", "last_month"],
+  ["today", "yesterday", "last_7_days", "last_14_days", "last_30_days", "this_month", "last_month"],
+);
+check(
+  // Etapa "Padronização Global dos Seletores de Período" — "Últimos 14
+  // dias" adicionado só como mais um valor de N em `lastNDaysRange`, já
+  // genérica; nenhuma mudança de contrato de `resolveAnalyticsPeriod`.
+  "Últimos 14 dias: 14 dias corridos terminando hoje",
+  resolveAnalyticsPeriod("last_14_days", "2026-09-15"),
+  { start: "2026-09-02", end: "2026-09-15" },
 );
 ok(
   "nunca inclui 'custom' na lista de presets (tratado à parte, como período personalizado) — garantido pelo próprio tipo Exclude<AnalyticsPeriodPreset, 'custom'>",
@@ -72,7 +80,7 @@ ok(
 // ---------------------------------------------------------------------------
 console.log("\n4 — buildReportPeriodHref: troca de período navega dentro da MESMA página nativa, URL reflete o período\n");
 
-for (const preset of ["today", "yesterday", "last_7_days", "last_30_days", "this_month", "last_month"] as const) {
+for (const preset of ["today", "yesterday", "last_7_days", "last_14_days", "last_30_days", "this_month", "last_month"] as const) {
   const href = buildReportPeriodHref("/clients/client-1/relatorio", preset);
   ok(`preset "${preset}": aponta pra página nativa (/clients/[id]/relatorio), nunca pro endpoint de PDF`, href.startsWith("/clients/client-1/relatorio?"));
   ok(`preset "${preset}": carrega o preset na querystring (refresh/back/forward reproduzem o mesmo período)`, href.includes(`analyticsPreset=${preset}`));

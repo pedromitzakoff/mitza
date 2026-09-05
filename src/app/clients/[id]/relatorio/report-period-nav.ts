@@ -1,4 +1,5 @@
 import type { AnalyticsPeriodPreset } from "@/lib/analytics";
+import { isValidDateRange } from "@/lib/date-range-picker";
 
 /**
  * Etapa "Relatório Nativo": núcleo puro de HREF da página nativa do
@@ -36,10 +37,15 @@ export function buildReportPdfHref(clientId: string, preset: AnalyticsPeriodPres
 }
 
 /** Mesma regra de validade que `resolveAnalyticsPeriod` já aplica pro
- * preset "custom" (`custom.end >= custom.start`) — replicada aqui só pra
- * decidir se o controle de período personalizado navega, nunca uma segunda
- * fonte de verdade sobre o que é um período válido (o servidor sempre
- * recalcula/valida de novo ao montar o relatório). */
+ * preset "custom" (`custom.end >= custom.start`) — delega pra
+ * `isValidDateRange` (`lib/date-range-picker.ts`, Etapa "Padronização
+ * Global dos Seletores de Período"), a mesma checagem que
+ * `PeriodRangeSelector` usa antes de liberar "Aplicar". Consolidação de 3
+ * reimplementações idênticas que existiam espalhadas (aqui,
+ * `client-report-wizard.tsx` e dentro de `resolveAnalyticsPeriod`) — só
+ * esta, que não tinha nenhum outro efeito colateral, foi unificada; o
+ * servidor sempre recalcula/valida de novo ao montar o relatório de
+ * qualquer forma. */
 export function isValidCustomRange(start: string, end: string): boolean {
-  return Boolean(start) && Boolean(end) && end >= start;
+  return isValidDateRange(start, end);
 }
