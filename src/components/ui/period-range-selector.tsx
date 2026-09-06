@@ -119,7 +119,16 @@ function CalendarMonthGrid({
   );
 
   return (
-    <div className={`flex w-56 shrink-0 flex-col gap-2 max-[359px]:w-full ${className ?? ""}`}>
+    // Etapa "Otimização Mobile" (ajuste pós-produção): usuário notou que,
+    // com só 1 calendário visível no mobile (o 2º mês some via `hidden
+    // sm:flex`), a largura fixa de sempre (`w-56`, pensada pra caber DOIS
+    // meses lado a lado no desktop) sobrava espaço em branco à direita do
+    // sheet. `flex-1` deixa o calendário crescer até preencher o que sobrar
+    // na linha (presets + calendário), sem mexer no desktop — lá
+    // `sm:w-56 sm:flex-none` volta a travar a largura de sempre, porque com
+    // DOIS meses full-width eles brigariam pelo espaço e ficariam
+    // desiguais/deformados.
+    <div className={`flex flex-1 flex-col gap-2 sm:w-56 sm:flex-none ${className ?? ""}`}>
       <div className="flex items-center justify-between px-1">
         {onPrev ? (
           <button
@@ -148,7 +157,13 @@ function CalendarMonthGrid({
         )}
       </div>
 
-      <div className="grid grid-cols-7 gap-y-1 text-center">
+      {/* `justify-items-center`: quando o calendário cresce (`flex-1` no
+          mobile, acima) pra preencher o espaço sobrando, cada coluna do
+          grid fica mais larga que os 32px do botão — sem isso os dias
+          ficariam colados à esquerda de cada coluna, com um vão só do
+          lado direito; centralizado, o espaço extra se distribui igual
+          nos dois lados de cada dia. */}
+      <div className="grid grid-cols-7 gap-y-1 justify-items-center text-center">
         {WEEKDAY_SHORT_LABELS_PT_BR.map((label) => (
           <span key={label} className="text-[11px] font-medium uppercase text-[#6F6B65]">
             {label}
