@@ -13,6 +13,7 @@ import {
   buildTargetVariationLabel,
   findBestCostCampaign,
   findHighestVolumeCampaign,
+  type PeriodReading,
 } from "./report-derivatives";
 
 /**
@@ -101,6 +102,22 @@ export type PerformanceReportSummaryBlock =
   | { status: "no_data"; message: string }
   | { status: "ok"; kpis: AnalyticsKpiCard[]; note: string };
 
+/** Etapa "Visual Polish Mobile" — resultado principal do período, pro
+ * mobile dar protagonismo visual real ao que o cliente contratou (vendas,
+ * leads, novos seguidores), nunca ao investimento (que é input, não
+ * resultado). `value`/`label` vêm 100% de `PerformanceSummary.resultCount`
+ * + `PERFORMANCE_GOALS[goal].resultMetricLabel` — os MESMOS já usados em
+ * `buildAnalyticsKpiCards` pro card "result" de leads/seguidores; pra
+ * vendas, aquele card nem existe hoje (a função devolve ROAS/CPA/Receita/
+ * Ticket, mas nunca a contagem de vendas isolada) — `hero` preenche essa
+ * lacuna só pra apresentação, sem recalcular nada. `null` nos mesmos dois
+ * estados de `summary` (sem objetivo/sem dado) — nunca um resultado
+ * "chutado" sem base. */
+export interface PerformanceReportHero {
+  value: string;
+  label: string;
+}
+
 export interface PerformanceReportDocument {
   clientName: string;
   periodLabel: string;
@@ -109,12 +126,18 @@ export interface PerformanceReportDocument {
   totalAdSets: number;
   totalCreatives: number;
   summary: PerformanceReportSummaryBlock;
-  /** Etapa "Otimização do Performance Report" — 1 a 3 frases curtas,
-   * determinísticas (`report-derivatives.ts`, `buildPeriodReading`), nunca
+  hero: PerformanceReportHero | null;
+  /** Etapa "Otimização do Performance Report" — leitura curta e
+   * determinística (`report-derivatives.ts`, `buildPeriodReading`), nunca
    * texto livre/IA generativa. `null` quando não há objetivo configurado ou
    * nenhum dado no período (mesmos estados de `summary`) — sem base
-   * nenhuma pra qualquer leitura. */
-  periodReading: string[] | null;
+   * nenhuma pra qualquer leitura. Estruturado (não mais `string[]`) desde a
+   * Etapa "Visual Polish Mobile" — mesmo texto/regras de sempre, só em
+   * campos nomeados pra permitir estilizar resultado/meta/destaque
+   * diferente no mobile (`flattenPeriodReadingLines` devolve a mesma
+   * sequência de frases de sempre pra quem não precisa disso — HTML/PDF e
+   * desktop nativo). */
+  periodReading: PeriodReading | null;
   tables: PerformanceReportTable[];
 }
 
@@ -417,9 +440,22 @@ function buildSummaryBlock(data: PerformanceReportData): PerformanceReportSummar
 }
 
 /** `null` sem objetivo configurado ou sem dado no período — mesmos dois
+ * estados de `buildSummaryBlock`. `resultCount`/`resultMetricLabel` já
+ * existem em `PerformanceSummary`/`PERFORMANCE_GOALS` (canônicos, os
+ * mesmos usados em `buildAnalyticsKpiCards`) — nenhum cálculo novo, só a
+ * seleção do que já existe. */
+function buildHero(data: PerformanceReportData): PerformanceReportHero | null {
+  if (data.summary.status !== "ok" || !data.performanceGoal) return null;
+  return {
+    value: String(data.summary.performanceSummary.resultCount),
+    label: PERFORMANCE_GOALS[data.performanceGoal].resultMetricLabel,
+  };
+}
+
+/** `null` sem objetivo configurado ou sem dado no período — mesmos dois
  * estados de `buildSummaryBlock`, nenhuma leitura possível sem base
  * (`report-derivatives.ts`, `buildPeriodReading`). */
-function buildPeriodReadingForDocument(data: PerformanceReportData): string[] | null {
+function buildPeriodReadingForDocument(data: PerformanceReportData): PeriodReading | null {
   if (data.summary.status !== "ok" || !data.performanceGoal) return null;
   return buildPeriodReading({
     performanceGoal: data.performanceGoal,
@@ -439,6 +475,7 @@ export function buildPerformanceReportDocument(data: PerformanceReportData): Per
     totalAdSets: data.adSets.length,
     totalCreatives: data.creatives.length,
     summary: buildSummaryBlock(data),
+    hero: buildHero(data),
     periodReading: buildPeriodReadingForDocument(data),
     // Ordem = ordem de renderização: Resultado Diário → Campanhas →
     // Públicos → Criativos (Resumo Executivo é renderizado à parte, fora

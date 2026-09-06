@@ -18,6 +18,7 @@ import {
   buildTargetVariationLabel,
   findBestCostCampaign,
   findHighestVolumeCampaign,
+  flattenPeriodReadingLines,
   resolveCampaignTargetBadge,
 } from "../src/lib/performance-report/report-derivatives";
 import type { CostComparison, PerformanceSummary } from "../src/lib/performance";
@@ -27,6 +28,11 @@ import type { CampaignSummary } from "../src/lib/campaign-analytics";
 let passed = 0;
 function check(name: string, actual: unknown, expected: unknown) {
   assert.deepStrictEqual(actual, expected, `FALHOU: ${name} — esperado ${JSON.stringify(expected)}, recebeu ${JSON.stringify(actual)}`);
+  passed++;
+  console.log(`  ok — ${name}`);
+}
+function ok(name: string, condition: boolean) {
+  assert.ok(condition, `FALHOU: ${name}`);
   passed++;
   console.log(`  ok — ${name}`);
 }
@@ -191,15 +197,23 @@ check("identidade por (channel, campaignName), nunca por posição", buildCampai
 console.log("\n13 — buildPeriodReading: leitura neutra sem nenhum resultado\n");
 
 check(
-  "resultCount 0 → frase neutra, singular do objetivo, sem 2ª/3ª frase",
+  "resultCount 0 → leitura neutra, singular do objetivo",
   buildPeriodReading({ performanceGoal: "leads", performanceSummary: baseSummary({ resultCount: 0, costPerResult: null, comparison: { variation: null, status: "not_available" } }), campaigns: [] }),
-  ["Nenhum lead foi registrado no período."],
+  { kind: "neutral", message: "Nenhum lead foi registrado no período." },
 );
 check(
   "objetivo 'sales' usa o singularLabel de PERFORMANCE_GOALS ('venda')",
   buildPeriodReading({ performanceGoal: "sales", performanceSummary: baseSummary({ resultCount: 0, resultType: "sales", costPerResult: null, comparison: { variation: null, status: "not_available" } }), campaigns: [] }),
-  ["Nenhum venda foi registrado no período."],
+  { kind: "neutral", message: "Nenhum venda foi registrado no período." },
 );
+check(
+  "flattenPeriodReadingLines: leitura neutra vira array de 1 frase (compatibilidade com HTML/PDF/desktop)",
+  flattenPeriodReadingLines(
+    buildPeriodReading({ performanceGoal: "leads", performanceSummary: baseSummary({ resultCount: 0, costPerResult: null, comparison: { variation: null, status: "not_available" } }), campaigns: [] }),
+  ),
+  ["Nenhum lead foi registrado no período."],
+);
+check("flattenPeriodReadingLines: null vira array vazio", flattenPeriodReadingLines(null), []);
 
 // ---------------------------------------------------------------------------
 console.log("\n14 — buildPeriodReading: leads, plural, com meta e melhor campanha\n");
@@ -215,18 +229,36 @@ const leadsReading = buildPeriodReading({
   performanceSummary: leadsSummary,
   campaigns: [campaign("A", { totalResultCount: 6, cpa: 20 }), campaign("B", { totalResultCount: 6, cpa: 30 })],
 });
-check("1ª frase: volume plural + CPL", leadsReading[0], "Foram registrados 12 leads, com CPL de R$ 25,00.");
-check("2ª frase: variação vs. meta em forma de frase", leadsReading[1], "O custo ficou 16,7% abaixo da meta de R$ 30,00.");
-check("3ª frase: melhor campanha (menor CPL entre as com resultado > 0)", leadsReading[2], "A campanha com melhor eficiência apresentou CPL de R$ 20,00.");
-check("no máximo 3 frases", leadsReading.length, 3);
+ok("kind 'has_data' quando há resultado", leadsReading.kind === "has_data");
+if (leadsReading.kind === "has_data") {
+  check("summaryLine: volume plural + CPL", leadsReading.summaryLine, "Foram registrados 12 leads, com CPL de R$ 25,00.");
+  check("targetLine: variação vs. meta em forma de frase", leadsReading.targetLine, "O custo ficou 16,7% abaixo da meta de R$ 30,00.");
+  check("targetStatus: reaproveita comparison.status canônico ('better', custo abaixo da meta)", leadsReading.targetStatus, "better");
+  check("bestCampaignLine: melhor campanha (menor CPL entre as com resultado > 0)", leadsReading.bestCampaignLine, "A campanha com melhor eficiência apresentou CPL de R$ 20,00.");
+}
+check(
+  "flattenPeriodReadingLines: as 3 frases na mesma ordem de sempre (compatibilidade HTML/PDF/desktop)",
+  flattenPeriodReadingLines(leadsReading),
+  [
+    "Foram registrados 12 leads, com CPL de R$ 25,00.",
+    "O custo ficou 16,7% abaixo da meta de R$ 30,00.",
+    "A campanha com melhor eficiência apresentou CPL de R$ 20,00.",
+  ],
+);
 
 // ---------------------------------------------------------------------------
 console.log("\n15 — buildPeriodReading: singular (1 resultado), sem meta, sem campanha elegível\n");
 
 const singularSummary = baseSummary({ resultCount: 1, costPerResult: 40, targetCostPerResult: null, comparison: { variation: null, status: "not_available" } });
 const singularReading = buildPeriodReading({ performanceGoal: "leads", performanceSummary: singularSummary, campaigns: [campaign("Sem resultado", { totalResultCount: 0, cpa: null })] });
-check("1 lead → singular ('lead', não 'leads')", singularReading[0], "Foram registrados 1 lead, com CPL de R$ 40,00.");
-check("sem meta → sem 2ª frase; sem campanha elegível → sem 3ª frase", singularReading.length, 1);
+ok("kind 'has_data'", singularReading.kind === "has_data");
+if (singularReading.kind === "has_data") {
+  check("summaryLine: 1 lead → singular ('lead', não 'leads')", singularReading.summaryLine, "Foram registrados 1 lead, com CPL de R$ 40,00.");
+  check("sem meta → targetLine/targetStatus null", singularReading.targetLine, null);
+  check("targetStatus null quando targetLine é null", singularReading.targetStatus, null);
+  check("sem campanha elegível → bestCampaignLine null", singularReading.bestCampaignLine, null);
+}
+check("flattenPeriodReadingLines: só a 1ª frase (sem meta, sem melhor campanha)", flattenPeriodReadingLines(singularReading), ["Foram registrados 1 lead, com CPL de R$ 40,00."]);
 
 // ---------------------------------------------------------------------------
 console.log(`\nTodos os ${passed} testes passaram.`);

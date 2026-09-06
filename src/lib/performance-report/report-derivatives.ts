@@ -1,5 +1,5 @@
 import { formatCurrency } from "@/lib/format";
-import type { CostComparison, PerformanceSummary } from "@/lib/performance";
+import type { CostComparison, PerformanceStatus, PerformanceSummary } from "@/lib/performance";
 import { PERFORMANCE_GOALS, formatPerformanceResult, type PerformanceGoal } from "@/lib/performance-goals";
 import type { CampaignSummary } from "@/lib/campaign-analytics";
 
@@ -44,6 +44,34 @@ export function buildTargetVariationLabel(comparison: CostComparison, targetCost
 }
 
 /**
+ * Etapa "Visual Polish Mobile": `buildPeriodReading` passou de `string[]`
+ * pra este tipo com campos nomeados — MESMO texto, MESMAS regras
+ * determinísticas de sempre (nada na geração mudou), só uma forma que o
+ * mobile consegue estilizar cada frase de um jeito diferente (resultado /
+ * meta / destaque, item 8 do pedido) sem precisar adivinhar "qual frase é
+ * qual" pela posição no array — a ambiguidade real que existia quando só 2
+ * das 3 frases estavam presentes (a segunda podia ser a de meta OU a de
+ * melhor campanha, dependendo de qual delas faltava). `targetStatus`
+ * reaproveita `performanceSummary.comparison.status` (mesma classificação
+ * de `getPerformanceStatus`, nunca uma segunda régua) — é o que permite ao
+ * mobile pintar a variação de lime/neutro sem inventar semântica nova.
+ * `flattenPeriodReadingLines`, abaixo, devolve o MESMO array de frases de
+ * sempre, na mesma ordem — usado pelo HTML/PDF e pelo desktop nativo, que
+ * nunca mudam de aparência nesta etapa.
+ */
+export type PeriodReading =
+  | { kind: "neutral"; message: string }
+  | {
+      kind: "has_data";
+      summaryLine: string;
+      targetLine: string | null;
+      /** `null` quando `targetLine` também é `null` (sem meta/sem
+       * comparação possível) — nunca uma cor "chutada" sem base. */
+      targetStatus: PerformanceStatus | null;
+      bestCampaignLine: string | null;
+    };
+
+/**
  * Leitura determinística do período — no máximo 3 frases curtas, cada uma
  * auditável a partir de números já exibidos no relatório (nunca texto livre/
  * IA generativa, nunca causalidade inventada: "campanha performou bem" não
@@ -61,29 +89,41 @@ export function buildPeriodReading(input: {
   performanceGoal: PerformanceGoal;
   performanceSummary: PerformanceSummary;
   campaigns: CampaignSummary[];
-}): string[] {
+}): PeriodReading {
   const { performanceGoal, performanceSummary, campaigns } = input;
   const config = PERFORMANCE_GOALS[performanceGoal];
-  const sentences: string[] = [];
 
   if (performanceSummary.resultCount === 0) {
-    sentences.push(`Nenhum ${config.singularLabel.toLowerCase()} foi registrado no período.`);
-    return sentences;
+    return { kind: "neutral", message: `Nenhum ${config.singularLabel.toLowerCase()} foi registrado no período.` };
   }
 
   const resultLabel = formatPerformanceResult(performanceSummary.resultCount, performanceGoal);
   const costPart = performanceSummary.costPerResult !== null ? `, com ${config.costMetricShortLabel} de ${formatCurrency(performanceSummary.costPerResult)}` : "";
-  sentences.push(`Foram registrados ${resultLabel}${costPart}.`);
+  const summaryLine = `Foram registrados ${resultLabel}${costPart}.`;
 
-  const variationLabel = buildTargetVariationSentence(performanceSummary.comparison, performanceSummary.targetCostPerResult);
-  if (variationLabel) sentences.push(variationLabel);
+  const targetLine = buildTargetVariationSentence(performanceSummary.comparison, performanceSummary.targetCostPerResult);
+  const targetStatus = targetLine ? performanceSummary.comparison.status : null;
 
   const bestCampaign = findBestCostCampaign(campaigns);
-  if (bestCampaign && bestCampaign.cpa !== null) {
-    sentences.push(`A campanha com melhor eficiência apresentou ${config.costMetricShortLabel} de ${formatCurrency(bestCampaign.cpa)}.`);
-  }
+  const bestCampaignLine =
+    bestCampaign && bestCampaign.cpa !== null
+      ? `A campanha com melhor eficiência apresentou ${config.costMetricShortLabel} de ${formatCurrency(bestCampaign.cpa)}.`
+      : null;
 
-  return sentences;
+  return { kind: "has_data", summaryLine, targetLine, targetStatus, bestCampaignLine };
+}
+
+/** Devolve a MESMA sequência de frases que a versão anterior de
+ * `buildPeriodReading` retornava direto (`string[]`) — usado pelo HTML/PDF
+ * (`html-renderer.ts`) e pela versão desktop do relatório nativo, que
+ * continuam mostrando a Leitura do período exatamente como sempre
+ * mostraram (um parágrafo por frase, mesma ordem: resultado, meta,
+ * melhor campanha). Só o mobile lê os campos nomeados de `PeriodReading`
+ * diretamente pra estilizar cada frase de um jeito diferente. */
+export function flattenPeriodReadingLines(reading: PeriodReading | null): string[] {
+  if (!reading) return [];
+  if (reading.kind === "neutral") return [reading.message];
+  return [reading.summaryLine, reading.targetLine, reading.bestCampaignLine].filter((line): line is string => line !== null);
 }
 
 /** Frase (não rótulo de KPI) da variação vs. meta — mesmo cálculo de

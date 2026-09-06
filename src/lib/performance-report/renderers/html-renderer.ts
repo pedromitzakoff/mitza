@@ -1,5 +1,6 @@
 import { escapeHtml } from "@/lib/html-escape";
 import type { PerformanceReportDocument, PerformanceReportRow, PerformanceReportTable } from "../report-document";
+import { flattenPeriodReadingLines } from "../report-derivatives";
 
 /**
  * Camada 4 — único lugar que sabe que "HTML" existe. Especificação visual
@@ -35,8 +36,14 @@ function isSafeHttpUrl(value: string | null | undefined): value is string {
  * ver `report-derivatives.ts#buildPeriodReading` — cada frase já vem pronta
  * do documento, aqui só é escapada e colocada em parágrafos. */
 function renderPeriodReading(doc: PerformanceReportDocument): string {
-  if (!doc.periodReading || doc.periodReading.length === 0) return "";
-  const paragraphs = doc.periodReading.map((sentence) => `<p>${escapeHtml(sentence)}</p>`).join("");
+  // Etapa "Visual Polish Mobile": `periodReading` passou de `string[]` pra
+  // um tipo estruturado (campos nomeados, ver report-derivatives.ts) — o
+  // PDF nunca muda de aparência nesta etapa, então `flattenPeriodReadingLines`
+  // devolve a MESMA sequência de frases de sempre, na mesma ordem, e este
+  // renderer continua desenhando exatamente como antes.
+  const lines = flattenPeriodReadingLines(doc.periodReading);
+  if (lines.length === 0) return "";
+  const paragraphs = lines.map((sentence) => `<p>${escapeHtml(sentence)}</p>`).join("");
   return `<div class="reading"><div class="reading-label">Leitura do período</div>${paragraphs}</div>`;
 }
 
