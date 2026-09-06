@@ -100,12 +100,29 @@ function RowCard({
   onToggleExpanded: () => void;
   isTotal?: boolean;
 }) {
+  // Etapa "Otimização Mobile" (ajuste pós-produção): até 3 métricas cabem
+  // confortavelmente numa linha só — pedido explícito do usuário depois de
+  // ver em produção ("Campanhas" com Investimento/Leads na mesma linha e
+  // CPL sozinho embaixo; "Resultado Diário" ficando alto demais com 2
+  // linhas de métrica por dia). 3 colunas resolve os dois: Campanhas passa
+  // a mostrar as 3 métricas base numa linha só, e Resultado Diário (mesmas
+  // 3 métricas) ganha uma linha a menos por card, encurtando a lista
+  // inteira. Com 4+ métricas (Receita/ROAS/Impressões também presentes),
+  // volta pra 2 colunas — 4-6 métricas em 3 colunas deixaria uma coluna
+  // solta numa linha final, o problema original.
+  // `min-[375px]:` (não `sm:`, ainda mobile): abaixo disso a coluna de 3
+  // fica estreita demais pra um total de 5 dígitos ("R$ 10.679,56", medido
+  // ~85px de largura própria) sem quebrar de forma feia no meio do número
+  // (a auditoria em 320px confirmou exatamente isso) — 2 colunas continuam
+  // seguras até lá.
+  const metricGridColumnsClass = row.metrics.length <= 3 ? "grid-cols-2 min-[375px]:grid-cols-3" : "grid-cols-2";
+
   return (
     <li
       className={
         isTotal
-          ? "rounded-xl border-2 border-[#17171A] bg-[#FAF8F4] p-3.5"
-          : "rounded-xl border border-[#D9D3C9] bg-white p-3.5"
+          ? "rounded-xl border-2 border-[#17171A] bg-[#FAF8F4] p-3"
+          : "rounded-xl border border-[#D9D3C9] bg-white p-3"
       }
     >
       <div className="flex items-start gap-2.5">
@@ -130,13 +147,19 @@ function RowCard({
       </div>
 
       {row.rowNote ? (
-        <p className="mt-2.5 text-sm text-[#6F6B65]">{row.rowNote}</p>
+        <p className="mt-2 text-sm text-[#6F6B65]">{row.rowNote}</p>
       ) : (
-        <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-2">
+        <dl className={`mt-2 grid gap-x-2.5 gap-y-1.5 ${metricGridColumnsClass}`}>
           {row.metrics.map((cell, index) => (
-            <div key={index}>
-              <dt className="text-[10px] font-semibold uppercase tracking-wide text-[#6F6B65]">{table.metricColumns[index]?.header}</dt>
-              <dd className="mt-0.5 text-sm font-bold tabular-nums text-[#17171A]">{cell.display}</dd>
+            <div key={index} className="min-w-0">
+              <dt className="truncate text-[10px] font-semibold uppercase tracking-wide text-[#6F6B65]">{table.metricColumns[index]?.header}</dt>
+              {/* Etapa "Otimização Mobile" (ajuste pós-produção): nunca
+                  `truncate` aqui — um valor precisa poder quebrar linha
+                  (raro, só em números muito grandes numa coluna estreita de
+                  3) em vez de sumir cortado; o rótulo (`dt`, acima) pode
+                  truncar porque o cabeçalho da coluna já existe por
+                  extenso na tabela desktop, nunca a única fonte do dado. */}
+              <dd className="mt-0.5 break-words text-sm font-bold tabular-nums text-[#17171A]">{cell.display}</dd>
             </div>
           ))}
         </dl>
@@ -243,7 +266,7 @@ export function ReportTableSection({ table }: { table: PerformanceReportTable })
           ou seja, rolagem horizontal como ÚNICA forma de ver a maior parte
           de cada linha. Mesmas `visibleRows`/`totalRow`, mesma ordenação —
           só a apresentação muda. */}
-      <ul className="mt-4 flex flex-col gap-2.5 sm:hidden">
+      <ul className="mt-4 flex flex-col gap-2 sm:hidden">
         {visibleRows.map((row) => (
           <RowCard
             key={row.id}
