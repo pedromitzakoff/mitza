@@ -32,9 +32,15 @@ function PeriodReading({ document }: { document: PerformanceReportDocument }) {
 export function ReportBody({ document }: { document: PerformanceReportDocument }) {
   return (
     <div className="mt-3.5 rounded-2xl border border-[#D9D3C9] bg-[#EFE9E0] px-3.5 py-4 sm:mt-5 sm:px-8 sm:py-6">
+      {/* Etapa "Remoção de redundâncias": o eyebrow "RESUMO DO PERÍODO" foi
+          removido — dizia exatamente o mesmo que o título logo abaixo,
+          só em caixa alta. Um único texto por seção (o `<h2>`) é
+          suficiente; o eyebrow continua existindo só no HTML/PDF
+          (`html-renderer.ts`), que é um documento de rolagem longa com
+          nav sticky onde esse padrão editorial faz sentido — nunca
+          alterado aqui. */}
       <section id="resumo" className="pb-6 sm:pb-9">
-        <div className="text-[11px] font-extrabold tracking-[0.15em] text-[#6F6B65]">RESUMO DO PERÍODO</div>
-        <h2 className="mt-1 text-xl font-bold tracking-tight text-[#17171A] sm:text-2xl">Resumo do período</h2>
+        <h2 className="text-xl font-bold tracking-tight text-[#17171A] sm:text-2xl">Resumo do período</h2>
         <div className="mt-3.5 sm:mt-5">
           <ReportKpiGrid summary={document.summary} />
         </div>
@@ -45,9 +51,10 @@ export function ReportBody({ document }: { document: PerformanceReportDocument }
         <ReportTableSection key={table.id} table={table} />
       ))}
 
-      <p className="border-t border-[#D9D3C9] pt-4 text-xs text-[#6F6B65] sm:pt-5">
-        Relatório de Performance · Meta Ads — gerado em {document.generatedAtLabel}.
-      </p>
+      {/* "Relatório de Performance" já está no <h1> do cabeçalho da página
+          (`report-header.tsx`) — nunca repetir aqui, só o que é novo
+          (canal + timestamp). */}
+      <p className="border-t border-[#D9D3C9] pt-4 text-xs text-[#6F6B65] sm:pt-5">Meta Ads — gerado em {document.generatedAtLabel}.</p>
     </div>
   );
 }

@@ -247,12 +247,14 @@ export function ReportTableSection({ table }: { table: PerformanceReportTable })
 
   return (
     <section id={table.id} className="border-t border-[#D9D3C9] py-6 sm:py-9">
-      <div className="flex flex-wrap items-end justify-between gap-3 sm:gap-4">
-        <div>
-          <div className="text-[11px] font-extrabold tracking-[0.15em] text-[#6F6B65]">{table.eyebrow}</div>
-          <h2 className="mt-1 text-xl font-bold tracking-tight text-[#17171A] sm:text-2xl">{table.title}</h2>
-          <p className="mt-1 max-w-xl text-[13px] text-[#6F6B65] sm:text-sm">{table.description}</p>
-        </div>
+      {/* Etapa "Remoção de redundâncias": eyebrow (repetia `table.title` em
+          caixa alta) e descrição (só reformulava o próprio título — ex.:
+          "Campanhas" + "Desempenho das campanhas no período.") removidos
+          daqui. Nenhum dos dois campos foi apagado de `report-document.ts`
+          — só pararam de ser renderizados nesta página; o HTML/PDF
+          (`html-renderer.ts`) continua os usando exatamente como antes. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+        <h2 className="text-xl font-bold tracking-tight text-[#17171A] sm:text-2xl">{table.title}</h2>
         {table.showItemCount && (
           <span className="shrink-0 rounded-full border border-[#D9D3C9] px-2.5 py-1.5 text-xs text-[#6F6B65]">
             {count} {count === 1 ? "item" : "itens"}
