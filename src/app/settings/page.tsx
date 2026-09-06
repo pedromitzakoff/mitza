@@ -35,6 +35,16 @@ const SETTINGS_GROUPS: { label: string; items: SettingsLink[] }[] = [
     ],
   },
   {
+    label: "Integrações",
+    items: [
+      {
+        href: "/settings/meta-connections",
+        title: "Conexões Meta",
+        description: "Quais clientes ainda estão sem conta de anúncio, campanha, público ou anúncio conectados no Meta.",
+      },
+    ],
+  },
+  {
     label: "Rotina operacional",
     items: [
       {
