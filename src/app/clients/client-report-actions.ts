@@ -146,6 +146,18 @@ export interface MarkClientReportSentResult {
   sentByName?: string;
 }
 
+/** SQLSTATE de um `raise exception '...'` sem código customizado — mesmo
+ * critério de `recurring-task-actions.ts` (`register_recurring_execution` é
+ * a MESMA RPC chamada ali e aqui): é assim que a função sinaliza uma regra
+ * de negócio já escrita em português pra ser lida pelo gestor (ex.: "Tarefa
+ * recorrente não encontrada."). Qualquer outro código (ambiguidade de
+ * função, violação de constraint, etc.) é um erro técnico — Achado #2 da
+ * auditoria de segurança: antes, `rpcError.message` chegava cru até a UI
+ * pra QUALQUER código de erro, não só o de negócio. */
+const RAISED_BUSINESS_ERROR_CODE = "P0001";
+const REGISTER_EXECUTION_GENERIC_ERROR_MESSAGE =
+  "Report marcado como enviado, mas não foi possível registrar a execução da recorrência. Tente novamente ou registre manualmente.";
+
 /**
  * "Marcar como enviado" — a única transição que grava `status = 'sent'` e,
  * consequentemente, a única que registra a execução da recorrência
@@ -205,11 +217,29 @@ export async function markClientReportSentAction(input: MarkClientReportSentInpu
     p_source: "web",
   });
   if (rpcError) {
+    // Nunca engolir o erro — contexto completo pro servidor, mensagem segura
+    // pra UI. `raise exception` no plpgsql (RAISED_BUSINESS_ERROR_CODE) já
+    // escreve mensagens em português pensadas pra aparecer pro gestor;
+    // qualquer outro código (RPC ambígua, violação de constraint, etc.) é
+    // técnico e nunca é exposto cru — mesma régua de
+    // `registerRecurringExecutionAction` (recurring-task-actions.ts).
+    console.error("[markClientReportSentAction] register_recurring_execution falhou", {
+      clientId: input.clientId,
+      reportId: input.reportId,
+      recurringTaskId,
+      teamMemberId: profile.id,
+      source: "web",
+      supabaseCode: rpcError.code,
+      supabaseMessage: rpcError.message,
+      supabaseDetails: rpcError.details,
+      supabaseHint: rpcError.hint,
+    });
+    const message = rpcError.code === RAISED_BUSINESS_ERROR_CODE ? rpcError.message : REGISTER_EXECUTION_GENERIC_ERROR_MESSAGE;
     return {
       ok: true,
       sentAt: now,
       sentByName: profile.name,
-      error: `Report marcado como enviado, mas não foi possível registrar a execução da recorrência: ${rpcError.message}`,
+      error: message,
     };
   }
 
