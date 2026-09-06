@@ -75,7 +75,16 @@ function matchPreset(range: { start: string; end: string }, presets: PeriodRange
   return presets.find((preset) => preset.range.start === range.start && preset.range.end === range.end) ?? null;
 }
 
-const DAY_BUTTON_BASE = "flex h-10 w-10 items-center justify-center rounded-full text-sm transition-colors sm:h-8 sm:w-8";
+// Etapa "Otimização Mobile" (ajuste pós-produção): usuário pediu
+// explicitamente o MESMO layout do desktop no mobile (presets à esquerda,
+// calendário à direita, lado a lado), só reduzido — não mais empilhado.
+// Isso muda a conta de largura: o calendário de 7 colunas precisa de pelo
+// menos 7×32px = 224px pra os dias não se sobreporem entre si (célula mais
+// estreita que o próprio botão), e essa largura tem que sobrar espaço pra
+// coluna de presets do lado. Por isso os dias voltam a 32px SEMPRE (igual
+// ao desktop) — 40px só cabia no layout empilhado antigo, que dava a
+// largura da tela inteira pro calendário.
+const DAY_BUTTON_BASE = "flex h-8 w-8 items-center justify-center rounded-full text-sm transition-colors";
 
 function CalendarMonthGrid({
   month,
@@ -110,19 +119,19 @@ function CalendarMonthGrid({
   );
 
   return (
-    <div className={`flex w-full flex-col gap-2 sm:w-56 ${className ?? ""}`}>
+    <div className={`flex w-56 shrink-0 flex-col gap-2 max-[359px]:w-full ${className ?? ""}`}>
       <div className="flex items-center justify-between px-1">
         {onPrev ? (
           <button
             type="button"
             onClick={onPrev}
             aria-label="Mês anterior"
-            className="flex h-11 w-11 items-center justify-center rounded-md text-[#17171A] hover:bg-[#EFE9E0] sm:h-8 sm:w-8"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-[#17171A] hover:bg-[#EFE9E0]"
           >
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </button>
         ) : (
-          <span className="h-11 w-11 sm:h-8 sm:w-8" aria-hidden="true" />
+          <span className="h-8 w-8" aria-hidden="true" />
         )}
         <span className="text-sm font-semibold capitalize text-[#17171A]">{monthLabel}</span>
         {onNext ? (
@@ -130,12 +139,12 @@ function CalendarMonthGrid({
             type="button"
             onClick={onNext}
             aria-label="Próximo mês"
-            className="flex h-11 w-11 items-center justify-center rounded-md text-[#17171A] hover:bg-[#EFE9E0] sm:h-8 sm:w-8"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-[#17171A] hover:bg-[#EFE9E0]"
           >
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
         ) : (
-          <span className="h-11 w-11 sm:h-8 sm:w-8" aria-hidden="true" />
+          <span className="h-8 w-8" aria-hidden="true" />
         )}
       </div>
 
@@ -287,13 +296,20 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
               antigo renderizando 86-94px pra FORA da borda esquerda da
               viewport em 320px, com `right-0` ancorado num trigger que não
               estava perto o suficiente da borda direita). Em `sm+` o
-              dropdown de sempre continua idêntico, sem backdrop. */}
+              dropdown de sempre continua idêntico, sem backdrop.
+              `sm:left-0` (não `right-0`): o cabeçalho do relatório
+              (`report-header.tsx`) posiciona o trigger encostado à
+              ESQUERDA do container (nunca empurrado pra direita) — ancorar
+              pela direita fazia o painel (até ~500-700px de conteúdo)
+              nascer parcialmente fora da tela à esquerda em telas de
+              desktop mais estreitas (achado testando esta correção, nunca
+              reportado pelo usuário — confirmado e corrigido aqui junto). */}
           <div className="fixed inset-0 z-40 bg-black/30 sm:hidden" onClick={() => closePanel(false)} aria-hidden="true" />
           <div
             ref={panelRef}
             role="dialog"
             aria-label="Selecionar período"
-            className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col rounded-t-2xl border border-[#C8BEAD] bg-white shadow-lg sm:absolute sm:inset-x-auto sm:inset-y-auto sm:bottom-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-none sm:w-auto sm:max-w-[calc(100vw_-_2rem)] sm:flex-row sm:overflow-auto sm:rounded-xl"
+            className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col rounded-t-2xl border border-[#C8BEAD] bg-white shadow-lg sm:absolute sm:inset-x-auto sm:inset-y-auto sm:bottom-auto sm:left-0 sm:top-full sm:mt-2 sm:max-h-none sm:w-auto sm:max-w-[calc(100vw_-_2rem)] sm:overflow-auto sm:rounded-xl"
           >
             <div className="flex items-center justify-between border-b border-[#EFE9E0] px-4 py-3 sm:hidden">
               <span className="text-sm font-semibold text-[#17171A]">Selecionar período</span>
@@ -307,14 +323,23 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
               </button>
             </div>
 
-            <div className="flex flex-1 flex-col overflow-y-auto sm:flex-row sm:overflow-visible">
-              <div className="flex shrink-0 flex-col gap-1 border-b border-[#EFE9E0] p-3 sm:w-40 sm:border-b-0 sm:border-r sm:p-3">
+            {/* Etapa "Otimização Mobile" (ajuste pós-produção): usuário viu
+                em produção e pediu o MESMO layout do desktop no mobile —
+                presets à esquerda, calendário à direita, lado a lado, só
+                reduzido — em vez do empilhado (presets em cima, calendário
+                embaixo) que a Fase 1 desta otimização tinha usado. Abaixo
+                de 360px (`max-[359px]:`) essa largura não fecha (calendário
+                sozinho já precisa de ~224px pra 7 dias de 32px cada) —
+                nesses aparelhos bem estreitos mantém o empilhado antigo,
+                que continua seguro em qualquer largura. */}
+            <div className="flex flex-1 flex-row overflow-y-auto max-[359px]:flex-col">
+              <div className="flex w-28 shrink-0 flex-col gap-0.5 border-r border-[#EFE9E0] p-2 sm:w-40 sm:gap-1 sm:p-3 max-[359px]:w-full max-[359px]:border-b max-[359px]:border-r-0 max-[359px]:p-3">
                 {presets.map((preset) => (
                   <button
                     key={preset.key}
                     type="button"
                     onClick={() => handlePresetClick(preset)}
-                    className={`flex min-h-11 w-full shrink-0 items-center rounded-lg px-3 text-left text-sm font-medium sm:min-h-0 sm:w-auto sm:rounded-md sm:px-2.5 sm:py-1.5 ${
+                    className={`flex min-h-9 w-full shrink-0 items-center rounded-md px-2 text-left text-xs font-medium sm:w-auto sm:min-h-0 sm:rounded-md sm:px-2.5 sm:py-1.5 sm:text-sm max-[359px]:min-h-11 max-[359px]:rounded-lg max-[359px]:px-3 max-[359px]:text-sm ${
                       draftPreset?.key === preset.key ? "bg-[#D8F238] text-[#17171A]" : "text-[#17171A] hover:bg-[#EFE9E0]"
                     }`}
                   >
@@ -323,8 +348,8 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
                 ))}
               </div>
 
-              <div className="flex flex-1 flex-col gap-3 p-3 sm:p-2.5">
-                <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-start">
+              <div className="flex flex-1 flex-col gap-3 p-2 sm:p-2.5">
+                <div className="flex flex-row items-start gap-3 max-[359px]:flex-col max-[359px]:items-center">
                   <CalendarMonthGrid
                     month={leftMonth}
                     draft={draft}
