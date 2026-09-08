@@ -1,20 +1,33 @@
 import Link from "next/link";
 import type { PerformanceSummary } from "@/lib/performance";
 import { deriveMonthlyKpiTexts } from "@/lib/performance";
-import type { PerformanceGoal } from "@/lib/performance-goals";
+import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { formatCurrency } from "@/lib/format";
 
 function Kpi({ label, value, auxiliary }: { label: string; value: string; auxiliary?: string | null }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">{label}</p>
-      <p className="text-xl font-semibold tracking-tight text-overview-text-primary">{value}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">{label}</p>
+      <p className="text-xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{value}</p>
       {/* Linha reservada mesmo vazia: nem todo Kpi tem auxiliar (ex.:
           "Investimento"), mas os que estão na mesma linha precisam da mesma
           altura pra não ficar com a base desalinhada. */}
       <p className="min-h-[1em] text-xs text-overview-text-secondary">{auxiliary}</p>
     </div>
   );
+}
+
+/** Verde-limão só quando `comparison.status === "better"` (custo por
+ * resultado abaixo da meta) — mesma régua canônica reaproveitada do
+ * Relatório de Performance (`PerformanceStatus`/`comparison.tone`, nunca
+ * uma segunda regra de "isso é bom?" inventada aqui). Qualquer outro status
+ * fica em texto neutro — a paleta KOFF não tem cor de alerta pra "pior",
+ * só ausência do acento. */
+function CostComparisonNote({ text, isBetter }: { text: string; isBetter: boolean }) {
+  if (isBetter) {
+    return <span className="inline-block rounded-full bg-lime px-2 py-0.5 text-[11px] font-bold text-[#17171A]">{text}</span>;
+  }
+  return <span className="text-xs text-overview-text-secondary">{text}</span>;
 }
 
 /**
@@ -64,16 +77,28 @@ export function MonthlyKpiSummary({
   targetCostPerResult: number | null;
   configureObjectiveHref: string;
 }) {
-  const { resultsValue, resultsAuxiliary, costValue } = deriveMonthlyKpiTexts(
-    performanceGoal,
-    performanceSummary,
-    formatCurrency,
-  );
+  const { resultsAuxiliary, costValue } = deriveMonthlyKpiTexts(performanceGoal, performanceSummary, formatCurrency);
+
+  // Etapa "Evolução Visual Incremental — Área do Cliente": mesmo princípio
+  // do hero do Relatório de Performance ("informação principal primeiro") —
+  // o número de resultado vira protagonista tipográfico, separado do rótulo
+  // do objetivo (nunca a string combinada de `deriveMonthlyKpiTexts`, que
+  // mistura número+palavra num tamanho só — aqui lidos direto de
+  // `performanceSummary`/`PERFORMANCE_GOALS`, os MESMOS dados que já
+  // alimentavam o KPI "Resultados" de sempre, nenhum cálculo novo). Sem meta
+  // configurada ou sem dado no período, cai pro texto auxiliar de sempre
+  // (`resultsAuxiliary`), mesmo comportamento de antes desta etapa.
+  const hasHeroResult = performanceGoal !== null && performanceSummary !== null && performanceSummary.hasAnyRecord;
+  const heroValue = hasHeroResult ? String(performanceSummary.resultCount) : "—";
+  const heroLabel = performanceGoal ? PERFORMANCE_GOALS[performanceGoal].resultMetricLabel : "Resultados";
 
   // Meta como texto auxiliar discreto do custo por resultado (nunca mais
   // uma métrica própria) — só existe quando há meta configurada, mesmo
-  // valor de sempre (`targetCostPerResult`), nenhum cálculo novo.
+  // valor de sempre (`targetCostPerResult`), nenhum cálculo novo. Verde-limão
+  // reaproveita `performanceSummary.comparison.status` (mesmo campo
+  // canônico já usado pelo Relatório) — nunca recalcula "está bom?" aqui.
   const costAuxiliary = targetCostPerResult !== null ? `Meta ${formatCurrency(targetCostPerResult)}` : null;
+  const isCostBetterThanTarget = performanceSummary?.comparison.status === "better";
 
   // Faturamento/ROAS — Etapa "Receita e ROAS": linha auxiliar, nunca
   // renderizada quando `revenue` é null (cliente sem objetivo de vendas, ou
@@ -91,18 +116,28 @@ export function MonthlyKpiSummary({
 
   return (
     <div>
-      {/* Etapa "Refinamento Visual 2.0 — Distribuição dos KPIs": ainda uma
-          única fileira, sem virar o grid fixo 4x2 de cards já rejeitado
-          antes (Etapa "Visão Geral: decisão em 5 segundos") — `auto-fit` +
-          `minmax` distribui os KPIs disponíveis pela largura toda do
-          container (em vez de `flex-wrap` empacotando tudo no início e
-          deixando espaço morto à direita), sem virar caixas/cards e sem
-          alterar nenhum valor: cada KPI continua alinhado à esquerda,
-          mesma hierarquia tipográfica de sempre. */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-x-8 gap-y-4">
+      {/* Etapa "Evolução Visual Incremental — Área do Cliente": o resultado
+          do mês vira hero tipográfico (mesmo princípio do Relatório —
+          "informação principal primeiro", nunca mais um KPI com o mesmo
+          peso dos demais). Investimento/Custo por resultado/Faturamento/
+          ROAS continuam a fileira enxuta de sempre (`auto-fit`+`minmax`,
+          Etapa "Refinamento Visual 2.0"), agora abaixo do hero em vez de ao
+          lado dele — nenhum valor recalculado, só reordenado/redimensionado. */}
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">{heroLabel}</p>
+        <p className="text-[40px] font-extrabold leading-none tracking-tight text-overview-text-primary tabular-nums">
+          {heroValue}
+        </p>
+        {resultsAuxiliary && <p className="mt-1 text-xs text-overview-text-secondary">{resultsAuxiliary}</p>}
+      </div>
+
+      <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-x-8 gap-y-4">
         <Kpi label="Investimento" value={formatCurrency(monthActual)} />
-        <Kpi label="Resultados" value={resultsValue} auxiliary={resultsAuxiliary} />
-        <Kpi label="Custo por resultado" value={costValue} auxiliary={costAuxiliary} />
+        <div className="flex flex-col gap-0.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Custo por resultado</p>
+          <p className="text-xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{costValue}</p>
+          <div className="min-h-[1em]">{costAuxiliary && <CostComparisonNote text={costAuxiliary} isBetter={isCostBetterThanTarget} />}</div>
+        </div>
         {hasRevenue && <Kpi label="Faturamento" value={revenueValue} />}
         {hasRevenue && <Kpi label="ROAS" value={roasValue} />}
       </div>

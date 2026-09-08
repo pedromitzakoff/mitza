@@ -1591,7 +1591,13 @@ export default async function ClientPage({
               linha compartilhada abaixo do grid — é `AccountFollowUpPanel`
               quem decide o layout, nunca duplicando a lógica/props de
               investimento aqui. */}
-          <div className="mt-3 rounded-lg border border-overview-border bg-overview-surface p-3">
+          {/* Etapa "Evolução Visual Incremental — Área do Cliente": superfície
+              creme em vez de branco+borda — mesmo papel que o creme já
+              cumpre no Relatório de Performance (grande superfície de
+              conteúdo, nunca o fundo da página inteira — `--authenticated-bg`
+              continua intocado). Sem borda: a diferenciação vem só do tom da
+              superfície, como no Relatório. */}
+          <div className="mt-3 rounded-lg bg-cream p-3 sm:rounded-2xl sm:p-5">
             <AccountFollowUpPanel
               monthActual={visaoGeralMonthActual}
               performanceGoal={performanceGoal}

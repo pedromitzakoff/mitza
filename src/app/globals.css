@@ -66,6 +66,26 @@
   --sand: #c8bead;
   --sand-subtle: #f1ece4;
 
+  /* Creme/Verde-limão KOFF (Etapa "Evolução Visual Incremental — Área do
+     Cliente"): os dois tons que faltavam pra área do cliente falar a mesma
+     língua do Relatório de Performance, que já os usa (hoje só como hex
+     solto dentro dos arquivos `report-*`, nunca tokenizado — igual `--sand`,
+     `--cream` vira o token compartilhado pra qualquer superfície nova que
+     precisar dele, sem repetir o valor). `--cream` é a grande superfície
+     (nunca --authenticated-bg/o fundo da página inteira — só o "cartão" de
+     um bloco específico, mesmo papel que já cumpre no Relatório); `--lime`
+     é acento funcional/semântico (reaproveita sempre o `PerformanceStatus`/
+     `comparison.tone` já calculado — nunca uma régua de cor nova, mesma
+     regra do Relatório). `--lime` não muda no escuro — mesmo critério de
+     `--sand`, que também permanece idêntico nos dois modos (funciona como
+     acento com texto grafite por cima, não como superfície grande que
+     precisaria inverter contraste). `--cream` no escuro reaproveita o MESMO
+     valor que `--overview-surface-subtle` já usa lá (`#201e1a`) — o papel
+     de "grande superfície secundária quente" já existia, só não tinha esse
+     nome. */
+  --cream: #efe9e0;
+  --lime: #d8f238;
+
   /* Sidebar KOFF — Etapa "Sidebar Off-White + Grafite + Areia Assinatura —
      v4": a Sidebar é uma superfície FIXA (não acompanha claro/escuro do
      resto da app — mesma decisão de sempre, ver JSDoc de `Sidebar` em
@@ -179,6 +199,8 @@
   --color-navy: var(--navy);
   --color-sand: var(--sand);
   --color-sand-subtle: var(--sand-subtle);
+  --color-cream: var(--cream);
+  --color-lime: var(--lime);
   --color-sidebar-surface: var(--sidebar-surface);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-foreground-secondary: var(--sidebar-foreground-secondary);
@@ -235,6 +257,11 @@
 
     --sand: #c8bead;
     --sand-subtle: #2a2620;
+    /* --lime propositalmente ausente daqui — mesmo critério de `--sand`
+       acima (não muda no escuro, ver comentário de `--cream`/`--lime` em
+       :root). --cream reaproveita o mesmo valor que `--overview-surface-subtle`
+       já usa no escuro. */
+    --cream: #201e1a;
 
     --overview-surface: #1a1917;
     --overview-surface-subtle: #201e1a;
