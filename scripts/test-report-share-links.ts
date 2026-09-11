@@ -42,14 +42,18 @@ function ok(name: string, condition: boolean) {
 
 interface StoredLink {
   clientId: string;
+  /** Nullable de propósito — modela a linha antiga (anterior à Etapa "Link
+   * Externo — token recuperável"), que nunca tinha essa coluna preenchida. */
+  token: string | null;
   tokenHash: string;
   createdAt: string;
   revokedAt: string | null;
 }
 
 /** Dublê em memória de `ReportShareLinkStore` — nunca toca Supabase/rede.
- * `insertedTokenHashes` existe só pra provar que o token BRUTO nunca passa
- * por aqui, só o hash. */
+ * `insertedTokenHashes` existe pra provar que `token_hash` continua sendo o
+ * sha256 do token bruto (nunca o valor cru), mesmo com o token bruto agora
+ * também sendo persistido (Etapa "Link Externo — token recuperável"). */
 class InMemoryReportShareLinkStore implements ReportShareLinkStore {
   links: StoredLink[] = [];
   insertedTokenHashes: string[] = [];
@@ -72,7 +76,7 @@ class InMemoryReportShareLinkStore implements ReportShareLinkStore {
     const link = this.links
       .filter((l) => l.clientId === clientId && l.revokedAt === null)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-    return link ? { clientId: link.clientId, createdAt: link.createdAt } : null;
+    return link ? { clientId: link.clientId, createdAt: link.createdAt, token: link.token } : null;
   }
 
   async revokeActiveForClient(clientId: string): Promise<void> {
@@ -82,9 +86,9 @@ class InMemoryReportShareLinkStore implements ReportShareLinkStore {
     }
   }
 
-  async insert(clientId: string, tokenHash: string): Promise<void> {
+  async insert(clientId: string, token: string, tokenHash: string): Promise<void> {
     this.insertedTokenHashes.push(tokenHash);
-    this.links.push({ clientId, tokenHash, createdAt: new Date().toISOString(), revokedAt: null });
+    this.links.push({ clientId, token, tokenHash, createdAt: new Date().toISOString(), revokedAt: null });
   }
 }
 
@@ -231,19 +235,44 @@ console.log("\n12 — rate limit: rotas fora de /r/* nunca são checadas por est
   ok("null imediato — nem consulta o backend de rate limit", result === null);
 }
 
-console.log("\n13 — token puro (bruto) nunca é persistido — só o hash chega ao 'banco'\n");
+console.log(
+  "\n13 — Etapa \"Link Externo — token recuperável\": token bruto agora É persistido (decisão consciente), mas /r/[token] continua resolvendo só pelo hash\n",
+);
 {
   const store = new InMemoryReportShareLinkStore(["client-a"]);
   __setReportShareLinkStoreForTests(store);
 
   const token = await rotateReportShareLink("client-a");
 
-  ok("exatamente 1 valor foi inserido no store", store.insertedTokenHashes.length === 1);
-  const [persistedValue] = store.insertedTokenHashes;
-  ok("o valor persistido NUNCA é igual ao token bruto", persistedValue !== token);
-  ok("o valor persistido é o sha256 hex do token (64 caracteres hex)", persistedValue === __testing.hashShareToken(token));
-  ok("o valor persistido tem formato de hash hex (64 chars, só [0-9a-f])", /^[0-9a-f]{64}$/.test(persistedValue));
+  ok("exatamente 1 hash foi inserido no store", store.insertedTokenHashes.length === 1);
+  const [persistedHash] = store.insertedTokenHashes;
+  ok("token_hash continua sendo o sha256 hex do token (64 caracteres hex)", persistedHash === __testing.hashShareToken(token));
+  ok("token_hash tem formato de hash hex (64 chars, só [0-9a-f])", /^[0-9a-f]{64}$/.test(persistedHash));
+  ok("token_hash NUNCA é igual ao token bruto", persistedHash !== token);
+
+  // Decisão desta etapa: o valor BRUTO também fica salvo, pra o painel
+  // "Link do cliente" poder reexibi-lo a qualquer momento (nunca mais só
+  // uma vez, na tela, no instante da geração).
+  ok("exatamente 1 link foi salvo no store", store.links.length === 1);
+  ok("o token bruto foi persistido junto (Etapa 'token recuperável')", store.links[0].token === token);
+
+  const status = await getReportShareLinkStatus("client-a");
+  ok("getReportShareLinkStatus devolve a URL completa reconstruída a partir do token persistido", status.url === `http://localhost:3000/r/${token}`);
 }
+
+console.log('\n13b — status de um link ativo criado ANTES da Etapa "token recuperável" (sem token persistido) cai pro caso "sem valor reexibível"\n');
+{
+  const store = new InMemoryReportShareLinkStore(["client-a"]);
+  __setReportShareLinkStoreForTests(store);
+  // Simula uma linha antiga: insere direto no array, sem passar por
+  // rotateReportShareLink (que sempre grava o token desde esta etapa).
+  store.links.push({ clientId: "client-a", token: null, tokenHash: "hash-antigo", createdAt: new Date().toISOString(), revokedAt: null });
+
+  const status = await getReportShareLinkStatus("client-a");
+  ok("link ainda é reportado como ativo", status.active === true);
+  ok("sem token bruto salvo (linha anterior a esta etapa), a URL não é montada", status.url === null);
+}
+
 
 console.log("\n14 — token bruto: alta entropia (256 bits) e nunca colide entre gerações\n");
 {
@@ -276,6 +305,7 @@ console.log("\n15 — nenhuma service role chega ao client bundle (checagem estr
 
 console.log("\n16 — URL do link é montada no servidor via VERCEL_PROJECT_PRODUCTION_URL, nunca via window.location.origin do admin\n");
 {
+  const libSource = readFileSync(join(__dirname, "..", "src", "lib", "report-share-links.ts"), "utf8");
   const actionsSource = readFileSync(join(__dirname, "..", "src", "app", "clients", "report-share-link-actions.ts"), "utf8");
   const panelSource = readFileSync(join(__dirname, "..", "src", "app", "clients", "report-share-link-panel.tsx"), "utf8");
 
@@ -283,11 +313,23 @@ console.log("\n16 — URL do link é montada no servidor via VERCEL_PROJECT_PROD
   // (protegida por "Vercel Authentication") produzia um link inacessível
   // pra qualquer cliente real — a correção é nunca depender de onde o
   // browser do admin está, sempre usar o domínio de produção real do
-  // projeto (env var que a própria Vercel injeta).
-  ok("generateReportShareLinkAction usa VERCEL_PROJECT_PRODUCTION_URL", /VERCEL_PROJECT_PRODUCTION_URL/.test(actionsSource));
-  ok("a Server Action retorna a URL completa (`url`), não só um path pro cliente montar", /return \{ url: `\$\{resolvePublicBaseUrl\(\)\}\/r\/\$\{token\}` \}/.test(actionsSource));
+  // projeto (env var que a própria Vercel injeta). Etapa "Link Externo —
+  // token recuperável": a resolução da URL foi promovida pra
+  // `resolvePublicShareLinkBaseUrl` (lib central) — tanto a geração
+  // (Server Action) quanto a leitura de status (Server Component)
+  // precisam montar a MESMA URL, nunca duas implementações.
+  ok("resolvePublicShareLinkBaseUrl (lib central) usa VERCEL_PROJECT_PRODUCTION_URL", /VERCEL_PROJECT_PRODUCTION_URL/.test(libSource));
+  ok(
+    "a Server Action reaproveita resolvePublicShareLinkBaseUrl (nunca uma segunda implementação própria)",
+    /import\s*\{[^}]*resolvePublicShareLinkBaseUrl[^}]*\}\s*from\s*"@\/lib\/report-share-links"/.test(actionsSource) &&
+      !/VERCEL_PROJECT_PRODUCTION_URL/.test(actionsSource),
+  );
+  ok(
+    "a Server Action retorna a URL completa (`url`), não só um path pro cliente montar",
+    /return \{ url: `\$\{resolvePublicShareLinkBaseUrl\(\)\}\/r\/\$\{token\}` \}/.test(actionsSource),
+  );
   ok("painel client nunca usa window.location.origin pra montar a URL do link", !/window\.location\.origin/.test(panelSource));
-  ok("painel client usa result.url diretamente (a URL já vem pronta do servidor)", /setRevealedUrl\(result\.url\)/.test(panelSource));
+  ok("painel client usa result.url diretamente (a URL já vem pronta do servidor)", /setUrl\(result\.url\)/.test(panelSource));
 }
 
 __setReportShareLinkStoreForTests(null);

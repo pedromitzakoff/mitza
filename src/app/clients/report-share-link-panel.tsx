@@ -10,30 +10,37 @@ const BUTTON_CLASSES =
  * Etapa "Link Externo V1" — painel "Link do cliente" dentro de "Informações
  * da conta" (`account-info-drawer.tsx`).
  *
- * UX de segurança deliberada: `report_share_links` só guarda o HASH do
- * token, nunca o valor bruto — então a URL só existe em memória do
- * navegador no instante em que acaba de ser gerada (`revealedUrl`, estado
- * local, nunca persistido em nenhum storage). Fechar o drawer/recarregar a
- * página perde o texto pra sempre; a única forma de "recuperar" é "Gerar
- * novo link", que revoga o anterior e mostra um novo. Isso é intencional —
- * nunca enfraquecer a segurança (ex.: guardar o token em claro) só pra
- * permitir reexibição depois.
+ * Etapa "Link Externo — token recuperável" (pedido explícito do usuário,
+ * decisão consciente de trade-off de segurança — ver o módulo central do
+ * token, que decide o que é persistido, nunca este painel):
+ * o token bruto passou a ser persistido, então a URL fica sempre visível
+ * enquanto o link estiver ativo — nunca mais "só aparece uma vez, perdeu
+ * precisa gerar outro". `initialUrl` chega pronto de `getReportShareLinkStatus`
+ * (Server Component, `[id]/page.tsx`); "Gerar novo link"/"Gerar link"
+ * atualizam esse valor local depois da Server Action, sem precisar recarregar
+ * a página. Único caso em que o valor pode faltar mesmo com `active === true`:
+ * um link gerado ANTES desta etapa (linha antiga sem `token` persistido) —
+ * aí a única saída é gerar um novo (mesmo fluxo de sempre).
  */
 export function ReportShareLinkPanel({
   clientId,
   initialActive,
   initialCreatedAtLabel,
+  initialUrl,
 }: {
   clientId: string;
   initialActive: boolean;
   /** Já formatado (`formatRelativeDateTime`) por quem chama — `null` sem
    * link ativo. */
   initialCreatedAtLabel: string | null;
+  /** URL completa do link ativo, pronta pra exibir — `null` sem link ativo
+   * ou pra um link antigo sem valor persistido (ver doc acima). */
+  initialUrl: string | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [active, setActive] = useState(initialActive);
   const [createdAtLabel, setCreatedAtLabel] = useState(initialCreatedAtLabel);
-  const [revealedUrl, setRevealedUrl] = useState<string | null>(null);
+  const [url, setUrl] = useState(initialUrl);
   const [copyLabel, setCopyLabel] = useState("Copiar link");
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +52,7 @@ export function ReportShareLinkPanel({
         setError(result.error);
         return;
       }
-      setRevealedUrl(result.url);
+      setUrl(result.url);
       setCopyLabel("Copiar link");
       setActive(true);
       setCreatedAtLabel("agora");
@@ -62,14 +69,14 @@ export function ReportShareLinkPanel({
       }
       setActive(false);
       setCreatedAtLabel(null);
-      setRevealedUrl(null);
+      setUrl(null);
     });
   }
 
   async function handleCopy() {
-    if (!revealedUrl) return;
+    if (!url) return;
     try {
-      await navigator.clipboard.writeText(revealedUrl);
+      await navigator.clipboard.writeText(url);
       setCopyLabel("Copiado!");
       setTimeout(() => setCopyLabel("Copiar link"), 2000);
     } catch {
@@ -79,17 +86,23 @@ export function ReportShareLinkPanel({
 
   return (
     <div className="flex flex-col gap-1.5">
-      {revealedUrl ? (
+      {url ? (
         <>
-          <p className="text-xs text-overview-text-muted">
-            Copie agora — por segurança, este link não pode ser exibido de novo depois de sair desta tela.
-          </p>
+          {createdAtLabel && (
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-[11px] text-overview-text-muted">Link ativo desde</span>
+              <span className="text-sm font-medium text-overview-text-primary">{createdAtLabel}</span>
+            </div>
+          )}
           <div className="rounded-md border border-overview-border bg-overview-surface-hover px-2 py-1.5">
-            <code className="block truncate text-xs text-overview-text-primary">{revealedUrl}</code>
+            <code className="block truncate text-xs text-overview-text-primary">{url}</code>
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={handleCopy} className={BUTTON_CLASSES}>
               {copyLabel}
+            </button>
+            <button type="button" onClick={handleGenerate} disabled={isPending} className={BUTTON_CLASSES}>
+              Gerar novo link
             </button>
             <button type="button" onClick={handleRevoke} disabled={isPending} className={BUTTON_CLASSES}>
               Revogar
@@ -98,6 +111,12 @@ export function ReportShareLinkPanel({
         </>
       ) : active ? (
         <>
+          {/* Link ativo mas sem valor persistido (gerado antes da Etapa
+              "Link Externo — token recuperável") — único caso em que ainda
+              não dá pra reexibir; "Gerar novo link" resolve de vez. */}
+          <p className="text-xs text-overview-text-muted">
+            Este link foi gerado antes de o valor ficar salvo pra reexibição — gere um novo pra poder vê-lo de novo daqui em diante.
+          </p>
           {createdAtLabel && (
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-[11px] text-overview-text-muted">Link ativo desde</span>

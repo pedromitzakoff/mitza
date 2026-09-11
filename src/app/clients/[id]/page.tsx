@@ -351,7 +351,7 @@ export default async function ClientPage({
 
   // Etapa "Link Externo V1" — só admin gerencia o link (`account-info-drawer.tsx`),
   // mesmo critério de `recentSyncRuns` acima: nem consulta pra outro perfil.
-  const reportShareLinkStatus = isAdmin ? await getReportShareLinkStatus(id) : { active: false, createdAt: null };
+  const reportShareLinkStatus = isAdmin ? await getReportShareLinkStatus(id) : { active: false, createdAt: null, url: null };
 
   // Habilitar Gestores 1.0: "Atualizar performance" (investimento realizado
   // + resultados da sprint) deixou de ser admin-only — o gestor responsável
@@ -1509,6 +1509,7 @@ export default async function ClientPage({
           isAdmin={isAdmin}
           hasActiveReportShareLink={reportShareLinkStatus.active}
           reportShareLinkCreatedAtLabel={accountInfoReportShareLinkCreatedAtLabel}
+          reportShareLinkUrl={reportShareLinkStatus.url}
         />
         {/* Etapa "Refinamento Visual 2.0": Editar por último — é a ação
             administrativa menos frequente do grupo, não deveria abrir a

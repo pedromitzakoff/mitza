@@ -85,6 +85,7 @@ export function AccountInfoDrawer({
   isAdmin,
   hasActiveReportShareLink,
   reportShareLinkCreatedAtLabel,
+  reportShareLinkUrl,
 }: {
   triggerClassName: string;
   lastPerformanceUpdateLabel: string;
@@ -118,6 +119,10 @@ export function AccountInfoDrawer({
   isAdmin: boolean;
   hasActiveReportShareLink: boolean;
   reportShareLinkCreatedAtLabel: string | null;
+  /** Etapa "Link Externo — token recuperável": URL completa do link ativo,
+   * já pronta pra reexibir a qualquer momento — `null` sem link ativo, ou
+   * pra um link ativo criado antes desta etapa (sem valor persistido). */
+  reportShareLinkUrl: string | null;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -204,6 +209,7 @@ export function AccountInfoDrawer({
                     clientId={clientId}
                     initialActive={hasActiveReportShareLink}
                     initialCreatedAtLabel={reportShareLinkCreatedAtLabel}
+                    initialUrl={reportShareLinkUrl}
                   />
                 </Section>
               )}

@@ -2894,6 +2894,7 @@ export interface Database {
         Row: {
           id: string;
           client_id: string;
+          token: string | null;
           token_hash: string;
           created_at: string;
           revoked_at: string | null;
@@ -2901,6 +2902,7 @@ export interface Database {
         Insert: {
           id?: string;
           client_id: string;
+          token?: string | null;
           token_hash: string;
           created_at?: string;
           revoked_at?: string | null;
@@ -2908,6 +2910,7 @@ export interface Database {
         Update: {
           id?: string;
           client_id?: string;
+          token?: string | null;
           token_hash?: string;
           created_at?: string;
           revoked_at?: string | null;
