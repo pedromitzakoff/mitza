@@ -221,7 +221,12 @@ export function MonthTasksPanel({
   const showSelectionUi = Boolean(isAdmin);
 
   return (
-    <div className="rounded-lg border border-overview-border bg-overview-surface p-3">
+    // Etapa "Evolução Visual Incremental — Área do Cliente" (Tarefas):
+    // superfície creme em vez de branco+borda, mesmo token/radius já usado
+    // no bloco "Acompanhamento da conta" — seção própria (nunca dividindo
+    // container com Performance/Metas, pedido explícito do usuário), só
+    // com a mesma linguagem visual.
+    <div className="rounded-lg bg-cream p-3 sm:rounded-2xl sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
@@ -306,8 +311,15 @@ export function MonthTasksPanel({
           )}
 
           {filtered.length > 0 || recurringTasksList.length > 0 ? (
-            <div className="mt-2 overflow-hidden rounded-lg border border-overview-border">
-              <div className="flex items-center gap-2.5 border-b border-overview-border bg-overview-surface-subtle px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
+            // Etapa "Evolução Visual Incremental — Área do Cliente": sem
+            // moldura própria (era `overflow-hidden rounded-lg border`,
+            // "caixa dentro de caixa" dentro da superfície creme acima) —
+            // a lista vive direto na superfície do painel; cada linha
+            // (`TaskRow`/`RecurringTaskRow`) já carrega seu próprio
+            // divisor fino (`border-b .../60`), nunca dependeu da moldura
+            // externa pra separar itens.
+            <div className="mt-2">
+              <div className="flex items-center gap-2.5 border-b border-overview-border/60 px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
                 {showSelectionUi && (
                   <span className={ACTIVITY_COL_SELECT}>
                     <input
