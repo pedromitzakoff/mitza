@@ -313,7 +313,7 @@ function CampaignClassificationDrawer({
               rateado).
             </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Fechar" className="rounded-md border border-border p-1.5 text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900">
+          <button type="button" onClick={onClose} aria-label="Fechar" className="rounded-md border border-border p-1.5 text-muted-foreground hover:bg-overview-surface-hover">
             ×
           </button>
         </div>

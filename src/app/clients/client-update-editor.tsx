@@ -109,7 +109,7 @@ export function ClientUpdateEditor({
         <button
           type="button"
           onClick={handleCopy}
-          className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-overview-surface-hover"
         >
           Copiar texto
         </button>
@@ -159,7 +159,7 @@ export function ClientUpdateEditor({
           <button
             type="button"
             onClick={() => setShowMenu((v) => !v)}
-            className="rounded-md px-1.5 py-0.5 text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="rounded-md px-1.5 py-0.5 text-muted-foreground hover:bg-overview-surface-hover"
             aria-label="Mais opções"
           >
             ⋯
@@ -169,7 +169,7 @@ export function ClientUpdateEditor({
               <button
                 type="button"
                 onClick={handleMarkUnsent}
-                className="whitespace-nowrap rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                className="whitespace-nowrap rounded px-2 py-1 text-left text-xs text-foreground hover:bg-overview-surface-hover"
               >
                 Marcar como não enviada
               </button>

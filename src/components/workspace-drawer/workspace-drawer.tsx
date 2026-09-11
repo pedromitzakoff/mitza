@@ -306,7 +306,7 @@ function NoteList({
           type="button"
           onClick={onClose}
           aria-label="Fechar"
-          className="rounded-md p-1 text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          className="rounded-md p-1 text-muted-foreground hover:bg-overview-surface-hover"
         >
           <X className="h-4 w-4" />
         </button>
@@ -424,7 +424,7 @@ function NoteListItem({
   }
 
   return (
-    <div className="group flex items-start gap-1 rounded-md px-2 py-2 hover:bg-zinc-100 dark:hover:bg-zinc-900">
+    <div className="group flex items-start gap-1 rounded-md px-2 py-2 hover:bg-overview-surface-hover">
       <button type="button" onClick={() => onSelect(note.id)} className="min-w-0 flex-1 text-left">
         <div className="flex items-center justify-between gap-2">
           <p className="min-w-0 truncate text-sm font-medium text-foreground">{note.title.trim() || "Nota sem título"}</p>
@@ -484,7 +484,7 @@ function NoteEditor({
           type="button"
           onClick={onBack}
           aria-label="Voltar"
-          className="rounded-md p-1 text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+          className="rounded-md p-1 text-muted-foreground hover:bg-overview-surface-hover"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -494,7 +494,7 @@ function NoteEditor({
             onClick={onTogglePin}
             aria-label={note.is_pinned ? "Desafixar nota" : "Fixar nota"}
             className={`rounded-md p-1 ${
-              note.is_pinned ? "text-brand" : "text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              note.is_pinned ? "text-brand" : "text-muted-foreground hover:bg-overview-surface-hover"
             }`}
           >
             <Pin className={`h-4 w-4 ${note.is_pinned ? "fill-current" : ""}`} />
@@ -503,7 +503,7 @@ function NoteEditor({
             type="button"
             onClick={onRequestDelete}
             aria-label="Excluir nota"
-            className="rounded-md p-1 text-muted-foreground hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-900 dark:hover:text-red-400"
+            className="rounded-md p-1 text-muted-foreground hover:bg-overview-surface-hover hover:text-red-600 dark:hover:text-red-400"
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -511,7 +511,7 @@ function NoteEditor({
             type="button"
             onClick={onClose}
             aria-label="Fechar"
-            className="rounded-md p-1 text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="rounded-md p-1 text-muted-foreground hover:bg-overview-surface-hover"
           >
             <X className="h-4 w-4" />
           </button>
@@ -677,7 +677,7 @@ function ToolbarButton({
       className={`mitza-pressable flex h-7 w-7 items-center justify-center rounded-md ${
         active
           ? "bg-brand/10 text-brand"
-          : "text-muted-foreground hover:bg-zinc-100 hover:text-foreground dark:hover:bg-zinc-900"
+          : "text-muted-foreground hover:bg-overview-surface-hover hover:text-foreground"
       }`}
     >
       {children}

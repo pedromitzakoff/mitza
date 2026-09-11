@@ -19,7 +19,7 @@ export function WorkspaceTrigger() {
       onClick={open}
       aria-label="Abrir Workspace pessoal"
       title="Workspace pessoal"
-      className="mitza-pressable fixed bottom-5 right-5 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-md transition-colors hover:bg-zinc-100 hover:text-foreground dark:hover:bg-zinc-900"
+      className="mitza-pressable fixed bottom-5 right-5 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-md transition-colors hover:bg-overview-surface-hover hover:text-foreground"
     >
       <NotebookPen className="h-5 w-5" />
     </button>

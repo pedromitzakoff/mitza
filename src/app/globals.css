@@ -27,8 +27,22 @@
   --background: #f7f7f5;
   --foreground: #181817;
   --card: #ffffff;
-  --muted-foreground: #737373;
-  --border-default: #e7e5e4;
+  /* Facelift da plataforma (Etapa "Unificação Visual KOFF — Superfícies
+     Base"): `--muted-foreground`/`--border-default` eram um cinza neutro
+     genérico (#737373/#e7e5e4) — perceptivelmente mais frio que o par
+     equivalente já usado na Visão Geral do cliente (`--overview-text-secondary`
+     #655f56 / `--overview-border` #e5e1d9). O comentário original acima
+     ("as duas paletas são próximas o bastante") datava de antes da área do
+     cliente ganhar a superfície quente própria — agora que ela existe, os
+     ~20 arquivos que ainda consomem só os tokens base (Configurações,
+     Equipe, Relatórios, listagem de Clientes, drawers, toasts) ficavam
+     visivelmente mais "frios" ao lado dela. Reaproveita os MESMOS valores
+     de `--overview-text-secondary`/`--overview-border` (nunca um terceiro
+     tom novo) — qualquer componente que já usa `text-muted-foreground`/
+     `border-border` herda o alinhamento automaticamente, sem precisar
+     trocar uma única classe. */
+  --muted-foreground: #655f56;
+  --border-default: #e5e1d9;
   /* Grafite KOFF — era azul (#4169e1). Ponto de partida pedido (#1C1C1C),
      ajustado 1 unidade pra compartilhar o MESMO preto quente que
      `--foreground`/`--card` (modo escuro) já usam — nunca um preto "frio"
@@ -240,8 +254,10 @@
     --background: #141412;
     --foreground: #f2f1ee;
     --card: #1c1c1a;
-    --muted-foreground: #9c9a95;
-    --border-default: #34332f;
+    /* Mesmo alinhamento do modo claro acima — reaproveita os valores
+       escuros já usados por `--overview-text-secondary`/`--overview-border`. */
+    --muted-foreground: #aca597;
+    --border-default: #2c2823;
     /* Etapa "Identidade Visual KOFF": grafite sólido não funciona como
        identidade no modo escuro (precisa ser CLARO pra ler contra o fundo
        escuro) — vira areia clara, o mesmo papel que `--navy` já cumpria

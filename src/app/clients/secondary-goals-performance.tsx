@@ -16,8 +16,8 @@ export function SecondaryGoalsPerformance({ goals }: { goals: SecondaryGoalPerfo
   if (goals.length === 0) return null;
 
   return (
-    <div className="mt-3 rounded-xl border border-border bg-card p-4">
-      <h3 className="text-sm font-semibold text-foreground">Outros objetivos</h3>
+    <div className="mt-3 rounded-lg bg-overview-surface-subtle p-3">
+      <h3 className="text-sm font-semibold text-overview-text-primary">Outros objetivos</h3>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {goals.map((goal) => {
           const config = PERFORMANCE_GOALS[goal.resultType];
@@ -25,25 +25,29 @@ export function SecondaryGoalsPerformance({ goals }: { goals: SecondaryGoalPerfo
           const unavailableText = describeGoalCostUnavailableReason(goal.costUnavailableReason);
 
           return (
-            <div key={goal.resultType} className="rounded-lg border border-border p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{config.label}</p>
-              <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+            <div key={goal.resultType} className="rounded-md border border-overview-border bg-overview-surface p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-overview-text-muted">{config.label}</p>
+              <p className="mt-1 text-lg font-semibold tabular-nums text-overview-text-primary">
                 {goal.resultCount}
-                {goal.targetResultCount !== null && <span className="text-sm font-normal text-muted-foreground"> / {goal.targetResultCount}</span>}
+                {goal.targetResultCount !== null && (
+                  <span className="text-sm font-normal text-overview-text-secondary"> / {goal.targetResultCount}</span>
+                )}
               </p>
-              {pct !== null && <p className="text-xs text-muted-foreground">{pct}% da meta</p>}
+              {pct !== null && <p className="text-xs text-overview-text-secondary">{pct}% da meta</p>}
 
-              <div className="mt-2 flex items-baseline justify-between gap-2 border-t border-border pt-2">
-                <span className="text-[11px] text-muted-foreground">{config.costMetricShortLabel}</span>
-                <span className="text-sm font-medium tabular-nums text-foreground">
+              <div className="mt-2 flex items-baseline justify-between gap-2 border-t border-overview-border pt-2">
+                <span className="text-[11px] text-overview-text-secondary">{config.costMetricShortLabel}</span>
+                <span className="text-sm font-medium tabular-nums text-overview-text-primary">
                   {goal.costPerResult !== null ? formatCurrency(goal.costPerResult) : "Indisponível"}
                 </span>
               </div>
-              {goal.costPerResult === null && unavailableText && <p className="mt-0.5 text-[11px] text-muted-foreground">{unavailableText}</p>}
+              {goal.costPerResult === null && unavailableText && (
+                <p className="mt-0.5 text-[11px] text-overview-text-secondary">{unavailableText}</p>
+              )}
 
               <div className="mt-1 flex items-baseline justify-between gap-2">
-                <span className="text-[11px] text-muted-foreground">Investimento (campanhas classificadas)</span>
-                <span className="text-sm tabular-nums text-foreground">{formatCurrency(goal.goalSpend)}</span>
+                <span className="text-[11px] text-overview-text-secondary">Investimento (campanhas classificadas)</span>
+                <span className="text-sm tabular-nums text-overview-text-primary">{formatCurrency(goal.goalSpend)}</span>
               </div>
             </div>
           );

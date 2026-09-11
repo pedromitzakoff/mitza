@@ -52,7 +52,7 @@ export function ClientReportsView({
               <Link
                 href={buildReportHref(report.id)}
                 scroll={false}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card p-3 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card p-3 hover:bg-overview-surface-hover"
               >
                 <span className="flex items-center gap-2">
                   <span className="text-sm font-medium text-foreground">{formatDateRange(report.periodStart, report.periodEnd)}</span>

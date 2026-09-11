@@ -376,7 +376,7 @@ export default async function ClientsPage({
 
                   <Link
                     href={`/clients/${card.clientId}`}
-                    className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                    className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-overview-surface-hover"
                   >
                     Abrir
                   </Link>

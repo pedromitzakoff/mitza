@@ -135,7 +135,7 @@ export default async function ReportsPage({
         <div className="flex items-center gap-0.5 rounded-md border border-border bg-card px-1 py-1 text-sm">
           <Link
             href={buildUrl({ month: shiftMonthParam(monthRange, -1) })}
-            className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-overview-surface-hover"
             aria-label="Mês anterior"
           >
             &lsaquo;
@@ -143,7 +143,7 @@ export default async function ReportsPage({
           <span className="min-w-[8.5rem] text-center font-medium text-foreground">{monthLabel}</span>
           <Link
             href={buildUrl({ month: shiftMonthParam(monthRange, 1) })}
-            className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="rounded-md px-1.5 py-0.5 text-foreground hover:bg-overview-surface-hover"
             aria-label="Próximo mês"
           >
             &rsaquo;
@@ -189,7 +189,7 @@ export default async function ReportsPage({
                 const resolved = resolvedReportFor(state.clientId);
                 const isFinalized = resolved.status === "finalizado";
                 return (
-                  <tr key={state.clientId} className="border-b border-border/60 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
+                  <tr key={state.clientId} className="border-b border-border/60 last:border-0 hover:bg-overview-surface-hover">
                     <td className="py-2 px-3 font-bold text-foreground">{state.clientName}</td>
                     <td className="py-2 px-3 text-muted-foreground">{state.managerName ?? "Sem gestor"}</td>
                     <td className="py-2 px-3">
@@ -222,7 +222,7 @@ export default async function ReportsPage({
                           {isAdmin && resolved.status === "pronto_revisao" && (
                             <form action={finalizeReportAction.bind(null, state.clientId, monthStart)}>
                               <SubmitButton
-                                className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                                className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-overview-surface-hover"
                                 pendingChildren="Finalizando..."
                               >
                                 Finalizar
@@ -236,7 +236,7 @@ export default async function ReportsPage({
                     <td className="py-2 px-3 text-right">
                       <Link
                         href={buildPerformanceReportHref(state.clientId, monthRange)}
-                        className="rounded-md border border-transparent px-2 py-1 text-xs font-medium text-brand transition-colors hover:border-border hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                        className="rounded-md border border-transparent px-2 py-1 text-xs font-medium text-brand transition-colors hover:border-border hover:bg-overview-surface-hover"
                       >
                         Abrir relatório
                       </Link>

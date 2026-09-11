@@ -109,7 +109,7 @@ export function OperationTriageView({
           <Link
             href={prevMonthHref}
             aria-label="Mês anterior"
-            className="mitza-pressable rounded-md border border-border px-2 py-1 text-sm text-foreground hover:bg-zinc-50 dark:hover:bg-zinc-900"
+            className="mitza-pressable rounded-md border border-border px-2 py-1 text-sm text-foreground hover:bg-overview-surface-hover"
           >
             ‹
           </Link>
@@ -117,7 +117,7 @@ export function OperationTriageView({
           <Link
             href={nextMonthHref}
             aria-label="Próximo mês"
-            className="mitza-pressable rounded-md border border-border px-2 py-1 text-sm text-foreground hover:bg-zinc-50 dark:hover:bg-zinc-900"
+            className="mitza-pressable rounded-md border border-border px-2 py-1 text-sm text-foreground hover:bg-overview-surface-hover"
           >
             ›
           </Link>

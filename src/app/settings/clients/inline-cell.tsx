@@ -9,7 +9,7 @@ import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-f
 import type { ClientContractStatus } from "@/lib/supabase/database.types";
 
 const cellButtonClasses =
-  "block w-full truncate rounded px-1.5 py-0.5 text-left transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900";
+  "block w-full truncate rounded px-1.5 py-0.5 text-left transition-colors hover:bg-overview-surface-hover disabled:cursor-not-allowed disabled:opacity-60";
 const cellInputClasses =
   "w-full rounded-md border border-border bg-card px-1.5 py-0.5 text-sm text-foreground outline-none transition-colors focus:border-zinc-500";
 

@@ -76,7 +76,7 @@ export default async function SettingsPage() {
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                    className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-overview-surface-hover"
                   >
                     <div>
                       <p className="text-foreground">{item.title}</p>

@@ -17,7 +17,7 @@ function CounterTile({
       type="button"
       onClick={onClick}
       className={`mitza-pressable flex flex-1 flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
-        active ? "border-brand bg-brand/5" : "border-border hover:bg-zinc-50 dark:hover:bg-zinc-900"
+        active ? "border-brand bg-brand/5" : "border-border hover:bg-overview-surface-hover"
       }`}
     >
       <span className="text-xl font-semibold tabular-nums text-foreground">{count}</span>

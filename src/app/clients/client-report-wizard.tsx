@@ -197,7 +197,7 @@ export function ClientReportWizard({
           <Link
             href={closeHref}
             scroll={false}
-            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-overview-surface-hover"
           >
             Fechar
           </Link>
@@ -216,7 +216,7 @@ export function ClientReportWizard({
               className={`mitza-pressable rounded-full px-2.5 py-1 font-medium ${
                 s.key === step
                   ? "bg-brand text-white"
-                  : "border border-border text-muted-foreground hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-zinc-900"
+                  : "border border-border text-muted-foreground hover:bg-overview-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
               }`}
             >
               {index + 1}. {s.label}
@@ -375,14 +375,14 @@ export function ClientReportWizard({
                   type="button"
                   onClick={handleSaveDraft}
                   disabled={isPending}
-                  className="mitza-pressable rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900"
+                  className="mitza-pressable rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-overview-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {status === "sent" ? "Salvar alterações" : "Salvar rascunho"}
                 </button>
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="mitza-pressable rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                  className="mitza-pressable rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-overview-surface-hover"
                 >
                   Copiar para WhatsApp
                 </button>

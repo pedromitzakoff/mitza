@@ -99,7 +99,7 @@ export function ClientCombobox({
           type="button"
           onClick={() => onSelect("")}
           aria-label="Limpar cliente selecionado"
-          className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900"
+          className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-overview-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
           <X className="h-3.5 w-3.5" aria-hidden="true" />
         </button>

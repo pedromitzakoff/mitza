@@ -99,7 +99,7 @@ export function AchievementDetailDrawer({ achievement, onClose }: { achievement:
             </p>
             <h2 className="mt-0.5 text-lg font-semibold leading-snug text-foreground">{achievement.headline}</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="Fechar" className="shrink-0 rounded-md border border-border p-1.5 text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900">
+          <button type="button" onClick={onClose} aria-label="Fechar" className="shrink-0 rounded-md border border-border p-1.5 text-muted-foreground hover:bg-overview-surface-hover">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>

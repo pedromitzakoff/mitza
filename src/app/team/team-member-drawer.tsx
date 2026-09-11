@@ -50,7 +50,7 @@ function DrawerShell({ title, closeHref, children }: { title: string; closeHref:
           <Link
             href={closeHref}
             scroll={false}
-            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-overview-surface-hover"
           >
             Fechar
           </Link>
@@ -104,7 +104,7 @@ export function NewTeamMemberDrawer({ closeHref }: { closeHref: string }) {
           <Link
             href={closeHref}
             scroll={false}
-            className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-overview-surface-hover"
           >
             Cancelar
           </Link>
@@ -200,7 +200,7 @@ export function EditTeamMemberDrawer({
             <ToastActionButton
               action={inviteTeamMemberAction.bind(null, member.id)}
               pendingLabel="Convidando..."
-              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-overview-surface-hover"
             >
               Convidar para o sistema
             </ToastActionButton>
@@ -209,7 +209,7 @@ export function EditTeamMemberDrawer({
             <ToastActionButton
               action={resendInviteAction.bind(null, member.id)}
               pendingLabel="Reenviando..."
-              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-overview-surface-hover"
             >
               Reenviar convite
             </ToastActionButton>
@@ -236,7 +236,7 @@ export function EditTeamMemberDrawer({
             <ToastActionButton
               action={deactivateTeamMemberAction.bind(null, member.id)}
               pendingLabel="Desativando..."
-              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-overview-surface-hover"
             >
               Desativar membro
             </ToastActionButton>
@@ -244,7 +244,7 @@ export function EditTeamMemberDrawer({
             <ToastActionButton
               action={reactivateTeamMemberAction.bind(null, member.id)}
               pendingLabel="Reativando..."
-              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-overview-surface-hover"
             >
               Reativar membro
             </ToastActionButton>

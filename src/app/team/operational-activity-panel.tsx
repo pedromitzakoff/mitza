@@ -46,7 +46,7 @@ export function OperationalActivityPanel({
                 href={periodHref(p)}
                 scroll={false}
                 className={`rounded px-2 py-0.5 font-medium ${
-                  p === period ? "bg-brand text-white" : "text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                  p === period ? "bg-brand text-white" : "text-muted-foreground hover:bg-overview-surface-hover"
                 }`}
               >
                 {ACTIVITY_PERIOD_LABEL[p]}

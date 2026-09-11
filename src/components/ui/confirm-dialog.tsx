@@ -76,7 +76,7 @@ export function ConfirmDialog({
               type="button"
               onClick={onCancel}
               disabled={pending}
-              className="mitza-pressable rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-zinc-900"
+              className="mitza-pressable rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-overview-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
             >
               Cancelar
             </button>

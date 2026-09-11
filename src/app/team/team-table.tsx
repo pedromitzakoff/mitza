@@ -104,7 +104,7 @@ export function TeamTable({ rows, isAdmin }: { rows: TeamTableRow[]; isAdmin: bo
                     Editar
                   </Link>
                   <details className="relative">
-                    <summary className="cursor-pointer list-none rounded-md px-1.5 py-0.5 text-muted-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand [&::-webkit-details-marker]:hidden dark:hover:bg-zinc-900">
+                    <summary className="cursor-pointer list-none rounded-md px-1.5 py-0.5 text-muted-foreground hover:bg-overview-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand [&::-webkit-details-marker]:hidden">
                       •••
                     </summary>
                     <div className="mitza-menu-in absolute right-0 z-10 mt-1 flex w-44 flex-col gap-0.5 rounded-md border border-border bg-card p-1 shadow-lg">
@@ -112,7 +112,7 @@ export function TeamTable({ rows, isAdmin }: { rows: TeamTableRow[]; isAdmin: bo
                         <ToastActionButton
                           action={resendInviteAction.bind(null, member.id)}
                           pendingLabel="Reenviando..."
-                          className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                          className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-overview-surface-hover"
                         >
                           Reenviar convite
                         </ToastActionButton>
@@ -121,7 +121,7 @@ export function TeamTable({ rows, isAdmin }: { rows: TeamTableRow[]; isAdmin: bo
                         <ToastActionButton
                           action={deactivateTeamMemberAction.bind(null, member.id)}
                           pendingLabel="Desativando..."
-                          className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                          className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-overview-surface-hover"
                         >
                           Desativar
                         </ToastActionButton>
@@ -130,7 +130,7 @@ export function TeamTable({ rows, isAdmin }: { rows: TeamTableRow[]; isAdmin: bo
                           <ToastActionButton
                             action={reactivateTeamMemberAction.bind(null, member.id)}
                             pendingLabel="Reativando..."
-                            className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                            className="w-full rounded px-2 py-1 text-left text-xs text-foreground hover:bg-overview-surface-hover"
                           >
                             Reativar
                           </ToastActionButton>

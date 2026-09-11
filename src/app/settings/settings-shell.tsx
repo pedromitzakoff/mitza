@@ -21,7 +21,7 @@ import type { ReactNode } from "react";
  * alguns chamadores já a repetiam manualmente (inofensivo, mesma regra
  * aplicada duas vezes); os que não repetiam ficavam sem esse feedback. */
 export const SETTINGS_SECONDARY_BUTTON_CLASSES =
-  "mitza-pressable rounded-md border border-border font-medium text-foreground hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand dark:hover:bg-zinc-900";
+  "mitza-pressable rounded-md border border-border font-medium text-foreground hover:bg-overview-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
 
 /** Mesma família acima, variante destrutiva (remover/excluir vínculo) —
  * mesma origem duplicada (2 arquivos), mesma correção. */

@@ -15,8 +15,9 @@ import { SubmitButton } from "@/app/submit-button";
 type Manager = { id: string; name: string };
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 
-const inputClasses = "rounded-md border border-border bg-card px-3 py-2 text-foreground outline-none focus:border-zinc-500";
-const labelClasses = "flex flex-col gap-1 text-sm text-foreground";
+const inputClasses =
+  "rounded-md border border-overview-border bg-overview-surface px-3 py-2 text-overview-text-primary outline-none transition-colors focus:border-brand";
+const labelClasses = "flex flex-col gap-1 text-sm text-overview-text-primary";
 
 /**
  * MITZA 2.0 — Refinamento do Cadastro do Cliente: esta tela é o cadastro
@@ -38,10 +39,10 @@ export function Block({
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-6 rounded-xl border border-border bg-card p-6">
+    <section className="flex flex-col gap-6 rounded-lg border border-overview-border bg-overview-surface p-6">
       <div>
-        <h2 className="text-base font-semibold text-foreground">{title}</h2>
-        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+        <h2 className="text-base font-semibold text-overview-text-primary">{title}</h2>
+        {description && <p className="mt-1 text-sm text-overview-text-secondary">{description}</p>}
       </div>
       <div className="flex flex-col gap-6">{children}</div>
     </section>
@@ -51,7 +52,7 @@ export function Block({
 function Subgroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-overview-text-muted">{label}</p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</div>
     </div>
   );
@@ -130,9 +131,7 @@ export function ClientForm({
       className="mt-6 flex flex-col gap-6"
     >
       {error && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          {error}
-        </p>
+        <p className="rounded-md bg-overview-danger-subtle px-3 py-2 text-sm text-overview-danger">{error}</p>
       )}
 
       <Block title="Identidade" description="O que representa este cliente visualmente e quem cuida dele.">
@@ -152,25 +151,25 @@ export function ClientForm({
                 const file = event.target.files?.[0];
                 setPhotoPreview(file ? URL.createObjectURL(file) : null);
               }}
-              className="text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground hover:file:bg-zinc-200 dark:file:bg-zinc-800 dark:hover:file:bg-zinc-700"
+              className="text-sm text-overview-text-secondary file:mr-3 file:rounded-md file:border-0 file:bg-overview-surface-subtle file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-overview-text-primary hover:file:bg-overview-surface-hover"
             />
-            <span className="text-xs text-muted-foreground">Sem foto, mostramos as iniciais do cliente.</span>
+            <span className="text-xs text-overview-text-secondary">Sem foto, mostramos as iniciais do cliente.</span>
           </div>
         </div>
 
         <label className={labelClasses}>
-          Nome <span className="text-red-500">*</span>
+          Nome <span className="text-overview-danger">*</span>
           <input name="name" required defaultValue={defaultName} className={inputClasses} />
         </label>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className={labelClasses}>
-            Empresa (razão social) <span className="text-xs text-muted-foreground">(opcional)</span>
+            Empresa (razão social) <span className="text-xs text-overview-text-secondary">(opcional)</span>
             <input name="legal_name" defaultValue={defaults?.legal_name ?? ""} className={inputClasses} />
           </label>
 
           <label className={labelClasses}>
-            CNPJ <span className="text-xs text-muted-foreground">(opcional)</span>
+            CNPJ <span className="text-xs text-overview-text-secondary">(opcional)</span>
             <input
               name="cnpj"
               inputMode="numeric"
@@ -185,7 +184,7 @@ export function ClientForm({
         </div>
 
         <label className={labelClasses}>
-          Gestor principal <span className="text-xs text-muted-foreground">(opcional)</span>
+          Gestor principal <span className="text-xs text-overview-text-secondary">(opcional)</span>
           <select
             name="primary_manager_id"
             defaultValue={defaults?.primary_manager_id ?? ""}
@@ -201,20 +200,20 @@ export function ClientForm({
         </label>
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-sm text-foreground">Gestores de apoio</legend>
+          <legend className="text-sm text-overview-text-primary">Gestores de apoio</legend>
           {managers.length === 0 && (
             <EmptyState>
               Nenhum membro da equipe cadastrado ainda (cadastre em Equipe).
             </EmptyState>
           )}
           {managers.map((manager) => (
-            <label key={manager.id} className="flex items-center gap-2 text-sm text-foreground">
+            <label key={manager.id} className="flex items-center gap-2 text-sm text-overview-text-primary">
               <input
                 type="checkbox"
                 name="manager_ids"
                 value={manager.id}
                 defaultChecked={assigned.has(manager.id)}
-                className="h-4 w-4 rounded border-border"
+                className="h-4 w-4 rounded border-overview-border"
               />
               {manager.name}
             </label>
@@ -225,7 +224,7 @@ export function ClientForm({
       <Block title="Configurações Operacionais" description="Como o MITZA trabalha com este cliente no dia a dia.">
         <Subgroup label="Mídia">
           <label className={labelClasses}>
-            Conta de anúncios (Meta) <span className="text-red-500">*</span>
+            Conta de anúncios (Meta) <span className="text-overview-danger">*</span>
             <input
               name="meta_ad_account_id"
               required
@@ -237,7 +236,7 @@ export function ClientForm({
             />
           </label>
           <label className={labelClasses}>
-            Nome da conta de anúncios <span className="text-xs text-muted-foreground">(opcional)</span>
+            Nome da conta de anúncios <span className="text-xs text-overview-text-secondary">(opcional)</span>
             <input
               name="meta_ad_account_name"
               defaultValue={defaults?.meta_ad_account_name ?? ""}
@@ -266,7 +265,7 @@ export function ClientForm({
               defaultValue={defaults?.monthly_planned_spend ?? ""}
               className={inputClasses}
             />
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-overview-text-secondary">
               Valor de referência do cliente — não altera o planejado das sprints.
             </span>
           </label>
@@ -287,16 +286,16 @@ export function ClientForm({
             menos 1 canal é obrigatório (validado na Server Action): sem
             nenhum canal ativo não haveria o que mostrar na Visão Geral. */}
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Canais de mídia</legend>
+          <legend className="text-xs font-medium uppercase tracking-wide text-overview-text-secondary">Canais de mídia</legend>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {AVAILABLE_TRAFFIC_CHANNELS.map((channel) => (
-              <label key={channel} className="flex items-center gap-2 text-sm text-foreground">
+              <label key={channel} className="flex items-center gap-2 text-sm text-overview-text-primary">
                 <input
                   type="checkbox"
                   name="media_channels"
                   value={channel}
                   defaultChecked={mediaChannels.has(channel)}
-                  className="h-4 w-4 rounded border-border"
+                  className="h-4 w-4 rounded border-overview-border"
                 />
                 {TRAFFIC_CHANNELS[channel].label}
               </label>
@@ -306,7 +305,7 @@ export function ClientForm({
 
         <Subgroup label="Performance">
           <label className={labelClasses}>
-            Objetivo principal de performance {isNewClient && <span className="text-red-500">*</span>}
+            Objetivo principal de performance {isNewClient && <span className="text-overview-danger">*</span>}
             <select
               name="performance_goal"
               required={isNewClient}
@@ -323,12 +322,12 @@ export function ClientForm({
                 </option>
               ))}
             </select>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-overview-text-secondary">
               Define se os resultados desta conta são acompanhados como leads, vendas ou seguidores.
             </span>
           </label>
           <label className={labelClasses}>
-            Meta padrão de {costMetricLabel.toLowerCase()} <span className="text-xs text-muted-foreground">(opcional)</span>
+            Meta padrão de {costMetricLabel.toLowerCase()} <span className="text-xs text-overview-text-secondary">(opcional)</span>
             <input
               type="number"
               step="0.01"
@@ -343,7 +342,7 @@ export function ClientForm({
                 este campo é só o fallback quando nenhum canal tem meta
                 definida ainda (`resolveClientMonthlyPlan`, lib/client-plan.ts,
                 nunca alterado aqui — só o texto ficou explícito). */}
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-overview-text-secondary">
               Usada quando não houver uma meta definida no planejamento mensal por canal.
             </span>
           </label>
@@ -363,7 +362,7 @@ export function ClientForm({
 
         <Subgroup label="Contrato">
           <label className={labelClasses}>
-            Início de contrato <span className="text-xs text-muted-foreground">(opcional)</span>
+            Início de contrato <span className="text-xs text-overview-text-secondary">(opcional)</span>
             <input
               type="date"
               name="contract_start_date"
@@ -372,7 +371,7 @@ export function ClientForm({
             />
           </label>
           <label className={labelClasses}>
-            Fim de contrato <span className="text-xs text-muted-foreground">(opcional)</span>
+            Fim de contrato <span className="text-xs text-overview-text-secondary">(opcional)</span>
             <input
               type="date"
               name="contract_end_date"
@@ -381,7 +380,7 @@ export function ClientForm({
             />
           </label>
           <label className={labelClasses}>
-            Próxima renovação <span className="text-xs text-muted-foreground">(opcional)</span>
+            Próxima renovação <span className="text-xs text-overview-text-secondary">(opcional)</span>
             <input
               type="date"
               name="renewal_date"
@@ -482,16 +481,16 @@ export function ClientForm({
         </Subgroup>
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Serviços contratados</legend>
+          <legend className="text-xs font-medium uppercase tracking-wide text-overview-text-secondary">Serviços contratados</legend>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {CONTRACTED_SERVICE_OPTIONS.map((service) => (
-              <label key={service} className="flex items-center gap-2 text-sm text-foreground">
+              <label key={service} className="flex items-center gap-2 text-sm text-overview-text-primary">
                 <input
                   type="checkbox"
                   name="contracted_services"
                   value={service}
                   defaultChecked={contractedServices.has(service)}
-                  className="h-4 w-4 rounded border-border"
+                  className="h-4 w-4 rounded border-overview-border"
                 />
                 {service}
               </label>
@@ -578,7 +577,7 @@ export function ClientForm({
               defaultValue={defaults?.dashboard_url ?? ""}
               className={inputClasses}
             />
-            <span className="text-xs text-muted-foreground">Usado só pelo atalho &ldquo;Dashboard&rdquo; no prontuário do cliente.</span>
+            <span className="text-xs text-overview-text-secondary">Usado só pelo atalho &ldquo;Dashboard&rdquo; no prontuário do cliente.</span>
           </label>
           <label className={labelClasses}>
             Link da página de Saldo
@@ -589,7 +588,7 @@ export function ClientForm({
               defaultValue={defaults?.balance_url ?? ""}
               className={inputClasses}
             />
-            <span className="text-xs text-muted-foreground">Usado só pelo atalho &ldquo;Saldo&rdquo; no prontuário do cliente.</span>
+            <span className="text-xs text-overview-text-secondary">Usado só pelo atalho &ldquo;Saldo&rdquo; no prontuário do cliente.</span>
           </label>
           <label className={labelClasses}>
             Planilha de fechamento mensal
@@ -600,7 +599,7 @@ export function ClientForm({
               defaultValue={defaults?.monthly_closing_sheet_url ?? ""}
               className={inputClasses}
             />
-            <span className="text-xs text-muted-foreground">Usado só pelo atalho &ldquo;Abrir fechamento mensal&rdquo; no prontuário do cliente.</span>
+            <span className="text-xs text-overview-text-secondary">Usado só pelo atalho &ldquo;Abrir fechamento mensal&rdquo; no prontuário do cliente.</span>
           </label>
           <label className={labelClasses}>
             Instagram
@@ -665,8 +664,8 @@ export function ClientForm({
         <Link href={cancelHref} className={`px-4 py-2 text-sm ${SETTINGS_SECONDARY_BUTTON_CLASSES}`}>
           Cancelar
         </Link>
-        <span className="text-xs text-muted-foreground">
-          <span className="text-red-500">*</span> campos obrigatórios
+        <span className="text-xs text-overview-text-secondary">
+          <span className="text-overview-danger">*</span> campos obrigatórios
         </span>
       </div>
     </form>
