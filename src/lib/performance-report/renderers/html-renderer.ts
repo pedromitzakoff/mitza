@@ -52,7 +52,23 @@ function renderKpiGrid(doc: PerformanceReportDocument): string {
     return `<p class="muted" style="padding:12px 0 0;">${escapeHtml(doc.summary.message)}</p>`;
   }
 
-  const cards = doc.summary.kpis
+  // Correção pontual: `doc.summary.kpis` nunca inclui uma métrica "result"
+  // pra objetivo `sales` (`buildAnalyticsKpiCards` só monta investimento/
+  // ROAS/custo/receita/ticket médio pra esse objetivo) — o total de vendas
+  // nunca tinha card próprio aqui. `doc.hero` (já calculado em
+  // `report-document.ts` a partir de `PerformanceSummary.resultCount`,
+  // mesmo dado usado pela página nativa) entra logo depois de
+  // "Investimento", na mesma posição em que `leads`/`followers` já
+  // mostravam "Resultado" — nunca duplicado quando esse card já existe.
+  const hasResultCard = doc.summary.kpis.some((kpi) => kpi.key === "result");
+  const kpis =
+    doc.hero && !hasResultCard
+      ? [doc.summary.kpis[0], { key: "result", label: doc.hero.label, value: doc.hero.value }, ...doc.summary.kpis.slice(1)].filter(
+          (kpi): kpi is (typeof doc.summary.kpis)[number] => kpi !== undefined,
+        )
+      : doc.summary.kpis;
+
+  const cards = kpis
     .map((kpi, index) => {
       const accentClass = index === 0 ? " accent" : "";
       return `<div class="kpi${accentClass}"><div class="kpi-label">${escapeHtml(kpi.label)}</div><div class="kpi-value">${escapeHtml(kpi.value)}</div>${

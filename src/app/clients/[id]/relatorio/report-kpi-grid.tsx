@@ -22,7 +22,7 @@ export function ReportKpiGrid({ summary, hero }: { summary: PerformanceReportSum
   return (
     <>
       <MobileSummary kpis={summary.kpis} hero={hero} />
-      <DesktopSummary kpis={summary.kpis} note={summary.note} />
+      <DesktopSummary kpis={summary.kpis} note={summary.note} hero={hero} />
     </>
   );
 }
@@ -117,15 +117,30 @@ function MobileSummary({ kpis, hero }: { kpis: AnalyticsKpiCard[]; hero: Perform
   );
 }
 
-/** Desktop — inalterado desde antes desta etapa (mesma grade de 4 cards,
- * mesmo card de destaque em fundo grafite, mesma nota de metodologia
- * logo abaixo). "Não redesenhe o desktop" era requisito explícito desta
- * rodada de polish mobile. */
-function DesktopSummary({ kpis, note }: { kpis: AnalyticsKpiCard[]; note: string }) {
+/** Desktop — mesma grade de cards de sempre (destaque em fundo grafite,
+ * demais em branco). Correção pontual: `summary.kpis` nunca inclui uma
+ * métrica "result" pra objetivo `sales` (`buildAnalyticsKpiCards` só monta
+ * investimento/ROAS/custo/receita/ticket médio pra esse objetivo — o total
+ * de vendas nunca tinha card próprio aqui, só no mobile via `hero`) — o
+ * card do resultado (`hero`, já calculado em `report-document.ts` a partir
+ * de `PerformanceSummary.resultCount`, mesmo dado usado pelo mobile) entra
+ * logo depois de "Investimento", na mesma posição em que `leads`/`followers`
+ * já mostravam "Resultado" (`kpis[1]`, antes desta correção) — nunca
+ * duplicado quando esse card já existe. Resto do layout (card de destaque,
+ * radius, nota de metodologia) inalterado. */
+function DesktopSummary({ kpis, note, hero }: { kpis: AnalyticsKpiCard[]; note: string; hero: PerformanceReportHero | null }) {
+  const hasResultCard = kpis.some((kpi) => kpi.key === "result");
+  const cards: AnalyticsKpiCard[] =
+    hero && !hasResultCard
+      ? [kpis[0], { key: "result", label: hero.label, value: hero.value }, ...kpis.slice(1)].filter(
+          (kpi): kpi is AnalyticsKpiCard => kpi !== undefined,
+        )
+      : kpis;
+
   return (
     <div className="hidden sm:block">
       <div className="grid grid-cols-4 gap-3.5">
-        {kpis.map((kpi, index) => {
+        {cards.map((kpi, index) => {
           const isAccent = index === 0;
           return (
             <div
