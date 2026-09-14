@@ -7,8 +7,8 @@ import { MIN_RELIABLE_RESULT_COUNT } from "@/lib/operation-health-thresholds";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { getLatestPerformanceUpdateText } from "@/lib/performance";
 import { formatAtividadeLabel } from "@/lib/metric-diagnostics";
-import { resolveOperationPriorityGroup, type OperationPriorityGroup } from "@/lib/operation-triage";
-import { describeSecondaryOperationalContext } from "@/lib/account-health-engine";
+import { resolveOperationCpaPriorityGroup, describeOperationCpaReason, type OperationPriorityGroup } from "@/lib/operation-triage";
+import { isReviewOverdue, describeReviewReason } from "@/lib/account-health-engine";
 import type { ClientOperationalState } from "@/lib/client-operational-state";
 
 const countFormatter = new Intl.NumberFormat("pt-BR");
@@ -29,7 +29,7 @@ function formatWholeCurrency(value: number): string {
  * resto do produto (ponto pequeno + texto neutro) — nunca um verde grande
  * competindo com os alertas acima dele na fila; Sem dados fica neutro de
  * propósito: não é "performou mal", é "não pôde ser avaliada" (ver
- * `resolveOperationPriorityGroup`, lib/operation-triage.ts). */
+ * `resolveOperationCpaPriorityGroup`, lib/operation-triage.ts). */
 const PRIORITY_GROUP_LABEL: Record<OperationPriorityGroup, string> = {
   critico: "Crítico",
   atencao: "Atenção",
@@ -55,16 +55,27 @@ const PRIORITY_GROUP_EMPHASIZE: Record<OperationPriorityGroup, boolean> = {
 };
 
 /**
- * Card da Operação (Etapa "Central de Decisão Diária") — a linha de motivo
- * deixou de ser um rótulo solto (planejamento OU atividade, o que existisse)
- * e passa a ser o `primaryReason` do Motor de Saúde da Conta
- * (`evaluation`, `lib/account-health-engine.ts`), prefixado pelo balde de
- * prioridade (`resolveOperationPriorityGroup`) — a MESMA fonte que já
- * decide a ordem da fila (`groupClientsByOperationPriority`), nunca um
- * segundo vocabulário. Hierarquia pedida explicitamente: 1) cliente, 2)
- * motivo principal (evidente, colorido só quando crítico/atenção), 3)
- * contexto secundário (atividade/atualização de performance, sempre menor
- * e mais discreto — nunca outro aviso vermelho competindo com o principal).
+ * Card da Operação (Etapa "Operação — CPA como régua única", sucede a
+ * "Central de Decisão Diária") — a Operação responde uma pergunta só: "como
+ * está esta conta olhando pra custo por resultado?". A linha de motivo
+ * (`reasonText`) vem de `describeOperationCpaReason` (`lib/operation-triage.ts`)
+ * — sempre explica o CPA ou a impossibilidade de avaliá-lo (amostra
+ * insuficiente, escopo não comparável, meta ausente), nunca investimento ou
+ * resultado. O balde de prioridade (`resolveOperationCpaPriorityGroup`,
+ * mesmo arquivo) é a MESMA fonte que decide a ordem/contadores da fila —
+ * nenhum segundo vocabulário. Hierarquia: 1) cliente, 2) motivo do CPA
+ * (evidente, colorido só quando crítico/atenção), 3) contexto secundário
+ * (atividade/atualização de performance/revisão atrasada — sempre menor,
+ * discreto, nunca competindo com o motivo principal).
+ *
+ * `evaluation.dimensions.investment`/`.results`/`.review` (Motor de Saúde,
+ * `lib/account-health-engine.ts`, intocado por esta etapa) continuam
+ * calculados — só PARARAM de influenciar prioridade/badge/motivo da
+ * Operação. Investimento e Resultado seguem visíveis nas métricas do card,
+ * com peso visual menor que o Custo (`MetricDeviation size="lg"` só no
+ * bloco de Custo). Revisão atrasada vira uma linha extra discreta
+ * (`reviewText`, sempre neutra/muted) quando `isReviewOverdue` — nunca um
+ * segundo motivo competindo com o CPA.
  *
  * Etapa "Auditoria da Operação": `managerName` entra na mesma linha do
  * nome do cliente, texto pequeno e neutro (nunca badge, nunca avatar
@@ -77,7 +88,7 @@ const PRIORITY_GROUP_EMPHASIZE: Record<OperationPriorityGroup, boolean> = {
  * (`diagnostics`, `lib/metric-diagnostics.ts` — mesma régua de magnitude de
  * sempre, 10/20%) para Investimento e Custo; Resultado continua um valor de
  * referência simples (o motor não define desvio pra contagem bruta). A
- * coluna "Meta" separada foi removida: a meta de custo agora é a linha de
+ * coluna "Meta" separada foi removida: a meta de custo é a linha de
  * referência do próprio bloco de Custo (`MetricDeviation.referenceLabel`,
  * "Meta R$ 10,00 · ↑ 58%"), o mesmo número, só mais perto do valor que ele
  * explica — nunca um cálculo novo, só reposicionado.
@@ -99,14 +110,11 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
   const results = evaluation.dimensions.results;
   const targetCostPerResult = evaluation.dimensions.cost.planned;
 
-  const priorityGroup = resolveOperationPriorityGroup(evaluation);
-  const reasonText = evaluation.primaryDimension ? evaluation.primaryReason : null;
-  // Achado P0 da Auditoria do Motor Operacional: "Sem dados" não esconde
-  // mais uma dimensão operacional já avaliada como grave/relevante — texto
-  // já pronto pela própria dimensão (nunca recalculado aqui), null sempre
-  // que não houver nada além de `leve` pra mostrar (ver
-  // `describeSecondaryOperationalContext`, account-health-engine.ts).
-  const secondaryOperationalContext = describeSecondaryOperationalContext(evaluation);
+  const priorityGroup = resolveOperationCpaPriorityGroup(evaluation);
+  // Etapa "Operação — CPA como régua única": sempre o CPA ou a
+  // impossibilidade de avaliá-lo (ver doc de `describeOperationCpaReason`,
+  // lib/operation-triage.ts) — nunca mais investimento/resultado/revisão.
+  const reasonText = describeOperationCpaReason(evaluation);
 
   const investmentValue = investment.hasSyncedData ? formatWholeCurrency(investment.actual) : "—";
   const investmentTitle = investment.hasSyncedData ? undefined : "Sem dados de investimento";
@@ -166,36 +174,41 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
   // competindo) — atividade parada tem prioridade por ser um fato mais
   // acionável ("ninguém mexeu nisso"); sem isso, cai pra "quando os
   // números foram atualizados pela última vez".
-  //
-  // Etapa "Unificação da Leitura da Operação": quando a própria revisão já é
-  // o `primaryReason` (primaryDimension === "review" — "Revisão atrasada
-  // há..."/"Nenhuma revisão registrada ainda"), o rótulo de atividade abaixo
-  // repetiria o mesmo fato duas vezes na hierarquia do card. Omitido só
-  // nesse caso (cai pro texto de performance, se houver) — nunca removido
-  // quando é uma informação genuinamente adicional.
-  const activityAlreadyIsPrimaryReason = evaluation.primaryDimension === "review";
-  const secondaryText =
-    atividadeLabel && !activityAlreadyIsPrimaryReason
-      ? atividadeLabel
-      : performanceUpdateText
-        ? `Performance: ${performanceUpdateText}`
-        : null;
+  const secondaryText = atividadeLabel ?? (performanceUpdateText ? `Performance: ${performanceUpdateText}` : null);
   // Nunca vermelho forte aqui — o motivo principal (linha acima) já carrega
   // o alerta, com a cor certa por tom (`emphasizeDeviationText`); o
   // contexto secundário fica sempre discreto, pra não competir
   // visualmente com ele.
   const secondaryClass = "text-overview-text-muted";
 
+  // Etapa "Operação — CPA como régua única": revisão atrasada continua uma
+  // informação operacional importante ("preciso ir lá revisar"), mas
+  // deliberadamente NUNCA mais compete com o CPA pela prioridade/motivo
+  // principal do card — vira uma linha própria, sempre discreta/muted,
+  // reaproveitando `isReviewOverdue`/`describeReviewReason` (mesma conta de
+  // sempre, `account-health-engine.ts`, nunca recalculada aqui). `null`
+  // quando em dia ou quando a cadência está desativada.
+  const reviewOverdue = isReviewOverdue(evaluation.dimensions.review);
+  const reviewText = reviewOverdue ? describeReviewReason(evaluation.dimensions.review) : null;
+
   const priorityTone = PRIORITY_GROUP_TONE[priorityGroup];
   const priorityLabel = PRIORITY_GROUP_LABEL[priorityGroup];
 
+  // Etapa "Operação — CPA como régua única": Custo vem primeiro e em
+  // `size="lg"` (mesma variante que `MetricDeviation` já oferecia, nenhum
+  // primitive novo) — a métrica que decide prioridade é a única com
+  // destaque tipográfico real. Investimento/Resultado continuam visíveis
+  // como contexto (você pediu pra não escondê-los), só em peso visual
+  // menor (`size="md"`, o padrão do componente).
   const metrics = (
     <>
       <MetricDeviation
-        label="Investimento"
-        value={investmentValue}
-        diagnostic={investment.hasSyncedData ? diagnostics.investment : null}
-        title={investmentTitle}
+        label={goalConfig?.costMetricShortLabel ?? "Custo"}
+        value={costValue}
+        diagnostic={diagnostics.cpa}
+        title={costTitle}
+        referenceLabel={costReferenceLabel}
+        size="lg"
       />
       <MetricDeviation
         label={goalConfig?.resultMetricLabel ?? "Resultado"}
@@ -204,11 +217,10 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
         title={resultTitle}
       />
       <MetricDeviation
-        label={goalConfig?.costMetricShortLabel ?? "Custo"}
-        value={costValue}
-        diagnostic={diagnostics.cpa}
-        title={costTitle}
-        referenceLabel={costReferenceLabel}
+        label="Investimento"
+        value={investmentValue}
+        diagnostic={investment.hasSyncedData ? diagnostics.investment : null}
+        title={investmentTitle}
       />
     </>
   );
@@ -239,12 +251,12 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
                 {emphasizeDeviationText(reasonText, priorityTone)}
               </p>
             )}
-            {secondaryOperationalContext && (
-              <p className="mt-0.5 truncate text-[11px] text-overview-text-muted" title={secondaryOperationalContext}>
-                {secondaryOperationalContext}
+            {secondaryText && <p className={`mt-0.5 truncate text-[11px] ${secondaryClass}`}>{secondaryText}</p>}
+            {reviewText && (
+              <p className="mt-0.5 truncate text-[11px] text-overview-text-muted" title={reviewText}>
+                {reviewText}
               </p>
             )}
-            {secondaryText && <p className={`mt-0.5 truncate text-[11px] ${secondaryClass}`}>{secondaryText}</p>}
           </div>
         </div>
 
@@ -265,14 +277,14 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
               {emphasizeDeviationText(reasonText, priorityTone)}
             </p>
           )}
-          {secondaryOperationalContext && (
-            <p className="mt-0.5 truncate text-[11px] text-overview-text-muted" title={secondaryOperationalContext}>
-              {secondaryOperationalContext}
-            </p>
-          )}
           {secondaryText && (
             <p className={`mt-0.5 truncate text-[11px] ${secondaryClass}`} title={secondaryText}>
               {secondaryText}
+            </p>
+          )}
+          {reviewText && (
+            <p className="mt-0.5 truncate text-[11px] text-overview-text-muted" title={reviewText}>
+              {reviewText}
             </p>
           )}
         </div>

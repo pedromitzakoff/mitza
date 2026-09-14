@@ -1,5 +1,5 @@
 import type { ClientOperationalState } from "@/lib/client-operational-state";
-import type { AccountHealthEvaluation } from "@/lib/account-health-engine";
+import { describeCostReason, type AccountHealthEvaluation } from "@/lib/account-health-engine";
 
 /**
  * Suporte da tela Operação (fila de triagem, ordenação/contagem/navegação
@@ -38,13 +38,11 @@ export interface OperationTriageSummary {
 
 /**
  * Contadores operacionais do cabeçalho da Operação (Etapa "Unificação da
- * Leitura da Operação") — o topo passa a falar a mesma língua do corpo da
- * tela: gravidade, não eixo de diagnóstico. Substitui os antigos contadores
- * por dimensão (Planejamento/CPA/Investimento/Pendências, Motor de
- * Diagnóstico Único) pelos MESMOS 4 baldes que `groupClientsByOperationPriority`
- * já usa pra ordenar a fila — nenhuma severidade nova, nenhum score
- * paralelo: `resolveOperationPriorityGroup` é chamado aqui exatamente como
- * é chamado lá embaixo pra cada card.
+ * Leitura da Operação", atualizada pela Etapa "Operação — CPA como régua
+ * única") — o topo fala a mesma língua do corpo da tela: gravidade, não
+ * eixo de diagnóstico. Contagens vêm de `resolveOperationCpaPriorityGroup`
+ * — a mesma fonte que `groupClientsByOperationPriority`/
+ * `filterOperationTriageClients` usam, nunca um score paralelo.
  */
 export function summarizeOperationTriage(cards: ClientOperationalState[]): OperationTriageSummary {
   let critico = 0;
@@ -52,7 +50,7 @@ export function summarizeOperationTriage(cards: ClientOperationalState[]): Opera
   let saudavel = 0;
   let semDados = 0;
   for (const card of cards) {
-    switch (resolveOperationPriorityGroup(card.evaluation)) {
+    switch (resolveOperationCpaPriorityGroup(card.evaluation)) {
       case "critico":
         critico++;
         break;
@@ -134,13 +132,77 @@ export function resolveOperationPriorityGroup(evaluation: AccountHealthEvaluatio
   return "saudavel";
 }
 
+/**
+ * Etapa "Operação — CPA como régua única": a Operação responde UMA
+ * pergunta ("como está minha carteira olhando pra custo por resultado?"),
+ * não mais a pior de 5 dimensões. Esta função é a ÚNICA mudança de
+ * comportamento desta etapa — `resolveOperationPriorityGroup` (acima)
+ * continua 100% intacta e continua sendo o que o Dashboard (`app/page.tsx`)
+ * e a Visão Geral do cliente (`clients/[id]/page.tsx`) consomem; nenhuma das
+ * duas telas muda por causa desta etapa. `account-health-engine.ts` também
+ * não muda uma linha — esta função só RECOMBINA o que ele já calculou.
+ *
+ * Regra (aprovada explicitamente):
+ * 1. `dataQuality` com qualquer lacuna → "sem_dados" (idêntico à função
+ *    acima — "sem dado confiável não existe operação" continua valendo).
+ * 2. Custo sem amostra confiável (`hasReliableSample`) ou sem escopo
+ *    comparável (`hasComparableScope`) → também "sem_dados" — são
+ *    exatamente os casos que você pediu pra preservar ("campanha ainda sem
+ *    gasto suficiente", "CPA ainda não calculável"): o motor já tinha essa
+ *    trava pronta (`evaluateCost`), só nunca tinha sido promovida a um
+ *    estado visível fora de "nenhum sinal".
+ * 3. Senão, a severidade de `cost` sozinha decide o balde — nenhum novo
+ *    limiar, a MESMA tabela severidade→balde que a Operação já usava (leve/
+ *    relevante → atenção, grave → crítico, nenhum → saudável).
+ *
+ * Investimento, Resultado e Revisão NUNCA entram aqui — deliberado.
+ */
+export function resolveOperationCpaPriorityGroup(evaluation: AccountHealthEvaluation): OperationPriorityGroup {
+  if (evaluation.dimensions.dataQuality.status !== "nenhum") return "sem_dados";
+
+  const cost = evaluation.dimensions.cost;
+  if (!cost.hasReliableSample || !cost.hasComparableScope) return "sem_dados";
+
+  switch (cost.status) {
+    case "grave":
+      return "critico";
+    case "relevante":
+    case "leve":
+      return "atencao";
+    case "nenhum":
+      return "saudavel";
+  }
+}
+
+/**
+ * Motivo principal da Operação (Etapa "Operação — CPA como régua única") —
+ * sempre explica o CPA ou a impossibilidade de avaliá-lo, nunca
+ * investimento/resultado/revisão. Quando `dataQuality` tem alguma lacuna,
+ * reaproveita `evaluation.primaryReason`: como `dataQuality` é sempre a
+ * primeira da ordem de desempate do motor (`DIMENSION_PRIORITY_ORDER`) e sua
+ * severidade só existe como "grave" (binária), toda vez que ela dispara ela
+ * já é, por construção, a dimensão vencedora de `evaluateAccountHealth` —
+ * `primaryReason` já É o texto de qualidade de dado, nunca precisa ser
+ * recalculado aqui. Fora isso, é sempre `describeCostReason` (mesma função
+ * do motor, nunca uma frase nova) — cobre tanto os motivos de "ainda não dá
+ * pra avaliar" (amostra/escopo) quanto o desvio real, e devolve `null`
+ * quando a conta está genuinamente saudável (mesmo comportamento de sempre:
+ * sem texto, sem linha de motivo).
+ */
+export function describeOperationCpaReason(evaluation: AccountHealthEvaluation): string | null {
+  if (evaluation.dimensions.dataQuality.status !== "nenhum") return evaluation.primaryReason;
+  return describeCostReason(evaluation.dimensions.cost);
+}
+
 /** Reordena a fila (já ordenada por `sortClientOperationalStates`) só pelos
  * 4 baldes acima — `Array.prototype.sort` é estável (ES2019+, mesma garantia
  * já usada por `collectAccountHealthReasons`), então a ordem dentro de cada
  * balde continua exatamente a que o motor decidiu. */
 export function groupClientsByOperationPriority(cards: ClientOperationalState[]): ClientOperationalState[] {
   return [...cards].sort(
-    (a, b) => OPERATION_PRIORITY_GROUP_RANK[resolveOperationPriorityGroup(a.evaluation)] - OPERATION_PRIORITY_GROUP_RANK[resolveOperationPriorityGroup(b.evaluation)],
+    (a, b) =>
+      OPERATION_PRIORITY_GROUP_RANK[resolveOperationCpaPriorityGroup(a.evaluation)] -
+      OPERATION_PRIORITY_GROUP_RANK[resolveOperationCpaPriorityGroup(b.evaluation)],
   );
 }
 
@@ -173,7 +235,7 @@ export function filterOperationTriageClients(
 ): ClientOperationalState[] {
   const normalizedQuery = filters.query.trim().toLowerCase();
   return cards.filter((card) => {
-    if (filters.severity !== "todos" && resolveOperationPriorityGroup(card.evaluation) !== filters.severity) return false;
+    if (filters.severity !== "todos" && resolveOperationCpaPriorityGroup(card.evaluation) !== filters.severity) return false;
     if (filters.managerId !== "todos" && card.managerId !== filters.managerId) return false;
     if (normalizedQuery) {
       const matchesName = card.clientName.toLowerCase().includes(normalizedQuery);

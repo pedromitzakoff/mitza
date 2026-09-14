@@ -38,9 +38,10 @@ function CounterTile({
  * `operation-client-card.tsx`), nunca mais como um segundo filtro aqui.
  * Cada contador funciona como filtro rápido (clique alterna, um único ativo
  * por vez) — mesma interação de sempre, só a pergunta que ele responde
- * mudou. Contagens vêm de `summarizeOperationTriage`, que usa exatamente
- * `resolveOperationPriorityGroup` — a mesma fonte que agrupa a lista
- * abaixo, nunca um score paralelo.
+ * mudou. Contagens vêm de `summarizeOperationTriage`, que usa
+ * `resolveOperationCpaPriorityGroup` (Etapa "Operação — CPA como régua
+ * única") — a mesma fonte que agrupa a lista abaixo, nunca um score
+ * paralelo.
  */
 export function OperationFilterBar({
   summary,

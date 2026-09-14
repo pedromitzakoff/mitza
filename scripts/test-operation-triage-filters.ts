@@ -1,19 +1,22 @@
 /**
  * Testes de `filterOperationTriageClients`/`summarizeOperationTriage`
- * (lib/operation-triage.ts) — Etapa "Unificação da Leitura da Operação":
- * o topo da tela passou a filtrar por GRAVIDADE (mesma classificação que já
- * agrupa a lista, `resolveOperationPriorityGroup`), nunca mais por eixo de
- * diagnóstico (Planejamento/Investimento/CPA/Pendências). Cobre os 7
- * cenários pedidos (A-G): cada filtro isolado, a composição gestor+
- * gravidade, e a composição completa busca+gestor+gravidade. Usa
- * `evaluateAccountHealth` de verdade (o motor real), nunca um score
+ * (lib/operation-triage.ts) — Etapa "Unificação da Leitura da Operação",
+ * atualizada pela Etapa "Operação — CPA como régua única": o topo da tela
+ * filtra por GRAVIDADE (mesma classificação que agrupa a lista,
+ * `resolveOperationCpaPriorityGroup`), e essa gravidade agora é decidida
+ * SÓ pelo custo por resultado contra a meta — nunca mais por investimento,
+ * volume de resultado ou revisão. Cobre os 7 cenários pedidos (A-G): cada
+ * filtro isolado, a composição gestor+gravidade, a composição completa
+ * busca+gestor+gravidade, e um cenário extra (H) provando que investimento/
+ * resultado gravemente desviados não mudam mais nenhum contador/filtro.
+ * Usa `evaluateAccountHealth` de verdade (o motor real), nunca um score
  * fabricado à mão.
  *
  * Rodar: npx tsx scripts/test-operation-triage-filters.ts
  */
 import assert from "node:assert/strict";
 import { evaluateAccountHealth, type AccountHealthInput } from "../src/lib/account-health-engine";
-import { filterOperationTriageClients, summarizeOperationTriage, resolveOperationPriorityGroup } from "../src/lib/operation-triage";
+import { filterOperationTriageClients, summarizeOperationTriage, resolveOperationCpaPriorityGroup } from "../src/lib/operation-triage";
 import type { ClientOperationalState } from "../src/lib/client-operational-state";
 
 let passed = 0;
@@ -74,15 +77,17 @@ function fixtureCard(
   };
 }
 
+// Severidade agora vem do CUSTO (contra a meta de 50), nunca mais do
+// investimento — 76 é 52% acima (grave), 56 é 12% acima (leve/"atenção").
 const healthySaudavel = evaluateAccountHealth(baseInput());
-const healthyCritico = evaluateAccountHealth(baseInput({ investmentActual: 755 })); // deviation 0.51 -> grave
-const healthyAtencao = evaluateAccountHealth(baseInput({ investmentActual: 580 })); // deviation 0.16 -> leve
+const healthyCritico = evaluateAccountHealth(baseInput({ costActual: 76 }));
+const healthyAtencao = evaluateAccountHealth(baseInput({ costActual: 56 }));
 const healthySemDados = evaluateAccountHealth(baseInput({ investmentPlanned: null }));
 
-check("fixture — Saudável realmente cai em 'saudavel'", resolveOperationPriorityGroup(healthySaudavel), "saudavel");
-check("fixture — Crítico realmente cai em 'critico'", resolveOperationPriorityGroup(healthyCritico), "critico");
-check("fixture — Atenção realmente cai em 'atencao'", resolveOperationPriorityGroup(healthyAtencao), "atencao");
-check("fixture — Sem dados realmente cai em 'sem_dados'", resolveOperationPriorityGroup(healthySemDados), "sem_dados");
+check("fixture — Saudável realmente cai em 'saudavel'", resolveOperationCpaPriorityGroup(healthySaudavel), "saudavel");
+check("fixture — Crítico realmente cai em 'critico'", resolveOperationCpaPriorityGroup(healthyCritico), "critico");
+check("fixture — Atenção realmente cai em 'atencao'", resolveOperationCpaPriorityGroup(healthyAtencao), "atencao");
+check("fixture — Sem dados realmente cai em 'sem_dados'", resolveOperationCpaPriorityGroup(healthySemDados), "sem_dados");
 
 const cards: ClientOperationalState[] = [
   fixtureCard("Crítico A", healthyCritico, { managerId: "gestor-1", managerName: "Ana" }),
@@ -151,6 +156,38 @@ console.log("\nCenário G — Busca + gestor + severidade compõem corretamente\
     "Saudável B",
     "Sem dados A",
   ]);
+}
+
+console.log("\nCenário H — investimento/resultado/revisão gravemente desviados não mudam nada\n");
+{
+  // O núcleo do pedido: uma conta com investimento MUITO fora do ritmo,
+  // resultado MUITO abaixo do esperado e revisão MUITO atrasada, mas CPA
+  // dentro da meta, precisa contar como saudável — nunca aparecer em
+  // "Críticas"/"Atenção", nunca puxar os contadores do topo.
+  // `resultActual: 3`/`resultPlanned: 20` (em vez do padrão 10/10): mantém a
+  // amostra >= 3 (MIN_RELIABLE_RESULT_COUNT) pra não acionar a trava de
+  // "amostra insuficiente" do custo por engano — o ponto deste cenário é um
+  // desvio de RESULTADO real e grave, não amostra pequena.
+  const tudoDesviadoMenosCusto = evaluateAccountHealth(
+    baseInput({ investmentActual: 950, resultActual: 3, resultPlanned: 20, reviewBusinessDaysAgo: 30 }),
+  );
+  check("investimento, resultado e revisão -> 'grave' no motor", [
+    tudoDesviadoMenosCusto.dimensions.investment.status,
+    tudoDesviadoMenosCusto.dimensions.results.status,
+    tudoDesviadoMenosCusto.dimensions.review.status,
+  ], ["grave", "grave", "grave"]);
+  check("mas custo continua 'nenhum' (dentro da meta)", tudoDesviadoMenosCusto.dimensions.cost.status, "nenhum");
+
+  const cardsComRuido = [...cards, fixtureCard("Saudável C (tudo desviado menos custo)", tudoDesviadoMenosCusto)];
+
+  const soudaveis = filterOperationTriageClients(cardsComRuido, { severity: "saudavel", managerId: "todos", query: "" });
+  check("H — cai em 'saudavel', junto das outras 2", soudaveis.map((c) => c.clientName).sort(), ["Saudável A", "Saudável B", "Saudável C (tudo desviado menos custo)"]);
+
+  const criticos = filterOperationTriageClients(cardsComRuido, { severity: "critico", managerId: "todos", query: "" });
+  check("H — nunca aparece em 'Críticas'", criticos.map((c) => c.clientName).sort(), ["Crítico A", "Crítico B"]);
+
+  const summaryComRuido = summarizeOperationTriage(cardsComRuido);
+  check("H — contador de saudáveis sobe pra 3, crítico continua 2", { critico: summaryComRuido.critico, saudavel: summaryComRuido.saudavel }, { critico: 2, saudavel: 3 });
 }
 
 console.log("\nsummarizeOperationTriage — contagens do topo batem exatamente com a lista real\n");

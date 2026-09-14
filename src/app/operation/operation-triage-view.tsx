@@ -6,7 +6,7 @@ import { formatMonthLabel } from "@/lib/format";
 import {
   shiftOperationMonth,
   groupClientsByOperationPriority,
-  resolveOperationPriorityGroup,
+  resolveOperationCpaPriorityGroup,
   filterOperationTriageClients,
   type OperationTriageSummary,
   type OperationPriorityGroup,
@@ -40,18 +40,17 @@ const PRIORITY_GROUP_EMPTY_LABEL: Record<OperationPriorityGroup, string> = {
 };
 
 /**
- * Centro de Triagem da Operação (Etapa "Unificação da Leitura da Operação")
- * — pergunta que a tela responde: "qual conta merece minha atenção agora, e
- * por quê". Uma única lógica mental, do topo ao corpo: os cards rápidos do
- * topo e o agrupamento da fila usam exatamente a mesma classificação
- * (`resolveOperationPriorityGroup`, derivada só do `evaluation`/Motor de
- * Saúde da Conta) — o filtro rápido reduz a lista pela MESMA gravidade que
- * os divisores (Crítico → Atenção → Saudável → Sem dados) já usam pra
- * ordenar o que sobrou. Os eixos de diagnóstico do Motor Único
- * (Planejamento/Investimento/CPA/Pendências) deixaram de ser filtro — agora
- * só aparecem como motivo dentro do próprio card
- * (`OperationClientCard`/`primaryReason`). A lógica final da tela é
- * Gravidade + Gestor + Busca, nada além disso.
+ * Centro de Triagem da Operação (Etapa "Unificação da Leitura da Operação",
+ * atualizada pela Etapa "Operação — CPA como régua única") — pergunta que a
+ * tela responde: "como está esta conta olhando pra custo por resultado?".
+ * Uma única lógica mental, do topo ao corpo: os cards rápidos do topo, o
+ * agrupamento da fila e os divisores de seção usam exatamente a mesma
+ * classificação (`resolveOperationCpaPriorityGroup`, `lib/operation-triage.ts`
+ * — derivada só de `evaluation.dimensions.cost`/`.dataQuality`, nunca de
+ * investimento/resultado/revisão) — o filtro rápido reduz a lista pela
+ * MESMA gravidade que os divisores (Crítico → Atenção → Saudável → Sem
+ * dados) já usam pra ordenar o que sobrou. A lógica final da tela é
+ * Gravidade (CPA) + Gestor + Busca, nada além disso.
  */
 export function OperationTriageView({
   clients,
@@ -139,8 +138,8 @@ export function OperationTriageView({
       {filteredClients.length > 0 ? (
         <ul className="flex flex-col gap-1">
           {filteredClients.map((card, index) => {
-            const group = resolveOperationPriorityGroup(card.evaluation);
-            const previousGroup = index > 0 ? resolveOperationPriorityGroup(filteredClients[index - 1].evaluation) : null;
+            const group = resolveOperationCpaPriorityGroup(card.evaluation);
+            const previousGroup = index > 0 ? resolveOperationCpaPriorityGroup(filteredClients[index - 1].evaluation) : null;
             const showDivider = group !== previousGroup;
             return (
               <li key={card.clientId}>

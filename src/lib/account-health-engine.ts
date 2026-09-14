@@ -595,7 +595,10 @@ function describeResultReason(dimension: ResultDimension): string | null {
   return `Resultado ${pct}% abaixo do esperado`;
 }
 
-function describeCostReason(dimension: CostDimension): string | null {
+/** Exportada (Etapa "Operação — CPA como régua única") pra
+ * `operation-triage.ts` compor o `reasonText` da Operação sempre a partir
+ * da dimensão de custo, nunca reimplementando esta mensagem. */
+export function describeCostReason(dimension: CostDimension): string | null {
   if (!dimension.hasReliableSample) {
     return `Aguardando amostra suficiente para avaliar custo (${dimension.sampleSize} de ${MIN_RELIABLE_RESULT_COUNT} resultados)`;
   }
@@ -607,7 +610,11 @@ function describeCostReason(dimension: CostDimension): string | null {
   return `Custo por resultado ${pct}% acima da meta`;
 }
 
-function describeReviewReason(dimension: ReviewDimension): string | null {
+/** Exportada (Etapa "Operação — CPA como régua única") pra
+ * `operation-client-card.tsx` mostrar revisão atrasada como contexto
+ * secundário discreto, sem competir com o CPA na prioridade — mesmo texto
+ * de sempre, nunca uma segunda frase. */
+export function describeReviewReason(dimension: ReviewDimension): string | null {
   if (dimension.status === "nenhum") return null;
   if (dimension.actual === null) return "Nenhuma revisão registrada ainda";
   return `Revisão atrasada há ${dimension.actual} dias úteis (prazo: ${dimension.planned})`;
