@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrency, formatPercent, formatDayShortMonth } from "@/lib/format";
-import { RITMO_STATUS_TEXT, type SpendStatus } from "@/lib/spend-status";
+import type { SpendStatus } from "@/lib/spend-status";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
-import { computeDeviationCurrency, computeExpectedPct, resolveMonthPeriodSummary } from "@/lib/financial-period";
+import { computeExpectedPct, resolveMonthPeriodSummary } from "@/lib/financial-period";
 import { computeMonthlyBudgetPlan, computeUtilizedPct, type MonthlyBudgetPlanSprintInput } from "@/lib/monthly-budget";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import type { TrafficChannel } from "@/lib/traffic-channels";
@@ -38,14 +38,12 @@ interface SharedInvestmentInput {
   isFutureMonth: boolean;
 }
 
-/** Recalcula `computeMonthlyBudgetPlan` — mesma função pura central, mesmos
- * inputs que `MonthInvestmentSummary` já recebe como props; chamada duas
- * vezes (aqui e no core) porque os dois viraram componentes irmãos (Etapa
- * "Simetria Performance x Investimento" — "Ver detalhes"/"Editar
- * planejamento" saíram do core pra uma linha de ações compartilhada,
- * fora do grid de colunas), nunca dois RESULTADOS diferentes pro mesmo mês
- * (mesma fórmula, sem estado compartilhado entre os dois — recomputar uma
- * conta pura e barata é seguro, o que não pode existir é uma SEGUNDA regra). */
+/** Recalcula `computeMonthlyBudgetPlan` — mesma função pura central de
+ * sempre, consumida só por `MonthInvestmentActions` (o disclosure de
+ * detalhes/ritmo recomendado) desde a Etapa "Revisão Performance — Visão
+ * Geral do cliente" (`MonthInvestmentSummary` deixou de precisar de `plan`
+ * quando a linha de diferença/restante/dias migrou pro diagnóstico único
+ * de `AccountFollowUpPanel`). */
 function resolvePlan(input: SharedInvestmentInput) {
   return input.effectiveDate
     ? computeMonthlyBudgetPlan({
@@ -59,32 +57,23 @@ function resolvePlan(input: SharedInvestmentInput) {
 }
 
 /**
- * Bloco 1 da hierarquia da página do cliente — "Investimento do mês".
+ * "Investimento — X%" — a segunda leitura da seção "Ritmo do mês"
+ * (`AccountFollowUpPanel`, Etapa "Revisão Performance — Visão Geral do
+ * cliente"). Espelha `MonthlyGoalProgress` (mesma anatomia: título com o %
+ * embutido + barra) — a fração ("R$417/R$1.000"), o "%" como número solto,
+ * o texto de status ("Dentro do ritmo esperado") e a linha de
+ * diferença/restante/dias saíram: a fração já está nos KPIs acima
+ * ("Investimento" + "Planejado R$X"), e o status virou o DIAGNÓSTICO ÚNICO
+ * da seção (compartilhado com Resultados, nunca mais dois textos de ritmo
+ * independentes na mesma tela).
  *
- * Etapa "Simetria Performance x Investimento": este componente (o CORE —
- * label, realizado/planejado, %, barra, status) e `MonthlyGoalProgress`
- * (Performance) precisam ser um PAR ESPELHADO — mesma anatomia, mesma
- * barra, mesmo texto de status, mesma altura aproximada. Por isso:
- * - a barra continua `AgencyInvestmentBar` (nunca mudou), mas a legenda de
- *   cores solta abaixo dela ("Realizado | Esperado hoje") saiu — o
- *   marcador da própria barra já tem um label (`formatExpectedMarkerLabel`,
- *   "Esperado hoje · X%"), repetir isso embaixo era a redundância que o
- *   usuário pediu pra cortar;
- * - o status principal deixou de ser uma frase longa e específica
- *   (`formatDeviationCurrencyText`, "R$330 abaixo do investimento esperado
- *   até hoje") e virou a MESMA estrutura curta de Performance
- *   (`RITMO_STATUS_TEXT`, compartilhado — "Abaixo do ritmo esperado"); o
- *   valor específico (R$/Restam/dias) migrou pra uma linha secundária
- *   separada, igual Performance tem "Esperado hoje: X";
- * - "Ver detalhes do investimento"/"Editar planejamento"/"Ver histórico"
- *   saíram DESTE componente — Performance não tem ação equivalente, e
- *   deformavam a altura da coluna. Viraram `MonthInvestmentActions` (mesmo
- *   arquivo, mais abaixo), renderizado por `[id]/page.tsx` numa linha
- *   COMPARTILHADA abaixo das duas colunas (nunca uma ação inventada pra
- *   Performance só pra preencher espaço).
+ * "Ver detalhes do investimento"/"Editar planejamento"/"Ver histórico"
+ * continuam fora deste componente — `MonthInvestmentActions` (mesmo
+ * arquivo, mais abaixo), renderizado por `AccountFollowUpPanel` numa linha
+ * própria, abaixo da seção "Ritmo do mês".
  *
  * Nenhum cálculo financeiro mudou — `classifySpendStatus`/
- * `computeMonthlyBudgetPlan`/`computeExpectedPct` continuam os mesmos.
+ * `resolveMonthPeriodSummary` continuam os mesmos.
  */
 export function MonthInvestmentSummary({
   planned,
@@ -92,79 +81,39 @@ export function MonthInvestmentSummary({
   expectedToDate,
   status,
   monthLabel,
-  sprints,
   monthRange,
-  effectiveDate,
   isClosedMonth,
   isFutureMonth,
   currentPlanningEndDate,
-}: SharedInvestmentInput & {
+}: Pick<SharedInvestmentInput, "planned" | "actual" | "expectedToDate" | "status" | "monthLabel" | "monthRange" | "isClosedMonth" | "isFutureMonth"> & {
   /** Etapa "Horizonte de Planejamento": badge "Evento · até DD mmm" —
    * contexto, não ação, por isso continua aqui (não migrou pra
    * `MonthInvestmentActions`). */
   currentPlanningEndDate: string | null;
 }) {
   const summary = resolveMonthPeriodSummary({ monthPlanned: planned, monthActual: actual, monthExpectedToDate: expectedToDate, monthStatus: status }, monthLabel, monthRange);
-  const pctRealizado = planned > 0 ? (actual / planned) * 100 : null;
-  const plan = resolvePlan({ planned, actual, expectedToDate, status, monthLabel, sprints, monthRange, effectiveDate, isClosedMonth, isFutureMonth });
-
-  const ritmoText = RITMO_STATUS_TEXT[status] ?? null;
-
-  // Linha secundária — mesmo papel do "Esperado hoje: X" de Performance,
-  // só com o conteúdo específico de investimento (valor em R$ + Restam/
-  // dias, ou o aviso de orçamento atingido). `computeDeviationCurrency` é a
-  // MESMA conta central de sempre (nunca uma fórmula nova) — só a frase ao
-  // redor do número é nova, pensada pra caber numa única linha compacta.
-  const deviationDiff = computeDeviationCurrency(summary);
-  const deviationFragment =
-    deviationDiff < 0
-      ? `${formatCurrency(Math.abs(deviationDiff))} abaixo do esperado`
-      : deviationDiff > 0
-        ? `${formatCurrency(deviationDiff)} acima do esperado`
-        : null;
-  const secondaryLine =
-    plan && plan.isBudgetReached
-      ? plan.overageAmount > 0
-        ? `Orçamento mensal atingido · ${formatCurrency(plan.overageAmount)} acima do planejado`
-        : "Orçamento mensal atingido"
-      : plan
-        ? [deviationFragment, `Restam ${formatCurrency(plan.remainingBudget)} · ${plan.eligibleDaysCount} dias`].filter(Boolean).join(" · ")
-        : null;
+  const pctRealizado = planned > 0 ? Math.round((actual / planned) * 100) : null;
 
   return (
     <div>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">Investimento</p>
-
       {/* Badge de evento (Etapa "Horizonte de Planejamento" — impede o
           gestor de achar que ainda existem dias de operação até o fim do
           mês quando a campanha já terminou antes disso, ex.: Baile do
           Hawaii) — sempre no topo do conteúdo, independente do resto. Mesmo
           texto/condição de sempre, só a posição relativa mudou. */}
       {currentPlanningEndDate && (
-        <p className="mb-2 mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+        <p className="mb-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
           Evento · até {formatDayShortMonth(currentPlanningEndDate)}
         </p>
       )}
 
       {planned <= 0 ? (
-        <div className="mt-1.5">
-          <EmptyState>Sem planejamento configurado para este mês.</EmptyState>
-        </div>
+        <EmptyState>Sem planejamento configurado para este mês.</EmptyState>
       ) : (
-        <div className="mt-1.5">
-          {/* Cabeçalho — realizado/planejado + % (mesma linguagem visual do
-              card "Performance", `MonthlyGoalProgress`). */}
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-            <p className="text-sm text-overview-text-secondary">
-              <span className="font-semibold text-overview-text-primary">
-                {formatCurrency(actual)} / {formatCurrency(planned)}
-              </span>
-            </p>
-            {pctRealizado !== null && <p className="text-xl font-bold text-overview-text-primary">{Math.round(pctRealizado)}%</p>}
-          </div>
-
-          {/* Barra + marcador de esperado — mesmo componente, mesmas props
-              de sempre, pros 3 estados temporais. */}
+        <div>
+          <p className="text-sm font-medium text-overview-text-primary">
+            Investimento{pctRealizado !== null ? <> — <span className="tabular-nums">{pctRealizado}%</span></> : null}
+          </p>
           <div className="mt-1.5">
             <AgencyInvestmentBar
               summary={summary}
@@ -172,31 +121,6 @@ export function MonthInvestmentSummary({
               showLegend={false}
             />
           </div>
-
-          {/* Status do ritmo — mesma estrutura exata de Performance (dot +
-              frase curta compartilhada, `RITMO_STATUS_TEXT`), com a linha
-              secundária logo abaixo. Só mês em andamento (mês futuro ainda
-              não tem ritmo pra avaliar; mês encerrado já não tem
-              "restam"). */}
-          {!isFutureMonth && !isClosedMonth && plan && (
-            <div className="mt-2">
-              {ritmoText && (
-                <p
-                  className={`flex items-center gap-1.5 text-xs font-medium ${
-                    status === "acima"
-                      ? "text-red-600 dark:text-red-400"
-                      : status === "abaixo"
-                        ? "text-amber-600 dark:text-amber-400"
-                        : "text-green-600 dark:text-green-400"
-                  }`}
-                >
-                  <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-current" aria-hidden="true" />
-                  {ritmoText}
-                </p>
-              )}
-              {secondaryLine && <p className="mt-0.5 text-xs text-overview-text-secondary">{secondaryLine}</p>}
-            </div>
-          )}
         </div>
       )}
     </div>

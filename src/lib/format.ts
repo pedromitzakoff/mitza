@@ -9,6 +9,16 @@ export function formatCurrency(value: number): string {
   return currencyFormatter.format(value);
 }
 
+/** "883"/"1.000" — contagem inteira formatada (separador de milhar,
+ * arredondada pro inteiro mais próximo) — Etapa "Visão Geral: decisão em 5
+ * segundos": precisão de casa decimal é detalhe de investigação, não de
+ * decisão rápida. Centralizada aqui (Etapa "Revisão Performance — Visão
+ * Geral do cliente") porque passou a ser consumida em mais de um lugar da
+ * área do cliente — nunca uma segunda implementação local duplicada. */
+export function formatCount(value: number): string {
+  return Math.round(value).toLocaleString("pt-BR");
+}
+
 const percentFormatter = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,

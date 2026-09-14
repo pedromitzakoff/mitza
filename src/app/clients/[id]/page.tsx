@@ -61,7 +61,7 @@ import { getReportShareLinkStatus } from "@/lib/report-share-links";
 import { ClientIdentitySticky } from "../client-identity-sticky";
 import { ClientWorkspaceContext } from "../client-workspace-context";
 import { AccountInfoDrawer } from "../account-info-drawer";
-import { MonthInvestmentSummary, MonthInvestmentActions } from "../month-investment-summary";
+import { MonthInvestmentActions } from "../month-investment-summary";
 import { SprintCard } from "../sprint-card";
 import { MonthTasksPanel } from "../month-tasks-panel";
 import { Section } from "../section";
@@ -1562,36 +1562,29 @@ export default async function ClientPage({
           a Fase F já tinha identificado como fragmentação). */}
       {activeArea === "visao-geral" && (
         <>
-          {/* Indicadores do mês — investimento, resultados e custo por
-              resultado (com a meta como texto auxiliar discreto do custo,
-              nunca mais uma métrica própria), Performance e Investimento
-              lado a lado (Etapa "Primeira dobra: Performance e Investimento
-              lado a lado" — dois `%` comparáveis de relance, num grid de 2
-              colunas a partir de `md:`, empilhado em telas menores) e
-              resultados por canal. A meta do mês (antes numa aba própria,
-              depois um card "Performance do mês" à parte) agora é só um
-              dado a mais de contexto do custo por resultado — nunca um
-              fluxo separado.
+          {/* Indicadores do mês (KPIs) → Ritmo do mês (duas leituras
+              empilhadas, sem divisor vertical) → diagnóstico único →
+              ações → resultados por canal — Etapa "Revisão Performance —
+              Visão Geral do cliente" (substitui "Primeira dobra"/"Simetria
+              Performance x Investimento"). Todo o layout é decidido dentro
+              de `AccountFollowUpPanel`; este bloco só passa os valores já
+              calculados (investimento/performance/planejamento), nunca
+              duplica lógica.
 
               Seletor "Consolidado | Meta Ads | Google Ads" — pedido
               explícito do usuário: escopa Indicadores do mês, cada Sprint,
-              Fechamento do mês e Investimento do mês (`MonthInvestmentSummary`
-              — QA multicanal: passou a receber
-              `visaoGeralPlanned`/`visaoGeralExpectedToDate`/`visaoGeralStatus`,
-              não mais os valores sempre-consolidados) ao canal escolhido.
-              Etapa "Primeira dobra": o seletor saiu daqui — agora vive
-              junto do seletor de mês, acima deste bloco ("período + canal"
-              como contexto único) — mesmo href/estado ativo de sempre, só
-              a posição mudou.
+              Fechamento do mês e Investimento do mês (`investmentPlanned`/
+              `investmentExpectedToDate`/`investmentStatus` abaixo — QA
+              multicanal: escopados por `visaoGeralPlanned`/
+              `visaoGeralExpectedToDate`/`visaoGeralStatus`, não mais os
+              valores sempre-consolidados) ao canal escolhido. O seletor em
+              si vive junto do seletor de mês, acima deste bloco ("período +
+              canal" como contexto único).
 
-              Etapa "Simetria Performance x Investimento":
-              `MonthInvestmentSummary` (core, montado aqui com as MESMAS
-              props de sempre) vira o slot `investmentSummary`;
-              `MonthInvestmentActions` (disclosure/edição/histórico, extraído
-              do core nesta etapa) vira o slot `investmentActions`, numa
-              linha compartilhada abaixo do grid — é `AccountFollowUpPanel`
-              quem decide o layout, nunca duplicando a lógica/props de
-              investimento aqui. */}
+              `MonthInvestmentActions` (disclosure/edição/histórico)
+              continua um slot `investmentActions` à parte, renderizado numa
+              linha própria abaixo da seção "Ritmo do mês" — nunca dentro
+              dela. */}
           {/* Etapa "Evolução Visual Incremental — Área do Cliente": superfície
               creme em vez de branco+borda — mesmo papel que o creme já
               cumpre no Relatório de Performance (grande superfície de
@@ -1608,21 +1601,14 @@ export default async function ClientPage({
               expectedResultsToDate={expectedResultsToDate}
               channelBreakdown={monthPerformanceChannelBreakdown}
               configureObjectiveHref={`/clients/${client.id}/edit`}
-              investmentSummary={
-                <MonthInvestmentSummary
-                  planned={visaoGeralPlanned}
-                  actual={visaoGeralMonthActual}
-                  expectedToDate={visaoGeralExpectedToDate}
-                  status={visaoGeralStatus}
-                  monthLabel={monthLabel}
-                  sprints={budgetSprints}
-                  monthRange={planningHorizon}
-                  effectiveDate={effectiveDate}
-                  isClosedMonth={isClosedMonth}
-                  isFutureMonth={isFutureMonth}
-                  currentPlanningEndDate={planningEndDate}
-                />
-              }
+              investmentPlanned={visaoGeralPlanned}
+              investmentExpectedToDate={visaoGeralExpectedToDate}
+              investmentStatus={visaoGeralStatus}
+              investmentMonthLabel={monthLabel}
+              investmentMonthRange={planningHorizon}
+              isFutureMonth={isFutureMonth}
+              isClosedMonth={isClosedMonth}
+              currentPlanningEndDate={planningEndDate}
               investmentActions={
                 <MonthInvestmentActions
                   planned={visaoGeralPlanned}
