@@ -13,8 +13,39 @@ import {
   type OperationQuickFilter,
 } from "@/lib/operation-triage";
 import type { ClientOperationalState } from "@/lib/client-operational-state";
+import { AVAILABLE_TRAFFIC_CHANNELS, TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { OperationClientCard } from "./operation-client-card";
 import { OperationFilterBar } from "./operation-filter-bar";
+
+/** Seletor "Meta Ads | Google Ads" — Etapa "Operação por Canal". Mesmo
+ * padrão visual de pill/segmented control já usado em
+ * `VisaoGeralChannelSwitch` (Visão Geral do cliente) e no seletor de
+ * prioridade de `OperationFilterBar` logo abaixo — nenhum componente novo,
+ * só a mesma linguagem visual reaplicada aqui. Deliberadamente sem
+ * "Consolidado": a Operação não tem mais leitura consolidada (decisão
+ * explícita — Meta e Google podem ter saúde completamente diferente, e
+ * consolidar mascararia isso). Navegação por `Link`/querystring (mesmo
+ * padrão do seletor de mês ao lado) — troca de canal é uma navegação de
+ * página inteira, nunca estado de cliente. */
+function OperationChannelSwitch({ monthParam, active }: { monthParam: string; active: TrafficChannel }) {
+  return (
+    <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-overview-surface p-0.5">
+      {AVAILABLE_TRAFFIC_CHANNELS.map((channel) => (
+        <Link
+          key={channel}
+          href={`/operation?month=${monthParam}&channel=${channel}`}
+          scroll={false}
+          aria-pressed={channel === active}
+          className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+            channel === active ? "bg-brand text-white" : "text-overview-text-secondary hover:text-overview-text-primary"
+          }`}
+        >
+          {TRAFFIC_CHANNELS[channel].label}
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 /** Plural/gramática do divisor de seção ("Crítico" → "Críticas" etc.) —
  * Etapa "Operação — Redução de Ruído Visual": desde que o badge de status
@@ -55,11 +86,18 @@ const PRIORITY_GROUP_EMPTY_LABEL: Record<OperationPriorityGroup, string> = {
 export function OperationTriageView({
   clients,
   monthParam,
+  channel,
   currentDateTimeLabel,
   summary,
 }: {
   clients: ClientOperationalState[];
   monthParam: string;
+  /** Canal ativo (Etapa "Operação por Canal") — nunca "consolidated": a tela
+   * inteira (população, métricas, meta, frescor, contadores) já chega
+   * recortada por este canal via `loadOperationTriageClients`. Usado aqui só
+   * pra destacar o botão ativo do seletor e propagar nos links de navegação
+   * de mês, pra trocar de mês nunca resetar o canal escolhido. */
+  channel: TrafficChannel;
   /** Só um relógio (dia da semana/data/hora atuais) — deliberadamente sem
    * verbo/rótulo que implique frescor de dado (ver comentário em
    * `page.tsx`: era "Atualizado {hora}", mas media o carregamento da
@@ -92,8 +130,8 @@ export function OperationTriageView({
     [groupedClients, quickFilter, managerFilter, query],
   );
 
-  const prevMonthHref = `/operation?month=${shiftOperationMonth(monthParam, -1)}`;
-  const nextMonthHref = `/operation?month=${shiftOperationMonth(monthParam, 1)}`;
+  const prevMonthHref = `/operation?month=${shiftOperationMonth(monthParam, -1)}&channel=${channel}`;
+  const nextMonthHref = `/operation?month=${shiftOperationMonth(monthParam, 1)}&channel=${channel}`;
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4 md:p-6">
@@ -104,7 +142,8 @@ export function OperationTriageView({
             Qual cliente merece sua atenção agora, e por quê.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <OperationChannelSwitch monthParam={monthParam} active={channel} />
           <Link
             href={prevMonthHref}
             aria-label="Mês anterior"

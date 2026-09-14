@@ -1,16 +1,19 @@
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
+import { loadOperationChannelStates } from "@/lib/operation-channel-state-data";
 import type { ClientOperationalState } from "@/lib/client-operational-state";
+import type { TrafficChannel } from "@/lib/traffic-channels";
 
 /**
- * Ponto de entrada de dados da Operação — desde a Etapa "Consolidação da
- * Arquitetura — Fase B", é um wrapper fino sobre `loadClientOperationalStates`
- * (`lib/client-operational-state-data.ts`, neutro), que também alimenta a
- * Visão Geral agora. Mesma assinatura e mesmo comportamento externo de
- * sempre — só a implementação das queries mudou de endereço (extraída pra
- * um módulo compartilhado), nenhuma fórmula mudou.
+ * Ponto de entrada de dados da Operação — Etapa "Operação por Canal": a
+ * Operação deixou de ter uma leitura consolidada (multi-canal) e passa a
+ * exigir sempre um canal (`"meta"`/`"google"`) — nunca mais um wrapper sobre
+ * `loadClientOperationalStates` (consolidado, `lib/client-operational-state-data.ts`,
+ * que continua intocado e é quem ainda alimenta Dashboard/Visão Geral do
+ * cliente/Relatórios/Sprints). Delega inteiramente pra
+ * `loadOperationChannelStates` (`lib/operation-channel-state-data.ts`) — ver
+ * a docstring de lá pro porquê da pipeline separada.
  */
-export async function loadOperationTriageClients(monthParam: string): Promise<ClientOperationalState[]> {
+export async function loadOperationTriageClients(monthParam: string, channel: TrafficChannel): Promise<ClientOperationalState[]> {
   const supabase = await createSupabaseClient();
-  return loadClientOperationalStates(supabase, monthParam);
+  return loadOperationChannelStates(supabase, monthParam, channel);
 }
