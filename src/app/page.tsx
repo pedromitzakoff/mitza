@@ -1013,69 +1013,43 @@ export default async function Home({
             accent
           />
           <div className="mt-3 grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Fase 1 "Confiabilidade dos Dados" — bug confirmado: este card
-                sempre mostrava `financial.actual` (soma de `monthActual`,
-                SEMPRE consolidado — todos os canais do cliente), mesmo com
-                o filtro de plataforma ativo — divergindo do "Realizado ·
-                Plataforma" corretamente escopado por canal mais abaixo
-                (`channelActualTotal`), na MESMA tela. Fora de Consolidado,
-                reaproveita esse mesmo `channelActualTotal` (nenhum cálculo
-                novo) — "planejado"/comparação vs. período anterior não
-                existem por canal ainda (mesma limitação já documentada na
-                seção "Ritmo de investimento" abaixo), por isso ficam de
-                fora em vez de mostrar uma base errada. */}
+            {/* Etapa "Redução de Ruído — Visão Geral da Agência": os 4 KPIs
+                respondem só a pergunta do próprio rótulo. Investimento
+                mostra só o realizado — planejamento/ritmo já têm seção
+                própria logo abaixo (Ritmo de investimento), repetir "de R$X
+                planejados" aqui era a mesma informação duas vezes. "% vs
+                período anterior" saiu de Investimento/Leads/Vendas (e do
+                CPL/CPA dentro de Leads/Vendas) pelo mesmo motivo: mais um
+                número por KPI sem responder nenhuma pergunta nova. CPL/CPA
+                continuam (respondem "a que custo?", pergunta diferente de
+                "quantos?"). Nenhum cálculo mudou — `financial`/
+                `agencyResults`/`PERFORMANCE_GOALS` são os mesmos de sempre,
+                só pararam de alimentar `comparison`/parte do `context`
+                aqui. */}
             <OperationMetric
               label="Investimento"
               value={formatCurrency(platformFilter === "consolidado" ? financial.actual : (channelActualTotal ?? 0))}
-              comparison={evolutionInvestment}
-              context={
-                platformFilter !== "consolidado"
-                  ? "Planejamento disponível só no recorte Consolidado"
-                  : financial.planned > 0
-                    ? `de ${formatCurrency(financial.planned)} planejados`
-                    : "Nenhum planejamento configurado"
-              }
             />
             <OperationMetric
               label="Leads"
               value={agencyResults.leads.clientsWithData > 0 ? String(agencyResults.leads.count) : "—"}
-              comparison={agencyResults.leads.clientsWithData > 0 ? evolutionLeads : null}
               context={
-                agencyResults.leads.clientsWithData > 0 ? (
-                  <>
-                    {PERFORMANCE_GOALS.leads.costMetricShortLabel}{" "}
-                    {agencyResults.leads.costPerResult !== null ? formatCurrency(agencyResults.leads.costPerResult) : "—"}
-                    {evolutionLeadsCpl && (
-                      <>
-                        {" "}
-                        · <span className={COMPARISON_TONE_TEXT_CLASSES[evolutionLeadsCpl.tone]}>{shortComparisonText(evolutionLeadsCpl)}</span>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  "Nenhum cliente com objetivo de leads configurado"
-                )
+                agencyResults.leads.clientsWithData > 0
+                  ? `${PERFORMANCE_GOALS.leads.costMetricShortLabel} ${
+                      agencyResults.leads.costPerResult !== null ? formatCurrency(agencyResults.leads.costPerResult) : "—"
+                    }`
+                  : "Nenhum cliente com objetivo de leads configurado"
               }
             />
             <OperationMetric
               label="Vendas"
               value={agencyResults.sales.clientsWithData > 0 ? String(agencyResults.sales.count) : "—"}
-              comparison={agencyResults.sales.clientsWithData > 0 ? evolutionSales : null}
               context={
-                agencyResults.sales.clientsWithData > 0 ? (
-                  <>
-                    {PERFORMANCE_GOALS.sales.costMetricShortLabel}{" "}
-                    {agencyResults.sales.costPerResult !== null ? formatCurrency(agencyResults.sales.costPerResult) : "—"}
-                    {evolutionSalesCpa && (
-                      <>
-                        {" "}
-                        · <span className={COMPARISON_TONE_TEXT_CLASSES[evolutionSalesCpa.tone]}>{shortComparisonText(evolutionSalesCpa)}</span>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  "Nenhum cliente com objetivo de vendas configurado"
-                )
+                agencyResults.sales.clientsWithData > 0
+                  ? `${PERFORMANCE_GOALS.sales.costMetricShortLabel} ${
+                      agencyResults.sales.costPerResult !== null ? formatCurrency(agencyResults.sales.costPerResult) : "—"
+                    }`
+                  : "Nenhum cliente com objetivo de vendas configurado"
               }
             />
             {/* "Contas ativas" reaproveita a mesma fonte central de sempre
@@ -1116,17 +1090,15 @@ export default async function Home({
                     />
                   </div>
 
-                  {/* Etapa "Refinamento visual da Visão Geral — Síntese"
-                      (redução de altura do bloco): status + diferença em uma
-                      única linha (era `investmentStatusPhrase` num parágrafo
-                      e `investmentDiffValueText` em outro) e a legenda
-                      "● Realizado"/"● Esperado hoje" do `ProgressBar` saiu —
-                      o rótulo do próprio marcador ("Esperado hoje · X%") já
-                      diz isso, e o preenchimento colorido é a única barra na
-                      tela, não precisa de legenda pra ser lido como
-                      "realizado". Nenhum cálculo mudou (`investmentDiff`/
-                      `investmentRitmoStatus`/`investmentStatusPhrase`/
-                      `investmentDiffValueText` intactos). */}
+                  {/* Etapa "Redução de Ruído — Visão Geral da Agência": só a
+                      classificação textual (`investmentStatusPhrase`, ex.:
+                      "Dentro do ritmo esperado") — o valor absoluto de
+                      diferença ("R$X de diferença") saiu, a barra + o
+                      marcador "Esperado hoje · X%" já mostram a mesma
+                      informação visualmente. Nenhum cálculo mudou
+                      (`investmentRitmoStatus`/`investmentStatusPhrase`
+                      intactos, mesma fonte de `investmentDiffTone` pra
+                      cor). */}
                   <p
                     className={`mt-1.5 text-[13px] font-medium ${
                       investmentDiffTone === "danger"
@@ -1137,7 +1109,6 @@ export default async function Home({
                     }`}
                   >
                     {investmentStatusPhrase}
-                    {investmentDiffValueText ? ` · ${investmentDiffValueText} de diferença` : null}
                   </p>
                 </>
               ) : (

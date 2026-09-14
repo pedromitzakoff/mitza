@@ -81,15 +81,13 @@ export function RemindersPanel({
             ))}
           </div>
         ) : (
-          <EmptyState
-            title="Nenhuma pendência em aberto"
-            description="Tudo resolvido por enquanto. Novas pendências podem ser adicionadas aqui."
-            action={
-              <Button href={addHref} variant="primary" size="sm">
-                Adicionar pendência
-              </Button>
-            }
-          />
+          // Etapa "Redução de Ruído — Visão Geral da Agência": o CTA
+          // "Adicionar pendência" já existe no header desta seção — repeti-lo
+          // aqui dentro do empty state era o mesmo botão duas vezes na
+          // mesma tela. Descrição também saiu: "Nenhuma pendência em
+          // aberto." já é auto-explicativo, a segunda frase não acrescentava
+          // informação nova.
+          <EmptyState title="Nenhuma pendência em aberto." />
         )}
       </div>
     </section>
