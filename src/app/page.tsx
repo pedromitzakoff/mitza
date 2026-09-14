@@ -20,7 +20,7 @@ import {
   type SprintFilterBucket,
 } from "@/app/operation/operation-data";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import { computeFinancialSummary, computeAgencyPeriodTotals, computeAgencyResultsByChannel } from "@/lib/agency-metrics";
+import { computeFinancialSummary, computeAgencyResultsByChannel } from "@/lib/agency-metrics";
 import { computeHealthResultsSummary } from "@/lib/agency-health-aggregation";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
 import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
@@ -32,7 +32,7 @@ import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals
 import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
-import { OperationMetric, COMPARISON_TONE_TEXT_CLASSES } from "./operation-metric";
+import { OperationMetric } from "./operation-metric";
 import { PrimaryInvestmentMetric } from "./investment-metric";
 import { PLATFORM_LABEL } from "./client-objective-table";
 import { getCompletedReminders, getOpenReminders, getReminderById } from "@/lib/reminders-data";
@@ -50,8 +50,6 @@ import type { TrafficChannelDb } from "@/lib/supabase/database.types";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { resolveClientMonthlyPlan, resolveTargetCostPerResult, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
 import type { SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
-import { previousEquivalentPeriod } from "@/lib/period-comparison";
-import { buildPercentChangeComparison, type AnalyticsKpiComparison } from "@/lib/analytics";
 
 /**
  * Etapa 47: Inter carregada e aplicada SÓ na Visão Geral (className no
@@ -354,65 +352,7 @@ export default async function Home({
     getClientMonthHorizons(supabase, clientIds, monthRange.firstDay),
   ]);
   perfLog("visão geral bloco 2 fundido (atividade/performance/lastReviews, antes lastReviews era sequencial à parte)", __perfBlock2Start);
-
-  // Etapa "Revisão da Visão Geral — Evolução no período": período anterior
-  // de MESMA DURAÇÃO (`lib/period-comparison.ts`, escrita desde o início
-  // pra ser reaproveitada aqui — nunca uma segunda lógica temporal). Quando
-  // o mês selecionado está em andamento (hoje cai dentro dele), o período
-  // ATUAL usado na comparação é truncado até hoje antes de calcular o
-  // anterior — comparar 1-27 de agosto contra agosto INTEIRO de julho seria
-  // uma leitura enganosa. Mês já encerrado ou ainda no futuro usam o mês
-  // inteiro (não há "hoje" no meio do intervalo pra truncar).
-  const currentPeriodEndForComparison =
-    todayStr >= monthRange.firstDay && todayStr < monthRange.lastDay ? todayStr : monthRange.lastDay;
-  const previousPeriod = previousEquivalentPeriod({ start: monthRange.firstDay, end: currentPeriodEndForComparison });
-
-  // Consulta ENXUTA (soma direta, mesmas tabelas de sempre) — nunca
-  // reconstrói sprint/orçamento/saúde pra um segundo período só pra tirar
-  // uma comparação (dobraria o carregamento da página). `resolvePerformanceRowsForSprints`
-  // é a mesma função já usada acima pro mês atual, só que sobre as sprints
-  // que se sobrepõem ao período anterior.
-  const __perfBlock3Start = perfNow();
-  const [previousSprintsForPerformance, previousDailySpend] = await Promise.all([
-    clientIds.length > 0
-      ? requireQuery(
-          supabase
-            .from("sprints")
-            .select("id, client_id, start_date, end_date")
-            .in("client_id", clientIds)
-            .lte("start_date", previousPeriod.end)
-            .gte("end_date", previousPeriod.start),
-          "sprints:previous-period",
-        )
-      : Promise.resolve([]),
-    clientIds.length > 0
-      ? requireQuery(
-          supabase
-            .from("daily_spend")
-            .select("client_id, spend")
-            .in("client_id", clientIds)
-            .gte("date", previousPeriod.start)
-            .lte("date", previousPeriod.end),
-          "daily_spend:previous-period",
-        )
-      : Promise.resolve([]),
-  ]);
-  const previousPerformanceRowsRaw = await resolvePerformanceRowsForSprints(
-    supabase,
-    (previousSprintsForPerformance ?? []).map((s) => ({
-      id: s.id,
-      client_id: s.client_id,
-      start_date: s.start_date,
-      end_date: s.end_date,
-    })),
-  );
-  perfLog("visão geral — evolução no período (período anterior)", __perfBlock3Start);
   perfLog("visão geral — dados totais carregados (auth + queries)", __perfPageStart);
-
-  const previousSpendByClientId = new Map<string, number>();
-  for (const row of previousDailySpend ?? []) {
-    previousSpendByClientId.set(row.client_id, (previousSpendByClientId.get(row.client_id) ?? 0) + row.spend);
-  }
 
   const lastReviewAtByClient = new Map<string, string>();
   for (const row of lastReviews ?? []) {
@@ -744,23 +684,6 @@ export default async function Home({
       ? computeHealthResultsSummary(indicatorStates)
       : computeAgencyResultsByChannel(indicatorCardsForResults, platformFilter);
 
-  // Etapa "Revisão da Visão Geral — Evolução no período": totais REALIZADOS
-  // do período anterior (dado bruto já buscado acima). Escopo de
-  // investimento = mesmo de `financial`/`computeFinancialSummary` (`cards`,
-  // com os filtros de recorte); escopo de leads/vendas = mesmo de
-  // `agencyResults`/`computeHealthResultsSummary` (`indicatorCards`, só
-  // mês/carteira/cliente) — cada métrica compara contra o período anterior
-  // no MESMO escopo do seu próprio valor absoluto, nunca uma segunda lógica
-  // de recorte.
-  const previousPerformanceRows = filterRowsToPrimaryGoal(previousPerformanceRowsRaw, primaryGoalByClientId);
-  const previousInvestmentTotals = computeAgencyPeriodTotals({
-    investmentClientIds: new Set(cards.map((c) => c.clientId)),
-    resultsClientIds: new Set(indicatorCards.map((c) => c.clientId)),
-    spendByClientId: previousSpendByClientId,
-    performanceRows: previousPerformanceRows,
-    primaryGoalByClientId,
-  });
-
   // Etapa "Saúde da carteira" (auditoria da Visão Geral): "como está minha
   // carteira agora", um número por balde — mesmo agrupamento de 4 baldes já
   // construído e testado pra Operação (`resolveOperationPriorityGroup`,
@@ -799,17 +722,22 @@ export default async function Home({
   // (`actualForPacing`) contra planejado/esperado — os dois já são a mesma
   // base de clientes. `financial.actual` (total da agência, todos os
   // clientes) alimenta só o KPI "Investimento" abaixo, nunca o ritmo.
-  const investmentDiff = financial.actualForPacing - financial.expectedToDate;
   const investmentRitmoStatus =
     financial.planned > 0 ? classifySpendStatus(financial.actualForPacing, financial.expectedToDate, financial.planned) : "sem_meta";
   const investmentDiffTone: StatusTone =
     investmentRitmoStatus === "acima" ? "danger" : investmentRitmoStatus === "abaixo" ? "warning" : "neutral";
   // Etapa "Refinamento Visão Geral da Agência" (Ponto 4): o diagnóstico de
-  // ritmo vira uma frase de STATUS em destaque (`investmentStatusPhrase`),
-  // com o valor em reais como apoio secundário abaixo dela — antes o número
-  // isolado ("R$ X abaixo") era o único elemento, competindo em peso visual
-  // com o próprio status. Nenhum cálculo mudou (`investmentDiff`/
-  // `investmentRitmoStatus` intactos), só a apresentação.
+  // ritmo é uma frase de STATUS (`investmentStatusPhrase`), colorida por
+  // `investmentDiffTone`. Etapa "Redução de Ruído — Visão Geral da Agência":
+  // o valor absoluto de diferença que existia como apoio ("R$X de
+  // diferença") saiu da interface — a barra + o marcador "Esperado hoje ·
+  // X%" já mostram a mesma informação visualmente; junto com ele saiu a
+  // comparação "% vs período anterior" que alimentava os 4 KPIs de
+  // "Desempenho da agência" (Investimento/Leads/Vendas, CPL/CPA). O CÁLCULO
+  // de período anterior (`computeAgencyPeriodTotals`/
+  // `buildPercentChangeComparison`, `lib/agency-metrics.ts`/`lib/analytics.ts`)
+  // não mudou uma linha — só parou de ser CONSUMIDO nesta página; qualquer
+  // outra tela pode chamar essas mesmas funções livremente.
   const investmentStatusPhrase =
     investmentRitmoStatus === "abaixo"
       ? "Ritmo abaixo do esperado hoje"
@@ -818,61 +746,7 @@ export default async function Home({
         : investmentRitmoStatus === "dentro"
           ? "Dentro do ritmo esperado"
           : "—";
-  const investmentDiffValueText = investmentDiff !== 0 ? formatCurrency(Math.abs(investmentDiff)) : null;
   const monthTemporalStatus = getMonthTemporalStatus(monthRange, todayStr);
-
-  // Etapa "Revisão da Visão Geral — Evolução no período": "↑X% vs período
-  // anterior" pra cada KPI executivo, reaproveitando a mesma função já usada
-  // pelo Hero do Analytics do cliente (`buildPercentChangeComparison`,
-  // `lib/analytics.ts`) — nenhuma segunda versão do texto/tom. Investimento é
-  // `neutral` (gastar mais/menos não é bom ou ruim em si, mesma decisão já
-  // tomada pro Analytics); Leads/Vendas são `higher_is_better`; CPL/CPA são
-  // `lower_is_better`. `null` sempre que não há base anterior confiável
-  // (`computePercentChange`) — cada indicador exibe (ou não) sua própria
-  // variação de forma independente, nunca uma seção inteira condicionada ao
-  // "algum dos cinco tem dado".
-  //
-  // Etapa "Refinamento visual da Visão Geral — Síntese": a variação deixou
-  // de ter uma seção própria ("Evolução no período") e passou a viver dentro
-  // do próprio big number — `OperationMetric` (`comparison` prop) — pra
-  // eliminar a duplicação de mostrar cada indicador duas vezes na mesma
-  // tela. Nenhum dos 5 cálculos abaixo mudou.
-  // Fase 1 "Confiabilidade dos Dados": `previousInvestmentTotals` (período
-  // anterior) é sempre CONSOLIDADO — a query de `daily_spend`/performance do
-  // período anterior nunca filtrou por canal (só existe pra alimentar esta
-  // comparação, nunca os KPIs absolutos). Comparar um valor ATUAL agora
-  // corretamente escopado por canal (ver `agencyResults`/`channelActualTotal`
-  // acima) contra um "período anterior" sempre consolidado produziria uma
-  // variação sem sentido (dois escopos diferentes) — pior que não mostrar
-  // nada. Fora de Consolidado, nenhuma das 5 comparações é exibida (`null`,
-  // nunca uma % fabricada); ficam como estavam só no recorte Consolidado, o
-  // único onde as duas pontas realmente comparam o mesmo escopo.
-  const evolutionInvestment =
-    platformFilter === "consolidado" ? buildPercentChangeComparison(financial.actual, previousInvestmentTotals.investment, "neutral") : null;
-  const evolutionLeads =
-    platformFilter === "consolidado"
-      ? buildPercentChangeComparison(agencyResults.leads.count, previousInvestmentTotals.leadsCount, "higher_is_better")
-      : null;
-  const evolutionLeadsCpl =
-    platformFilter === "consolidado" && agencyResults.leads.costPerResult !== null
-      ? buildPercentChangeComparison(agencyResults.leads.costPerResult, previousInvestmentTotals.leadsCostPerResult, "lower_is_better")
-      : null;
-  const evolutionSales =
-    platformFilter === "consolidado"
-      ? buildPercentChangeComparison(agencyResults.sales.count, previousInvestmentTotals.salesCount, "higher_is_better")
-      : null;
-  const evolutionSalesCpa =
-    platformFilter === "consolidado" && agencyResults.sales.costPerResult !== null
-      ? buildPercentChangeComparison(agencyResults.sales.costPerResult, previousInvestmentTotals.salesCostPerResult, "lower_is_better")
-      : null;
-  // Versão curta ("↑49%") do mesmo texto já pronto de `comparison.text`
-  // ("↑49% vs período anterior") — só formatação de exibição pra CPL/CPA
-  // não repetirem "vs período anterior" uma segunda vez na mesma linha do
-  // indicador principal (Leads/Vendas já mostram a frase inteira acima).
-  // Nenhum recálculo: mesma variação, mesmo tom, só o texto mais curto.
-  function shortComparisonText(comparison: AnalyticsKpiComparison): string {
-    return comparison.text.replace(" vs período anterior", "");
-  }
 
   // Preserva TODOS os filtros ativos — usado na navegação de mês e na
   // ordenação da tabela, que não devem resetar o resto do contexto. Não
