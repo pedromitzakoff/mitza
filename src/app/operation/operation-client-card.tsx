@@ -71,11 +71,23 @@ const PRIORITY_GROUP_EMPHASIZE: Record<OperationPriorityGroup, boolean> = {
  * `evaluation.dimensions.investment`/`.results`/`.review` (Motor de Saúde,
  * `lib/account-health-engine.ts`, intocado por esta etapa) continuam
  * calculados — só PARARAM de influenciar prioridade/badge/motivo da
- * Operação. Investimento e Resultado seguem visíveis nas métricas do card,
- * com peso visual menor que o Custo (`MetricDeviation size="lg"` só no
- * bloco de Custo). Revisão atrasada vira uma linha extra discreta
- * (`reviewText`, sempre neutra/muted) quando `isReviewOverdue` — nunca um
- * segundo motivo competindo com o CPA.
+ * Operação.
+ *
+ * Etapa "Operação — Hierarquia Visual Neutra" (corrige um excesso da etapa
+ * anterior): as 3 métricas — Investimento, Resultado, Custo — têm o MESMO
+ * peso visual (mesmo `size`, nenhum `size="lg"`, mesma ordem de sempre:
+ * Investimento → Resultado → Custo). CPA ser a única regra de
+ * saúde/prioridade não significa que ele precise "parecer maior" — a leitura
+ * é "três métricas igualmente importantes pra entender a conta, só uma
+ * delas (Custo) tem estado de alerta". Por isso só o bloco de Custo recebe
+ * `diagnostic`/`referenceLabel` (seta, cor, % e comparação com a meta);
+ * Investimento e Resultado são sempre neutros — valor puro, sem seta, sem
+ * cor de desvio, sem comparação com esperado/meta, mesmo quando o motor de
+ * verdade calcula um desvio grave pra eles (ele calcula porque outras telas
+ * usam essa mesma dimensão — a Operação simplesmente nunca lê
+ * `diagnostics.investment` aqui). Revisão atrasada vira uma linha extra
+ * discreta (`reviewText`, sempre neutra/muted) quando `isReviewOverdue` —
+ * nunca um segundo motivo competindo com o CPA.
  *
  * Etapa "Auditoria da Operação": `managerName` entra na mesma linha do
  * nome do cliente, texto pequeno e neutro (nunca badge, nunca avatar
@@ -84,14 +96,10 @@ const PRIORITY_GROUP_EMPHASIZE: Record<OperationPriorityGroup, boolean> = {
  * gestor. "Sem gestor" quando `null` (nunca omitido) — uma conta sem
  * responsável é, ela mesma, um fato operacional relevante.
  *
- * As métricas continuam vindo do Motor de Diagnóstico Único
- * (`diagnostics`, `lib/metric-diagnostics.ts` — mesma régua de magnitude de
- * sempre, 10/20%) para Investimento e Custo; Resultado continua um valor de
- * referência simples (o motor não define desvio pra contagem bruta). A
- * coluna "Meta" separada foi removida: a meta de custo é a linha de
- * referência do próprio bloco de Custo (`MetricDeviation.referenceLabel`,
- * "Meta R$ 10,00 · ↑ 58%"), o mesmo número, só mais perto do valor que ele
- * explica — nunca um cálculo novo, só reposicionado.
+ * A meta de custo é a linha de referência do próprio bloco de Custo
+ * (`MetricDeviation.referenceLabel`, "Meta R$ 10,00 · ↑ 58%"), o mesmo
+ * número que já existia, só mais perto do valor que ele explica — nunca um
+ * cálculo novo, só reposicionado.
  *
  * ⚠️ PARCIALMENTE PROVISÓRIO: `diagnostics.atividade` combina duas
  * fontes — `client_last_operational_activity` (tarefa criada/editada/
@@ -194,22 +202,17 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
   const priorityTone = PRIORITY_GROUP_TONE[priorityGroup];
   const priorityLabel = PRIORITY_GROUP_LABEL[priorityGroup];
 
-  // Etapa "Operação — CPA como régua única": Custo vem primeiro e em
-  // `size="lg"` (mesma variante que `MetricDeviation` já oferecia, nenhum
-  // primitive novo) — a métrica que decide prioridade é a única com
-  // destaque tipográfico real. Investimento/Resultado continuam visíveis
-  // como contexto (você pediu pra não escondê-los), só em peso visual
-  // menor (`size="md"`, o padrão do componente).
+  // Etapa "Operação — Hierarquia Visual Neutra": ordem de sempre
+  // (Investimento → Resultado → Custo), mesmo `size` (padrão do
+  // componente) nas 3 — nenhuma delas "parece maior". Investimento nunca
+  // recebe `diagnostic` aqui (valor neutro, sem seta/cor/% de desvio) —
+  // diferente da Visão Geral do cliente/Dashboard, que continuam usando
+  // `diagnostics.investment` normalmente em outras telas. Resultado já era
+  // neutro (o motor não define desvio pra contagem bruta). Só Custo recebe
+  // `diagnostic`/`referenceLabel` — é a única métrica com estado de alerta.
   const metrics = (
     <>
-      <MetricDeviation
-        label={goalConfig?.costMetricShortLabel ?? "Custo"}
-        value={costValue}
-        diagnostic={diagnostics.cpa}
-        title={costTitle}
-        referenceLabel={costReferenceLabel}
-        size="lg"
-      />
+      <MetricDeviation label="Investimento" value={investmentValue} diagnostic={null} title={investmentTitle} />
       <MetricDeviation
         label={goalConfig?.resultMetricLabel ?? "Resultado"}
         value={resultValue}
@@ -217,10 +220,11 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
         title={resultTitle}
       />
       <MetricDeviation
-        label="Investimento"
-        value={investmentValue}
-        diagnostic={investment.hasSyncedData ? diagnostics.investment : null}
-        title={investmentTitle}
+        label={goalConfig?.costMetricShortLabel ?? "Custo"}
+        value={costValue}
+        diagnostic={diagnostics.cpa}
+        title={costTitle}
+        referenceLabel={costReferenceLabel}
       />
     </>
   );
