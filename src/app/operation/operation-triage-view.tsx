@@ -16,10 +16,10 @@ import type { ClientOperationalState } from "@/lib/client-operational-state";
 import { OperationClientCard } from "./operation-client-card";
 import { OperationFilterBar } from "./operation-filter-bar";
 
-/** Plural/gramática de seção — mesmo rótulo de `PRIORITY_GROUP_LABEL`
- * (operation-client-card.tsx) só ajustado pro cabeçalho de grupo em vez do
- * selo de linha ("Crítico" na linha, "Críticas" separando o grupo). Nenhum
- * balde novo, só o texto do divisor. */
+/** Plural/gramática do divisor de seção ("Crítico" → "Críticas" etc.) —
+ * Etapa "Operação — Redução de Ruído Visual": desde que o badge de status
+ * saiu do card (`operation-client-card.tsx`), este divisor é a ÚNICA fonte
+ * visual do balde de cada conta — nunca repetido dentro do card. */
 const PRIORITY_GROUP_SECTION_LABEL: Record<OperationPriorityGroup, string> = {
   critico: "Críticas",
   atencao: "Atenção",

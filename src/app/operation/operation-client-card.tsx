@@ -1,14 +1,11 @@
 import Link from "next/link";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { MetricDeviation } from "@/components/workspace/metric-deviation";
-import { StatusDot, emphasizeDeviationText, type StatusTone } from "@/components/workspace/status-dot";
+import { emphasizeDeviationText, type StatusTone } from "@/components/workspace/status-dot";
 import { formatCurrency, formatRelativeShortDateTime } from "@/lib/format";
 import { MIN_RELIABLE_RESULT_COUNT } from "@/lib/operation-health-thresholds";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
-import { getLatestPerformanceUpdateText } from "@/lib/performance";
-import { formatAtividadeLabel } from "@/lib/metric-diagnostics";
 import { resolveOperationCpaPriorityGroup, describeOperationCpaReason, type OperationPriorityGroup } from "@/lib/operation-triage";
-import { isReviewOverdue, describeReviewReason } from "@/lib/account-health-engine";
 import type { ClientOperationalState } from "@/lib/client-operational-state";
 
 const countFormatter = new Intl.NumberFormat("pt-BR");
@@ -22,36 +19,19 @@ function formatWholeCurrency(value: number): string {
   return `R$ ${Math.round(value).toLocaleString("pt-BR")}`;
 }
 
-/** "Crítico"/"Atenção"/"Saudável"/"Sem dados" + o tom visual de cada balde
- * (Etapa "Central de Decisão Diária") — `emphasize` só nos dois primeiros
- * (o pedido explícito era hierarquia clara: motivo principal evidente pra
- * quem precisa de atenção). Saudável usa o mesmo `StatusDot` discreto do
- * resto do produto (ponto pequeno + texto neutro) — nunca um verde grande
- * competindo com os alertas acima dele na fila; Sem dados fica neutro de
- * propósito: não é "performou mal", é "não pôde ser avaliada" (ver
- * `resolveOperationCpaPriorityGroup`, lib/operation-triage.ts). */
-const PRIORITY_GROUP_LABEL: Record<OperationPriorityGroup, string> = {
-  critico: "Crítico",
-  atencao: "Atenção",
-  saudavel: "Saudável",
-  sem_dados: "Sem dados",
-};
-
 /** Exportado (Etapa "Motivo da Operação no Cliente") pra página individual
  * do cliente colorir a mesma frase de motivo com o mesmo tom — nenhuma
- * segunda tabela crítico/atenção/saudável→cor, a mesma fonte única. */
+ * segunda tabela crítico/atenção/saudável→cor, a mesma fonte única. Etapa
+ * "Operação — Redução de Ruído Visual": este mapeamento continua existindo
+ * (ainda usado por `clients/[id]/page.tsx` e pra colorir `reasonText` aqui
+ * dentro), mesmo depois do badge visual (`StatusDot`) ter saído do card —
+ * a seção (Críticas/Atenção/Saudáveis/Sem dados) já comunica o balde; só o
+ * TOM de cor do motivo continua reaproveitando esta fonte única. */
 export const PRIORITY_GROUP_TONE: Record<OperationPriorityGroup, StatusTone> = {
   critico: "danger",
   atencao: "warning",
   saudavel: "success",
   sem_dados: "neutral",
-};
-
-const PRIORITY_GROUP_EMPHASIZE: Record<OperationPriorityGroup, boolean> = {
-  critico: true,
-  atencao: true,
-  saudavel: false,
-  sem_dados: false,
 };
 
 /**
@@ -62,54 +42,47 @@ const PRIORITY_GROUP_EMPHASIZE: Record<OperationPriorityGroup, boolean> = {
  * — sempre explica o CPA ou a impossibilidade de avaliá-lo (amostra
  * insuficiente, escopo não comparável, meta ausente), nunca investimento ou
  * resultado. O balde de prioridade (`resolveOperationCpaPriorityGroup`,
- * mesmo arquivo) é a MESMA fonte que decide a ordem/contadores da fila —
- * nenhum segundo vocabulário. Hierarquia: 1) cliente, 2) motivo do CPA
- * (evidente, colorido só quando crítico/atenção), 3) contexto secundário
- * (atividade/atualização de performance/revisão atrasada — sempre menor,
- * discreto, nunca competindo com o motivo principal).
+ * mesmo arquivo) é a MESMA fonte que decide a ordem/contadores/agrupamento
+ * da fila — nenhum segundo vocabulário.
+ *
+ * Etapa "Operação — Redução de Ruído Visual" (corrige redundância das duas
+ * etapas anteriores): o card já vive DENTRO de uma seção que já diz "Crítico"/
+ * "Atenção"/"Saudável"/"Sem dados" (`PRIORITY_GROUP_SECTION_LABEL`,
+ * `operation-triage-view.tsx`) — repetir isso de novo em badge (`StatusDot`)
+ * dentro de cada card era a mesma informação duas vezes. Saiu o badge; o
+ * TOM de cor do balde continua existindo só na cor do próprio `reasonText`
+ * (`PRIORITY_GROUP_TONE`/`emphasizeDeviationText`), nunca um texto/selo
+ * próprio. Gestor também saiu do card: o filtro "Gestor" da própria tela já
+ * decide se a lista é da agência inteira ou de alguém específico — mostrar
+ * o nome em cada card era redundante com esse filtro (dado de gestor em si
+ * não muda em nenhuma outra tela).
+ *
+ * Hierarquia final do card: 1) cliente, 2) motivo do CPA (colorido só
+ * quando crítico/atenção), 3) frescor dos dados de performance — ÚNICA
+ * informação operacional secundária que sobra aqui (atividade, revisão
+ * atrasada e a origem/verbo de sincronização saíram: continuam existindo
+ * no motor e nas telas onde já faziam sentido — Sprint, página do cliente —
+ * só pararam de aparecer NESTE card). `card.performanceLastUpdatedAt` é a
+ * mesma fonte que já alimentava a antiga linha "Performance: ...", só sem
+ * o prefixo de origem ("Manual"/"Meta"/"Google") nem o verbo
+ * ("Atualizado"/"Sincronizado") — o motivo do CPA já deixa claro que o
+ * assunto é performance, repetir a palavra na linha de baixo era ruído.
+ * `formatRelativeShortDateTime` é o MESMO formatter de sempre (Hoje/Ontem/
+ * data — nenhum formato novo inventado aqui).
  *
  * `evaluation.dimensions.investment`/`.results`/`.review` (Motor de Saúde,
- * `lib/account-health-engine.ts`, intocado por esta etapa) continuam
- * calculados — só PARARAM de influenciar prioridade/badge/motivo da
- * Operação.
- *
- * Etapa "Operação — Hierarquia Visual Neutra" (corrige um excesso da etapa
- * anterior): as 3 métricas — Investimento, Resultado, Custo — têm o MESMO
- * peso visual (mesmo `size`, nenhum `size="lg"`, mesma ordem de sempre:
- * Investimento → Resultado → Custo). CPA ser a única regra de
- * saúde/prioridade não significa que ele precise "parecer maior" — a leitura
- * é "três métricas igualmente importantes pra entender a conta, só uma
- * delas (Custo) tem estado de alerta". Por isso só o bloco de Custo recebe
- * `diagnostic`/`referenceLabel` (seta, cor, % e comparação com a meta);
- * Investimento e Resultado são sempre neutros — valor puro, sem seta, sem
- * cor de desvio, sem comparação com esperado/meta, mesmo quando o motor de
- * verdade calcula um desvio grave pra eles (ele calcula porque outras telas
- * usam essa mesma dimensão — a Operação simplesmente nunca lê
- * `diagnostics.investment` aqui). Revisão atrasada vira uma linha extra
- * discreta (`reviewText`, sempre neutra/muted) quando `isReviewOverdue` —
- * nunca um segundo motivo competindo com o CPA.
- *
- * Etapa "Auditoria da Operação": `managerName` entra na mesma linha do
- * nome do cliente, texto pequeno e neutro (nunca badge, nunca avatar
- * próprio) — achado da auditoria: "quem é responsável por essa conta?"
- * não tinha resposta nenhuma no card antes disso, só via filtro/busca de
- * gestor. "Sem gestor" quando `null` (nunca omitido) — uma conta sem
- * responsável é, ela mesma, um fato operacional relevante.
+ * `lib/account-health-engine.ts`, intocado por todas as etapas da Operação)
+ * continuam calculados — só nunca influenciam prioridade/badge/motivo/linha
+ * secundária da Operação. As 3 métricas (Investimento, Resultado, Custo) têm
+ * o MESMO peso visual (mesmo `size`, mesma ordem: Investimento → Resultado
+ * → Custo) — só o bloco de Custo recebe `diagnostic`/`referenceLabel`
+ * (seta, cor, % e comparação com a meta); Investimento e Resultado são
+ * sempre neutros — valor puro, sem seta, sem cor de desvio.
  *
  * A meta de custo é a linha de referência do próprio bloco de Custo
  * (`MetricDeviation.referenceLabel`, "Meta R$ 10,00 · ↑ 58%"), o mesmo
  * número que já existia, só mais perto do valor que ele explica — nunca um
  * cálculo novo, só reposicionado.
- *
- * ⚠️ PARCIALMENTE PROVISÓRIO: `diagnostics.atividade` combina duas
- * fontes — `client_last_operational_activity` (tarefa criada/editada/
- * concluída/comentada, comentário de sprint: infraestrutura real, Etapa
- * 15) e `account_reviews` (a fonte de "revisão de conta"/otimização que já
- * existia). Só a segunda é placeholder: quando a estrutura real de
- * Otimizações existir (congelada pra uma etapa futura), ela substitui
- * `account_reviews` como o insumo de "otimização" — a parte de tarefas não
- * muda. Essa troca acontece inteira em `client-operational-state-data.ts`;
- * este componente e o motor (`metric-diagnostics.ts`) não mudam.
  */
 export function OperationClientCard({ card }: { card: ClientOperationalState }) {
   const { diagnostics, evaluation } = card;
@@ -143,64 +116,17 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
       : undefined;
   const costReferenceLabel = targetCostPerResult === null ? undefined : `Meta ${formatCurrency(targetCostPerResult)}`;
 
-  // Atividade continua a mesma conta de sempre (48h/3 dias/N dias,
-  // `metric-diagnostics.ts`) — nunca um novo limiar. Deixou só de ser o
-  // ÚNICO motivo visível: agora é contexto secundário, atrás do
-  // `primaryReason` do motor. Planejamento incompleto não aparece mais
-  // aqui separadamente porque, nesse caso, ele já É o motivo principal
-  // (toda lacuna de configuração vira `primaryDimension === "dataQuality"`
-  // no motor — mesmo fato, uma vez só, sem repetir o texto duas vezes).
-  const atividadeLabel = formatAtividadeLabel(diagnostics.atividade);
-
-  // Etapa "Data de atualização da performance por cliente": de quando são
-  // os números de Resultado/Custo deste card especificamente — nunca a
-  // hora em que a página foi carregada (isso não diz nada sobre os dados
-  // em si). Reaproveita `getLatestPerformanceUpdateText`, a mesma função já
-  // usada no card fechado da Sprint/cabeçalho da página do cliente ("Manual
-  // · Atualizado em..."/"Meta · Sincronizado em..."/"Sem atualização
-  // registrada") — nenhum cálculo novo, só exibida aqui também. Só
-  // relevante quando o cliente tem objetivo de performance configurado
-  // (sem isso, o motivo principal já explica "Objetivo não configurado").
-  //
-  // Etapa "Ajuste hoje/ontem": aqui (só aqui — Sprint/página do cliente
-  // continuam com `formatShortDateTime`, sem "Hoje"/"Ontem") o formatter
-  // passado é `formatRelativeShortDateTime`: hoje fala "Hoje", ontem fala
-  // "Ontem", depois disso mostra a data real — sempre com o horário.
-  // Bug real encontrado em produção: `formatRelativeShortDateTime` espera um
-  // INSTANTE real ("agora"), nunca `todayUTC()` (meia-noite civil truncada
-  // pro fuso) — passar `todayUTC()` fazia a comparação de dia reconverter
-  // esse valor pelo fuso de novo, empurrando a referência um dia pra trás e
-  // rotulando a sincronização de ONTEM como "Hoje" (ver `lib/format.ts`,
-  // `diffCalendarDaysInAppTimezone`). `new Date()` é o único valor correto.
-  const performanceUpdateText = goalConfig
-    ? getLatestPerformanceUpdateText(card.performanceLatestSource, card.performanceLastUpdatedAt, (value) =>
-        formatRelativeShortDateTime(value, new Date()),
-      )
-    : null;
-
-  // Contexto secundário: só UM sinal por vez (nunca dois avisos
-  // competindo) — atividade parada tem prioridade por ser um fato mais
-  // acionável ("ninguém mexeu nisso"); sem isso, cai pra "quando os
-  // números foram atualizados pela última vez".
-  const secondaryText = atividadeLabel ?? (performanceUpdateText ? `Performance: ${performanceUpdateText}` : null);
-  // Nunca vermelho forte aqui — o motivo principal (linha acima) já carrega
-  // o alerta, com a cor certa por tom (`emphasizeDeviationText`); o
-  // contexto secundário fica sempre discreto, pra não competir
-  // visualmente com ele.
-  const secondaryClass = "text-overview-text-muted";
-
-  // Etapa "Operação — CPA como régua única": revisão atrasada continua uma
-  // informação operacional importante ("preciso ir lá revisar"), mas
-  // deliberadamente NUNCA mais compete com o CPA pela prioridade/motivo
-  // principal do card — vira uma linha própria, sempre discreta/muted,
-  // reaproveitando `isReviewOverdue`/`describeReviewReason` (mesma conta de
-  // sempre, `account-health-engine.ts`, nunca recalculada aqui). `null`
-  // quando em dia ou quando a cadência está desativada.
-  const reviewOverdue = isReviewOverdue(evaluation.dimensions.review);
-  const reviewText = reviewOverdue ? describeReviewReason(evaluation.dimensions.review) : null;
+  // Etapa "Operação — Redução de Ruído Visual": única linha operacional
+  // secundária do card — frescor dos DADOS DE PERFORMANCE (nunca atividade,
+  // nunca revisão, nunca sincronização de investimento; ver doc da função
+  // acima). Sempre visível, mesma convenção pra todo card — inclusive
+  // quando nunca houve registro, pra nunca dar a impressão de que o dado é
+  // "de agora" por omissão.
+  const dataFreshnessText = card.performanceLastUpdatedAt
+    ? `Última atualização: ${formatRelativeShortDateTime(card.performanceLastUpdatedAt, new Date())}`
+    : "Sem atualização registrada";
 
   const priorityTone = PRIORITY_GROUP_TONE[priorityGroup];
-  const priorityLabel = PRIORITY_GROUP_LABEL[priorityGroup];
 
   // Etapa "Operação — Hierarquia Visual Neutra": ordem de sempre
   // (Investimento → Resultado → Custo), mesmo `size` (padrão do
@@ -245,22 +171,13 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
         <div className="flex items-center gap-3">
           <ClientAvatar name={card.clientName} imageUrl={card.avatarUrl} size="sm" />
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-              <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
-              <span className="truncate text-[11px] text-overview-text-muted">{card.managerName ?? "Sem gestor"}</span>
-              <StatusDot tone={priorityTone} label={priorityLabel} emphasize={PRIORITY_GROUP_EMPHASIZE[priorityGroup]} />
-            </div>
+            <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
             {reasonText && (
               <p className="mt-0.5 truncate text-xs text-overview-text-secondary" title={reasonText}>
                 {emphasizeDeviationText(reasonText, priorityTone)}
               </p>
             )}
-            {secondaryText && <p className={`mt-0.5 truncate text-[11px] ${secondaryClass}`}>{secondaryText}</p>}
-            {reviewText && (
-              <p className="mt-0.5 truncate text-[11px] text-overview-text-muted" title={reviewText}>
-                {reviewText}
-              </p>
-            )}
+            <p className="mt-0.5 truncate text-[11px] text-overview-text-muted">{dataFreshnessText}</p>
           </div>
         </div>
 
@@ -271,26 +188,13 @@ export function OperationClientCard({ card }: { card: ClientOperationalState }) 
         <ClientAvatar name={card.clientName} imageUrl={card.avatarUrl} size="sm" />
 
         <div className="flex w-72 min-w-0 shrink-0 flex-col">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
-            <span className="truncate text-[11px] text-overview-text-muted">{card.managerName ?? "Sem gestor"}</span>
-            <StatusDot tone={priorityTone} label={priorityLabel} emphasize={PRIORITY_GROUP_EMPHASIZE[priorityGroup]} />
-          </div>
+          <p className="truncate text-sm font-semibold text-foreground">{card.clientName}</p>
           {reasonText && (
             <p className="mt-0.5 truncate text-xs text-overview-text-secondary" title={reasonText}>
               {emphasizeDeviationText(reasonText, priorityTone)}
             </p>
           )}
-          {secondaryText && (
-            <p className={`mt-0.5 truncate text-[11px] ${secondaryClass}`} title={secondaryText}>
-              {secondaryText}
-            </p>
-          )}
-          {reviewText && (
-            <p className="mt-0.5 truncate text-[11px] text-overview-text-muted" title={reviewText}>
-              {reviewText}
-            </p>
-          )}
+          <p className="mt-0.5 truncate text-[11px] text-overview-text-muted">{dataFreshnessText}</p>
         </div>
 
         <div className="grid flex-1 grid-cols-3 gap-6">{metrics}</div>
