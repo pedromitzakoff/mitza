@@ -87,57 +87,66 @@ export default async function EditClientPage({
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
-      <Link href={returnTo} className="text-sm text-zinc-500 hover:underline">
+      <Link href={returnTo} className="text-sm text-overview-text-secondary hover:underline">
         &larr; Voltar
       </Link>
 
-      <h1 className="mt-4 text-2xl font-semibold text-foreground">
+      <h1 className="mt-4 text-2xl font-semibold text-overview-text-primary">
         Cadastro do Cliente
       </h1>
-      <p className="mt-1 text-sm text-zinc-500">
+      <p className="mt-1 text-sm text-overview-text-secondary">
         Identidade, canais e links deste cliente. Planejamento fica no Planejamento Mensal, performance nas telas
         de performance/relatório, acompanhamento na Operação.
       </p>
 
-      <ClientForm
-        action={updateClientAction.bind(null, id, returnTo)}
-        managers={allManagers ?? []}
-        error={error}
-        defaultName={client.name}
-        defaultMetaAdAccountId={client.meta_ad_account_id}
-        defaults={client}
-        submitLabel="Salvar"
-        cancelHref={returnTo}
-      />
+      {/* Revisão visual pós-simplificação: `ClientForm` e os dois blocos
+          abaixo são irmãos diretos (nunca estiveram dentro do mesmo
+          container de espaçamento) — sem este wrapper, "Objetivos da conta"/
+          "Administração" ficavam colados embaixo do botão Salvar, sem
+          nenhum respiro (só o `<form>` interno do ClientForm tinha `gap-6`,
+          que não alcançava irmãos externos a ele). `/clients/new` não é
+          afetado — continua renderizando só `<ClientForm>`, sem nada depois. */}
+      <div className="flex flex-col gap-6">
+        <ClientForm
+          action={updateClientAction.bind(null, id, returnTo)}
+          managers={allManagers ?? []}
+          error={error}
+          defaultName={client.name}
+          defaultMetaAdAccountId={client.meta_ad_account_id}
+          defaults={client}
+          submitLabel="Salvar"
+          cancelHref={returnTo}
+        />
 
-      {isAdmin && (
-        <Block
-          title="Objetivos da conta"
-          description="Um cliente pode ter mais de um objetivo de performance ao mesmo tempo (ex.: Leads + Seguidores). Cada objetivo tem sua própria meta, canais e campanhas classificadas — o custo por resultado só é calculado quando há investimento real e atribuível às campanhas daquele objetivo."
-        >
-          <ClientGoalsSection
-            clientId={id}
-            returnTo={`/clients/${id}/edit`}
-            goals={clientGoals}
-            summaries={goalSummaries}
-            campaigns={campaignsForAssignment}
-            recentSprints={(recentSprints ?? []).map((s) => ({ id: s.id, startDate: s.start_date, endDate: s.end_date }))}
-          />
-        </Block>
-      )}
+        {isAdmin && (
+          <Block
+            title="Objetivos da conta"
+            description="Um cliente pode ter mais de um objetivo de performance ao mesmo tempo (ex.: Leads + Seguidores). Cada objetivo tem sua própria meta, canais e campanhas classificadas — o custo por resultado só é calculado quando há investimento real e atribuível às campanhas daquele objetivo."
+          >
+            <ClientGoalsSection
+              clientId={id}
+              returnTo={`/clients/${id}/edit`}
+              goals={clientGoals}
+              summaries={goalSummaries}
+              campaigns={campaignsForAssignment}
+              recentSprints={(recentSprints ?? []).map((s) => ({ id: s.id, startDate: s.start_date, endDate: s.end_date }))}
+            />
+          </Block>
+        )}
 
-      {isAdmin && (
-        <Block title="Administração" description="Ações administrativas sobre este cliente.">
-          <div className="flex flex-col gap-3">
-            <p className="text-xs text-zinc-500">
-              O cliente some das listagens e para de sincronizar com o Meta, mas sprints, tarefas e
-              comentários ficam preservados. Dá pra restaurar depois em Configurações &gt; Clientes
-              excluídos.
-            </p>
-            <DeleteClientButton action={deleteClientAction.bind(null, id)} />
-          </div>
-        </Block>
-      )}
+        {isAdmin && (
+          <Block title="Administração" description="Ações administrativas sobre este cliente.">
+            <div className="flex flex-col gap-3">
+              <p className="text-xs text-overview-text-secondary">
+                O cliente some das listagens e para de sincronizar com o Meta, mas sprints, tarefas e
+                comentários ficam preservados. Dá pra restaurar depois em Configurações &gt; Clientes
+                excluídos.
+              </p>
+              <DeleteClientButton action={deleteClientAction.bind(null, id)} />
+            </div>
+          </Block>
+        )}
+      </div>
     </div>
   );
 }

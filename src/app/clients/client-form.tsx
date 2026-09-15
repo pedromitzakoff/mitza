@@ -14,6 +14,14 @@ type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 
 const inputClasses =
   "rounded-md border border-overview-border bg-overview-surface px-3 py-2 text-overview-text-primary outline-none transition-colors focus:border-brand";
+/** `flex flex-col` num `<label>`: cada filho direto vira sua própria linha
+ * — inclusive um texto solto seguido de um `<span>` (ex.: `Nome <span>*</span>`),
+ * que sem um wrapper comum quebra o "*"/"(opcional)" pra uma linha própria
+ * embaixo do rótulo, em vez de ficar ao lado do texto. Por isso todo rótulo
+ * com marcador inline (obrigatório/opcional) neste arquivo envolve
+ * "texto + marcador" num único `<span>` — só assim os dois contam como UM
+ * filho do flex, na mesma linha, e o campo (input/select) continua sendo o
+ * próximo filho, na linha de baixo. */
 const labelClasses = "flex flex-col gap-1 text-sm text-overview-text-primary";
 
 /**
@@ -175,7 +183,9 @@ export function ClientForm({
         </div>
 
         <label className={labelClasses}>
-          Nome <span className="text-overview-danger">*</span>
+          <span>
+            Nome <span className="text-overview-danger">*</span>
+          </span>
           <input name="name" required defaultValue={defaultName} className={inputClasses} />
         </label>
 
@@ -190,7 +200,9 @@ export function ClientForm({
           </label>
 
           <label className={labelClasses}>
-            Gestor principal <span className="text-xs text-overview-text-secondary">(opcional)</span>
+            <span>
+              Gestor principal <span className="text-xs text-overview-text-secondary">(opcional)</span>
+            </span>
             <select
               name="primary_manager_id"
               defaultValue={defaults?.primary_manager_id ?? ""}
@@ -245,7 +257,9 @@ export function ClientForm({
         </fieldset>
 
         <label className={labelClasses}>
-          Conta de anúncios (Meta) {metaChannelChecked && <span className="text-overview-danger">*</span>}
+          <span>
+            Conta de anúncios (Meta) {metaChannelChecked && <span className="text-overview-danger">*</span>}
+          </span>
           <input
             name="meta_ad_account_id"
             placeholder="act_1234567890"
@@ -262,7 +276,9 @@ export function ClientForm({
         </label>
 
         <label className={labelClasses}>
-          Objetivo principal de performance {isNewClient && <span className="text-overview-danger">*</span>}
+          <span>
+            Objetivo principal de performance {isNewClient && <span className="text-overview-danger">*</span>}
+          </span>
           <select
             name="performance_goal"
             required={isNewClient}
@@ -298,7 +314,10 @@ export function ClientForm({
           </summary>
           <div className="mt-3 flex flex-col gap-1">
             <label className={labelClasses}>
-              Meta padrão de {costMetricLabel.toLowerCase()} <span className="text-xs text-overview-text-secondary">(opcional)</span>
+              <span>
+                Meta padrão de {costMetricLabel.toLowerCase()}{" "}
+                <span className="text-xs text-overview-text-secondary">(opcional)</span>
+              </span>
               <input
                 type="number"
                 step="0.01"
