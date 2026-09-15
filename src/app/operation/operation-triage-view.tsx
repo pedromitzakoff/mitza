@@ -14,6 +14,7 @@ import {
 } from "@/lib/operation-triage";
 import type { ClientOperationalState } from "@/lib/client-operational-state";
 import { AVAILABLE_TRAFFIC_CHANNELS, TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { OperationClientCard } from "./operation-client-card";
 import { OperationFilterBar } from "./operation-filter-bar";
 
@@ -27,13 +28,21 @@ import { OperationFilterBar } from "./operation-filter-bar";
  * consolidar mascararia isso). Navegação por `Link`/querystring (mesmo
  * padrão do seletor de mês ao lado) — troca de canal é uma navegação de
  * página inteira, nunca estado de cliente. */
-function OperationChannelSwitch({ monthParam, active }: { monthParam: string; active: TrafficChannel }) {
+function OperationChannelSwitch({
+  monthParam,
+  goal,
+  active,
+}: {
+  monthParam: string;
+  goal: PerformanceGoal | "todos";
+  active: TrafficChannel;
+}) {
   return (
     <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-overview-surface p-0.5">
       {AVAILABLE_TRAFFIC_CHANNELS.map((channel) => (
         <Link
           key={channel}
-          href={`/operation?month=${monthParam}&channel=${channel}`}
+          href={`/operation?month=${monthParam}&channel=${channel}&goal=${goal}`}
           scroll={false}
           aria-pressed={channel === active}
           className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
@@ -41,6 +50,56 @@ function OperationChannelSwitch({ monthParam, active }: { monthParam: string; ac
           }`}
         >
           {TRAFFIC_CHANNELS[channel].label}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+/** Opções do seletor de Objetivo — mesma fonte canônica de sempre
+ * (`clients.performance_goal`/`PerformanceGoal`, `lib/performance-goals.ts`),
+ * só com "Todos" adicionado no topo (não existe "Todos" em `PerformanceGoal`
+ * porque esse tipo descreve o objetivo de UM cliente, nunca um recorte de
+ * tela). Rótulo do terceiro valor é "Seguidores" — o mesmo já usado em
+ * `PERFORMANCE_GOALS.followers.label`/no Cadastro do Cliente — nunca
+ * "Awareness"/"Growth"/"Branding": `lib/performance-goals.ts` já documenta
+ * essa decisão como deliberada, e introduzir um nome novo aqui criaria uma
+ * segunda nomenclatura pro mesmo conceito. */
+const OPERATION_GOAL_OPTIONS: { value: PerformanceGoal | "todos"; label: string }[] = [
+  { value: "todos", label: "Todos" },
+  { value: "leads", label: PERFORMANCE_GOALS.leads.label },
+  { value: "sales", label: PERFORMANCE_GOALS.sales.label },
+  { value: "followers", label: PERFORMANCE_GOALS.followers.label },
+];
+
+/** Seletor "Todos | Leads | Vendas | Seguidores" (Etapa "Operação — Filtro
+ * por Objetivo") — mesmo padrão visual/de navegação de `OperationChannelSwitch`
+ * acima (pill/segmented control, `Link`/querystring, nunca estado de
+ * cliente): objetivo é outro recorte de POPULAÇÃO, não um filtro visual, então
+ * precisa da mesma navegação de página inteira que canal já usa (ver
+ * `loadOperationChannelStates`, `lib/operation-channel-state-data.ts`). */
+function OperationGoalSwitch({
+  monthParam,
+  channel,
+  active,
+}: {
+  monthParam: string;
+  channel: TrafficChannel;
+  active: PerformanceGoal | "todos";
+}) {
+  return (
+    <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-overview-surface p-0.5">
+      {OPERATION_GOAL_OPTIONS.map((option) => (
+        <Link
+          key={option.value}
+          href={`/operation?month=${monthParam}&channel=${channel}&goal=${option.value}`}
+          scroll={false}
+          aria-pressed={option.value === active}
+          className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+            option.value === active ? "bg-brand text-white" : "text-overview-text-secondary hover:text-overview-text-primary"
+          }`}
+        >
+          {option.label}
         </Link>
       ))}
     </div>
@@ -87,6 +146,7 @@ export function OperationTriageView({
   clients,
   monthParam,
   channel,
+  goal,
   currentDateTimeLabel,
   summary,
 }: {
@@ -98,6 +158,12 @@ export function OperationTriageView({
    * pra destacar o botão ativo do seletor e propagar nos links de navegação
    * de mês, pra trocar de mês nunca resetar o canal escolhido. */
   channel: TrafficChannel;
+  /** Objetivo ativo (Etapa "Operação — Filtro por Objetivo") — `"todos"` ou
+   * um `PerformanceGoal`. Mesmo espírito de `channel`: a população inteira
+   * já chega recortada por este objetivo via `loadOperationTriageClients`,
+   * este valor só destaca o botão ativo e propaga nos links de navegação
+   * (mês, canal), pra trocar um nunca resetar o outro. */
+  goal: PerformanceGoal | "todos";
   /** Só um relógio (dia da semana/data/hora atuais) — deliberadamente sem
    * verbo/rótulo que implique frescor de dado (ver comentário em
    * `page.tsx`: era "Atualizado {hora}", mas media o carregamento da
@@ -130,8 +196,8 @@ export function OperationTriageView({
     [groupedClients, quickFilter, managerFilter, query],
   );
 
-  const prevMonthHref = `/operation?month=${shiftOperationMonth(monthParam, -1)}&channel=${channel}`;
-  const nextMonthHref = `/operation?month=${shiftOperationMonth(monthParam, 1)}&channel=${channel}`;
+  const prevMonthHref = `/operation?month=${shiftOperationMonth(monthParam, -1)}&channel=${channel}&goal=${goal}`;
+  const nextMonthHref = `/operation?month=${shiftOperationMonth(monthParam, 1)}&channel=${channel}&goal=${goal}`;
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4 md:p-6">
@@ -143,7 +209,8 @@ export function OperationTriageView({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <OperationChannelSwitch monthParam={monthParam} active={channel} />
+          <OperationChannelSwitch monthParam={monthParam} goal={goal} active={channel} />
+          <OperationGoalSwitch monthParam={monthParam} channel={channel} active={goal} />
           <Link
             href={prevMonthHref}
             aria-label="Mês anterior"

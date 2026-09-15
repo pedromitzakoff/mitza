@@ -3,6 +3,7 @@ import { summarizeOperationTriage } from "@/lib/operation-triage";
 import { loadOperationTriageClients } from "./operation-triage-data";
 import { OperationTriageView } from "./operation-triage-view";
 import type { TrafficChannel } from "@/lib/traffic-channels";
+import type { PerformanceGoal } from "@/lib/performance-goals";
 
 function currentMonthParam(): string {
   const now = new Date();
@@ -19,6 +20,17 @@ function currentMonthParam(): string {
  * até o usuário trocar. */
 export function resolveOperationChannel(paramValue: string | undefined): TrafficChannel {
   return paramValue === "google" ? "google" : "meta";
+}
+
+/** Etapa "Operação — Filtro por Objetivo": mesmo padrão de
+ * `resolveOperationChannel` acima — valor inválido/ausente cai num default
+ * seguro (`"todos"`, nunca um objetivo específico "chutado"), nunca uma
+ * segunda forma de resolver parâmetro de URL nesta tela. Valores aceitos são
+ * exatamente os de `PerformanceGoal` (`lib/performance-goals.ts`) — a mesma
+ * fonte canônica que `clients.performance_goal` já usa, nunca uma
+ * classificação de objetivo nova/paralela. */
+export function resolveOperationGoal(paramValue: string | undefined): PerformanceGoal | "todos" {
+  return paramValue === "leads" || paramValue === "sales" || paramValue === "followers" ? paramValue : "todos";
 }
 
 /**
@@ -41,17 +53,25 @@ export function resolveOperationChannel(paramValue: string | undefined): Traffic
  * já devolve a população/métricas/meta/frescor recortados pro canal
  * (`lib/operation-channel-state-data.ts`) — esta página só lê o parâmetro e
  * repassa.
+ *
+ * Etapa "Operação — Filtro por Objetivo": `?goal=leads`/`?goal=sales`/
+ * `?goal=followers` (default `"todos"`, nunca omitido silenciosamente pro
+ * loader) recorta a população MAIS UMA VEZ, por cima do canal — nunca um
+ * substituto dele (ver `loadOperationChannelStates`). Combina livremente
+ * com `channel`/`month`: trocar um nunca reseta o outro (ver hrefs em
+ * `operation-triage-view.tsx`).
  */
 export default async function OperationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; channel?: string }>;
+  searchParams: Promise<{ month?: string; channel?: string; goal?: string }>;
 }) {
   const params = await searchParams;
   const monthParam = params.month ?? currentMonthParam();
   const channel = resolveOperationChannel(params.channel);
+  const goal = resolveOperationGoal(params.goal);
 
-  const clients = await loadOperationTriageClients(monthParam, channel);
+  const clients = await loadOperationTriageClients(monthParam, channel, goal);
   const summary = summarizeOperationTriage(clients);
 
   // Etapa "Auditoria da Operação": era rotulado "Atualizado {hora}", mas é
@@ -67,6 +87,7 @@ export default async function OperationPage({
       clients={clients}
       monthParam={monthParam}
       channel={channel}
+      goal={goal}
       currentDateTimeLabel={`${weekdayShort} · ${dateShort} · ${time}`}
       summary={summary}
     />

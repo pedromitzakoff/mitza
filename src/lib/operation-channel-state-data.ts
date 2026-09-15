@@ -8,6 +8,7 @@ import { sumChannelEffectiveSpend, groupChannelSpendBySprintId, type SprintChann
 import { computeMonthlyExpectedPct, resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { resolveClientMonthlyPlan, resolveTargetCostPerResult, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+import type { PerformanceGoal } from "@/lib/performance-goals";
 import { evaluateAccountHealth, resolveReviewCadenceInputs, type AccountHealthInput } from "@/lib/account-health-engine";
 import { monthRangeFromOperationParam } from "@/lib/operation-triage";
 import { sortClientOperationalStates, type ClientOperationalState } from "@/lib/client-operational-state";
@@ -66,8 +67,43 @@ type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
  * de uma avaliação já recortada a UM canal só, essa mistura não pode mais
  * acontecer, então a checagem fica automaticamente satisfeita (não é uma
  * regra nova, é a mesma regra sem nada pra vetar).
+ *
+ * Etapa "Operação — Filtro por Objetivo": `goal` (opcional, `"todos"` por
+ * padrão) recorta a população mais uma vez, também NA QUERY — mesmo
+ * princípio do filtro de canal acima: um cliente de Vendas nunca deveria
+ * contar/aparecer/virar "Sem dados" na visão de Leads, porque nem chega a
+ * ser avaliado. `clients.performance_goal` é a mesma fonte canônica já
+ * usada por todo o resto do motor de saúde (`aggregatePerformanceResults`,
+ * `evaluateAccountHealth` já recebiam este campo por cliente antes desta
+ * etapa) — nunca `client_goals` (múltiplos objetivos simultâneos, tabela
+ * separada, hoje só consumida pelo card "Objetivos da conta" do cadastro,
+ * não pela Operação) nem `main_objective` (campo descritivo textual, sem
+ * estrutura de meta/cálculo). Filtrar por `performance_goal` é estender o
+ * MESMO campo que cada linha desta função já lê pra tudo mais — nenhuma
+ * classificação nova, nenhuma coluna nova.
+ *
+ * Nenhuma outra parte desta função muda por causa de `goal`: uma vez que a
+ * população já está recortada na query, todo o resto (investimento,
+ * resultado, custo, meta, frescor) já era — e continua sendo — resolvido
+ * por cliente a partir do `performance_goal` de CADA cliente
+ * (`aggregatePerformanceResults(..., client.performance_goal, channel)`
+ * abaixo), exatamente como antes desta etapa. "Seguidores" (o único valor
+ * de `performance_goal` sem rótulo de Leads/Vendas) passa pela MESMA
+ * função sem nenhum código extra — e cai honestamente em "Sem dados" pra
+ * qualquer canal (Meta ou Google), porque o resultado desse objetivo é
+ * gravado com `channel = "instagram"` (`lib/traffic-channels.ts`), que
+ * nunca bate com o filtro `channel === "meta"`/`"google"` de
+ * `aggregatePerformanceResults` — comportamento correto e já existente do
+ * motor, não uma regra nova criada aqui (auditoria completa no relatório
+ * desta etapa: a arquitetura de Operação por Canal não tem hoje como
+ * atribuir investimento/resultado de Seguidores a um canal específico).
  */
-export async function loadOperationChannelStates(supabase: Supabase, monthParam: string, channel: TrafficChannel): Promise<ClientOperationalState[]> {
+export async function loadOperationChannelStates(
+  supabase: Supabase,
+  monthParam: string,
+  channel: TrafficChannel,
+  goal: PerformanceGoal | "todos" = "todos",
+): Promise<ClientOperationalState[]> {
   const today = todayUTC();
   const todayStr = todayDateString();
   const now = new Date();
@@ -82,19 +118,20 @@ export async function loadOperationChannelStates(supabase: Supabase, monthParam:
   // NA QUERY (não depois, em memória): um cliente sem Google configurado
   // nunca chega a ser avaliado quando o canal selecionado é Google — nunca
   // aparece como "Sem dados" por não ter o canal, porque nem entra na
-  // fila pra começar.
-  const clients = await requireQuery(
-    supabase
-      .from("clients")
-      .select(
-        "id, name, avatar_url, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
-      )
-      .is("deleted_at", null)
-      .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS)
-      .contains("media_channels", [channel])
-      .order("name"),
-    "clients:operation-channel",
-  );
+  // fila pra começar. Etapa "Operação — Filtro por Objetivo": mesmo
+  // princípio, `.eq("performance_goal", goal)` só entra quando `goal` não é
+  // "todos" — objetivo é um recorte A MAIS sobre a população já filtrada
+  // por canal, nunca um substituto dela (ver docstring da função).
+  let clientsQuery = supabase
+    .from("clients")
+    .select(
+      "id, name, avatar_url, performance_goal, target_cost_per_result, primary_manager:team_members!clients_primary_manager_id_fkey(id, name)",
+    )
+    .is("deleted_at", null)
+    .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS)
+    .contains("media_channels", [channel]);
+  if (goal !== "todos") clientsQuery = clientsQuery.eq("performance_goal", goal);
+  const clients = await requireQuery(clientsQuery.order("name"), "clients:operation-channel");
 
   const clientIds = clients.map((c) => c.id);
   if (clientIds.length === 0) return [];
