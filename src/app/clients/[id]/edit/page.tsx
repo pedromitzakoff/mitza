@@ -43,11 +43,12 @@ export default async function EditClientPage({
 }) {
   const { id } = await params;
   // Habilitar Gestores 3.0: Cadastro do Cliente deixou de ser admin-only —
-  // o gestor responsável também pode editar. Etapa "Simplificação do
-  // Cadastro do Cliente": "gestor de apoio" parou de conceder acesso — só
-  // admin ou o GESTOR PRINCIPAL passam em `requireClientManagerAccess`
-  // agora (ver `lib/auth.ts`). "Excluir cliente", abaixo, continua
-  // restrito a admin (ação destrutiva, fora do pedido).
+  // qualquer usuário interno autorizado da KOFF também pode editar (Etapa
+  // "Correção do Modelo de Autorização — Acesso Amplo Interno":
+  // `requireClientManagerAccess` não exige mais ser o gestor principal
+  // deste cliente — ver `lib/auth.ts`). "Gestor de apoio" (`client_managers`)
+  // continua fora da decisão. "Excluir cliente", abaixo, continua restrito
+  // a admin (ação destrutiva, fora do pedido).
   const profile = await requireClientManagerAccess(id);
   const isAdmin = profile.role === "admin";
   const { error, return_to } = await searchParams;

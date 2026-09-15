@@ -1,0 +1,49 @@
+-- Etapa "Correção do Modelo de Autorização — Acesso Amplo Interno" —
+-- substitui `is-client-manager-primary-only.sql` (nunca chegou a ser
+-- aplicada em produção; não rode aquele arquivo, foi removido do repo —
+-- rode este no lugar dele). Também substitui, de fato, a versão de
+-- `is_client_manager()` atualmente vigente em produção (a de
+-- `is-client-manager-include-primary.sql`, client_managers OU
+-- primary_manager_id) — `create or replace function` sobrescreve
+-- qualquer definição anterior, então só é preciso rodar ESTE arquivo,
+-- nenhum dos anteriores precisa ser revertido antes.
+--
+-- Regra de produto revisada: qualquer usuário interno autorizado da KOFF
+-- pode acessar e trabalhar em QUALQUER cliente — não precisa ser o
+-- `clients.primary_manager_id` do cliente. `primary_manager_id` continua
+-- existindo (responsável pela conta, agrupamentos, filtros, Dashboard/
+-- Operação/Sprints, atribuição operacional), mas nunca mais concede nem
+-- restringe acesso.
+--
+-- "Usuário interno autorizado" já tem uma fonte canônica única na
+-- plataforma: `current_team_member_id()` (`team-members.sql`), que resolve
+-- pra um uuid não-nulo se e só se `auth.uid()` corresponder a uma linha
+-- ativa (`status = 'ativo'`) em `team_members` — a MESMA checagem que
+-- `getCurrentProfile()` já faz no lado da aplicação. Nenhuma flag/tabela
+-- nova: só reaproveita esse helper existente.
+--
+-- `is_client_manager(p_client_id)` é o ÚNICO ponto de decisão de "gestor
+-- responsável" em toda a plataforma — toda policy de escrita relevante já
+-- chama `is_admin() or is_client_manager(client_id)` (auditoria completa
+-- feita antes de `is-client-manager-primary-only.sql`, nenhuma mudou desde
+-- então). Por isso a menor alteração segura continua sendo redefinir só
+-- esta função — nenhuma outra policy precisa ser reescrita. `is_admin()`
+-- no `or` fica redundante a partir de agora (todo admin já é membro interno
+-- ativo, então já passaria por `is_client_manager` sozinho), mas
+-- inofensivo — não precisa ser removido de lugar nenhum.
+--
+-- `client_managers` ("Gestores de apoio") continua REMOVIDA da decisão —
+-- não é reintroduzida por este arquivo. A tabela em si permanece intocada
+-- (estrutura legada, sem consumidor de autorização) — nenhuma migration
+-- destrutiva aqui.
+--
+-- `p_client_id` fica no parâmetro só por compatibilidade de assinatura com
+-- toda policy existente (nenhuma precisa mudar de `is_client_manager(client_id)`
+-- pra outra chamada) — deixou de ser usado pra decidir qualquer coisa.
+create or replace function is_client_manager(p_client_id uuid) returns boolean as $$
+  select current_team_member_id() is not null;
+$$ language sql stable security definer set search_path = public;
+
+-- `guard_client_manager_update()` (trigger em `clients`, `manager-edit-clients.sql`)
+-- chama `is_client_manager(old.id)` — herda a regra nova automaticamente,
+-- nenhuma alteração própria necessária.

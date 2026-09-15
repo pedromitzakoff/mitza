@@ -1,12 +1,17 @@
 /**
- * Testes da Etapa "Simplificação do Cadastro do Cliente" — cobre os pontos
- * explicitamente pedidos que ainda não tinham teste dedicado:
+ * Testes da Etapa "Simplificação do Cadastro do Cliente" + Etapa
+ * "Correção do Modelo de Autorização — Acesso Amplo Interno" (que revisou a
+ * regra de acesso definida na primeira — ver seção 2 abaixo). Cobre os
+ * pontos explicitamente pedidos que ainda não tinham teste dedicado:
  *
  * 1. Conta Meta condicionalmente obrigatória (obrigatória só quando "meta"
  *    está em `media_channels` — cliente Google-only nunca precisa dela).
- * 2. "Gestores de apoio" (`client_managers`) removido da autorização, tanto
- *    na camada de aplicação (`lib/auth.ts`) quanto na Server Action
- *    (`src/app/clients/actions.ts`) quanto na RLS (SQL).
+ * 2. Autorização de escrita sobre um cliente é "usuário interno autorizado
+ *    da KOFF" (qualquer `team_members` ativo, admin ou gestor,
+ *    independente de ser `primary_manager_id` do cliente) — nunca
+ *    "gestor de apoio" (`client_managers`, que nem participa da decisão) e
+ *    nunca "precisa ser o gestor principal" (regra anterior, revertida).
+ *    Cobre app (`lib/auth.ts`) e RLS (SQL).
  * 3. `DIMENSION_PRIORITY_ORDER`/`buildAttentionAlerts` sem influência de
  *    revisão (comportamental, direto — complementa
  *    `test-account-health-engine.ts`/`test-review-compliance.ts`, já
@@ -29,7 +34,7 @@
  * Rodar: npx tsx scripts/test-client-registration-simplification.ts
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { evaluateAccountHealth, DIMENSION_PRIORITY_ORDER, type AccountHealthInput } from "../src/lib/account-health-engine";
 import { buildAttentionAlerts } from "../src/lib/attention-alerts";
@@ -56,12 +61,18 @@ function stripComments(source: string): string {
     .filter((line) => !line.trim().startsWith("*") && !line.trim().startsWith("//"))
     .join("\n");
 }
+function stripSqlComments(source: string): string {
+  return source
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n");
+}
 
 const actionsSource = loadSource("src", "app", "clients", "actions.ts");
 const actionsCode = stripComments(actionsSource);
 const authSource = loadSource("src", "lib", "auth.ts");
 const clientFormSource = loadSource("src", "app", "clients", "client-form.tsx");
-const rlsMigrationSource = loadSource("supabase", "is-client-manager-primary-only.sql");
+const rlsMigrationSource = loadSource("supabase", "is-client-manager-internal-team.sql");
 const metaOptionalMigrationSource = loadSource("supabase", "client-meta-account-optional.sql");
 
 console.log("\n1 — Conta Meta condicionalmente obrigatória (nunca para cliente Google-only)\n");
@@ -101,38 +112,59 @@ console.log("\n1 — Conta Meta condicionalmente obrigatória (nunca para client
   );
 }
 
-console.log("\n2 — 'Gestores de apoio' (client_managers) removido da autorização\n");
+console.log("\n2 — Autorização de escrita = usuário interno autorizado (não gestor de apoio, não 'só o gestor principal')\n");
 {
   const authCode = stripComments(authSource);
+  const requireClientManagerAccessSource = authCode.slice(authCode.indexOf("export async function requireClientManagerAccess"));
+
+  ok("requireClientManagerAccess não consulta mais client_managers", !/client_managers/.test(requireClientManagerAccessSource));
   ok(
-    "requireClientManagerAccess não consulta mais client_managers",
-    !/requireClientManagerAccess[\s\S]*?client_managers/.test(authCode.slice(authCode.indexOf("export async function requireClientManagerAccess"))),
+    "requireClientManagerAccess não restringe mais por primary_manager_id (regra anterior revertida)",
+    !/primary_manager_id/.test(requireClientManagerAccessSource),
   );
   ok(
-    "requireClientManagerAccess decide só por is admin ou primary_manager_id === profile.id",
-    /client\?\.primary_manager_id !== profile\.id/.test(authCode),
+    "requireClientManagerAccess não consulta mais a tabela clients (não precisa mais saber QUAL cliente)",
+    !/\.from\("clients"\)/.test(requireClientManagerAccessSource),
+  );
+  ok(
+    "requireClientManagerAccess delega pra requireActiveProfile — qualquer perfil interno ativo passa",
+    /return requireActiveProfile\(\)/.test(requireClientManagerAccessSource),
+  );
+  // `requireActiveProfile` (mesmo arquivo) já é a checagem canônica de
+  // "existe um team_members ativo pra este auth.uid()?" — é exatamente
+  // `getCurrentProfile()` (que já faz esse JOIN/filtro) sem checagem de
+  // role adicional. Confirma que ela é a fonte reaproveitada, não uma
+  // segunda implementação.
+  ok(
+    "requireActiveProfile só verifica 'existe perfil?' (getCurrentProfile), nenhuma checagem de role/cliente",
+    /export async function requireActiveProfile[\s\S]*?getCurrentProfile\(\)[\s\S]*?redirect\("\/"\)/.test(authCode),
   );
 
   ok("createClientAction não escreve mais em client_managers", !/\.from\("client_managers"\)/.test(actionsCode));
   ok("updateClientAction não escreve mais em client_managers", !/client_managers/.test(actionsCode));
-  ok("o formulário não envia mais manager_ids[] (fieldset 'Gestores de apoio' removido)", !/name="manager_ids"/.test(clientFormSource));
+  ok("o formulário não envia mais manager_ids[] (fieldset 'Gestores de apoio' removido, não reintroduzido)", !/name="manager_ids"/.test(clientFormSource));
   ok(
     "o formulário não renderiza mais o fieldset 'Gestores de apoio' (só sobra a menção em comentário/docstring, removida da checagem)",
     !/Gestores de apoio/.test(stripComments(clientFormSource)),
   );
 
+  const rlsMigrationCode = stripSqlComments(rlsMigrationSource);
   ok(
-    "RLS: is_client_manager() novo só verifica clients.primary_manager_id",
-    /join clients c\s+on tm\.id = c\.primary_manager_id/.test(rlsMigrationSource.replace(/\s+/g, " ")) ||
-      /join team_members tm on tm\.id = c\.primary_manager_id/.test(rlsMigrationSource),
+    "RLS: is_client_manager() novo reaproveita current_team_member_id() (fonte canônica de 'usuário interno ativo', já usada em 11 outras migrations)",
+    /select current_team_member_id\(\) is not null/.test(rlsMigrationCode),
   );
+  ok("RLS: is_client_manager() novo não consulta mais a tabela client_managers", !/from client_managers/.test(rlsMigrationCode));
   ok(
-    "RLS: is_client_manager() novo não consulta mais a tabela client_managers",
-    !/from client_managers/.test(rlsMigrationSource),
+    "RLS: is_client_manager() novo não depende mais de primary_manager_id (nem pra conceder, nem pra restringir)",
+    !/primary_manager_id/.test(rlsMigrationCode),
   );
   ok(
     "client_managers não é apagada (tabela física preservada, só sem consumidor de autorização)",
     !/drop table.*client_managers/i.test(rlsMigrationSource),
+  );
+  ok(
+    "a migration anterior (regra 'só gestor principal') foi removida do repo, nunca chegou a ser aplicada",
+    !existsSync(join(__dirname, "..", "supabase", "is-client-manager-primary-only.sql")),
   );
 }
 

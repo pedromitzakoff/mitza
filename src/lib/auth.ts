@@ -191,38 +191,34 @@ export async function requireActiveProfile(): Promise<CurrentProfile> {
 }
 
 /**
- * Garante permissão de ESCRITA sobre um cliente específico — admin sempre
- * tem; gestor só quando é o `clients.primary_manager_id` ("Gestor
- * principal") do cliente.
+ * Garante permissão de ESCRITA sobre um cliente específico.
  *
- * Etapa "Simplificação do Cadastro do Cliente": "Gestores de apoio"
- * (`client_managers`) deixou de conceder acesso — decisão de produto
- * explícita ("a KOFF não usa mais gestor de apoio como modelo
- * operacional"). Antes desta etapa esta função também aceitava uma linha em
- * `client_managers`; agora só o gestor principal (além de admin) passa —
- * mesmo critério de `is_client_manager()` no RLS (ver
- * supabase/is-client-manager-primary-only.sql, que substituiu
- * is-client-manager-include-primary.sql). Esta função só existe pra dar um
- * redirect amigável ANTES da escrita chegar ao banco, nunca substitui a
- * policy correspondente — as duas precisam continuar em sincronia.
+ * Etapa "Correção do Modelo de Autorização — Acesso Amplo Interno": regra de
+ * produto revisada (a etapa anterior, "Simplificação do Cadastro do
+ * Cliente", tinha restringido demais). NOVA REGRA: qualquer usuário interno
+ * autorizado da KOFF — a MESMA população que `getCurrentProfile()` já
+ * resolve (`team_members` com `status = 'ativo'`, admin ou gestor) — pode
+ * acessar e trabalhar em QUALQUER cliente, seja ou não o
+ * `primary_manager_id` dele. `primary_manager_id` continua existindo
+ * (responsável pela conta, agrupamentos, filtros, Dashboard/Operação/
+ * Sprints, atribuição), mas nunca mais concede nem restringe acesso —
+ * mesmo critério agora em `is_client_manager()` no RLS (ver
+ * supabase/is-client-manager-internal-team.sql, que reaproveita
+ * `current_team_member_id()`, o mesmo helper canônico que já decide "isto é
+ * um usuário interno autorizado?" em toda a plataforma). "Gestores de
+ * apoio" (`client_managers`) continua sem participar da decisão — nem
+ * nunca mais foi reintroduzido, só deixou de ser necessário: um gestor sem
+ * `client_managers` nenhum já está autorizado por ser membro interno ativo.
+ *
+ * `clientId` fica no parâmetro por compatibilidade de assinatura com todos
+ * os chamadores existentes (nenhum precisa mudar) — não decide mais nada
+ * aqui; a checagem hoje é idêntica a `requireActiveProfile()`. Mantida como
+ * função própria (em vez de só trocar os chamadores por
+ * `requireActiveProfile`) porque o nome ainda comunica a intenção no call
+ * site ("preciso de acesso de gestão a ESTE cliente"), caso um escopo por
+ * cliente volte a fazer sentido no futuro.
  */
 export async function requireClientManagerAccess(clientId: string): Promise<CurrentProfile> {
-  const profile = await getCurrentProfile();
-
-  if (!profile) {
-    redirect("/");
-  }
-
-  if (profile.role === "admin") {
-    return profile;
-  }
-
-  const supabase = await createClient();
-  const { data: client } = await supabase.from("clients").select("primary_manager_id").eq("id", clientId).maybeSingle();
-
-  if (client?.primary_manager_id !== profile.id) {
-    redirect("/");
-  }
-
-  return profile;
+  void clientId;
+  return requireActiveProfile();
 }

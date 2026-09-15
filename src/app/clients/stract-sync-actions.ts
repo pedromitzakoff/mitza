@@ -27,10 +27,12 @@ import { toUserFacingError } from "@/lib/user-facing-error";
  * `supabase/operation-collaboration-rls.sql` reabriu essa policy pra
  * "qualquer autenticado" (deliberado, pra colaboração na Operação), o que
  * transformou aquele SELECT num no-op de autorização. `requireClientManagerAccess`
- * (`lib/auth.ts`) nunca dependeu dessa policy — lê o conteúdo de
- * `client_managers`/`primary_manager_id` e decide pela identidade real de
- * quem está logado, admin sempre passa. `runImportForSource` (service role
- * por baixo) só é chamada depois dessa checagem.
+ * (`lib/auth.ts`) nunca dependeu dessa policy — confirma que quem está
+ * logado é um usuário interno autorizado da KOFF (`team_members` ativo,
+ * admin ou gestor — Etapa "Correção do Modelo de Autorização — Acesso Amplo
+ * Interno"; não precisa ser o gestor principal deste cliente específico, e
+ * `client_managers` não participa). `runImportForSource` (service role por
+ * baixo) só é chamada depois dessa checagem.
  */
 export async function syncClientStractSourcesAction(clientId: string) {
   await requireClientManagerAccess(clientId);

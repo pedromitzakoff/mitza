@@ -39,8 +39,13 @@ const labelClasses = "flex flex-col gap-1 text-sm text-overview-text-primary";
  * já eram o lugar canônico pra eles (coluna própria, edição inline), então
  * tirá-los daqui evita informação duplicada entre telas sem remover
  * funcionalidade nenhuma. "Gestores de apoio" (`client_managers`) saiu de
- * vez — decisão de produto: só admin ou o gestor principal têm acesso de
- * gestão agora (ver `lib/auth.ts`, `requireClientManagerAccess`).
+ * vez — mas não foi substituído por "só o gestor principal": Etapa
+ * "Correção do Modelo de Autorização — Acesso Amplo Interno" define que
+ * qualquer usuário interno autorizado da KOFF (admin ou gestor) tem acesso
+ * de gestão a qualquer cliente, responsável ou não por ele (ver
+ * `lib/auth.ts`, `requireClientManagerAccess`). `primary_manager_id`
+ * (campo "Gestor principal" abaixo) continua existindo — só não concede
+ * nem restringe mais acesso.
  *
  * `readStructuralFields`/`createClientAction`/`updateClientAction`
  * (`../actions.ts`) foram reduzidos junto — nenhum campo removido daqui

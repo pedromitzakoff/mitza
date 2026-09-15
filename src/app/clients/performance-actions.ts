@@ -33,13 +33,15 @@ function withError(returnTo: string, message: string): string {
  * nenhum campo aqui aceita CPL/CPA diretamente, e receita nunca é estimada
  * (só gravada quando o gestor efetivamente informa).
  *
- * Permissão: admin ou o gestor responsável por este cliente
- * (`requireClientManagerAccess`) — sem isso o gestor não conseguia
- * registrar a própria execução. RLS (`sprints_update`/`performance_records_write`,
- * ver supabase/manager-write-sprint-performance.sql) aplica exatamente a
- * mesma regra no banco, com um trigger extra travando qualquer coluna de
- * planejamento da sprint (planned_spend/datas/snapshots) — só admin altera
- * isso, mesmo que a checagem daqui seja contornada.
+ * Permissão: qualquer usuário interno autorizado da KOFF
+ * (`requireClientManagerAccess` — Etapa "Correção do Modelo de Autorização —
+ * Acesso Amplo Interno": não precisa ser o gestor responsável por ESTE
+ * cliente). RLS (`sprints_update`/`performance_records_write`, ver
+ * supabase/manager-write-sprint-performance.sql, que delega em
+ * `is_client_manager()`) aplica exatamente a mesma regra no banco, com um
+ * trigger extra travando qualquer coluna de planejamento da sprint
+ * (planned_spend/datas/snapshots) — só admin altera isso, mesmo que a
+ * checagem daqui seja contornada.
  *
  * `returnTo` (Etapa MVP 1.3) — quem chama decide pra onde volta depois de
  * salvar (página do cliente ou tela Sprints, preservando o contexto de

@@ -242,10 +242,12 @@ function isNextControlFlowError(error: unknown): boolean {
 
 export async function updateClientAction(clientId: string, returnTo: string, formData: FormData) {
   // Habilitar Gestores 3.0: editar o Cadastro do Cliente deixou de ser
-  // admin-only — o gestor responsável também pode. Etapa "Simplificação do
-  // Cadastro do Cliente": "gestor de apoio" (`client_managers`) parou de
-  // conceder acesso — só admin ou o GESTOR PRINCIPAL (`primary_manager_id`)
-  // passam em `requireClientManagerAccess` agora (ver `lib/auth.ts`).
+  // admin-only — qualquer usuário interno autorizado da KOFF também pode
+  // (Etapa "Correção do Modelo de Autorização — Acesso Amplo Interno":
+  // `requireClientManagerAccess` não exige mais ser o GESTOR PRINCIPAL
+  // deste cliente específico — ver `lib/auth.ts`). "Gestor de apoio"
+  // (`client_managers`) continua fora da decisão — nem nunca precisou
+  // voltar, já que qualquer membro interno ativo está autorizado.
   // `createClientAction`/`deleteClientAction` continuam admin-only
   // (criar/excluir cliente é mais estrutural, fora do pedido).
   const profile = await requireClientManagerAccess(clientId);

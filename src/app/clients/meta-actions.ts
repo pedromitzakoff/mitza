@@ -19,12 +19,13 @@ import { toUserFacingError } from "@/lib/user-facing-error";
  * inexistente, nunca "este usuário pode mexer neste cliente".
  *
  * `requireClientManagerAccess(clientId)` (`lib/auth.ts`) substitui isso por
- * autorização EXPLÍCITA, que nunca dependeu do RLS de SELECT: ela lê o
- * CONTEÚDO de `client_managers`/`clients.primary_manager_id` e compara com
- * a identidade de quem está logado — admin sempre passa, gestor só passa se
- * estiver em `client_managers` OU for o `primary_manager_id` deste cliente
- * específico; qualquer outro perfil autenticado é redirecionado (`/`) antes
- * de qualquer escrita. `syncClientMetaSpend` (que usa `createAdminClient()`/
+ * autorização EXPLÍCITA, que nunca dependeu do RLS de SELECT: confirma que
+ * quem está logado é um usuário interno autorizado da KOFF (`team_members`
+ * ativo, admin ou gestor — Etapa "Correção do Modelo de Autorização —
+ * Acesso Amplo Interno") — não precisa ser o `primary_manager_id` deste
+ * cliente específico, e `client_managers` não participa da decisão.
+ * Qualquer perfil sem vínculo interno ativo é redirecionado (`/`) antes de
+ * qualquer escrita. `syncClientMetaSpend` (que usa `createAdminClient()`/
  * service role por baixo) só é alcançada DEPOIS dessa checagem — nunca antes.
  */
 export async function syncClientMetaAction(clientId: string) {
