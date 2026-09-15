@@ -6,15 +6,34 @@ import { requireQuery } from "@/lib/require-query";
 import { deleteClientAction, updateClientAction } from "../../actions";
 import { Block, ClientForm } from "../../client-form";
 import { DeleteClientButton } from "../../delete-client-button";
-import { addClientKpiAction, deleteClientKpiAction } from "@/app/reports/report-actions";
-import { KPI_DIRECTION_LABEL, KPI_UNIT_LABEL, formatKpiValue } from "@/lib/monthly-reports";
-import { updateAccountReviewCadenceAction } from "../../account-review-actions";
-import { SubmitButton } from "@/app/submit-button";
 import { fetchGoalDisplaySummaries, listClientGoals } from "@/lib/client-goals";
 import { listCampaignsForAssignment } from "@/lib/campaign-goal-assignments";
 import { todayDateString } from "@/lib/today";
 import { ClientGoalsSection } from "../../client-goals-section";
 
+/**
+ * Etapa "Simplificação do Cadastro do Cliente": este cadastro deixou de
+ * carregar KPIs do Relatório Mensal e Cadência de Revisões — auditoria de
+ * uso real confirmou os dois sem consumidor vivo relevante hoje:
+ *
+ * - "KPIs do Relatório Mensal" (`client_kpi_definitions`) alimentava um
+ *   snapshot (`monthly_reports.snapshot`) que nenhuma tela lê mais — o
+ *   Relatório Mensal de verdade (`/clients/[id]/relatorio`) usa um sistema
+ *   de KPI totalmente diferente, calculado de dados de campanha.
+ * - "Cadência de Revisões" (`account_review_cadences`) teve sua influência
+ *   sobre saúde/prioridade operacional removida (`lib/account-health-engine.ts`,
+ *   `lib/attention-alerts.ts`) — decisão de produto explícita ("a KOFF não
+ *   usa mais Cadência de Revisões como processo operacional"). Sem UI pra
+ *   configurar, essa cadência não podia continuar influenciando nada.
+ *
+ * Nenhuma tabela/coluna foi apagada — só as Server Actions de escrita que
+ * ficaram genuinamente órfãs (`addClientKpiAction`/`deleteClientKpiAction`,
+ * `report-actions.ts`; `updateAccountReviewCadenceAction`,
+ * `account-review-actions.ts`) foram removidas, confirmado por busca
+ * exaustiva de que não tinham mais nenhum chamador. `client_kpi_definitions`/
+ * `account_review_cadences` continuam sendo LIDAS normalmente por quem já
+ * as lia antes desta etapa.
+ */
 export default async function EditClientPage({
   params,
   searchParams,
@@ -24,16 +43,18 @@ export default async function EditClientPage({
 }) {
   const { id } = await params;
   // Habilitar Gestores 3.0: Cadastro do Cliente deixou de ser admin-only —
-  // o gestor responsável (principal ou de apoio, mesmo critério de
-  // `is_client_manager()` no RLS) também pode editar. "Excluir cliente",
-  // abaixo, continua restrito a admin (ação destrutiva, fora do pedido).
+  // o gestor responsável também pode editar. Etapa "Simplificação do
+  // Cadastro do Cliente": "gestor de apoio" parou de conceder acesso — só
+  // admin ou o GESTOR PRINCIPAL passam em `requireClientManagerAccess`
+  // agora (ver `lib/auth.ts`). "Excluir cliente", abaixo, continua
+  // restrito a admin (ação destrutiva, fora do pedido).
   const profile = await requireClientManagerAccess(id);
   const isAdmin = profile.role === "admin";
   const { error, return_to } = await searchParams;
   const returnTo = return_to && return_to.startsWith("/") ? return_to : `/clients/${id}`;
 
   const supabase = await createSupabaseClient();
-  const [{ data: client }, allManagers, assigned, kpis, cadence, clientGoals, campaignsForAssignment, recentSprints] = await Promise.all([
+  const [{ data: client }, allManagers, clientGoals, campaignsForAssignment, recentSprints] = await Promise.all([
     // `.single()` já conflita "cliente não encontrado" (RLS filtrou, ou id
     // inexistente) com "consulta falhou" — mesmo assim, distinção
     // deliberada e pré-existente (não é o bug de ignorar erro): aqui não
@@ -41,22 +62,6 @@ export default async function EditClientPage({
     // de erro genérica.
     supabase.from("clients").select("*").eq("id", id).is("deleted_at", null).single(),
     requireQuery(supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"), "team_members"),
-    requireQuery(
-      supabase.from("client_managers").select("user_id, team_members(id, name)").eq("client_id", id),
-      "client_managers",
-    ),
-    requireQuery(
-      supabase.from("client_kpi_definitions").select("*").eq("client_id", id).order("display_order"),
-      "client_kpi_definitions",
-    ),
-    requireQuery<{ reviews_per_week: number; max_business_days_without_review: number; is_active: boolean } | null>(
-      supabase
-        .from("account_review_cadences")
-        .select("reviews_per_week, max_business_days_without_review, is_active")
-        .eq("client_id", id)
-        .maybeSingle(),
-      "account_review_cadences",
-    ),
     listClientGoals(supabase, id),
     listCampaignsForAssignment(supabase, id, todayDateString()),
     // Sprints recentes (últimas 8) pro lançamento manual de resultado por
@@ -89,14 +94,13 @@ export default async function EditClientPage({
         Cadastro do Cliente
       </h1>
       <p className="mt-1 text-sm text-zinc-500">
-        Ficha administrativa deste cliente — identidade, configurações operacionais, integrações
-        e situação contratual. O trabalho do dia a dia acontece no Prontuário.
+        Identidade, canais e links deste cliente. Planejamento fica no Planejamento Mensal, performance nas telas
+        de performance/relatório, acompanhamento na Operação.
       </p>
 
       <ClientForm
         action={updateClientAction.bind(null, id, returnTo)}
         managers={allManagers ?? []}
-        assignedIds={assigned?.map((a) => a.user_id) ?? []}
         error={error}
         defaultName={client.name}
         defaultMetaAdAccountId={client.meta_ad_account_id}
@@ -104,141 +108,6 @@ export default async function EditClientPage({
         submitLabel="Salvar"
         cancelHref={returnTo}
       />
-
-      <Block
-        title="Configurações Operacionais"
-        description="KPIs do Relatório Mensal e cadência de revisões — ficam aqui à parte por serem salvos separadamente do restante do cadastro."
-      >
-        <div className="flex flex-col gap-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">KPIs do Relatório Mensal</p>
-          <p className="text-xs text-zinc-500">
-            Controla quais KPIs aparecem no Bloco 2 (Performance) do Relatório Mensal deste cliente. &ldquo;Menor é
-            melhor&rdquo; serve pra métricas de custo (CPL, CPA); &ldquo;Maior é melhor&rdquo; pra Leads, ROAS, Vendas etc.
-          </p>
-
-        {(kpis ?? []).length > 0 && (
-          <ul className="mb-3 flex flex-col gap-1.5">
-            {(kpis ?? []).map((kpi) => (
-              <li
-                key={kpi.id}
-                className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 px-3 py-1.5 text-sm dark:border-zinc-800"
-              >
-                <span className="text-black dark:text-zinc-50">
-                  {kpi.name}
-                  <span className="ml-2 text-xs text-zinc-500">
-                    {KPI_UNIT_LABEL[kpi.unit]} · {KPI_DIRECTION_LABEL[kpi.direction]}
-                    {kpi.target !== null ? ` · meta ${formatKpiValue(kpi.target, kpi.unit)}` : ""}
-                  </span>
-                </span>
-                <form action={deleteClientKpiAction.bind(null, kpi.id, id)}>
-                  <SubmitButton
-                    pendingChildren="Removendo..."
-                    className="text-xs text-zinc-500 hover:text-red-600 dark:hover:text-red-400"
-                  >
-                    Remover
-                  </SubmitButton>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <form action={addClientKpiAction.bind(null, id)} className="flex flex-wrap items-end gap-2">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-500">Nome</label>
-            <input
-              name="name"
-              required
-              placeholder="Ex.: CPL"
-              className="rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm text-black dark:border-zinc-700 dark:text-zinc-50"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-500">Unidade</label>
-            <select name="unit" defaultValue="numero" className="rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm text-black dark:border-zinc-700 dark:text-zinc-50">
-              {Object.entries(KPI_UNIT_LABEL).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-500">Direção</label>
-            <select name="direction" defaultValue="maior_melhor" className="rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm text-black dark:border-zinc-700 dark:text-zinc-50">
-              {Object.entries(KPI_DIRECTION_LABEL).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-500">Meta (opcional)</label>
-            <input
-              type="number"
-              step="0.01"
-              name="target"
-              className="w-28 rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm text-black dark:border-zinc-700 dark:text-zinc-50"
-            />
-          </div>
-          <SubmitButton
-            pendingChildren="Adicionando..."
-            className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
-          >
-            Adicionar KPI
-          </SubmitButton>
-        </form>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Cadência de Revisões de conta</p>
-          <p className="text-xs text-zinc-500">
-            Meta de frequência semanal e intervalo máximo tolerado sem revisão — nunca uma data fixa, só uma
-            referência pra &ldquo;Revisões de conta&rdquo; na página do cliente.
-          </p>
-        <form
-          action={updateAccountReviewCadenceAction.bind(null, id, returnTo)}
-          className="flex flex-wrap items-end gap-3"
-        >
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-500">Revisões por semana</label>
-            <input
-              type="number"
-              name="reviews_per_week"
-              min={1}
-              defaultValue={cadence?.reviews_per_week ?? 3}
-              className="w-24 rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm text-black dark:border-zinc-700 dark:text-zinc-50"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-500">Máx. dias úteis sem otimização</label>
-            <input
-              type="number"
-              name="max_business_days_without_review"
-              min={1}
-              defaultValue={cadence?.max_business_days_without_review ?? 3}
-              className="w-24 rounded-md border border-zinc-300 bg-transparent px-2 py-1 text-sm text-black dark:border-zinc-700 dark:text-zinc-50"
-            />
-          </div>
-          <label className="flex items-center gap-2 text-sm text-black dark:text-zinc-50">
-            <input
-              type="checkbox"
-              name="is_active"
-              defaultChecked={cadence?.is_active ?? true}
-              className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
-            />
-            Cadência ativa
-          </label>
-          <SubmitButton
-            pendingChildren="Salvando..."
-            className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
-          >
-            Salvar cadência
-          </SubmitButton>
-        </form>
-        </div>
-      </Block>
 
       {isAdmin && (
         <Block

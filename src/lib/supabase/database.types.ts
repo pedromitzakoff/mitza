@@ -278,7 +278,7 @@ export interface Database {
         Row: {
           id: string;
           name: string;
-          meta_ad_account_id: string;
+          meta_ad_account_id: string | null;
           created_at: string;
           deleted_at: string | null;
           legal_name: string | null;
@@ -329,7 +329,7 @@ export interface Database {
         Insert: {
           id?: string;
           name: string;
-          meta_ad_account_id: string;
+          meta_ad_account_id?: string | null;
           created_at?: string;
           deleted_at?: string | null;
           legal_name?: string | null;
@@ -380,7 +380,7 @@ export interface Database {
         Update: {
           id?: string;
           name?: string;
-          meta_ad_account_id?: string;
+          meta_ad_account_id?: string | null;
           created_at?: string;
           deleted_at?: string | null;
           legal_name?: string | null;

@@ -4,11 +4,10 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireAdmin, requireClientManagerAccess } from "@/lib/auth";
-import { normalizeCnpj } from "@/lib/cnpj";
 import { OperationalEventType } from "@/lib/operational-events";
 import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operational-event";
 import { toUserFacingError } from "@/lib/user-facing-error";
-import type { ClientContractStatus, ClientMainObjective, PerformanceGoalDb } from "@/lib/supabase/database.types";
+import type { ClientContractStatus, PerformanceGoalDb } from "@/lib/supabase/database.types";
 
 function optionalText(formData: FormData, name: string): string | null {
   const value = String(formData.get(name) ?? "").trim();
@@ -20,11 +19,6 @@ function optionalNumber(formData: FormData, name: string): number | null {
   if (!value) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function optionalInt(formData: FormData, name: string): number | null {
-  const value = optionalNumber(formData, name);
-  return value === null ? null : Math.trunc(value);
 }
 
 /**
@@ -60,58 +54,46 @@ async function uploadClientPhotoIfProvided(
   return { avatarUrl: `${data.publicUrl}?v=${Date.now()}` };
 }
 
-/** Campos estruturais (Etapa 27) — todos opcionais, lidos e persistidos
- * juntos tanto na criação quanto na edição. Nenhum deles substitui
- * `planned_spend` da sprint, que continua sendo a fonte operacional semanal. */
+/**
+ * Campos estruturais (Etapa 27, reduzida na Etapa "Simplificação do Cadastro
+ * do Cliente") — lidos e persistidos juntos tanto na criação quanto na
+ * edição. Nenhum deles substitui `planned_spend` da sprint, que continua
+ * sendo a fonte operacional semanal.
+ *
+ * Etapa "Simplificação do Cadastro do Cliente": esta função só lê o que o
+ * `ClientForm` simplificado ainda envia — CRÍTICO nunca ler um campo que
+ * saiu do formulário e ainda assim incluí-lo aqui: `updateClientAction`
+ * salva `{...structural}` inteiro a cada edição, então uma chave presente
+ * neste objeto sempre SOBRESCREVE a coluna correspondente (com `null`
+ * quando o campo não existe mais no FormData) — apagaria silenciosamente
+ * dado histórico de clientes já cadastrados a cada salvamento. Os campos
+ * removidos do formulário (`legal_name`, `cnpj`, datas de contrato,
+ * contatos, comercial, `contracted_services`, contexto estratégico,
+ * `main_objective`, `monthly_planned_spend`, `primary_kpi`/`_target`,
+ * `meta_ad_account_name`, links sociais) continuam existindo no banco —
+ * só pararam de ser lidos/reescritos por aqui. `cnpj`/`contract_start_date`/
+ * `main_contact_email`/`agency_monthly_fee` continuam editáveis em
+ * Settings > Clientes (`app/settings/clients/actions.ts`), que já era o
+ * lugar canônico pra eles.
+ */
 function readStructuralFields(formData: FormData) {
   return {
-    legal_name: optionalText(formData, "legal_name"),
-    cnpj: normalizeCnpj(String(formData.get("cnpj") ?? "")) || null,
     status: (String(formData.get("status") ?? "ativo") || "ativo") as ClientContractStatus,
-    contract_start_date: optionalText(formData, "contract_start_date"),
-    contract_end_date: optionalText(formData, "contract_end_date"),
-    renewal_date: optionalText(formData, "renewal_date"),
     primary_manager_id: optionalText(formData, "primary_manager_id"),
-    main_contact_name: optionalText(formData, "main_contact_name"),
-    main_contact_role: optionalText(formData, "main_contact_role"),
-    main_contact_email: optionalText(formData, "main_contact_email"),
-    main_contact_phone: optionalText(formData, "main_contact_phone"),
-    financial_contact_name: optionalText(formData, "financial_contact_name"),
-    financial_contact_email: optionalText(formData, "financial_contact_email"),
-    financial_contact_phone: optionalText(formData, "financial_contact_phone"),
-    instagram_url: optionalText(formData, "instagram_url"),
-    website_url: optionalText(formData, "website_url"),
-    facebook_url: optionalText(formData, "facebook_url"),
-    commercial_whatsapp: optionalText(formData, "commercial_whatsapp"),
     dashboard_url: optionalText(formData, "dashboard_url"),
     balance_url: optionalText(formData, "balance_url"),
     monthly_closing_sheet_url: optionalText(formData, "monthly_closing_sheet_url"),
-    meta_ad_account_name: optionalText(formData, "meta_ad_account_name"),
-    main_objective: optionalText(formData, "main_objective") as ClientMainObjective | null,
-    monthly_planned_spend: optionalNumber(formData, "monthly_planned_spend"),
-    primary_kpi: optionalText(formData, "primary_kpi"),
-    primary_kpi_target: optionalText(formData, "primary_kpi_target"),
-    operational_summary: optionalText(formData, "operational_summary"),
-    important_notes: optionalText(formData, "important_notes"),
-    agency_monthly_fee: optionalNumber(formData, "agency_monthly_fee"),
-    billing_due_day: optionalInt(formData, "billing_due_day"),
-    contracted_services: formData.getAll("contracted_services").map(String).length
-      ? formData.getAll("contracted_services").map(String)
-      : null,
     // Etapa "Canais Ativos por Cliente": fonte única de verdade de "em quais
     // plataformas este cliente investe" — controla o seletor de canal da
     // Visão Geral (ver lib/traffic-channels.ts). Validado como "pelo menos 1"
     // em createClientAction/updateClientAction, nunca aqui (esta função só
     // lê o formulário, nunca decide se o valor é aceitável).
     media_channels: formData.getAll("media_channels").map(String),
-    notice_period_days: optionalInt(formData, "notice_period_days"),
-    main_product_or_service: optionalText(formData, "main_product_or_service"),
-    operation_region: optionalText(formData, "operation_region"),
-    primary_audience: optionalText(formData, "primary_audience"),
-    client_differentials: optionalText(formData, "client_differentials"),
-    client_restrictions: optionalText(formData, "client_restrictions"),
-    important_seasonal_dates: optionalText(formData, "important_seasonal_dates"),
     performance_goal: optionalText(formData, "performance_goal") as PerformanceGoalDb | null,
+    // Meta/fallback de custo-alvo (canal → consolidado → este campo,
+    // `resolveTargetCostPerResult`, lib/client-plan.ts — regra intocada) —
+    // vive na área "Configuração avançada" do formulário, nunca removida,
+    // só com menos peso visual.
     target_cost_per_result: optionalNumber(formData, "target_cost_per_result"),
   };
 }
@@ -119,10 +101,29 @@ function readStructuralFields(formData: FormData) {
 function readClientFields(formData: FormData) {
   return {
     name: String(formData.get("name") ?? "").trim(),
-    meta_ad_account_id: String(formData.get("meta_ad_account_id") ?? "").trim(),
-    managerIds: formData.getAll("manager_ids").map(String),
+    // Etapa "Simplificação do Cadastro do Cliente": conta Meta deixou de
+    // ser obrigatória pra todo cliente (constraint relaxada em
+    // `client-meta-account-optional.sql`) — cliente Google-only
+    // (`media_channels` sem "meta") não precisa mais preencher isso.
+    // `optionalText` converte string vazia em `null`, nunca `""` (que
+    // quebraria o check de formato `act_\d+` no banco). Obrigatoriedade
+    // CONDICIONAL ("meta em media_channels -> precisa ter conta") é
+    // validada logo abaixo, em `createClientAction`/`updateClientAction`.
+    meta_ad_account_id: optionalText(formData, "meta_ad_account_id"),
     ...readStructuralFields(formData),
   };
+}
+
+/** Etapa "Simplificação do Cadastro do Cliente": única regra de "quando a
+ * conta Meta é obrigatória" — reaproveitada por `createClientAction` e
+ * `updateClientAction`, nunca duplicada. Meta só é exigida quando o cliente
+ * de fato opera esse canal (`media_channels` inclui "meta"); um cliente
+ * Google-only nunca precisa preencher isso. */
+function validateMetaAccountRequirement(mediaChannels: string[], metaAdAccountId: string | null): string | null {
+  if (mediaChannels.includes("meta") && !metaAdAccountId) {
+    return "Informe a conta de anúncios do Meta (obrigatória enquanto Meta Ads estiver marcado em Canais de mídia)";
+  }
+  return null;
 }
 
 function appendSaved(url: string): string {
@@ -154,7 +155,7 @@ function resolveClientCreationErrorMessage(error: { code?: string; message: stri
 
 export async function createClientAction(formData: FormData) {
   const profile = await requireAdmin();
-  const { name, meta_ad_account_id, managerIds, ...structural } = readClientFields(formData);
+  const { name, meta_ad_account_id, ...structural } = readClientFields(formData);
 
   // Objetivo de performance é obrigatório só na CRIAÇÃO (Etapa 71, seção 2)
   // — clientes já existentes continuam podendo ficar sem objetivo
@@ -169,6 +170,11 @@ export async function createClientAction(formData: FormData) {
   // opção nenhuma pro seletor da Visão Geral mostrar.
   if (structural.media_channels.length === 0) {
     redirect(`/clients/new?error=${encodeURIComponent("Selecione pelo menos um canal de mídia")}`);
+  }
+
+  const metaAccountError = validateMetaAccountRequirement(structural.media_channels, meta_ad_account_id);
+  if (metaAccountError) {
+    redirect(`/clients/new?error=${encodeURIComponent(metaAccountError)}`);
   }
 
   const supabase = await createSupabaseClient();
@@ -193,12 +199,6 @@ export async function createClientAction(formData: FormData) {
     console.error("[createClientAction] falha ao salvar foto do cliente:", photoResult.error);
   }
 
-  if (managerIds.length > 0) {
-    await supabase
-      .from("client_managers")
-      .insert(managerIds.map((user_id) => ({ client_id: client.id, user_id })));
-  }
-
   const actor = actorFromProfile(profile);
   await recordOperationalEvent(supabase, actor, {
     eventType: OperationalEventType.CLIENT_CREATED,
@@ -217,16 +217,6 @@ export async function createClientAction(formData: FormData) {
       clientId: client.id,
       source: "web",
       metadata: { role: "primary", manager_team_member_id: structural.primary_manager_id },
-    });
-  }
-  for (const managerId of managerIds) {
-    await recordOperationalEvent(supabase, actor, {
-      eventType: OperationalEventType.CLIENT_MANAGER_ASSIGNED,
-      entityType: "client",
-      entityId: client.id,
-      clientId: client.id,
-      source: "web",
-      metadata: { role: "support", manager_team_member_id: managerId },
     });
   }
 
@@ -252,14 +242,22 @@ function isNextControlFlowError(error: unknown): boolean {
 
 export async function updateClientAction(clientId: string, returnTo: string, formData: FormData) {
   // Habilitar Gestores 3.0: editar o Cadastro do Cliente deixou de ser
-  // admin-only — o gestor responsável (principal ou de apoio) também
-  // pode. `createClientAction`/`deleteClientAction` continuam admin-only
+  // admin-only — o gestor responsável também pode. Etapa "Simplificação do
+  // Cadastro do Cliente": "gestor de apoio" (`client_managers`) parou de
+  // conceder acesso — só admin ou o GESTOR PRINCIPAL (`primary_manager_id`)
+  // passam em `requireClientManagerAccess` agora (ver `lib/auth.ts`).
+  // `createClientAction`/`deleteClientAction` continuam admin-only
   // (criar/excluir cliente é mais estrutural, fora do pedido).
   const profile = await requireClientManagerAccess(clientId);
-  const { name, meta_ad_account_id, managerIds, ...structural } = readClientFields(formData);
+  const { name, meta_ad_account_id, ...structural } = readClientFields(formData);
 
   if (structural.media_channels.length === 0) {
     redirect(`/clients/${clientId}/edit?error=${encodeURIComponent("Selecione pelo menos um canal de mídia")}`);
+  }
+
+  const metaAccountError = validateMetaAccountRequirement(structural.media_channels, meta_ad_account_id);
+  if (metaAccountError) {
+    redirect(`/clients/${clientId}/edit?error=${encodeURIComponent(metaAccountError)}`);
   }
 
   const supabase = await createSupabaseClient();
@@ -275,11 +273,6 @@ export async function updateClientAction(clientId: string, returnTo: string, for
       .select("primary_manager_id")
       .eq("id", clientId)
       .single();
-    const { data: previousManagers } = await supabase
-      .from("client_managers")
-      .select("user_id")
-      .eq("client_id", clientId);
-    const previousManagerIds = new Set((previousManagers ?? []).map((m) => m.user_id));
 
     const photoResult = await uploadClientPhotoIfProvided(supabase, clientId, formData);
     if (photoResult.error) {
@@ -300,14 +293,6 @@ export async function updateClientAction(clientId: string, returnTo: string, for
       redirect(`/clients/${clientId}/edit?error=${encodeURIComponent(toUserFacingError(error, "Não foi possível salvar as alterações do cliente."))}`);
     }
 
-    await supabase.from("client_managers").delete().eq("client_id", clientId);
-
-    if (managerIds.length > 0) {
-      await supabase
-        .from("client_managers")
-        .insert(managerIds.map((user_id) => ({ client_id: clientId, user_id })));
-    }
-
     const actor = actorFromProfile(profile);
 
     if (structural.primary_manager_id !== (previous?.primary_manager_id ?? null)) {
@@ -323,19 +308,6 @@ export async function updateClientAction(clientId: string, returnTo: string, for
           new_manager_team_member_id: structural.primary_manager_id,
         },
       });
-    }
-
-    for (const managerId of managerIds) {
-      if (!previousManagerIds.has(managerId)) {
-        await recordOperationalEvent(supabase, actor, {
-          eventType: OperationalEventType.CLIENT_MANAGER_ASSIGNED,
-          entityType: "client",
-          entityId: clientId,
-          clientId,
-          source: "web",
-          metadata: { role: "support", manager_team_member_id: managerId },
-        });
-      }
     }
   } catch (error) {
     if (isNextControlFlowError(error)) throw error;

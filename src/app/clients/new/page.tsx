@@ -27,7 +27,6 @@ export default async function NewClientPage({
       <ClientForm
         action={createClientAction}
         managers={managers ?? []}
-        assignedIds={[]}
         error={error}
         submitLabel="Criar cliente"
         submitPendingLabel="Criando..."

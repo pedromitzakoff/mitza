@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { getCurrentProfile, requireAdmin, requireClientManagerAccess } from "@/lib/auth";
+import { getCurrentProfile, requireAdmin } from "@/lib/auth";
 import { todayUTC, todayDateString } from "@/lib/today";
 import { formatMonthLabel } from "@/lib/format";
 import { getOrCreateReport, buildReportViewData } from "./report-data";
@@ -12,8 +12,6 @@ import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operation
 import { withOriginalDueDate } from "@/lib/task-creation";
 import { toUserFacingError } from "@/lib/user-facing-error";
 import type {
-  KpiDirection,
-  KpiUnit,
   MonthlyReportStatus,
   ReportActionItemDependency,
   ReportActionItemStatus,
@@ -423,56 +421,11 @@ export async function reopenReportAction(clientId: string, monthStart: string) {
 }
 
 // ---------------------------------------------------------------------------
-// KPIs configurados por cliente (Configurações > editar cliente) — controlam
-// quais KPIs aparecem no Bloco 2 de todos os meses deste cliente.
+// Etapa "Simplificação do Cadastro do Cliente": `addClientKpiAction`/
+// `deleteClientKpiAction` (KPIs do Relatório Mensal, `client_kpi_definitions`)
+// foram removidas — auditoria confirmou zero consumidor real: alimentavam só
+// um snapshot (`monthly_reports.snapshot`) que nenhuma tela lê mais, e o
+// único chamador (bloco "KPIs do Relatório Mensal" em `/clients/[id]/edit`)
+// também saiu. A tabela `client_kpi_definitions` continua existindo (nenhuma
+// migration destrutiva) — só ficou sem nenhuma Server Action de escrita.
 // ---------------------------------------------------------------------------
-
-export async function addClientKpiAction(clientId: string, formData: FormData) {
-  // Habilitar Gestores 3.0: KPIs do Relatório Mensal fazem parte do
-  // Cadastro do Cliente, que o gestor responsável também pode editar
-  // agora — RLS de `client_kpi_definitions` já aceitava is_client_manager()
-  // desde a Etapa 45, só a checagem aqui na action estava mais restrita.
-  await requireClientManagerAccess(clientId);
-  const supabase = await createSupabaseClient();
-
-  const name = String(formData.get("name") ?? "").trim();
-  const unit = String(formData.get("unit") ?? "numero") as KpiUnit;
-  const direction = String(formData.get("direction") ?? "maior_melhor") as KpiDirection;
-  const rawTarget = String(formData.get("target") ?? "").trim();
-  const target = rawTarget === "" ? null : Number(rawTarget);
-
-  const returnTo = `/clients/${clientId}/edit`;
-  if (!name) redirect(`${returnTo}?error=${encodeURIComponent("Nome do KPI é obrigatório")}`);
-
-  const { count } = await supabase
-    .from("client_kpi_definitions")
-    .select("id", { count: "exact", head: true })
-    .eq("client_id", clientId);
-
-  const { error } = await supabase.from("client_kpi_definitions").insert({
-    client_id: clientId,
-    name,
-    unit,
-    direction,
-    target,
-    display_order: count ?? 0,
-  });
-
-  if (error) redirect(`${returnTo}?error=${encodeURIComponent(toUserFacingError(error, "Não foi possível adicionar o KPI."))}`);
-
-  // Platform Continuity System 1.0: sem redirect — o formulário de KPIs já
-  // vive na própria página de edição do cliente; `revalidatePath` mostra o
-  // KPI novo na lista sem recarregar a página.
-  revalidatePath(`/clients/${clientId}/edit`);
-  revalidatePath(`/reports/${clientId}`);
-}
-
-export async function deleteClientKpiAction(kpiId: string, clientId: string) {
-  await requireClientManagerAccess(clientId);
-  const supabase = await createSupabaseClient();
-
-  await supabase.from("client_kpi_definitions").delete().eq("id", kpiId);
-
-  revalidatePath(`/clients/${clientId}/edit`);
-  revalidatePath(`/reports/${clientId}`);
-}

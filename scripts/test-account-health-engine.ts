@@ -200,7 +200,37 @@ console.log("\nDimensão Revisão — nunca revisada é sempre o pior caso; cad�
     enabled: false,
   });
   check("reviewBusinessDaysAgo=null com cadência ativa -> sempre 'grave', independente do prazo configurado", evaluateAccountHealth(baseInput({ reviewBusinessDaysAgo: null, reviewMaxBusinessDays: 5 })).dimensions.review.status, "grave");
-  check("nunca revisada -> motivo específico, nunca um percentual", evaluateAccountHealth(baseInput({ reviewBusinessDaysAgo: null })).primaryReason, "Nenhuma revisão registrada ainda");
+  // Etapa "Simplificação do Cadastro do Cliente": "revisão" saiu de
+  // `DIMENSION_PRIORITY_ORDER" — a KOFF não usa mais Cadência de Revisões
+  // como processo operacional, então `dimensions.review` continua sendo
+  // calculado (compatibilidade — ver testes acima/abaixo, a matemática não
+  // mudou), mas NUNCA mais determina `primaryReason`/`primaryDimension`/
+  // `healthStatus`, mesmo no pior caso possível (nunca revisada, "grave").
+  check(
+    "nunca revisada, resto saudável -> dimensions.review continua 'grave' (matemática intacta)...",
+    evaluateAccountHealth(baseInput({ reviewBusinessDaysAgo: null })).dimensions.review.status,
+    "grave",
+  );
+  check(
+    "...mas primaryReason continua genérico — revisão nunca mais vira motivo principal",
+    evaluateAccountHealth(baseInput({ reviewBusinessDaysAgo: null })).primaryReason,
+    "Nenhum sinal de atenção no momento",
+  );
+  check(
+    "...primaryDimension nunca é 'review'",
+    evaluateAccountHealth(baseInput({ reviewBusinessDaysAgo: null })).primaryDimension,
+    null,
+  );
+  check(
+    "...healthStatus continua 'saudavel' mesmo com revisão gravemente atrasada",
+    evaluateAccountHealth(baseInput({ reviewBusinessDaysAgo: null })).healthStatus,
+    "saudavel",
+  );
+  check(
+    "revisão 'grave' nunca aparece em collectAccountHealthReasons",
+    collectAccountHealthReasons(evaluateAccountHealth(baseInput({ reviewBusinessDaysAgo: null }))).includes("Nenhuma revisão registrada ainda"),
+    false,
+  );
   check("revisada ANTES do prazo (folga grande) -> 'nenhum' (revisar cedo nunca penaliza)", evaluateAccountHealth(baseInput({ reviewBusinessDaysAgo: 1, reviewMaxBusinessDays: 10 })).dimensions.review.status, "nenhum");
   check("revisada EXATAMENTE no prazo -> 'nenhum' (ainda não está atrasada)", evaluateAccountHealth(baseInput({ reviewBusinessDaysAgo: 10, reviewMaxBusinessDays: 10 })).dimensions.review.status, "nenhum");
   check(

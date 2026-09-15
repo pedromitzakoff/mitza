@@ -40,6 +40,16 @@ export async function syncClientMetaSpend(clientId: string): Promise<SyncResult>
     throw new Error(`Cliente ${clientId} está com status "${client.status}" — sincronização automática pausada.`);
   }
 
+  // Etapa "Simplificação do Cadastro do Cliente": conta Meta deixou de ser
+  // obrigatória (cliente Google-only pode não ter nenhuma configurada) —
+  // `syncAllClientsMetaSpend` já filtra por `media_channels` antes de
+  // chegar aqui, mas esta função continua podendo ser chamada isoladamente
+  // (`syncClientMetaAction`), então o guard fica também aqui.
+  const metaAdAccountId = client.meta_ad_account_id;
+  if (!metaAdAccountId) {
+    throw new Error(`Cliente ${clientId} não tem conta Meta configurada.`);
+  }
+
   // Integração Stract (arquitetura aprovada — ver DECISIONS.md, ponto 7):
   // cliente com uma import_source ativa pro canal Meta nunca usa a sync
   // nativa em paralelo — duas fontes automáticas escrevendo a mesma chave
@@ -75,7 +85,7 @@ export async function syncClientMetaSpend(clientId: string): Promise<SyncResult>
     throw new Error(`Nenhuma sprint atual encontrada para o cliente ${clientId}`);
   }
 
-  const dailySpend = await fetchDailySpend(client.meta_ad_account_id, sprint.start_date, currentDate);
+  const dailySpend = await fetchDailySpend(metaAdAccountId, sprint.start_date, currentDate);
 
   if (dailySpend.length > 0) {
     const { error: upsertError } = await supabase.from("daily_spend").upsert(
@@ -97,16 +107,21 @@ export async function syncClientMetaSpend(clientId: string): Promise<SyncResult>
   return { clientId, daysSynced: dailySpend.length };
 }
 
-/** Roda a sync acima só pros clientes ativos (Workspace) — pausado/
- * encerrado nem entra no loop, pra não gerar erro/log por tentativa
- * bloqueada pelo guard de `syncClientMetaSpend` acima. */
+/** Roda a sync acima só pros clientes ativos (Workspace) que de fato operam
+ * Meta (`media_channels` inclui "meta") — pausado/encerrado nem entra no
+ * loop, mesma razão de sempre; cliente Google-only também não entra desde a
+ * Etapa "Simplificação do Cadastro do Cliente" (Meta deixou de ser
+ * obrigatória pra todo cliente), pra não gerar erro/log todo dia por uma
+ * tentativa que o guard de `syncClientMetaSpend` acima só bloquearia
+ * depois. */
 export async function syncAllClientsMetaSpend(): Promise<SyncResult[]> {
   const supabase = createAdminClient();
   const { data: clients, error } = await supabase
     .from("clients")
     .select("id")
     .is("deleted_at", null)
-    .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS);
+    .eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS)
+    .contains("media_channels", ["meta"]);
 
   if (error) {
     throw new Error(error.message);

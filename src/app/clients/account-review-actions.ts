@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { getCurrentProfile, requireClientManagerAccess } from "@/lib/auth";
+import { getCurrentProfile } from "@/lib/auth";
 import {
   ACCOUNT_REVIEW_REASONS,
   ACCOUNT_REVIEW_OUTCOMES,
@@ -125,31 +125,13 @@ export async function recordAccountReviewAction(clientId: string, returnTo: stri
   redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}reviewSaved=${data.reviewId}`);
 }
 
-/** Configuração de cadência (Etapa 57, seção 25) — deixou de ser
- * admin-only na Etapa "Habilitar Gestores 3.0": o gestor responsável pelo
- * cliente (RLS de `account_review_cadences_write`, atualizada junto) também
- * pode editar, já que faz parte do Cadastro do Cliente. Nunca cria data
- * fixa de otimização, só a meta de frequência semanal e o intervalo máximo
- * tolerado em dias úteis. */
-export async function updateAccountReviewCadenceAction(clientId: string, returnTo: string, formData: FormData) {
-  await requireClientManagerAccess(clientId);
-  const supabase = await createSupabaseClient();
-
-  const reviewsPerWeek = Math.max(1, Math.trunc(Number(formData.get("reviews_per_week") ?? 3)) || 3);
-  const maxBusinessDays = Math.max(1, Math.trunc(Number(formData.get("max_business_days_without_review") ?? 3)) || 3);
-  const isActive = formData.get("is_active") === "on";
-
-  await supabase.from("account_review_cadences").upsert(
-    {
-      client_id: clientId,
-      reviews_per_week: reviewsPerWeek,
-      max_business_days_without_review: maxBusinessDays,
-      is_active: isActive,
-    },
-    { onConflict: "client_id" },
-  );
-
-  revalidatePath(`/clients/${clientId}/edit`);
-  revalidatePath(`/clients/${clientId}`);
-  redirect(returnTo);
-}
+// Etapa "Simplificação do Cadastro do Cliente": `updateAccountReviewCadenceAction`
+// foi removida — decisão de produto explícita ("a KOFF não usa mais
+// Cadência de Revisões como processo operacional"), bloco correspondente
+// saiu de `/clients/[id]/edit` (único chamador) e sua influência sobre
+// saúde/prioridade operacional foi neutralizada em
+// `lib/account-health-engine.ts`/`lib/attention-alerts.ts`. A tabela
+// `account_review_cadences` continua existindo e sendo LIDA normalmente
+// (`resolveReviewCadenceInputs`, `lib/account-health-engine.ts` — linhas já
+// configuradas continuam resolvidas do mesmo jeito, só ninguém mais escreve
+// nelas por aqui) — nenhuma migration destrutiva.

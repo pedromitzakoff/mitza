@@ -212,20 +212,30 @@ export interface AccountHealthEvaluation {
 
 /**
  * Ordem de prioridade em caso de empate de severidade entre dimensões
- * (aprovada): qualidade dos dados > custo > resultado > investimento >
- * revisão — "sem dados confiáveis não existe operação", depois eficiência,
- * depois volume, depois orçamento, depois rotina. Fonte única — tanto
- * `evaluateAccountHealth` (decide `primaryReason`/`primaryDimension`) quanto
+ * (aprovada): qualidade dos dados > custo > resultado > investimento —
+ * "sem dados confiáveis não existe operação", depois eficiência, depois
+ * volume, depois orçamento. Fonte única — tanto `evaluateAccountHealth`
+ * (decide `primaryReason`/`primaryDimension`) quanto
  * `collectAccountHealthReasons` (lista completa) quanto quem ordena a fila
  * da Operação por fora deste arquivo usam exatamente este array, nunca uma
  * cópia paralela.
+ *
+ * Etapa "Simplificação do Cadastro do Cliente": "revisão" saiu desta lista
+ * — decisão de produto explícita ("a KOFF não usa mais Cadência de Revisões
+ * como processo operacional"). `dimensions.review` continua existindo no
+ * tipo/no objeto retornado por `evaluateAccountHealth` (compatibilidade —
+ * `resolveReviewComplianceStatus`/`ReviewDimension` continuam usados fora
+ * deste motor, ver `lib/account-health-engine.ts` mais abaixo), só deixou
+ * de poder ser a dimensão vencedora: nunca mais decide `healthStatus`,
+ * `primaryReason`, `primaryDimension` nem entra em `collectAccountHealthReasons`.
+ * Config de cadência sem UI pra editar (bloco removido do Cadastro do
+ * Cliente) não pode continuar alterando prioridade/saúde de forma invisível.
  */
 export const DIMENSION_PRIORITY_ORDER: (keyof AccountHealthEvaluation["dimensions"])[] = [
   "dataQuality",
   "cost",
   "results",
   "investment",
-  "review",
 ];
 
 export interface AccountHealthInput {

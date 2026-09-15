@@ -85,13 +85,18 @@ export function buildAttentionAlerts(input: AttentionAlertsInput): AttentionAler
     });
   }
 
-  if (!input.optimizationRecentlyDone) {
-    alerts.push({
-      severity: "atencao",
-      kind: "otimizacao",
-      message: "Nenhuma otimização registrada recentemente.",
-    });
-  }
+  // Etapa "Simplificação do Cadastro do Cliente": o alerta "Nenhuma
+  // otimização registrada recentemente" (derivado de Cadência de Revisões,
+  // `account_review_cadences`) foi removido — decisão de produto explícita
+  // ("a KOFF não usa mais Cadência de Revisões como processo operacional").
+  // `optimizationRecentlyDone` continua no tipo de `AttentionAlertsInput`
+  // (compatibilidade — quem chama ainda resolve e passa o valor), só deixou
+  // de virar alerta/influenciar severidade: sem UI pra configurar cadência,
+  // esse sinal não pode continuar alterando prioridade de forma invisível.
+  // Cascata automática, sem nenhuma outra mudança: `computeAccountHealth`
+  // (severidade máxima dos alertas) e `priorityTier`/`sortAccountsByPriority`
+  // (lib/account-priority.ts, que checava `alerts.some(kind === "otimizacao")`)
+  // nunca mais são influenciados por revisão.
 
   if (!input.lastSyncedAt) {
     alerts.push({ severity: "atencao", kind: "meta_sync", message: "Dados do Meta sem sincronização recente." });

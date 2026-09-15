@@ -31,8 +31,8 @@ export default async function DeletedClientsPage() {
               <div className="min-w-0">
                 <p className="truncate text-foreground">{client.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {client.meta_ad_account_id} · excluído em{" "}
-                  {formatDateFromInstant(client.deleted_at!)}
+                  {client.meta_ad_account_id ? `${client.meta_ad_account_id} · ` : ""}
+                  excluído em {formatDateFromInstant(client.deleted_at!)}
                 </p>
               </div>
               <RestoreClientButton clientId={client.id} clientName={client.name} />

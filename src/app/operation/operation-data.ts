@@ -68,7 +68,10 @@ export type OperationTaskItem = TaskListItem & { sprint_id: string | null; notes
 export interface OperationClientRawData {
   id: string;
   name: string;
-  metaAdAccountId: string;
+  /** Etapa "Simplificação do Cadastro do Cliente": `null` = cliente
+   * Google-only, sem conta Meta configurada (deixou de ser obrigatório —
+   * ver `client-meta-account-optional.sql`). */
+  metaAdAccountId: string | null;
   managerNames: string[];
   managerIds: string[];
   sprints: {
@@ -148,7 +151,7 @@ export interface OperationClientRawData {
 export interface OperationClientCard {
   clientId: string;
   clientName: string;
-  metaAdAccountId: string;
+  metaAdAccountId: string | null;
   managerNames: string[];
   managerIds: string[];
   sprint: SprintFinancials | null;
