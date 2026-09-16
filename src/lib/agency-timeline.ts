@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, OperationalEventType, TaskType } from "@/lib/supabase/database.types";
 import { OperationalEventType as EventType, OPERATIONAL_EVENT_TYPE_LABEL } from "@/lib/operational-events";
-import { buildReviewDetail, fetchOptimizationActionsByReviewId } from "@/lib/client-operational-history";
+import { buildReviewPresentation, fetchOptimizationActionsByReviewId, type ReviewPresentation } from "@/lib/client-operational-history";
 
 /**
  * Timeline Geral da Agência — "o que aconteceu na operação da agência hoje/
@@ -55,6 +55,60 @@ export interface AgencyTimelineRow {
   actorName: string | null;
   label: string;
   detail: string | null;
+  /** Etapa "Histórico de Decisões Operacionais" (seção 8/9 do pedido) — só
+   * presente em `account_review_recorded`; quando presente, a página
+   * desenha a hierarquia de 3 níveis (diagnóstico/ações/observação) em vez
+   * de `label`/`detail`. `label`/`detail` continuam preenchidos pra este
+   * evento (nunca ficam `undefined`) só por consistência de tipo — a UI
+   * simplesmente não os usa quando `reviewPresentation` existe. */
+  reviewPresentation?: ReviewPresentation;
+}
+
+/** Filtro "Tipo" (seção 10 do pedido) — recorte por CIMA da curadoria de
+ * `AGENCY_TIMELINE_EVENT_TYPES` de sempre, nunca uma segunda lista de
+ * eventos "soltos". "Tarefas" não é uma categoria própria de propósito: sob
+ * a curadoria atual só existe `task_completed` (tarefa avulsa, tipo
+ * genérico "outro") junto de marcos de reunião/criativo/saldo — poucos
+ * tipos, já rotulados individualmente, sem volume/semântica suficiente pra
+ * merecer filtro isolado (auditado por código antes de decidir, nunca uma
+ * categoria inventada sem consumidor real). */
+export type AgencyTimelineType = "todos" | "otimizacoes" | "reports" | "outros";
+
+export const AGENCY_TIMELINE_TYPE_LABEL: Record<AgencyTimelineType, string> = {
+  todos: "Todos",
+  otimizacoes: "Otimizações",
+  reports: "Reports",
+  outros: "Outros",
+};
+export const AGENCY_TIMELINE_TYPE_OPTIONS: { value: AgencyTimelineType; label: string }[] = [
+  { value: "todos", label: AGENCY_TIMELINE_TYPE_LABEL.todos },
+  { value: "otimizacoes", label: AGENCY_TIMELINE_TYPE_LABEL.otimizacoes },
+  { value: "reports", label: AGENCY_TIMELINE_TYPE_LABEL.reports },
+  { value: "outros", label: AGENCY_TIMELINE_TYPE_LABEL.outros },
+];
+
+const OTIMIZACOES_EVENT_TYPES: OperationalEventType[] = [EventType.ACCOUNT_REVIEW_RECORDED];
+const REPORTS_EVENT_TYPES: OperationalEventType[] = [EventType.CLIENT_REPORT_GENERATED, EventType.CLIENT_REPORT_SENT];
+const OUTROS_EVENT_TYPES: OperationalEventType[] = AGENCY_TIMELINE_EVENT_TYPES.filter(
+  (type) => !OTIMIZACOES_EVENT_TYPES.includes(type) && !REPORTS_EVENT_TYPES.includes(type),
+);
+
+/** Resolve `?type=` da URL pra um `AgencyTimelineType` seguro — mesmo padrão
+ * de fallback já usado por `resolveOperationChannel`/`resolveOperationGoal`
+ * (Operação): valor ausente/inválido cai em `"todos"`, nunca um recorte
+ * "chutado". Exportado só pra teste. */
+export function resolveAgencyTimelineType(paramValue: string | undefined): AgencyTimelineType {
+  return paramValue === "otimizacoes" || paramValue === "reports" || paramValue === "outros" ? paramValue : "todos";
+}
+
+/** Exportado só pra teste (`scripts/test-account-review-diagnosis.ts`) —
+ * confirma que Otimizações/Reports/Outros particionam
+ * `AGENCY_TIMELINE_EVENT_TYPES` sem sobreposição nem perda de tipo. */
+export function eventTypesForFilter(type: AgencyTimelineType): OperationalEventType[] {
+  if (type === "otimizacoes") return OTIMIZACOES_EVENT_TYPES;
+  if (type === "reports") return REPORTS_EVENT_TYPES;
+  if (type === "outros") return OUTROS_EVENT_TYPES;
+  return AGENCY_TIMELINE_EVENT_TYPES;
 }
 
 export interface AgencyTimelineFilters {
@@ -63,6 +117,10 @@ export interface AgencyTimelineFilters {
    * carteira do cliente. */
   actorId: string | null;
   clientId: string | null;
+  /** Etapa "Histórico de Decisões Operacionais" — recorte por tipo de
+   * evento (seção 10 do pedido). Combina livremente com gestor/cliente
+   * (todos viram `.eq()`/`.in()` na MESMA query, nunca filtro em memória). */
+  type: AgencyTimelineType;
 }
 
 /** Rótulo humano de `task_completed` a partir de `metadata.task_type`
@@ -137,7 +195,7 @@ export async function fetchAgencyTimeline(
       "id, event_type, occurred_at, entity_id, correlation_id, metadata, actor:team_members(name), client:clients(id, name)",
     )
     .eq("organization_id", organizationId)
-    .in("event_type", AGENCY_TIMELINE_EVENT_TYPES)
+    .in("event_type", eventTypesForFilter(filters.type))
     .order("occurred_at", { ascending: false })
     .range(from, to);
 
@@ -192,14 +250,17 @@ export async function fetchAgencyTimeline(
         return { ...base, ...buildTaskCompletedPresentation(metadata) };
       }
 
-      return {
-        ...base,
-        label: OPERATIONAL_EVENT_TYPE_LABEL[eventType],
-        detail:
-          eventType === EventType.ACCOUNT_REVIEW_RECORDED
-            ? buildReviewDetail(metadata, optimizationActionsByReviewId.get(row.entity_id ?? ""))
-            : null,
-      };
+      if (eventType === EventType.ACCOUNT_REVIEW_RECORDED) {
+        const reviewPresentation = buildReviewPresentation(metadata, optimizationActionsByReviewId.get(row.entity_id ?? ""));
+        return {
+          ...base,
+          label: OPERATIONAL_EVENT_TYPE_LABEL[eventType],
+          detail: null,
+          reviewPresentation: reviewPresentation ?? undefined,
+        };
+      }
+
+      return { ...base, label: OPERATIONAL_EVENT_TYPE_LABEL[eventType], detail: null };
     }),
   };
 }

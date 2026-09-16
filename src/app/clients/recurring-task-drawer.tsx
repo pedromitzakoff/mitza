@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { SectionHeader } from "@/components/ui/section-header";
 import { formatDateTime } from "@/lib/format";
-import { formatPreviousWeekMissingLine, OPTIMIZATION_QUICK_GROUPS } from "@/lib/recurring-tasks";
+import { formatPreviousWeekMissingLine } from "@/lib/recurring-tasks";
+import { OPTIMIZATION_QUICK_GROUPS } from "@/lib/account-reviews";
 import { RegisterExecutionForm } from "./register-execution-form";
 import type { RecurringTaskDetail, RecurringTaskExecutionDetail } from "@/lib/recurring-task-data";
 

@@ -4,59 +4,22 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import {
-  ACCOUNT_REVIEW_REASONS,
-  ACCOUNT_REVIEW_OUTCOMES,
-  OPTIMIZATION_TYPES,
-  OPTIMIZATION_ACTIONS_BY_TYPE,
-} from "@/lib/account-reviews";
+import { isValidAccountReviewDiagnosis, parseOptimizationSelections } from "@/lib/account-reviews";
 import { checkWorkspaceClientAction } from "@/lib/require-workspace-client";
-import type { AccountReviewOutcome, AccountReviewReason, OptimizationType } from "@/lib/supabase/database.types";
-
-interface OptimizationInput {
-  type: OptimizationType;
-  action: string;
-  description: string;
-  reason: string;
-  expectedImpact: string;
-}
-
-function parseOptimizations(raw: string): OptimizationInput[] {
-  if (!raw) return [];
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
-
-  const valid: OptimizationInput[] = [];
-  for (const item of parsed) {
-    if (typeof item !== "object" || item === null) continue;
-    const type = (item as Record<string, unknown>).type;
-    const action = (item as Record<string, unknown>).action;
-    if (typeof type !== "string" || !OPTIMIZATION_TYPES.includes(type as OptimizationType)) continue;
-    if (typeof action !== "string" || !OPTIMIZATION_ACTIONS_BY_TYPE[type as OptimizationType].includes(action)) continue;
-
-    valid.push({
-      type: type as OptimizationType,
-      action,
-      description: String((item as Record<string, unknown>).description ?? "").trim(),
-      reason: String((item as Record<string, unknown>).reason ?? "").trim(),
-      expectedImpact: String((item as Record<string, unknown>).expectedImpact ?? "").trim(),
-    });
-  }
-  return valid;
-}
 
 /**
- * Registra uma Análise da Conta (Etapa 57) — toda a validação de negócio e a
- * gravação (análise + otimizações + tarefa opcional + eventos operacionais)
- * acontece atomicamente em `record_account_review` (supabase/account-
- * reviews.sql); esta action só resolve o ator, normaliza o input do
- * formulário e traduz erros do banco em mensagens curtas.
+ * Registra uma revisão operacional (Etapa "Histórico de Decisões
+ * Operacionais" — substitui o formulário de 3 perguntas condicionais por
+ * Diagnóstico + Ação + Observação, ver `record-account-review-drawer.tsx`).
+ * `reason` sempre `'ROUTINE'` e `outcome` sempre DERIVADO do número de ações
+ * selecionadas (nenhuma ⇒ `NO_CHANGE`, 1+ ⇒ `OPTIMIZATION_PERFORMED') —
+ * nenhum dos dois é mais perguntado nesta tela; o fluxo de "problema
+ * identificado + criar tarefa" também saiu daqui (criar uma tarefa continua
+ * disponível como funcionalidade genérica do produto, só não é mais um passo
+ * deste formulário rápido). Toda a validação de negócio e a gravação
+ * (revisão + otimizações + eventos operacionais) continuam acontecendo
+ * atomicamente em `record_account_review` (supabase/account-review-diagnosis.sql);
+ * esta action só resolve o ator, normaliza o input e traduz erros do banco.
  */
 export async function recordAccountReviewAction(clientId: string, returnTo: string, formData: FormData) {
   const profile = await getCurrentProfile();
@@ -69,53 +32,35 @@ export async function recordAccountReviewAction(clientId: string, returnTo: stri
   const blocked = await checkWorkspaceClientAction(supabase, clientId);
   if (blocked) fail(blocked);
 
-  const reason = String(formData.get("reason") ?? "") as AccountReviewReason;
-  const reasonOtherDescription = String(formData.get("reason_other_description") ?? "").trim() || null;
-  const outcome = String(formData.get("outcome") ?? "") as AccountReviewOutcome;
+  const diagnosisRaw = String(formData.get("diagnosis") ?? "");
   const notes = String(formData.get("notes") ?? "").trim() || null;
-  const issueDescription = String(formData.get("issue_description") ?? "").trim() || null;
-  const issueCategory = String(formData.get("issue_category") ?? "").trim() || null;
-  const createTask = formData.get("create_task") === "on";
-  const taskResponsibleId = String(formData.get("task_responsible_id") ?? "") || null;
-  const taskDueDate = String(formData.get("task_due_date") ?? "") || null;
-  const optimizations = parseOptimizations(String(formData.get("optimizations_json") ?? ""));
+  const optimizations = parseOptimizationSelections(String(formData.get("optimization_selections_json") ?? ""));
 
   function fail(message: string): never {
     redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}reviewError=${encodeURIComponent(message)}`);
   }
 
-  if (!ACCOUNT_REVIEW_REASONS.includes(reason)) fail("Selecione o motivo da revisão.");
-  if (reason === "OTHER" && !reasonOtherDescription) fail('Descreva o motivo quando selecionar "Outro".');
-  if (!ACCOUNT_REVIEW_OUTCOMES.includes(outcome)) fail("Selecione o resultado da revisão.");
-  if (outcome === "OPTIMIZATION_PERFORMED" && optimizations.length === 0) {
-    fail("Adicione ao menos uma alteração realizada.");
-  }
-  if (outcome === "ISSUE_IDENTIFIED" && !issueDescription) fail("Descreva o problema identificado.");
+  if (!isValidAccountReviewDiagnosis(diagnosisRaw)) fail("Selecione o diagnóstico da conta.");
 
   const { data, error } = await supabase.rpc("record_account_review", {
     p_client_id: clientId,
     p_team_member_id: profile.id,
     p_auth_user_id: profile.authUserId,
-    p_reason: reason,
-    p_reason_other_description: reasonOtherDescription,
-    p_outcome: outcome,
+    p_reason: "ROUTINE",
+    p_reason_other_description: null,
+    p_outcome: optimizations.length > 0 ? "OPTIMIZATION_PERFORMED" : "NO_CHANGE",
     p_notes: notes,
-    p_issue_description: issueDescription,
-    p_issue_category: issueCategory,
-    p_optimizations: optimizations.map((opt) => ({
-      type: opt.type,
-      action: opt.action,
-      description: opt.description || null,
-      reason: opt.reason || null,
-      expected_impact: opt.expectedImpact || null,
-    })),
-    p_create_task: outcome === "ISSUE_IDENTIFIED" && createTask,
-    p_task_responsible_id: outcome === "ISSUE_IDENTIFIED" && createTask ? taskResponsibleId : null,
-    p_task_due_date: outcome === "ISSUE_IDENTIFIED" && createTask ? taskDueDate : null,
+    p_issue_description: null,
+    p_issue_category: null,
+    p_optimizations: optimizations.map((opt) => ({ type: opt.type, action: opt.action, quantity: opt.quantity })),
+    p_create_task: false,
+    p_task_responsible_id: null,
+    p_task_due_date: null,
     p_source: "web",
+    p_diagnosis: diagnosisRaw,
   });
 
-  if (error || !data) fail(error?.message ?? "Não foi possível registrar a otimização.");
+  if (error || !data) fail(error?.message ?? "Não foi possível registrar a revisão.");
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/sprints");

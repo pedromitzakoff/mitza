@@ -1,4 +1,3 @@
-import type { OptimizationType } from "@/lib/supabase/database.types";
 
 /** Cor padrão sugerida ao cadastrar uma recorrência nova (`<input
  * type="color">` sem seleção prévia) — livre escolha do admin depois, nunca
@@ -36,68 +35,11 @@ export const DEFAULT_RECURRING_TASK_COLOR = "#1C1C1C";
  *     execuções começa vazio pra cada `recurring_tasks` novo.
  */
 
-/**
- * Registro rápido de Otimização (refatoração posterior, decisão do usuário:
- * "o gestor não pensa em categorias, pensa nas decisões que tomou"). Nada de
- * checklist de categorias genéricas com ação sempre "Outro" — cada chip já É
- * a decisão (tipo + ação real), pensado pra registrar em menos de 10
- * segundos. `type`/`action` PRECISAM bater com `OptimizationType`/
- * `OPTIMIZATION_ACTIONS_BY_TYPE` (`@/lib/account-reviews`) — é assim que o
- * backend grava em `account_optimizations` (mesma tabela e função da
- * Análise da Conta manual, `record_account_review`; aqui só uma seleção
- * curada de combinações, pensada pra ser rápida, não o formulário completo).
- * Fixo no código de propósito (não é dado configurável em /settings) — é
- * método operacional da agência, mesmo espírito da cadência das recorrências
- * (ver `supabase/recurring-task-cadence.sql`).
- */
-export interface OptimizationQuickAction {
-  type: OptimizationType;
-  action: string;
-  icon: string;
-  label: string;
-}
-
-export interface OptimizationQuickGroup {
-  type: OptimizationType;
-  groupLabel: string;
-  actions: OptimizationQuickAction[];
-}
-
-export const OPTIMIZATION_QUICK_GROUPS: OptimizationQuickGroup[] = [
-  {
-    type: "CAMPAIGN",
-    groupLabel: "Campanhas",
-    actions: [
-      { type: "CAMPAIGN", action: "ACTIVATED", icon: "▶", label: "Ativei" },
-      { type: "CAMPAIGN", action: "PAUSED", icon: "⏸", label: "Pausei" },
-    ],
-  },
-  {
-    type: "AUDIENCE",
-    groupLabel: "Públicos",
-    actions: [
-      { type: "AUDIENCE", action: "ACTIVATED", icon: "▶", label: "Ativei" },
-      { type: "AUDIENCE", action: "PAUSED", icon: "⏸", label: "Pausei" },
-    ],
-  },
-  {
-    type: "CREATIVE",
-    groupLabel: "Criativos",
-    actions: [
-      { type: "CREATIVE", action: "ADDED", icon: "➕", label: "Publiquei" },
-      { type: "CREATIVE", action: "PAUSED", icon: "⏸", label: "Pausei" },
-    ],
-  },
-  {
-    type: "BUDGET",
-    groupLabel: "Orçamento",
-    actions: [
-      { type: "BUDGET", action: "INCREASED", icon: "⬆", label: "Aumentei" },
-      { type: "BUDGET", action: "DECREASED", icon: "⬇", label: "Reduzi" },
-      { type: "BUDGET", action: "REDISTRIBUTED", icon: "⇄", label: "Redistribuí" },
-    ],
-  },
-];
+/** Registro rápido de Otimização — movido pra `@/lib/account-reviews`
+ * (Etapa "Histórico de Decisões Operacionais"): passou a ser reaproveitado
+ * também pela revisão manual da conta, não só por esta recorrência, então
+ * mora ao lado do resto da taxonomia central (`OPTIMIZATION_QUICK_GROUPS`,
+ * `OptimizationQuickAction`, `OptimizationQuickGroup`). */
 
 export interface RecurringTaskGoalHistoryEntry {
   weeklyGoal: number;

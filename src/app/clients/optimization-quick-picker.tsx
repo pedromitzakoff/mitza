@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { OPTIMIZATION_QUICK_GROUPS } from "@/lib/recurring-tasks";
+import { OPTIMIZATION_QUICK_GROUPS } from "@/lib/account-reviews";
 
 function comboKey(type: string, action: string): string {
   return `${type}:${action}`;

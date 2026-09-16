@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, AccountReviewOutcome, OptimizationType } from "@/lib/supabase/database.types";
-import { ACCOUNT_REVIEW_OUTCOME_LABEL, OPTIMIZATION_ACTION_LABEL, OPTIMIZATION_TYPE_LABEL } from "@/lib/account-reviews";
+import type { Database, AccountReviewDiagnosis, AccountReviewOutcome, OptimizationType } from "@/lib/supabase/database.types";
+import {
+  ACCOUNT_REVIEW_DIAGNOSIS_LABEL,
+  ACCOUNT_REVIEW_OUTCOME_LABEL,
+  OPTIMIZATION_ACTION_LABEL,
+  OPTIMIZATION_TYPE_LABEL,
+} from "@/lib/account-reviews";
 
 /**
  * "Histórico de {mês}" do Acompanhamento da Conta (Etapa 62, seção 9 do
@@ -117,10 +122,31 @@ function formatOptimizationItem(item: OptimizationActionDetail): string {
  * outcome-specific — uma revisão continua sendo uma unidade só de leitura,
  * nunca N linhas. Exportado (Timeline Geral, `lib/agency-timeline.ts`) —
  * mesmo texto nas duas Timelines. */
+/**
+ * Etapa "Histórico de Decisões Operacionais": quando a revisão tem
+ * `diagnosis` (toda revisão registrada a partir desta etapa), ele substitui
+ * o rótulo de outcome como informação PRINCIPAL — "CPA acima da meta" em vez
+ * de "Otimização realizada", nunca as duas juntas (seção 12 do pedido, sem
+ * duplicar informação: o outcome só volta a aparecer explicitamente no caso
+ * NO_CHANGE, como "Nenhuma alteração necessária" ao lado do diagnóstico,
+ * porque aí ele carrega informação que o diagnóstico sozinho não dá — "está
+ * saudável E não precisou de ação" é diferente de só "está saudável").
+ * Evento histórico sem `diagnosis` (anterior a esta etapa) cai no fallback
+ * de sempre — outcome como label principal, comportamento 100% preservado
+ * (seção 7 do pedido: nenhuma migration destrutiva, histórico legado
+ * continua renderizando).
+ */
 export function buildReviewDetail(metadata: Record<string, unknown>, actions?: OptimizationActionDetail[]): string | null {
   const outcome = metadata.outcome;
   if (typeof outcome !== "string" || !(outcome in ACCOUNT_REVIEW_OUTCOME_LABEL)) return null;
   const outcomeLabel = ACCOUNT_REVIEW_OUTCOME_LABEL[outcome as AccountReviewOutcome];
+
+  const diagnosis = metadata.diagnosis;
+  const diagnosisLabel =
+    typeof diagnosis === "string" && diagnosis in ACCOUNT_REVIEW_DIAGNOSIS_LABEL
+      ? ACCOUNT_REVIEW_DIAGNOSIS_LABEL[diagnosis as AccountReviewDiagnosis]
+      : null;
+  const primaryLabel = diagnosisLabel ?? outcomeLabel;
 
   if (outcome === "OPTIMIZATION_PERFORMED") {
     if (actions && actions.length > 0) {
@@ -129,19 +155,83 @@ export function buildReviewDetail(metadata: Record<string, unknown>, actions?: O
         items.length <= OPTIMIZATION_ITEMS_INLINE_LIMIT
           ? items.join(" · ")
           : `${items.slice(0, OPTIMIZATION_ITEMS_TRUNCATED_SHOWN).join(" · ")} · +${items.length - OPTIMIZATION_ITEMS_TRUNCATED_SHOWN} alterações`;
-      return `${outcomeLabel} · ${list}`;
+      return `${primaryLabel} · ${list}`;
     }
 
     // Fallback: evento histórico (ou lote ainda não buscado pelo chamador) —
     // só os tipos já salvos no metadata da própria revisão.
     const types = Array.isArray(metadata.optimization_types) ? metadata.optimization_types : [];
     if (types.length === 1 && typeof types[0] === "string" && types[0] in OPTIMIZATION_TYPE_LABEL) {
-      return `${outcomeLabel} · ${OPTIMIZATION_TYPE_LABEL[types[0] as OptimizationType]}`;
+      return `${primaryLabel} · ${OPTIMIZATION_TYPE_LABEL[types[0] as OptimizationType]}`;
     }
-    if (types.length > 1) return `${outcomeLabel} · ${types.length} alterações`;
+    if (types.length > 1) return `${primaryLabel} · ${types.length} alterações`;
   }
 
-  return outcomeLabel;
+  if (outcome === "NO_CHANGE" && diagnosisLabel) {
+    return `${diagnosisLabel} · ${outcomeLabel}`;
+  }
+
+  return primaryLabel;
+}
+
+export interface ReviewPresentation {
+  /** Diagnóstico (ou outcome, em evento legado sem diagnóstico) — informação
+   * PRINCIPAL da revisão, nunca "Analisou a conta"/rótulo genérico de evento
+   * (Etapa "Histórico de Decisões Operacionais", seções 8/12 do pedido). */
+  headline: string;
+  /** "Redistribuiu orçamento · Adicionou criativo", ou "Nenhuma alteração
+   * necessária" quando outcome é NO_CHANGE com diagnóstico — `null` só em
+   * evento legado NO_CHANGE sem diagnóstico (nesse caso o outcome JÁ é o
+   * headline, nunca duplicado numa segunda linha). */
+  actionsLine: string | null;
+  /** Observação (`account_reviews.notes`, copiada pro metadata do próprio
+   * evento) — `null` quando ausente, nunca uma linha vazia. */
+  notes: string | null;
+}
+
+/**
+ * Versão estruturada de `buildReviewDetail`, pensada pra Timeline Geral
+ * (`lib/agency-timeline.ts`) — em vez de UMA string concatenada, devolve
+ * headline/ações/observação separados, pra a página desenhar a hierarquia
+ * de 3 níveis pedida (seção 8: diagnóstico em destaque, ações abaixo,
+ * observação só quando existir). `client-operational-history.ts`
+ * (`CollapsibleAccountHistory`/`ClientHistoryList`) continua usando
+ * `buildReviewDetail` — layout compacto de uma linha só, inalterado.
+ */
+export function buildReviewPresentation(
+  metadata: Record<string, unknown>,
+  actions?: OptimizationActionDetail[],
+): ReviewPresentation | null {
+  const outcome = metadata.outcome;
+  if (typeof outcome !== "string" || !(outcome in ACCOUNT_REVIEW_OUTCOME_LABEL)) return null;
+  const outcomeLabel = ACCOUNT_REVIEW_OUTCOME_LABEL[outcome as AccountReviewOutcome];
+
+  const diagnosis = metadata.diagnosis;
+  const diagnosisLabel =
+    typeof diagnosis === "string" && diagnosis in ACCOUNT_REVIEW_DIAGNOSIS_LABEL
+      ? ACCOUNT_REVIEW_DIAGNOSIS_LABEL[diagnosis as AccountReviewDiagnosis]
+      : null;
+
+  const notesRaw = metadata.notes;
+  const notes = typeof notesRaw === "string" && notesRaw.trim().length > 0 ? notesRaw.trim() : null;
+
+  let actionsLine: string | null = null;
+  if (outcome === "OPTIMIZATION_PERFORMED") {
+    if (actions && actions.length > 0) {
+      actionsLine = actions.map(formatOptimizationItem).join(" · ");
+    } else {
+      const types = Array.isArray(metadata.optimization_types) ? metadata.optimization_types : [];
+      if (types.length === 1 && typeof types[0] === "string" && types[0] in OPTIMIZATION_TYPE_LABEL) {
+        actionsLine = OPTIMIZATION_TYPE_LABEL[types[0] as OptimizationType];
+      } else if (types.length > 1) {
+        actionsLine = `${types.length} alterações`;
+      }
+    }
+  } else if (outcome === "NO_CHANGE" && diagnosisLabel) {
+    actionsLine = outcomeLabel;
+  }
+
+  return { headline: diagnosisLabel ?? outcomeLabel, actionsLine, notes };
 }
 
 function buildDetail(eventType: ClientHistoryEventType, metadata: Record<string, unknown>, actions?: OptimizationActionDetail[]): string | null {

@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { checkWorkspaceClientAction } from "@/lib/require-workspace-client";
-import { OPTIMIZATION_QUICK_GROUPS } from "@/lib/recurring-tasks";
+import { isValidAccountReviewDiagnosis, parseOptimizationSelections } from "@/lib/account-reviews";
+import type { AccountReviewDiagnosis } from "@/lib/supabase/database.types";
 
 /**
  * Bug crítico corrigido — antes, QUALQUER falha (sessão expirada, cliente
@@ -24,40 +25,6 @@ import { OPTIMIZATION_QUICK_GROUPS } from "@/lib/recurring-tasks";
  * exatamente como o gestor deixou, sem precisar duplicar esse estado aqui.
  */
 export type RegisterExecutionState = { status: "idle" } | { status: "success" } | { status: "error"; message: string };
-
-/** Valida o JSON do picker de otimização (`optimization_selections_json`,
- * montado no cliente por `OptimizationQuickPicker`) contra as combinações
- * curadas de `OPTIMIZATION_QUICK_GROUPS` — nunca confia em type/action/
- * quantity vindos do formulário sem checar contra a lista oficial (defesa em
- * profundidade, mesmo princípio de `parseOptimizations` na Análise da Conta
- * manual, `account-review-actions.ts`). */
-function parseOptimizationSelections(raw: string): { type: string; action: string; quantity: number }[] {
-  if (!raw) return [];
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
-
-  const valid: { type: string; action: string; quantity: number }[] = [];
-  for (const item of parsed) {
-    if (typeof item !== "object" || item === null) continue;
-    const type = (item as Record<string, unknown>).type;
-    const action = (item as Record<string, unknown>).action;
-    const quantity = Math.trunc(Number((item as Record<string, unknown>).quantity));
-
-    const isKnownCombo = OPTIMIZATION_QUICK_GROUPS.some((group) =>
-      group.actions.some((quickAction) => quickAction.type === type && quickAction.action === action),
-    );
-    if (!isKnownCombo || !(quantity > 0)) continue;
-
-    valid.push({ type: type as string, action: action as string, quantity });
-  }
-  return valid;
-}
 
 /** SQLSTATE de um `raise exception '...'` sem código customizado — é assim
  * que `register_recurring_execution`/`record_account_review` sinalizam uma
@@ -106,7 +73,21 @@ export async function registerRecurringExecutionAction(
 
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const checklistSelectedKeys = formData.getAll("checklist_items").map(String);
+
+  // Presença de `optimization_selections_json` no formData é o mesmo sinal
+  // que `RegisterExecutionForm` usa pra decidir se renderiza
+  // `OptimizationQuickPicker`+`DiagnosisPicker` (`usesAccountReview=true`) —
+  // reaproveitado aqui pra saber se diagnóstico é exigido nesta submissão
+  // específica (recorrências com checklist genérico não têm o campo, então
+  // nunca caem nesta validação).
+  const isAccountReviewFlow = formData.has("optimization_selections_json");
   const optimizationSelections = parseOptimizationSelections(String(formData.get("optimization_selections_json") ?? ""));
+  const diagnosisRaw = String(formData.get("diagnosis") ?? "");
+  const diagnosis: AccountReviewDiagnosis | null = isValidAccountReviewDiagnosis(diagnosisRaw) ? diagnosisRaw : null;
+
+  if (isAccountReviewFlow && !diagnosis) {
+    return { status: "error", message: "Selecione o diagnóstico da conta." };
+  }
 
   const { error } = await supabase.rpc("register_recurring_execution", {
     p_recurring_task_id: recurringTaskId,
@@ -122,9 +103,12 @@ export async function registerRecurringExecutionAction(
     // atual (com ele, default null) — as duas eram candidatas válidas pro
     // mesmo conjunto de argumentos nomeados. Passar `null` explicitamente
     // nunca depende da resolução automática do Postgres (ver também a
-    // migration que remove as assinaturas antigas).
+    // migration que remove as assinaturas antigas). Mesmo raciocínio agora
+    // pra p_diagnosis, novo nesta etapa — mesma migration já cuida de
+    // remover a assinatura antiga que não o tinha.
     p_client_report_id: null,
     p_source: "web",
+    p_diagnosis: diagnosis,
   });
 
   if (error) {

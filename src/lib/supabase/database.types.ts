@@ -162,6 +162,19 @@ export type AccountReviewReason =
   | "OPPORTUNITY"
   | "OTHER";
 export type AccountReviewOutcome = "NO_CHANGE" | "OPTIMIZATION_PERFORMED" | "ISSUE_IDENTIFIED";
+/** Etapa "Histórico de Decisões Operacionais" — o que o gestor OBSERVOU na
+ * conta (dimensão nova, ortogonal a reason/outcome). Rótulos em
+ * lib/account-reviews.ts. */
+export type AccountReviewDiagnosis =
+  | "HEALTHY"
+  | "COST_ABOVE_TARGET"
+  | "COST_BELOW_TARGET"
+  | "LOW_VOLUME"
+  | "BUDGET_LIMITED"
+  | "CREATIVE_FATIGUE"
+  | "AUDIENCE_FATIGUE"
+  | "CAMPAIGN_UNDERPERFORMING"
+  | "INSUFFICIENT_DATA";
 export type OptimizationType =
   | "CREATIVE"
   | "AUDIENCE"
@@ -1669,6 +1682,7 @@ export interface Database {
           issue_task_id: string | null;
           previous_review_at: string | null;
           seconds_since_previous_review: number | null;
+          diagnosis: AccountReviewDiagnosis | null;
           created_at: string;
           updated_at: string;
         };
@@ -1689,6 +1703,7 @@ export interface Database {
           issue_task_id?: string | null;
           previous_review_at?: string | null;
           seconds_since_previous_review?: number | null;
+          diagnosis?: AccountReviewDiagnosis | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1709,6 +1724,7 @@ export interface Database {
           issue_task_id?: string | null;
           previous_review_at?: string | null;
           seconds_since_previous_review?: number | null;
+          diagnosis?: AccountReviewDiagnosis | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -3085,6 +3101,7 @@ export interface Database {
           p_task_responsible_id: string | null;
           p_task_due_date: string | null;
           p_source?: OperationalEventSource;
+          p_diagnosis?: AccountReviewDiagnosis | null;
         };
         Returns: {
           reviewId: string;
@@ -3103,6 +3120,7 @@ export interface Database {
           p_optimization_selections?: unknown | null;
           p_client_report_id?: string | null;
           p_source?: OperationalEventSource;
+          p_diagnosis?: AccountReviewDiagnosis | null;
         };
         Returns: {
           executionId: string;

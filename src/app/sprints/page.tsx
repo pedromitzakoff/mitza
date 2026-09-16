@@ -335,7 +335,7 @@ export default async function SprintsPage({
           supabase
             .from("account_reviews")
             .select(
-              "id, client_id, sprint_id, reviewed_at, reason, reason_other_description, outcome, notes, issue_description, issue_category, seconds_since_previous_review, team_member:team_members!account_reviews_team_member_id_fkey(name), optimizations:account_optimizations(id, optimization_type, optimization_action, description, reason, expected_impact, quantity), issue_task:tasks!account_reviews_issue_task_id_fkey(title)",
+              "id, client_id, sprint_id, reviewed_at, reason, reason_other_description, outcome, diagnosis, notes, issue_description, issue_category, seconds_since_previous_review, team_member:team_members!account_reviews_team_member_id_fkey(name), optimizations:account_optimizations(id, optimization_type, optimization_action, description, reason, expected_impact, quantity), issue_task:tasks!account_reviews_issue_task_id_fkey(title)",
             )
             .in("sprint_id", allSprintIds)
             .order("reviewed_at", { ascending: false }),
@@ -795,6 +795,7 @@ export default async function SprintsPage({
         reason: openReviewDetailRow.reason,
         reasonOtherDescription: openReviewDetailRow.reason_other_description,
         outcome: openReviewDetailRow.outcome,
+        diagnosis: openReviewDetailRow.diagnosis,
         notes: openReviewDetailRow.notes,
         issueDescription: openReviewDetailRow.issue_description,
         issueCategory: openReviewDetailRow.issue_category,

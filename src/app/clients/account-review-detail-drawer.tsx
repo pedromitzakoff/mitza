@@ -3,12 +3,13 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { formatDateTime } from "@/lib/format";
 import { formatDelay } from "@/lib/operational-events";
 import {
+  ACCOUNT_REVIEW_DIAGNOSIS_LABEL,
   ACCOUNT_REVIEW_OUTCOME_LABEL,
   ACCOUNT_REVIEW_REASON_LABEL,
   OPTIMIZATION_ACTION_LABEL,
   OPTIMIZATION_TYPE_LABEL,
 } from "@/lib/account-reviews";
-import type { AccountReviewOutcome, AccountReviewReason, OptimizationType } from "@/lib/supabase/database.types";
+import type { AccountReviewDiagnosis, AccountReviewOutcome, AccountReviewReason, OptimizationType } from "@/lib/supabase/database.types";
 import { generateClientUpdateAction } from "./client-update-actions";
 import { ClientUpdateEditor } from "./client-update-editor";
 import { SubmitButton } from "@/app/submit-button";
@@ -37,6 +38,10 @@ export interface AccountReviewDetail {
   reason: AccountReviewReason;
   reasonOtherDescription: string | null;
   outcome: AccountReviewOutcome;
+  /** Etapa "Histórico de Decisões Operacionais" — `null` em revisão legada
+   * (anterior a esta etapa) ou nas raras revisões gravadas antes dela ainda
+   * sem diagnóstico preenchido. */
+  diagnosis: AccountReviewDiagnosis | null;
   notes: string | null;
   issueDescription: string | null;
   issueCategory: string | null;
@@ -98,6 +103,12 @@ export function AccountReviewDetailDrawer({
             <dt className="text-overview-text-secondary">Resultado</dt>
             <dd className="font-medium text-overview-text-primary">{ACCOUNT_REVIEW_OUTCOME_LABEL[review.outcome]}</dd>
           </div>
+          {review.diagnosis && (
+            <div className="flex justify-between">
+              <dt className="text-overview-text-secondary">Diagnóstico</dt>
+              <dd className="text-right font-medium text-overview-text-primary">{ACCOUNT_REVIEW_DIAGNOSIS_LABEL[review.diagnosis]}</dd>
+            </div>
+          )}
           <div className="flex justify-between">
             <dt className="text-overview-text-secondary">Tempo desde a otimização anterior</dt>
             <dd className="font-medium text-overview-text-primary">

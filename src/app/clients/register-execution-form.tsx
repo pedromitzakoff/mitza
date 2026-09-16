@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { SubmitButton } from "@/app/submit-button";
 import { registerRecurringExecutionAction, type RegisterExecutionState } from "./recurring-task-actions";
 import { OptimizationQuickPicker } from "./optimization-quick-picker";
+import { DiagnosisPicker } from "./diagnosis-picker";
 import type { RecurringTaskChecklistItem } from "@/lib/recurring-task-data";
 
 // Precisa viver aqui, não em recurring-task-actions.ts: um arquivo
@@ -45,7 +46,10 @@ export function RegisterExecutionForm({
   return (
     <form action={formAction} className="mt-2 flex flex-col gap-2">
       {usesAccountReview ? (
-        <OptimizationQuickPicker />
+        <>
+          <DiagnosisPicker />
+          <OptimizationQuickPicker />
+        </>
       ) : (
         checklistItems.length > 0 && (
           <div className="flex flex-col gap-1">
