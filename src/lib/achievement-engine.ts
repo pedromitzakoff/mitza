@@ -23,19 +23,50 @@ import type { AchievementCandidate, AchievementLevel } from "@/lib/achievement-t
  * realmente relevantes do que 10 fracos") — depois de coletar TODOS os
  * candidatos de um cliente no dia (conta + campanha + público + criativo),
  * o motor persiste só os `MAX_CLIENT_ACHIEVEMENTS_PER_DAY` de maior
- * prioridade. Prioridade = severidade primeiro (recorde > destaque, nunca o
- * contrário), nível mais amplo em seguida (conta > campanha > público >
- * criativo — uma conquista de conta é sempre mais significativa que uma de
- * sub-entidade). Deliberadamente simples: nenhuma lógica semântica de "isso
- * já foi dito de outro jeito" — o corte por quantidade já resolve a
- * inflação sem precisar disso. */
+ * prioridade.
+ *
+ * Prioridade = severidade primeiro (recorde > destaque, nunca o contrário —
+ * é uma hierarquia categórica legítima, preservada sem mudança). Revisão
+ * pós-aprovação: dentro da MESMA severidade, "nível mais amplo" (conta >
+ * campanha > público > criativo) deixou de decidir sozinho — um insight de
+ * campanha/público/criativo pode ser muito mais forte que uma conquista de
+ * conta genérica, e o corte não pode eliminar isso automaticamente só pelo
+ * nível. Em vez disso, usa a MAGNITUDE que o próprio candidato já carrega
+ * (`relativeMagnitude`, abaixo — desvio relativo de `metric.actual` contra
+ * `metric.comparisonActual`/`metric.target`, o que já existir; nenhum campo
+ * novo, nenhum scoring inventado) e só cai pro nível como ÚLTIMO
+ * desempate, quando a magnitude está ausente ou empatada dos dois lados. */
 const SEVERITY_RANK: Record<AchievementCandidate["severity"], number> = { record: 0, highlight: 1, milestone: 2 };
 const LEVEL_RANK: Record<AchievementLevel, number> = { account: 0, campaign: 1, ad_set: 2, creative: 3 };
+
+/** Desvio relativo do acontecimento — `null` quando o candidato não carrega
+ * nenhum dos dois sinais (caso raro; cai pro desempate por nível). Prefere
+ * `comparisonActual` (comparação de período/concorrência, já a base mais
+ * direta de "quão forte foi a mudança") e cai pra `target` (distância da
+ * meta) quando não há comparação — nunca os dois combinados, nunca uma
+ * fórmula nova por família de conquista. */
+export function relativeMagnitude(candidate: AchievementCandidate): number | null {
+  const { metric } = candidate;
+  if (metric.comparisonActual !== undefined && metric.comparisonActual !== 0) {
+    return Math.abs((metric.actual - metric.comparisonActual) / metric.comparisonActual);
+  }
+  if (metric.target !== undefined && metric.target !== null && metric.target !== 0) {
+    return Math.abs((metric.actual - metric.target) / metric.target);
+  }
+  return null;
+}
 
 export function prioritizeClientCandidates(candidates: AchievementCandidate[]): AchievementCandidate[] {
   return [...candidates].sort((a, b) => {
     const severityDiff = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
     if (severityDiff !== 0) return severityDiff;
+
+    const magnitudeA = relativeMagnitude(a);
+    const magnitudeB = relativeMagnitude(b);
+    if (magnitudeA !== null && magnitudeB !== null && magnitudeA !== magnitudeB) return magnitudeB - magnitudeA;
+    if (magnitudeA !== null && magnitudeB === null) return -1;
+    if (magnitudeA === null && magnitudeB !== null) return 1;
+
     return LEVEL_RANK[a.level] - LEVEL_RANK[b.level];
   });
 }

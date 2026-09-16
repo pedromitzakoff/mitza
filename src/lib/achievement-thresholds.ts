@@ -140,6 +140,19 @@ export const SUB_ENTITY_WINDOW_SAMPLE_POLICY: WindowSamplePolicy = {
  * "melhor" quem não tinha ninguém comparável pra perder). */
 export const SUB_ENTITY_MIN_COMPARABLE_ENTITIES = 2;
 
+/** Revisão do detector "Destaque": mudar de líder (menor CPA hoje vs. ontem)
+ * NUNCA é suficiente sozinho — precisa ser uma vantagem MATERIAL sobre o
+ * conjunto das demais entidades comparáveis, não só sobre a segunda
+ * colocada isolada (diferenças de ranking podem ser irrelevantes). A
+ * vantagem é medida como `(CPA agregado das demais − CPA da destaque) /
+ * CPA agregado das demais`, exigindo este piso mínimo pra contar.
+ *
+ * Mesma magnitude já usada em `EVOLUTION_CPA_IMPROVEMENT_PCT`/
+ * `SCALE_MIN_INVESTMENT_GROWTH_PCT` — 20% já é o piso que o resto do motor
+ * usa pra "isso é uma diferença real", nunca um segundo número inventado
+ * sem relação com o que já existe. */
+export const SUB_ENTITY_DESTAQUE_MIN_ADVANTAGE_PCT = EVOLUTION_CPA_IMPROVEMENT_PCT;
+
 // ---------------------------------------------------------------------------
 // Controle de ruído (seção 8/9 do pedido) — teto de quantas conquistas de
 // CLIENTE (todos os níveis somados) o motor emite por cliente por dia.

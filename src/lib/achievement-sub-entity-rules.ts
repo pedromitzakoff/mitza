@@ -46,11 +46,20 @@ function rowsBetween(rows: SubEntityDailyRow[], from: string, to: string): SubEn
 }
 
 /**
- * DESTAQUE — a entidade (campanha/público/criativo) com o melhor CPA/CPL da
- * conta nos últimos 7 dias, entre concorrentes com amostra válida
- * (`SUB_ENTITY_MIN_COMPARABLE_ENTITIES`, `achievement-thresholds.ts`). Anti-
- * spam: só emite quando a LIDERANÇA muda — se a mesma entidade já era a
- * destaque ontem, não é novidade hoje.
+ * DESTAQUE — a entidade (campanha/público/criativo) com uma vantagem
+ * MATERIAL de CPA/CPL sobre o CONJUNTO das demais entidades comparáveis nos
+ * últimos 7 dias (`SUB_ENTITY_DESTAQUE_MIN_ADVANTAGE_PCT`), entre
+ * concorrentes com amostra válida (`SUB_ENTITY_MIN_COMPARABLE_ENTITIES`,
+ * `achievement-thresholds.ts`).
+ *
+ * Revisão pós-aprovação: mudar de líder (menor CPA hoje vs. ontem) nunca é
+ * suficiente sozinho — diferenças de ranking podem ser irrelevantes.
+ * `findSubEntityDestaque` já embute o piso de vantagem material (contra o
+ * agregado das demais, nunca só a 2ª colocada isolada); esta regra só
+ * precisa comparar se a entidade com vantagem material HOJE é a MESMA que
+ * já tinha vantagem material ONTEM — anti-spam por CRUZAMENTO da condição
+ * (mesmo espírito das regras de Evolução/Escala do nível conta), nunca só
+ * "a liderança mudou".
  */
 export function ruleSubEntityDestaque(ctx: SubEntityAchievementContext): AchievementCandidate | null {
   const todayCurrent = rowsBetween(ctx.rows, addDays(ctx.yesterday, -6), ctx.yesterday);
@@ -59,9 +68,14 @@ export function ruleSubEntityDestaque(ctx: SubEntityAchievementContext): Achieve
 
   const yesterdayCurrent = rowsBetween(ctx.rows, addDays(ctx.yesterday, -7), addDays(ctx.yesterday, -1));
   const yesterdayResult = findSubEntityDestaque(summarizeSubEntities(yesterdayCurrent, ctx.performanceGoal));
+  // Só emite quando ESTA entidade passa a ter vantagem MATERIAL hoje — se
+  // ontem ela já era a destaque com vantagem material, não é novidade
+  // (`yesterdayResult` só existe quando já passou no piso de
+  // `SUB_ENTITY_DESTAQUE_MIN_ADVANTAGE_PCT`, então esta comparação nunca
+  // suprime uma virada de líder que ainda não tinha vantagem material).
   if (yesterdayResult && yesterdayResult.winner.key === todayResult.winner.key) return null;
 
-  const { winner, runnerUp } = todayResult;
+  const { winner, rest, advantagePct } = todayResult;
   const cpa = winner.agg.cpa as number;
 
   return {
@@ -79,19 +93,19 @@ export function ruleSubEntityDestaque(ctx: SubEntityAchievementContext): Achieve
       metric: "cpa",
       actual: cpa,
       unit: "currency",
-      comparisonActual: runnerUp.agg.cpa ?? undefined,
+      comparisonActual: rest.cpa,
       windowStart: addDays(ctx.yesterday, -6),
       windowEnd: ctx.yesterday,
       windowLabel: "7 dias",
       sampleSpend: winner.agg.spend,
       sampleResultCount: winner.agg.resultCount,
       sampleRevenue: winner.agg.revenue,
-      comparisonSpend: runnerUp.agg.spend,
-      comparisonResultCount: runnerUp.agg.resultCount,
-      comparisonRevenue: runnerUp.agg.revenue,
+      comparisonSpend: rest.spend,
+      comparisonResultCount: rest.resultCount,
+      comparisonRevenue: rest.revenue,
     },
     headline: `"${winner.name}" tem o melhor CPA da conta nos últimos 7 dias`,
-    detail: `${resultNoun(winner.agg.resultCount, ctx.performanceGoal)} · CPA ${formatCurrency(cpa)}`,
+    detail: `${resultNoun(winner.agg.resultCount, ctx.performanceGoal)} · CPA ${formatCurrency(cpa)} · ${formatPercent(advantagePct * 100)} abaixo dos demais`,
   };
 }
 

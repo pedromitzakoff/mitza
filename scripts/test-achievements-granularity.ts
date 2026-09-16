@@ -34,7 +34,13 @@ import {
 } from "../src/lib/achievement-client-rules";
 import { prioritizeClientCandidates } from "../src/lib/achievement-engine";
 import { buildIdempotencyKey } from "../src/lib/achievement-engine";
-import { SUB_ENTITY_MIN_COMPARABLE_ENTITIES, SUB_ENTITY_WINDOW_SAMPLE_POLICY, MAX_CLIENT_ACHIEVEMENTS_PER_DAY, EVOLUTION_CPA_IMPROVEMENT_PCT } from "../src/lib/achievement-thresholds";
+import {
+  SUB_ENTITY_MIN_COMPARABLE_ENTITIES,
+  SUB_ENTITY_WINDOW_SAMPLE_POLICY,
+  SUB_ENTITY_DESTAQUE_MIN_ADVANTAGE_PCT,
+  MAX_CLIENT_ACHIEVEMENTS_PER_DAY,
+  EVOLUTION_CPA_IMPROVEMENT_PCT,
+} from "../src/lib/achievement-thresholds";
 import { resolveAchievementLevel } from "../src/app/achievements/page";
 import { ACHIEVEMENT_LEVEL_LABEL, CLIENT_FAMILY_LABEL } from "../src/lib/achievement-labels";
 import type { AchievementCandidate } from "../src/lib/achievement-types";
@@ -186,9 +192,26 @@ console.log("\n4 — Destaque (melhor CPA da conta) — campanha/público/criati
   check("2 campanhas resumidas no período", summaries.length, 2);
 
   const destaque = findSubEntityDestaque(summaries);
-  ok("com 2 concorrentes válidos, destaque é encontrado", destaque !== null);
+  ok("com 2 concorrentes válidos e vantagem material (67%), destaque é encontrado", destaque !== null);
   check("vencedora é a de menor CPA (Campanha Prospecção)", destaque?.winner.name, "Campanha Prospecção");
-  ok("CPA da vencedora é realmente menor que o da concorrente (evidência correta)", (destaque!.winner.agg.cpa as number) < (destaque!.runnerUp.agg.cpa as number));
+  ok("CPA da vencedora é realmente menor que o AGREGADO das demais (evidência correta)", (destaque!.winner.agg.cpa as number) < destaque!.rest.cpa);
+  ok(`vantagem (${((destaque?.advantagePct ?? 0) * 100).toFixed(0)}%) é ≥ ${SUB_ENTITY_DESTAQUE_MIN_ADVANTAGE_PCT * 100}% (piso de vantagem material)`, (destaque?.advantagePct ?? 0) >= SUB_ENTITY_DESTAQUE_MIN_ADVANTAGE_PCT);
+
+  // Líder por diferença MÍNIMA (abaixo do piso de vantagem material) —
+  // revisão pós-aprovação: mudar de líder nunca é suficiente sozinho, a
+  // vantagem precisa ser material contra o conjunto das demais.
+  const marginalRows: SubEntityDailyRow[] = [];
+  for (let i = 6; i >= 0; i--) {
+    marginalRows.push(row(addDays(YESTERDAY, -i), "Campanha Líder Marginal", 180 / 7, 10 / 7)); // CPA 18
+    marginalRows.push(row(addDays(YESTERDAY, -i), "Campanha B", 20, 1)); // CPA 20
+    marginalRows.push(row(addDays(YESTERDAY, -i), "Campanha C", 20, 1)); // CPA 20
+  }
+  const marginalSummaries = summarizeSubEntities(marginalRows, "leads");
+  const marginalDestaque = findSubEntityDestaque(marginalSummaries);
+  ok(
+    "vantagem de só 10% (18 vs. agregado 20 das demais) fica ABAIXO do piso de 20% — líder por diferença mínima NUNCA gera Destaque",
+    marginalDestaque === null,
+  );
 
   // Amostra insuficiente: só 1 campanha válida (a outra nunca bate o piso de
   // spend/resultado) — "não gerar conquista com 1 resultado ou gasto
@@ -198,7 +221,7 @@ console.log("\n4 — Destaque (melhor CPA da conta) — campanha/público/criati
   soloRows.push(row(YESTERDAY, "Campanha Fraca", 5, 1)); // não bate minSpend/minResultCount
   const soloSummaries = summarizeSubEntities(soloRows, "leads");
   const soloDestaque = findSubEntityDestaque(soloSummaries);
-  ok("sem pelo menos 2 concorrentes com amostra válida, destaque NUNCA é gerado (amostra insuficiente)", soloDestaque === null);
+  ok("único concorrente válido (o outro nunca bate amostra) — destaque NUNCA é gerado", soloDestaque === null);
   check(`mínimo de concorrentes é ${SUB_ENTITY_MIN_COMPARABLE_ENTITIES}`, SUB_ENTITY_MIN_COMPARABLE_ENTITIES, 2);
 
   // Amostra abaixo do piso mínimo (poucos resultados/gasto irrelevante) —
@@ -241,22 +264,25 @@ console.log("\n6 — ruleSubEntityDestaque/ruleSubEntityEvolution — anti-spam 
     return { date, channel: "meta", name, resultType: "leads", spend, resultCount, revenue: null };
   }
 
-  // Líder consistente nos últimos 8 dias (não muda de ontem pra hoje) — não
-  // deve gerar novo candidato de Destaque.
+  // Cenário 5 do pedido ("já estava acima do threshold ontem → não gera
+  // novamente"): "Campanha Líder" já tinha vantagem MATERIAL (CPA 10 vs. 30,
+  // 66,7% — bem acima do piso de 20%) e uniforme nos 14 dias, então a mesma
+  // entidade também vence a avaliação de ONTEM — anti-spam suprime.
   const stableRows: SubEntityDailyRow[] = [];
   for (let i = 13; i >= 0; i--) {
     stableRows.push(row(addDays(YESTERDAY, -i), "Campanha Líder", 30, 3));
     stableRows.push(row(addDays(YESTERDAY, -i), "Campanha Segunda", 30, 1));
   }
   const stableCtx: SubEntityAchievementContext = { clientId: "c1", clientName: "Pet Fast", yesterday: YESTERDAY, performanceGoal: "leads", level: "campaign", rows: stableRows };
-  check("liderança estável (mesma de ontem) não gera novo candidato de Destaque", ruleSubEntityDestaque(stableCtx), null);
+  check("destaque com vantagem material já presente ontem não gera novo candidato (anti-spam)", ruleSubEntityDestaque(stableCtx), null);
 
-  // Virada de liderança hoje: baseline longo (20 dias) onde "Campanha Líder"
-  // sempre venceu, e só ONTEM "Campanha Nova" tem um resultado forte o
-  // bastante pra virar a janela de 7 dias — garante que a virada aconteça
-  // exatamente HOJE (mesmo cuidado dos fixtures de Evolução/Escala acima: um
-  // baseline curto faria a virada já ter acontecido ONTEM também, e a regra
-  // corretamente não emitiria nada nesse caso).
+  // Cenário 6 do pedido ("cruzou o threshold hoje → gera"): baseline longo
+  // (19 dias) onde "Campanha Líder" sempre venceu com vantagem material, e só
+  // ONTEM "Campanha Nova" tem um resultado forte o bastante pra assumir a
+  // vantagem material dentro da janela de 7 dias — garante que a virada
+  // aconteça exatamente HOJE (mesmo cuidado dos fixtures de Evolução/Escala
+  // acima: um baseline curto faria a virada já ter acontecido ONTEM também, e
+  // a regra corretamente não emitiria nada nesse caso).
   const flipRows: SubEntityDailyRow[] = [];
   for (let i = 19; i >= 1; i--) {
     flipRows.push(row(addDays(YESTERDAY, -i), "Campanha Líder", 30, 3)); // CPA 10 (baseline)
@@ -271,6 +297,10 @@ console.log("\n6 — ruleSubEntityDestaque/ruleSubEntityEvolution — anti-spam 
   check("level do candidato é 'campaign'", flipCandidate?.level, "campaign");
   check("family do candidato é 'destaque'", flipCandidate?.family, "destaque");
   ok("headline usa aspas no nome da entidade (padrão do pedido)", Boolean(flipCandidate?.headline.includes('"Campanha Nova"')));
+  ok(
+    "evidência (metric.comparisonActual) confirma vantagem material contra o AGREGADO das demais, não só a diferença de ranking",
+    flipCandidate !== null && flipCandidate.metric.comparisonActual !== undefined && flipCandidate.metric.actual < (flipCandidate.metric.comparisonActual as number) * (1 - SUB_ENTITY_DESTAQUE_MIN_ADVANTAGE_PCT),
+  );
   ok("headline NUNCA repete o nome do cliente (cliente é campo separado)", !flipCandidate?.headline.includes("Pet Fast"));
 }
 
@@ -363,6 +393,56 @@ console.log("\n9 — Controle de ruído (teto de conquistas por cliente/dia)\n")
   const engineCode = stripComments(loadSource("src", "lib", "achievement-engine.ts"));
   ok("motor coleta TODOS os candidatos do cliente (conta + sub-entidade) antes de decidir o que persistir", /const allCandidates: AchievementCandidate\[\] = \[\]/.test(engineCode));
   ok("motor aplica o teto via prioritizeClientCandidates + MAX_CLIENT_ACHIEVEMENTS_PER_DAY antes de persistir", /prioritizeClientCandidates\(allCandidates\)/.test(engineCode) && /slice\(0, MAX_CLIENT_ACHIEVEMENTS_PER_DAY\)/.test(engineCode));
+
+  // Revisão pós-aprovação: "nível mais amplo" NUNCA deve eliminar
+  // automaticamente um insight mais relevante de campanha/público/criativo —
+  // quando os candidatos JÁ carregam informação suficiente pra medir força
+  // quantitativa (comparisonActual/target), essa magnitude decide primeiro, e
+  // o nível só desempata quando a magnitude está ausente ou empatada.
+  function candidateWithMagnitude(
+    level: AchievementCandidate["level"],
+    severity: AchievementCandidate["severity"],
+    type: string,
+    actual: number,
+    comparisonActual: number,
+  ): AchievementCandidate {
+    return {
+      type,
+      scope: "client",
+      family: "evolucao",
+      severity,
+      occurredOnDate: YESTERDAY,
+      windowKey: type,
+      clientId: "c1",
+      clientName: "Cliente X",
+      level,
+      metric: { metric: "cpa", actual, unit: "currency", comparisonActual },
+      headline: type,
+      detail: "",
+    };
+  }
+
+  const magnitudeCandidates = [
+    // conta, highlight, sem magnitude relativa nenhuma (nem comparisonActual nem target).
+    candidate("account", "highlight", "acct_no_magnitude"),
+    // criativo, highlight, MAS com uma magnitude relativa enorme (CPA 60% menor
+    // que a comparação) — deve vencer o de conta apesar do nível mais estreito.
+    candidateWithMagnitude("creative", "highlight", "creative_big_magnitude", 4, 10),
+  ];
+  const prioritizedByMagnitude = prioritizeClientCandidates(magnitudeCandidates);
+  check(
+    "candidato de criativo com magnitude quantitativa forte vence candidato de conta sem magnitude, mesma severidade (nível NÃO decide sozinho)",
+    prioritizedByMagnitude[0].type,
+    "creative_big_magnitude",
+  );
+
+  // Quando AMBOS têm magnitude, a maior magnitude vence — independente do nível.
+  const bothWithMagnitude = [
+    candidateWithMagnitude("account", "highlight", "acct_small_magnitude", 9, 10), // 10% de diferença
+    candidateWithMagnitude("ad_set", "highlight", "adset_big_magnitude", 4, 10), // 60% de diferença
+  ];
+  const prioritizedBoth = prioritizeClientCandidates(bothWithMagnitude);
+  check("entre 2 highlights com magnitude, a de MAIOR magnitude vence mesmo sendo nível mais estreito", prioritizedBoth[0].type, "adset_big_magnitude");
 }
 
 // ---------------------------------------------------------------------------

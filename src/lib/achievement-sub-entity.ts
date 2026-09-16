@@ -1,7 +1,12 @@
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import type { TrafficChannel } from "@/lib/traffic-channels";
+import { safeDivide } from "@/lib/performance";
 import { aggregateWindow, windowSampleIsValid, type ClientDailyPoint, type WindowAggregate } from "@/lib/achievement-sample";
-import { SUB_ENTITY_MIN_COMPARABLE_ENTITIES, SUB_ENTITY_WINDOW_SAMPLE_POLICY } from "@/lib/achievement-thresholds";
+import {
+  SUB_ENTITY_DESTAQUE_MIN_ADVANTAGE_PCT,
+  SUB_ENTITY_MIN_COMPARABLE_ENTITIES,
+  SUB_ENTITY_WINDOW_SAMPLE_POLICY,
+} from "@/lib/achievement-thresholds";
 
 /**
  * Núcleo puro de "Conquistas por Granularidade" (Campanha/Público/Criativo)
@@ -71,9 +76,26 @@ export function summarizeSubEntities(rows: SubEntityDailyRow[], primaryGoal: Per
   });
 }
 
+export interface SubEntityRestAggregate {
+  spend: number;
+  resultCount: number;
+  revenue: number | null;
+  cpa: number;
+}
+
 export interface SubEntityDestaqueResult {
   winner: SubEntitySummary;
-  runnerUp: SubEntitySummary;
+  /** Agregado de TODAS as demais entidades válidas (nunca só a segunda
+   * colocada) — a vantagem da destaque é medida contra o grupo inteiro, não
+   * contra um único concorrente isolado (revisão pós-aprovação: mudar de
+   * líder por uma diferença irrelevante contra a 2ª colocada não deveria
+   * bastar). */
+  rest: SubEntityRestAggregate;
+  /** `(rest.cpa − winner.cpa) / rest.cpa` — quanto a destaque é mais barata
+   * que o conjunto das demais. Sempre `>= SUB_ENTITY_DESTAQUE_MIN_ADVANTAGE_PCT`
+   * quando este resultado existe (o piso já foi aplicado dentro de
+   * `findSubEntityDestaque`). */
+  advantagePct: number;
 }
 
 /** "Destaque" — a entidade de MENOR CPA/CPL entre as que passam na amostra
@@ -81,13 +103,35 @@ export interface SubEntityDestaqueResult {
  * `SUB_ENTITY_MIN_COMPARABLE_ENTITIES` concorrentes válidas no MESMO
  * período — nunca "melhor" sem concorrência real (seção 5 do pedido: nunca
  * chamar de "melhor" uma entidade que teve amostra irrelevante OU que não
- * tinha ninguém comparável pra perder). */
+ * tinha ninguém comparável pra perder).
+ *
+ * Revisão pós-aprovação: mudar de líder (menor CPA hoje vs. ontem) nunca é
+ * suficiente sozinho — diferenças de ranking podem ser irrelevantes.
+ * "Destaque" agora exige uma vantagem MATERIAL: o CPA da entidade precisa
+ * ser pelo menos `SUB_ENTITY_DESTAQUE_MIN_ADVANTAGE_PCT` menor que o CPA
+ * AGREGADO de todas as demais entidades válidas (nunca só a 2ª colocada
+ * isolada — um grupo inteiro de concorrentes é uma base de comparação mais
+ * confiável que um único rival). */
 export function findSubEntityDestaque(summaries: SubEntitySummary[]): SubEntityDestaqueResult | null {
   const valid = summaries.filter((s) => windowSampleIsValid(s.agg, SUB_ENTITY_WINDOW_SAMPLE_POLICY) && s.agg.cpa !== null);
   if (valid.length < SUB_ENTITY_MIN_COMPARABLE_ENTITIES) return null;
 
   const sorted = [...valid].sort((a, b) => (a.agg.cpa as number) - (b.agg.cpa as number));
-  return { winner: sorted[0], runnerUp: sorted[1] };
+  const winner = sorted[0];
+  const others = sorted.slice(1);
+
+  const restSpend = others.reduce((sum, s) => sum + s.agg.spend, 0);
+  const restResultCount = others.reduce((sum, s) => sum + s.agg.resultCount, 0);
+  const restRevenueEntries = others.filter((s) => s.agg.revenue !== null);
+  const restRevenue = restRevenueEntries.length > 0 ? restRevenueEntries.reduce((sum, s) => sum + (s.agg.revenue ?? 0), 0) : null;
+  const restCpa = safeDivide(restSpend, restResultCount);
+  if (restCpa === null || restCpa === 0) return null;
+
+  const winnerCpa = winner.agg.cpa as number;
+  const advantagePct = (restCpa - winnerCpa) / restCpa;
+  if (advantagePct < SUB_ENTITY_DESTAQUE_MIN_ADVANTAGE_PCT) return null;
+
+  return { winner, rest: { spend: restSpend, resultCount: restResultCount, revenue: restRevenue, cpa: restCpa }, advantagePct };
 }
 
 export interface SubEntityEvolutionResult {
