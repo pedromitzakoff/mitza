@@ -28,6 +28,16 @@ import {
 import type { AchievementCandidate, AchievementSourceInfo } from "@/lib/achievement-types";
 
 /**
+ * Etapa "Conquistas por Granularidade": nenhuma regra abaixo escreve o nome
+ * do cliente dentro de `headline`/`detail` — antes existiam frases como
+ * "CPA da ${clientName} melhorou..."/"${clientName} teve a melhor
+ * semana...", mas o cliente agora é SEMPRE a primeira informação do card,
+ * renderizada separadamente (`achievements-feed.tsx`) a partir de
+ * `candidate.clientName`. Repetir o nome dentro da frase duplicaria a
+ * mesma informação duas vezes na mesma linha visual.
+ */
+
+/**
  * As 12 regras de Cliente da V1 — cada função é pura (sem I/O), recebe o
  * contexto já resolvido (`ClientAchievementContext`, montado por
  * `achievement-metrics.ts`) e devolve no máximo 1 candidato. V1 = escopo
@@ -190,6 +200,7 @@ function bestRollingWeekRecord(
     windowKey: `week_record:${candidateWindow.endDate}`,
     clientId: ctx.clientId,
     clientName: ctx.clientName,
+    level: "account",
     metric: {
       metric: metricLabel === "result_count" ? "result_count" : metricLabel,
       actual: candidateWindow.value,
@@ -222,7 +233,7 @@ export function ruleRecordBestCpaWeek(ctx: ClientAchievementContext): Achievemen
     (agg) => agg.cpa,
     (candidate, best) => candidate < best,
     (v) => formatCurrency(v),
-    `${ctx.clientName} teve a melhor semana de CPA da história`,
+    `Melhor semana de CPA da história`,
     (f) => `CPA de ${f} na semana`,
   );
 }
@@ -237,7 +248,7 @@ export function ruleRecordBestRoasWeek(ctx: ClientAchievementContext): Achieveme
     (agg) => agg.roas,
     (candidate, best) => candidate > best,
     (v) => `${v.toFixed(2)}x`,
-    `${ctx.clientName} teve a melhor semana de ROAS da história`,
+    `Melhor semana de ROAS da história`,
     (f) => `ROAS de ${f} na semana`,
   );
 }
@@ -251,7 +262,7 @@ export function ruleRecordBestResultsWeek(ctx: ClientAchievementContext): Achiev
     (agg) => agg.resultCount,
     (candidate, best) => candidate > best,
     (v) => `${v}`,
-    `${ctx.clientName} teve a melhor semana de resultados da história`,
+    `Melhor semana de resultados da história`,
     (f) => `${f} resultados na semana`,
   );
 }
@@ -293,6 +304,7 @@ export function ruleRecordBestMonthClosed(ctx: ClientAchievementContext): Achiev
     windowKey: `month_closed_record:${closedMonth}`,
     clientId: ctx.clientId,
     clientName: ctx.clientName,
+    level: "account",
     metric: {
       metric: "result_count",
       actual: closedAgg.resultCount,
@@ -311,7 +323,7 @@ export function ruleRecordBestMonthClosed(ctx: ClientAchievementContext): Achiev
       comparisonRevenue: best.agg.revenue,
       historySinceDate: historySinceDate(ctx),
     },
-    headline: `${ctx.clientName} teve o melhor mês da história`,
+    headline: `Melhor mês da história`,
     detail: `${closedAgg.resultCount} resultados no mês, superando o recorde anterior de ${best.agg.resultCount}`,
   };
 }
@@ -362,6 +374,7 @@ export function ruleRecordCurrentMonthPaceBeatsHistory(ctx: ClientAchievementCon
     windowKey: `month_pace_record:${currentMonth}`,
     clientId: ctx.clientId,
     clientName: ctx.clientName,
+    level: "account",
     metric: {
       metric: "result_count",
       actual: currentAgg.resultCount,
@@ -381,7 +394,7 @@ export function ruleRecordCurrentMonthPaceBeatsHistory(ctx: ClientAchievementCon
       historySinceDate: historySinceDate(ctx),
     },
     headline: `Novo recorde mensal em andamento`,
-    detail: `Com ${daysRemaining} dias restantes, ${ctx.clientName} já superou seu maior volume mensal de resultados (recorde anterior: ${bestClosed.agg.resultCount})`,
+    detail: `${currentAgg.resultCount} resultados com ${daysRemaining} dias restantes · recorde anterior de ${bestClosed.agg.resultCount}`,
   };
 }
 
@@ -450,6 +463,7 @@ export function ruleGoalMonthlyResultReached(ctx: ClientAchievementContext): Ach
     windowKey: `goal_monthly:${currentMonth}:${thresholdToday}`,
     clientId: ctx.clientId,
     clientName: ctx.clientName,
+    level: "account",
     metric: {
       metric: "result_count",
       actual: currentAgg.resultCount,
@@ -461,7 +475,7 @@ export function ruleGoalMonthlyResultReached(ctx: ClientAchievementContext): Ach
       sampleSpend: currentAgg.spend,
       sampleRevenue: currentAgg.revenue,
     },
-    headline: thresholdToday > 1 ? `${ctx.clientName} superou a meta mensal` : `${ctx.clientName} atingiu a meta mensal`,
+    headline: thresholdToday > 1 ? `Superou a meta mensal` : `Atingiu a meta mensal`,
     detail:
       thresholdToday > 1
         ? `${currentAgg.resultCount} resultados — ${formatPercent((thresholdToday - 1) * 100)} acima da meta de ${goal.targetResultCount}`
@@ -528,6 +542,7 @@ export function ruleConsistencyCpaBelowTarget(ctx: ClientAchievementContext): Ac
     windowKey: `consistency_cpa:${streakStartDate}:${threshold}`,
     clientId: ctx.clientId,
     clientName: ctx.clientName,
+    level: "account",
     metric: {
       metric: "cpa",
       actual: cpaToday ?? 0,
@@ -540,7 +555,7 @@ export function ruleConsistencyCpaBelowTarget(ctx: ClientAchievementContext): Ac
       sampleResultCount: streakWindowAgg.resultCount,
       sampleRevenue: streakWindowAgg.revenue,
     },
-    headline: `${ctx.clientName} completou ${threshold} dias de mídia consecutivos abaixo da meta de CPA`,
+    headline: `${threshold} dias consecutivos abaixo da meta de CPA`,
     detail:
       cpaToday !== null && goal?.targetCostPerResult
         ? `CPA de ${formatCurrency(cpaToday)} · Meta ${formatCurrency(goal.targetCostPerResult)}`
@@ -589,6 +604,7 @@ export function ruleEvolutionCpaImproved(ctx: ClientAchievementContext): Achieve
     windowKey: `evolution_cpa:${ctx.yesterday}`,
     clientId: ctx.clientId,
     clientName: ctx.clientName,
+    level: "account",
     metric: {
       metric: "cpa",
       actual: today.currentCpa ?? 0,
@@ -605,8 +621,8 @@ export function ruleEvolutionCpaImproved(ctx: ClientAchievementContext): Achieve
       comparisonResultCount: today.previous.resultCount,
       comparisonRevenue: today.previous.revenue,
     },
-    headline: `CPA da ${ctx.clientName} melhorou ${formatPercent(improvementPct * 100)} vs. os 7 dias anteriores`,
-    detail: `${formatCurrency(today.currentCpa ?? 0)} contra ${formatCurrency(today.previousCpa ?? 0)} no período anterior`,
+    headline: `CPA melhorou ${formatPercent(improvementPct * 100)} nos últimos 7 dias`,
+    detail: `${formatCurrency(today.currentCpa ?? 0)} vs. ${formatCurrency(today.previousCpa ?? 0)} no período anterior`,
   };
 }
 
@@ -647,6 +663,7 @@ export function ruleEvolutionRoasGrowth(ctx: ClientAchievementContext): Achievem
     windowKey: `evolution_roas:${ctx.yesterday}`,
     clientId: ctx.clientId,
     clientName: ctx.clientName,
+    level: "account",
     metric: {
       metric: "roas",
       actual: today.currentRoas ?? 0,
@@ -663,8 +680,8 @@ export function ruleEvolutionRoasGrowth(ctx: ClientAchievementContext): Achievem
       comparisonResultCount: today.previous.resultCount,
       comparisonRevenue: today.previous.revenue,
     },
-    headline: `ROAS da ${ctx.clientName} cresceu ${formatPercent(growthPct * 100)} vs. os 7 dias anteriores`,
-    detail: `${(today.currentRoas ?? 0).toFixed(2)}x contra ${(today.previousRoas ?? 0).toFixed(2)}x no período anterior`,
+    headline: `ROAS cresceu ${formatPercent(growthPct * 100)} nos últimos 7 dias`,
+    detail: `${(today.currentRoas ?? 0).toFixed(2)}x vs. ${(today.previousRoas ?? 0).toFixed(2)}x no período anterior`,
   };
 }
 
@@ -730,6 +747,7 @@ export function ruleScaleInvestmentGrowthWithEfficiency(ctx: ClientAchievementCo
     windowKey: `scale:${ctx.yesterday}`,
     clientId: ctx.clientId,
     clientName: ctx.clientName,
+    level: "account",
     metric: {
       metric: "investment",
       actual: today.currentSpend,
@@ -743,11 +761,11 @@ export function ruleScaleInvestmentGrowthWithEfficiency(ctx: ClientAchievementCo
       sampleResultCount: today.currentResultCount,
       comparisonResultCount: today.previousResultCount,
     },
-    headline: `${ctx.clientName} escalou investimento mantendo eficiência`,
+    headline: `Escalou investimento ${formatPercent(growthPct * 100)} mantendo eficiência`,
     detail:
       today.currentCpa !== null && today.target
-        ? `Investimento aumentou ${formatPercent(growthPct * 100)} e o CPA continuou dentro da meta (${formatCurrency(today.currentCpa)} · meta ${formatCurrency(today.target)})`
-        : `Investimento aumentou ${formatPercent(growthPct * 100)} mantendo o CPA dentro da meta`,
+        ? `CPA ${formatCurrency(today.currentCpa)} · Meta ${formatCurrency(today.target)}`
+        : `CPA dentro da meta`,
   };
 }
 
@@ -779,6 +797,7 @@ export function ruleRecoveryCpaBackWithinTarget(ctx: ClientAchievementContext): 
     windowKey: `recovery_cpa:${result.badStreakStartDate}`,
     clientId: ctx.clientId,
     clientName: ctx.clientName,
+    level: "account",
     metric: {
       metric: "cpa",
       actual: cpaToday ?? 0,
@@ -793,8 +812,8 @@ export function ruleRecoveryCpaBackWithinTarget(ctx: ClientAchievementContext): 
     headline: `Performance recuperada`,
     detail:
       cpaToday !== null && goal?.targetCostPerResult
-        ? `Depois de um período acima da meta, o CPA da ${ctx.clientName} voltou para ${formatCurrency(cpaToday)}, abaixo da meta de ${formatCurrency(goal.targetCostPerResult)}`
-        : `O CPA da ${ctx.clientName} voltou a ficar dentro da meta após um período acima dela`,
+        ? `CPA voltou a ${formatCurrency(cpaToday)}, abaixo da meta de ${formatCurrency(goal.targetCostPerResult)}`
+        : `CPA voltou a ficar dentro da meta após um período acima dela`,
   };
 }
 

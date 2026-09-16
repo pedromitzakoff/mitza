@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
-import type { AchievementMetricSnapshot, AchievementScope, AchievementSeverity, AchievementSourceInfo } from "@/lib/achievement-types";
+import type { AchievementLevel, AchievementMetricSnapshot, AchievementScope, AchievementSeverity, AchievementSourceInfo } from "@/lib/achievement-types";
 
 /**
  * Camada de LEITURA da página `/achievements` — só lê conquistas já
@@ -31,6 +31,13 @@ export interface AchievementRow {
   clientName: string | null;
   actorTeamMemberId: string | null;
   actorTeamMemberName: string | null;
+  /** Etapa "Conquistas por Granularidade" — `"account"` pra todo evento
+   * legado (gravado antes desta etapa, sem o campo no metadata) e pra
+   * escopo agência/pessoa. Fallback seguro, nunca `undefined` na leitura. */
+  level: AchievementLevel;
+  /** Nome da campanha/público/criativo — `null` quando `level === "account"`
+   * ou em evento legado sem o campo. */
+  entityName: string | null;
   headline: string;
   detail: string;
   metric: AchievementMetricSnapshot | null;
@@ -42,6 +49,9 @@ export interface AchievementFilters {
   clientId?: string | null;
   actorTeamMemberId?: string | null;
   family?: string | null;
+  /** Etapa "Conquistas por Granularidade" — só faz sentido pra `scope:
+   * "client"` (Agência/Pessoa nunca têm nível); `null`/ausente = todos. */
+  level?: AchievementLevel | null;
 }
 
 const ACHIEVEMENTS_PAGE_SIZE = 20;
@@ -70,6 +80,8 @@ function toRow(row: {
     clientName: row.client?.name ?? (metadata.client_name as string | null) ?? null,
     actorTeamMemberId: row.actor_team_member_id,
     actorTeamMemberName: row.actor?.name ?? null,
+    level: (metadata.level as AchievementLevel | undefined) ?? "account",
+    entityName: (metadata.entity_name as string | undefined) ?? null,
     headline: (metadata.headline as string) ?? "",
     detail: (metadata.detail as string) ?? "",
     metric: (metadata.metric as AchievementMetricSnapshot | undefined) ?? null,
@@ -99,6 +111,18 @@ export async function fetchAchievements(
   if (filters.clientId) query = query.eq("client_id", filters.clientId);
   if (filters.actorTeamMemberId) query = query.eq("actor_team_member_id", filters.actorTeamMemberId);
   if (filters.family) query = query.eq("metadata->>family", filters.family);
+  if (filters.level) {
+    // Evento legado (anterior à Etapa "Conquistas por Granularidade") nunca
+    // teve `metadata.level` — sempre foi conceitualmente "Conta", então
+    // "Nível: Conta" também precisa incluir esses eventos (chave ausente),
+    // nunca só os que já têm o campo explícito. Só o nível "account" precisa
+    // desse `.or` — campanha/público/criativo são inteiramente novos nesta
+    // etapa, sem ambiguidade histórica.
+    query =
+      filters.level === "account"
+        ? query.or("metadata->>level.eq.account,metadata->>level.is.null")
+        : query.eq("metadata->>level", filters.level);
+  }
 
   const { data } = await query;
   const rows = data ?? [];

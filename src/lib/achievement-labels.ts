@@ -1,4 +1,4 @@
-import type { AchievementMetricSnapshot, AchievementScope, AchievementSeverity } from "@/lib/achievement-types";
+import type { AchievementLevel, AchievementMetricSnapshot, AchievementScope, AchievementSeverity } from "@/lib/achievement-types";
 
 /** Rótulos visíveis — nunca "medalha"/"nível"/"XP" na UI (Auditoria, seção
  * 1). Usado pela página `/achievements` e, futuramente, pela Timeline. */
@@ -16,6 +16,17 @@ export const CLIENT_FAMILY_LABEL: Record<string, string> = {
   evolucao: "Evolução",
   escala: "Escala",
   recuperacao: "Recuperação",
+  destaque: "Destaque",
+};
+
+/** Etapa "Conquistas por Granularidade" — "Nível" (Conta/Campanha/Público/
+ * Criativo), filtro/tag ortogonal a "Tipo" (família). Só existe pra escopo
+ * `client`. */
+export const ACHIEVEMENT_LEVEL_LABEL: Record<AchievementLevel, string> = {
+  account: "Conta",
+  campaign: "Campanha",
+  ad_set: "Público",
+  creative: "Criativo",
 };
 
 export const AGENCY_FAMILY_LABEL: Record<string, string> = {

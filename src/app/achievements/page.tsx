@@ -7,7 +7,15 @@ import { formatTimelineDayLabel } from "@/lib/format";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { fetchAchievements, fetchClientAchievementsMonthSummary, type AchievementRow } from "@/lib/achievements-data";
 import { ACHIEVEMENT_SCOPE_LABEL, CLIENT_FAMILY_LABEL, AGENCY_FAMILY_LABEL, PERSON_FAMILY_LABEL } from "@/lib/achievement-labels";
-import type { AchievementScope } from "@/lib/achievement-types";
+import type { AchievementLevel, AchievementScope } from "@/lib/achievement-types";
+
+/** Etapa "Conquistas por Granularidade" — mesmo padrão de fallback seguro
+ * já usado por `resolveOperationChannel`/`resolveAgencyTimelineType`: valor
+ * ausente/inválido cai em `"todos"`, nunca um nível "chutado". Exportado só
+ * pra teste. */
+export function resolveAchievementLevel(paramValue: string | undefined): AchievementLevel | "todos" {
+  return paramValue === "account" || paramValue === "campaign" || paramValue === "ad_set" || paramValue === "creative" ? paramValue : "todos";
+}
 import { AchievementsFilterBar } from "./achievements-filter-bar";
 import { AchievementsFeed } from "./achievements-feed";
 
@@ -23,7 +31,7 @@ import { AchievementsFeed } from "./achievements-feed";
 export default async function AchievementsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; client?: string; actor?: string; family?: string; page?: string }>;
+  searchParams: Promise<{ tab?: string; client?: string; actor?: string; family?: string; level?: string; page?: string }>;
 }) {
   const profile = await getCurrentProfile();
   if (!profile) return null;
@@ -33,6 +41,7 @@ export default async function AchievementsPage({
   const clientId = params.client ?? "todos";
   const actorId = params.actor ?? "todos";
   const familyId = params.family ?? "todos";
+  const levelId = scope === "client" ? resolveAchievementLevel(params.level) : "todos";
   const page = Math.max(0, Number(params.page) || 0);
 
   const supabase = await createSupabaseClient();
@@ -52,6 +61,7 @@ export default async function AchievementsPage({
         clientId: scope === "client" && clientId !== "todos" ? clientId : null,
         actorTeamMemberId: scope === "person" && actorId !== "todos" ? actorId : null,
         family: familyId !== "todos" ? familyId : null,
+        level: levelId !== "todos" ? levelId : null,
       },
       page,
     ),
@@ -70,7 +80,7 @@ export default async function AchievementsPage({
     else groups.push({ dayLabel, rows: [row] });
   }
 
-  function pageHref(overrides: { tab?: string; client?: string; actor?: string; family?: string; page?: number }) {
+  function pageHref(overrides: { tab?: string; client?: string; actor?: string; family?: string; level?: string; page?: number }) {
     const next = new URLSearchParams();
     const nextScope = overrides.tab ?? params.tab ?? "client";
     if (nextScope !== "client") next.set("tab", nextScope);
@@ -84,6 +94,9 @@ export default async function AchievementsPage({
     const nextFamily = overrides.family ?? familyId;
     if (nextFamily !== "todos") next.set("family", nextFamily);
 
+    const nextLevel = overrides.level ?? levelId;
+    if (nextScope === "client" && nextLevel !== "todos") next.set("level", nextLevel);
+
     const nextPage = overrides.page ?? page;
     if (nextPage > 0) next.set("page", String(nextPage));
 
@@ -91,7 +104,8 @@ export default async function AchievementsPage({
     return query ? `/achievements?${query}` : "/achievements";
   }
 
-  const hasAnyFilter = (scope === "client" && clientId !== "todos") || (scope === "person" && actorId !== "todos") || familyId !== "todos";
+  const hasAnyFilter =
+    (scope === "client" && (clientId !== "todos" || levelId !== "todos")) || (scope === "person" && actorId !== "todos") || familyId !== "todos";
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4 md:p-6">
@@ -104,7 +118,7 @@ export default async function AchievementsPage({
         {(["client", "agency", "person"] as const).map((tabScope) => (
           <Link
             key={tabScope}
-            href={pageHref({ tab: tabScope, client: "todos", actor: "todos", family: "todos", page: 0 })}
+            href={pageHref({ tab: tabScope, client: "todos", actor: "todos", family: "todos", level: "todos", page: 0 })}
             scroll={false}
             className={
               scope === tabScope
@@ -132,6 +146,7 @@ export default async function AchievementsPage({
         clientId={clientId}
         actorId={actorId}
         familyId={familyId}
+        levelId={levelId}
         clients={clients ?? []}
         teamMembers={teamMembers ?? []}
         familyOptions={familyOptions}

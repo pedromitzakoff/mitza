@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { formatCurrency, formatDateRange, formatDateTimeWithYear, formatDateWithYear, formatPercent } from "@/lib/format";
 import { safeDivide } from "@/lib/performance";
 import { yearMonthOf } from "@/lib/achievement-dates";
-import { familyLabelFor, ACHIEVEMENT_METRIC_LABEL } from "@/lib/achievement-labels";
+import { ACHIEVEMENT_LEVEL_LABEL, ACHIEVEMENT_METRIC_LABEL, familyLabelFor } from "@/lib/achievement-labels";
 import type { AchievementRow } from "@/lib/achievements-data";
 import type { AchievementMetricSnapshot } from "@/lib/achievement-types";
 
@@ -95,7 +95,10 @@ export function AchievementDetailDrawer({ achievement, onClose }: { achievement:
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
-              🏆 {familyLabelFor(achievement.scope, achievement.family)}
+              {achievement.clientName ?? achievement.actorTeamMemberName ?? "Agência"}
+              {" · "}
+              {achievement.level === "account" ? familyLabelFor(achievement.scope, achievement.family) : ACHIEVEMENT_LEVEL_LABEL[achievement.level]}
+              {achievement.entityName ? ` · ${achievement.entityName}` : ""}
             </p>
             <h2 className="mt-0.5 text-lg font-semibold leading-snug text-foreground">{achievement.headline}</h2>
           </div>

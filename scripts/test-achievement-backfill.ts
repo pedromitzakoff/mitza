@@ -107,6 +107,7 @@ console.log("\n3 — Idempotência determinística\n");
     windowKey: "consistency_cpa:2026-07-30:7",
     clientId: "client-1",
     clientName: "Pet Fast",
+    level: "account",
     metric: { metric: "cpa", actual: 20, unit: "currency" },
     headline: "x",
     detail: "y",

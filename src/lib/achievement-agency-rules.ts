@@ -82,6 +82,7 @@ export function ruleAgencyActiveClientsMilestone(ctx: AgencyAchievementContext):
   return {
     type: "agency_active_clients_milestone",
     scope: "agency",
+    level: "account",
     family: "crescimento",
     severity: milestone >= 100 ? "record" : milestone >= 50 ? "highlight" : "milestone",
     occurredOnDate: ctx.evaluatedOnDate,
@@ -106,6 +107,7 @@ export function ruleAgencyHealthyWalletMilestone(ctx: AgencyAchievementContext):
   return {
     type: "agency_healthy_wallet_milestone",
     scope: "agency",
+    level: "account",
     family: "carteira",
     severity: milestone >= 1 ? "record" : "highlight",
     occurredOnDate: ctx.evaluatedOnDate,
@@ -127,6 +129,7 @@ export function ruleAgencyReviewsMilestone(ctx: AgencyAchievementContext): Achie
   return {
     type: "agency_reviews_milestone",
     scope: "agency",
+    level: "account",
     family: "operacao",
     severity: milestone >= 1000 ? "record" : "highlight",
     occurredOnDate: ctx.evaluatedOnDate,
@@ -145,6 +148,7 @@ export function ruleAgencyOptimizationsMilestone(ctx: AgencyAchievementContext):
   return {
     type: "agency_optimizations_milestone",
     scope: "agency",
+    level: "account",
     family: "operacao",
     severity: milestone >= 1000 ? "record" : "highlight",
     occurredOnDate: ctx.evaluatedOnDate,
@@ -163,6 +167,7 @@ export function ruleAgencyReportsMilestone(ctx: AgencyAchievementContext): Achie
   return {
     type: "agency_reports_milestone",
     scope: "agency",
+    level: "account",
     family: "relacionamento",
     severity: milestone >= 1000 ? "record" : "highlight",
     occurredOnDate: ctx.evaluatedOnDate,
@@ -182,6 +187,7 @@ export function ruleAgencyMediaScaleMilestone(ctx: AgencyAchievementContext): Ac
   return {
     type: "agency_media_scale_milestone",
     scope: "agency",
+    level: "account",
     family: "escala_midia",
     severity: "record",
     occurredOnDate: ctx.evaluatedOnDate,

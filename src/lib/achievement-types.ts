@@ -6,13 +6,31 @@ import type { OptimizationType } from "@/lib/supabase/database.types";
  */
 export type AchievementScope = "client" | "agency" | "person";
 
+/**
+ * Etapa "Conquistas por Granularidade" — a que nível a conquista pertence
+ * dentro da conta do cliente. Só existe pra escopo `client` (Agência/Pessoa
+ * nunca têm campanha/público/criativo). `"account"` é o nível de sempre (as
+ * 11 regras da V1, consolidado por canal) — as demais são novas nesta
+ * etapa, condicionadas a dado granular confiável existir pro cliente (ver
+ * `achievement-sub-entity.ts`/auditoria no relatório final). Interno/tag
+ * pequena na UI, nunca o protagonista do card (Cliente + Acontecimento é).
+ */
+export type AchievementLevel = "account" | "campaign" | "ad_set" | "creative";
+
 /** `milestone` = relevante mas recorrente (ex.: 3 dias); `highlight` =
  * resultado claramente significativo (ex.: 7/14 dias, 125% da meta);
  * `record` = recorde histórico. Nomes internos, nunca "medalha"/"nível" na
  * UI. */
 export type AchievementSeverity = "milestone" | "highlight" | "record";
 
-export type ClientAchievementFamily = "recordes" | "metas" | "consistencia" | "evolucao" | "escala" | "recuperacao";
+/** `destaque` (Etapa "Conquistas por Granularidade") — nova família: uma
+ * campanha/público/criativo é a MELHOR entre concorrentes comparáveis da
+ * mesma conta, no período (nunca comparado contra o histórico do próprio
+ * sujeito — isso é `recordes`, mantido exclusivo de escopo `account`). Só
+ * emitida quando há ≥2 entidades com amostra válida no período (ver
+ * `SUB_ENTITY_MIN_COMPARABLE_ENTITIES`, `achievement-thresholds.ts`) —
+ * nunca "melhor" sem concorrência real. */
+export type ClientAchievementFamily = "recordes" | "metas" | "consistencia" | "evolucao" | "escala" | "recuperacao" | "destaque";
 export type AgencyAchievementFamily = "crescimento" | "carteira" | "operacao" | "relacionamento" | "escala_midia";
 export type PersonAchievementFamily = "revisoes" | "otimizacoes" | "clientes_atendidos" | "reports" | "tempo_de_casa" | "experiencia";
 
@@ -97,9 +115,19 @@ export interface AchievementCandidate {
   clientId?: string;
   clientName?: string;
   actorTeamMemberId?: string;
+  /** Etapa "Conquistas por Granularidade" — `"account"` pra toda regra de
+   * escopo `agency`/`person` e pras 11 regras de conta da V1. Regras novas
+   * de campanha/público/criativo preenchem o nível real. */
+  level: AchievementLevel;
+  /** Nome da campanha/público/criativo — só quando `level !== "account"`.
+   * Nunca um id (Meta/Google não garantem estabilidade, mesma decisão já
+   * tomada por `creative-analytics.ts`/`campaign-analytics.ts`). */
+  entityName?: string;
   metric: AchievementMetricSnapshot;
   /** Texto curto e honesto (nunca "confete") descrevendo o que aconteceu —
-   * a Página lê isso direto, nenhuma tela reconstrói a frase. */
+   * NUNCA inclui o nome do cliente (ele já é a primeira informação do card,
+   * sempre separado — ver `achievements-feed.tsx`). A Página lê isso direto,
+   * nenhuma tela reconstrói a frase. */
   headline: string;
   detail: string;
   /** Só escopo `client` (ver `AchievementSourceInfo`) — anexado pelo motor

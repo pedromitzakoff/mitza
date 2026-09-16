@@ -7,14 +7,38 @@ import {
   buildClientAchievementContext,
   fetchAgencyMetrics,
   fetchPersonMetrics,
+  fetchSubEntityAchievementContexts,
   listEligibleClientsForAchievements,
   listEligibleTeamMembersForAchievements,
   listOrganizationIds,
 } from "@/lib/achievement-metrics";
 import { CLIENT_RULES } from "@/lib/achievement-client-rules";
+import { SUB_ENTITY_RULES } from "@/lib/achievement-sub-entity-rules";
 import { AGENCY_RULES, type AgencyAchievementContext } from "@/lib/achievement-agency-rules";
 import { PERSON_RULES, type PersonAchievementContext } from "@/lib/achievement-person-rules";
-import type { AchievementCandidate } from "@/lib/achievement-types";
+import { MAX_CLIENT_ACHIEVEMENTS_PER_DAY } from "@/lib/achievement-thresholds";
+import type { AchievementCandidate, AchievementLevel } from "@/lib/achievement-types";
+
+/** Controle de ruído (seção 8/9 do pedido, "Prefiro 2-3 acontecimentos
+ * realmente relevantes do que 10 fracos") — depois de coletar TODOS os
+ * candidatos de um cliente no dia (conta + campanha + público + criativo),
+ * o motor persiste só os `MAX_CLIENT_ACHIEVEMENTS_PER_DAY` de maior
+ * prioridade. Prioridade = severidade primeiro (recorde > destaque, nunca o
+ * contrário), nível mais amplo em seguida (conta > campanha > público >
+ * criativo — uma conquista de conta é sempre mais significativa que uma de
+ * sub-entidade). Deliberadamente simples: nenhuma lógica semântica de "isso
+ * já foi dito de outro jeito" — o corte por quantidade já resolve a
+ * inflação sem precisar disso. */
+const SEVERITY_RANK: Record<AchievementCandidate["severity"], number> = { record: 0, highlight: 1, milestone: 2 };
+const LEVEL_RANK: Record<AchievementLevel, number> = { account: 0, campaign: 1, ad_set: 2, creative: 3 };
+
+export function prioritizeClientCandidates(candidates: AchievementCandidate[]): AchievementCandidate[] {
+  return [...candidates].sort((a, b) => {
+    const severityDiff = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
+    if (severityDiff !== 0) return severityDiff;
+    return LEVEL_RANK[a.level] - LEVEL_RANK[b.level];
+  });
+}
 
 /**
  * Orquestração do motor de Conquistas — a única função que liga leitura
@@ -59,6 +83,10 @@ export interface AchievementRunSummary {
   clientsSkippedUntrustedSync: number;
   clientsSkippedNoOrganization: number;
   clientCandidates: number;
+  /** Candidatos descartados só pelo teto de ruído (`MAX_CLIENT_ACHIEVEMENTS_PER_DAY`)
+   * — nunca por amostra inválida (isso já é `null` antes de virar candidato,
+   * nem chega a ser contado). */
+  clientCandidatesDroppedByCap: number;
   clientInserted: number;
   organizationsEvaluated: number;
   agencyCandidates: number;
@@ -79,6 +107,7 @@ function emptySummary(evaluatedOnDate: string): AchievementRunSummary {
     clientsSkippedUntrustedSync: 0,
     clientsSkippedNoOrganization: 0,
     clientCandidates: 0,
+    clientCandidatesDroppedByCap: 0,
     clientInserted: 0,
     organizationsEvaluated: 0,
     agencyCandidates: 0,
@@ -133,6 +162,8 @@ async function persistCandidate(
       family: candidate.family,
       severity: candidate.severity,
       client_name: candidate.clientName ?? null,
+      level: candidate.level,
+      entity_name: candidate.entityName ?? null,
       headline: candidate.headline,
       detail: candidate.detail,
       metric: candidate.metric,
@@ -193,15 +224,40 @@ export async function evaluateAchievementsForDate(
         continue;
       }
 
+      // Etapa "Conquistas por Granularidade": coleta TODOS os candidatos do
+      // cliente no dia — conta (11 regras) + campanha/público/criativo (2
+      // regras × cada nível com dado real, `fetchSubEntityAchievementContexts`
+      // já devolve só os níveis com linha real, nunca um nível fabricado) —
+      // antes de decidir o que persistir. Nunca persiste direto no loop de
+      // regras como antes: o teto de ruído (`prioritizeClientCandidates` +
+      // `MAX_CLIENT_ACHIEVEMENTS_PER_DAY`) só pode cortar depois de conhecer
+      // TODOS os candidatos do cliente no dia.
+      const allCandidates: AchievementCandidate[] = [];
       for (const rule of CLIENT_RULES) {
         const candidate = rule(context);
-        if (!candidate) continue;
+        if (candidate) allCandidates.push(candidate);
+      }
+
+      const subEntityContexts = await fetchSubEntityAchievementContexts(supabase, client, evaluationDate);
+      for (const subEntityContext of subEntityContexts) {
+        for (const rule of SUB_ENTITY_RULES) {
+          const candidate = rule(subEntityContext);
+          if (candidate) allCandidates.push(candidate);
+        }
+      }
+
+      summary.clientCandidates += allCandidates.length;
+
+      const prioritized = prioritizeClientCandidates(allCandidates);
+      const toPersist = prioritized.slice(0, MAX_CLIENT_ACHIEVEMENTS_PER_DAY);
+      summary.clientCandidatesDroppedByCap += prioritized.length - toPersist.length;
+
+      for (const candidate of toPersist) {
         // Etapa "Conquistas Auditáveis": `source` (proveniência/sincronização)
         // é capturado uma única vez por cliente (`buildClientAchievementContext`),
         // nunca por regra individual — anexado aqui, no único lugar que já
         // tem acesso a `context.sourceInfo` E a todo candidato do cliente.
         candidate.source = context.sourceInfo ?? undefined;
-        summary.clientCandidates++;
         if (await persistCandidate(supabase, client.organizationId, candidate)) {
           summary.clientInserted++;
           recordCreated(candidate);

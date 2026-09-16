@@ -10,6 +10,10 @@ import { resolveClientMonthlyPlan, resolveTargetCostPerResult, primaryGoalResult
 import { addDays, firstDayOfMonth, isLastDayOfMonth, lastDayOfMonth, listDatesInclusive, yearMonthOf } from "@/lib/achievement-dates";
 import type { ClientDailyPoint } from "@/lib/achievement-sample";
 import type { ClientAchievementContext, ClientMonthlyGoalInfo } from "@/lib/achievement-client-rules";
+import type { SubEntityAchievementContext } from "@/lib/achievement-sub-entity-rules";
+import { getCampaignDailyMetricsForPeriod } from "@/lib/campaign-analytics-data";
+import { getAdSetDailyMetricsForPeriod } from "@/lib/ad-set-analytics-data";
+import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
 
 /**
  * Camada de I/O do motor de Conquistas — monta os contextos puros
@@ -383,6 +387,68 @@ export async function buildClientAchievementContext(
       sourceInfo,
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Etapa "Conquistas por Granularidade" — Campanha/Público/Criativo
+// ---------------------------------------------------------------------------
+
+/** 15 dias fechados terminando na data avaliada — 7 dias atuais + 7
+ * anteriores + 1 dia extra, o mínimo pra `achievement-sub-entity-rules.ts`
+ * recalcular a mesma checagem "como estava ontem" sem uma segunda consulta
+ * (mesmo motivo de `HISTORY_LOOKBACK_DAYS` existir pro nível conta, só que
+ * bem menor — sub-entidade nunca avalia recorde histórico, só as duas
+ * janelas de 7 dias). */
+const SUB_ENTITY_LOOKBACK_DAYS = 15;
+
+/** Monta até 3 contextos (campanha/público/criativo) pra UM cliente — só os
+ * níveis com dado real entram na lista (cliente sem `campaign_name_column`/
+ * `ad_set_name_column`/`ad_name_column` configurado simplesmente não gera
+ * linha nessas tabelas, nunca um erro — mesma degradação graciosa já
+ * documentada em `campaign-analytics-data.ts`/`ad-set-analytics-data.ts`/
+ * `creative-analytics-data.ts`). Chamada só depois do cliente já ter
+ * passado no gate de confiança de sync (`achievement-engine.ts`) — a mesma
+ * garantia de frescor do nível conta cobre estas 3 tabelas (mesma sync run,
+ * ver auditoria no relatório final), nenhum gate próprio necessário aqui. */
+export async function fetchSubEntityAchievementContexts(
+  supabase: SupabaseClient<Database>,
+  client: EligibleClient,
+  evaluationDate: string,
+): Promise<SubEntityAchievementContext[]> {
+  const period = { start: addDays(evaluationDate, -(SUB_ENTITY_LOOKBACK_DAYS - 1)), end: evaluationDate };
+
+  const [campaignRows, adSetRows, creativeRows] = await Promise.all([
+    getCampaignDailyMetricsForPeriod(supabase, client.id, period),
+    getAdSetDailyMetricsForPeriod(supabase, client.id, period),
+    getAdCreativeDailyMetricsForPeriod(supabase, client.id, period),
+  ]);
+
+  const base = { clientId: client.id, clientName: client.name, yesterday: evaluationDate, performanceGoal: client.performanceGoal };
+  const contexts: SubEntityAchievementContext[] = [];
+
+  if (campaignRows.length > 0) {
+    contexts.push({
+      ...base,
+      level: "campaign",
+      rows: campaignRows.map((r) => ({ date: r.date, channel: r.channel, name: r.campaignName, resultType: r.resultType, spend: r.spend, resultCount: r.resultCount, revenue: r.revenue })),
+    });
+  }
+  if (adSetRows.length > 0) {
+    contexts.push({
+      ...base,
+      level: "ad_set",
+      rows: adSetRows.map((r) => ({ date: r.date, channel: r.channel, name: r.adSetName, resultType: r.resultType, spend: r.spend, resultCount: r.resultCount, revenue: r.revenue })),
+    });
+  }
+  if (creativeRows.length > 0) {
+    contexts.push({
+      ...base,
+      level: "creative",
+      rows: creativeRows.map((r) => ({ date: r.date, channel: null, name: r.creativeName, resultType: r.resultType, spend: r.spend, resultCount: r.resultCount, revenue: r.revenue })),
+    });
+  }
+
+  return contexts;
 }
 
 // ---------------------------------------------------------------------------

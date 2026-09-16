@@ -115,3 +115,38 @@ export const PERSON_OPTIMIZATIONS_MILESTONES = [500, 250, 100, 50, 1];
 export const PERSON_CLIENTS_SERVED_MILESTONES = [50, 25, 10, 1];
 export const PERSON_REPORTS_MILESTONES = [100, 50, 25, 1];
 export const PERSON_TENURE_MONTHS_MILESTONES = [24, 12, 6];
+
+// ---------------------------------------------------------------------------
+// Etapa "Conquistas por Granularidade" — campanha/público/criativo. Amostra
+// própria, MENOR que `WINDOW_SAMPLE_POLICY.d7` de propósito: uma campanha/
+// público/criativo individual naturalmente move um volume menor que a conta
+// inteira, então exigir a mesma barra da conta tornaria os 3 novos níveis
+// praticamente mudos. Ainda assim não trivial — 3 resultados/R$100 numa
+// semana é o piso mínimo pra sustentar qualquer afirmação de "melhor"/
+// "melhorou", nunca 1 resultado isolado ou um gasto irrelevante (seção 5/6/7
+// do pedido: "não gerar conquista com 1 resultado ou gasto irrelevante").
+// ---------------------------------------------------------------------------
+export const SUB_ENTITY_WINDOW_SAMPLE_POLICY: WindowSamplePolicy = {
+  minResultCount: 3,
+  minSpend: 100,
+  minDaysWithData: 3,
+};
+
+/** "Destaque" (melhor CPA/CPL da conta) exige pelo menos esta quantidade de
+ * entidades (campanhas/públicos/criativos) com amostra válida no MESMO
+ * período — nunca "melhor" sem concorrência real (seção 5 do pedido: "não
+ * chamar simplesmente a campanha com menor CPA de 'melhor' se ela teve
+ * amostra irrelevante" — extrapolado aqui pra também nunca chamar de
+ * "melhor" quem não tinha ninguém comparável pra perder). */
+export const SUB_ENTITY_MIN_COMPARABLE_ENTITIES = 2;
+
+// ---------------------------------------------------------------------------
+// Controle de ruído (seção 8/9 do pedido) — teto de quantas conquistas de
+// CLIENTE (todos os níveis somados) o motor emite por cliente por dia.
+// Prioriza severidade (record > highlight > milestone) e, dentro da mesma
+// severidade, nível mais amplo primeiro (conta > campanha > público >
+// criativo — ver `achievement-engine.ts`) — nunca uma lógica semântica de
+// "isso já foi dito de outro jeito" (deliberadamente simples, seção 9: "não
+// implemente uma regra complexa sem necessidade").
+// ---------------------------------------------------------------------------
+export const MAX_CLIENT_ACHIEVEMENTS_PER_DAY = 3;

@@ -75,6 +75,7 @@ export function rulePersonReviewsMilestone(ctx: PersonAchievementContext): Achie
   return {
     type: "person_reviews_milestone",
     scope: "person",
+    level: "account",
     family: "revisoes",
     severity: milestone >= 500 ? "record" : milestone === 1 ? "milestone" : "highlight",
     occurredOnDate: ctx.evaluatedOnDate,
@@ -94,6 +95,7 @@ export function rulePersonOptimizationsMilestone(ctx: PersonAchievementContext):
   return {
     type: "person_optimizations_milestone",
     scope: "person",
+    level: "account",
     family: "otimizacoes",
     severity: milestone >= 500 ? "record" : milestone === 1 ? "milestone" : "highlight",
     occurredOnDate: ctx.evaluatedOnDate,
@@ -113,6 +115,7 @@ export function rulePersonClientsServedMilestone(ctx: PersonAchievementContext):
   return {
     type: "person_clients_served_milestone",
     scope: "person",
+    level: "account",
     family: "clientes_atendidos",
     severity: milestone >= 50 ? "record" : milestone === 1 ? "milestone" : "highlight",
     occurredOnDate: ctx.evaluatedOnDate,
@@ -132,6 +135,7 @@ export function rulePersonReportsMilestone(ctx: PersonAchievementContext): Achie
   return {
     type: "person_reports_milestone",
     scope: "person",
+    level: "account",
     family: "reports",
     severity: milestone >= 100 ? "record" : milestone === 1 ? "milestone" : "highlight",
     occurredOnDate: ctx.evaluatedOnDate,
@@ -153,6 +157,7 @@ export function rulePersonTenureMilestone(ctx: PersonAchievementContext): Achiev
   return {
     type: "person_tenure_milestone",
     scope: "person",
+    level: "account",
     family: "tempo_de_casa",
     severity: "milestone",
     occurredOnDate: ctx.evaluatedOnDate,
@@ -170,6 +175,7 @@ export function rulePersonFirstMeetingCompleted(ctx: PersonAchievementContext): 
   return {
     type: "person_first_meeting_completed",
     scope: "person",
+    level: "account",
     family: "experiencia",
     severity: "milestone",
     occurredOnDate: ctx.evaluatedOnDate,
@@ -187,6 +193,7 @@ export function rulePersonFirstCreativeDeliveryCompleted(ctx: PersonAchievementC
   return {
     type: "person_first_creative_delivery_completed",
     scope: "person",
+    level: "account",
     family: "experiencia",
     severity: "milestone",
     occurredOnDate: ctx.evaluatedOnDate,
