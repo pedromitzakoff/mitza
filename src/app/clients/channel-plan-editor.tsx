@@ -195,7 +195,7 @@ export function ChannelPlanEditor({
         type="button"
         ref={triggerRef}
         onClick={() => setIsOpen(true)}
-        className="mitza-pressable text-xs font-medium text-brand hover:underline"
+        className="mitza-pressable font-medium text-brand hover:underline"
       >
         Planejamento
       </button>
