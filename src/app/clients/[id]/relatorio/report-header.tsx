@@ -34,6 +34,7 @@ export function ReportHeader({
   backHref,
   pdfHref,
   periodControl,
+  copyLinkControl,
   clearsMobileMenuButton = false,
 }: {
   clientName: string;
@@ -45,6 +46,12 @@ export function ReportHeader({
    * gera PDF). */
   pdfHref?: string;
   periodControl: React.ReactNode;
+  /** Etapa "Copiar link do cliente no Relatório": ação secundária
+   * (`CopyReportLinkButton`), presente só na página interna — mesma razão
+   * de `pdfHref`, o link público (`/r/[token]`) nunca precisa copiar a si
+   * mesmo. Ordem fixa no header: Período → Copiar link do cliente → Baixar
+   * PDF. */
+  copyLinkControl?: React.ReactNode;
   /** `true` só na página interna (dentro do `AppShell`) — afasta o
    * cabeçalho do botão hambúrguer flutuante da Sidebar em mobile (ver nota
    * acima). `/r/[token]` nunca é renderizada dentro do `AppShell`, então
@@ -63,19 +70,25 @@ export function ReportHeader({
 
       <h1 className="mt-0.5 text-xl font-bold tracking-tight text-[#17171A] sm:text-2xl">Relatório de Performance</h1>
 
-      <div className="mt-3.5 flex items-center gap-2.5">
+      <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
         <div className="min-w-0 flex-1 sm:flex-none">{periodControl}</div>
-        {pdfHref && (
-          <a
-            href={pdfHref}
-            aria-label="Baixar PDF"
-            title="Baixar PDF"
-            className="mitza-pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#C8BEAD] bg-white text-[#17171A] hover:bg-[#EFE9E0] sm:h-auto sm:w-auto sm:gap-1.5 sm:rounded-md sm:border-none sm:bg-brand sm:px-3.5 sm:py-1.5 sm:text-sm sm:font-medium sm:text-white sm:hover:bg-brand-hover"
-          >
-            <Download className="h-[18px] w-[18px] sm:hidden" aria-hidden="true" />
-            <span className="hidden sm:inline">Baixar PDF</span>
-          </a>
-        )}
+        {/* Ações secundária + primária agrupadas — quebram juntas pro mobile
+            (`flex-wrap` do container acima) em vez de competir espaço com o
+            período, que já ocupa a largura toda na primeira linha. */}
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto sm:gap-2.5">
+          {copyLinkControl}
+          {pdfHref && (
+            <a
+              href={pdfHref}
+              aria-label="Baixar PDF"
+              title="Baixar PDF"
+              className="mitza-pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#C8BEAD] bg-white text-[#17171A] hover:bg-[#EFE9E0] sm:h-auto sm:w-auto sm:gap-1.5 sm:rounded-md sm:border-none sm:bg-brand sm:px-3.5 sm:py-1.5 sm:text-sm sm:font-medium sm:text-white sm:hover:bg-brand-hover"
+            >
+              <Download className="h-[18px] w-[18px] sm:hidden" aria-hidden="true" />
+              <span className="hidden sm:inline">Baixar PDF</span>
+            </a>
+          )}
+        </div>
       </div>
     </header>
   );

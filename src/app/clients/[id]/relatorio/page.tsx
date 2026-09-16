@@ -4,10 +4,12 @@ import { todayDateString } from "@/lib/today";
 import { resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
 import { buildPerformanceReportDocument } from "@/lib/performance-report/report-document";
+import { getReportShareLinkStatus } from "@/lib/report-share-links";
 import { ReportPeriodControl } from "./report-period-control";
 import { buildReportPdfHref } from "./report-period-nav";
 import { ReportBody } from "./report-body";
 import { ReportHeader } from "./report-header";
+import { CopyReportLinkButton } from "./copy-report-link-button";
 
 /**
  * Etapa "Relatório Nativo": "Cliente → Relatório → relatório" — esta rota É
@@ -58,6 +60,13 @@ export default async function ClientPerformanceReportPage({
 
   const pdfHref = buildReportPdfHref(client.id, activePreset, { start: period.start, end: period.end });
 
+  // Etapa "Copiar link do cliente no Relatório": mesma infra do link
+  // público de sempre (`lib/report-share-links.ts`) — nenhuma segunda fonte
+  // de status; `getReportShareLinkStatus` não é admin-only em si (só
+  // geração/revogação são), então qualquer gestor com acesso a este
+  // relatório também vê/copia um link já ativo.
+  const reportShareLinkStatus = await getReportShareLinkStatus(id);
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 sm:py-6">
       {/* Identidade visual do Relatório de Performance aprovada anteriormente
@@ -80,6 +89,7 @@ export default async function ClientPerformanceReportPage({
             today={today}
           />
         }
+        copyLinkControl={<CopyReportLinkButton clientId={client.id} initialUrl={reportShareLinkStatus.url} />}
       />
 
       <ReportBody document={document} />
