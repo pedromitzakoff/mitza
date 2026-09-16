@@ -501,13 +501,32 @@ export function TaskRow({
           )}
         </span>
 
-        <span className={`${compactDate ? ACTIVITY_COL_DATE_COMPACT : ACTIVITY_COL_DATE} ${dateClasses}`}>{dueDate}</span>
-
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-overview-text-primary" title={task.title}>
-            {task.title}
-          </span>
-        </span>
+        {/* Etapa "Facelift Visual — Visão Geral do cliente": em
+            `compactDate` (só `MonthTasksPanel`), a TAREFA vira a informação
+            principal da linha — vem antes da data, que passa a ser
+            metadata final (à direita, secundária), nunca mais o primeiro
+            texto que os olhos encontram. Demais consumidores (`TaskList`,
+            fila "Atividades" de `/sprints`) mantêm a ordem de sempre
+            (data → tarefa), sem `compactDate`. */}
+        {compactDate ? (
+          <>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-overview-text-primary" title={task.title}>
+                {task.title}
+              </span>
+            </span>
+            <span className={`${ACTIVITY_COL_DATE_COMPACT} text-right ${dateClasses}`}>{dueDate}</span>
+          </>
+        ) : (
+          <>
+            <span className={`${ACTIVITY_COL_DATE} ${dateClasses}`}>{dueDate}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-overview-text-primary" title={task.title}>
+                {task.title}
+              </span>
+            </span>
+          </>
+        )}
 
         {!hideAssignee && (!hideAssigneeIfName || task.assignee?.name !== hideAssigneeIfName) && (
           <span className={ACTIVITY_COL_ASSIGNEE}>

@@ -16,7 +16,11 @@ export function SecondaryGoalsPerformance({ goals }: { goals: SecondaryGoalPerfo
   if (goals.length === 0) return null;
 
   return (
-    <div className="mt-3 rounded-lg bg-overview-surface-subtle p-3">
+    // Etapa "Facelift Visual — Visão Geral do cliente": mt-6 (era mt-3) —
+    // mesma cadência entre grandes regiões usada acima (Performance) e
+    // abaixo (Tarefas), nunca um espaçamento menor só porque este bloco é
+    // opcional.
+    <div className="mt-6 rounded-lg bg-overview-surface-subtle p-3">
       <h3 className="text-sm font-semibold text-overview-text-primary">Outros objetivos</h3>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {goals.map((goal) => {

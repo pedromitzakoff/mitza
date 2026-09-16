@@ -20,7 +20,18 @@ import { ACTIVITY_COL_ACTIONS, ACTIVITY_COL_ASSIGNEE, ACTIVITY_COL_DATE, ACTIVIT
  * Clica pra abrir o drawer — mesmo padrão de `AccountReviewRow` (link pra um
  * `detailHref`, nunca expansão inline como `TaskRow`, já que recorrência não
  * tem campos rápidos pra editar na linha).
- */
+ *
+ * Etapa "Facelift Visual — Visão Geral do cliente": `item.icon` (emoji livre
+ * escolhido em Configurações → Tarefas recorrentes, `recurring-tasks-list.tsx`)
+ * deixou de ser renderizado — auditoria confirmou que é decorativo (campo de
+ * texto livre por template, sem taxonomia fixa), nunca informação que ajude
+ * uma decisão; removido só da APRESENTAÇÃO, o dado (`recurring_tasks.icon`)
+ * continua intocado no banco e no formulário de edição. A coluna de status
+ * vira um espaçador vazio, mesma largura de sempre (alinhamento com `TaskRow`
+ * preservado). O progresso ("0/2") permanece — é informação real (execuções
+ * da semana vs. meta semanal), só deixou de ficar "isolado na borda direita"
+ * (era `justify-between` empurrando pro extremo da coluna larga) e passou a
+ * ficar imediatamente ao lado do nome, como um detalhe do próprio título. */
 export function RecurringTaskRow({
   item,
   detailHref,
@@ -28,6 +39,7 @@ export function RecurringTaskRow({
   dateColClassName = ACTIVITY_COL_DATE,
   showAssigneeCol = true,
   selectColClassName,
+  titleFirst,
 }: {
   item: RecurringTaskListItem;
   detailHref: string;
@@ -42,25 +54,41 @@ export function RecurringTaskRow({
    * comuns da mesma lista, mesmo sem checkbox próprio (recorrência nunca
    * entra na seleção/exclusão em massa). */
   selectColClassName?: string;
+  /** Etapa "Facelift Visual — Visão Geral do cliente": nome antes da data
+   * (era sempre data → nome) — só `MonthTasksPanel` passa isto, mesmo
+   * espírito de `compactDate` em `TaskRow`. Omitir preserva a ordem de
+   * sempre (data → nome), usada pela fila "Atividades" de `/sprints`. */
+  titleFirst?: boolean;
 }) {
   const { progress } = item;
   const progressLabel = progress.goal === null ? `${progress.done}` : `${progress.done}/${progress.goal}`;
+
+  const dateSpan = <span className={`${dateColClassName} truncate`}>{item.nextExecutionLabel}</span>;
+  const titleSpan = (
+    <span className="flex min-w-0 flex-1 items-baseline gap-1.5 text-sm">
+      <span className="truncate font-medium text-overview-text-primary">{item.title}</span>
+      <span className="shrink-0 tabular-nums text-xs text-overview-text-muted">{progressLabel}</span>
+    </span>
+  );
 
   return (
     <li className="flex min-h-[28px] items-center border-b border-overview-border/60 px-2 py-1 last:border-0 hover:bg-overview-surface-hover">
       <Link href={detailHref} scroll={false} className="flex w-full items-center gap-2.5">
         {selectColClassName && <span className={selectColClassName} aria-hidden="true" />}
 
-        <span className={ACTIVITY_COL_STATUS} aria-hidden="true">
-          <span className="text-sm leading-none">{item.icon}</span>
-        </span>
+        <span className={ACTIVITY_COL_STATUS} aria-hidden="true" />
 
-        <span className={`${dateColClassName} truncate`}>{item.nextExecutionLabel}</span>
-
-        <span className="flex min-w-0 flex-1 items-center justify-between gap-2 text-sm">
-          <span className="truncate font-medium text-overview-text-primary">{item.title}</span>
-          <span className="shrink-0 tabular-nums text-xs text-overview-text-secondary">{progressLabel}</span>
-        </span>
+        {titleFirst ? (
+          <>
+            {titleSpan}
+            {dateSpan}
+          </>
+        ) : (
+          <>
+            {dateSpan}
+            {titleSpan}
+          </>
+        )}
 
         {showAssigneeCol && <span className={ACTIVITY_COL_ASSIGNEE} aria-hidden="true" />}
 

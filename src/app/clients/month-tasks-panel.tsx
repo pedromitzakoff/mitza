@@ -13,12 +13,7 @@ import type { RecurringTaskListItem } from "@/lib/recurring-task-data";
 import { orderTasks } from "./task-order";
 import { InlineCreateTaskForm, type InlineTaskManagerOption } from "./inline-task-form";
 import { deleteTaskAction } from "./tasks-actions";
-import {
-  ACTIVITY_COL_ACTIONS,
-  ACTIVITY_COL_DATE_COMPACT,
-  ACTIVITY_COL_SELECT,
-  ACTIVITY_COL_STATUS,
-} from "./activity-columns";
+import { ACTIVITY_COL_DATE_COMPACT, ACTIVITY_COL_SELECT } from "./activity-columns";
 
 type TaskFilter = "todas" | "pendentes" | "atrasadas" | "concluidas";
 
@@ -221,12 +216,14 @@ export function MonthTasksPanel({
   const showSelectionUi = Boolean(isAdmin);
 
   return (
-    // Etapa "Evolução Visual Incremental — Área do Cliente" (Tarefas):
-    // superfície creme em vez de branco+borda, mesmo token/radius já usado
-    // no bloco "Acompanhamento da conta" — seção própria (nunca dividindo
-    // container com Performance/Metas, pedido explícito do usuário), só
-    // com a mesma linguagem visual.
-    <div className="rounded-lg bg-cream p-3 sm:rounded-2xl sm:p-5">
+    // Etapa "Facelift Visual — Visão Geral do cliente": seção aberta no
+    // fundo da própria página (era `rounded-lg bg-cream p-3 sm:rounded-2xl
+    // sm:p-5`, a mesma superfície do bloco "Acompanhamento da conta" —
+    // "card dentro de card" competindo visualmente com Performance, sem
+    // motivo: Tarefas não é um bloco analítico, é uma lista operacional).
+    // Hierarquia agora vem de título + divisor + linhas, nunca de uma
+    // segunda superfície colorida.
+    <div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
@@ -290,37 +287,43 @@ export function MonthTasksPanel({
 
       {expanded && (
         <>
+          {/* Etapa "Facelift Visual — Visão Geral do cliente": navegação
+              textual (era pill/cápsula com borda própria cada uma) — só a
+              selecionada ganha peso (texto escuro + sublinhado sutil), as
+              demais são texto secundário clicável. Mesma funcionalidade
+              exata dos filtros, só menos "botões" na tela. */}
           {selectedCount === 0 && (
-            <div className="mt-2 flex flex-wrap gap-1">
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               {FILTERS.map(({ key, label }) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setFilter(key)}
-                  className={`mitza-pressable rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  className={`mitza-pressable rounded-sm ${
                     filter === key
-                      ? "border-brand bg-brand text-white"
-                      : "border-overview-border text-overview-text-secondary hover:border-brand hover:text-brand"
+                      ? "font-medium text-overview-text-primary underline decoration-brand decoration-2 underline-offset-4"
+                      : "text-overview-text-secondary hover:text-overview-text-primary"
                   }`}
                 >
-                  {label}
-                  <span className="ml-1 tabular-nums opacity-80">{counts[key]}</span>
+                  {label} <span className="tabular-nums">{counts[key]}</span>
                 </button>
               ))}
             </div>
           )}
 
           {filtered.length > 0 || recurringTasksList.length > 0 ? (
-            // Etapa "Evolução Visual Incremental — Área do Cliente": sem
-            // moldura própria (era `overflow-hidden rounded-lg border`,
-            // "caixa dentro de caixa" dentro da superfície creme acima) —
-            // a lista vive direto na superfície do painel; cada linha
-            // (`TaskRow`/`RecurringTaskRow`) já carrega seu próprio
-            // divisor fino (`border-b .../60`), nunca dependeu da moldura
-            // externa pra separar itens.
-            <div className="mt-2">
-              <div className="flex items-center gap-2.5 border-b border-overview-border/60 px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
-                {showSelectionUi && (
+            // Etapa "Facelift Visual — Visão Geral do cliente": sem cabeçalho
+            // de coluna "Próxima execução | Tarefa" (dava peso de spreadsheet
+            // pra metadata que agora é secundária dentro da própria linha —
+            // ver `TaskRow`/`RecurringTaskRow`, prop `compactDate`/`titleFirst`).
+            // Só um divisor fino marca o início da lista; cada linha carrega
+            // seu próprio divisor abaixo, nunca dependeu de moldura externa.
+            // A linha de "selecionar todas" (só admin) é a única sobra
+            // funcional do cabeçalho antigo — vira uma linha própria, mínima,
+            // em vez de uma coluna de uma grade que não existe mais.
+            <div className="mt-3 border-t border-overview-border">
+              {showSelectionUi && (
+                <div className="flex items-center gap-2 px-2 pt-1.5 text-xs text-overview-text-secondary">
                   <span className={ACTIVITY_COL_SELECT}>
                     <input
                       ref={headerCheckboxRef}
@@ -333,12 +336,9 @@ export function MonthTasksPanel({
                       className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-brand"
                     />
                   </span>
-                )}
-                <span className={`${ACTIVITY_COL_STATUS} truncate`} aria-hidden="true" />
-                <span className={ACTIVITY_COL_DATE_COMPACT}>Próxima execução</span>
-                <span className="min-w-0 flex-1">Tarefa</span>
-                <span className={ACTIVITY_COL_ACTIONS} aria-hidden="true" />
-              </div>
+                  <span>Selecionar todas</span>
+                </div>
+              )}
               <ul className="[&>li:last-child]:border-0">
                 {recurringTasksList.map((item) => (
                   <RecurringTaskRow
@@ -350,6 +350,7 @@ export function MonthTasksPanel({
                     dateColClassName={ACTIVITY_COL_DATE_COMPACT}
                     showAssigneeCol={false}
                     selectColClassName={showSelectionUi ? ACTIVITY_COL_SELECT : undefined}
+                    titleFirst
                   />
                 ))}
                 {filtered.map((task) => (

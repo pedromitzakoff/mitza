@@ -1292,7 +1292,15 @@ export default async function ClientPage({
   const monthTaskRows = [...sortedSprints.flatMap((sprint) => tasksBySprintId.get(sprint.sprintId) ?? []), ...unlinkedTasks];
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-5">
+    // Etapa "Facelift Visual — Visão Geral do cliente": max-w-5xl (era
+    // max-w-6xl) — mesmo container já usado por Conquistas/Timeline/Equipe
+    // (`max-w-5xl`), nunca um valor arbitrário novo. Numa tela larga, 1152px
+    // deixava "Leads — Investimento — CPL" (KPIs) e as barras de ritmo
+    // esticadas o bastante pra parecer ilhas distantes; 1024px aproxima os
+    // três sem comprimir a densidade em telas menores. `ClientIdentitySticky`
+    // usa o MESMO valor (nunca dois containers de largura diferente na
+    // mesma página).
+    <div className="mx-auto max-w-5xl px-6 py-5">
       <ScrollRestoreOnMount />
 
       {/* 1. Identificação do cliente — substitui o antigo ClientContextBar
@@ -1592,7 +1600,13 @@ export default async function ClientPage({
               conteúdo, nunca o fundo da página inteira — `--authenticated-bg`
               continua intocado). Sem borda: a diferenciação vem só do tom da
               superfície, como no Relatório. */}
-          <div className="mt-3 rounded-lg bg-cream p-3 sm:rounded-2xl sm:p-5">
+          {/* Etapa "Facelift Visual — Visão Geral do cliente": mt-6 (era
+              mt-3) — mesma cadência vertical usada entre as demais grandes
+              regiões da página (Tarefas abaixo, Sprints — que já chegava a
+              mt-6 "de graça" por colapsar com o mt-6 interno de `Section`).
+              Não fazia sentido o espaço ENTRE regiões ser menor que o
+              espaço DENTRO de uma região (KPIs → Ritmo do mês, mt-5). */}
+          <div className="mt-6 rounded-lg bg-cream p-3 sm:rounded-2xl sm:p-5">
             <AccountFollowUpPanel
               monthActual={visaoGeralMonthActual}
               performanceGoal={performanceGoal}
@@ -1648,7 +1662,7 @@ export default async function ClientPage({
               sprints do mês + as soltas numa lista só, com a sprint de
               cada uma como referência (nunca agrupamento) — ver doc de
               `MonthTasksPanel`. */}
-          <div className="mt-3">
+          <div className="mt-6">
             <MonthTasksPanel
               key={monthParam}
               monthLabel={monthLabel}
@@ -1675,51 +1689,55 @@ export default async function ClientPage({
               sem sentido num relatório) e sem otimizações (migraram pra
               a aba de Tarefas) — nem no resumo fechado nem dentro do
               card. */}
-          <div className="mt-3">
-            <Section title={`Sprints de ${monthLabel}`}>
-              <div className="flex flex-col gap-2">
-                {sortedSprints.length > 0 ? (
-                  sortedSprints.map((sprint) => (
-                    <SprintCard
-                      key={sprint.sprintId}
-                      // Seletor Consolidado/Meta/Google: só o `actualSpend`
-                      // exibido muda (`sprintActualSpendByChannelBySprintId`,
-                      // acima) — `plannedSpend`/`status`/`progressPct`/
-                      // `expectedToDate` continuam os valores consolidados
-                      // de sempre, mas nenhum deles é lido pelo card neste
-                      // modo (`hideTaskList`, relatório semanal — só o
-                      // financeiro/performance aparece, nunca o badge de
-                      // ritmo/planejado desta sprint).
-                      sprint={
-                        metricsChannel === "consolidated"
-                          ? sprint
-                          : { ...sprint, actualSpend: sprintActualSpendByChannelBySprintId.get(sprint.sprintId) ?? 0 }
-                      }
-                      comments={sprintCommentsById.get(sprint.sprintId) ?? []}
-                      clientId={client.id}
-                      isAdmin={isAdmin}
-                      canEditPerformance={canManageClient}
-                      tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
-                      manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
-                      metaSyncedAt={lastSync?.synced_at ?? null}
-                      taskManagers={managers ?? []}
-                      defaultAssigneeName={client.primary_manager?.name ?? null}
-                      performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
-                      targetCostPerResult={scopedTargetCostPerResult}
-                      returnTo={returnTo}
-                      hideNextAction
-                      hideTaskList
-                      canOperate={canOperate}
-                    />
-                  ))
-                ) : (
-                  <EmptyState>
-                    Nenhuma sprint encontrada para este período — verifique se as sprints do mês já foram geradas.
-                  </EmptyState>
-                )}
-              </div>
-            </Section>
-          </div>
+          {/* Etapa "Facelift Visual — Visão Geral do cliente": wrapper
+              `mt-3` removido — era redundante (`Section` já aplica seu
+              próprio `mt-6`, que colapsava com este `mt-3` no mesmo espaço
+              vertical de sempre); Performance/Tarefas acima passam a usar
+              o MESMO mt-6 explicitamente, em vez de depender desse
+              colapso implícito de margem só aqui. */}
+          <Section title={`Sprints de ${monthLabel}`}>
+            <div className="flex flex-col gap-2">
+              {sortedSprints.length > 0 ? (
+                sortedSprints.map((sprint) => (
+                  <SprintCard
+                    key={sprint.sprintId}
+                    // Seletor Consolidado/Meta/Google: só o `actualSpend`
+                    // exibido muda (`sprintActualSpendByChannelBySprintId`,
+                    // acima) — `plannedSpend`/`status`/`progressPct`/
+                    // `expectedToDate` continuam os valores consolidados
+                    // de sempre, mas nenhum deles é lido pelo card neste
+                    // modo (`hideTaskList`, relatório semanal — só o
+                    // financeiro/performance aparece, nunca o badge de
+                    // ritmo/planejado desta sprint).
+                    sprint={
+                      metricsChannel === "consolidated"
+                        ? sprint
+                        : { ...sprint, actualSpend: sprintActualSpendByChannelBySprintId.get(sprint.sprintId) ?? 0 }
+                    }
+                    comments={sprintCommentsById.get(sprint.sprintId) ?? []}
+                    clientId={client.id}
+                    isAdmin={isAdmin}
+                    canEditPerformance={canManageClient}
+                    tasks={tasksBySprintId.get(sprint.sprintId) ?? []}
+                    manualSpendUpdatedAt={manualSpendUpdatedAtBySprintId.get(sprint.sprintId) ?? null}
+                    metaSyncedAt={lastSync?.synced_at ?? null}
+                    taskManagers={managers ?? []}
+                    defaultAssigneeName={client.primary_manager?.name ?? null}
+                    performance={sprintPerformanceBySprintId.get(sprint.sprintId)}
+                    targetCostPerResult={scopedTargetCostPerResult}
+                    returnTo={returnTo}
+                    hideNextAction
+                    hideTaskList
+                    canOperate={canOperate}
+                  />
+                ))
+              ) : (
+                <EmptyState>
+                  Nenhuma sprint encontrada para este período — verifique se as sprints do mês já foram geradas.
+                </EmptyState>
+              )}
+            </div>
+          </Section>
 
         </>
       )}

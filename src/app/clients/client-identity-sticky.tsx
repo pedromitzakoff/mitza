@@ -42,7 +42,10 @@ export function ClientIdentitySticky({
       <div ref={sentinelRef} aria-hidden className="h-px w-full" />
       {showMinimal && (
         <div className="fixed inset-x-0 top-0 z-20 border-b border-overview-border bg-overview-surface">
-          <div className="mx-auto flex max-w-6xl items-center gap-2 px-6 py-1.5">
+          {/* Etapa "Facelift Visual — Visão Geral do cliente": max-w-5xl —
+              precisa ser SEMPRE o mesmo valor do container principal
+              (`[id]/page.tsx`), nunca um segundo número solto. */}
+          <div className="mx-auto flex max-w-5xl items-center gap-2 px-6 py-1.5">
             <ClientAvatar name={clientName} imageUrl={avatarUrl} size="xs" />
             <p className="min-w-0 truncate text-sm font-medium text-overview-text-primary">{clientName}</p>
             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass}`}>

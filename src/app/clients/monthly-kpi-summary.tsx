@@ -95,7 +95,12 @@ export function MonthlyKpiSummary({
 
   return (
     <div>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-x-8 gap-y-4">
+      {/* Etapa "Facelift Visual — Visão Geral do cliente": gap-x-6 (era
+          gap-x-8) — Resultado/Investimento/Custo por resultado ficavam
+          "ilhas" distantes demais numa tela larga; o container mais
+          estreito (`[id]/page.tsx`, max-w-5xl) já ajuda, este gap menor
+          termina o ajuste sem mudar o grid/breakpoints/valores. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-x-6 gap-y-4">
         <Kpi label={resultLabel} value={resultValue} auxiliary={resultAuxiliary} />
         <Kpi label="Investimento" value={formatCurrency(monthActual)} auxiliary={investmentAuxiliary} />
         <Kpi label="Custo por resultado" value={costValue} auxiliary={costAuxiliary} />
