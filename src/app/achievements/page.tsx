@@ -5,6 +5,7 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { formatTimelineDayLabel } from "@/lib/format";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
+import type { PerformanceGoal } from "@/lib/performance-goals";
 import { fetchAchievements, fetchClientAchievementsMonthSummary, type AchievementRow } from "@/lib/achievements-data";
 import { ACHIEVEMENT_SCOPE_LABEL, CLIENT_FAMILY_LABEL, AGENCY_FAMILY_LABEL, PERSON_FAMILY_LABEL } from "@/lib/achievement-labels";
 import type { AchievementLevel, AchievementScope } from "@/lib/achievement-types";
@@ -15,6 +16,16 @@ import type { AchievementLevel, AchievementScope } from "@/lib/achievement-types
  * pra teste. */
 export function resolveAchievementLevel(paramValue: string | undefined): AchievementLevel | "todos" {
   return paramValue === "account" || paramValue === "campaign" || paramValue === "ad_set" || paramValue === "creative" ? paramValue : "todos";
+}
+
+/** Etapa "Filtros de Gestor/Objetivo" — mesmo padrão de
+ * `resolveOperationGoal` (`operation/page.tsx`): valor ausente/inválido cai
+ * em `"todos"`, nunca um objetivo "chutado". Valores aceitos são exatamente
+ * os de `PerformanceGoal` (`lib/performance-goals.ts`) — a mesma fonte
+ * canônica que `clients.performance_goal` já usa, nunca uma classificação
+ * de objetivo nova/paralela. Exportado só pra teste. */
+export function resolveAchievementGoal(paramValue: string | undefined): PerformanceGoal | "todos" {
+  return paramValue === "leads" || paramValue === "sales" || paramValue === "followers" ? paramValue : "todos";
 }
 import { AchievementsFilterBar } from "./achievements-filter-bar";
 import { AchievementsFeed } from "./achievements-feed";
@@ -31,7 +42,7 @@ import { AchievementsFeed } from "./achievements-feed";
 export default async function AchievementsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; client?: string; actor?: string; family?: string; level?: string; page?: string }>;
+  searchParams: Promise<{ tab?: string; client?: string; manager?: string; goal?: string; actor?: string; family?: string; level?: string; page?: string }>;
 }) {
   const profile = await getCurrentProfile();
   if (!profile) return null;
@@ -39,6 +50,12 @@ export default async function AchievementsPage({
   const params = await searchParams;
   const scope: AchievementScope = params.tab === "agency" ? "agency" : params.tab === "person" ? "person" : "client";
   const clientId = params.client ?? "todos";
+  // Gestor/Objetivo só existem na aba Cliente (Agência/Pessoa não têm
+  // relação com `clients` — mesmo raciocínio já aplicado a `levelId`
+  // abaixo): fora dela, ficam travados em "todos", nunca filtrando por
+  // engano um escopo que não tem cliente nenhum.
+  const managerId = scope === "client" ? (params.manager ?? "todos") : "todos";
+  const goalId = scope === "client" ? resolveAchievementGoal(params.goal) : "todos";
   const actorId = params.actor ?? "todos";
   const familyId = params.family ?? "todos";
   const levelId = scope === "client" ? resolveAchievementLevel(params.level) : "todos";
@@ -46,6 +63,14 @@ export default async function AchievementsPage({
 
   const supabase = await createSupabaseClient();
   const now = new Date();
+
+  const clientFilters = {
+    clientId: scope === "client" && clientId !== "todos" ? clientId : null,
+    managerId: managerId !== "todos" ? managerId : null,
+    goal: goalId !== "todos" ? goalId : null,
+    family: familyId !== "todos" ? familyId : null,
+    level: levelId !== "todos" ? levelId : null,
+  };
 
   const [clients, teamMembers, { rows, hasMore }, monthSummary] = await Promise.all([
     requireQuery(
@@ -58,15 +83,13 @@ export default async function AchievementsPage({
       profile.organizationId,
       {
         scope,
-        clientId: scope === "client" && clientId !== "todos" ? clientId : null,
         actorTeamMemberId: scope === "person" && actorId !== "todos" ? actorId : null,
-        family: familyId !== "todos" ? familyId : null,
-        level: levelId !== "todos" ? levelId : null,
+        ...clientFilters,
       },
       page,
     ),
     scope === "client"
-      ? fetchClientAchievementsMonthSummary(supabase, profile.organizationId, monthRangeFor(now))
+      ? fetchClientAchievementsMonthSummary(supabase, profile.organizationId, monthRangeFor(now), clientFilters)
       : Promise.resolve(null),
   ]);
 
@@ -80,13 +103,28 @@ export default async function AchievementsPage({
     else groups.push({ dayLabel, rows: [row] });
   }
 
-  function pageHref(overrides: { tab?: string; client?: string; actor?: string; family?: string; level?: string; page?: number }) {
+  function pageHref(overrides: {
+    tab?: string;
+    client?: string;
+    manager?: string;
+    goal?: string;
+    actor?: string;
+    family?: string;
+    level?: string;
+    page?: number;
+  }) {
     const next = new URLSearchParams();
     const nextScope = overrides.tab ?? params.tab ?? "client";
     if (nextScope !== "client") next.set("tab", nextScope);
 
     const nextClient = overrides.client ?? clientId;
     if (nextScope === "client" && nextClient !== "todos") next.set("client", nextClient);
+
+    const nextManager = overrides.manager ?? managerId;
+    if (nextScope === "client" && nextManager !== "todos") next.set("manager", nextManager);
+
+    const nextGoal = overrides.goal ?? goalId;
+    if (nextScope === "client" && nextGoal !== "todos") next.set("goal", nextGoal);
 
     const nextActor = overrides.actor ?? actorId;
     if (nextScope === "person" && nextActor !== "todos") next.set("actor", nextActor);
@@ -105,7 +143,9 @@ export default async function AchievementsPage({
   }
 
   const hasAnyFilter =
-    (scope === "client" && (clientId !== "todos" || levelId !== "todos")) || (scope === "person" && actorId !== "todos") || familyId !== "todos";
+    (scope === "client" && (clientId !== "todos" || managerId !== "todos" || goalId !== "todos" || levelId !== "todos")) ||
+    (scope === "person" && actorId !== "todos") ||
+    familyId !== "todos";
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4 md:p-6">
@@ -118,7 +158,7 @@ export default async function AchievementsPage({
         {(["client", "agency", "person"] as const).map((tabScope) => (
           <Link
             key={tabScope}
-            href={pageHref({ tab: tabScope, client: "todos", actor: "todos", family: "todos", level: "todos", page: 0 })}
+            href={pageHref({ tab: tabScope, client: "todos", manager: "todos", goal: "todos", actor: "todos", family: "todos", level: "todos", page: 0 })}
             scroll={false}
             className={
               scope === tabScope
@@ -144,6 +184,8 @@ export default async function AchievementsPage({
       <AchievementsFilterBar
         scope={scope}
         clientId={clientId}
+        managerId={managerId}
+        goalId={goalId}
         actorId={actorId}
         familyId={familyId}
         levelId={levelId}

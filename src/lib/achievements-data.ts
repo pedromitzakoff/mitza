@@ -62,9 +62,40 @@ export interface AchievementFilters {
   /** Etapa "Conquistas por Granularidade" — só faz sentido pra `scope:
    * "client"` (Agência/Pessoa nunca têm nível); `null`/ausente = todos. */
   level?: AchievementLevel | null;
+  /** Etapa "Filtros de Gestor/Objetivo" — responsável operacional ATUAL da
+   * conta (`clients.primary_manager_id`, mesma fonte canônica de
+   * `clients/page.tsx`/`operation-channel-state-data.ts` — nunca duplicado
+   * no metadata do evento). Só faz sentido pra `scope: "client"`. */
+  managerId?: string | null;
+  /** Objetivo de performance ATUAL da conta (`clients.performance_goal`,
+   * mesma fonte canônica de `operation/page.tsx`). Só faz sentido pra
+   * `scope: "client"`. */
+  goal?: PerformanceGoal | null;
 }
 
 const ACHIEVEMENTS_PAGE_SIZE = 20;
+
+/** Resolve Gestor/Objetivo pro conjunto de `client_id` que os satisfaz,
+ * consultando `clients` diretamente (a configuração CANÔNICA ATUAL da
+ * conta) — nunca uma segunda cópia desses valores dentro do evento. `null`
+ * = nenhum dos dois filtros está ativo (não restringe nada, diferente de um
+ * array vazio, que significa "nenhum cliente satisfaz os dois filtros
+ * juntos"). Compartilhado por `fetchAchievements`/`fetchClientAchievementsMonthSummary`
+ * — nunca duas implementações da mesma resolução. */
+async function resolveClientIdsForManagerAndGoal(
+  supabase: SupabaseClient<Database>,
+  managerId: string | null | undefined,
+  goal: PerformanceGoal | null | undefined,
+): Promise<string[] | null> {
+  if (!managerId && !goal) return null;
+
+  let query = supabase.from("clients").select("id");
+  if (managerId) query = query.eq("primary_manager_id", managerId);
+  if (goal) query = query.eq("performance_goal", goal);
+
+  const { data } = await query;
+  return (data ?? []).map((c) => c.id);
+}
 
 function toRow(row: {
   id: string;
@@ -110,6 +141,14 @@ export async function fetchAchievements(
   const from = page * pageSize;
   const to = from + pageSize;
 
+  const managerGoalClientIds = await resolveClientIdsForManagerAndGoal(supabase, filters.managerId, filters.goal);
+  if (managerGoalClientIds !== null && managerGoalClientIds.length === 0) {
+    // Nenhum cliente satisfaz Gestor+Objetivo juntos — resultado vazio sem
+    // nem consultar operational_events (mesmo espírito de curto-circuito
+    // seguro já usado nesta camada, nunca um `.in([])` ambíguo pro PostgREST).
+    return { rows: [], hasMore: false };
+  }
+
   let query = supabase
     .from("operational_events")
     .select("id, occurred_at, recorded_at, client_id, actor_team_member_id, metadata, client:clients(name, performance_goal), actor:team_members(name)")
@@ -120,6 +159,7 @@ export async function fetchAchievements(
     .range(from, to);
 
   if (filters.clientId) query = query.eq("client_id", filters.clientId);
+  if (managerGoalClientIds !== null) query = query.in("client_id", managerGoalClientIds);
   if (filters.actorTeamMemberId) query = query.eq("actor_team_member_id", filters.actorTeamMemberId);
   if (filters.family) query = query.eq("metadata->>family", filters.family);
   if (filters.level) {
@@ -150,6 +190,19 @@ export interface AchievementMonthSummary {
   goalsReached: number;
 }
 
+/** Filtros que também recortam o resumo — os MESMOS filtros da aba Cliente
+ * abaixo dele (`AchievementFilters`, sem `scope`/`actorTeamMemberId`, que
+ * não existem nesta aba), pra "9 conquistas · 2 clientes · ..." sempre
+ * corresponder à população realmente visível no feed, nunca um total global
+ * dissociado do que os filtros já recortaram. */
+export interface AchievementMonthSummaryFilters {
+  clientId?: string | null;
+  managerId?: string | null;
+  goal?: PerformanceGoal | null;
+  family?: string | null;
+  level?: AchievementLevel | null;
+}
+
 /** Resumo compacto do mês — só pra Cliente (a única aba com volume
  * suficiente pra fazer sentido, seção 36 da Auditoria: "não transformar a
  * página em Dashboard"). Uma única query agregada, nunca N+1. */
@@ -157,8 +210,14 @@ export async function fetchClientAchievementsMonthSummary(
   supabase: SupabaseClient<Database>,
   organizationId: string,
   monthRange: { firstDay: string; lastDay: string },
+  filters: AchievementMonthSummaryFilters = {},
 ): Promise<AchievementMonthSummary> {
-  const { data } = await supabase
+  const managerGoalClientIds = await resolveClientIdsForManagerAndGoal(supabase, filters.managerId, filters.goal);
+  if (managerGoalClientIds !== null && managerGoalClientIds.length === 0) {
+    return { total: 0, distinctClients: 0, records: 0, goalsReached: 0 };
+  }
+
+  let query = supabase
     .from("operational_events")
     .select("client_id, metadata")
     .eq("organization_id", organizationId)
@@ -167,6 +226,17 @@ export async function fetchClientAchievementsMonthSummary(
     .gte("occurred_at", `${monthRange.firstDay}T00:00:00Z`)
     .lte("occurred_at", `${monthRange.lastDay}T23:59:59.999Z`);
 
+  if (filters.clientId) query = query.eq("client_id", filters.clientId);
+  if (managerGoalClientIds !== null) query = query.in("client_id", managerGoalClientIds);
+  if (filters.family) query = query.eq("metadata->>family", filters.family);
+  if (filters.level) {
+    query =
+      filters.level === "account"
+        ? query.or("metadata->>level.eq.account,metadata->>level.is.null")
+        : query.eq("metadata->>level", filters.level);
+  }
+
+  const { data } = await query;
   const rows = data ?? [];
   const distinctClients = new Set(rows.map((r) => r.client_id).filter((id): id is string => id !== null)).size;
   const records = rows.filter((r) => (r.metadata as Record<string, unknown> | null)?.severity === "record").length;

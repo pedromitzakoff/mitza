@@ -2,9 +2,25 @@
 
 import { useRouter } from "next/navigation";
 import { ACHIEVEMENT_LEVEL_LABEL } from "@/lib/achievement-labels";
+import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import type { AchievementLevel, AchievementScope } from "@/lib/achievement-types";
 
 const LEVEL_OPTIONS: AchievementLevel[] = ["account", "campaign", "ad_set", "creative"];
+
+/** Opções do filtro de Objetivo — mesma fonte canônica de sempre
+ * (`clients.performance_goal`/`PerformanceGoal`, `lib/performance-goals.ts`)
+ * e MESMOS rótulos curtos já usados em `OPERATION_GOAL_OPTIONS`
+ * (`operation/page.tsx`/`operation-triage-view.tsx`) — "Seguidores" pro
+ * terceiro valor, nunca "Awareness"/"Growth"/"Branding" (decisão já
+ * documentada em `lib/performance-goals.ts`: introduzir um nome novo aqui
+ * criaria uma segunda nomenclatura pro mesmo conceito). Só array local
+ * diferente é o rótulo "Todos" no topo — `PerformanceGoal` descreve o
+ * objetivo de UM cliente, nunca um recorte de tela. */
+const GOAL_OPTIONS: { value: PerformanceGoal; label: string }[] = [
+  { value: "leads", label: PERFORMANCE_GOALS.leads.label },
+  { value: "sales", label: PERFORMANCE_GOALS.sales.label },
+  { value: "followers", label: PERFORMANCE_GOALS.followers.label },
+];
 
 /**
  * Filtros de Conquistas — variam por aba (seção 22 da Auditoria original,
@@ -19,6 +35,8 @@ const LEVEL_OPTIONS: AchievementLevel[] = ["account", "campaign", "ad_set", "cre
 export function AchievementsFilterBar({
   scope,
   clientId,
+  managerId,
+  goalId,
   actorId,
   familyId,
   levelId,
@@ -28,10 +46,18 @@ export function AchievementsFilterBar({
 }: {
   scope: AchievementScope;
   clientId: string;
+  /** Etapa "Filtros de Gestor/Objetivo" — só existe (e só é lido) na aba
+   * Cliente, mesmo tratamento de `levelId` abaixo. */
+  managerId: string;
+  goalId: string;
   actorId: string;
   familyId: string;
   levelId: string;
   clients: { id: string; name: string }[];
+  /** Reaproveitado da mesma query já feita pra aba Pessoa (`page.tsx`,
+   * `team_members` com `status = 'ativo'`) — nunca uma segunda consulta só
+   * pra popular o filtro de Gestor (mesmo padrão de opções já usado em
+   * `clients/page.tsx`/`operation-filter-bar.tsx`). */
   teamMembers: { id: string; name: string }[];
   familyOptions: Record<string, string>;
 }) {
@@ -41,6 +67,8 @@ export function AchievementsFilterBar({
     const next = new URLSearchParams();
     if (scope !== "client") next.set("tab", scope);
     if (scope === "client" && clientId !== "todos") next.set("client", clientId);
+    if (scope === "client" && managerId !== "todos") next.set("manager", managerId);
+    if (scope === "client" && goalId !== "todos") next.set("goal", goalId);
     if (scope === "person" && actorId !== "todos") next.set("actor", actorId);
     if (familyId !== "todos") next.set("family", familyId);
     if (scope === "client" && levelId !== "todos") next.set("level", levelId);
@@ -59,7 +87,9 @@ export function AchievementsFilterBar({
   }
 
   const hasAnyFilter =
-    (scope === "client" && (clientId !== "todos" || levelId !== "todos")) || (scope === "person" && actorId !== "todos") || familyId !== "todos";
+    (scope === "client" && (clientId !== "todos" || managerId !== "todos" || goalId !== "todos" || levelId !== "todos")) ||
+    (scope === "person" && actorId !== "todos") ||
+    familyId !== "todos";
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -74,6 +104,38 @@ export function AchievementsFilterBar({
           {clients.map((client) => (
             <option key={client.id} value={client.id}>
               {client.name}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {scope === "client" && teamMembers.length > 0 && (
+        <select
+          value={managerId}
+          onChange={(event) => navigate({ manager: event.target.value })}
+          aria-label="Filtrar por gestor"
+          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        >
+          <option value="todos">Gestor: todos</option>
+          {teamMembers.map((manager) => (
+            <option key={manager.id} value={manager.id}>
+              {manager.name}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {scope === "client" && (
+        <select
+          value={goalId}
+          onChange={(event) => navigate({ goal: event.target.value })}
+          aria-label="Filtrar por objetivo"
+          className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        >
+          <option value="todos">Objetivo: todos</option>
+          {GOAL_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
@@ -128,7 +190,7 @@ export function AchievementsFilterBar({
       {hasAnyFilter && (
         <button
           type="button"
-          onClick={() => navigate({ client: "todos", actor: "todos", family: "todos", level: "todos" })}
+          onClick={() => navigate({ client: "todos", manager: "todos", goal: "todos", actor: "todos", family: "todos", level: "todos" })}
           className="rounded text-xs text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
           Limpar filtros
