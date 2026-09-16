@@ -13,6 +13,24 @@
 -- apresentação cai pro outcome/optimizations de sempre quando diagnosis é
 -- null).
 --
+-- Revisão desta migration: "Criar tarefa a partir desta revisão" — capacidade
+-- opcional/discreta (checkbox único, sem reintroduzir outcome=ISSUE_IDENTIFIED
+-- como pergunta) que reaproveita a MESMA tarefa/coluna/vínculo que o fluxo
+-- legado de "problema identificado" já usava (`tasks` + `account_reviews.
+-- issue_task_id` — nenhuma tabela nova). A única mudança é que a criação da
+-- tarefa deixa de depender de outcome='ISSUE_IDENTIFIED' (que não é mais
+-- perguntado) e passa a depender só de `p_create_task`; o texto da tarefa é
+-- resolvido pela camada JS (observação, ou o rótulo do diagnóstico quando não
+-- há observação) e chega aqui pelo mesmo parâmetro `p_issue_description` de
+-- sempre — zero coluna/tabela nova.
+--
+-- Esta revisão também incorpora a correção de supabase/fix-tasks-original-due-date.sql
+-- (`original_due_date` no insert de `tasks`, NOT NULL sem default) — auditoria
+-- encontrou que essa correção é POSTERIOR à versão de record_account_review
+-- usada como base aqui (supabase/account-optimization-quantity.sql), então
+-- precisa ser reincorporada agora pra não regredir o bug "null value in
+-- column original_due_date" ao criar a tarefa.
+--
 -- Rode depois de supabase/recurring-task-optimization-refactor.sql.
 
 alter table account_reviews add column if not exists diagnosis text;
@@ -48,16 +66,31 @@ drop function if exists record_account_review(
   uuid, uuid, uuid, text, text, text, text, text, text, jsonb, boolean, uuid, date, text
 );
 
--- record_account_review (redefinida): único trecho alterado é o novo
--- parâmetro opcional p_diagnosis (default null — compatível com qualquer
--- chamador existente que não o envie, ex.: histórico de chamadas já feitas
--- por register_recurring_execution antes desta etapa). Grava a coluna nova
--- e inclui `diagnosis` E `notes` no metadata do próprio account_review_recorded
--- (notes já existia na tabela, só nunca tinha ido pro metadata) — pra
--- Timeline Geral (lib/agency-timeline.ts) montar Diagnóstico + Ações +
--- Observação sem segunda consulta, mesmo padrão já usado pros outros campos
--- (reason/outcome/optimization_types). Todo o resto é idêntico ao já
--- redefinido em supabase/account-optimization-quantity.sql.
+-- record_account_review (redefinida): dois trechos alterados a partir da
+-- versão-base (supabase/account-optimization-quantity.sql).
+--
+-- 1) p_diagnosis (default null — compatível com qualquer chamador existente
+--    que não o envie). Grava a coluna nova e inclui `diagnosis` E `notes` no
+--    metadata do próprio account_review_recorded (notes já existia na
+--    tabela, só nunca tinha ido pro metadata) — pra Timeline Geral
+--    (lib/agency-timeline.ts) montar Diagnóstico + Ações + Observação sem
+--    segunda consulta, mesmo padrão já usado pros outros campos
+--    (reason/outcome/optimization_types).
+--
+-- 2) "Criar tarefa a partir desta revisão" deixa de exigir
+--    outcome='ISSUE_IDENTIFIED' — passa a criar a tarefa sempre que
+--    `p_create_task` for true, qualquer que seja o outcome (derivado de
+--    NO_CHANGE/OPTIMIZATION_PERFORMED no fluxo novo). Reaproveita 100% a
+--    mesma tabela `tasks` e o mesmo vínculo `account_reviews.issue_task_id`
+--    do fluxo legado — nenhuma tabela/coluna nova. `p_issue_description`
+--    continua sendo o parâmetro que carrega o texto da tarefa (resolvido
+--    pela camada JS: observação, ou o rótulo do diagnóstico quando não há
+--    observação — nunca um campo novo no formulário).
+--
+-- Também reincorpora a correção de original_due_date
+-- (supabase/fix-tasks-original-due-date.sql, posterior à versão-base usada
+-- aqui) — sem isso, criar a tarefa violaria a constraint NOT NULL de
+-- `tasks.original_due_date` (sem default).
 create or replace function record_account_review(
   p_client_id uuid,
   p_team_member_id uuid,
@@ -94,6 +127,7 @@ declare
   v_optimization_count int := coalesce(jsonb_array_length(p_optimizations), 0);
   v_optimization_types jsonb;
   v_task_id uuid := null;
+  v_task_due_date date;
 begin
   select organization_id into v_org_id from team_members where id = p_team_member_id;
   if v_org_id is null then
@@ -126,6 +160,13 @@ begin
   if p_outcome = 'ISSUE_IDENTIFIED' and (p_issue_description is null or length(trim(p_issue_description)) = 0) then
     raise exception 'Descrição do problema é obrigatória.';
   end if;
+  -- Defesa em profundidade pro fluxo novo (checkbox "Criar tarefa a partir
+  -- desta revisão", desacoplado de outcome): a camada JS sempre resolve um
+  -- texto (observação ou o rótulo do diagnóstico) antes de marcar
+  -- p_create_task, mas o banco nunca confia só nisso.
+  if p_create_task and (p_issue_description is null or length(trim(p_issue_description)) = 0) then
+    raise exception 'Contexto da tarefa é obrigatório.';
+  end if;
 
   select primary_manager_id into v_client_manager_id from clients where id = p_client_id;
 
@@ -151,16 +192,25 @@ begin
   )
   returning id into v_review_id;
 
-  -- Tarefa opcional a partir da pendência (seção 14) — só quando o gestor
-  -- decide explicitamente; nunca automática.
-  if p_outcome = 'ISSUE_IDENTIFIED' and p_create_task then
-    insert into tasks (client_id, title, type, assignee_id, due_date, sprint_id, status, recurrence, notes)
+  -- Tarefa opcional a partir da revisão — só quando o gestor marca "Criar
+  -- tarefa a partir desta revisão" (checkbox discreto, `p_create_task`);
+  -- desacoplada de outcome (cobre NO_CHANGE/OPTIMIZATION_PERFORMED, não só
+  -- o antigo ISSUE_IDENTIFIED) — nunca automática. Mesma tabela `tasks` e
+  -- mesmo vínculo `account_reviews.issue_task_id` do fluxo legado.
+  if p_create_task then
+    v_task_due_date := coalesce(p_task_due_date, v_sprint.end_date);
+
+    insert into tasks (
+      client_id, title, type, assignee_id, due_date, original_due_date,
+      sprint_id, status, recurrence, notes
+    )
     values (
       p_client_id,
-      left('Pendência: ' || p_issue_description, 200),
+      left('Revisão: ' || p_issue_description, 200),
       'outro',
       p_task_responsible_id,
-      coalesce(p_task_due_date, v_sprint.end_date),
+      v_task_due_date,
+      v_task_due_date,
       v_sprint.id,
       'pendente',
       'nenhuma',
@@ -177,9 +227,9 @@ begin
       v_org_id, 'task_created', p_team_member_id, p_auth_user_id,
       p_client_id, v_sprint.id, 'task', v_task_id, v_now, p_source, v_correlation_id,
       jsonb_build_object(
-        'task_type', 'outro', 'task_title', left('Pendência: ' || p_issue_description, 200),
-        'due_date', coalesce(p_task_due_date, v_sprint.end_date),
-        'assignee_team_member_id', p_task_responsible_id, 'origin', 'account_review_issue',
+        'task_type', 'outro', 'task_title', left('Revisão: ' || p_issue_description, 200),
+        'due_date', v_task_due_date,
+        'assignee_team_member_id', p_task_responsible_id, 'origin', 'account_review_follow_up',
         'account_review_id', v_review_id
       )
     );
@@ -287,10 +337,14 @@ drop function if exists register_recurring_execution(uuid, uuid, uuid, uuid, tex
 drop function if exists register_recurring_execution(uuid, uuid, uuid, uuid, text, text[], jsonb, uuid, text);
 
 -- register_recurring_execution (redefinida): corpo idêntico ao vigente
--- (register-recurring-execution-cleanup-v2.sql), só com o novo parâmetro
--- opcional p_diagnosis (default null) no final — repassado pra
--- record_account_review só quando uses_account_review=true, mesmo espírito
--- de p_optimization_selections.
+-- (register-recurring-execution-cleanup-v2.sql), com dois acréscimos no
+-- final — p_diagnosis (default null, repassado pra record_account_review só
+-- quando uses_account_review=true, mesmo espírito de
+-- p_optimization_selections) e p_create_task/p_issue_description (default
+-- false/null — mesma capacidade discreta "Criar tarefa a partir desta
+-- revisão" da revisão manual, disponível também na execução rápida da
+-- recorrência "Otimização", já que as duas escrevem a mesma
+-- account_reviews por baixo).
 create or replace function register_recurring_execution(
   p_recurring_task_id uuid,
   p_client_id uuid,
@@ -301,7 +355,9 @@ create or replace function register_recurring_execution(
   p_optimization_selections jsonb default null,
   p_client_report_id uuid default null,
   p_source text default 'web',
-  p_diagnosis text default null
+  p_diagnosis text default null,
+  p_create_task boolean default false,
+  p_issue_description text default null
 ) returns jsonb as $$
 declare
   v_uses_account_review boolean;
@@ -343,10 +399,10 @@ begin
       p_reason_other_description => null,
       p_outcome => case when jsonb_array_length(v_optimizations) > 0 then 'OPTIMIZATION_PERFORMED' else 'NO_CHANGE' end,
       p_notes => p_notes,
-      p_issue_description => null,
+      p_issue_description => p_issue_description,
       p_issue_category => null,
       p_optimizations => v_optimizations,
-      p_create_task => false,
+      p_create_task => p_create_task,
       p_task_responsible_id => null,
       p_task_due_date => null,
       p_source => p_source,

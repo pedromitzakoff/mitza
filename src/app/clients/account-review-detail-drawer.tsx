@@ -160,9 +160,18 @@ export function AccountReviewDetailDrawer({
             <SectionHeader>Problema identificado</SectionHeader>
             <p className="mt-2 text-sm text-overview-text-primary">{review.issueDescription}</p>
             {review.issueCategory && <p className="mt-1 text-xs text-overview-text-secondary">Categoria: {review.issueCategory}</p>}
-            {review.issueTaskTitle && (
-              <p className="mt-1 text-xs text-overview-text-secondary">Tarefa criada: {review.issueTaskTitle}</p>
-            )}
+          </section>
+        )}
+
+        {/* "Criar tarefa a partir desta revisão" (revisão pós-aprovação) —
+         * `issueTaskTitle` deixou de depender de outcome=ISSUE_IDENTIFIED
+         * (a tarefa agora nasce de qualquer revisão, ver
+         * account-review-actions.ts), então esta linha precisa aparecer
+         * independente do outcome — nunca só dentro do bloco legado acima. */}
+        {review.issueTaskTitle && (
+          <section className="mt-4 border-t border-overview-border pt-4">
+            <SectionHeader>Tarefa criada</SectionHeader>
+            <p className="mt-2 text-sm text-overview-text-primary">{review.issueTaskTitle}</p>
           </section>
         )}
 

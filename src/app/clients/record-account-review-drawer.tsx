@@ -19,10 +19,17 @@ import { SubmitButton } from "@/app/submit-button";
  * selecionada é um registro perfeitamente válido — não força nenhuma ação
  * artificial só para salvar.
  *
- * `managers` não é mais usado aqui (o antigo fluxo "criar tarefa a partir da
- * pendência" saiu do formulário rápido — criar uma tarefa continua existindo
- * como funcionalidade genérica do produto, só não é mais um passo deste
- * formulário) — mantido no tipo só pra não obrigar os 2 chamadores
+ * "Criar tarefa a partir desta revisão" — checkbox opcional/discreto abaixo
+ * da Observação (revisão pós-aprovação: cobre o gestor que identifica algo
+ * a fazer depois, sem executar a ação agora, sem reintroduzir o passo
+ * "problema identificado" nem complicar os 3 blocos acima). Desmarcado
+ * (padrão), nada muda no fluxo — `recordAccountReviewAction` só cria a
+ * tarefa quando marcado.
+ *
+ * `managers` não é mais usado aqui (o responsável da tarefa criada fica
+ * sempre "sem responsável definido", mesmo padrão do fluxo legado quando
+ * nenhum era escolhido — manter o formulário numa única decisão por vez)
+ * — mantido no tipo só pra não obrigar os 2 chamadores
  * (`/clients/[id]/page.tsx`, `/sprints/page.tsx`) a deixar de passar a prop.
  */
 export function RecordAccountReviewDrawer({
@@ -82,6 +89,11 @@ export function RecordAccountReviewDrawer({
               />
             </label>
           </section>
+
+          <label className="flex items-center gap-2 text-sm text-overview-text-secondary">
+            <input type="checkbox" name="create_task" className="h-4 w-4 rounded border-overview-border" />
+            Criar tarefa a partir desta revisão
+          </label>
 
           <div className="flex items-center gap-2 border-t border-overview-border pt-4">
             <SubmitButton

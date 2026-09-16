@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { checkWorkspaceClientAction } from "@/lib/require-workspace-client";
-import { isValidAccountReviewDiagnosis, parseOptimizationSelections } from "@/lib/account-reviews";
+import { ACCOUNT_REVIEW_DIAGNOSIS_LABEL, isValidAccountReviewDiagnosis, parseOptimizationSelections } from "@/lib/account-reviews";
 import type { AccountReviewDiagnosis } from "@/lib/supabase/database.types";
 
 /**
@@ -89,6 +89,15 @@ export async function registerRecurringExecutionAction(
     return { status: "error", message: "Selecione o diagnóstico da conta." };
   }
 
+  // "Criar tarefa a partir desta revisão" (revisão pós-aprovação) — mesma
+  // capacidade discreta da revisão manual, disponível aqui porque as duas
+  // escrevem a mesma account_reviews por baixo (record_account_review).
+  // Texto da tarefa: a observação, quando preenchida, ou o rótulo do
+  // diagnóstico quando não há observação — nunca em branco, nunca um campo
+  // novo no formulário.
+  const createTask = isAccountReviewFlow && formData.get("create_task") === "on";
+  const taskContext = createTask ? notes ?? (diagnosis ? ACCOUNT_REVIEW_DIAGNOSIS_LABEL[diagnosis] : null) : null;
+
   const { error } = await supabase.rpc("register_recurring_execution", {
     p_recurring_task_id: recurringTaskId,
     p_client_id: clientId,
@@ -104,11 +113,13 @@ export async function registerRecurringExecutionAction(
     // mesmo conjunto de argumentos nomeados. Passar `null` explicitamente
     // nunca depende da resolução automática do Postgres (ver também a
     // migration que remove as assinaturas antigas). Mesmo raciocínio agora
-    // pra p_diagnosis, novo nesta etapa — mesma migration já cuida de
-    // remover a assinatura antiga que não o tinha.
+    // pra p_diagnosis/p_create_task/p_issue_description, novos nesta etapa —
+    // mesma migration já cuida de remover a assinatura antiga que não os tinha.
     p_client_report_id: null,
     p_source: "web",
     p_diagnosis: diagnosis,
+    p_create_task: createTask,
+    p_issue_description: taskContext,
   });
 
   if (error) {

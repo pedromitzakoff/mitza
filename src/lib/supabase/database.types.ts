@@ -3121,6 +3121,8 @@ export interface Database {
           p_client_report_id?: string | null;
           p_source?: OperationalEventSource;
           p_diagnosis?: AccountReviewDiagnosis | null;
+          p_create_task?: boolean;
+          p_issue_description?: string | null;
         };
         Returns: {
           executionId: string;

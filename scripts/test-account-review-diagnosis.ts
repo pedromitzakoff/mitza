@@ -77,7 +77,7 @@ console.log("1 — Migration: diagnosis aditivo, sem overload ambíguo, nada des
   );
   ok(
     "register_recurring_execution novo mantém p_client_report_id ANTES de p_source (ordem real vigente, não a de uma migration antiga)",
-    /p_optimization_selections jsonb default null,\s*p_client_report_id uuid default null,\s*p_source text default 'web',\s*p_diagnosis text default null/.test(sql),
+    /p_optimization_selections jsonb default null,\s*p_client_report_id uuid default null,\s*p_source text default 'web',\s*p_diagnosis text default null,\s*p_create_task boolean default false,\s*p_issue_description text default null/.test(sql),
   );
   ok(
     "register_recurring_execution repassa p_diagnosis pra record_account_review só quando uses_account_review",
@@ -88,6 +88,42 @@ console.log("1 — Migration: diagnosis aditivo, sem overload ambíguo, nada des
   ok(
     "insert em recurring_task_executions preserva client_report_id (não foi perdido na redefinição)",
     /account_review_id, checklist_selected_keys, optimization_selections, client_report_id, notes/.test(sql),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 1b — "Criar tarefa a partir desta revisão": reaproveita 100% a estrutura
+// legada (tasks + account_reviews.issue_task_id), desacoplada de
+// outcome='ISSUE_IDENTIFIED', com a correção de original_due_date
+// reincorporada (senão regride o bug de NOT NULL).
+// ---------------------------------------------------------------------------
+console.log("\n1b — Criar tarefa a partir desta revisão: reaproveita a estrutura legada, sem outcome, sem regressão de original_due_date\n");
+{
+  const sql = stripComments(loadSource("supabase", "account-review-diagnosis.sql"));
+
+  ok(
+    "criação de tarefa não depende mais de outcome='ISSUE_IDENTIFIED' — só de p_create_task",
+    /if p_create_task then\s*v_task_due_date := coalesce/.test(sql) && !/if p_outcome = 'ISSUE_IDENTIFIED' and p_create_task then/.test(sql),
+  );
+  ok(
+    "insert em tasks preserva original_due_date (correção de fix-tasks-original-due-date.sql reincorporada, senão regride NOT NULL)",
+    /insert into tasks \(\s*client_id, title, type, assignee_id, due_date, original_due_date,\s*sprint_id, status, recurrence, notes\s*\)/.test(sql),
+  );
+  ok("due_date e original_due_date usam a MESMA data (v_task_due_date), nunca duas datas diferentes", /v_task_due_date,\s*v_task_due_date,/.test(sql));
+  ok("título da tarefa usa o prefixo novo 'Revisão:' (não mais 'Pendência:', que soava só a problema)", /left\('Revisão: ' \|\| p_issue_description, 200\)/.test(sql));
+  ok("nenhuma ocorrência residual do prefixo antigo 'Pendência:'", !/Pendência: /.test(sql));
+  ok("metadata do task_created usa origin novo (account_review_follow_up, não mais account_review_issue)", /'origin', 'account_review_follow_up'/.test(sql));
+  ok(
+    "defesa em profundidade: p_create_task exige p_issue_description não vazio (banco nunca confia só no JS)",
+    /if p_create_task and \(p_issue_description is null or length\(trim\(p_issue_description\)\) = 0\) then/.test(sql),
+  );
+  ok(
+    "register_recurring_execution repassa p_create_task/p_issue_description pra record_account_review",
+    /p_create_task => p_create_task/.test(sql) && /p_issue_description => p_issue_description/.test(sql),
+  );
+  ok(
+    "vínculo account_reviews.issue_task_id é reaproveitado sem mudança (mesma coluna do fluxo legado)",
+    /update account_reviews set issue_task_id = v_task_id where id = v_review_id/.test(sql),
   );
 }
 
@@ -187,6 +223,49 @@ console.log("\n5 — recordAccountReviewAction: outcome derivado, reason fixo, s
   ok(
     "reviewed_at (data/hora) é sempre v_now no servidor — nunca recebido do cliente",
     /reviewed_at, reason, reason_other_description, outcome, notes,\s*issue_description, issue_category, previous_review_at, seconds_since_previous_review, diagnosis\s*\) values \(\s*v_org_id, p_client_id, v_sprint\.id, p_team_member_id, p_auth_user_id,\s*v_now,/.test(sqlFn),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 5b — "Criar tarefa a partir desta revisão": opcional, discreto, sem
+// reintroduzir outcome=ISSUE_IDENTIFIED como pergunta. Desmarcado, nada
+// muda; marcado, o contexto vem da observação ou, na ausência dela, do
+// rótulo do diagnóstico — nunca em branco.
+// ---------------------------------------------------------------------------
+console.log("\n5b — Criar tarefa a partir desta revisão (opcional/discreto, sem outcome)\n");
+{
+  const actionCode = stripComments(loadSource("src", "app", "clients", "account-review-actions.ts"));
+  const recurringActionCode = stripComments(loadSource("src", "app", "clients", "recurring-task-actions.ts"));
+
+  ok("createTask lido de formData.get(\"create_task\") === \"on\" (checkbox único, sem novo campo)", /formData\.get\("create_task"\) === "on"/.test(actionCode));
+  ok(
+    "taskContext usa a observação quando existe, e o rótulo do diagnóstico como fallback (nunca em branco)",
+    /createTask \? notes \?\? ACCOUNT_REVIEW_DIAGNOSIS_LABEL\[diagnosisRaw\] : null/.test(actionCode),
+  );
+  ok("p_create_task nunca é true quando o checkbox não foi marcado (desmarcado = comportamento antigo)", /p_create_task: createTask/.test(actionCode));
+  ok("action nunca lê formData.get(\"outcome\")/'ISSUE_IDENTIFIED' — checkbox não reintroduz outcome perguntado", !/ISSUE_IDENTIFIED/.test(actionCode));
+
+  ok(
+    "mesma capacidade disponível na execução rápida da recorrência (mesma account_reviews por baixo)",
+    /createTask = isAccountReviewFlow && formData\.get\("create_task"\) === "on"/.test(recurringActionCode) &&
+      /p_create_task: createTask/.test(recurringActionCode) &&
+      /p_issue_description: taskContext/.test(recurringActionCode),
+  );
+
+  const drawerCode = stripComments(loadSource("src", "app", "clients", "record-account-review-drawer.tsx"));
+  ok("drawer manual tem o checkbox 'Criar tarefa a partir desta revisão'", /name="create_task"/.test(drawerCode) && /Criar tarefa a partir desta revisão/.test(drawerCode));
+  ok("checkbox não é obrigatório (sem required/checked fixo — opcional de verdade)", !/name="create_task"[^>]*required/.test(drawerCode));
+
+  const registerFormCode = stripComments(loadSource("src", "app", "clients", "register-execution-form.tsx"));
+  ok(
+    "formulário de execução rápida só mostra o checkbox quando usesAccountReview (nunca no checklist genérico)",
+    /usesAccountReview &&\s*\(\s*<label[^>]*>\s*<input type="checkbox" name="create_task"/.test(registerFormCode),
+  );
+
+  const detailDrawerCode = stripComments(loadSource("src", "app", "clients", "account-review-detail-drawer.tsx"));
+  ok(
+    "'Tarefa criada' no drawer de detalhe não depende mais de outcome=ISSUE_IDENTIFIED (aparece pra qualquer revisão com tarefa vinculada)",
+    /\{review\.issueTaskTitle && \(/.test(detailDrawerCode) && !/outcome === "ISSUE_IDENTIFIED"[\s\S]{0,400}Tarefa criada/.test(detailDrawerCode),
   );
 }
 

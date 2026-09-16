@@ -68,6 +68,12 @@ export function RegisterExecutionForm({
         placeholder="Observações (opcional)"
         className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:border-zinc-500"
       />
+      {usesAccountReview && (
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <input type="checkbox" name="create_task" className="h-3.5 w-3.5 rounded border-border" />
+          Criar tarefa a partir desta revisão
+        </label>
+      )}
       <div className="flex flex-col items-start gap-1.5">
         <SubmitButton
           pendingChildren="Registrando..."
