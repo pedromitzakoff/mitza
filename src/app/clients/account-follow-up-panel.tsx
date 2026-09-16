@@ -124,7 +124,7 @@ function RitmoDiagnostic({
  * o ritmo e o detalhamento por canal só consomem valores já calculados
  * pela página; nunca recomputados aqui (exceto `classifySpendStatus`, que é
  * uma função PURA recalculada de propósito — mesmo padrão já usado por
- * `MonthInvestmentActions`/`MonthInvestmentSummary`, nunca uma segunda
+ * `MonthInvestmentPaceNote`/`MonthInvestmentSummary`, nunca uma segunda
  * regra de negócio).
  *
  * Etapa "Revisão Performance — Visão Geral do cliente" (substitui a
@@ -147,9 +147,15 @@ function RitmoDiagnostic({
  *    atenção?": um texto só quando as duas leituras estão bem, dois
  *    textos atribuídos quando alguma delas não está (nunca esconde uma
  *    condição problemática só pra caber numa frase única).
- * 4. Ações (`investmentActions` — "Ver detalhes do investimento"/"Editar
- *    planejamento"/"Ver histórico", inalteradas) e "Resultados por canal"
- *    em largura total, fechando o bloco.
+ * 4. Metadata do diagnóstico (`investmentPaceNote` — "Diferença para o
+ *    ritmo"/"Ritmo recomendado"/"Ver histórico", Etapa "Simplificação
+ *    Pós-Facelift") DENTRO da mesma seção "Ritmo do mês", e "Resultados por
+ *    canal" em largura total, fechando o bloco. O antigo disclosure "Ver
+ *    detalhes do investimento" (com "Realizado"/"Esperado hoje"/"Esperado
+ *    até hoje"/"Regra da projeção") foi removido por inteiro — informação
+ *    duplicada da camada 1/2; "Editar planejamento" subiu pra toolbar de
+ *    `[id]/page.tsx` (ação estrutural da conta, não mais interna de
+ *    Performance).
  *
  * O histórico do mês (antigo `CollapsibleAccountHistory`) continua fora da
  * apresentação padrão (decisão de etapa anterior, inalterada) — a Timeline
@@ -172,7 +178,7 @@ export function AccountFollowUpPanel({
   isFutureMonth,
   isClosedMonth,
   currentPlanningEndDate,
-  investmentActions,
+  investmentPaceNote,
 }: {
   /** Investimento realizado do mês selecionado — já calculado pela camada
    * financeira (`sumActualSpendForMonth`), nunca recomputado aqui. */
@@ -202,10 +208,14 @@ export function AccountFollowUpPanel({
   isFutureMonth: boolean;
   isClosedMonth: boolean;
   currentPlanningEndDate: string | null;
-  /** `<MonthInvestmentActions />` já pronto — disclosure/edição/histórico
-   * do investimento, renderizado numa linha própria abaixo da seção "Ritmo
-   * do mês" (nunca dentro dela). */
-  investmentActions?: ReactNode;
+  /** `<MonthInvestmentPaceNote />` já pronto — Etapa "Simplificação
+   * Pós-Facelift": "Diferença para o ritmo"/"Ritmo recomendado" + "Ver
+   * histórico" (o antigo disclosure "Ver detalhes do investimento" saiu por
+   * inteiro; "Editar planejamento" subiu pra toolbar de `[id]/page.tsx`).
+   * Renderizado DENTRO da seção "Ritmo do mês", logo abaixo do diagnóstico
+   * único — nunca numa faixa separada abaixo dela (era assim antes, quando
+   * ainda carregava a ação de editar planejamento). */
+  investmentPaceNote?: ReactNode;
 }) {
   // Resultado só tem leitura de ritmo quando há meta de QUANTIDADE
   // configurada pro mês — mesmo guard que já existia antes de
@@ -276,9 +286,14 @@ export function AccountFollowUpPanel({
         <div className="mt-2.5">
           <RitmoDiagnostic resultStatus={resultStatus} investmentStatus={investmentRitmoStatus} />
         </div>
-      </div>
 
-      {investmentActions && <div className="mt-3 border-t border-overview-border pt-2">{investmentActions}</div>}
+        {/* Etapa "Simplificação Pós-Facelift": "Diferença para o ritmo"/
+            "Ritmo recomendado" (+ "Ver histórico") vivem AQUI DENTRO agora —
+            metadata secundária do próprio diagnóstico, não mais uma faixa de
+            ações separada abaixo da seção inteira (era assim quando ainda
+            incluía "Editar planejamento", que subiu pra toolbar). */}
+        {investmentPaceNote && <div className="mt-1">{investmentPaceNote}</div>}
+      </div>
 
       {performanceGoal && <ResultsByChannel goal={performanceGoal} channelBreakdown={channelBreakdown} />}
     </>

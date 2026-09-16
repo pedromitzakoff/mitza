@@ -61,7 +61,8 @@ import { getReportShareLinkStatus } from "@/lib/report-share-links";
 import { ClientIdentitySticky } from "../client-identity-sticky";
 import { ClientWorkspaceContext } from "../client-workspace-context";
 import { AccountInfoDrawer } from "../account-info-drawer";
-import { MonthInvestmentActions } from "../month-investment-summary";
+import { MonthInvestmentPaceNote } from "../month-investment-summary";
+import { ChannelPlanEditor } from "../channel-plan-editor";
 import { SprintCard } from "../sprint-card";
 import { MonthTasksPanel } from "../month-tasks-panel";
 import { Section } from "../section";
@@ -890,13 +891,6 @@ export default async function ClientPage({
   // datas: "não é o mês corrente" + "não está encerrado" já implica futuro,
   // dado que todo mês é ou passado, ou corrente, ou futuro).
   const isFutureMonth = !isCurrentMonth && !isClosedMonth;
-  // Etapa "Horizonte de Planejamento": distingue POR QUE o período está
-  // encerrado — o mês civil realmente acabou (`todayStr > lastDay`) ou só o
-  // horizonte de evento (`todayStr` ainda dentro do mês civil, mas depois
-  // do `planning_end_date`) — só pra escolher o texto certo ("Mês
-  // encerrado" x "Período de planejamento encerrado"), nunca pra mudar
-  // nenhum cálculo (isso já é só `isClosedMonth`, derivado do horizonte).
-  const isClosedByHorizonOnly = isClosedMonth && todayStr <= lastDay;
   // `budgetSprints` alimenta só `MonthInvestmentSummary` agora (Etapa 73) —
   // esta página não computa mais `computeMonthlyBudgetPlan` por conta própria
   // pra derivar planejamento por sprint; o componente mensal já calcula seu
@@ -1443,6 +1437,38 @@ export default async function ClientPage({
           {activeArea === "visao-geral" && (
             <VisaoGeralChannelSwitch baseHref={metricsChannelBaseHref} active={metricsChannel} options={metricsChannelOptions} />
           )}
+          {/* Etapa "Simplificação Pós-Facelift": "Planejamento" sobe pra
+              cá — antes era "Editar planejamento" no rodapé de Performance
+              (`ChannelPlanEditor`, mesmo componente/estado/mecanismo, só
+              rótulo curto e nova posição). Auditoria: nenhum dos dados que
+              `ChannelPlanEditor` recebe (`AVAILABLE_TRAFFIC_CHANNELS`,
+              `clientPlan.byChannel`, `monthParam`/`{firstDay,lastDay}`,
+              `planningEndDate`, `performanceGoal`) depende de
+              `metricsChannel` (canal selecionado só na Visão Geral) nem de
+              `activeArea` — o plano é sempre o de TODOS os canais do mês
+              selecionado, nunca escopado por aba/seletor de canal. Por isso
+              fica fora do `activeArea === "visao-geral"` acima: é uma ação
+              estrutural da conta (mesma leitura de "Mês", que também não é
+              exclusiva da Visão Geral — afeta Timeline via
+              `fetchClientOperationalHistory`), disponível em qualquer aba.
+              Mesma condição de sempre decide se aparece (`isAdmin`, mês não
+              encerrado, `effectiveDate` resolvido) — nunca um estado novo;
+              quando não aparece, simplesmente não há nada aqui (antes havia
+              um texto "Mês encerrado" no rodapé de Performance, que não
+              sobrevive à remoção do bloco de ações — ver relatório desta
+              etapa). */}
+          {isAdmin && !isClosedMonth && effectiveDate && (
+            <ChannelPlanEditor
+              clientId={client.id}
+              monthParam={monthParam}
+              monthLabel={monthLabel}
+              monthRange={{ firstDay, lastDay }}
+              currentPlanningEndDate={planningEndDate}
+              channels={AVAILABLE_TRAFFIC_CHANNELS}
+              byChannel={clientPlan.byChannel}
+              performanceGoal={performanceGoal}
+            />
+          )}
         </div>
 
         {/* Divisória contexto → navegação — mesma divisória já usada mais
@@ -1595,16 +1621,14 @@ export default async function ClientPage({
               si vive junto do seletor de mês, acima deste bloco ("período +
               canal" como contexto único).
 
-              `MonthInvestmentActions` (disclosure/edição/histórico)
-              continua um slot `investmentActions` à parte, renderizado numa
-              linha própria abaixo da seção "Ritmo do mês" — nunca dentro
-              dela. */}
-          {/* Etapa "Evolução Visual Incremental — Área do Cliente": superfície
-              creme em vez de branco+borda — mesmo papel que o creme já
-              cumpre no Relatório de Performance (grande superfície de
-              conteúdo, nunca o fundo da página inteira — `--authenticated-bg`
-              continua intocado). Sem borda: a diferenciação vem só do tom da
-              superfície, como no Relatório. */}
+              `MonthInvestmentPaceNote` ("Diferença para o ritmo"/"Ritmo
+              recomendado"/"Ver histórico", Etapa "Simplificação
+              Pós-Facelift") continua um slot `investmentPaceNote` à parte,
+              mas agora renderizado DENTRO da seção "Ritmo do mês" — o antigo
+              disclosure "Ver detalhes do investimento" foi removido por
+              inteiro, e "Editar planejamento" (`ChannelPlanEditor`) subiu
+              pra toolbar de contexto (mês/canal/planejamento), mais acima
+              nesta página. */}
           {/* Etapa "Facelift Visual 2.0 — Performance sem grande card":
               wrapper reduzido a só a margem entre regiões (era `rounded-lg
               bg-cream p-3 sm:rounded-2xl sm:p-5` — a superfície areia
@@ -1631,29 +1655,19 @@ export default async function ClientPage({
               isFutureMonth={isFutureMonth}
               isClosedMonth={isClosedMonth}
               currentPlanningEndDate={planningEndDate}
-              investmentActions={
-                <MonthInvestmentActions
+              investmentPaceNote={
+                <MonthInvestmentPaceNote
                   planned={visaoGeralPlanned}
                   actual={visaoGeralMonthActual}
                   expectedToDate={visaoGeralExpectedToDate}
-                  status={visaoGeralStatus}
-                  clientId={client.id}
-                  monthParam={monthParam}
-                  monthLabel={monthLabel}
                   sprints={budgetSprints}
                   monthRange={planningHorizon}
                   effectiveDate={effectiveDate}
-                  isAdmin={isAdmin}
                   isClosedMonth={isClosedMonth}
-                  isClosedByHorizonOnly={isClosedByHorizonOnly}
                   isFutureMonth={isFutureMonth}
+                  isAdmin={isAdmin}
                   lastChange={lastChange}
                   historyHref={historyDrawerHref}
-                  performanceGoal={performanceGoal}
-                  channels={AVAILABLE_TRAFFIC_CHANNELS}
-                  byChannel={clientPlan.byChannel}
-                  calendarMonthRange={{ firstDay, lastDay }}
-                  currentPlanningEndDate={planningEndDate}
                 />
               }
             />

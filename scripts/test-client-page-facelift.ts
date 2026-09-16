@@ -1,18 +1,21 @@
 /**
- * Testes da Etapa "Facelift Visual — Visão Geral do cliente" (rodadas 1 e
- * 2) — puramente visual (composição/densidade/espaçamento/hierarquia), sem
- * mudança de dado/query/cálculo/permissão. Como não há regra de negócio
- * nova, esta suíte é só ESTRUTURAL (checagem de código-fonte) — mesmo
- * padrão já usado por `test-achievements-granularity.ts`/
- * `test-operation-goal-filter.ts` pra confirmar decisões de composição sem
- * precisar de um browser real.
+ * Testes da Etapa "Facelift Visual — Visão Geral do cliente" (rodadas 1, 2
+ * e 3) — puramente visual/composicional, sem mudança de dado/query/
+ * cálculo/permissão. Como não há regra de negócio nova, esta suíte é só
+ * ESTRUTURAL (checagem de código-fonte) — mesmo padrão já usado por
+ * `test-achievements-granularity.ts`/`test-operation-goal-filter.ts` pra
+ * confirmar decisões de composição sem precisar de um browser real.
  *
  * Rodada 2: remove o grande card areia de Performance (vira seção editorial
  * com assinatura pontual) e consolida Mês+Canal+Navegação numa única
- * toolbar — seções 10-12 abaixo. Seções 1-9 (rodada 1) foram atualizadas
- * só onde a composição que elas protegiam mudou de fato (o wrapper de
- * Performance, que perdeu `bg-cream` de vez); os testes de Tarefas
- * continuam intocados porque essa composição não mudou nesta rodada.
+ * toolbar — seções 10-12 abaixo.
+ *
+ * Rodada 3 ("Simplificação Pós-Facelift", seção 13 abaixo): remove por
+ * inteiro o accordion "Ver detalhes do investimento" (informação já
+ * duplicada nas barras/diagnóstico de "Ritmo do mês"), preserva só
+ * "Diferença para o ritmo"/"Ritmo recomendado" integrados diretamente sob o
+ * diagnóstico, e sobe "Planejamento" (era "Editar planejamento", dentro de
+ * Performance) pra toolbar de contexto, junto de Mês/Canal.
  *
  * Rodar: npx tsx scripts/test-client-page-facelift.ts
  */
@@ -45,6 +48,8 @@ const recurringRowCode = stripComments(loadSource("src", "app", "clients", "recu
 const taskRowCode = stripComments(loadSource("src", "app", "clients", "task-row.tsx"));
 const secondaryGoalsCode = stripComments(loadSource("src", "app", "clients", "secondary-goals-performance.tsx"));
 const accountFollowUpCode = stripComments(loadSource("src", "app", "clients", "account-follow-up-panel.tsx"));
+const monthInvestmentCode = stripComments(loadSource("src", "app", "clients", "month-investment-summary.tsx"));
+const channelPlanEditorCode = stripComments(loadSource("src", "app", "clients", "channel-plan-editor.tsx"));
 
 console.log("1 — Largura do conteúdo: mesmo max-w-5xl no container principal e no sticky\n");
 {
@@ -155,6 +160,38 @@ console.log("\n12 — Regressão: decisões da rodada 1 continuam de pé\n");
   ok("max-w-5xl da rodada 1 não foi revertido", /max-w-5xl px-6 py-5/.test(pageCode));
   ok("Tarefas continua sem grande card (rodada 1, intocada nesta rodada)", !tasksPanelCode.includes("bg-cream"));
   ok("filtros textuais de Tarefas continuam sem pill/cápsula (rodada 1, intocada)", !/rounded-full border px-2\.5 py-1/.test(tasksPanelCode));
+}
+
+// ---------------------------------------------------------------------------
+// Rodada 3 — "Simplificação Pós-Facelift"
+// ---------------------------------------------------------------------------
+console.log("\n13 — Accordion removido, diferença/ritmo integrados, Planejamento na toolbar\n");
+{
+  ok('accordion "Ver/Ocultar detalhes do investimento" não existe mais', !/Ver detalhes do investimento|Ocultar detalhes do investimento/.test(monthInvestmentCode));
+  ok("nenhum <details> sobrou em month-investment-summary.tsx", !/<details/.test(monthInvestmentCode));
+  ok('"Detalhes do acompanhamento"/"Regra da projeção"/"Ritmo planejado inicial" (textos do accordion) não existem mais', !/Detalhes do acompanhamento|Regra da projeção|Ritmo planejado inicial/.test(monthInvestmentCode));
+  ok('"Realizado"/"Esperado hoje"/"Esperado até hoje" (duplicados da barra/KPI) não existem mais', !/>Realizado<|>Esperado hoje<|>Esperado até hoje</.test(monthInvestmentCode));
+
+  ok('"Diferença para o ritmo" continua renderizada (como frase "X acima/abaixo do ritmo", não mais label+valor separados)', /acima do ritmo|abaixo do ritmo|Sem diferença de ritmo/.test(monthInvestmentCode));
+  ok('"Ritmo recomendado" continua renderizado (inline, junto da diferença)', /Ritmo recomendado:/.test(monthInvestmentCode));
+  ok("mesma fórmula de diferença para o ritmo (actual - expectedToDate, nunca invertida)", /const ritmoDiff = actual - expectedToDate;/.test(monthInvestmentCode));
+  ok("Ritmo recomendado continua vindo de computeMonthlyBudgetPlan (plan.recommendedDaily), nenhum cálculo novo", /plan\.recommendedDaily/.test(monthInvestmentCode) && /computeMonthlyBudgetPlan\(/.test(monthInvestmentCode));
+  ok("nova nota só aparece no mesmo caso em que a leitura de investimento do diagnóstico existe (!future && !closed && planned > 0)", /const hasPace = planned > 0 && !isFutureMonth && !isClosedMonth;/.test(monthInvestmentCode));
+  ok("linha nova fica dentro da seção Ritmo do mês (mt-1, sem border-t/card próprio)", /investmentPaceNote && <div className="mt-1">/.test(accountFollowUpCode));
+  ok("texto da diferença/ritmo recomendado é neutro (nunca amber/red — só o diagnóstico acima carrega tom semântico forte)", !/text-amber-600|text-red-600/.test(monthInvestmentCode));
+
+  ok("ChannelPlanEditor não é mais invocado dentro de Performance (só mencionado em comentário explicando a mudança)", !/<ChannelPlanEditor/.test(accountFollowUpCode));
+  ok('gatilho de ChannelPlanEditor usa o rótulo curto "Planejamento" (não mais "Editar planejamento")', /\n\s*Planejamento\n/.test(loadSource("src", "app", "clients", "channel-plan-editor.tsx")) && !/Editar planejamento/.test(channelPlanEditorCode));
+  ok("Planejamento (ChannelPlanEditor) aparece no grupo de CONTEXTO da toolbar, antes da divisória/navegação", pageCode.indexOf("<ChannelPlanEditor") > pageCode.indexOf("prevMonthHref") && pageCode.indexOf("<ChannelPlanEditor") < pageCode.indexOf('<div role="tablist"'));
+  ok(
+    "Planejamento NÃO é condicional a activeArea === 'visao-geral' (auditoria: não depende de canal nem de aba, ao contrário de VisaoGeralChannelSwitch)",
+    !/activeArea === "visao-geral" &&\s*\(\s*<ChannelPlanEditor/.test(pageCode),
+  );
+  ok("Planejamento preserva a mesma condição de disponibilidade de sempre (admin, mês não encerrado, effectiveDate resolvido)", /isAdmin && !isClosedMonth && effectiveDate &&\s*\(\s*<ChannelPlanEditor/.test(pageCode));
+  ok("Planejamento recebe os MESMOS dados de sempre (todos os canais, plano por canal, mês civil, horizonte, objetivo)", /channels=\{AVAILABLE_TRAFFIC_CHANNELS\}[\s\S]{0,80}byChannel=\{clientPlan\.byChannel\}[\s\S]{0,80}performanceGoal=\{performanceGoal\}/.test(pageCode));
+
+  ok("código órfão removido: isClosedByHorizonOnly não existe mais em page.tsx (só servia ao texto do accordion removido)", !pageCode.includes("isClosedByHorizonOnly"));
+  ok("mês/canal continuam preservados (mesmos hrefs/estado da rodada 2, nenhuma regressão)", /prevMonthHref/.test(pageCode) && /VisaoGeralChannelSwitch/.test(pageCode));
 }
 
 console.log(`\n${passed} verificações passaram.`);

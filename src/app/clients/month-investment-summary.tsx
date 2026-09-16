@@ -1,14 +1,10 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatCurrency, formatPercent, formatDayShortMonth } from "@/lib/format";
+import { formatCurrency, formatDayShortMonth } from "@/lib/format";
 import type { SpendStatus } from "@/lib/spend-status";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
-import { computeExpectedPct, resolveMonthPeriodSummary } from "@/lib/financial-period";
-import { computeMonthlyBudgetPlan, computeUtilizedPct, type MonthlyBudgetPlanSprintInput } from "@/lib/monthly-budget";
-import type { PerformanceGoal } from "@/lib/performance-goals";
-import type { TrafficChannel } from "@/lib/traffic-channels";
-import type { ChannelMetrics } from "@/lib/channel-metrics";
-import { ChannelPlanEditor } from "./channel-plan-editor";
+import { resolveMonthPeriodSummary } from "@/lib/financial-period";
+import { computeMonthlyBudgetPlan, type MonthlyBudgetPlanSprintInput } from "@/lib/monthly-budget";
 
 export interface MonthlyBudgetChangeSummary {
   lastEffectiveDate: string;
@@ -39,12 +35,12 @@ interface SharedInvestmentInput {
 }
 
 /** Recalcula `computeMonthlyBudgetPlan` — mesma função pura central de
- * sempre, consumida só por `MonthInvestmentActions` (o disclosure de
- * detalhes/ritmo recomendado) desde a Etapa "Revisão Performance — Visão
- * Geral do cliente" (`MonthInvestmentSummary` deixou de precisar de `plan`
- * quando a linha de diferença/restante/dias migrou pro diagnóstico único
- * de `AccountFollowUpPanel`). */
-function resolvePlan(input: SharedInvestmentInput) {
+ * sempre, consumida só por `MonthInvestmentPaceNote` ("Ritmo recomendado")
+ * desde a Etapa "Revisão Performance — Visão Geral do cliente"
+ * (`MonthInvestmentSummary` deixou de precisar de `plan` quando a linha de
+ * diferença/restante/dias migrou pro diagnóstico único de
+ * `AccountFollowUpPanel`). */
+function resolvePlan(input: Pick<SharedInvestmentInput, "planned" | "actual" | "monthRange" | "effectiveDate" | "sprints">) {
   return input.effectiveDate
     ? computeMonthlyBudgetPlan({
         monthlyBudget: input.planned,
@@ -128,196 +124,87 @@ export function MonthInvestmentSummary({
 }
 
 /**
- * Ações do investimento — "Ver detalhes do investimento" (disclosure com o
- * mesmo diagnóstico detalhado de sempre), "Editar planejamento"
- * (`ChannelPlanEditor`) e "Ver histórico". Extraído de `MonthInvestmentSummary`
- * nesta etapa (Etapa "Simetria Performance x Investimento") — são AÇÕES,
- * não fazem parte da anatomia espelhada com Performance, e antes deformavam
- * a altura da coluna de Investimento. `[id]/page.tsx` renderiza este
- * componente numa linha compartilhada, abaixo do grid de 2 colunas —
- * nunca dentro de uma coluna específica.
+ * Nota de ritmo do investimento — "Diferença para o ritmo" + "Ritmo
+ * recomendado" (Etapa "Simplificação Pós-Facelift"), movidas de dentro do
+ * antigo accordion "Ver detalhes do investimento"/"Detalhes do
+ * acompanhamento" (removido por inteiro) pra uma linha direta abaixo do
+ * diagnóstico único de "Ritmo do mês" (`RitmoDiagnostic`, em
+ * `account-follow-up-panel.tsx`).
  *
- * Recalcula `plan`/`pctRealizado`/`expectedPct` a partir dos mesmos inputs
- * primitivos que `MonthInvestmentSummary` já recebe (nenhum estado
- * compartilhado entre os dois) — mesma fórmula central de sempre, só
- * chamada de novo; nenhum resultado diferente pro mesmo mês.
+ * O que NÃO sobrevive à remoção do accordion, por decisão explícita do
+ * pedido (só "Diferença para o ritmo"/"Ritmo recomendado" foram apontadas
+ * pra preservar):
+ * - "Realizado"/"Esperado hoje" — já representados pela barra + "Investimento
+ *   — X%" (`MonthInvestmentSummary`, acima) e pelo marker "Esperado hoje"
+ *   (`AgencyInvestmentBar`, que recalcula `computeExpectedPct` internamente
+ *   — nunca duplicado aqui); eram literalmente o mesmo número repetido.
+ * - "Esperado até hoje" e "Regra da projeção" — texto explicativo do
+ *   accordion, sem cálculo próprio que precise de outro lugar.
+ * - "Ritmo planejado inicial" (mês futuro) / "X% do orçamento utilizado"
+ *   (mês encerrado) — variantes do MESMO accordion pros outros dois estados
+ *   de mês; o pedido não pediu equivalente pra elas, então esta nota só
+ *   aparece no caso ativo (`hasPace` abaixo) — ver limitação no relatório
+ *   desta etapa.
+ * "Editar planejamento" (`ChannelPlanEditor`) saiu de vez daqui — subiu pra
+ * toolbar de contexto (`[id]/page.tsx`, junto de Mês/Canal), chamado direto
+ * por quem monta a página; este arquivo não sabe mais de canais/plano por
+ * canal.
+ *
+ * Recalcula `ritmoDiff`/`plan` a partir dos mesmos inputs primitivos que
+ * `MonthInvestmentSummary` já recebe (nenhum estado compartilhado entre os
+ * dois) — mesma fórmula central de sempre (`computeMonthlyBudgetPlan`), só
+ * chamada de novo; nenhum resultado diferente pro mesmo mês. Cor
+ * deliberadamente NEUTRA (nunca vermelho/âmbar aqui) — o diagnóstico logo
+ * acima já é a leitura semântica principal; esta linha é metadata, não um
+ * segundo alerta.
  */
-export function MonthInvestmentActions({
+export function MonthInvestmentPaceNote({
   planned,
   actual,
   expectedToDate,
-  status,
-  clientId,
-  monthParam,
-  monthLabel,
   sprints,
   monthRange,
   effectiveDate,
-  isAdmin,
   isClosedMonth,
-  isClosedByHorizonOnly,
   isFutureMonth,
+  isAdmin,
   lastChange,
   historyHref,
-  performanceGoal,
-  channels,
-  byChannel,
-  calendarMonthRange,
-  currentPlanningEndDate,
-}: SharedInvestmentInput & {
-  clientId: string;
-  monthParam: string;
+}: Pick<SharedInvestmentInput, "planned" | "actual" | "expectedToDate" | "sprints" | "monthRange" | "effectiveDate" | "isClosedMonth" | "isFutureMonth"> & {
   isAdmin: boolean;
-  /** Etapa "Horizonte de Planejamento": `true` quando `isClosedMonth` veio
-   * do horizonte de evento (mês civil ainda em andamento, só a campanha já
-   * terminou) — só decide o TEXTO do rodapé ("Mês encerrado" x "Período de
-   * planejamento encerrado"), nunca nenhum cálculo. */
-  isClosedByHorizonOnly: boolean;
   lastChange: MonthlyBudgetChangeSummary | null;
   historyHref: string;
-  performanceGoal: PerformanceGoal | null;
-  /** Etapa "Planejamento por Canal": canais selecionáveis (Meta/Google) e o
-   * plano vigente de cada um — repassados direto pro `ChannelPlanEditor`,
-   * nunca recalculados aqui. */
-  channels: TrafficChannel[];
-  byChannel: Partial<Record<TrafficChannel, ChannelMetrics>>;
-  /** Etapa "Horizonte de Planejamento": mês CIVIL inteiro (nunca o horizonte
-   * já encurtado, que é o que `monthRange` acima passou a ser) — só pro
-   * `ChannelPlanEditor` montar o seletor de data e o rótulo "Período de
-   * planejamento". */
-  calendarMonthRange: { firstDay: string; lastDay: string };
-  currentPlanningEndDate: string | null;
 }) {
-  const summary = resolveMonthPeriodSummary({ monthPlanned: planned, monthActual: actual, monthExpectedToDate: expectedToDate, monthStatus: status }, monthLabel, monthRange);
-  const pctRealizado = planned > 0 ? (actual / planned) * 100 : null;
-  const expectedPct = computeExpectedPct(summary);
-  const utilizedPct = computeUtilizedPct(planned, actual);
+  // Mesmo guard que `hasInvestmentRitmo` já usa em `account-follow-up-panel.tsx`
+  // pra decidir se mostra a leitura de investimento no diagnóstico — nunca
+  // uma segunda condição divergente pra uma informação que só faz sentido
+  // junto dela.
+  const hasPace = planned > 0 && !isFutureMonth && !isClosedMonth;
+  const showHistoryLink = isAdmin && Boolean(lastChange) && (lastChange?.changeCountThisMonth ?? 0) > 1;
+
+  if (!hasPace && !showHistoryLink) return null;
+
   const ritmoDiff = actual - expectedToDate;
-  const ritmoDiffText =
-    ritmoDiff < 0 ? `${formatCurrency(Math.abs(ritmoDiff))} abaixo` : ritmoDiff > 0 ? `${formatCurrency(ritmoDiff)} acima` : "Sem diferença";
-  const plan = resolvePlan({ planned, actual, expectedToDate, status, monthLabel, sprints, monthRange, effectiveDate, isClosedMonth, isFutureMonth });
-
-  const closedDiffText = (() => {
-    if (planned <= 0) return null;
-    const diff = planned - actual;
-    if (diff > 0) return `${formatCurrency(diff)} abaixo do orçamento planejado`;
-    if (diff < 0) return `${formatCurrency(Math.abs(diff))} acima do orçamento planejado`;
-    return "Orçamento utilizado integralmente";
-  })();
-
-  const hasDetails = planned > 0;
+  const ritmoDiffText = hasPace
+    ? ritmoDiff < 0
+      ? `${formatCurrency(Math.abs(ritmoDiff))} abaixo do ritmo`
+      : ritmoDiff > 0
+        ? `${formatCurrency(ritmoDiff)} acima do ritmo`
+        : "Sem diferença de ritmo"
+    : null;
+  const plan = hasPace ? resolvePlan({ planned, actual, monthRange, effectiveDate, sprints }) : null;
 
   return (
-    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
-      {hasDetails ? (
-        <details className="group/details min-w-0 flex-1 [&_summary::-webkit-details-marker]:hidden">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm text-[11px] font-medium text-overview-text-muted hover:text-overview-text-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-brand">
-            <span className="mitza-chevron text-xs group-open/details:rotate-90">▸</span>
-            <span className="group-open/details:hidden">Ver detalhes do investimento</span>
-            <span className="hidden group-open/details:inline">Ocultar detalhes do investimento</span>
-          </summary>
-
-          <div className="mt-2 flex flex-col gap-3">
-            {!isFutureMonth && !isClosedMonth && (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">Detalhes do acompanhamento</p>
-                <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
-                  <div>
-                    <p className="text-[11px] text-overview-text-muted">Realizado</p>
-                    <p className="text-sm font-medium text-overview-text-primary">
-                      {pctRealizado !== null ? formatPercent(pctRealizado) : "—"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-overview-text-muted">Esperado hoje</p>
-                    <p className="text-sm font-medium text-overview-text-primary">{formatPercent(expectedPct)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-overview-text-muted">Esperado até hoje</p>
-                    <p className="text-sm font-medium text-overview-text-primary">{formatCurrency(expectedToDate)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-overview-text-muted">Diferença para o ritmo</p>
-                    <p
-                      className={`text-sm font-medium ${
-                        ritmoDiff < 0
-                          ? "text-amber-600 dark:text-amber-400"
-                          : ritmoDiff > 0
-                            ? "text-red-600 dark:text-red-400"
-                            : "text-overview-text-primary"
-                      }`}
-                    >
-                      {ritmoDiffText}
-                    </p>
-                  </div>
-                  {plan && !plan.isBudgetReached && (
-                    <div>
-                      <p className="text-[11px] text-overview-text-muted">Ritmo recomendado</p>
-                      <p className="text-sm font-medium text-overview-text-primary">{formatCurrency(plan.recommendedDaily)}/dia</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {isClosedMonth && (utilizedPct != null || closedDiffText) && (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">Detalhes do acompanhamento</p>
-                {utilizedPct != null && (
-                  <p className="mt-1 text-sm text-overview-text-primary">{Math.round(utilizedPct)}% do orçamento utilizado</p>
-                )}
-                {closedDiffText && <p className="mt-0.5 text-[11px] text-overview-text-muted">{closedDiffText}</p>}
-              </div>
-            )}
-
-            {isFutureMonth && plan && (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">Ritmo planejado inicial</p>
-                <p className="mt-1 text-sm font-medium text-overview-text-primary">{formatCurrency(plan.recommendedDaily)}/dia</p>
-                <p className="mt-0.5 text-[11px] text-overview-text-muted">
-                  {plan.eligibleDaysCount} dias em {monthLabel}
-                </p>
-              </div>
-            )}
-
-            {!isFutureMonth && !isClosedMonth && plan && !plan.isBudgetReached && (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">Regra da projeção</p>
-                <p className="mt-1 text-[11px] text-overview-text-muted">O cálculo considera o dia de hoje como disponível para ajuste.</p>
-              </div>
-            )}
-          </div>
-        </details>
-      ) : (
-        <span />
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      <p className="min-w-0 text-xs text-overview-text-secondary">
+        {ritmoDiffText}
+        {plan && !plan.isBudgetReached && <> · Ritmo recomendado: {formatCurrency(plan.recommendedDaily)}/dia</>}
+      </p>
+      {showHistoryLink && (
+        <Link href={historyHref} className="shrink-0 text-xs font-medium text-overview-text-primary hover:underline">
+          Ver histórico
+        </Link>
       )}
-
-      <div className="flex shrink-0 flex-col items-end gap-1">
-        {isAdmin &&
-          (isClosedMonth ? (
-            <span className="text-[11px] text-overview-text-muted">
-              {isClosedByHorizonOnly ? "Período de planejamento encerrado" : "Mês encerrado"}
-            </span>
-          ) : (
-            effectiveDate && (
-              <ChannelPlanEditor
-                clientId={clientId}
-                monthParam={monthParam}
-                monthLabel={monthLabel}
-                monthRange={calendarMonthRange}
-                currentPlanningEndDate={currentPlanningEndDate}
-                channels={channels}
-                byChannel={byChannel}
-                performanceGoal={performanceGoal}
-              />
-            )
-          ))}
-        {isAdmin && lastChange && lastChange.changeCountThisMonth > 1 && (
-          <Link href={historyHref} className="text-xs font-medium text-overview-text-primary hover:underline">
-            Ver histórico
-          </Link>
-        )}
-      </div>
     </div>
   );
 }

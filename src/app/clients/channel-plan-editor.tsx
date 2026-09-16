@@ -183,6 +183,13 @@ export function ChannelPlanEditor({
   }, [isOpen]);
 
   if (!isOpen) {
+    // Etapa "Simplificação Pós-Facelift": rótulo curto ("Planejamento", era
+    // "Editar planejamento") — agora vive na toolbar de contexto
+    // (`[id]/page.tsx`, junto de Mês/Canal), não mais no rodapé de
+    // Performance; o título do modal abaixo ("Planejamento de {monthLabel}")
+    // já deixa a ação ("editar") clara depois de aberto, então o gatilho
+    // não precisa repeti-la. Mecanismo (estado próprio, modal interno)
+    // inalterado — só o texto/posição de quem chama mudaram.
     return (
       <button
         type="button"
@@ -190,7 +197,7 @@ export function ChannelPlanEditor({
         onClick={() => setIsOpen(true)}
         className="mitza-pressable text-xs font-medium text-brand hover:underline"
       >
-        Editar planejamento
+        Planejamento
       </button>
     );
   }
