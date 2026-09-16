@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
+import type { PerformanceGoal } from "@/lib/performance-goals";
 import type { AchievementLevel, AchievementMetricSnapshot, AchievementScope, AchievementSeverity, AchievementSourceInfo } from "@/lib/achievement-types";
 
 /**
@@ -29,6 +30,15 @@ export interface AchievementRow {
   type: string;
   clientId: string | null;
   clientName: string | null;
+  /** Etapa "Comunicação de Conquistas" — objetivo de performance ATUAL do
+   * cliente (`clients.performance_goal`, fonte canônica já usada por
+   * `achievement-metrics.ts` pra montar o contexto de avaliação — nunca
+   * reintroduzida como campo próprio no metadata do evento). Determina se a
+   * mensagem copiável fala em CPA/venda, CPL/lead ou custo por novo
+   * seguidor (`achievement-messages.ts`). `null` = cliente sem objetivo
+   * configurado (evento legado ou cliente ainda não configurado) — a
+   * mensagem cai num rótulo neutro, nunca adivinha CPA/CPL. */
+  clientPerformanceGoal: PerformanceGoal | null;
   actorTeamMemberId: string | null;
   actorTeamMemberName: string | null;
   /** Etapa "Conquistas por Granularidade" — `"account"` pra todo evento
@@ -63,7 +73,7 @@ function toRow(row: {
   client_id: string | null;
   actor_team_member_id: string | null;
   metadata: Record<string, unknown> | null;
-  client: { name: string } | null;
+  client: { name: string; performance_goal: PerformanceGoal | null } | null;
   actor: { name: string } | null;
 }): AchievementRow {
   const metadata = row.metadata ?? {};
@@ -78,6 +88,7 @@ function toRow(row: {
     type: (metadata.achievement_type as string) ?? "",
     clientId: row.client_id,
     clientName: row.client?.name ?? (metadata.client_name as string | null) ?? null,
+    clientPerformanceGoal: row.client?.performance_goal ?? null,
     actorTeamMemberId: row.actor_team_member_id,
     actorTeamMemberName: row.actor?.name ?? null,
     level: (metadata.level as AchievementLevel | undefined) ?? "account",
@@ -101,7 +112,7 @@ export async function fetchAchievements(
 
   let query = supabase
     .from("operational_events")
-    .select("id, occurred_at, recorded_at, client_id, actor_team_member_id, metadata, client:clients(name), actor:team_members(name)")
+    .select("id, occurred_at, recorded_at, client_id, actor_team_member_id, metadata, client:clients(name, performance_goal), actor:team_members(name)")
     .eq("organization_id", organizationId)
     .eq("event_type", "achievement_unlocked")
     .eq("metadata->>scope", filters.scope)

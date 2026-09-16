@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { formatTimeOnly, formatTimelineDayLabel } from "@/lib/format";
 import { ACHIEVEMENT_LEVEL_LABEL, familyLabelFor } from "@/lib/achievement-labels";
+import { buildClientMessage } from "@/lib/achievement-messages";
 import type { AchievementRow } from "@/lib/achievements-data";
 import { AchievementDetailDrawer } from "./achievement-detail-drawer";
+import { CopyMessageButton } from "./copy-message-button";
 
 /**
  * Feed de Conquistas (Etapa "Conquistas por Granularidade" — redesenho
@@ -33,25 +35,39 @@ export function AchievementsFeed({ groups, now }: { groups: { dayLabel: string; 
         <div key={group.dayLabel}>
           <p className="px-1 pb-1 text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">{group.dayLabel}</p>
           <ul className="flex flex-col">
-            {group.rows.map((row) => (
-              <li key={row.id} className="border-b border-overview-border/60 last:border-b-0">
-                <button
-                  type="button"
-                  onClick={() => setOpenId(row.id)}
-                  className="mitza-pressable w-full py-2.5 text-left text-sm hover:bg-overview-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="font-semibold text-foreground">{subjectLabel(row)}</span>
-                    <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">{contextTag(row)}</span>
-                  </div>
-                  <p className="mt-1 font-medium text-foreground">{row.headline}</p>
-                  {row.detail && <p className="mt-0.5 text-overview-text-secondary">{row.detail}</p>}
-                  <p className="mt-1 text-xs text-overview-text-muted">
-                    {formatTimelineDayLabel(row.occurredAt, now)} · {formatTimeOnly(row.occurredAt)}
-                  </p>
-                </button>
-              </li>
-            ))}
+            {group.rows.map((row) => {
+              const clientMessage = buildClientMessage(row);
+              return (
+                <li key={row.id} className="border-b border-overview-border/60 py-2.5 last:border-b-0">
+                  <button
+                    type="button"
+                    onClick={() => setOpenId(row.id)}
+                    className="mitza-pressable block w-full text-left text-sm hover:bg-overview-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="font-semibold text-foreground">{subjectLabel(row)}</span>
+                      <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">{contextTag(row)}</span>
+                    </div>
+                    {clientMessage ? (
+                      <p className="mt-1 whitespace-pre-line font-medium text-foreground">{clientMessage}</p>
+                    ) : (
+                      <>
+                        <p className="mt-1 font-medium text-foreground">{row.headline}</p>
+                        {row.detail && <p className="mt-0.5 text-overview-text-secondary">{row.detail}</p>}
+                      </>
+                    )}
+                    <p className="mt-1 text-xs text-overview-text-muted">
+                      {formatTimelineDayLabel(row.occurredAt, now)} · {formatTimeOnly(row.occurredAt)}
+                    </p>
+                  </button>
+                  {clientMessage && (
+                    <div className="mt-1.5">
+                      <CopyMessageButton message={clientMessage} />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       ))}

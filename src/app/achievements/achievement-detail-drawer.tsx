@@ -6,8 +6,10 @@ import { formatCurrency, formatDateRange, formatDateTimeWithYear, formatDateWith
 import { safeDivide } from "@/lib/performance";
 import { yearMonthOf } from "@/lib/achievement-dates";
 import { ACHIEVEMENT_LEVEL_LABEL, ACHIEVEMENT_METRIC_LABEL, familyLabelFor } from "@/lib/achievement-labels";
+import { buildClientMessage } from "@/lib/achievement-messages";
 import type { AchievementRow } from "@/lib/achievements-data";
 import type { AchievementMetricSnapshot } from "@/lib/achievement-types";
+import { CopyMessageButton } from "./copy-message-button";
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -70,6 +72,7 @@ function civilDateFromInstant(instant: string): string {
  */
 export function AchievementDetailDrawer({ achievement, onClose }: { achievement: AchievementRow; onClose: () => void }) {
   const { metric, source } = achievement;
+  const clientMessage = buildClientMessage(achievement);
   const hasPeriod = Boolean(metric?.windowStart && metric?.windowEnd);
   const hasComparisonPeriod = Boolean(metric?.comparisonWindowStart && metric?.comparisonWindowEnd);
   const hasComparison = metric?.comparisonActual !== undefined;
@@ -108,6 +111,15 @@ export function AchievementDetailDrawer({ achievement, onClose }: { achievement:
         </div>
 
         <div className="mt-4 flex flex-col gap-4">
+          {clientMessage && (
+            <Section title="Mensagem para o cliente">
+              <p className="whitespace-pre-line text-sm text-foreground">{clientMessage}</p>
+              <div className="mt-2">
+                <CopyMessageButton message={clientMessage} />
+              </div>
+            </Section>
+          )}
+
           {achievement.detail && (
             <Section title="O que aconteceu">
               <p className="text-sm text-foreground">{achievement.detail}</p>
