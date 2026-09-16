@@ -1,6 +1,6 @@
 /**
- * Testes da Etapa "Facelift Visual — Visão Geral do cliente" (rodadas 1, 2
- * e 3) — puramente visual/composicional, sem mudança de dado/query/
+ * Testes da Etapa "Facelift Visual — Visão Geral do cliente" (rodadas 1 a
+ * 4) — puramente visual/composicional, sem mudança de dado/query/
  * cálculo/permissão. Como não há regra de negócio nova, esta suíte é só
  * ESTRUTURAL (checagem de código-fonte) — mesmo padrão já usado por
  * `test-achievements-granularity.ts`/`test-operation-goal-filter.ts` pra
@@ -16,6 +16,13 @@
  * "Diferença para o ritmo"/"Ritmo recomendado" integrados diretamente sob o
  * diagnóstico, e sobe "Planejamento" (era "Editar planejamento", dentro de
  * Performance) pra toolbar de contexto, junto de Mês/Canal.
+ *
+ * Rodada 4 ("Remoção do Diagnóstico Textual", seção 14 abaixo): remove
+ * `RitmoDiagnostic` (o texto "Resultados: .../Investimento: ..."/"Dentro do
+ * ritmo esperado") — as barras + marker "Esperado hoje" já são a
+ * representação canônica do pacing. `MonthInvestmentPaceNote` (Diferença
+ * para o ritmo/Ritmo recomendado) passa a ser o único texto secundário
+ * abaixo das barras.
  *
  * Rodar: npx tsx scripts/test-client-page-facelift.ts
  */
@@ -177,7 +184,7 @@ console.log("\n13 — Accordion removido, diferença/ritmo integrados, Planejame
   ok("mesma fórmula de diferença para o ritmo (actual - expectedToDate, nunca invertida)", /const ritmoDiff = actual - expectedToDate;/.test(monthInvestmentCode));
   ok("Ritmo recomendado continua vindo de computeMonthlyBudgetPlan (plan.recommendedDaily), nenhum cálculo novo", /plan\.recommendedDaily/.test(monthInvestmentCode) && /computeMonthlyBudgetPlan\(/.test(monthInvestmentCode));
   ok("nova nota só aparece no mesmo caso em que a leitura de investimento do diagnóstico existe (!future && !closed && planned > 0)", /const hasPace = planned > 0 && !isFutureMonth && !isClosedMonth;/.test(monthInvestmentCode));
-  ok("linha nova fica dentro da seção Ritmo do mês (mt-1, sem border-t/card próprio)", /investmentPaceNote && <div className="mt-1">/.test(accountFollowUpCode));
+  ok("linha nova fica dentro da seção Ritmo do mês, sem border-t/card próprio", /investmentPaceNote && <div className="mt-2\.5">/.test(accountFollowUpCode));
   ok("texto da diferença/ritmo recomendado é neutro (nunca amber/red — só o diagnóstico acima carrega tom semântico forte)", !/text-amber-600|text-red-600/.test(monthInvestmentCode));
 
   ok("ChannelPlanEditor não é mais invocado dentro de Performance (só mencionado em comentário explicando a mudança)", !/<ChannelPlanEditor/.test(accountFollowUpCode));
@@ -192,6 +199,29 @@ console.log("\n13 — Accordion removido, diferença/ritmo integrados, Planejame
 
   ok("código órfão removido: isClosedByHorizonOnly não existe mais em page.tsx (só servia ao texto do accordion removido)", !pageCode.includes("isClosedByHorizonOnly"));
   ok("mês/canal continuam preservados (mesmos hrefs/estado da rodada 2, nenhuma regressão)", /prevMonthHref/.test(pageCode) && /VisaoGeralChannelSwitch/.test(pageCode));
+}
+
+// ---------------------------------------------------------------------------
+// Rodada 4 — "Remoção do Diagnóstico Textual"
+// ---------------------------------------------------------------------------
+console.log("\n14 — RitmoDiagnostic removido: barras + marker são a representação canônica\n");
+{
+  ok("RitmoDiagnostic não existe mais como função/componente", !/function RitmoDiagnostic|<RitmoDiagnostic/.test(accountFollowUpCode));
+  ok('"Dentro do ritmo esperado" (variante consolidada do diagnóstico) não é mais renderizado', !/Dentro do ritmo esperado/.test(accountFollowUpCode));
+  ok('formato "Resultados: ... · Investimento: ..." (variante dupla do diagnóstico) não existe mais', !/Resultados: \{resultText\}|Investimento: \{investmentText\}/.test(accountFollowUpCode));
+  ok("helpers de tom exclusivos do diagnóstico (resultRitmoTone/investmentRitmoTone/TONE_TEXT_CLASSES) foram removidos — nenhum órfão", !/resultRitmoTone|investmentRitmoTone|TONE_TEXT_CLASSES/.test(accountFollowUpCode));
+  ok("RITMO_STATUS_TEXT (só consumido pelo diagnóstico removido) não sobrou em spend-status.ts", !/RITMO_STATUS_TEXT/.test(stripComments(loadSource("src", "lib", "spend-status.ts"))));
+  ok(
+    "classifySpendStatus/SPEND_STATUS_MARGIN (cálculo real, usado pelas barras) continuam intocados em spend-status.ts",
+    /export function classifySpendStatus/.test(loadSource("src", "lib", "spend-status.ts")) && /SPEND_STATUS_MARGIN = 0\.2/.test(loadSource("src", "lib", "spend-status.ts")),
+  );
+
+  ok("MonthlyGoalProgress (barra de Resultados) continua chamada sem alteração de props", /<MonthlyGoalProgress\n\s*monthResultCount=\{performanceSummary\?\.resultCount \?\? 0\}/.test(accountFollowUpCode));
+  ok("MonthInvestmentSummary (barra de Investimento) continua chamada sem alteração de props", /<MonthInvestmentSummary\n\s*planned=\{investmentPlanned\}/.test(accountFollowUpCode));
+  ok("hasResultRitmo (gate real da barra de Resultados) foi preservado — só o diagnóstico textual saiu, não a barra", /const hasResultRitmo =/.test(accountFollowUpCode));
+
+  ok("MonthInvestmentPaceNote (Diferença para o ritmo/Ritmo recomendado) continua intocado por esta rodada", /export function MonthInvestmentPaceNote/.test(monthInvestmentCode));
+  ok("ritmoDiff/plan.recommendedDaily continuam com a MESMA fórmula (nenhum cálculo tocado nesta rodada)", /const ritmoDiff = actual - expectedToDate;/.test(monthInvestmentCode) && /plan\.recommendedDaily/.test(monthInvestmentCode));
 }
 
 console.log(`\n${passed} verificações passaram.`);
