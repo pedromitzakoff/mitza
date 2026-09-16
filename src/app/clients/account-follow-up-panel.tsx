@@ -224,15 +224,30 @@ export function AccountFollowUpPanel({
 
   return (
     <>
-      <MonthlyKpiSummary
-        monthActual={monthActual}
-        performanceGoal={performanceGoal}
-        performanceSummary={performanceSummary}
-        targetCostPerResult={targetCostPerResult}
-        targetResultCount={targetResultCount}
-        investmentPlanned={investmentPlanned}
-        configureObjectiveHref={configureObjectiveHref}
-      />
+      {/* Etapa "Facelift Visual 2.0 — Performance sem grande card": a
+          superfície areia grande que identificava este bloco (removida —
+          virou "card dentro de card" competindo com Tarefas) dá lugar a uma
+          assinatura pontual: barra vertical + label pequena, mesmo
+          tratamento tipográfico já usado no rótulo "Ritmo do mês" abaixo
+          (`text-[11px] font-semibold uppercase tracking-wide`), nunca um
+          retângulo colorido. Areia (`bg-sand`) reaparece só aqui, como
+          acento — não como superfície. */}
+      <div className="flex items-center gap-2">
+        <span aria-hidden="true" className="h-3.5 w-1 shrink-0 rounded-full bg-sand" />
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Performance do mês</p>
+      </div>
+
+      <div className="mt-3">
+        <MonthlyKpiSummary
+          monthActual={monthActual}
+          performanceGoal={performanceGoal}
+          performanceSummary={performanceSummary}
+          targetCostPerResult={targetCostPerResult}
+          targetResultCount={targetResultCount}
+          investmentPlanned={investmentPlanned}
+          configureObjectiveHref={configureObjectiveHref}
+        />
+      </div>
 
       <div className="mt-5 border-t border-overview-border pt-3">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Ritmo do mês</p>

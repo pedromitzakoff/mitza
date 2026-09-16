@@ -1,11 +1,18 @@
 /**
- * Testes da Etapa "Facelift Visual — Visão Geral do cliente" — rodada
- * puramente visual (composição/densidade/espaçamento/hierarquia), sem
+ * Testes da Etapa "Facelift Visual — Visão Geral do cliente" (rodadas 1 e
+ * 2) — puramente visual (composição/densidade/espaçamento/hierarquia), sem
  * mudança de dado/query/cálculo/permissão. Como não há regra de negócio
  * nova, esta suíte é só ESTRUTURAL (checagem de código-fonte) — mesmo
  * padrão já usado por `test-achievements-granularity.ts`/
  * `test-operation-goal-filter.ts` pra confirmar decisões de composição sem
  * precisar de um browser real.
+ *
+ * Rodada 2: remove o grande card areia de Performance (vira seção editorial
+ * com assinatura pontual) e consolida Mês+Canal+Navegação numa única
+ * toolbar — seções 10-12 abaixo. Seções 1-9 (rodada 1) foram atualizadas
+ * só onde a composição que elas protegiam mudou de fato (o wrapper de
+ * Performance, que perdeu `bg-cream` de vez); os testes de Tarefas
+ * continuam intocados porque essa composição não mudou nesta rodada.
  *
  * Rodar: npx tsx scripts/test-client-page-facelift.ts
  */
@@ -37,6 +44,7 @@ const tasksPanelCode = stripComments(loadSource("src", "app", "clients", "month-
 const recurringRowCode = stripComments(loadSource("src", "app", "clients", "recurring-task-row.tsx"));
 const taskRowCode = stripComments(loadSource("src", "app", "clients", "task-row.tsx"));
 const secondaryGoalsCode = stripComments(loadSource("src", "app", "clients", "secondary-goals-performance.tsx"));
+const accountFollowUpCode = stripComments(loadSource("src", "app", "clients", "account-follow-up-panel.tsx"));
 
 console.log("1 — Largura do conteúdo: mesmo max-w-5xl no container principal e no sticky\n");
 {
@@ -47,7 +55,9 @@ console.log("1 — Largura do conteúdo: mesmo max-w-5xl no container principal 
 
 console.log("\n2 — Ritmo vertical: cadência consistente entre as grandes regiões (mt-6)\n");
 {
-  ok("bloco Performance (superfície creme) usa mt-6 antes dele", /mt-6 rounded-lg bg-cream/.test(pageCode));
+  // Rodada 2: o wrapper de Performance perdeu bg-cream (ver seção 10) — a
+  // margem mt-6 continua, só sem superfície nenhuma em volta.
+  ok("bloco Performance usa mt-6 antes dele (sem superfície própria, ver seção 10)", /mt-6">\s*<AccountFollowUpPanel/.test(pageCode));
   ok("bloco Tarefas (MonthTasksPanel) usa mt-6 antes dele", /mt-6">\s*<MonthTasksPanel/.test(pageCode));
   ok("Outros objetivos (quando existe) usa a MESMA cadência mt-6", /mt-6 rounded-lg bg-overview-surface-subtle/.test(secondaryGoalsCode));
   ok(
@@ -113,6 +123,38 @@ console.log("\n9 — Não mexeu no que não devia: Sprints continua com o mesmo 
 {
   ok("Sprints continua chamando SprintCard com hideNextAction/hideTaskList (mesmo comportamento de sempre)", /hideNextAction\s*hideTaskList/.test(pageCode));
   ok("nenhuma prop nova de negócio foi adicionada ao SprintCard nesta etapa", !/accordionRowsPrototype=\{true\}/.test(pageCode));
+}
+
+// ---------------------------------------------------------------------------
+// Rodada 2 — "Segunda rodada de refinamento visual"
+// ---------------------------------------------------------------------------
+console.log("\n10 — Performance sem grande card: superfície removida, assinatura areia pontual\n");
+{
+  ok("wrapper de Performance em page.tsx não usa mais bg-cream/rounded/padding de card", !/<div className="mt-6 rounded-lg bg-cream/.test(pageCode));
+  ok("AccountFollowUpPanel não introduz nenhuma superfície própria (sem bg-cream/bg-sand como fundo, sem rounded-2xl)", !/bg-cream|rounded-2xl/.test(accountFollowUpCode));
+  ok('título "Performance do mês" existe, com a mesma tipografia já usada em "Ritmo do mês" (uppercase, 11px, semibold)', /Performance do mês/.test(accountFollowUpCode) && /text-\[11px\] font-semibold uppercase tracking-wide text-overview-text-muted/.test(accountFollowUpCode));
+  ok("identidade areia é só um acento pontual (barra estreita, bg-sand), nunca um retângulo grande", /h-3\.5 w-1 shrink-0 rounded-full bg-sand/.test(accountFollowUpCode));
+  ok("nenhuma sombra foi adicionada em Performance", !accountFollowUpCode.includes("shadow") && !pageCode.includes("shadow"));
+  ok("KPIs continuam vindo de MonthlyKpiSummary (mesma lógica/props, nenhum KPI hardcoded)", /<MonthlyKpiSummary/.test(accountFollowUpCode));
+  ok("Ritmo do mês continua com o mesmo divisor horizontal discreto (border-t) separando dos KPIs", /border-t border-overview-border pt-3/.test(accountFollowUpCode));
+}
+
+console.log("\n11 — Toolbar única: Mês + Canal (contexto) antes de Navegação, com divisória\n");
+{
+  ok("seletor de mês e canal vivem na MESMA linha da navegação (uma única div flex, não duas fileiras)", /flex flex-wrap items-center gap-3 border-b border-overview-border text-sm">[\s\S]*?IconButton href=\{prevMonthHref\}[\s\S]*?role="tablist"/.test(pageCode));
+  ok("contexto (mês+canal) vem ANTES da navegação na ordem do JSX", pageCode.indexOf("prevMonthHref") < pageCode.indexOf('role="tablist"'));
+  ok("divisória entre contexto e navegação reaproveita a mesma classe já usada entre navegação e ações (h-4 w-px bg-overview-border)", /hidden h-4 w-px shrink-0 bg-overview-border sm:block/.test(pageCode));
+  ok('navegação continua com role="tablist"/role="tab" (contexto nunca ganha esses papéis)', /<div role="tablist"/.test(pageCode) && !/<div className="flex items-center gap-3 pb-1\.5">\s*<div role="tablist"/.test(pageCode));
+  ok("Canal continua condicional a activeArea === 'visao-geral' (nunca aparece fora da Visão Geral)", /activeArea === "visao-geral" &&\s*\(\s*<VisaoGeralChannelSwitch/.test(pageCode));
+  ok("Mês continua SEM condição de aba (afeta Visão Geral e Timeline — fetchClientOperationalHistory usa o mês selecionado)", /firstDay, lastDay \}, historyPage\)/.test(pageCode));
+  ok("navegação mantém overflow-x-auto (scroll horizontal em telas estreitas, nunca vira tabela)", /role="tablist" className="flex min-w-0 flex-1 items-center gap-4 overflow-x-auto"/.test(pageCode));
+}
+
+console.log("\n12 — Regressão: decisões da rodada 1 continuam de pé\n");
+{
+  ok("max-w-5xl da rodada 1 não foi revertido", /max-w-5xl px-6 py-5/.test(pageCode));
+  ok("Tarefas continua sem grande card (rodada 1, intocada nesta rodada)", !tasksPanelCode.includes("bg-cream"));
+  ok("filtros textuais de Tarefas continuam sem pill/cápsula (rodada 1, intocada)", !/rounded-full border px-2\.5 py-1/.test(tasksPanelCode));
 }
 
 console.log(`\n${passed} verificações passaram.`);

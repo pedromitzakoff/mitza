@@ -1405,159 +1405,164 @@ export default async function ClientPage({
         </div>
       )}
 
-      {/* Etapa "Barra única de controles do cliente": uma ÚNICA fileira,
-          nunca mais "navegação embaixo + botões em cima". As abas de
-          sempre (mesmo padrão visual/estrutural já usado em Sprints: Link +
-          role="tab", nenhum cálculo/prop/comportamento interno alterado —
-          Etapa "Relatório Único": Analytics aposentado, restam Visão
-          geral/Timeline) +
-          Saldo/Fechamento/Relatório (NAVEGAÇÃO — "pra onde eu quero ir";
-          não são abas de verdade, não trocam o conteúdo desta mesma página:
-          Saldo/Fechamento abrem planilha externa em nova aba, Relatório é
-          outra rota — por isso sem `role="tab"`/`aria-selected`, só a mesma
-          classe visual `NAV_ITEM_*`) + uma divisória discreta + Dashboard
-          ↗/Editar/Atualizar Meta/Registrar revisão (AÇÃO — "o que eu quero
-          fazer"; usam a MESMA classe visual `NAV_ITEM_*` — sempre
-          `NAV_ITEM_INACTIVE_CLASSES`, nunca `NAV_ITEM_ACTIVE_CLASSES`, já
-          que ação nunca tem estado "selecionado" — pra ficar na mesma
-          altura/alinhamento da navegação, sem virar um bloco de botões
-          visualmente diferente). Mesmos hrefs/target/rel/condições/
-          permissões de sempre em cada item; nenhum drawer virou página nem
-          vice-versa. */}
-      <div role="tablist" className="mt-3 flex items-center gap-4 overflow-x-auto border-b border-overview-border text-sm">
-        {AREA_TABS.map((tab) => (
-          <Link
-            key={tab.key}
-            href={buildAreaHref(tab.key)}
-            scroll={false}
-            role="tab"
-            aria-selected={tab.key === activeArea}
-            className={`${NAV_ITEM_BASE_CLASSES} ${tab.key === activeArea ? NAV_ITEM_ACTIVE_CLASSES : NAV_ITEM_INACTIVE_CLASSES}`}
-          >
-            {tab.label}
-          </Link>
-        ))}
-        {client.balance_url && (
-          <a
-            href={client.balance_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}
-          >
-            Saldo
-          </a>
-        )}
-        {client.monthly_closing_sheet_url && (
-          <a
-            href={client.monthly_closing_sheet_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}
-          >
-            Fechamento
-          </a>
-        )}
-        <Link href={reportHref} className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
-          Relatório
-        </Link>
-
-        {/* Divisória — só indica "começa outro grupo" (navegação → ação),
-            nunca um container/background/pill. */}
-        <span aria-hidden="true" className="h-4 w-px shrink-0 bg-overview-border" />
-
-        {client.dashboard_url && (
-          <a
-            href={client.dashboard_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES} inline-flex items-center gap-1`}
-          >
-            <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
-            Dashboard
-          </a>
-        )}
-        {/* "Atualizar Meta" (syncClientMetaAction, ../meta-actions.ts) fica
-            oculto por enquanto — é a sincronização direta com a API do
-            Meta, e a operação usa a sincronização do Stract
-            ("Sincronizar agora", dentro de "Informações da conta") como
-            fonte de dados por ora. A Server Action continua existindo, só
-            sem porta de entrada aqui (mesmo padrão já usado nesta página
-            pra rotas/ações que saem de navegação sem serem apagadas, ver
-            comentário de "Sprints"/"Clientes" em `sidebar.tsx`). */}
-        {/* "Registrar revisão" (RecordAccountReviewDrawer/recordAccountReviewAction,
-            abertos via `?review=new`) fica oculto por pedido do usuário — não
-            usamos mais esse fluxo na página individual do cliente. Drawer/
-            Server Action continuam existindo (mesmo par que `/sprints` ainda
-            usa), só sem porta de entrada aqui — mesmo padrão já usado nesta
-            página pra ações que saem de navegação sem serem apagadas (ver
-            "Atualizar Meta", acima). */}
-        {/* Etapa "Refinamento Visual 2.0 — Ajuste de Arquitetura": ação
-            secundária (nunca aba — não troca conteúdo, não mexe na URL),
-            abre o drawer `AccountInfoDrawer` com o contexto operacional
-            saudável (dados/sincronização/otimização/histórico) que saiu do
-            cabeçalho. Ver definição completa em `account-info-drawer.tsx`. */}
-        <AccountInfoDrawer
-          triggerClassName={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}
-          lastPerformanceUpdateLabel={lastPerformanceUpdateLabel}
-          lastPerformanceUpdateValue={lastPerformanceUpdateValue}
-          lastPerformanceUpdateSourceLabel={lastPerformanceUpdateSourceLabel}
-          latestDataDateLabel={accountInfoLatestDataDateLabel}
-          hasStractSource={stractImportSourceIds.length > 0}
-          syncStatusLabel={accountInfoSyncStatusLabel}
-          syncStatusBadgeClassName={accountInfoSyncStatusBadgeClassName}
-          syncStartedAtLabel={accountInfoSyncStartedAtLabel}
-          metaOnlyLastSyncLabel={accountInfoMetaOnlyLastSyncLabel}
-          lastOptimizationLabel={lastOptimizationLabel}
-          lastOptimizationValue={lastOptimizationValue}
-          lastOptimizationTooltip={lastOptimizationTooltip}
-          canOperate={canOperate}
-          syncAction={syncClientStractSourcesAction.bind(null, client.id)}
-          recentSyncRuns={accountInfoRecentSyncRuns}
-          reviewsHistoryHref={reviewsHistoryHref}
-          clientId={client.id}
-          isAdmin={isAdmin}
-          hasActiveReportShareLink={reportShareLinkStatus.active}
-          reportShareLinkCreatedAtLabel={accountInfoReportShareLinkCreatedAtLabel}
-          reportShareLinkUrl={reportShareLinkStatus.url}
-        />
-        {/* Etapa "Refinamento Visual 2.0": Editar por último — é a ação
-            administrativa menos frequente do grupo, não deveria abrir a
-            hierarquia de ações (mesmo href/permissão de sempre, só a
-            posição mudou). */}
-        {canManageClient && (
-          <Link href={`/clients/${client.id}/edit`} className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
-            Editar
-          </Link>
-        )}
-      </div>
-
-      {/* 0. Seletor de mês (Etapa 62, seção 6) — contexto temporal de toda
-          a página; mesmo padrão de navegação mensal já usado em
-          Relatórios/Visão Geral/Sprints (`?month=YYYY-MM` + shiftMonthParam),
-          nenhum componente novo de seletor. Etapa 75: removido o texto
-          "Período em análise" — o próprio seletor já comunica o período,
-          sem precisar de rótulo.
-          Etapa "Primeira dobra": perde a caixa (era `border ... px-1 py-1`)
-          — só as setas (`IconButton`, clicáveis de sempre) e o mês, sem
-          container visível; menos peso pra um controle que é só contexto,
-          não uma ação. O seletor de canal (`VisaoGeralChannelSwitch`, só
-          existe na Visão Geral) passa a viver na MESMA linha — "período +
-          canal" como contexto único dos dados logo abaixo, em vez de dois
-          elementos em posições diferentes da página. Nenhuma navegação,
-          filtro, href ou estado mudou. */}
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="flex items-center gap-0.5 text-sm">
-          <IconButton href={prevMonthHref} aria-label="Mês anterior" variant="ghost" size="sm">
-            &lsaquo;
-          </IconButton>
-          <span className="min-w-[6rem] px-1 text-center text-sm font-medium text-overview-text-primary">{monthLabel}</span>
-          <IconButton href={nextMonthHref} aria-label="Próximo mês" variant="ghost" size="sm">
-            &rsaquo;
-          </IconButton>
+      {/* Etapa "Facelift Visual — Toolbar de Contexto + Navegação": CONTEXTO
+          (mês + canal — "o que estou vendo") e NAVEGAÇÃO (abas/links/ações —
+          "pra onde eu quero ir/o que eu quero fazer") viviam em duas
+          fileiras (mês/canal "órfãos" abaixo da barra de navegação); agora
+          compõem UMA linha só no desktop, nessa ordem, com uma divisória
+          discreta entre os dois grupos — nunca misturados no mesmo papel
+          semântico (contexto nunca ganha `role="tab"`, mês/canal nunca
+          navegam pra outra área/rota).
+          Auditoria (`[id]/page.tsx`): Canal só afeta Visão Geral (todo uso de
+          `metricsChannel` fica dentro do bloco `activeArea === "visao-geral"`
+          mais abaixo) — continua condicional a essa aba, exatamente como
+          antes. Mês afeta Visão Geral E Timeline (`fetchClientOperationalHistory`
+          já recebe `{firstDay, lastDay}` derivado do mês selecionado,
+          "Histórico de {monthLabel}") — por isso o seletor de mês continua
+          sempre visível, em qualquer aba, como já era antes desta etapa.
+          Saldo/Fechamento/Relatório/Dashboard/Editar nunca leram mês/canal —
+          são navegação/ação pura, independente do contexto.
+          Mobile: `flex-wrap` deixa o grupo de contexto quebrar pra linha
+          própria quando não há largura pra tudo (nunca comprime nem
+          esconde controles); a navegação mantém seu próprio scroll
+          horizontal (`overflow-x-auto`) quando ainda assim não couber. */}
+      <div className="mt-3 flex flex-wrap items-center gap-3 border-b border-overview-border text-sm">
+        {/* Contexto — mesmas setas/rótulo/seletor de sempre (Etapa 62,
+            seção 6 / Etapa "Primeira dobra"), nenhum estado, href ou regra
+            de canal/mês mudou, só a posição na página. */}
+        <div className="flex items-center gap-3 pb-1.5">
+          <div className="flex items-center gap-0.5">
+            <IconButton href={prevMonthHref} aria-label="Mês anterior" variant="ghost" size="sm">
+              &lsaquo;
+            </IconButton>
+            <span className="min-w-[6rem] px-1 text-center text-sm font-medium text-overview-text-primary">{monthLabel}</span>
+            <IconButton href={nextMonthHref} aria-label="Próximo mês" variant="ghost" size="sm">
+              &rsaquo;
+            </IconButton>
+          </div>
+          {activeArea === "visao-geral" && (
+            <VisaoGeralChannelSwitch baseHref={metricsChannelBaseHref} active={metricsChannel} options={metricsChannelOptions} />
+          )}
         </div>
-        {activeArea === "visao-geral" && (
-          <VisaoGeralChannelSwitch baseHref={metricsChannelBaseHref} active={metricsChannel} options={metricsChannelOptions} />
-        )}
+
+        {/* Divisória contexto → navegação — mesma divisória já usada mais
+            abaixo entre navegação e ações, nunca um separador novo. Escondida
+            no mobile: contexto/navegação já quebram em linhas próprias
+            (`flex-wrap`), uma barra vertical solta entre duas linhas não
+            comunicaria nada. */}
+        <span aria-hidden="true" className="hidden h-4 w-px shrink-0 bg-overview-border sm:block" />
+
+        {/* Navegação — mesma barra única de sempre (Etapa "Barra única de
+            controles do cliente"): abas de verdade (`role="tab"`, Visão
+            geral/Timeline) + Saldo/Fechamento/Relatório (navegação externa/
+            outra rota) + divisória + Dashboard/Informações/Editar (ação).
+            Nenhum href/target/rel/condição/permissão mudou. */}
+        <div role="tablist" className="flex min-w-0 flex-1 items-center gap-4 overflow-x-auto">
+          {AREA_TABS.map((tab) => (
+            <Link
+              key={tab.key}
+              href={buildAreaHref(tab.key)}
+              scroll={false}
+              role="tab"
+              aria-selected={tab.key === activeArea}
+              className={`${NAV_ITEM_BASE_CLASSES} ${tab.key === activeArea ? NAV_ITEM_ACTIVE_CLASSES : NAV_ITEM_INACTIVE_CLASSES}`}
+            >
+              {tab.label}
+            </Link>
+          ))}
+          {client.balance_url && (
+            <a
+              href={client.balance_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}
+            >
+              Saldo
+            </a>
+          )}
+          {client.monthly_closing_sheet_url && (
+            <a
+              href={client.monthly_closing_sheet_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}
+            >
+              Fechamento
+            </a>
+          )}
+          <Link href={reportHref} className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
+            Relatório
+          </Link>
+
+          {/* Divisória — só indica "começa outro grupo" (navegação → ação),
+              nunca um container/background/pill. */}
+          <span aria-hidden="true" className="h-4 w-px shrink-0 bg-overview-border" />
+
+          {client.dashboard_url && (
+            <a
+              href={client.dashboard_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES} inline-flex items-center gap-1`}
+            >
+              <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+              Dashboard
+            </a>
+          )}
+          {/* "Atualizar Meta" (syncClientMetaAction, ../meta-actions.ts) fica
+              oculto por enquanto — é a sincronização direta com a API do
+              Meta, e a operação usa a sincronização do Stract
+              ("Sincronizar agora", dentro de "Informações da conta") como
+              fonte de dados por ora. A Server Action continua existindo, só
+              sem porta de entrada aqui (mesmo padrão já usado nesta página
+              pra rotas/ações que saem de navegação sem serem apagadas, ver
+              comentário de "Sprints"/"Clientes" em `sidebar.tsx`). */}
+          {/* "Registrar revisão" (RecordAccountReviewDrawer/recordAccountReviewAction,
+              abertos via `?review=new`) fica oculto por pedido do usuário — não
+              usamos mais esse fluxo na página individual do cliente. Drawer/
+              Server Action continuam existindo (mesmo par que `/sprints` ainda
+              usa), só sem porta de entrada aqui — mesmo padrão já usado nesta
+              página pra ações que saem de navegação sem serem apagadas (ver
+              "Atualizar Meta", acima). */}
+          {/* Etapa "Refinamento Visual 2.0 — Ajuste de Arquitetura": ação
+              secundária (nunca aba — não troca conteúdo, não mexe na URL),
+              abre o drawer `AccountInfoDrawer` com o contexto operacional
+              saudável (dados/sincronização/otimização/histórico) que saiu do
+              cabeçalho. Ver definição completa em `account-info-drawer.tsx`. */}
+          <AccountInfoDrawer
+            triggerClassName={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}
+            lastPerformanceUpdateLabel={lastPerformanceUpdateLabel}
+            lastPerformanceUpdateValue={lastPerformanceUpdateValue}
+            lastPerformanceUpdateSourceLabel={lastPerformanceUpdateSourceLabel}
+            latestDataDateLabel={accountInfoLatestDataDateLabel}
+            hasStractSource={stractImportSourceIds.length > 0}
+            syncStatusLabel={accountInfoSyncStatusLabel}
+            syncStatusBadgeClassName={accountInfoSyncStatusBadgeClassName}
+            syncStartedAtLabel={accountInfoSyncStartedAtLabel}
+            metaOnlyLastSyncLabel={accountInfoMetaOnlyLastSyncLabel}
+            lastOptimizationLabel={lastOptimizationLabel}
+            lastOptimizationValue={lastOptimizationValue}
+            lastOptimizationTooltip={lastOptimizationTooltip}
+            canOperate={canOperate}
+            syncAction={syncClientStractSourcesAction.bind(null, client.id)}
+            recentSyncRuns={accountInfoRecentSyncRuns}
+            reviewsHistoryHref={reviewsHistoryHref}
+            clientId={client.id}
+            isAdmin={isAdmin}
+            hasActiveReportShareLink={reportShareLinkStatus.active}
+            reportShareLinkCreatedAtLabel={accountInfoReportShareLinkCreatedAtLabel}
+            reportShareLinkUrl={reportShareLinkStatus.url}
+          />
+          {/* Etapa "Refinamento Visual 2.0": Editar por último — é a ação
+              administrativa menos frequente do grupo, não deveria abrir a
+              hierarquia de ações (mesmo href/permissão de sempre, só a
+              posição mudou). */}
+          {canManageClient && (
+            <Link href={`/clients/${client.id}/edit`} className={`${NAV_ITEM_BASE_CLASSES} ${NAV_ITEM_INACTIVE_CLASSES}`}>
+              Editar
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Etapa "MITZA 2.0 — Refinamento da Experiência do Cliente": a Visão
@@ -1600,13 +1605,15 @@ export default async function ClientPage({
               conteúdo, nunca o fundo da página inteira — `--authenticated-bg`
               continua intocado). Sem borda: a diferenciação vem só do tom da
               superfície, como no Relatório. */}
-          {/* Etapa "Facelift Visual — Visão Geral do cliente": mt-6 (era
-              mt-3) — mesma cadência vertical usada entre as demais grandes
-              regiões da página (Tarefas abaixo, Sprints — que já chegava a
-              mt-6 "de graça" por colapsar com o mt-6 interno de `Section`).
-              Não fazia sentido o espaço ENTRE regiões ser menor que o
-              espaço DENTRO de uma região (KPIs → Ritmo do mês, mt-5). */}
-          <div className="mt-6 rounded-lg bg-cream p-3 sm:rounded-2xl sm:p-5">
+          {/* Etapa "Facelift Visual 2.0 — Performance sem grande card":
+              wrapper reduzido a só a margem entre regiões (era `rounded-lg
+              bg-cream p-3 sm:rounded-2xl sm:p-5` — a superfície areia
+              grande virou uma seção editorial aberta no fundo da página,
+              mesmo tratamento que Tarefas já ganhou na rodada anterior;
+              identidade areia agora é só a barra vertical + label do
+              título, dentro de `AccountFollowUpPanel`). mt-6 preservado —
+              mesma cadência entre as grandes regiões da página. */}
+          <div className="mt-6">
             <AccountFollowUpPanel
               monthActual={visaoGeralMonthActual}
               performanceGoal={performanceGoal}
