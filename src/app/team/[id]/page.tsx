@@ -4,8 +4,8 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC } from "@/lib/today";
 import { currentMonthRange, shiftMonthParam } from "@/lib/sprint-financials";
-import { formatCurrency, formatMonthLabel, formatRelativeShortDateTime } from "@/lib/format";
-import { loadTeamMemberProfiles, type TeamMemberPortfolioClient } from "@/lib/team-performance-data";
+import { formatCurrency, formatMonthLabel, formatRelativeShortDateTime, formatDateFromInstant } from "@/lib/format";
+import { loadTeamMemberProfiles, loadManagerAssignmentHistory, type TeamMemberPortfolioClient, type ManagerAssignmentHistoryEntry } from "@/lib/team-performance-data";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { IconButton, Button } from "@/components/workspace/button";
 import { SectionHeader } from "@/components/workspace/section-header";
@@ -51,7 +51,10 @@ export default async function TeamMemberProfilePage({
   const isCurrentMonth = monthParam === currentRange.firstDay;
 
   const supabase = await createSupabaseClient();
-  const profiles = await loadTeamMemberProfiles(supabase, profile.organizationId, monthParam);
+  const [profiles, assignmentHistory] = await Promise.all([
+    loadTeamMemberProfiles(supabase, profile.organizationId, monthParam),
+    loadManagerAssignmentHistory(supabase, id),
+  ]);
   const member = profiles.find((p) => p.teamMemberId === id);
   if (!member) notFound();
 
@@ -179,6 +182,24 @@ export default async function TeamMemberProfilePage({
         </p>
       </div>
 
+      {/* HISTÓRICO DE CARTEIRA — Etapa "Equipe — Fase 2": fonte é
+          `client_manager_assignments` (via `loadManagerAssignmentHistory`),
+          nunca reconstruída/inventada — todo período aqui é real a partir
+          do deploy dessa etapa; nada antes disso aparece, porque nada antes
+          disso existe com confiança (ver auditoria em
+          `supabase/client-manager-assignments.sql`). Cada linha é um fato
+          (cliente, início, fim/"atual"), nunca um agregado/score. */}
+      {assignmentHistory.length > 0 && (
+        <div className="mt-8 border-t border-overview-border pt-4">
+          <SectionHeader title="Histórico de carteira" />
+          <div className="mt-3 flex flex-col divide-y divide-overview-border">
+            {assignmentHistory.map((entry) => (
+              <AssignmentHistoryRow key={`${entry.clientId}-${entry.startedAt}`} entry={entry} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* CONQUISTAS — só escopo Pessoa (ator real, gravado no momento da
           conquista). Conquistas de escopo Cliente nunca aparecem aqui (sem
           ator gravado — ver auditoria). Sem tokens/medalhas nesta fase. */}
@@ -222,6 +243,17 @@ function PortfolioClientRow({ client, today }: { client: TeamMemberPortfolioClie
         {client.costComparable && client.costActual !== null && client.costTarget !== null
           ? `${client.costMetricShortLabel} ${formatCurrency(client.costActual)} · Meta ${formatCurrency(client.costTarget)}`
           : "Sem meta de custo comparável"}
+      </p>
+    </div>
+  );
+}
+
+function AssignmentHistoryRow({ entry }: { entry: ManagerAssignmentHistoryEntry }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2">
+      <p className="text-sm font-medium text-overview-text-primary">{entry.clientName}</p>
+      <p className="text-[13px] text-overview-text-secondary tabular-nums">
+        {formatDateFromInstant(entry.startedAt)} &rarr; {entry.endedAt ? formatDateFromInstant(entry.endedAt) : "atual"}
       </p>
     </div>
   );

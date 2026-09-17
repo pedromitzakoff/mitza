@@ -7,6 +7,7 @@ import { resolveClientMediaChannels, TRAFFIC_CHANNELS } from "@/lib/traffic-chan
 import { fetchAchievements, type AchievementRow } from "@/lib/achievements-data";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import type { PerformanceGoal } from "@/lib/performance-goals";
+import { fetchAssignmentPeriodsForManager } from "@/lib/client-manager-assignments";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -337,4 +338,37 @@ export async function loadTeamMemberProfiles(
 function costShortLabel(goal: PerformanceGoal): string {
   const labels: Record<PerformanceGoal, string> = { leads: "CPL", sales: "CPA", followers: "Custo por novo seguidor" };
   return labels[goal];
+}
+
+export interface ManagerAssignmentHistoryEntry {
+  clientId: string;
+  clientName: string;
+  startedAt: string;
+  endedAt: string | null;
+}
+
+/**
+ * Etapa "Equipe — Fase 2": "Histórico de carteira" do Perfil do Gestor —
+ * reaproveita `fetchAssignmentPeriodsForManager` (`lib/client-manager-assignments.ts`,
+ * a fonte canônica) e só junta o nome do cliente pra exibição (nenhuma
+ * lógica temporal nova aqui, nenhum recálculo de período). Mais recente
+ * primeiro. Nunca inclui nada anterior ao deploy da Fase 2 — a própria
+ * fonte não tem esse dado (ver `client-manager-assignments.sql`, backfill).
+ */
+export async function loadManagerAssignmentHistory(supabase: Supabase, managerId: string): Promise<ManagerAssignmentHistoryEntry[]> {
+  const periods = await fetchAssignmentPeriodsForManager(supabase, managerId);
+  if (periods.length === 0) return [];
+
+  const clientIds = Array.from(new Set(periods.map((period) => period.clientId)));
+  const clientRows = await requireQuery(supabase.from("clients").select("id, name").in("id", clientIds), "clients:assignment-history-names");
+  const nameByClientId = new Map(clientRows.map((row) => [row.id, row.name]));
+
+  return periods
+    .map((period) => ({
+      clientId: period.clientId,
+      clientName: nameByClientId.get(period.clientId) ?? period.clientId,
+      startedAt: period.startedAt,
+      endedAt: period.endedAt,
+    }))
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
