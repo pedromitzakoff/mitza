@@ -135,6 +135,15 @@ export interface TeamMemberProfile {
   /** All-time (sem filtro de data) — seguro pra "atuação" (ver auditoria),
    * nunca pra investimento. */
   activityAllTime: TeamMemberActivityCounts;
+  /** Etapa "Equipe — Fase 5": clientes DISTINTOS em que este gestor já
+   * registrou pelo menos 1 revisão (`account_review_recorded`), all-time —
+   * mesma definição/fonte já usada por `distinctClientsServedCount` no motor
+   * de Conquistas (`lib/achievement-metrics.ts`), nunca uma segunda leitura.
+   * Conceito DIFERENTE de `portfolio.clientCount` (carteira ATUAL via
+   * `primary_manager_id`): "clientes atendidos" é atividade registrada,
+   * "clientes sob responsabilidade" é atribuição — os dois nunca são
+   * somados nem confundidos (ver auditoria da Fase 5). */
+  distinctClientsServed: number;
   /** Só `scope: "person"` — ver auditoria no topo do arquivo sobre por que
    * conquistas de cliente nunca entram aqui. */
   achievements: AchievementRow[];
@@ -166,6 +175,26 @@ export function countByActor(rows: { actor_team_member_id: string | null; event_
     byActor.set(row.actor_team_member_id, counts);
   }
   return byActor;
+}
+
+/** Etapa "Equipe — Fase 5": clientes distintos por ator a partir de linhas
+ * de `account_review_recorded` (`client_id` + `actor_team_member_id`) —
+ * mesma definição de `distinctClientsServedCount` no motor de Conquistas
+ * (`lib/achievement-metrics.ts:countDistinctClientsForActorReviews`), só que
+ * agregada em memória pra todos os gestores de uma vez (mesmo espírito de
+ * `countByActor`, acima), nunca uma query por gestor. Exportada pra ser
+ * testável sem Supabase. */
+export function countDistinctClientsByActor(rows: { actor_team_member_id: string | null; client_id: string | null }[]): Map<string, number> {
+  const clientsByActor = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (!row.actor_team_member_id || !row.client_id) continue;
+    const set = clientsByActor.get(row.actor_team_member_id) ?? new Set<string>();
+    set.add(row.client_id);
+    clientsByActor.set(row.actor_team_member_id, set);
+  }
+  const result = new Map<string, number>();
+  for (const [actorId, set] of clientsByActor) result.set(actorId, set.size);
+  return result;
 }
 
 /**
@@ -232,7 +261,7 @@ export async function loadTeamMemberProfiles(
   const periodStart = `${monthRange.firstDay}T00:00:00Z`;
   const periodEnd = `${monthRange.lastDay}T23:59:59.999Z`;
 
-  const [members, clientOperationalStates, mediaChannelRows, activityInPeriodRows, activityAllTimeRows, managerChangeRows, personAchievements] =
+  const [members, clientOperationalStates, mediaChannelRows, activityInPeriodRows, activityAllTimeRows, managerChangeRows, personAchievements, distinctClientsServedRows] =
     await Promise.all([
       requireQuery(
         supabase
@@ -286,11 +315,25 @@ export async function loadTeamMemberProfiles(
         "operational_events:manager-change",
       ),
       fetchAchievements(supabase, organizationId, { scope: "person" }, 0, 200),
+      // Etapa "Equipe — Fase 5" — "Clientes atendidos" (all-time), fonte
+      // separada de ACTIVITY_EVENT_TYPES de propósito: account_review_recorded
+      // nunca entra na contagem de otimizações (mesma razão de sempre, ver
+      // `countByActor` acima), mas é exatamente a fonte de "atendeu" (mesmo
+      // critério já usado pelo motor de Conquistas).
+      requireQuery(
+        supabase
+          .from("operational_events")
+          .select("actor_team_member_id, client_id")
+          .eq("organization_id", organizationId)
+          .eq("event_type", "account_review_recorded"),
+        "operational_events:distinct-clients-served",
+      ),
     ]);
 
   const mediaChannelsByClient = new Map<string, string[] | null>(mediaChannelRows.map((row) => [row.id, row.media_channels]));
   const activityInPeriodByActor = countByActor(activityInPeriodRows);
   const activityAllTimeByActor = countByActor(activityAllTimeRows);
+  const distinctClientsServedByActor = countDistinctClientsByActor(distinctClientsServedRows);
 
   // Primeira ocorrência por cliente (já ordenado occurred_at desc) é a MAIS
   // RECENTE troca de gestor dentro do período — a única que importa pra
@@ -344,6 +387,7 @@ export async function loadTeamMemberProfiles(
       portfolioPerformance,
       activityInPeriod: activityInPeriodByActor.get(member.id) ?? emptyActivityCounts(),
       activityAllTime: activityAllTimeByActor.get(member.id) ?? emptyActivityCounts(),
+      distinctClientsServed: distinctClientsServedByActor.get(member.id) ?? 0,
       achievements: achievementsByActor.get(member.id) ?? [],
     };
   });

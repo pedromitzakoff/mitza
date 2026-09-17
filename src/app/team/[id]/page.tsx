@@ -13,6 +13,7 @@ import {
   type ManagerPortfolioEvolutionPoint,
 } from "@/lib/team-portfolio-performance";
 import { selectPersonBadges } from "@/lib/achievement-badges";
+import { curateTeamMemberTrajectory, type TrajectoryPoint } from "@/lib/team-trajectory";
 import type { AchievementRow } from "@/lib/achievements-data";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { IconButton, Button } from "@/components/workspace/button";
@@ -38,6 +39,19 @@ import { OperationMetric } from "@/app/operation-metric";
  * Reaproveita `loadTeamMemberProfiles` (a MESMA função da lista `/team`) —
  * nenhuma segunda implementação de cálculo só porque é 1 pessoa em vez de
  * todas.
+ *
+ * Etapa "Equipe — Fase 5: Trajetória e Experiência Profissional": nova
+ * seção "Trajetória" no topo (curadoria pura sobre `achievements`, ver
+ * `lib/team-trajectory.ts` — nenhum evento/detector novo) e "Experiência"
+ * (substitui a antiga seção "Histórico", mesmos números + "Clientes
+ * atendidos"/"Meses com carteira avaliável" novos). Reorganização de
+ * seções pra reduzir fragmentação visual (pedido explícito), nenhuma
+ * remoção de informação existente. Deliberadamente SEM Especialização por
+ * canal/objetivo (auditoria da etapa: sem histórico confiável antes de
+ * hoje) e SEM qualquer data derivada de `team_members.created_at` — nem
+ * "Entrou na KOFF em...", nem "Perfil registrado desde..." (pedido
+ * explícito: omitir completamente, não substituir por uma frase mais
+ * cautelosa).
  */
 export default async function TeamMemberProfilePage({
   params,
@@ -70,8 +84,9 @@ export default async function TeamMemberProfilePage({
   const buildMonthHref = (nextMonth: string) => (nextMonth === currentRange.firstDay ? `/team/${id}` : `/team/${id}?month=${nextMonth}`);
   const now = new Date();
 
-  const { portfolio, portfolioPerformance, activityInPeriod, activityAllTime, achievements } = member;
+  const { portfolio, portfolioPerformance, activityInPeriod, activityAllTime, distinctClientsServed, achievements } = member;
   const badges = selectPersonBadges(achievements);
+  const trajectory = curateTeamMemberTrajectory(achievements);
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -105,6 +120,24 @@ export default async function TeamMemberProfilePage({
           )}
         </div>
       </div>
+
+      {/* TRAJETÓRIA — Etapa "Equipe — Fase 5": resumo editorial dos
+          principais marcos profissionais (curadoria pura sobre
+          `achievements`, `lib/team-trajectory.ts`), no máximo 6 pontos, em
+          ordem cronológica. Some inteira sem dado — nunca um estado vazio
+          fabricado (mesmo padrão de "Evolução"/"Histórico de carteira"
+          abaixo). A visão completa e não-curada continua em "Conquistas",
+          no fim da página. */}
+      {trajectory.length > 0 && (
+        <div className="mt-8 border-t border-overview-border pt-4">
+          <SectionHeader title="Trajetória" accent />
+          <div className="mt-4 flex flex-col gap-5 border-l border-overview-border pl-5">
+            {trajectory.map((point) => (
+              <TrajectoryRow key={point.type} point={point} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* CARTEIRA ATUAL — fato do estado atual (`primary_manager_id`), nunca
           um total histórico (auditoria: não existe histórico de troca de
@@ -180,6 +213,26 @@ export default async function TeamMemberProfilePage({
         </div>
       )}
 
+      {/* HISTÓRICO DE CARTEIRA — Etapa "Equipe — Fase 2": fonte é
+          `client_manager_assignments` (via `loadManagerAssignmentHistory`),
+          nunca reconstruída/inventada — todo período aqui é real a partir
+          do deploy dessa etapa; nada antes disso aparece, porque nada antes
+          disso existe com confiança (ver auditoria em
+          `supabase/client-manager-assignments.sql`). Cada linha é um fato
+          (cliente, início, fim/"atual"), nunca um agregado/score. Agrupada
+          junto de Carteira/Performance/Evolução (Etapa "Equipe — Fase 5":
+          reorganização de seções). */}
+      {assignmentHistory.length > 0 && (
+        <div className="mt-8 border-t border-overview-border pt-4">
+          <SectionHeader title="Histórico de carteira" />
+          <div className="mt-3 flex flex-col divide-y divide-overview-border">
+            {assignmentHistory.map((entry) => (
+              <AssignmentHistoryRow key={`${entry.clientId}-${entry.startedAt}`} entry={entry} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ATUAÇÃO NO MÊS — sempre por ATOR (quem de fato registrou a ação),
           nunca por gestor atual do cliente; cada evento é 1:1 com uma ação
           real (ver auditoria — otimizações somam account_optimization_recorded,
@@ -194,41 +247,34 @@ export default async function TeamMemberProfilePage({
         </div>
       </div>
 
-      {/* HISTÓRICO — só o que é seguro historicamente (eventos com ator +
-          data reais, tabela append-only). Deliberadamente SEM nenhum total
-          de investimento: não existe histórico de troca de gestor
-          confiável pra provar que os clientes da carteira ATUAL também
+      {/* EXPERIÊNCIA — Etapa "Equipe — Fase 5": substitui a antiga seção
+          "Histórico" (mesmos 3 números, all-time, só o que é seguro
+          historicamente — eventos com ator + data reais, tabela
+          append-only). "Clientes atendidos" é NOVO: distinto de
+          `portfolio.clientCount` (carteira atual/`primary_manager_id`) —
+          atendeu (atividade registrada) nunca é a mesma coisa que ser
+          responsável (atribuição); os dois nunca são somados ou chamados
+          pelo mesmo nome (ver `lib/team-performance-data.ts`). "Meses com
+          carteira avaliável" (`portfolioEvolution.length`) só aparece
+          quando > 0 — nunca um "0 meses" destacado (mesma regra de nunca
+          fabricar um estado vazio como se fosse informação). Deliberadamente
+          SEM nenhum total de investimento: não existe histórico de troca de
+          gestor confiável pra provar que os clientes da carteira ATUAL já
           eram dele em períodos passados. */}
       <div className="mt-8 border-t border-overview-border pt-4">
-        <SectionHeader title="Histórico" />
-        <div className="mt-3 grid grid-cols-3 gap-x-10 gap-y-5">
+        <SectionHeader title="Experiência" />
+        <div className="mt-3 grid grid-cols-2 gap-x-10 gap-y-5 sm:grid-cols-3">
+          <OperationMetric label="Clientes atendidos" value={String(distinctClientsServed)} />
           <OperationMetric label="Otimizações" value={String(activityAllTime.optimizations)} />
           <OperationMetric label="Reports enviados" value={String(activityAllTime.reportsSent)} />
-          <OperationMetric label="Reuniões" value={String(activityAllTime.meetings)} />
+          <OperationMetric label="Reuniões concluídas" value={String(activityAllTime.meetings)} />
+          {portfolioEvolution.length > 0 && <OperationMetric label="Meses com carteira avaliável" value={String(portfolioEvolution.length)} />}
         </div>
         <p className="mt-3 text-[12px] text-overview-text-muted">
           Nenhum valor de investimento de períodos anteriores é mostrado aqui — não há como comprovar, com segurança, que os clientes da carteira
           atual já estavam sob esta gestão nesses períodos.
         </p>
       </div>
-
-      {/* HISTÓRICO DE CARTEIRA — Etapa "Equipe — Fase 2": fonte é
-          `client_manager_assignments` (via `loadManagerAssignmentHistory`),
-          nunca reconstruída/inventada — todo período aqui é real a partir
-          do deploy dessa etapa; nada antes disso aparece, porque nada antes
-          disso existe com confiança (ver auditoria em
-          `supabase/client-manager-assignments.sql`). Cada linha é um fato
-          (cliente, início, fim/"atual"), nunca um agregado/score. */}
-      {assignmentHistory.length > 0 && (
-        <div className="mt-8 border-t border-overview-border pt-4">
-          <SectionHeader title="Histórico de carteira" />
-          <div className="mt-3 flex flex-col divide-y divide-overview-border">
-            {assignmentHistory.map((entry) => (
-              <AssignmentHistoryRow key={`${entry.clientId}-${entry.startedAt}`} entry={entry} />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* INSÍGNIAS — Etapa "Equipe — Fase 4": maior patamar já cruzado por
           `type` escalonável (`selectPersonBadges`, `lib/achievement-badges.ts`),
@@ -290,6 +336,35 @@ function PortfolioClientRow({ client, today }: { client: TeamMemberPortfolioClie
           ? `${client.costMetricShortLabel} ${formatCurrency(client.costActual)} · Meta ${formatCurrency(client.costTarget)}`
           : "Sem meta de custo comparável"}
       </p>
+    </div>
+  );
+}
+
+/** "OUT 2026" — mês abreviado maiúsculo + ano, sem "de" (Etapa "Equipe —
+ * Fase 5": rótulo pedido pra Trajetória, diferente de `formatMonthLabel`,
+ * que devolve "Outubro de 2026" pro seletor de mês da própria página —
+ * dois estilos deliberadamente distintos, cada um no seu lugar, nenhum dos
+ * dois reescrito). `point.occurredAt` já é um timestamp completo (meio-dia
+ * fixo no fuso da agência, ver `achievement-engine.ts:persistCandidate`) —
+ * nunca precisa do sufixo `T00:00:00Z` que as datas civis puras deste
+ * arquivo usam em outro lugar. */
+const trajectoryMonthYearFormatter = new Intl.DateTimeFormat("pt-BR", { month: "short", year: "numeric", timeZone: "UTC" });
+
+function formatTrajectoryMonthLabel(occurredAt: string): string {
+  const [month, year] = trajectoryMonthYearFormatter.format(new Date(occurredAt)).split(" de ");
+  return `${month.replace(/\.$/, "").toUpperCase()} ${year}`;
+}
+
+/** Uma linha da Trajetória — timeline editorial discreta (trilho fino +
+ * marcador verde-limão pequeno, nunca troféu/medalha/card pesado/gráfico).
+ * Mesmos tokens de identidade KOFF já usados no resto da página
+ * (`bg-lime`, `overview-*`) — nenhuma cor nova inventada. */
+function TrajectoryRow({ point }: { point: TrajectoryPoint }) {
+  return (
+    <div className="relative">
+      <span className="absolute top-1.5 -left-[21px] h-1.5 w-1.5 rounded-full bg-lime" aria-hidden="true" />
+      <p className="text-[11px] font-medium tracking-wide text-overview-text-muted uppercase">{formatTrajectoryMonthLabel(point.occurredAt)}</p>
+      <p className="mt-0.5 text-sm font-medium text-overview-text-primary">{point.headline}</p>
     </div>
   );
 }
