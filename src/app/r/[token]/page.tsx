@@ -1,13 +1,67 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { todayDateString } from "@/lib/today";
 import { resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
 import { buildPerformanceReportDocument } from "@/lib/performance-report/report-document";
-import { resolveClientIdFromShareToken } from "@/lib/report-share-links";
+import { resolveClientIdFromShareToken, resolvePublicShareLinkBaseUrl } from "@/lib/report-share-links";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ReportPeriodControl } from "@/app/clients/[id]/relatorio/report-period-control";
 import { ReportBody } from "@/app/clients/[id]/relatorio/report-body";
 import { ReportHeader } from "@/app/clients/[id]/relatorio/report-header";
+import { formatReportPeriodLabel, resolveReportShareClientName, resolveReportShareDefaultPeriod } from "./report-share-metadata";
+
+const REPORT_SHARE_TITLE = "KOFF — Relatório de Performance";
+const REPORT_SHARE_DESCRIPTION_FALLBACK = "Acompanhe os resultados, investimento e principais indicadores da campanha.";
+
+/**
+ * Etapa "OG Metadata do Relatório Público": título/descrição/Open
+ * Graph/Twitter Card do link enviado ao cliente — hoje o WhatsApp/Google
+ * Chat mostravam a identidade genérica da plataforma (`app/layout.tsx`:
+ * "Mitza"). NUNCA a pipeline pesada do relatório (`buildPerformanceReportData`),
+ * só o nome do cliente (`resolveReportShareClientName`, mesma resolução de
+ * sempre por token — nunca `clientId` cru, nunca métrica) + o período padrão
+ * ("this_month", `resolveReportShareDefaultPeriod`). Token inválido/revogado/
+ * cliente excluído cai no MESMO fallback genérico que um token válido sem
+ * nome resolvido — nunca revela pelo metadata se um token é ou não válido
+ * (a página em si continua decidindo 404 normalmente na renderização).
+ * `metadataBase` resolvido aqui (nunca em `app/layout.tsx`, que fica intocado)
+ * via `resolvePublicShareLinkBaseUrl` — a MESMA função que já monta a URL
+ * pública do link no painel administrativo, garantindo o domínio de
+ * produção real (`VERCEL_PROJECT_PRODUCTION_URL`) mesmo sob a proteção de
+ * deployment da Vercel. A imagem (`og:image`/`twitter:image`) vem sozinha da
+ * convenção de arquivo colocada ao lado (`opengraph-image.tsx`), nunca
+ * declarada aqui.
+ */
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const baseUrl = resolvePublicShareLinkBaseUrl();
+  const canonicalUrl = `${baseUrl}/r/${token}`;
+
+  const clientName = await resolveReportShareClientName(token);
+  const description = clientName
+    ? `${clientName} · ${formatReportPeriodLabel(resolveReportShareDefaultPeriod())} — ${REPORT_SHARE_DESCRIPTION_FALLBACK}`
+    : REPORT_SHARE_DESCRIPTION_FALLBACK;
+
+  return {
+    metadataBase: new URL(baseUrl),
+    title: REPORT_SHARE_TITLE,
+    description,
+    robots: { index: false, follow: false },
+    openGraph: {
+      title: REPORT_SHARE_TITLE,
+      description,
+      url: canonicalUrl,
+      siteName: "KOFF",
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: REPORT_SHARE_TITLE,
+      description,
+    },
+  };
+}
 
 /**
  * Etapa "Link Externo V1" — Performance Report somente leitura, sem login,
