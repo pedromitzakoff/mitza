@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, OperationalEventType, TaskType } from "@/lib/supabase/database.types";
 import { OperationalEventType as EventType, OPERATIONAL_EVENT_TYPE_LABEL } from "@/lib/operational-events";
 import { buildReviewPresentation, fetchOptimizationActionsByReviewId, type ReviewPresentation } from "@/lib/client-operational-history";
+import { formatEventReference, parseEventRelation, type EventRelation } from "@/lib/event-reference";
 
 /**
  * Timeline Geral da Agência — "o que aconteceu na operação da agência hoje/
@@ -24,7 +25,30 @@ import { buildReviewPresentation, fetchOptimizationActionsByReviewId, type Revie
  * com otimização(ões) já carrega o detalhe no próprio metadata — nunca
  * `account_optimization_recorded`/os eventos "outcome-specific" ao lado,
  * que triplicariam a mesma revisão como 3 linhas).
+ *
+ * Etapa "Timeline 2.0": a página separada "Conquistas" (`/achievements`)
+ * deixa de ser um destino de produto — os acontecimentos positivos que ela
+ * mostrava (`achievement_unlocked`, motor intocado em `achievement-engine.ts`)
+ * passam a aparecer AQUI, na mesma linha do tempo das ações humanas, sob a
+ * família `"performance"` (nunca `"acao"` — distinção estrutural, seção 2 do
+ * pedido: AÇÃO HUMANA ≠ RESULTADO OBSERVADO). Nenhum motor novo: esta função
+ * só lê `metadata.headline`/`detail` do mesmo evento que o cron já grava
+ * (`record_achievement_event`, `supabase/achievements.sql`) — a MESMA leitura
+ * que `achievements-data.ts#toRow` já faz, sem duplicar a lógica de parse
+ * (os dois arquivos leem o mesmo formato de metadata porque o formato é
+ * canônico, não porque um importa o outro — inverter essa dependência
+ * acoplaria a Timeline a uma página que deixou de existir).
+ *
+ * Toda conquista já persistida é, hoje, um acontecimento POSITIVO (patamar
+ * atingido, meta batida, recuperação confirmada — nenhum detector emite algo
+ * negativo ainda). `performanceTone: "positivo"` reflete esse fato honesto,
+ * nunca uma suposição — o dia em que existir um detector negativo
+ * (documentado como próxima fase no relatório desta etapa), ele populará
+ * `"atencao"` pelo mesmo campo, sem precisar de nenhuma mudança estrutural
+ * aqui.
  */
+const PERFORMANCE_EVENT_TYPES: OperationalEventType[] = [EventType.ACHIEVEMENT_UNLOCKED];
+
 const AGENCY_TIMELINE_EVENT_TYPES: OperationalEventType[] = [
   EventType.CLIENT_CREATED,
   EventType.CLIENT_STATUS_CHANGED,
@@ -46,9 +70,22 @@ const AGENCY_TIMELINE_EVENT_TYPES: OperationalEventType[] = [
   EventType.CLIENT_REPORT_SENT,
 ];
 
+/** Etapa "Timeline 2.0" (seção 2 do pedido, princípio central): distinção
+ * ESTRUTURAL entre ação humana e resultado observado — nunca inferida do
+ * texto na UI. `"acao"` = qualquer tipo de `AGENCY_TIMELINE_EVENT_TYPES`
+ * (alguém fez algo); `"performance"` = automático, hoje só `achievement_unlocked`. */
+export type AgencyTimelineEventFamily = "acao" | "performance";
+
+/** Só existe quando `family === "performance"`. Todo `achievement_unlocked`
+ * já persistido é positivo (ver comentário de `PERFORMANCE_EVENT_TYPES`
+ * acima) — `"atencao"` é reservado pro primeiro detector negativo (próxima
+ * fase, ver relatório da etapa), nunca fabricado aqui. */
+export type PerformanceTone = "positivo" | "atencao";
+
 export interface AgencyTimelineRow {
   id: string;
   eventType: OperationalEventType;
+  family: AgencyTimelineEventFamily;
   occurredAt: string;
   clientId: string | null;
   clientName: string | null;
@@ -62,6 +99,19 @@ export interface AgencyTimelineRow {
    * evento (nunca ficam `undefined`) só por consistência de tipo — a UI
    * simplesmente não os usa quando `reviewPresentation` existe. */
   reviewPresentation?: ReviewPresentation;
+  /** Só presente em `family === "performance"`. */
+  performanceTone?: PerformanceTone;
+  /** Etapa "Timeline 2.0" (seção 11) — referência humana curta e ESTÁVEL
+   * (`#EVT-XXXXXXXX`, derivada do próprio `id`, nunca de posição na lista —
+   * ver `lib/event-reference.ts`). Sempre presente, em toda linha. */
+  eventReference: string;
+  /** Etapa "Timeline 2.0" (seção 12) — relação temporal com outro evento,
+   * quando o `metadata` já carrega uma (`related_event_id`/`relation_type`).
+   * `null` pra praticamente todo evento hoje: nenhum detector desta etapa
+   * ainda escreve essa relação (arquitetura pronta, população fica pra
+   * próxima fase — ver relatório). Nunca afirma causalidade (seção 3) — só
+   * "ocorreu depois de". */
+  relation: EventRelation | null;
 }
 
 /** Filtro "Tipo" (seção 10 do pedido) — recorte por CIMA da curadoria de
@@ -111,6 +161,42 @@ export function eventTypesForFilter(type: AgencyTimelineType): OperationalEventT
   return AGENCY_TIMELINE_EVENT_TYPES;
 }
 
+/** Etapa "Timeline 2.0" (seção 7 do pedido): experiência simples "Todos |
+ * Ações | Performance" — uma dimensão nova, ORTOGONAL ao filtro "Tipo"
+ * (`AgencyTimelineType`, que continua só recortando DENTRO das ações).
+ * `"acoes"` = só `AGENCY_TIMELINE_EVENT_TYPES` (curadoria de sempre);
+ * `"performance"` = só `PERFORMANCE_EVENT_TYPES` (ignora o filtro "Tipo",
+ * que não faz sentido pra conquista); `"todos"` = os dois juntos, "Tipo"
+ * ainda recortando a parte de ações — "a história completa intercalada
+ * cronologicamente" (pedido explícito), nunca duas listas separadas. */
+export type AgencyTimelineFamilyFilter = "todos" | "acoes" | "performance";
+
+export const AGENCY_TIMELINE_FAMILY_LABEL: Record<AgencyTimelineFamilyFilter, string> = {
+  todos: "Todos",
+  acoes: "Ações",
+  performance: "Performance",
+};
+export const AGENCY_TIMELINE_FAMILY_OPTIONS: { value: AgencyTimelineFamilyFilter; label: string }[] = [
+  { value: "todos", label: AGENCY_TIMELINE_FAMILY_LABEL.todos },
+  { value: "acoes", label: AGENCY_TIMELINE_FAMILY_LABEL.acoes },
+  { value: "performance", label: AGENCY_TIMELINE_FAMILY_LABEL.performance },
+];
+
+/** Resolve `?family=` da URL — mesmo padrão de fallback seguro de sempre:
+ * valor ausente/inválido cai em `"todos"`. Exportado só pra teste. */
+export function resolveAgencyTimelineFamily(paramValue: string | undefined): AgencyTimelineFamilyFilter {
+  return paramValue === "acoes" || paramValue === "performance" ? paramValue : "todos";
+}
+
+/** Combina família + tipo num único `.in()` da query — nunca duas queries
+ * nem filtro em memória. Exportado só pra teste. */
+export function eventTypesForFilters(family: AgencyTimelineFamilyFilter, type: AgencyTimelineType): OperationalEventType[] {
+  if (family === "performance") return PERFORMANCE_EVENT_TYPES;
+  const actionTypes = eventTypesForFilter(type);
+  if (family === "acoes") return actionTypes;
+  return [...actionTypes, ...PERFORMANCE_EVENT_TYPES];
+}
+
 export interface AgencyTimelineFilters {
   /** `null` = todos os gestores — `actor_team_member_id`, quem EXECUTOU a
    * ação (mesmo critério já usado em `fetchTeamMemberTimeline`), não a
@@ -121,6 +207,8 @@ export interface AgencyTimelineFilters {
    * evento (seção 10 do pedido). Combina livremente com gestor/cliente
    * (todos viram `.eq()`/`.in()` na MESMA query, nunca filtro em memória). */
   type: AgencyTimelineType;
+  /** Etapa "Timeline 2.0" — Ações/Performance/Todos (ver `AgencyTimelineFamilyFilter`). */
+  family: AgencyTimelineFamilyFilter;
 }
 
 /** Rótulo humano de `task_completed` a partir de `metadata.task_type`
@@ -172,6 +260,49 @@ export function shouldSuppressDuplicateTaskCompleted(
   return correlationId !== null && siblingCorrelationIds.has(correlationId);
 }
 
+/** Um único evento, buscado direto pelo `id` real (nunca pela referência
+ * curta — ver `lib/event-reference.ts`) — usado só pra mostrar o evento
+ * RELACIONADO de outra linha (`row.relation`), que pode estar em qualquer
+ * página/fora do filtro atual. `null` = evento não encontrado (id inválido,
+ * ou de outra organização — a mesma policy de RLS de sempre já impede ver
+ * evento de outra organização; aqui o filtro explícito por `organizationId`
+ * é só defesa em profundidade, nunca a única barreira). */
+export interface AgencyTimelineEventById {
+  id: string;
+  eventReference: string;
+  label: string;
+  detail: string | null;
+  clientName: string | null;
+  occurredAt: string;
+}
+
+export async function fetchAgencyTimelineEventById(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  id: string,
+): Promise<AgencyTimelineEventById | null> {
+  const { data } = await supabase
+    .from("operational_events")
+    .select("id, event_type, occurred_at, metadata, client:clients(name)")
+    .eq("organization_id", organizationId)
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) return null;
+
+  const eventType = data.event_type as OperationalEventType;
+  const metadata = (data.metadata ?? {}) as Record<string, unknown>;
+  const isPerformance = eventType === EventType.ACHIEVEMENT_UNLOCKED;
+
+  return {
+    id: data.id,
+    eventReference: formatEventReference(data.id),
+    label: isPerformance && typeof metadata.headline === "string" ? metadata.headline : OPERATIONAL_EVENT_TYPE_LABEL[eventType],
+    detail: isPerformance && typeof metadata.detail === "string" ? metadata.detail : null,
+    clientName: data.client?.name ?? null,
+    occurredAt: data.occurred_at,
+  };
+}
+
 const AGENCY_TIMELINE_PAGE_SIZE = 20;
 
 /** Página da Timeline Geral, mais recente primeiro — mesmo padrão de
@@ -195,7 +326,7 @@ export async function fetchAgencyTimeline(
       "id, event_type, occurred_at, entity_id, correlation_id, metadata, actor:team_members(name), client:clients(id, name)",
     )
     .eq("organization_id", organizationId)
-    .in("event_type", eventTypesForFilter(filters.type))
+    .in("event_type", eventTypesForFilters(filters.family, filters.type))
     .order("occurred_at", { ascending: false })
     .range(from, to);
 
@@ -237,14 +368,31 @@ export async function fetchAgencyTimeline(
     rows: visible.map((row) => {
       const eventType = row.event_type as OperationalEventType;
       const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+      const family: AgencyTimelineEventFamily = eventType === EventType.ACHIEVEMENT_UNLOCKED ? "performance" : "acao";
       const base = {
         id: row.id,
         eventType,
+        family,
         occurredAt: row.occurred_at,
         clientId: row.client?.id ?? null,
         clientName: row.client?.name ?? null,
         actorName: row.actor?.name ?? null,
+        eventReference: formatEventReference(row.id),
+        relation: parseEventRelation(metadata),
       };
+
+      // Etapa "Timeline 2.0": conquista já persistida — só LÊ o headline/
+      // detail que o motor já gravou (`record_achievement_event`), nunca
+      // recalcula. Mesmo formato de metadata que `achievements-data.ts#toRow`
+      // já lê (`headline`/`detail`), aqui só pra apresentação na Timeline.
+      if (family === "performance") {
+        return {
+          ...base,
+          label: typeof metadata.headline === "string" ? metadata.headline : OPERATIONAL_EVENT_TYPE_LABEL[eventType],
+          detail: typeof metadata.detail === "string" ? metadata.detail : null,
+          performanceTone: "positivo" as PerformanceTone,
+        };
+      }
 
       if (eventType === EventType.TASK_COMPLETED) {
         return { ...base, ...buildTaskCompletedPresentation(metadata) };

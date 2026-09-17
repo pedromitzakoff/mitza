@@ -385,8 +385,12 @@ console.log("\n8 — Filtro por Tipo (URL) e combinação com Gestor/Cliente\n")
   ok("filtro de gestor vira .eq na própria query (nunca filtro em memória)", /filters\.actorId\) query = query\.eq\("actor_team_member_id", filters\.actorId\)/.test(timelineCode));
   ok("filtro de cliente vira .eq na própria query", /filters\.clientId\) query = query\.eq\("client_id", filters\.clientId\)/.test(timelineCode));
   ok(
-    "filtro de tipo vira .in na MESMA query (eventTypesForFilter), combinando livremente com gestor/cliente — nunca 3 filtros separados incompatíveis",
-    /\.in\("event_type", eventTypesForFilter\(filters\.type\)\)/.test(timelineCode),
+    // Etapa "Timeline 2.0": eventTypesForFilter (Tipo) foi combinada com o
+    // novo filtro de Família (Todos/Ações/Performance) num único resolvedor
+    // (eventTypesForFilters) — mesmo princípio de sempre (um só .in na
+    // MESMA query), agora com uma dimensão extra.
+    "filtro de tipo+família vira .in na MESMA query (eventTypesForFilters), combinando livremente com gestor/cliente — nunca filtros separados incompatíveis",
+    /\.in\("event_type", eventTypesForFilters\(filters\.family, filters\.type\)\)/.test(timelineCode),
   );
 }
 

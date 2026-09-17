@@ -38,6 +38,18 @@ import { AchievementsFeed } from "./achievements-feed";
  * renderização (salvaguarda de aprovação nº4); toda decisão já aconteceu
  * no cron (`achievement-engine.ts`). Mesmo modelo de acesso de sempre:
  * qualquer usuário autenticado vê a carteira/agência/equipe inteira.
+ *
+ * Etapa "Timeline 2.0": esta página deixou de ter uma entrada própria na
+ * navegação (removida de `sidebar.tsx`) — os acontecimentos positivos que
+ * ela mostra agora também aparecem em `/timeline` (família "Performance",
+ * ver `lib/agency-timeline.ts`), sem precisar de um pilar de produto
+ * próprio. Esta página em si (com seus filtros de Gestor/Objetivo/Tipo/
+ * Nível, mais granulares que a Timeline) continua funcionando pra quem
+ * acessar a rota diretamente — decisão deliberada de não substituir por um
+ * redirect nesta etapa: fazer isso com segurança exigiria migrar toda a
+ * suíte de testes estrutural desta página (`test-achievements-filters.ts`/
+ * `test-achievements-granularity.ts`) numa mudança maior, deixada pra uma
+ * etapa de limpeza futura (ver relatório da etapa).
  */
 export default async function AchievementsPage({
   searchParams,

@@ -15,7 +15,6 @@ import {
   PanelLeftOpen,
   RefreshCw,
   Settings,
-  Trophy,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -151,15 +150,18 @@ interface NavItem {
  * Etapa "Timeline Geral da Agência": terceiro pilar principal, ao lado de
  * Visão Geral e Operação — a tríade responde três perguntas distintas que
  * nunca competem entre si (Visão Geral: "como está a agência?"; Operação:
- * "qual cliente precisa de atenção?"; Timeline: "o que aconteceu?").
+ * "qual cliente precisa de atenção?"; Timeline: "o que está acontecendo?").
  *
- * Etapa "Sistema de Conquistas": quarto pilar — "o que merece ser
- * comemorado?", nunca confundido com Timeline ("o que aconteceu" é
- * operacional/factual; "o que merece comemoração" é seletivo/qualificado,
- * ver Auditoria seção 1). A constituição do produto passa a ser Visão
- * Geral → Operação → Timeline → Conquistas → Cliente — ainda sem espaço
- * pra um quinto pilar (Relatórios/Clientes/Sprints continuam cobertos por
- * outros fluxos, mesmo raciocínio de sempre). */
+ * Etapa "Timeline 2.0": "Conquistas" deixou de ser um quarto pilar próprio —
+ * os acontecimentos positivos que ela mostrava ("o que merece ser
+ * comemorado") agora vivem DENTRO da Timeline (família "Performance", ver
+ * `lib/agency-timeline.ts`), nunca perdidos, só sem uma entrada de
+ * navegação própria. `/achievements` continua existindo como redirect
+ * seguro pra `/timeline?family=performance` (nenhum link antigo quebra). A
+ * constituição do produto passa a ser Visão Geral → Operação → Timeline →
+ * Cliente — ainda sem espaço pra um quarto pilar (Relatórios/Clientes/
+ * Sprints continuam cobertos por outros fluxos, mesmo raciocínio de
+ * sempre). */
 const NAV_ITEMS: NavItem[] = [
   { label: "Visão Geral", href: "/", icon: LayoutGrid, isActive: (p) => p === "/", group: "principal" },
   {
@@ -173,14 +175,7 @@ const NAV_ITEMS: NavItem[] = [
     label: "Timeline",
     href: "/timeline",
     icon: History,
-    isActive: (p) => p.startsWith("/timeline"),
-    group: "principal",
-  },
-  {
-    label: "Conquistas",
-    href: "/achievements",
-    icon: Trophy,
-    isActive: (p) => p.startsWith("/achievements"),
+    isActive: (p) => p.startsWith("/timeline") || p.startsWith("/achievements"),
     group: "principal",
   },
   { label: "Equipe", href: "/team", icon: Users, isActive: (p) => p.startsWith("/team"), group: "flexivel" },
