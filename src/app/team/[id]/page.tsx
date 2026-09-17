@@ -6,6 +6,12 @@ import { todayUTC } from "@/lib/today";
 import { currentMonthRange, shiftMonthParam } from "@/lib/sprint-financials";
 import { formatCurrency, formatMonthLabel, formatRelativeShortDateTime, formatDateFromInstant } from "@/lib/format";
 import { loadTeamMemberProfiles, loadManagerAssignmentHistory, type TeamMemberPortfolioClient, type ManagerAssignmentHistoryEntry } from "@/lib/team-performance-data";
+import {
+  loadManagerPortfolioEvolution,
+  describePortfolioUnavailableReason,
+  type PortfolioClientEvaluation,
+  type ManagerPortfolioEvolutionPoint,
+} from "@/lib/team-portfolio-performance";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { IconButton, Button } from "@/components/workspace/button";
 import { SectionHeader } from "@/components/workspace/section-header";
@@ -51,9 +57,10 @@ export default async function TeamMemberProfilePage({
   const isCurrentMonth = monthParam === currentRange.firstDay;
 
   const supabase = await createSupabaseClient();
-  const [profiles, assignmentHistory] = await Promise.all([
+  const [profiles, assignmentHistory, portfolioEvolution] = await Promise.all([
     loadTeamMemberProfiles(supabase, profile.organizationId, monthParam),
     loadManagerAssignmentHistory(supabase, id),
+    loadManagerPortfolioEvolution(supabase, id, currentRange.firstDay),
   ]);
   const member = profiles.find((p) => p.teamMemberId === id);
   if (!member) notFound();
@@ -61,8 +68,7 @@ export default async function TeamMemberProfilePage({
   const buildMonthHref = (nextMonth: string) => (nextMonth === currentRange.firstDay ? `/team/${id}` : `/team/${id}?month=${nextMonth}`);
   const now = new Date();
 
-  const { portfolio, activityInPeriod, activityAllTime, achievements } = member;
-  const nonComparableCount = portfolio.clientCount - portfolio.comparableCount;
+  const { portfolio, portfolioPerformance, activityInPeriod, activityAllTime, achievements } = member;
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -118,37 +124,58 @@ export default async function TeamMemberProfilePage({
         )}
       </div>
 
-      {/* PERFORMANCE DA CARTEIRA — desvio de custo (CPA/CPL/Custo por novo
-          seguidor) contra a META DO PRÓPRIO CLIENTE, nunca volume absoluto.
-          Reaproveita `evaluation.dimensions.cost` (Motor de Saúde) já
-          calculado por `loadClientOperationalStates` — os mesmos 2 flags
-          (`hasReliableSample`/`hasComparableScope`) que já protegem a
-          Operação contra "Sem dados" mascarado de bom/mau desempenho.
-          Denominador sempre explícito (nunca uma % sozinha escondendo
-          quantos não entraram na conta). */}
+      {/* PERFORMANCE DA CARTEIRA ATUAL — Etapa "Equipe — Fase 3": cada
+          cliente comparado contra a PRÓPRIA meta, nunca volume/investimento
+          absoluto (princípio central aprovado). Reaproveita
+          `evaluation.dimensions.cost` (Motor de Saúde) já calculado por
+          `loadClientOperationalStates` — nenhum cálculo novo, só a
+          classificação do motivo quando não avaliável (ver
+          `lib/team-portfolio-performance.ts`). "Seguidores" fica fora da
+          avaliação nesta fase (decisão explícita — o pipeline hoje mistura
+          investimento de todos os canais no denominador do custo por
+          seguidor, mesmo quando só Meta Ads deveria contar). */}
       <div className="mt-8 border-t border-overview-border pt-4">
         <SectionHeader title="Performance da carteira atual" />
-        {portfolio.comparableCount > 0 ? (
-          <>
-            <p className="mt-2 text-sm text-overview-text-primary">
-              <span className="font-medium tabular-nums">
-                {portfolio.withinOrAboveTargetCount} de {portfolio.comparableCount}
-              </span>{" "}
-              clientes com meta de custo comparável estão na meta ou melhor.
-            </p>
-            {nonComparableCount > 0 && (
-              <p className="mt-1 text-[13px] text-overview-text-muted">
-                {nonComparableCount} cliente{nonComparableCount !== 1 ? "s" : ""} sem meta de custo comparável ainda (amostra insuficiente, escopo de
-                canal não comparável ou meta não configurada) — não contam nem a favor nem contra.
-              </p>
-            )}
-          </>
-        ) : (
-          <p className="mt-2 text-[13px] text-overview-text-secondary">
-            Nenhum cliente da carteira tem meta de custo comparável ainda neste período.
+        <div className="mt-3 grid grid-cols-3 gap-x-10 gap-y-5">
+          <OperationMetric label="Contas avaliáveis" value={String(portfolioPerformance.evaluableCount)} />
+          <OperationMetric label="Dentro da meta" value={String(portfolioPerformance.withinTargetCount)} />
+          <OperationMetric label="Fora da meta" value={String(portfolioPerformance.outsideTargetCount)} />
+        </div>
+        {portfolioPerformance.unavailableCount > 0 && (
+          <p className="mt-2 text-[13px] text-overview-text-muted">
+            {portfolioPerformance.unavailableCount} conta{portfolioPerformance.unavailableCount !== 1 ? "s" : ""} sem avaliação confiável — não
+            contam nem a favor nem contra.
           </p>
         )}
+
+        {portfolioPerformance.clients.length > 0 ? (
+          <div className="mt-4 flex flex-col divide-y divide-overview-border">
+            {portfolioPerformance.clients.map((client) => (
+              <PortfolioPerformanceRow key={client.clientId} client={client} />
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-[13px] text-overview-text-secondary">Nenhum cliente atribuído atualmente.</p>
+        )}
       </div>
+
+      {/* EVOLUÇÃO — Etapa "Equipe — Fase 3": só meses com responsabilidade
+          INTEIRA (nunca parcial) sobre pelo menos 1 cliente entram aqui (ver
+          `periodCoversFullMonth`, `lib/team-portfolio-performance.ts`).
+          Como `client_manager_assignments` só existe a partir do deploy da
+          Fase 2, é esperado que esta seção comece vazia (o primeiro mês
+          potencialmente elegível é o seguinte ao deploy) — a seção some
+          inteira nesse caso, nunca mostra um "0/0" ou um mês fabricado. */}
+      {portfolioEvolution.length > 0 && (
+        <div className="mt-8 border-t border-overview-border pt-4">
+          <SectionHeader title="Evolução" />
+          <div className="mt-3 flex flex-col divide-y divide-overview-border">
+            {portfolioEvolution.map((point) => (
+              <EvolutionRow key={point.monthParam} point={point} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ATUAÇÃO NO MÊS — sempre por ATOR (quem de fato registrou a ação),
           nunca por gestor atual do cliente; cada evento é 1:1 com uma ação
@@ -254,6 +281,56 @@ function AssignmentHistoryRow({ entry }: { entry: ManagerAssignmentHistoryEntry 
       <p className="text-sm font-medium text-overview-text-primary">{entry.clientName}</p>
       <p className="text-[13px] text-overview-text-secondary tabular-nums">
         {formatDateFromInstant(entry.startedAt)} &rarr; {entry.endedAt ? formatDateFromInstant(entry.endedAt) : "atual"}
+      </p>
+    </div>
+  );
+}
+
+/** Texto de distância relativa da meta — "20% melhor que a meta"/"20% acima
+ * da meta", nunca uma média entre clientes (cada linha é a leitura de UM
+ * cliente contra a PRÓPRIA meta). */
+function formatRelativeDeviationLabel(deviation: number): string {
+  const pct = Math.round(Math.abs(deviation) * 100);
+  return deviation < 0 ? `${pct}% melhor que a meta` : `${pct}% acima da meta`;
+}
+
+function PortfolioPerformanceRow({ client }: { client: PortfolioClientEvaluation }) {
+  const goalLabel = client.performanceGoal === "leads" ? "Leads" : client.performanceGoal === "sales" ? "Vendas" : client.performanceGoal === "followers" ? "Seguidores" : null;
+
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2.5">
+      <div>
+        <p className="text-sm font-medium text-overview-text-primary">{client.clientName}</p>
+        <p className="mt-0.5 text-[13px] text-overview-text-secondary">{goalLabel ?? "Objetivo não configurado"}</p>
+      </div>
+      {client.evaluable && client.costActual !== null && client.costTarget !== null ? (
+        <p className="text-right text-[13px] text-overview-text-secondary tabular-nums">
+          {client.costMetricShortLabel} {formatCurrency(client.costActual)} · Meta {formatCurrency(client.costTarget)}
+          {client.relativeDeviation !== null && (
+            <>
+              {" · "}
+              <span className={client.withinTarget ? "text-overview-text-secondary" : "text-overview-danger"}>
+                {formatRelativeDeviationLabel(client.relativeDeviation)}
+              </span>
+            </>
+          )}
+        </p>
+      ) : (
+        <p className="text-[13px] text-overview-text-muted">
+          Sem avaliação confiável — {client.unavailableReason ? describePortfolioUnavailableReason(client.unavailableReason).toLowerCase() : ""}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function EvolutionRow({ point }: { point: ManagerPortfolioEvolutionPoint }) {
+  const { summary } = point;
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2">
+      <p className="text-sm font-medium text-overview-text-primary">{formatMonthLabel(point.monthParam)}</p>
+      <p className="text-[13px] text-overview-text-secondary tabular-nums">
+        {summary.withinTargetCount}/{summary.evaluableCount} contas dentro da meta
       </p>
     </div>
   );

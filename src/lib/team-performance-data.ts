@@ -8,6 +8,11 @@ import { fetchAchievements, type AchievementRow } from "@/lib/achievements-data"
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { fetchAssignmentPeriodsForManager } from "@/lib/client-manager-assignments";
+import {
+  evaluatePortfolioClient,
+  summarizePortfolioPerformance,
+  type PortfolioPerformanceSummary,
+} from "@/lib/team-portfolio-performance";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -117,6 +122,15 @@ export interface TeamMemberProfile {
   avatarUrl: string | null;
   status: "ativo" | "inativo";
   portfolio: TeamMemberPortfolioSummary;
+  /** Etapa "Equipe — Fase 3": cada cliente da carteira ATUAL (mesmo
+   * agrupamento de `portfolio`, `clients.primary_manager_id` — nunca uma
+   * segunda fonte pro presente, ver `lib/team-portfolio-performance.ts`)
+   * avaliado CONTRA A PRÓPRIA META, nunca por volume/investimento. Objeto
+   * irmão de `portfolio` (não substitui — `portfolio.comparableCount`/
+   * `withinOrAboveTargetCount`, Fase 1, continuam existindo e alimentando a
+   * seção "Carteira atual"; este campo alimenta "Performance da carteira
+   * atual", com motivo textual por cliente quando não avaliável). */
+  portfolioPerformance: PortfolioPerformanceSummary;
   activityInPeriod: TeamMemberActivityCounts;
   /** All-time (sem filtro de data) — seguro pra "atuação" (ver auditoria),
    * nunca pra investimento. */
@@ -318,6 +332,7 @@ export async function loadTeamMemberProfiles(
       buildPortfolioClient(state, mediaChannelsByClient.get(state.clientId), member.id, latestManagerChangeByClient.get(state.clientId)),
     );
     const portfolio = summarizePortfolio(portfolioClients);
+    const portfolioPerformance = summarizePortfolioPerformance(managerStates.map(evaluatePortfolioClient));
 
     return {
       teamMemberId: member.id,
@@ -326,6 +341,7 @@ export async function loadTeamMemberProfiles(
       avatarUrl: member.avatar_url,
       status: member.status as "ativo" | "inativo",
       portfolio,
+      portfolioPerformance,
       activityInPeriod: activityInPeriodByActor.get(member.id) ?? emptyActivityCounts(),
       activityAllTime: activityAllTimeByActor.get(member.id) ?? emptyActivityCounts(),
       achievements: achievementsByActor.get(member.id) ?? [],
