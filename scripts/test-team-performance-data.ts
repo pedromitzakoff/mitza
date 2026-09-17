@@ -160,20 +160,42 @@ console.log("\n4 — Investimento respeita o período selecionado (nenhuma segun
   );
 }
 
-console.log("\n5 — Investimento NUNCA é somado/tratado como histórico\n");
+console.log("\n5 — Investimento NUNCA é somado/tratado como histórico, e a UI nunca sugere atribuição além do estado atual\n");
 {
   ok(
     "nenhuma soma de investimento all-time existe no arquivo (só activity all-time, nunca investimento)",
     !/investmentAllTime|historicalInvestment|totalInvestment/.test(teamPerformanceDataSource),
   );
   ok(
-    "UI do perfil explica por que não mostra investimento histórico",
-    /Investimento gerenciado historicamente não é mostrado/.test(teamProfilePageSource),
+    "UI do perfil explica por que não mostra nenhum valor de investimento de períodos anteriores",
+    /Nenhum valor de investimento de períodos anteriores é mostrado/.test(teamProfilePageSource),
   );
   ok(
-    'nenhum rótulo tipo "gerenciado historicamente"/"desde que entrou"/"na KOFF" é usado pra investimento',
-    !/gerenciados historicamente|desde que entrou/.test(teamProfilePageSource) && !/na KOFF desde/.test(teamProfilePageSource),
+    'rótulo do investimento do período é "Investimento da carteira atual em {mês}" (nunca "gerenciado")',
+    /Investimento da carteira atual em/.test(teamProfilePageSource) && /Investimento da carteira atual em/.test(teamListPageSource),
   );
+  ok('seção de performance se chama "Performance da carteira atual" (nunca sem o qualificador "atual")', /Performance da carteira atual/.test(teamProfilePageSource));
+
+  // Etapa "Revisão semântica — atribuição de investimento/performance":
+  // varredura ampla nas 3 fontes (código VIVO, sem comentários — stripComments
+  // já removeu qualquer menção documental/explicativa a essas frases, que
+  // existe de propósito nos comentários pra registrar o que foi evitado e
+  // por quê) por qualquer texto que sugira atribuição retroativa de
+  // investimento/performance só por `primary_manager_id` atual.
+  const liveSources = { "team-performance-data.ts": teamPerformanceDataSource, "team/page.tsx": teamListPageSource, "team/[id]/page.tsx": teamProfilePageSource };
+  const forbiddenPhrases = [
+    /gerenciad[oa]s?\b/i, // "gerenciado"/"gerenciados"/"gerenciada" — cobre "R$ X gerenciados (este mês)", "gerenciado na KOFF" etc.
+    /total gerenciado/i,
+    /j[áa] gerenciou/i,
+    /hist[óo]rico de investimento/i,
+    /desde que entrou/i,
+    /na koff desde/i,
+  ];
+  for (const [fileLabel, source] of Object.entries(liveSources)) {
+    for (const phrase of forbiddenPhrases) {
+      ok(`${fileLabel}: código vivo (sem comentários) nunca contém ${phrase}`, !phrase.test(source));
+    }
+  }
 }
 
 console.log("\n6 — Performance usa o target canônico (evaluation.dimensions.cost, sem recálculo)\n");

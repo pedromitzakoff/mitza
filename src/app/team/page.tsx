@@ -13,12 +13,22 @@ import { IconButton, Button } from "@/components/workspace/button";
  * — essa mudou de rota pra `/settings/team`, ver `settings-shell.tsx`).
  *
  * Deliberadamente NÃO é uma lista de tarefas/pendências do gestor (isso já
- * existe em Operação/Timeline) — é uma leitura profissional: carteira,
- * quanto está gerenciando no período, performance da carteira relativa à
- * PRÓPRIA meta de cada cliente (nunca volume absoluto), e atuação
- * registrada. Nenhum score/ranking/bônus/insígnia automática nesta fase —
- * ver `lib/team-performance-data.ts` pra auditoria completa de quais dados
- * são confiáveis e por quê.
+ * existe em Operação/Timeline) — é uma leitura profissional: carteira
+ * ATUAL, quanto essa carteira investiu no período, performance da carteira
+ * ATUAL relativa à PRÓPRIA meta de cada cliente (nunca volume absoluto), e
+ * atuação registrada (essa sim atribuível ao gestor — ator+timestamp
+ * reais). Nenhum score/ranking/bônus/insígnia automática nesta fase — ver
+ * `lib/team-performance-data.ts` pra auditoria completa de quais dados são
+ * confiáveis e por quê.
+ *
+ * Etapa "Revisão semântica — atribuição de investimento/performance": como
+ * não existe assignment history completo (auditoria original), nenhum
+ * texto aqui pode sugerir que o gestor foi responsável pelo investimento/
+ * performance do PERÍODO só porque `primary_manager_id` aponta pra ele
+ * HOJE — por isso "R$ X gerenciados"/"gerenciado em {mês}" (que soa como
+ * "este gestor gerenciou R$X neste mês") virou "Investimento da carteira
+ * atual em {mês}" (a carteira é atual; o investimento é do mês; a frase
+ * nunca afirma que o gestor gerenciou aquele valor o mês inteiro).
  *
  * Acesso: qualquer membro interno ativo (mesma regra de `getCurrentProfile`
  * já usada por Timeline/Conquistas) — não é uma área de RH, nenhuma RLS
@@ -110,12 +120,12 @@ function TeamMemberSummaryRow({
           </p>
         </div>
         <div>
-          <p className="text-[13px] text-overview-text-secondary">Gerenciado em {monthLabel.toLowerCase()}</p>
+          <p className="text-[13px] text-overview-text-secondary">Investimento da carteira atual em {monthLabel.toLowerCase()}</p>
           <p className="mt-0.5 text-sm font-medium text-overview-text-primary tabular-nums">{formatCurrency(portfolio.investmentActual)}</p>
         </div>
         {hasComparablePerformance && (
           <div>
-            <p className="text-[13px] text-overview-text-secondary">Na meta de custo</p>
+            <p className="text-[13px] text-overview-text-secondary">Carteira atual na meta de custo</p>
             <p className="mt-0.5 text-sm font-medium text-overview-text-primary tabular-nums">
               {portfolio.withinOrAboveTargetCount} de {portfolio.comparableCount}
             </p>

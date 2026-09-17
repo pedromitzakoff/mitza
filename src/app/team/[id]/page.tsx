@@ -13,11 +13,19 @@ import { OperationMetric } from "@/app/operation-metric";
 
 /**
  * `/team/[id]` — Perfil Profissional (Equipe, Fase 1). "Career profile", não
- * "employee dashboard": carteira atual, quanto está gerenciando no período,
- * performance da carteira relativa à PRÓPRIA meta de cada cliente, atuação
- * registrada (otimizações/reports/reuniões) e conquistas pessoais já
+ * "employee dashboard": carteira ATUAL, quanto essa carteira investiu no
+ * período, performance da carteira ATUAL relativa à PRÓPRIA meta de cada
+ * cliente, atuação registrada (otimizações/reports/reuniões — essa sim
+ * atribuível ao gestor, ator+timestamp reais) e conquistas pessoais já
  * atribuíveis com segurança. Sem score/nota/ranking/nível/bônus — ver
  * auditoria completa em `lib/team-performance-data.ts`.
+ *
+ * Etapa "Revisão semântica — atribuição de investimento/performance": sem
+ * assignment history completo (auditoria original), nenhum texto aqui pode
+ * sugerir que o gestor foi responsável pelo investimento/performance do
+ * PERÍODO só porque `primary_manager_id` aponta pra ele HOJE — "carteira
+ * atual" e "investimento da carteira atual" (nunca "gerenciado"/"gerenciou")
+ * deixam claro que é uma leitura do PRESENTE, não uma atribuição retroativa.
  *
  * Reaproveita `loadTeamMemberProfiles` (a MESMA função da lista `/team`) —
  * nenhuma segunda implementação de cálculo só porque é 1 pessoa em vez de
@@ -93,7 +101,7 @@ export default async function TeamMemberProfilePage({
         <SectionHeader title="Carteira atual" accent />
         <div className="mt-3 grid grid-cols-2 gap-x-10 gap-y-5 sm:grid-cols-3">
           <OperationMetric label="Clientes" value={String(portfolio.clientCount)} />
-          <OperationMetric label={`Gerenciado em ${monthLabel.toLowerCase()}`} value={formatCurrency(portfolio.investmentActual)} />
+          <OperationMetric label={`Investimento da carteira atual em ${monthLabel.toLowerCase()}`} value={formatCurrency(portfolio.investmentActual)} />
         </div>
 
         {portfolio.clients.length > 0 ? (
@@ -116,7 +124,7 @@ export default async function TeamMemberProfilePage({
           Denominador sempre explícito (nunca uma % sozinha escondendo
           quantos não entraram na conta). */}
       <div className="mt-8 border-t border-overview-border pt-4">
-        <SectionHeader title="Performance da carteira" />
+        <SectionHeader title="Performance da carteira atual" />
         {portfolio.comparableCount > 0 ? (
           <>
             <p className="mt-2 text-sm text-overview-text-primary">
@@ -154,9 +162,10 @@ export default async function TeamMemberProfilePage({
       </div>
 
       {/* HISTÓRICO — só o que é seguro historicamente (eventos com ator +
-          data reais, tabela append-only). Deliberadamente SEM investimento
-          histórico: não existe histórico de troca de gestor confiável pra
-          provar quanto deste total pertence de fato a este gestor. */}
+          data reais, tabela append-only). Deliberadamente SEM nenhum total
+          de investimento: não existe histórico de troca de gestor
+          confiável pra provar que os clientes da carteira ATUAL também
+          eram dele em períodos passados. */}
       <div className="mt-8 border-t border-overview-border pt-4">
         <SectionHeader title="Histórico" />
         <div className="mt-3 grid grid-cols-3 gap-x-10 gap-y-5">
@@ -165,8 +174,8 @@ export default async function TeamMemberProfilePage({
           <OperationMetric label="Reuniões" value={String(activityAllTime.meetings)} />
         </div>
         <p className="mt-3 text-[12px] text-overview-text-muted">
-          Investimento gerenciado historicamente não é mostrado — não há como comprovar, com segurança, quais clientes/períodos passados já estavam
-          sob esta gestão.
+          Nenhum valor de investimento de períodos anteriores é mostrado aqui — não há como comprovar, com segurança, que os clientes da carteira
+          atual já estavam sob esta gestão nesses períodos.
         </p>
       </div>
 
