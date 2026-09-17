@@ -11,15 +11,15 @@ import {
   monthRangeFromParam,
   shiftMonthParam,
 } from "@/lib/sprint-financials";
-import { formatCurrency, formatMonthLabel } from "@/lib/format";
-import { getMonthTemporalStatus, resolvePlanningHorizon } from "@/lib/monthly-budget";
+import { formatCurrency, formatMonthLabel, formatRelativeShortDateTime } from "@/lib/format";
+import { resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { getClientMonthHorizons } from "@/lib/client-month-horizons";
 import {
   buildOperationClientCard,
   type OperationClientRawData,
   type SprintFilterBucket,
 } from "@/app/operation/operation-data";
-import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
+import type { SpendStatus } from "@/lib/spend-status";
 import { computeFinancialSummary, computeAgencyResultsByChannel } from "@/lib/agency-metrics";
 import { computeHealthResultsSummary } from "@/lib/agency-health-aggregation";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
@@ -33,19 +33,18 @@ import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
 import { OperationMetric } from "./operation-metric";
-import { PrimaryInvestmentMetric } from "./investment-metric";
 import { PLATFORM_LABEL } from "./client-objective-table";
 import { getCompletedReminders, getOpenReminders, getReminderById } from "@/lib/reminders-data";
 import { computeReminderCounts, filterReminders, sortReminders, type ReminderFilter } from "@/lib/reminders";
 import { RemindersPanel } from "./reminders-panel";
 import { RemindersCompletedDrawer } from "./reminders-completed-drawer";
 import { ReminderFormDrawer } from "./reminder-form-drawer";
-import { EmptyState } from "@/components/workspace/empty-state";
+import { fetchAchievements } from "@/lib/achievements-data";
+import { fetchAgencyTimeline } from "@/lib/agency-timeline";
 import { Button, IconButton } from "@/components/workspace/button";
-import { ProgressBar } from "@/components/workspace/progress-bar";
 import { SectionHeader } from "@/components/workspace/section-header";
 import { SandRail } from "@/components/workspace/sand-rail";
-import type { StatusTone } from "@/components/workspace/status-dot";
+import Link from "next/link";
 import type { TrafficChannelDb } from "@/lib/supabase/database.types";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { resolveClientMonthlyPlan, resolveTargetCostPerResult, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
@@ -95,6 +94,7 @@ export default async function Home({
     pendenciaFiltro?: string;
     pendenciaModal?: string;
     pendenciasConcluidas?: string;
+    pendenciaExpandir?: string;
   }>;
 }) {
   // Instrumentação temporária (Navigation Performance & Perceived Speed 1.0)
@@ -127,6 +127,7 @@ export default async function Home({
   const sprintBucketFilter = params.sprintBucket as SprintFilterBucket | undefined;
   const platformFilter = (params.platform ?? "consolidado") as PlatformFilter;
   const pendenciaFiltroFilter = (params.pendenciaFiltro ?? "todas") as ReminderFilter;
+  const pendenciaExpandirFilter = params.pendenciaExpandir === "1";
   const syncFilter = params.sync;
   const metaFilter = params.meta;
 
@@ -161,6 +162,8 @@ export default async function Home({
     ],
     clientOperationalStates,
     openReminders,
+    { rows: recentAchievements },
+    { rows: recentAgencyEvents },
   ] = await Promise.all([
     Promise.all([
     requireQuery(
@@ -291,8 +294,18 @@ export default async function Home({
     ]),
     loadClientOperationalStates(supabase, monthRange.firstDay),
     getOpenReminders(supabase),
+    // Etapa "Reformulação da Home — Aconteceu recentemente": mesma leitura
+    // de `operational_events` já usada por `/achievements` e `/timeline`
+    // (`fetchAchievements`/`fetchAgencyTimeline`) — nenhum motor de evento
+    // novo, nenhuma tabela nova. `scope: "client"` porque é o recorte que
+    // faz sentido pra um resumo executivo (Agência/Pessoa ficam de fora
+    // desta composição compacta — ver limitação no relatório da etapa);
+    // páginas pequenas (3/6) porque a Home só mostra os primeiros itens do
+    // feed combinado, nunca a lista inteira.
+    fetchAchievements(supabase, profile.organizationId, { scope: "client" }, 0, 3),
+    fetchAgencyTimeline(supabase, profile.organizationId, { actorId: null, clientId: null, type: "todos" }, 0, 6),
   ]);
-  perfLog("visão geral bloco 1 (12 queries + ClientOperationalState + Pendências)", __perfBlock1Start);
+  perfLog("visão geral bloco 1 (12 queries + ClientOperationalState + Pendências + Atividade recente)", __perfBlock1Start);
 
   const clientIds = (clients ?? []).map((c) => c.id);
   const currentSprintIds = (sprints ?? [])
@@ -711,42 +724,38 @@ export default async function Home({
   // não entram na contagem.
   const needsAttentionCount = portfolioHealthCounts.critico + portfolioHealthCounts.atencao;
 
+  // Etapa "Reformulação da Home — Atenção": a Operação deixou de ter uma
+  // leitura consolidada (Etapa "Operação por Canal" — ela hoje só avalia
+  // CPA por canal, Meta OU Google isolado, nunca os dois juntos, porque
+  // consolidar CPA de canais com saúde diferente seria enganoso). Por isso
+  // "Atenção" aqui NUNCA reaproveita `resolveOperationCpaPriorityGroup` (o
+  // balde da Operação) — reaproveita o motor de saúde geral e consolidado
+  // (`evaluateAccountHealth`, 5 dimensões, `client-operational-state-data.ts`),
+  // que é a MESMA fonte que já alimenta `portfolioHealthCounts`/
+  // `needsAttentionCount` acima (nenhum motor novo, nenhuma segunda
+  // definição de "atenção consolidada" inventada). `indicatorStates` já
+  // vem ordenado por severidade (`sortClientOperationalStates`, aplicado
+  // dentro de `loadClientOperationalStates`) — só filtra pros 2 baldes que
+  // já compõem `needsAttentionCount` e corta pros primeiros N, sem nenhum
+  // critério de ordenação novo. Nunca escopado por `platformFilter`: este
+  // motor não tem dimensão por canal (ver comentário de `agencyResults`
+  // acima) — a UI avisa isso explicitamente quando o filtro de plataforma
+  // não é Consolidado, em vez de fingir que "Atenção" também filtra por
+  // canal.
+  const ATTENTION_LIST_LIMIT = 5;
+  const attentionClients = indicatorStates
+    .filter((state) => {
+      const group = resolveOperationPriorityGroup(state.evaluation);
+      return group === "critico" || group === "atencao";
+    })
+    .slice(0, ATTENTION_LIST_LIMIT);
+
   const financial = computeFinancialSummary(cards);
   // Etapa 3: realizado do canal selecionado, somado sobre os clientes já
   // filtrados (que, fora de Consolidado, já são só os que usam essa
   // plataforma — ver filtro acima). `null` quando Consolidado (não usado).
   const channelActualTotal =
     platformFilter !== "consolidado" ? cards.reduce((sum, c) => sum + (c.monthActualByChannel[platformFilter] ?? 0), 0) : null;
-
-  // AJUSTE 1: ritmo compara SÓ o realizado dos clientes com meta
-  // (`actualForPacing`) contra planejado/esperado — os dois já são a mesma
-  // base de clientes. `financial.actual` (total da agência, todos os
-  // clientes) alimenta só o KPI "Investimento" abaixo, nunca o ritmo.
-  const investmentRitmoStatus =
-    financial.planned > 0 ? classifySpendStatus(financial.actualForPacing, financial.expectedToDate, financial.planned) : "sem_meta";
-  const investmentDiffTone: StatusTone =
-    investmentRitmoStatus === "acima" ? "danger" : investmentRitmoStatus === "abaixo" ? "warning" : "neutral";
-  // Etapa "Refinamento Visão Geral da Agência" (Ponto 4): o diagnóstico de
-  // ritmo é uma frase de STATUS (`investmentStatusPhrase`), colorida por
-  // `investmentDiffTone`. Etapa "Redução de Ruído — Visão Geral da Agência":
-  // o valor absoluto de diferença que existia como apoio ("R$X de
-  // diferença") saiu da interface — a barra + o marcador "Esperado hoje ·
-  // X%" já mostram a mesma informação visualmente; junto com ele saiu a
-  // comparação "% vs período anterior" que alimentava os 4 KPIs de
-  // "Desempenho da agência" (Investimento/Leads/Vendas, CPL/CPA). O CÁLCULO
-  // de período anterior (`computeAgencyPeriodTotals`/
-  // `buildPercentChangeComparison`, `lib/agency-metrics.ts`/`lib/analytics.ts`)
-  // não mudou uma linha — só parou de ser CONSUMIDO nesta página; qualquer
-  // outra tela pode chamar essas mesmas funções livremente.
-  const investmentStatusPhrase =
-    investmentRitmoStatus === "abaixo"
-      ? "Ritmo abaixo do esperado hoje"
-      : investmentRitmoStatus === "acima"
-        ? "Ritmo acima do esperado hoje"
-        : investmentRitmoStatus === "dentro"
-          ? "Dentro do ritmo esperado"
-          : "—";
-  const monthTemporalStatus = getMonthTemporalStatus(monthRange, todayStr);
 
   // Preserva TODOS os filtros ativos — usado na navegação de mês e na
   // ordenação da tabela, que não devem resetar o resto do contexto. Não
@@ -765,6 +774,7 @@ export default async function Home({
     if (metaFilter) next.set("meta", metaFilter);
     if (platformFilter !== "consolidado") next.set("platform", platformFilter);
     if (pendenciaFiltroFilter !== "todas") next.set("pendenciaFiltro", pendenciaFiltroFilter);
+    if (pendenciaExpandirFilter) next.set("pendenciaExpandir", "1");
 
     for (const [key, value] of Object.entries(overrides)) {
       if (value === "") next.delete(key);
@@ -790,6 +800,8 @@ export default async function Home({
   const closeReminderModalHref = buildUrl({ pendenciaModal: "" });
   const openCompletedRemindersHref = buildUrl({ pendenciasConcluidas: "1" });
   const closeCompletedRemindersHref = buildUrl({ pendenciasConcluidas: "" });
+  const expandRemindersHref = buildUrl({ pendenciaExpandir: "1" });
+  const collapseRemindersHref = buildUrl({ pendenciaExpandir: "" });
 
   const isNewReminderModal = params.pendenciaModal === "new";
   const editingReminder =
@@ -798,7 +810,43 @@ export default async function Home({
   const showCompletedReminders = params.pendenciasConcluidas === "1";
   const completedReminders = showCompletedReminders ? await getCompletedReminders(supabase) : [];
 
+  // Etapa "Reformulação da Home — Aconteceu recentemente": combina duas
+  // leituras já existentes de `operational_events` — conquistas
+  // (`fetchAchievements`) e a Timeline Geral curada (`fetchAgencyTimeline`,
+  // que já exclui CRUD granular/eventos administrativos, ver
+  // `lib/agency-timeline.ts`) — sem nenhum motor de relevância novo.
+  // Conquistas sempre primeiro (pedido explícito: "conquistas/performance
+  // relevante primeiro; depois eventos operacionais"), eventos preenchendo
+  // o resto até o limite — nunca uma heurística de relevância combinada
+  // por peso/score. Limitação conhecida (documentada, não resolvida nesta
+  // etapa): conquistas de escopo Agência/Pessoa não entram neste feed
+  // compacto, só as de escopo Cliente (`/achievements` mostra as 3).
+  const RECENT_ACTIVITY_LIMIT = 6;
+  interface RecentActivityItem {
+    id: string;
+    subject: string;
+    text: string;
+    occurredAt: string;
+  }
+  const recentActivityAchievementItems: RecentActivityItem[] = recentAchievements.map((row) => ({
+    id: `achievement:${row.id}`,
+    subject: row.clientName ?? "Cliente",
+    text: row.headline,
+    occurredAt: row.occurredAt,
+  }));
+  const recentActivityEventItems: RecentActivityItem[] = recentAgencyEvents.map((row) => ({
+    id: `event:${row.id}`,
+    subject: row.clientName ?? row.actorName ?? "Agência",
+    text: row.reviewPresentation?.headline ?? row.label,
+    occurredAt: row.occurredAt,
+  }));
+  const recentActivity = [...recentActivityAchievementItems, ...recentActivityEventItems].slice(0, RECENT_ACTIVITY_LIMIT);
+
   const monthLabel = formatMonthLabel(monthRange.firstDay);
+  // Instante real pro relógio relativo de "Aconteceu recentemente" — nunca
+  // `todayUTC()`/`today` (que já são meia-noite civil truncada pelo fuso,
+  // ver a ressalva de `formatRelativeShortDateTime`, lib/format.ts).
+  const now = new Date();
 
   // Etapa "Cabeçalho executivo": o título "Visão Geral" saiu (redundante com
   // a Sidebar + o próprio conteúdo da página) e o seletor de mês — antes uma
@@ -863,24 +911,21 @@ export default async function Home({
           monthNav={monthNav}
         />
 
-        {/* Etapa "Refinamento visual da Visão Geral — Síntese": a página
-            deixa de misturar panorama executivo com diagnóstico operacional
-            por cliente (Críticas/Atenção/Saudáveis/Sem dados, Fora do ritmo,
-            Gestores vinculados, Tarefas, Revisões e a fila de Prioridades
-            saíram daqui — nenhuma dessas regras foi alterada, todas
-            continuam existindo em Operação, que também é pra onde o link em
-            "Contas ativas" leva). "Desempenho da agência" responde só "como
-            está a agência agora": 4 números executivos com sua própria
-            variação embutida (nunca mais uma segunda seção "Evolução no
-            período" repetindo os mesmos 4-5 indicadores) e o ritmo agregado
-            de investimento.
-            Superfície aberta (nem `rounded-lg`/`border`/`bg-overview-surface`
-            do "card" que existia antes) — só um `border-t` bem sutil separa
-            os dois blocos, pedido explícito desta rodada pra reduzir a
-            sensação de "vários cards dentro de cards". Rail em areia
-            (`SectionHeader accent`, padrão compartilhável novo — ver
-            `components/workspace/section-header.tsx`) é a única assinatura
-            de marca desta seção. */}
+        {/* Etapa "Reformulação da Home — Visão Executiva": a página passa a
+            responder 3 perguntas em sequência (o que está acontecendo? o
+            que merece atenção? o que aconteceu recentemente?), nunca
+            duplicando a Operação/Timeline/Conquistas — só resume o que já
+            existe em cada uma delas e linka pra tela completa. "Ritmo de
+            investimento" (agregado de TODOS os clientes/canais) saiu: era
+            só um número bonito sem decisão executiva clara — pacing real se
+            decide por CLIENTE (já existe na própria página do cliente,
+            "Ritmo do mês"), e agregar Meta+Google+clientes de saúde
+            diferente correria o mesmo risco de mascarar problema real que
+            "Atenção" abaixo evita deliberadamente (ver nota sobre
+            `evaluateAccountHealth`). Superfície aberta (nem `rounded-lg`/
+            `border`/`bg-overview-surface`) — só `border-t` fino separa cada
+            bloco, rail em areia (`SectionHeader accent`) só na primeira
+            seção. */}
         <div className="mt-6">
           <SectionHeader
             title={platformFilter === "consolidado" ? "Desempenho da agência" : `Desempenho da agência · ${PLATFORM_LABEL[platformFilter]}`}
@@ -888,18 +933,11 @@ export default async function Home({
           />
           <div className="mt-3 grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
             {/* Etapa "Redução de Ruído — Visão Geral da Agência": os 4 KPIs
-                respondem só a pergunta do próprio rótulo. Investimento
-                mostra só o realizado — planejamento/ritmo já têm seção
-                própria logo abaixo (Ritmo de investimento), repetir "de R$X
-                planejados" aqui era a mesma informação duas vezes. "% vs
-                período anterior" saiu de Investimento/Leads/Vendas (e do
-                CPL/CPA dentro de Leads/Vendas) pelo mesmo motivo: mais um
-                número por KPI sem responder nenhuma pergunta nova. CPL/CPA
-                continuam (respondem "a que custo?", pergunta diferente de
-                "quantos?"). Nenhum cálculo mudou — `financial`/
-                `agencyResults`/`PERFORMANCE_GOALS` são os mesmos de sempre,
-                só pararam de alimentar `comparison`/parte do `context`
-                aqui. */}
+                respondem só a pergunta do próprio rótulo — só fotografia,
+                nunca diagnóstico (sem comparação percentual, sem seta, sem
+                "de R$X planejados"). Nenhum cálculo mudou — `financial`/
+                `agencyResults`/`PERFORMANCE_GOALS` são os mesmos de
+                sempre. */}
             <OperationMetric
               label="Investimento"
               value={formatCurrency(platformFilter === "consolidado" ? financial.actual : (channelActualTotal ?? 0))}
@@ -926,91 +964,122 @@ export default async function Home({
                   : "Nenhum cliente com objetivo de vendas configurado"
               }
             />
-            {/* "Contas ativas" reaproveita a mesma fonte central de sempre
-                (`operationIndicators.activeClientsCount`, contrato
-                `status = "ativo"`) — secundário aos outros 3 (sem
-                `comparison`, mesmo tamanho de fonte, papel de contexto da
-                carteira). O link substitui a antiga seção "Acompanhamento
-                operacional" inteira: mesma contagem (`needsAttentionCount`
-                = Crítico + Atenção, resolveOperationPriorityGroup) e mesmo
-                destino (`operationHref`), sem precisar de uma faixa própria
-                pra uma única linha de informação. */}
-            <OperationMetric
-              label="Contas ativas"
-              value={String(operationIndicators.activeClientsCount)}
-              linkHref={operationHref}
-              linkLabel={`${needsAttentionCount} conta${needsAttentionCount !== 1 ? "s" : ""} precisa${needsAttentionCount !== 1 ? "m" : ""} de atenção →`}
-            />
-          </div>
-
-          <div className="mt-5 border-t border-overview-border pt-3">
-            <SectionHeader
-              title={
-                platformFilter === "consolidado"
-                  ? "Ritmo de investimento"
-                  : `Ritmo de investimento · ${PLATFORM_LABEL[platformFilter]}`
-              }
-            />
-
-            {platformFilter === "consolidado" ? (
-              financial.planned > 0 ? (
-                <>
-                  <div className="mt-2">
-                    <ProgressBar
-                      planned={financial.planned}
-                      actual={financial.actualForPacing}
-                      expectedToDate={financial.expectedToDate}
-                      monthTemporalStatus={monthTemporalStatus}
-                    />
-                  </div>
-
-                  {/* Etapa "Redução de Ruído — Visão Geral da Agência": só a
-                      classificação textual (`investmentStatusPhrase`, ex.:
-                      "Dentro do ritmo esperado") — o valor absoluto de
-                      diferença ("R$X de diferença") saiu, a barra + o
-                      marcador "Esperado hoje · X%" já mostram a mesma
-                      informação visualmente. Nenhum cálculo mudou
-                      (`investmentRitmoStatus`/`investmentStatusPhrase`
-                      intactos, mesma fonte de `investmentDiffTone` pra
-                      cor). */}
-                  <p
-                    className={`mt-1.5 text-[13px] font-medium ${
-                      investmentDiffTone === "danger"
-                        ? "text-overview-danger"
-                        : investmentDiffTone === "warning"
-                          ? "text-overview-warning"
-                          : "text-overview-text-secondary"
-                    }`}
-                  >
-                    {investmentStatusPhrase}
-                  </p>
-                </>
-              ) : (
-                <EmptyState title="Nenhum cliente do recorte tem planejamento mensal configurado." className="mt-3" />
-              )
-            ) : (
-              <>
-                {/* Etapa 3: fora do Consolidado só existe investimento
-                    REALIZADO por plataforma — planejado/esperado/ritmo
-                    dependem de um orçamento que ainda não é configurado por
-                    canal (ver decisão registrada no relatório da etapa). */}
-                <div className="mt-2 grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-3">
-                  <PrimaryInvestmentMetric label={`Realizado · ${PLATFORM_LABEL[platformFilter]}`} value={formatCurrency(channelActualTotal ?? 0)} />
-                </div>
-                <p className="mt-1.5 text-[13px] text-overview-text-muted">
-                  Planejado e ritmo financeiro disponíveis só no recorte Consolidado — ainda não há orçamento configurado por plataforma.
-                </p>
-              </>
-            )}
+            {/* "Contas ativas" volta a ser um número simples (sem link
+                embutido) — "quantas precisam de atenção" agora é a própria
+                seção "Atenção" abaixo, nunca repetido aqui também. */}
+            <OperationMetric label="Contas ativas" value={String(operationIndicators.activeClientsCount)} />
           </div>
         </div>
 
-        {/* Módulo "Pendências": lembretes rápidos e leves (agência/cliente),
-            deliberadamente fora de "Desempenho da agência" acima — como
-            envolve ações (adicionar/concluir/editar), não pode ficar
-            misturado com indicadores read-only. Nunca mistura com
-            tarefas/sprints: ver `src/lib/reminders.ts`. */}
-        <div className="mt-3">
+        {/* "ATENÇÃO" — Etapa "Reformulação da Home": responde "quais contas
+            merecem que eu olhe agora?" sem duplicar a Operação. A Operação
+            (Etapa "Operação por Canal") deixou de ter uma leitura
+            consolidada — ela avalia CPA sempre de UM canal (Meta OU
+            Google), porque consolidar CPA de canais com saúde diferente
+            seria enganoso (`resolveOperationCpaPriorityGroup`,
+            `lib/operation-triage.ts`). Por isso esta seção NUNCA usa esse
+            balde — ela reaproveita o motor de saúde geral e consolidado
+            (`evaluateAccountHealth`, 5 dimensões — investimento/resultado/
+            custo/revisão/qualidade de dados, `lib/account-health-engine.ts`)
+            via `resolveOperationPriorityGroup`, a MESMA fonte que já decide
+            `needsAttentionCount` (o "X contas precisam de atenção" que
+            existia embutido no KPI "Contas ativas" antes desta etapa) —
+            nenhum motor novo, nenhuma segunda definição de "atenção
+            consolidada". `attentionClients` já vem ordenado por severidade
+            (`sortClientOperationalStates`, dentro do loader) — só corta pros
+            5 primeiros. `evaluation.primaryReason` é a mesma frase que a
+            Operação/página do cliente já mostram — nunca um texto novo, e
+            só aparece a dimensão que de fato decidiu a severidade (nunca
+            investimento/resultado/revisão quando não foram o motivo). */}
+        <div className="mt-6 border-t border-overview-border pt-4">
+          <SectionHeader
+            title="Atenção"
+            action={
+              <Link
+                href={operationHref}
+                className="shrink-0 text-[13px] text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary"
+              >
+                Ver Operação →
+              </Link>
+            }
+          />
+          {attentionClients.length > 0 ? (
+            <>
+              <p className="mt-2 text-[13px] text-overview-text-secondary">
+                {needsAttentionCount} conta{needsAttentionCount !== 1 ? "s" : ""} precisa{needsAttentionCount !== 1 ? "m" : ""} de atenção
+              </p>
+              {/* A Operação (link acima) é sempre recortada por canal — esta
+                  lista nunca é, porque o motor que ela reaproveita não tem
+                  dimensão por canal. Aviso só quando pode confundir (filtro
+                  de plataforma ativo), nunca por padrão. */}
+              {platformFilter !== "consolidado" && (
+                <p className="mt-0.5 text-[12px] text-overview-text-muted">
+                  Sempre considera a conta inteira (Meta + Google) — não filtra por {PLATFORM_LABEL[platformFilter]}.
+                </p>
+              )}
+              <div className="mt-2.5 flex flex-col divide-y divide-overview-border">
+                {attentionClients.map((state) => (
+                  <div key={state.clientId} className="flex items-baseline justify-between gap-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-overview-text-primary">{state.clientName}</p>
+                      <p className="mt-0.5 truncate text-[13px] text-overview-text-secondary">{state.evaluation.primaryReason}</p>
+                    </div>
+                    {state.managerName && <span className="shrink-0 text-[12px] text-overview-text-muted">{state.managerName}</span>}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="mt-2 text-[13px] text-overview-text-secondary">Nenhuma conta precisa de atenção agora.</p>
+          )}
+        </div>
+
+        {/* "ACONTECEU RECENTEMENTE" — Etapa "Reformulação da Home": resumo
+            executivo de atividade recente, nunca a Timeline inteira nem um
+            motor de eventos novo. Combina `fetchAchievements` (Conquistas)
+            e `fetchAgencyTimeline` (Timeline Geral, já curada — ver
+            `lib/agency-timeline.ts`) — ambas leituras de `operational_events`
+            já existentes. Conquistas sempre primeiro (pedido explícito),
+            eventos preenchem o resto; ver `recentActivity` acima pra
+            limitação documentada (só conquistas de escopo Cliente). */}
+        <div className="mt-6 border-t border-overview-border pt-4">
+          <SectionHeader
+            title="Aconteceu recentemente"
+            action={
+              <Link
+                href="/timeline"
+                className="shrink-0 text-[13px] text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary"
+              >
+                Ver Timeline →
+              </Link>
+            }
+          />
+          {recentActivity.length > 0 ? (
+            <div className="mt-2.5 flex flex-col divide-y divide-overview-border">
+              {recentActivity.map((item) => (
+                <div key={item.id} className="py-2">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="min-w-0 truncate text-sm font-medium text-overview-text-primary">{item.subject}</p>
+                    <span className="shrink-0 text-[12px] text-overview-text-muted">{formatRelativeShortDateTime(item.occurredAt, now)}</span>
+                  </div>
+                  <p className="mt-0.5 truncate text-[13px] text-overview-text-secondary">{item.text}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[13px] text-overview-text-secondary">Nenhuma atividade recente para mostrar.</p>
+          )}
+        </div>
+
+        {/* Módulo "Pendências": lembretes rápidos e leves (agência/cliente).
+            Etapa "Reformulação da Home": mesmo `border-t` das seções acima
+            (era um card com borda própria) — não deve dominar a página
+            quando vazio, nem quando tem só 1-2 itens. Lista sempre capada
+            (`REMINDERS_HOME_VISIBLE_LIMIT`, dentro de `RemindersPanel`),
+            "Ver todas" expande via `pendenciaExpandir` (mesmo padrão de
+            `pendenciasConcluidas`). Nenhuma funcionalidade removida:
+            adicionar/editar/concluir/filtrar continuam intactos. */}
+        <div className="mt-6 border-t border-overview-border pt-4">
           <RemindersPanel
             reminders={remindersFiltered}
             todayStr={todayStr}
@@ -1020,6 +1089,9 @@ export default async function Home({
             addHref={addReminderHref}
             completedHref={openCompletedRemindersHref}
             buildEditHref={buildReminderEditHref}
+            expanded={pendenciaExpandirFilter}
+            expandHref={expandRemindersHref}
+            collapseHref={collapseRemindersHref}
           />
         </div>
 
