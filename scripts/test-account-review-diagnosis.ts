@@ -382,15 +382,29 @@ console.log("\n8 — Filtro por Tipo (URL) e combinação com Gestor/Cliente\n")
   );
 
   const timelineCode = stripComments(loadSource("src", "lib", "agency-timeline.ts"));
-  ok("filtro de gestor vira .eq na própria query (nunca filtro em memória)", /filters\.actorId\) query = query\.eq\("actor_team_member_id", filters\.actorId\)/.test(timelineCode));
-  ok("filtro de cliente vira .eq na própria query", /filters\.clientId\) query = query\.eq\("client_id", filters\.clientId\)/.test(timelineCode));
+  // Etapa "Timeline 2.0 — Revisão de Acoplamento": a query real migrou pra
+  // fetchAgencyEvents (núcleo canônico) — mesmo .eq direto de sempre, só o
+  // nome do parâmetro deixou de ter o prefixo "filters." (fetchAgencyTimeline
+  // continua repassando filters.actorId/filters.clientId pra ela, ver
+  // "casca fina" abaixo).
+  ok("filtro de gestor vira .eq na própria query (nunca filtro em memória)", /actorId\) query = query\.eq\("actor_team_member_id", actorId\)/.test(timelineCode));
+  ok("filtro de cliente vira .eq na própria query", /clientId\) query = query\.eq\("client_id", clientId\)/.test(timelineCode));
+  ok(
+    "fetchAgencyTimeline (casca fina de /timeline) repassa filters.actorId/filters.clientId pra fetchAgencyEvents sem reimplementar o filtro",
+    /actorId: filters\.actorId,\s*\n\s*clientId: filters\.clientId,/.test(timelineCode),
+  );
   ok(
     // Etapa "Timeline 2.0": eventTypesForFilter (Tipo) foi combinada com o
-    // novo filtro de Família (Todos/Ações/Performance) num único resolvedor
-    // (eventTypesForFilters) — mesmo princípio de sempre (um só .in na
-    // MESMA query), agora com uma dimensão extra.
-    "filtro de tipo+família vira .in na MESMA query (eventTypesForFilters), combinando livremente com gestor/cliente — nunca filtros separados incompatíveis",
-    /\.in\("event_type", eventTypesForFilters\(filters\.family, filters\.type\)\)/.test(timelineCode),
+    // filtro de Família (Todos/Ações/Performance) num único resolvedor
+    // (eventTypesForFilters) — resolvido em fetchAgencyTimeline (a casca
+    // fina de /timeline), repassado como eventTypes já pronto pra
+    // fetchAgencyEvents (núcleo canônico, que faz o .in real).
+    "fetchAgencyTimeline resolve tipo+família via eventTypesForFilters e repassa como eventTypes pra fetchAgencyEvents",
+    /eventTypes: eventTypesForFilters\(filters\.family, filters\.type\)/.test(timelineCode),
+  );
+  ok(
+    "fetchAgencyEvents (núcleo canônico) faz o .in real com os eventTypes já resolvidos — nunca decide sozinho quais tipos existem",
+    /\.in\("event_type", eventTypes\)/.test(timelineCode),
   );
 }
 

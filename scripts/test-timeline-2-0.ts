@@ -86,8 +86,12 @@ console.log("\n3 — Filtros Todos / Ações / Performance funcionam\n");
 
 console.log("\n4 — Filtro por Gestor e Cliente continuam funcionando junto da Família\n");
 {
-  ok("filtro de gestor continua .eq direto na query (inalterado)", /filters\.actorId\) query = query\.eq\("actor_team_member_id", filters\.actorId\)/.test(agencyTimelineSource));
-  ok("filtro de cliente continua .eq direto na query (inalterado)", /filters\.clientId\) query = query\.eq\("client_id", filters\.clientId\)/.test(agencyTimelineSource));
+  ok("filtro de gestor continua .eq direto na query (agora em fetchAgencyEvents, o núcleo canônico)", /actorId\) query = query\.eq\("actor_team_member_id", actorId\)/.test(agencyTimelineSource));
+  ok("filtro de cliente continua .eq direto na query", /clientId\) query = query\.eq\("client_id", clientId\)/.test(agencyTimelineSource));
+  ok(
+    "fetchAgencyTimeline (casca fina de /timeline) repassa filters.actorId/filters.clientId pra fetchAgencyEvents sem reimplementar o filtro",
+    /actorId: filters\.actorId,\s*\n\s*clientId: filters\.clientId,/.test(agencyTimelineSource),
+  );
   ok("AgencyTimelineFilters ganhou 'family' como um campo A MAIS (nunca substituiu actorId/clientId/type)", /actorId: string \| null;[\s\S]{0,120}clientId: string \| null;[\s\S]{0,300}family: AgencyTimelineFamilyFilter;/.test(agencyTimelineSource));
 }
 
@@ -160,10 +164,39 @@ console.log("\n9 — Múltiplas intervenções: nenhuma triangulação automáti
   );
 }
 
-console.log("\n10 — Home não cria segundo motor de eventos\n");
+console.log("\n10 — Home não cria segundo motor de eventos, nem se acopla ao loader/vocabulário da tela Timeline\n");
 {
   ok("Home não importa mais fetchAchievements", !/from "@\/lib\/achievements-data"/.test(homePageSource));
-  ok("Home consome a MESMA fetchAgencyTimeline de /timeline, nenhuma query própria a operational_events", /from "@\/lib\/agency-timeline"/.test(homePageSource) && !/\.from\("operational_events"\)/.test(homePageSource));
+  ok("Home importa fetchRecentAgencyEvents (casca própria), nenhuma query própria a operational_events", /import \{ fetchRecentAgencyEvents \} from "@\/lib\/agency-timeline"/.test(homePageSource) && !/\.from\("operational_events"\)/.test(homePageSource));
+  ok("Home NUNCA importa fetchAgencyTimeline nem o vocabulário de filtro da tela Timeline (AgencyTimelineType/AgencyTimelineFamilyFilter)", !/fetchAgencyTimeline/.test(homePageSource) && !/AgencyTimelineType|AgencyTimelineFamilyFilter/.test(homePageSource));
+}
+
+console.log("\n10b — Auditoria de acoplamento: fetchAgencyTimeline TINHA decisões de superfície; extração corrigiu isso\n");
+{
+  ok(
+    "existe um núcleo canônico próprio (fetchAgencyEvents), independente de paginação/filtro de tela",
+    /export async function fetchAgencyEvents/.test(agencyTimelineSource),
+  );
+  ok(
+    "o núcleo canônico recebe eventTypes JÁ RESOLVIDOS (nunca decide sozinho o vocabulário Tipo/Família da tela Timeline)",
+    /eventTypes: OperationalEventType\[\];/.test(agencyTimelineSource) && /const \{ eventTypes, actorId, clientId, limit, offset = 0 \} = eventQuery;/.test(agencyTimelineSource),
+  );
+  ok(
+    "o núcleo canônico não sabe o que é 'página' — devolve 'truncated' (fato), nunca 'hasMore'/'page'/'pageSize' (decisão de UI)",
+    /truncated: boolean;/.test(agencyTimelineSource) && !/interface AgencyEventPage[\s\S]{0,120}(page|pageSize)/.test(agencyTimelineSource),
+  );
+  ok(
+    "fetchAgencyTimeline (Timeline) É a casca que introduz page/pageSize — só ela traduz isso pra offset/limit",
+    /export async function fetchAgencyTimeline\([\s\S]{0,200}page = 0,\s*\n\s*pageSize = AGENCY_TIMELINE_PAGE_SIZE,/.test(agencyTimelineSource),
+  );
+  ok(
+    "fetchRecentAgencyEvents (Home) NUNCA recebe page/pageSize/type/family — só limit",
+    /export async function fetchRecentAgencyEvents\(\s*\n\s*supabase: SupabaseClient<Database>,\s*\n\s*organizationId: string,\s*\n\s*limit: number,\s*\n\s*\)/.test(agencyTimelineSource),
+  );
+  ok(
+    "as duas cascas (Timeline e Home) chamam a MESMA fetchAgencyEvents — nenhuma query duplicada, nenhuma segunda classificação acao/performance",
+    (agencyTimelineSource.match(/await fetchAgencyEvents\(/g) ?? []).length === 2,
+  );
 }
 
 console.log("\n11 — Conquistas: motor/cron intocados; só a navegação mudou\n");

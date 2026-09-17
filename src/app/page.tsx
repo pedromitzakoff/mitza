@@ -41,7 +41,7 @@ import { computeReminderCounts, filterReminders, sortReminders, type ReminderFil
 import { RemindersPanel } from "./reminders-panel";
 import { RemindersCompletedDrawer } from "./reminders-completed-drawer";
 import { ReminderFormDrawer } from "./reminder-form-drawer";
-import { fetchAgencyTimeline } from "@/lib/agency-timeline";
+import { fetchRecentAgencyEvents } from "@/lib/agency-timeline";
 import { Button, IconButton } from "@/components/workspace/button";
 import { SectionHeader } from "@/components/workspace/section-header";
 import { SandRail } from "@/components/workspace/sand-rail";
@@ -163,7 +163,7 @@ export default async function Home({
     ],
     clientOperationalStates,
     openReminders,
-    { rows: recentAgencyEvents },
+    recentAgencyEvents,
     metaOperationStates,
     googleOperationStates,
   ] = await Promise.all([
@@ -296,16 +296,18 @@ export default async function Home({
     ]),
     loadClientOperationalStates(supabase, monthRange.firstDay),
     getOpenReminders(supabase),
-    // Etapa "Timeline 2.0": "Aconteceu recentemente" passa a consumir uma
-    // ÚNICA leitura — a MESMA fonte canônica de `/timeline`
-    // (`fetchAgencyTimeline`, `family: "todos"`), que desde esta etapa já
-    // inclui as conquistas (`achievement_unlocked`) intercaladas
-    // cronologicamente com as ações. Antes disso, a Home fazia DUAS
-    // consultas (`fetchAchievements` + `fetchAgencyTimeline`) e concatenava
-    // "conquistas sempre primeiro" — com a Timeline unificada, manter as
-    // duas consultas duplicaria toda conquista de escopo Cliente nesta
-    // lista. Nenhum motor de evento novo, nenhuma tabela nova.
-    fetchAgencyTimeline(supabase, profile.organizationId, { actorId: null, clientId: null, type: "todos", family: "todos" }, 0, 6),
+    // Etapa "Timeline 2.0 — Revisão de Acoplamento": "Aconteceu recentemente"
+    // consome `fetchRecentAgencyEvents` (`lib/agency-timeline.ts`) — uma
+    // casca fina sobre o MESMO núcleo canônico que `/timeline` usa
+    // (`fetchAgencyEvents`), mas SEM importar o vocabulário de filtro da
+    // tela Timeline (tipo/família/paginação) nem herdar decisões de UI que
+    // não fazem sentido pra um resumo executivo. A Home nunca soube o que é
+    // "family: todos" — só pede "os últimos 6 acontecimentos", ponto.
+    // Nenhum motor de evento novo, nenhuma tabela nova, nenhuma query
+    // duplicada — as conquistas (`achievement_unlocked`) já vêm intercaladas
+    // cronologicamente porque a classificação `acao`/`performance` vive
+    // uma única vez, no núcleo compartilhado.
+    fetchRecentAgencyEvents(supabase, profile.organizationId, 6),
     // Etapa "Correção da Home — Atenção por canal": chamada DIRETA da MESMA
     // pipeline canônica da Operação (`lib/operation-channel-state-data.ts`,
     // sem wrapper novo) — uma vez por canal, `goal: "todos"` (mesma
@@ -842,13 +844,15 @@ export default async function Home({
   const showCompletedReminders = params.pendenciasConcluidas === "1";
   const completedReminders = showCompletedReminders ? await getCompletedReminders(supabase) : [];
 
-  // Etapa "Timeline 2.0": "Aconteceu recentemente" é um RESUMO da MESMA
-  // fonte canônica de `/timeline` (`fetchAgencyTimeline`, já buscada acima
-  // com `family: "todos"` e limite 6) — nenhum motor de relevância próprio,
-  // nenhuma segunda leitura. Conquistas (`achievement_unlocked`) já vêm
-  // intercaladas cronologicamente no resultado (ver `lib/agency-timeline.ts`),
-  // então a Home nunca mais precisa decidir "conquista primeiro ou evento
-  // primeiro" — é a mesma ordem que `/timeline` mostraria.
+  // Etapa "Timeline 2.0 — Revisão de Acoplamento": "Aconteceu recentemente"
+  // é um RESUMO do MESMO núcleo canônico de `/timeline`
+  // (`fetchRecentAgencyEvents`, já buscado acima com limite 6) — nunca o
+  // loader/vocabulário de filtro da própria tela Timeline, nenhum motor de
+  // relevância próprio, nenhuma segunda leitura. Conquistas
+  // (`achievement_unlocked`) já vêm intercaladas cronologicamente no
+  // resultado (a classificação `acao`/`performance` vive uma única vez, em
+  // `lib/agency-timeline.ts#fetchAgencyEvents`), então a Home nunca mais
+  // precisa decidir "conquista primeiro ou evento primeiro".
   interface RecentActivityItem {
     id: string;
     subject: string;
@@ -1038,12 +1042,13 @@ export default async function Home({
           </div>
         </div>
 
-        {/* "ACONTECEU RECENTEMENTE" — Etapa "Timeline 2.0": resumo executivo
-            (top 6) da MESMA fonte canônica de `/timeline`
-            (`fetchAgencyTimeline`, `family: "todos"`) — nunca a Timeline
-            inteira, nunca um segundo motor de eventos. Conquistas
-            (`achievement_unlocked`) já vêm intercaladas cronologicamente
-            dentro desse resultado — ver `recentActivity` acima. */}
+        {/* "ACONTECEU RECENTEMENTE" — Etapa "Timeline 2.0 — Revisão de
+            Acoplamento": resumo executivo (top 6) do MESMO núcleo canônico
+            de `/timeline` (`fetchRecentAgencyEvents`, nunca o loader
+            específico da tela Timeline) — nunca a Timeline inteira, nunca
+            um segundo motor de eventos. Conquistas (`achievement_unlocked`)
+            já vêm intercaladas cronologicamente dentro desse resultado —
+            ver `recentActivity` acima. */}
         <div className="mt-6 border-t border-overview-border pt-4">
           <SectionHeader
             title="Aconteceu recentemente"

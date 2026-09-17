@@ -267,27 +267,34 @@ console.log("\n6 — Ordenação: selectAccountsNeedingAttention só filtra + co
 
 console.log('\n7 — "Aconteceu recentemente" nunca cria um motor de eventos novo\n');
 {
-  // Etapa "Timeline 2.0": a Home deixou de fazer DUAS leituras
-  // (fetchAchievements + fetchAgencyTimeline) — agora consome só a MESMA
-  // fonte canônica de `/timeline` (fetchAgencyTimeline, family: "todos"),
-  // que já inclui achievement_unlocked intercalado (ver lib/agency-timeline.ts).
-  // Manter as duas leituras duplicaria toda conquista de escopo Cliente.
+  // Etapa "Timeline 2.0 — Revisão de Acoplamento": a Home deixou de
+  // depender do loader/vocabulário de filtro específico da tela Timeline
+  // (fetchAgencyTimeline, type/family) — agora chama fetchRecentAgencyEvents,
+  // uma casca fina própria sobre o MESMO núcleo canônico
+  // (fetchAgencyEvents, lib/agency-timeline.ts), que já classifica
+  // achievement_unlocked como "performance" intercalado. Nenhuma segunda
+  // leitura, nenhum motor novo, nenhum acoplamento ao filtro de Tipo/Família
+  // que a Home nem expõe na UI.
   ok("NÃO importa mais fetchAchievements (Timeline 2.0 unificou a fonte)", !/from "@\/lib\/achievements-data"/.test(homePageSource));
-  ok("importa fetchAgencyTimeline da Timeline Geral já existente (agora unificada)", /import \{ fetchAgencyTimeline \} from "@\/lib\/agency-timeline"/.test(homePageSource));
+  ok(
+    "importa fetchRecentAgencyEvents (casca própria da Home, nunca o loader/vocabulário de filtro da tela Timeline)",
+    /import \{ fetchRecentAgencyEvents \} from "@\/lib\/agency-timeline"/.test(homePageSource),
+  );
+  ok("NÃO importa fetchAgencyTimeline (esse é específico da tela /timeline — paginação, tipo, família)", !/import \{ fetchAgencyTimeline \}/.test(homePageSource));
   ok("nenhuma nova constante de OperationalEventType/tabela é definida em page.tsx", !/OperationalEventType\.\w+\s*=/.test(homePageSource) && !/from\("operational_events"\)/.test(homePageSource));
   ok(
-    'chama fetchAgencyTimeline com family: "todos" (mesma família default da Timeline, nunca um recorte próprio da Home)',
-    /fetchAgencyTimeline\(supabase, profile\.organizationId, \{ actorId: null, clientId: null, type: "todos", family: "todos" \}, 0, 6\)/.test(homePageSource),
+    "chama fetchRecentAgencyEvents só com limite 6 — nunca precisa saber o que é 'type'/'family'/página",
+    /fetchRecentAgencyEvents\(supabase, profile\.organizationId, 6\)/.test(homePageSource),
   );
 }
 
 console.log("\n8 — Limite de eventos (6), sem segunda composição/sort próprio\n");
 {
   ok(
-    "recentActivity é um .map DIRETO sobre o resultado de fetchAgencyTimeline (nunca uma concatenação de duas listas nem um sort por peso/score)",
+    "recentActivity é um .map DIRETO sobre o resultado de fetchRecentAgencyEvents (nunca uma concatenação de duas listas nem um sort por peso/score)",
     /const recentActivity: RecentActivityItem\[\] = recentAgencyEvents\.map\(/.test(homePageSource),
   );
-  ok("busca já vem com limite 6 (nenhuma query pesada, nenhum .slice adicional escondendo um limite diferente)", /"todos", family: "todos" \}, 0, 6\)/.test(homePageSource));
+  ok("busca já vem com limite 6 (nenhuma query pesada, nenhum .slice adicional escondendo um limite diferente)", /fetchRecentAgencyEvents\(supabase, profile\.organizationId, 6\)/.test(homePageSource));
 }
 
 console.log("\n9 — Pendências continua funcional: mesmas ações/props preservadas em RemindersPanel\n");

@@ -218,7 +218,7 @@ export interface AgencyTimelineFilters {
  * `client_reports`) — confundiria os dois caminhos que a própria auditoria
  * identificou como paralelos. `reuniao`/`entrega_criativo` não entram neste
  * mapa de propósito: esse `task_completed` é removido antes de chegar aqui
- * (ver dedupe em `fetchAgencyTimeline`) porque o evento específico
+ * (ver dedupe em `fetchAgencyEvents`) porque o evento específico
  * (`meeting_completed`/`creative_delivery_completed`) já representa a mesma
  * conclusão — mostrar os dois duplicaria a mesma ação. `outro` (e qualquer
  * tipo ausente/desconhecido, ex. evento histórico) cai no rótulo genérico de
@@ -303,22 +303,58 @@ export async function fetchAgencyTimelineEventById(
   };
 }
 
-const AGENCY_TIMELINE_PAGE_SIZE = 20;
+/**
+ * Etapa "Timeline 2.0 — Revisão de Acoplamento": auditoria pedida sobre se
+ * `fetchAgencyTimeline` já era uma camada de domínio genérica ou se
+ * carregava decisões específicas da SUPERFÍCIE `/timeline`. Resposta:
+ * carregava — `page`/`pageSize`/`hasMore` são paginação de tela (Home nunca
+ * pagina), e `AgencyTimelineFilters.type`/`.family` são literalmente o
+ * vocabulário do filtro da própria página (Todos/Otimizações/Reports/Outros
+ * × Todos/Ações/Performance) — forçar a Home a importar esse vocabulário só
+ * pra sempre passar `"todos"` acopla um resumo executivo ao filtro de uma
+ * tela que ele nem usa.
+ *
+ * `fetchAgencyEvents` (abaixo) é a camada extraída — MENOR possível: recebe
+ * `eventTypes` já resolvidos (quem decide QUAIS tipos entram é sempre quem
+ * chama — Timeline resolve via `eventTypesForFilters`, Home resolve pra
+ * "todos os tipos, sem filtro"), faz a MESMA query única, a MESMA
+ * deduplicação de `task_completed`, e a MESMA normalização/classificação
+ * `acao`/`performance` (linha 371 abaixo) — nunca duplicada, nunca uma
+ * segunda definição. `fetchAgencyTimeline` (a assinatura que `/timeline` já
+ * usa, inalterada) e `fetchRecentAgencyEvents` (novo, só pra Home) são as
+ * DUAS únicas cascas finas sobre essa mesma função — nenhum motor novo,
+ * nenhuma query duplicada.
+ */
+export interface AgencyEventQuery {
+  eventTypes: OperationalEventType[];
+  /** `null`/ausente = todos os gestores/clientes — mesmo critério de sempre. */
+  actorId?: string | null;
+  clientId?: string | null;
+  limit: number;
+  offset?: number;
+}
 
-/** Página da Timeline Geral, mais recente primeiro — mesmo padrão de
- * paginação (busca 1 a mais, corta, usa a sobra pra saber se há próxima
- * página) já usado em `fetchClientOperationalHistory`/`fetchTeamMemberTimeline`,
- * nenhum padrão novo. Filtros (gestor/cliente) viram `.eq()` na própria
- * query — nunca carrega tudo e filtra em memória. */
-export async function fetchAgencyTimeline(
+export interface AgencyEventPage {
+  rows: AgencyTimelineRow[];
+  /** `true` = existem mais linhas além de `limit` neste `offset` (busca
+   * `limit + 1`, nunca decide o que fazer com essa informação — isso é
+   * sempre responsabilidade de quem chama: `/timeline` mostra "Ver mais
+   * antigos", a Home simplesmente ignora). */
+  truncated: boolean;
+}
+
+/** Núcleo canônico — `operational_events` → linhas normalizadas
+ * (`AgencyTimelineRow`), mais recente primeiro. Mesmo padrão de paginação
+ * (busca 1 a mais, corta, usa a sobra pra saber se há mais) já usado em
+ * `fetchClientOperationalHistory`/`fetchTeamMemberTimeline`, nenhum padrão
+ * novo. Filtros (tipos/gestor/cliente) sempre viram `.eq()`/`.in()` na
+ * própria query — nunca carrega tudo e filtra em memória. */
+export async function fetchAgencyEvents(
   supabase: SupabaseClient<Database>,
   organizationId: string,
-  filters: AgencyTimelineFilters,
-  page = 0,
-  pageSize = AGENCY_TIMELINE_PAGE_SIZE,
-): Promise<{ rows: AgencyTimelineRow[]; hasMore: boolean }> {
-  const from = page * pageSize;
-  const to = from + pageSize;
+  eventQuery: AgencyEventQuery,
+): Promise<AgencyEventPage> {
+  const { eventTypes, actorId, clientId, limit, offset = 0 } = eventQuery;
 
   let query = supabase
     .from("operational_events")
@@ -326,17 +362,17 @@ export async function fetchAgencyTimeline(
       "id, event_type, occurred_at, entity_id, correlation_id, metadata, actor:team_members(name), client:clients(id, name)",
     )
     .eq("organization_id", organizationId)
-    .in("event_type", eventTypesForFilters(filters.family, filters.type))
+    .in("event_type", eventTypes)
     .order("occurred_at", { ascending: false })
-    .range(from, to);
+    .range(offset, offset + limit);
 
-  if (filters.actorId) query = query.eq("actor_team_member_id", filters.actorId);
-  if (filters.clientId) query = query.eq("client_id", filters.clientId);
+  if (actorId) query = query.eq("actor_team_member_id", actorId);
+  if (clientId) query = query.eq("client_id", clientId);
 
   const { data } = await query;
   const rawRows = data ?? [];
-  const hasMore = rawRows.length > pageSize;
-  const pageRows = rawRows.slice(0, pageSize);
+  const truncated = rawRows.length > limit;
+  const pageRows = rawRows.slice(0, limit);
 
   // Reunião/entrega de criativo concluídas emitem `task_completed` +
   // `meeting_completed`/`creative_delivery_completed` correlacionados na
@@ -364,7 +400,7 @@ export async function fetchAgencyTimeline(
   const optimizationActionsByReviewId = await fetchOptimizationActionsByReviewId(supabase, reviewIds);
 
   return {
-    hasMore,
+    truncated,
     rows: visible.map((row) => {
       const eventType = row.event_type as OperationalEventType;
       const metadata = (row.metadata ?? {}) as Record<string, unknown>;
@@ -411,4 +447,49 @@ export async function fetchAgencyTimeline(
       return { ...base, label: OPERATIONAL_EVENT_TYPE_LABEL[eventType], detail: null };
     }),
   };
+}
+
+const AGENCY_TIMELINE_PAGE_SIZE = 20;
+
+/** Casca fina de `/timeline` sobre `fetchAgencyEvents` — MESMA assinatura
+ * externa de antes da extração (nenhuma mudança em `app/timeline/page.tsx`):
+ * resolve o vocabulário de filtro da PRÓPRIA tela (`type`/`family` →
+ * `eventTypesForFilters`) e traduz `page`/`pageSize` (conceito de paginação
+ * de tela) pra `offset`/`limit` (conceito de query). Só quem decide "isso é
+ * uma página" continua sendo a Timeline — a função canônica não sabe o que
+ * é uma página. */
+export async function fetchAgencyTimeline(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  filters: AgencyTimelineFilters,
+  page = 0,
+  pageSize = AGENCY_TIMELINE_PAGE_SIZE,
+): Promise<{ rows: AgencyTimelineRow[]; hasMore: boolean }> {
+  const { rows, truncated } = await fetchAgencyEvents(supabase, organizationId, {
+    eventTypes: eventTypesForFilters(filters.family, filters.type),
+    actorId: filters.actorId,
+    clientId: filters.clientId,
+    limit: pageSize,
+    offset: page * pageSize,
+  });
+  return { rows, hasMore: truncated };
+}
+
+/** Casca fina pra Home ("Aconteceu recentemente") sobre a MESMA
+ * `fetchAgencyEvents` — nunca importa o vocabulário de filtro da Timeline
+ * (`AgencyTimelineType`/`AgencyTimelineFamilyFilter`), nunca pagina (a Home
+ * não tem "Ver mais antigos"): só "os últimos N acontecimentos, sem
+ * recorte". `eventTypesForFilters("todos", "todos")` já é exatamente "todos
+ * os tipos de ação + performance", a mesma lista que a Timeline usa quando
+ * nenhum filtro está ativo — reaproveitada, nunca duplicada. */
+export async function fetchRecentAgencyEvents(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  limit: number,
+): Promise<AgencyTimelineRow[]> {
+  const { rows } = await fetchAgencyEvents(supabase, organizationId, {
+    eventTypes: eventTypesForFilters("todos", "todos"),
+    limit,
+  });
+  return rows;
 }
