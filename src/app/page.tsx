@@ -27,7 +27,9 @@ import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
 import { isReviewOverdue } from "@/lib/account-health-engine";
 import { type OverviewPriorityFilter } from "./overview-client-view";
 import { getActiveDiagnosticFilters } from "@/lib/metric-diagnostics";
-import { resolveOperationPriorityGroup, type OperationPriorityGroup } from "@/lib/operation-triage";
+import { selectAccountsNeedingAttention, type AttentionSummaryClient } from "@/lib/operation-triage";
+import { loadOperationChannelStates } from "@/lib/operation-channel-state-data";
+import type { ClientOperationalState } from "@/lib/client-operational-state";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
@@ -164,6 +166,8 @@ export default async function Home({
     openReminders,
     { rows: recentAchievements },
     { rows: recentAgencyEvents },
+    metaOperationStates,
+    googleOperationStates,
   ] = await Promise.all([
     Promise.all([
     requireQuery(
@@ -304,6 +308,14 @@ export default async function Home({
     // feed combinado, nunca a lista inteira.
     fetchAchievements(supabase, profile.organizationId, { scope: "client" }, 0, 3),
     fetchAgencyTimeline(supabase, profile.organizationId, { actorId: null, clientId: null, type: "todos" }, 0, 6),
+    // Etapa "Correção da Home — Atenção por canal": chamada DIRETA da MESMA
+    // pipeline canônica da Operação (`lib/operation-channel-state-data.ts`,
+    // sem wrapper novo) — uma vez por canal, `goal: "todos"` (mesma
+    // população default da Operação, sem recorte por objetivo). Nenhuma
+    // query/regra duplicada: é literalmente a função que `/operation`
+    // chama, só que também aqui.
+    loadOperationChannelStates(supabase, monthRange.firstDay, "meta", "todos"),
+    loadOperationChannelStates(supabase, monthRange.firstDay, "google", "todos"),
   ]);
   perfLog("visão geral bloco 1 (12 queries + ClientOperationalState + Pendências + Atividade recente)", __perfBlock1Start);
 
@@ -697,58 +709,80 @@ export default async function Home({
       ? computeHealthResultsSummary(indicatorStates)
       : computeAgencyResultsByChannel(indicatorCardsForResults, platformFilter);
 
-  // Etapa "Saúde da carteira" (auditoria da Visão Geral): "como está minha
-  // carteira agora", um número por balde — mesmo agrupamento de 4 baldes já
-  // construído e testado pra Operação (`resolveOperationPriorityGroup`,
-  // `lib/operation-triage.ts`), nunca um score/threshold novo aqui. Mesmo
-  // recorte de mês/carteira/cliente de `agencyResults`/`operationIndicators`
-  // (`indicatorStates`, nunca os filtros de recorte de `cards`) — é um
-  // retrato macro da carteira, não uma lista filtrável.
-  const portfolioHealthCounts: Record<OperationPriorityGroup, number> = {
-    critico: 0,
-    atencao: 0,
-    saudavel: 0,
-    sem_dados: 0,
-  };
-  for (const state of indicatorStates) {
-    portfolioHealthCounts[resolveOperationPriorityGroup(state.evaluation)]++;
-  }
-  // Operação não filtra por balde via URL (o agrupamento lá é só ordenação/
-  // divisor visual, ver `operation-triage-view.tsx`) — o link leva pro mês
-  // certo, onde Crítico já aparece primeiro na fila, nunca um filtro
-  // fabricado que a tela de destino não suporta.
-  const operationHref = `/operation?month=${monthRange.firstDay}`;
-  // Etapa "Revisão da Visão Geral": ponte compacta pra Operação — "precisa
-  // de atenção" é Crítico + Atenção do mesmo agrupamento acima (nunca um
-  // score novo), os 2 baldes que de fato pedem uma ação; Saudável/Sem dados
-  // não entram na contagem.
-  const needsAttentionCount = portfolioHealthCounts.critico + portfolioHealthCounts.atencao;
+  // Etapa "Correção da Home — Atenção por canal": a Operação é a fonte
+  // canônica de "quais contas precisam de atenção" desde "Operação por
+  // Canal" — CPA-only, sempre recortada a UM canal (Meta OU Google, nunca
+  // consolidado: juntar CPA de canais com saúde diferente seria enganoso).
+  // "Atenção" aqui NUNCA usa o motor de saúde geral/consolidado
+  // (`evaluateAccountHealth` genérico via `resolveOperationPriorityGroup`)
+  // — essa leitura podia classificar uma conta diferente da Operação (ex.:
+  // CPA saudável, mas investimento fora do ritmo vencendo o desempate de 5
+  // dimensões), o que a tornava uma segunda definição de "atenção"
+  // divergente da tela que já é a fonte oficial. Em vez disso, reaproveita
+  // DIRETO `metaOperationStates`/`googleOperationStates` — já buscados
+  // acima chamando `loadOperationChannelStates` (a MESMA pipeline de
+  // `/operation`, `lib/operation-channel-state-data.ts`, nenhuma query
+  // nova) — com `resolveOperationCpaPriorityGroup`/`describeOperationCpaReason`
+  // (`lib/operation-triage.ts`, o mesmo balde e o mesmo motivo CPA-only da
+  // Operação: `sem_dados` continua excluído de "atenção" exatamente como
+  // lá — amostra insuficiente/escopo não comparável nunca é tratado como
+  // desempenho ruim; `describeOperationCpaReason` só fala de custo/
+  // qualidade de dado, nunca investimento/resultado/revisão).
+  //
+  // Nenhum total combinado Meta+Google é exibido de propósito: um mesmo
+  // cliente pode aparecer em AMBOS os canais (crítico em Meta E em
+  // Google), então "somar contas" contaria a mesma conta duas vezes — a
+  // mesma armadilha de consolidação que esta correção existe pra evitar.
+  const ATTENTION_LIST_LIMIT_PER_CHANNEL = 3;
+  const currentTeamMemberId = profile.id;
 
-  // Etapa "Reformulação da Home — Atenção": a Operação deixou de ter uma
-  // leitura consolidada (Etapa "Operação por Canal" — ela hoje só avalia
-  // CPA por canal, Meta OU Google isolado, nunca os dois juntos, porque
-  // consolidar CPA de canais com saúde diferente seria enganoso). Por isso
-  // "Atenção" aqui NUNCA reaproveita `resolveOperationCpaPriorityGroup` (o
-  // balde da Operação) — reaproveita o motor de saúde geral e consolidado
-  // (`evaluateAccountHealth`, 5 dimensões, `client-operational-state-data.ts`),
-  // que é a MESMA fonte que já alimenta `portfolioHealthCounts`/
-  // `needsAttentionCount` acima (nenhum motor novo, nenhuma segunda
-  // definição de "atenção consolidada" inventada). `indicatorStates` já
-  // vem ordenado por severidade (`sortClientOperationalStates`, aplicado
-  // dentro de `loadClientOperationalStates`) — só filtra pros 2 baldes que
-  // já compõem `needsAttentionCount` e corta pros primeiros N, sem nenhum
-  // critério de ordenação novo. Nunca escopado por `platformFilter`: este
-  // motor não tem dimensão por canal (ver comentário de `agencyResults`
-  // acima) — a UI avisa isso explicitamente quando o filtro de plataforma
-  // não é Consolidado, em vez de fingir que "Atenção" também filtra por
-  // canal.
-  const ATTENTION_LIST_LIMIT = 5;
-  const attentionClients = indicatorStates
-    .filter((state) => {
-      const group = resolveOperationPriorityGroup(state.evaluation);
-      return group === "critico" || group === "atencao";
-    })
-    .slice(0, ATTENTION_LIST_LIMIT);
+  function scopeOperationStatesToHomeFilters(states: ClientOperationalState[]): ClientOperationalState[] {
+    let scoped = states;
+    if (managerFilter === "me") {
+      scoped = scoped.filter((state) => state.managerId === currentTeamMemberId);
+    } else if (managerFilter !== "all") {
+      scoped = scoped.filter((state) => state.managerId === managerFilter);
+    }
+    if (clientFilter) {
+      scoped = scoped.filter((state) => state.clientId === clientFilter);
+    }
+    return scoped;
+  }
+
+  interface ChannelAttentionSummary {
+    label: string;
+    /** Quantidade REAL de contas em atenção neste canal (crítico + atenção,
+     * mesmos 2 baldes que já contavam pra "precisa de atenção" antes desta
+     * correção) — sempre calculada ANTES do corte de exibição, nunca
+     * `clients.length` (que já vem cortado). Ver `AttentionSummary`,
+     * `lib/operation-triage.ts`. */
+    count: number;
+    /** Já cortado pro limite de exibição — `count` acima é quem sabe o
+     * total real. */
+    clients: AttentionSummaryClient[];
+    /** Abre a Operação já no canal correspondente — nunca o mês sem canal,
+     * que cairia no default (Meta) mesmo clicando a partir de Google. */
+    operationHref: string;
+  }
+
+  function buildChannelAttentionSummary(channel: TrafficChannel, label: string, states: ClientOperationalState[]): ChannelAttentionSummary {
+    // `selectAccountsNeedingAttention` (lib/operation-triage.ts) é a MESMA
+    // função que a Operação usa pra decidir balde/motivo — esta chamada só
+    // aplica o recorte de gestor/cliente da Home por cima, nenhuma regra
+    // de classificação própria aqui.
+    const { count, clients } = selectAccountsNeedingAttention(scopeOperationStatesToHomeFilters(states), ATTENTION_LIST_LIMIT_PER_CHANNEL);
+    return {
+      label,
+      count,
+      clients,
+      operationHref: `/operation?month=${monthRange.firstDay}&channel=${channel}`,
+    };
+  }
+
+  const channelAttentionSummaries: ChannelAttentionSummary[] = [
+    buildChannelAttentionSummary("meta", "Meta Ads", metaOperationStates),
+    buildChannelAttentionSummary("google", "Google Ads", googleOperationStates),
+  ];
 
   const financial = computeFinancialSummary(cards);
   // Etapa 3: realizado do canal selecionado, somado sobre os clientes já
@@ -971,67 +1005,51 @@ export default async function Home({
           </div>
         </div>
 
-        {/* "ATENÇÃO" — Etapa "Reformulação da Home": responde "quais contas
-            merecem que eu olhe agora?" sem duplicar a Operação. A Operação
-            (Etapa "Operação por Canal") deixou de ter uma leitura
-            consolidada — ela avalia CPA sempre de UM canal (Meta OU
-            Google), porque consolidar CPA de canais com saúde diferente
-            seria enganoso (`resolveOperationCpaPriorityGroup`,
-            `lib/operation-triage.ts`). Por isso esta seção NUNCA usa esse
-            balde — ela reaproveita o motor de saúde geral e consolidado
-            (`evaluateAccountHealth`, 5 dimensões — investimento/resultado/
-            custo/revisão/qualidade de dados, `lib/account-health-engine.ts`)
-            via `resolveOperationPriorityGroup`, a MESMA fonte que já decide
-            `needsAttentionCount` (o "X contas precisam de atenção" que
-            existia embutido no KPI "Contas ativas" antes desta etapa) —
-            nenhum motor novo, nenhuma segunda definição de "atenção
-            consolidada". `attentionClients` já vem ordenado por severidade
-            (`sortClientOperationalStates`, dentro do loader) — só corta pros
-            5 primeiros. `evaluation.primaryReason` é a mesma frase que a
-            Operação/página do cliente já mostram — nunca um texto novo, e
-            só aparece a dimensão que de fato decidiu a severidade (nunca
-            investimento/resultado/revisão quando não foram o motivo). */}
+        {/* "ATENÇÃO" — Etapa "Correção da Home — Atenção por canal": responde
+            "quais contas merecem que eu olhe agora?" sem duplicar a
+            Operação NEM divergir dela. A Operação (Etapa "Operação por
+            Canal") é a fonte canônica — CPA-only, sempre de UM canal por
+            vez (Meta OU Google, nunca consolidado: juntar CPA de canais com
+            saúde diferente seria enganoso). Por isso esta seção reaproveita
+            DIRETO `channelAttentionSummaries` (construído acima com
+            `loadOperationChannelStates` + `resolveOperationCpaPriorityGroup`/
+            `describeOperationCpaReason` — a MESMA pipeline/balde/motivo da
+            Operação) e renderiza um bloco POR CANAL, nunca um número único
+            consolidado (que poderia contar a mesma conta duas vezes, ou
+            escondê-la se um canal estiver saudável e o outro crítico). Cada
+            bloco linka "Ver Operação" já no canal correspondente. */}
         <div className="mt-6 border-t border-overview-border pt-4">
-          <SectionHeader
-            title="Atenção"
-            action={
-              <Link
-                href={operationHref}
-                className="shrink-0 text-[13px] text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary"
-              >
-                Ver Operação →
-              </Link>
-            }
-          />
-          {attentionClients.length > 0 ? (
-            <>
-              <p className="mt-2 text-[13px] text-overview-text-secondary">
-                {needsAttentionCount} conta{needsAttentionCount !== 1 ? "s" : ""} precisa{needsAttentionCount !== 1 ? "m" : ""} de atenção
-              </p>
-              {/* A Operação (link acima) é sempre recortada por canal — esta
-                  lista nunca é, porque o motor que ela reaproveita não tem
-                  dimensão por canal. Aviso só quando pode confundir (filtro
-                  de plataforma ativo), nunca por padrão. */}
-              {platformFilter !== "consolidado" && (
-                <p className="mt-0.5 text-[12px] text-overview-text-muted">
-                  Sempre considera a conta inteira (Meta + Google) — não filtra por {PLATFORM_LABEL[platformFilter]}.
+          <SectionHeader title="Atenção" />
+          <div className="mt-3 flex flex-col gap-4">
+            {channelAttentionSummaries.map((summary) => (
+              <div key={summary.label}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-[13px] font-semibold text-overview-text-primary">{summary.label}</p>
+                  <Link
+                    href={summary.operationHref}
+                    className="shrink-0 text-[13px] text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary"
+                  >
+                    Ver Operação →
+                  </Link>
+                </div>
+                <p className="mt-1 text-[13px] text-overview-text-secondary">
+                  {summary.count > 0
+                    ? `${summary.count} conta${summary.count !== 1 ? "s" : ""} precisa${summary.count !== 1 ? "m" : ""} de atenção`
+                    : "Nenhuma conta precisa de atenção agora."}
                 </p>
-              )}
-              <div className="mt-2.5 flex flex-col divide-y divide-overview-border">
-                {attentionClients.map((state) => (
-                  <div key={state.clientId} className="flex items-baseline justify-between gap-3 py-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-overview-text-primary">{state.clientName}</p>
-                      <p className="mt-0.5 truncate text-[13px] text-overview-text-secondary">{state.evaluation.primaryReason}</p>
-                    </div>
-                    {state.managerName && <span className="shrink-0 text-[12px] text-overview-text-muted">{state.managerName}</span>}
+                {summary.clients.length > 0 && (
+                  <div className="mt-1.5 flex flex-col divide-y divide-overview-border">
+                    {summary.clients.map((client) => (
+                      <p key={client.clientId} className="truncate py-1.5 text-sm text-overview-text-primary">
+                        <span className="font-medium">{client.clientName}</span>
+                        {client.reason && <span className="text-overview-text-secondary"> — {client.reason}</span>}
+                      </p>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-            </>
-          ) : (
-            <p className="mt-2 text-[13px] text-overview-text-secondary">Nenhuma conta precisa de atenção agora.</p>
-          )}
+            ))}
+          </div>
         </div>
 
         {/* "ACONTECEU RECENTEMENTE" — Etapa "Reformulação da Home": resumo

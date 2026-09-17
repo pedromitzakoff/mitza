@@ -13,15 +13,27 @@
  * 1. KPIs continuam corretos (mesmas fontes/cálculos, sem % vs período
  *    anterior, sem "de R$X planejados").
  * 2. Filtros/contexto (`AgencyFilters`, `buildUrl`) continuam preservados.
- * 3. "Atenção" usa a fonte/regra canônica (`resolveOperationPriorityGroup`,
- *    o motor de saúde CONSOLIDADO de 5 dimensões) — nunca o balde
- *    CPA-por-canal da Operação (`resolveOperationCpaPriorityGroup`).
+ * 3. "Atenção" usa a fonte/regra canônica da OPERAÇÃO (Etapa "Correção da
+ *    Home — Atenção por canal", que substitui a versão anterior desta
+ *    etapa): `loadOperationChannelStates` + `resolveOperationCpaPriorityGroup`/
+ *    `describeOperationCpaReason` (CPA-only, por canal) — nunca mais o
+ *    motor de saúde geral/consolidado (`resolveOperationPriorityGroup`),
+ *    que podia classificar uma conta diferente da Operação. Testes
+ *    dinâmicos (seção 3b) provam com fixtures reais do motor: uma conta
+ *    saudável em CPA mas ruim em investimento/resultado/revisão NUNCA
+ *    aparece; uma conta crítica em CPA aparece no canal correto.
  * 4. Nenhuma segunda health engine foi criada (nenhuma função
- *    `evaluate*Health`/`resolveAttention*` nova em `page.tsx`).
- * 5. Limite de itens em "Atenção" (5).
- * 6. Ordenação: `attentionClients` deriva de `indicatorStates`
- *    (já ordenado por `sortClientOperationalStates` dentro do loader),
- *    nenhum `.sort()` novo é aplicado a ele.
+ *    `evaluate*Health` nova em `page.tsx`; a seleção de "atenção" é uma
+ *    função pura extraída em `lib/operation-triage.ts`
+ *    — `selectAccountsNeedingAttention` — reaproveitando os mesmos
+ *    baldes/motivos, nunca uma regra própria do componente).
+ * 5. Limite de itens em "Atenção" — por CANAL (3 cada), nunca a carteira
+ *    inteira nem um total combinado Meta+Google (que contaria a mesma
+ *    conta duas vezes).
+ * 6. Ordenação: `selectAccountsNeedingAttention` só filtra + corta —
+ *    nenhum `.sort()` novo — reaproveitando a ordem que
+ *    `loadOperationChannelStates` já resolve (`sortClientOperationalStates`,
+ *    dentro do loader).
  * 7. "Aconteceu recentemente" nunca cria um motor de eventos novo —
  *    reaproveita `fetchAchievements`/`fetchAgencyTimeline`, ambas leituras
  *    já existentes de `operational_events`.
@@ -46,6 +58,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { evaluateAccountHealth, type AccountHealthInput } from "../src/lib/account-health-engine";
+import { selectAccountsNeedingAttention, resolveOperationCpaPriorityGroup } from "../src/lib/operation-triage";
+import type { ClientOperationalState } from "../src/lib/client-operational-state";
 
 let passed = 0;
 function ok(name: string, condition: boolean) {
@@ -56,6 +71,51 @@ function ok(name: string, condition: boolean) {
 
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "");
+}
+
+/** Mesmo fixture mínimo de `test-operation-priority-grouping.ts` — só o que
+ * `selectAccountsNeedingAttention` de fato lê (`clientId`/`clientName`/
+ * `evaluation`); os demais campos existem só pra satisfazer o tipo. */
+function fixtureState(clientId: string, evaluation: ReturnType<typeof evaluateAccountHealth>): ClientOperationalState {
+  return {
+    clientId,
+    clientName: clientId,
+    managerId: null,
+    managerName: null,
+    avatarUrl: null,
+    performanceGoal: "sales",
+    evaluation,
+    overdueTasksCount: 0,
+    openTasksCount: 0,
+    lastDataSyncAt: null,
+    performanceLatestSource: null,
+    performanceLastUpdatedAt: null,
+    diagnostics: {
+      planejamento: { items: [], isIncomplete: false },
+      cpa: null,
+      investment: { value: 0, expected: null, deviationPct: null, direction: "flat", tone: "normal", isOutOfRange: false },
+      pendencias: { count: 0, items: [], hasPendencias: false },
+      atividade: { lastActivityAt: null, hoursSinceLastActivity: null, isOverdue: false },
+    },
+  };
+}
+
+function baseHealthInput(overrides: Partial<AccountHealthInput> = {}): AccountHealthInput {
+  return {
+    investmentActual: 500,
+    investmentPlanned: 1000,
+    investmentHasSyncedData: true,
+    resultActual: 10,
+    resultPlanned: 10,
+    hasPerformanceData: true,
+    performanceGoalConfigured: true,
+    costActual: 50,
+    costPlanned: 50,
+    monthExpectedPct: 50,
+    reviewBusinessDaysAgo: 5,
+    reviewMaxBusinessDays: 10,
+    ...overrides,
+  };
 }
 
 const homePageSource = stripComments(readFileSync(join(__dirname, "..", "src", "app", "page.tsx"), "utf8"));
@@ -79,44 +139,130 @@ console.log("\n2 — Filtros/contexto continuam preservados (AgencyFilters, buil
   ok("monthNav (navegação de mês) continua sendo passado pra AgencyFilters", /monthNav=\{monthNav\}/.test(homePageSource));
 }
 
-console.log('\n3 — "Atenção" usa a fonte/regra canônica: motor de saúde CONSOLIDADO (5 dimensões), nunca o balde CPA-por-canal da Operação\n');
+console.log('\n3 — "Atenção" usa a fonte/regra canônica da OPERAÇÃO: CPA-only, por canal — nunca o motor de saúde geral/consolidado\n');
 {
   ok(
-    "attentionClients usa resolveOperationPriorityGroup (motor consolidado geral, mesmo já usado por needsAttentionCount)",
-    /resolveOperationPriorityGroup\(state\.evaluation\)/.test(homePageSource),
+    "page.tsx importa loadOperationChannelStates (MESMA pipeline de /operation) — nenhum wrapper/query própria",
+    /import \{ loadOperationChannelStates \} from "@\/lib\/operation-channel-state-data"/.test(homePageSource),
   );
   ok(
-    "attentionClients NUNCA usa resolveOperationCpaPriorityGroup (balde CPA-por-canal, exclusivo da Operação)",
-    !/resolveOperationCpaPriorityGroup/.test(homePageSource),
+    "chama loadOperationChannelStates uma vez por canal (meta/google), goal 'todos' — mesma população default da Operação",
+    /loadOperationChannelStates\(supabase, monthRange\.firstDay, "meta", "todos"\)/.test(homePageSource) &&
+      /loadOperationChannelStates\(supabase, monthRange\.firstDay, "google", "todos"\)/.test(homePageSource),
   );
-  ok("attentionClients deriva de indicatorStates (já filtrado por gestor/cliente, mesma fonte de needsAttentionCount)", /const attentionClients = indicatorStates/.test(homePageSource));
-  ok("motivo exibido é evaluation.primaryReason (mesma frase da Operação/página do cliente, nunca um texto novo)", /\{state\.evaluation\.primaryReason\}/.test(homePageSource));
   ok(
-    'aviso explícito quando o filtro de plataforma não é Consolidado (nunca finge filtrar "Atenção" por canal)',
-    /platformFilter !== "consolidado"[\s\S]{0,200}Sempre considera a conta inteira/.test(homePageSource),
+    "usa selectAccountsNeedingAttention (lib/operation-triage.ts) — a mesma seleção CPA-only da Operação, nunca reescrita aqui",
+    /import \{ selectAccountsNeedingAttention, type AttentionSummaryClient \} from "@\/lib\/operation-triage"/.test(homePageSource) &&
+      /selectAccountsNeedingAttention\(scopeOperationStatesToHomeFilters\(states\), ATTENTION_LIST_LIMIT_PER_CHANNEL\)/.test(homePageSource),
   );
-  ok('link "Ver Operação" usa o mesmo operationHref de sempre (nenhuma segunda URL)', /href=\{operationHref\}[\s\S]{0,300}Ver Operação/.test(homePageSource));
+  ok(
+    "page.tsx NUNCA importa/usa resolveOperationPriorityGroup (motor geral/consolidado) pra esta seção",
+    !/resolveOperationPriorityGroup/.test(homePageSource),
+  );
+  ok("nenhum total combinado Meta+Google — cada canal tem seu próprio count/lista, nunca somados", !/metaAttentionSummary\.count \+ google/.test(homePageSource) && !/needsAttentionCount/.test(homePageSource));
+  ok(
+    'CTA "Ver Operação" de cada canal abre a Operação já naquele canal (?channel=meta/?channel=google), nunca sem canal',
+    /operationHref: `\/operation\?month=\$\{monthRange\.firstDay\}&channel=\$\{channel\}`/.test(homePageSource),
+  );
+}
+
+console.log("\n3b — Dinâmico (fixtures reais do motor): CPA saudável mas ruim em investimento/resultado/revisão NUNCA aparece em Atenção\n");
+{
+  // Investimento MUITO acima do esperado (grave) + resultado MUITO abaixo
+  // (grave) + revisão nunca feita (grave) — só o CUSTO está saudável
+  // (actual === planned, desvio 0). Se `selectAccountsNeedingAttention`
+  // olhasse pra qualquer dimensão fora de custo/qualidade de dado, esta
+  // conta apareceria — ela NUNCA deve, porque a Operação (CPA-only) também
+  // nunca a mostraria.
+  const evaluation = evaluateAccountHealth(
+    baseHealthInput({
+      investmentActual: 5000,
+      investmentPlanned: 1000,
+      // resultActual >= MIN_RELIABLE_RESULT_COUNT (3) — amostra confiável
+      // pro CUSTO (que usa o mesmo `resultActual` como tamanho de amostra),
+      // mas ainda MUITO abaixo do esperado (10) pra ficar "grave" no eixo
+      // Resultado — os dois fatos precisam coexistir pra provar que só o
+      // custo decide "Atenção" mesmo com resultado também grave.
+      resultActual: 4,
+      resultPlanned: 20,
+      costActual: 50,
+      costPlanned: 50,
+      reviewBusinessDaysAgo: null,
+    }),
+  );
+  ok("pré-condição do fixture: investimento/resultado/revisão realmente graves", evaluation.dimensions.investment.status === "grave" && evaluation.dimensions.results.status === "grave" && evaluation.dimensions.review.status === "grave");
+  ok("pré-condição do fixture: custo (CPA) permanece saudável", evaluation.dimensions.cost.status === "nenhum");
+  ok(
+    'a Operação (resolveOperationCpaPriorityGroup) classifica esta conta como "saudavel", nunca crítica/atenção',
+    resolveOperationCpaPriorityGroup(evaluation) === "saudavel",
+  );
+
+  const summary = selectAccountsNeedingAttention([fixtureState("cliente-cpa-saudavel", evaluation)], 5);
+  ok('"Atenção" da Home NUNCA lista esta conta (count === 0)', summary.count === 0);
+  ok('"Atenção" da Home NUNCA lista esta conta (clients === [])', summary.clients.length === 0);
+}
+
+console.log('\n3c — Dinâmico: conta com CPA crítico aparece em "Atenção", com o motivo correto — nunca investimento/resultado/revisão\n');
+{
+  // Único problema real: custo 80% acima da meta (grave), com amostra
+  // confiável (>= MIN_RELIABLE_RESULT_COUNT) e investimento/resultado/
+  // revisão saudáveis — prova que o motivo mostrado é sempre sobre CUSTO,
+  // nunca as outras dimensões, mesmo quando elas TAMBÉM existem no
+  // `evaluation` completo (o motor sempre as calcula).
+  const evaluation = evaluateAccountHealth(
+    baseHealthInput({
+      // monthExpectedPct é 50 (padrão de baseHealthInput) — investimento/
+      // resultado no valor exatamente ESPERADO até hoje (desvio 0), pra
+      // garantir que as duas dimensões fiquem genuinamente saudáveis, não
+      // só "dentro da margem por acaso".
+      investmentActual: 250,
+      investmentPlanned: 500,
+      resultActual: 5,
+      resultPlanned: 10,
+      costActual: 90,
+      costPlanned: 50,
+      reviewBusinessDaysAgo: 2,
+    }),
+  );
+  ok("pré-condição do fixture: investimento/resultado/revisão saudáveis", evaluation.dimensions.investment.status === "nenhum" && evaluation.dimensions.results.status === "nenhum" && evaluation.dimensions.review.status === "nenhum");
+  ok('a Operação classifica esta conta como "critico" (só o custo decide)', resolveOperationCpaPriorityGroup(evaluation) === "critico");
+
+  const metaStates = [fixtureState("cliente-cpa-critico", evaluation)];
+  const googleStates: ClientOperationalState[] = [];
+  const metaSummary = selectAccountsNeedingAttention(metaStates, 3);
+  const googleSummary = selectAccountsNeedingAttention(googleStates, 3);
+
+  ok("aparece no canal Meta (canal de onde veio o estado)", metaSummary.count === 1 && metaSummary.clients[0]?.clientId === "cliente-cpa-critico");
+  ok("NÃO aparece no canal Google (população/estado são independentes por canal)", googleSummary.count === 0);
+  ok(
+    "o motivo é sempre sobre custo/qualidade de dado — nunca menciona investimento/resultado/revisão",
+    /custo/i.test(metaSummary.clients[0]?.reason ?? "") &&
+      !/investimento|resultado (abaixo|acima)|revisão/i.test(metaSummary.clients[0]?.reason ?? ""),
+  );
 }
 
 console.log("\n4 — Nenhuma segunda health engine foi criada\n");
 {
   ok("page.tsx não define nenhuma função evaluate*Health/evaluateAccountHealth própria", !/function evaluate\w*[Hh]ealth/.test(homePageSource));
-  ok("page.tsx não define nenhum resolveAttention*/resolve*PriorityGroup próprio (só importa os existentes)", !/function resolve\w*(Attention|PriorityGroup)/.test(homePageSource));
-  ok("evaluateAccountHealth só é importado (isReviewOverdue), nunca redefinido aqui", /import \{ isReviewOverdue \} from "@\/lib\/account-health-engine"/.test(homePageSource) && !/function evaluateAccountHealth/.test(homePageSource));
+  ok("page.tsx não define nenhum resolve*PriorityGroup/selectAccountsNeedingAttention próprio (só importa os existentes)", !/function resolve\w*PriorityGroup/.test(homePageSource) && !/function selectAccountsNeedingAttention/.test(homePageSource));
+  ok("evaluateAccountHealth só é importado indiretamente (isReviewOverdue), nunca redefinido em page.tsx", /import \{ isReviewOverdue \} from "@\/lib\/account-health-engine"/.test(homePageSource) && !/function evaluateAccountHealth/.test(homePageSource));
 }
 
-console.log('\n5 — Limite de itens em "Atenção" (5, "poucas contas, não a carteira inteira")\n');
+console.log('\n5 — Limite de itens em "Atenção" — por canal (3 cada), nunca a carteira inteira\n');
 {
-  ok("ATTENTION_LIST_LIMIT = 5", /const ATTENTION_LIST_LIMIT = 5/.test(homePageSource));
-  ok("attentionClients corta com .slice(0, ATTENTION_LIST_LIMIT)", /\.slice\(0, ATTENTION_LIST_LIMIT\)/.test(homePageSource));
+  ok("ATTENTION_LIST_LIMIT_PER_CHANNEL = 3", /const ATTENTION_LIST_LIMIT_PER_CHANNEL = 3/.test(homePageSource));
+  ok("o limite é repassado a selectAccountsNeedingAttention (mesmo corte da função canônica, nunca um .slice próprio em page.tsx)", /selectAccountsNeedingAttention\([\s\S]{0,80}ATTENTION_LIST_LIMIT_PER_CHANNEL\)/.test(homePageSource));
 }
 
-console.log("\n6 — Ordenação: attentionClients reaproveita a ordem já resolvida pelo loader, nenhum sort novo\n");
+console.log("\n6 — Ordenação: selectAccountsNeedingAttention só filtra + corta, nenhum sort novo (verificado na própria lib)\n");
 {
-  ok(
-    "attentionClients só filtra (.filter) + corta (.slice) — nenhum .sort() aplicado sobre indicatorStates/attentionClients",
-    /const attentionClients = indicatorStates\s*\n\s*\.filter\(/.test(homePageSource) && !/attentionClients[\s\S]{0,5}\.sort\(/.test(homePageSource),
-  );
+  const operationTriageSource = stripComments(readFileSync(join(__dirname, "..", "src", "lib", "operation-triage.ts"), "utf8"));
+  const selectFnMatch = /export function selectAccountsNeedingAttention\([\s\S]*?\n\}/.exec(operationTriageSource);
+  ok("função selectAccountsNeedingAttention encontrada em operation-triage.ts", selectFnMatch !== null);
+  const selectFnBody = selectFnMatch?.[0] ?? "";
+  ok("...usa .filter (mesmo balde de sempre)", /\.filter\(/.test(selectFnBody));
+  ok("...usa .slice (corte de exibição)", /\.slice\(/.test(selectFnBody));
+  ok("...NUNCA usa .sort() — reaproveita a ordem que o loader já resolveu", !/\.sort\(/.test(selectFnBody));
 }
 
 console.log('\n7 — "Aconteceu recentemente" nunca cria um motor de eventos novo\n');

@@ -206,6 +206,53 @@ export function groupClientsByOperationPriority(cards: ClientOperationalState[])
   );
 }
 
+export interface AttentionSummaryClient {
+  clientId: string;
+  clientName: string;
+  /** Sempre de `describeOperationCpaReason` (acima) — nunca investimento/
+   * resultado/revisão, mesmo quando essas dimensões também têm severidade. */
+  reason: string | null;
+}
+
+export interface AttentionSummary {
+  /** Total REAL de contas no balde crítico+atenção — sempre calculado
+   * ANTES do corte por `limit`, nunca `clients.length` (que já vem
+   * cortado). */
+  count: number;
+  clients: AttentionSummaryClient[];
+}
+
+/**
+ * Etapa "Correção da Home — Atenção por canal": seleciona as contas que
+ * merecem atenção dentro de uma lista JÁ recortada a um canal/população
+ * (`loadOperationChannelStates`, `lib/operation-channel-state-data.ts`) —
+ * mesmo balde CPA-only da Operação (`resolveOperationCpaPriorityGroup`,
+ * nunca o motor de saúde geral/consolidado) e o mesmo motivo
+ * (`describeOperationCpaReason`). Extraído pra ser a ÚNICA implementação
+ * consumida tanto pela Operação (indiretamente, via os baldes acima) quanto
+ * por qualquer resumo executivo (Home) que precise da MESMA definição de
+ * "precisa de atenção" — nunca uma segunda regra reescrita no componente.
+ *
+ * `states` precisa já vir ordenado por severidade
+ * (`sortClientOperationalStates`, aplicado dentro do loader) — esta função
+ * nunca reordena, só filtra (`sem_dados`/`saudavel` ficam de fora, mesmo
+ * critério de sempre) e corta em `limit`.
+ */
+export function selectAccountsNeedingAttention(states: ClientOperationalState[], limit: number): AttentionSummary {
+  const needingAttention = states.filter((state) => {
+    const group = resolveOperationCpaPriorityGroup(state.evaluation);
+    return group === "critico" || group === "atencao";
+  });
+  return {
+    count: needingAttention.length,
+    clients: needingAttention.slice(0, limit).map((state) => ({
+      clientId: state.clientId,
+      clientName: state.clientName,
+      reason: describeOperationCpaReason(state.evaluation),
+    })),
+  };
+}
+
 /** Filtro rápido do topo da Operação (Etapa "Unificação da Leitura da
  * Operação") — `"todos"` ou um dos 4 baldes de `OperationPriorityGroup`.
  * Deliberadamente o MESMO tipo (mais `"todos"`), nunca um enum paralelo de
