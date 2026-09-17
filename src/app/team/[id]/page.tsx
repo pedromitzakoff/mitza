@@ -12,6 +12,8 @@ import {
   type PortfolioClientEvaluation,
   type ManagerPortfolioEvolutionPoint,
 } from "@/lib/team-portfolio-performance";
+import { selectPersonBadges } from "@/lib/achievement-badges";
+import type { AchievementRow } from "@/lib/achievements-data";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { IconButton, Button } from "@/components/workspace/button";
 import { SectionHeader } from "@/components/workspace/section-header";
@@ -69,6 +71,7 @@ export default async function TeamMemberProfilePage({
   const now = new Date();
 
   const { portfolio, portfolioPerformance, activityInPeriod, activityAllTime, achievements } = member;
+  const badges = selectPersonBadges(achievements);
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -227,6 +230,22 @@ export default async function TeamMemberProfilePage({
         </div>
       )}
 
+      {/* INSÍGNIAS — Etapa "Equipe — Fase 4": maior patamar já cruzado por
+          `type` escalonável (`selectPersonBadges`, `lib/achievement-badges.ts`),
+          nunca um evento novo — reagrupamento puro sobre as mesmas
+          conquistas já carregadas abaixo. Credencial editorial (borda +
+          tipografia + acento verde-limão), nunca medalha/estrela/XP. */}
+      {badges.length > 0 && (
+        <div className="mt-8 border-t border-overview-border pt-4">
+          <SectionHeader title="Insígnias" />
+          <div className="mt-3 flex flex-wrap gap-2">
+            {badges.map((badge) => (
+              <BadgeCredential key={badge.type} achievement={badge} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* CONQUISTAS — só escopo Pessoa (ator real, gravado no momento da
           conquista). Conquistas de escopo Cliente nunca aparecem aqui (sem
           ator gravado — ver auditoria). Sem tokens/medalhas nesta fase. */}
@@ -282,6 +301,54 @@ function AssignmentHistoryRow({ entry }: { entry: ManagerAssignmentHistoryEntry 
       <p className="text-[13px] text-overview-text-secondary tabular-nums">
         {formatDateFromInstant(entry.startedAt)} &rarr; {entry.endedAt ? formatDateFromInstant(entry.endedAt) : "atual"}
       </p>
+    </div>
+  );
+}
+
+/** Rótulo curto por `type` de insígnia — único lugar que decide isso (nunca
+ * reimplementado por card). Todo `type` de `ESCALATING_BADGE_TYPES`
+ * (`lib/achievement-badges.ts`) precisa de uma entrada aqui. */
+const BADGE_LABELS: Record<string, string> = {
+  person_consecutive_months_fully_within_target: "Consistência",
+  person_optimizations_milestone: "Otimizações",
+  person_reviews_milestone: "Revisões",
+  person_reports_milestone: "Reports",
+  person_clients_served_milestone: "Clientes atendidos",
+  person_tenure_milestone: "Tempo de casa",
+};
+
+/** Valor curto exibido no selo — mesma leitura de `metric.target` que já
+ * sustenta a conquista (nenhum recálculo), só formatado pro espaço
+ * compacto do selo. Tempo de casa e Consistência têm unidade própria (meses/
+ * anos); o resto é contagem simples. */
+function formatBadgeValue(achievement: AchievementRow): string {
+  const target = achievement.metric?.target;
+  if (target === null || target === undefined) return "";
+  if (achievement.type === "person_tenure_milestone") {
+    if (target >= 24) return `${target / 12} anos`;
+    if (target === 12) return "1 ano";
+    return `${target} meses`;
+  }
+  if (achievement.type === "person_consecutive_months_fully_within_target") return `${target} meses`;
+  return String(target);
+}
+
+/** Credencial profissional — editorial/sóbria (borda + tipografia + filete
+ * verde-limão como único acento), deliberadamente sem medalha/estrela/XP/
+ * pódio. `title` (tooltip nativo) carrega o `headline` completo da conquista
+ * por trás do selo, sem precisar de um componente de detalhe novo nesta
+ * fase. */
+function BadgeCredential({ achievement }: { achievement: AchievementRow }) {
+  const label = BADGE_LABELS[achievement.type] ?? achievement.family;
+  const value = formatBadgeValue(achievement);
+
+  return (
+    <div className="flex items-stretch gap-2 rounded-md border border-overview-border-strong bg-overview-surface-subtle px-3 py-2" title={achievement.headline}>
+      <span className="w-0.5 shrink-0 rounded-full bg-lime" aria-hidden="true" />
+      <div>
+        <p className="text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">{label}</p>
+        {value && <p className="text-sm font-semibold tabular-nums text-overview-text-primary">{value}</p>}
+      </div>
     </div>
   );
 }

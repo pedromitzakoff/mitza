@@ -224,8 +224,12 @@ console.log("\n11 — Mês anterior ao início de client_manager_assignments (de
 console.log("\n12 — Mês sem nenhum cliente elegível: loadManagerPortfolioEvolution pula o mês (nunca 0/0)\n");
 {
   ok(
-    "código-fonte: mês sem cobertura (coverageClientIds vazio) é pulado com continue, nunca vira um ponto na lista",
-    /if \(coverageClientIds\.length === 0\) continue;/.test(portfolioPerformanceSource),
+    "código-fonte: loadManagerPortfolioMonthSummary devolve hasCoverage:false/summary:null quando nenhum cliente tem cobertura integral (nunca um resumo fabricado)",
+    /if \(coverageClientIds\.length === 0\) return \{ monthParam, hasCoverage: false, summary: null \};/.test(portfolioPerformanceSource),
+  );
+  ok(
+    "código-fonte: loadManagerPortfolioEvolution pula (continue) o mês sem cobertura, nunca vira um ponto na lista",
+    /if \(!monthSummary\.hasCoverage \|\| !monthSummary\.summary\) continue;/.test(portfolioPerformanceSource),
   );
   ok(
     "código-fonte: UI só renderiza a seção Evolução quando há pelo menos 1 ponto (portfolioEvolution.length > 0)",
@@ -286,7 +290,10 @@ console.log("\n16 — Ausência de score/ranking/XP/bônus\n");
   const combinedSource = `${portfolioPerformanceSource}\n${teamPerformanceDataSource}\n${teamProfilePageSource}\n${teamListPageSource}`;
   ok("nenhuma palavra de score/ranking/nível/XP nos arquivos da Fase 3", !/\bscore\b|\branking\b|\bXP\b|\bn[íi]vel\b|leaderboard|Performance Score/i.test(combinedSource));
   ok("nenhuma palavra de bônus/comissão/prêmio/remuneração/salário/folha", !/b[oô]nus|comiss[aã]o|pr[eê]mio|remunera[çc][aã]o|sal[aá]rio|folha/i.test(combinedSource));
-  ok("nenhum badge/medalha/insígnia automática nova (Bronze/Prata/Ouro)", !/bronze|prata|ouro|insígnia|medalha/i.test(combinedSource));
+  // "Insígnia" deixou de ser proibida na Etapa "Equipe — Fase 4" (aprovada
+  // como taxonomia oficial) — o que continua proibido é bronze/prata/ouro/
+  // medalha (estética de jogo/premiação), nunca o nome do conceito.
+  ok("nenhum badge/medalha automática nova (Bronze/Prata/Ouro)", !/bronze|prata|ouro|medalha/i.test(combinedSource));
   ok('/team (lista) não foi alterado por esta etapa (nenhuma referência a "portfolioPerformance"/"Evolução")', !/portfolioPerformance/.test(teamListPageSource) && !/Evolução/.test(teamListPageSource));
   ok("nenhuma ordenação de team_members por performance (a query de membros continua .order(\"name\"))", /from\("team_members"\)[\s\S]{0,250}\.order\("name"\)/.test(teamPerformanceDataSource));
 }

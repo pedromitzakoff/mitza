@@ -32,7 +32,20 @@ export type AchievementSeverity = "milestone" | "highlight" | "record";
  * nunca "melhor" sem concorrência real. */
 export type ClientAchievementFamily = "recordes" | "metas" | "consistencia" | "evolucao" | "escala" | "recuperacao" | "destaque";
 export type AgencyAchievementFamily = "crescimento" | "carteira" | "operacao" | "relacionamento" | "escala_midia";
-export type PersonAchievementFamily = "revisoes" | "otimizacoes" | "clientes_atendidos" | "reports" | "tempo_de_casa" | "experiencia";
+/** "performance" (Etapa "Equipe — Fase 4"): único acréscimo aditivo a este
+ * union — carteira sob responsabilidade temporal confiável avaliada contra
+ * a PRÓPRIA meta de cada cliente (nunca CPA absoluto, nunca volume/
+ * investimento). Reaproveita 100% a infraestrutura já existente
+ * (`operational_events`/`achievement_unlocked`/`record_achievement_event`) —
+ * nenhuma tabela, nenhuma constraint nova (ver `achievement-person-performance-rules.ts`). */
+export type PersonAchievementFamily =
+  | "revisoes"
+  | "otimizacoes"
+  | "clientes_atendidos"
+  | "reports"
+  | "tempo_de_casa"
+  | "experiencia"
+  | "performance";
 
 /** Snapshot da métrica por trás da conquista — guardado no metadata do
  * evento pra permitir (no futuro, fora desta etapa) gerar uma mensagem de

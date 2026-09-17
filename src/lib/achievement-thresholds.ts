@@ -117,6 +117,18 @@ export const PERSON_REPORTS_MILESTONES = [100, 50, 25, 1];
 export const PERSON_TENURE_MONTHS_MILESTONES = [24, 12, 6];
 
 // ---------------------------------------------------------------------------
+// Etapa "Equipe — Fase 4": Performance Profissional. "100% da carteira
+// avaliável dentro da meta" nunca precisa de amostra própria — a própria
+// Fase 3 já exige ≥1 conta AVALIÁVEL (amostra confiável + escopo comparável
+// + meta configurada) antes de qualquer conta entrar no denominador; exigir
+// um piso adicional aqui duplicaria uma regra que já vive em
+// `team-portfolio-performance.ts`. Só a sequência de meses consecutivos
+// precisa de um teto de patamares (mesmo espírito de
+// `CONSISTENCY_STREAK_THRESHOLDS`, maior primeiro).
+// ---------------------------------------------------------------------------
+export const PERSON_CONSECUTIVE_MONTHS_FULLY_WITHIN_TARGET_THRESHOLDS = [6, 3];
+
+// ---------------------------------------------------------------------------
 // Etapa "Conquistas por Granularidade" — campanha/público/criativo. Amostra
 // própria, MENOR que `WINDOW_SAMPLE_POLICY.d7` de propósito: uma campanha/
 // público/criativo individual naturalmente move um volume menor que a conta

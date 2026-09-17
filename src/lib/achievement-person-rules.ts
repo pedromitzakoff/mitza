@@ -59,7 +59,10 @@ export interface PersonAchievementContext {
   firstCreativeDeliveryCompleted: boolean;
 }
 
-function highestMilestoneCrossed(current: number, milestones: number[]): number | undefined {
+/** Exportada (Etapa "Equipe — Fase 4") pra `achievement-person-performance-rules.ts`
+ * reaproveitar a MESMA regra "só o maior patamar cruzado" — nunca uma
+ * segunda implementação. */
+export function highestMilestoneCrossed(current: number, milestones: number[]): number | undefined {
   return milestones.find((m) => current >= m);
 }
 

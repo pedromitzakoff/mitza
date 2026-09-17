@@ -14,6 +14,11 @@ import type { SubEntityAchievementContext } from "@/lib/achievement-sub-entity-r
 import { getCampaignDailyMetricsForPeriod } from "@/lib/campaign-analytics-data";
 import { getAdSetDailyMetricsForPeriod } from "@/lib/ad-set-analytics-data";
 import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
+import { formatMonthLabel } from "@/lib/format";
+import { fetchAssignmentPeriodsForManager } from "@/lib/client-manager-assignments";
+import { resolveManagerConsecutiveMonthsFullyWithinTarget } from "@/lib/team-portfolio-performance";
+import { PERSON_CONSECUTIVE_MONTHS_FULLY_WITHIN_TARGET_THRESHOLDS } from "@/lib/achievement-thresholds";
+import type { PersonPerformanceAchievementContext } from "@/lib/achievement-person-performance-rules";
 
 /**
  * Camada de I/O do motor de Conquistas — monta os contextos puros
@@ -678,6 +683,60 @@ export async function fetchPersonMetrics(supabase: SupabaseClient<Database>, mem
     tenureMonthsPreviousDay: tenureMonthsSince(member.createdAt, previousDay),
     firstMeetingCompleted,
     firstCreativeDeliveryCompleted,
+  };
+}
+
+/**
+ * Etapa "Equipe — Fase 4": contexto de Performance Profissional — SEMPRE
+ * "vazio" (nenhum detector dispara) fora do último dia civil do mês
+ * (`isLastDayOfMonth`), pra nunca fazer o trabalho pesado (percorrer até
+ * `PERSON_CONSECUTIVE_MONTHS_FULLY_WITHIN_TARGET_THRESHOLDS` meses pra trás,
+ * um `loadClientOperationalStates` por mês) num dia em que o resultado nunca
+ * seria usado — mesmo padrão de curto-circuito já usado pela família `metas`
+ * de Cliente (`achievement-client-rules.ts`).
+ *
+ * Reaproveita 100% `team-portfolio-performance.ts` (Fase 3) — nenhum cálculo
+ * de custo/meta/responsabilidade temporal próprio aqui. `client_manager_assignments`
+ * (Fase 2) é lido através de `fetchAssignmentPeriodsForManager`, a mesma
+ * fonte canônica de sempre; gestor sem NENHUM período (inclusive todo
+ * gestor antes do deploy de 17/09/2026) recebe `portfolioSummary: null`
+ * estruturalmente, sem checagem de data nenhuma aqui — a ausência de
+ * assignments já resolve isso sozinha.
+ */
+export async function fetchPersonPerformanceMetrics(
+  supabase: SupabaseClient<Database>,
+  member: EligibleTeamMember,
+  evaluationDate: string,
+): Promise<PersonPerformanceAchievementContext> {
+  const monthParam = firstDayOfMonth(evaluationDate);
+  const monthLabel = formatMonthLabel(monthParam);
+  const empty: PersonPerformanceAchievementContext = {
+    teamMemberId: member.id,
+    teamMemberName: member.name,
+    evaluatedOnDate: evaluationDate,
+    monthParam,
+    monthLabel,
+    portfolioSummary: null,
+    consecutiveMonthsStreak: 0,
+  };
+
+  if (!isLastDayOfMonth(evaluationDate)) return empty;
+
+  const periods = await fetchAssignmentPeriodsForManager(supabase, member.id);
+  if (periods.length === 0) return empty;
+
+  const result = await resolveManagerConsecutiveMonthsFullyWithinTarget(
+    supabase,
+    member.id,
+    periods,
+    monthParam,
+    Math.max(...PERSON_CONSECUTIVE_MONTHS_FULLY_WITHIN_TARGET_THRESHOLDS),
+  );
+
+  return {
+    ...empty,
+    portfolioSummary: result.closingMonth.hasCoverage ? result.closingMonth.summary : null,
+    consecutiveMonthsStreak: result.streakLength,
   };
 }
 

@@ -46,6 +46,13 @@ type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
  * atribui a NENHUM dos dois gestores nesse mês (perde um ponto de dado,
  * nunca inventa uma fração). Mês sem nenhum cliente elegível simplesmente
  * não aparece na lista de pontos — nunca um "0/0" fabricado.
+ *
+ * Etapa "Equipe — Fase 4" (Conquistas de Performance Profissional):
+ * `loadManagerPortfolioMonthSummary`/`monthQualifiesFullyWithinTarget`/
+ * `resolveManagerConsecutiveMonthsFullyWithinTarget` são reaproveitados por
+ * `achievement-metrics.ts` pra alimentar os novos detectores de
+ * `achievement-person-performance-rules.ts` — MESMA regra de responsabilidade
+ * temporal e de "100% da carteira avaliável", nenhuma segunda definição.
  */
 
 export type PortfolioUnavailableReason =
@@ -232,6 +239,39 @@ export interface ManagerPortfolioEvolutionPoint {
   summary: PortfolioPerformanceSummary;
 }
 
+/** Resumo de UM mês pra UM gestor — `hasCoverage: false` = nenhum cliente
+ * com responsabilidade INTEGRAL do mês inteiro (nunca confundido com "0
+ * dentro da meta": nesse caso `summary` é sempre `null`, nunca um resumo
+ * vazio fabricado). Extraída (Etapa "Equipe — Fase 4") do corpo de
+ * `loadManagerPortfolioEvolution` pra ser reaproveitada também pelos novos
+ * detectores de Performance Profissional (`achievement-person-performance-rules.ts`,
+ * via `achievement-metrics.ts`) — MESMA função, nunca uma segunda leitura de
+ * "qual foi a carteira do gestor naquele mês". */
+export interface ManagerPortfolioMonthSummary {
+  monthParam: string;
+  hasCoverage: boolean;
+  summary: PortfolioPerformanceSummary | null;
+}
+
+/** `periods` já deve vir de `fetchAssignmentPeriodsForManager` — esta função
+ * nunca busca de novo (quem chama em loop, ver `resolveManagerConsecutiveMonthsFullyWithinTarget`
+ * abaixo, busca uma única vez e reaproveita pra todos os meses). */
+export async function loadManagerPortfolioMonthSummary(
+  supabase: Supabase,
+  managerId: string,
+  monthParam: string,
+  periods: ClientManagerAssignmentPeriod[],
+): Promise<ManagerPortfolioMonthSummary> {
+  const monthRange = monthRangeFromOperationParam(monthParam);
+  const coverageClientIds = resolveFullMonthCoverageClientIds(periods, monthRange);
+  if (coverageClientIds.length === 0) return { monthParam, hasCoverage: false, summary: null };
+
+  const coverageSet = new Set(coverageClientIds);
+  const states = await loadClientOperationalStates(supabase, monthParam);
+  const evaluations = states.filter((state) => coverageSet.has(state.clientId)).map(evaluatePortfolioClient);
+  return { monthParam, hasCoverage: true, summary: summarizePortfolioPerformance(evaluations) };
+}
+
 /**
  * Evolução mês a mês de UM gestor — só meses com ≥1 cliente sob
  * responsabilidade INTEIRA daquele mês entram no resultado (nunca um ponto
@@ -255,14 +295,85 @@ export async function loadManagerPortfolioEvolution(
 
   const points: ManagerPortfolioEvolutionPoint[] = [];
   for (const monthParam of resolveEvolutionMonthParams(referenceMonthParam)) {
-    const monthRange = monthRangeFromOperationParam(monthParam);
-    const coverageClientIds = resolveFullMonthCoverageClientIds(periods, monthRange);
-    if (coverageClientIds.length === 0) continue;
-
-    const coverageSet = new Set(coverageClientIds);
-    const states = await loadClientOperationalStates(supabase, monthParam);
-    const evaluations = states.filter((state) => coverageSet.has(state.clientId)).map(evaluatePortfolioClient);
-    points.push({ monthParam, summary: summarizePortfolioPerformance(evaluations) });
+    const monthSummary = await loadManagerPortfolioMonthSummary(supabase, managerId, monthParam, periods);
+    if (!monthSummary.hasCoverage || !monthSummary.summary) continue;
+    points.push({ monthParam, summary: monthSummary.summary });
   }
   return points;
+}
+
+/**
+ * Etapa "Equipe — Fase 4": critério ÚNICO de "mês fechado 100% dentro da
+ * meta" — reaproveitado tanto pela conquista `person_portfolio_fully_within_target`
+ * quanto pelo cálculo de sequência abaixo (nunca duas cópias da mesma
+ * condição). Exige ≥1 conta AVALIÁVEL (nunca "100% de zero") — a própria
+ * amostra/escopo/meta já são garantidos por `evaluatePortfolioClient`, esta
+ * função não reavalia nada, só lê o resumo já pronto.
+ */
+export function monthQualifiesFullyWithinTarget(monthSummary: ManagerPortfolioMonthSummary): boolean {
+  return monthSummary.hasCoverage && monthSummary.summary !== null && monthSummary.summary.evaluableCount >= 1 && monthSummary.summary.outsideTargetCount === 0;
+}
+
+/** Pura — dado, do mês mais recente pro mais antigo, se cada mês qualificou
+ * (`monthQualifiesFullyWithinTarget`), conta quantos meses CONSECUTIVOS a
+ * partir do primeiro (mais recente) qualificam — para na primeira falha
+ * (mês que não qualificou, OU mês sem cobertura nenhuma — os dois quebram a
+ * sequência exatamente igual, nunca um "pula esse mês e continua depois").
+ * Testável isoladamente sem Supabase. */
+export function countConsecutiveQualifyingMonths(monthsNewestFirst: boolean[]): number {
+  let streak = 0;
+  for (const qualifies of monthsNewestFirst) {
+    if (!qualifies) break;
+    streak++;
+  }
+  return streak;
+}
+
+export interface ManagerConsecutiveMonthsResult {
+  streakLength: number;
+  /** Resumo do mês de FECHAMENTO (o mais recente da sequência avaliada) —
+   * sempre calculado, mesmo quando `streakLength` é 0 (nesse caso o mês de
+   * fechamento pode ter `outsideTargetCount > 0`, ou nenhuma cobertura —
+   * `hasCoverage`/`summary` distinguem os dois). Devolvido junto pra quem
+   * chama (`achievement-metrics.ts`) nunca precisar de uma segunda consulta
+   * só pra saber o resumo do mês que acabou de fechar. */
+  closingMonth: ManagerPortfolioMonthSummary;
+}
+
+/**
+ * Sequência de meses fechados consecutivos, terminando em `closingMonthParam`,
+ * em que `monthQualifiesFullyWithinTarget` foi verdadeiro. `maxMonthsBack` é
+ * responsabilidade de quem chama (nunca um valor de conquista embutido
+ * aqui — este arquivo não sabe o que é um "patamar de insígnia", ver
+ * `achievement-thresholds.ts`/`achievement-person-performance-rules.ts`).
+ * Uma única passada, mês a mês, parando na primeira falha — nunca continua
+ * verificando meses mais antigos depois de encontrar uma quebra (a
+ * sequência "atual" é sempre a que termina no mês de fechamento).
+ */
+export async function resolveManagerConsecutiveMonthsFullyWithinTarget(
+  supabase: Supabase,
+  managerId: string,
+  periods: ClientManagerAssignmentPeriod[],
+  closingMonthParam: string,
+  maxMonthsBack: number,
+): Promise<ManagerConsecutiveMonthsResult> {
+  const qualifications: boolean[] = [];
+  let closingMonth: ManagerPortfolioMonthSummary | null = null;
+  let cursor = closingMonthParam;
+
+  for (let i = 0; i < maxMonthsBack; i++) {
+    const monthSummary = await loadManagerPortfolioMonthSummary(supabase, managerId, cursor, periods);
+    if (i === 0) closingMonth = monthSummary;
+
+    const qualifies = monthQualifiesFullyWithinTarget(monthSummary);
+    qualifications.push(qualifies);
+    if (!qualifies) break;
+
+    cursor = shiftOperationMonth(cursor, -1);
+  }
+
+  return {
+    streakLength: countConsecutiveQualifyingMonths(qualifications),
+    closingMonth: closingMonth ?? { monthParam: closingMonthParam, hasCoverage: false, summary: null },
+  };
 }

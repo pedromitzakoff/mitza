@@ -278,7 +278,11 @@ console.log("\n11 — Nenhuma nota/score/ranking/bônus criado nesta fase\n");
   const combinedSource = `${teamPerformanceDataSource}\n${teamListPageSource}\n${teamProfilePageSource}`;
   ok("nenhuma palavra de score/nota/ranking/nível/XP nos 3 arquivos novos", !/\bscore\b|\branking\b|\bXP\b|\bn[íi]vel\b|nota:|Performance Score/i.test(combinedSource));
   ok("nenhuma palavra de bônus/comissão/prêmio/remuneração/salário/folha", !/b[oô]nus|comiss[aã]o|pr[eê]mio|remunera[çc][aã]o|sal[aá]rio|folha/i.test(combinedSource));
-  ok("nenhum badge/medalha/insígnia automática (Bronze/Prata/Ouro) é definido", !/bronze|prata|ouro|insígnia|medalha/i.test(combinedSource));
+  // "Insígnia" deixou de ser proibida na Etapa "Equipe — Fase 4" (aprovada
+  // explicitamente pelo usuário como taxonomia oficial — ver
+  // `lib/achievement-badges.ts`) — o que continua proibido é a ESTÉTICA de
+  // jogo/premiação (bronze/prata/ouro/medalha), nunca o nome do conceito.
+  ok("nenhum badge/medalha automática (Bronze/Prata/Ouro) é definido", !/bronze|prata|ouro|medalha/i.test(combinedSource));
 }
 
 console.log(`\nTodos os ${passed} testes passaram.`);

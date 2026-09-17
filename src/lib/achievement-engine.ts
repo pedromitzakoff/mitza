@@ -7,6 +7,7 @@ import {
   buildClientAchievementContext,
   fetchAgencyMetrics,
   fetchPersonMetrics,
+  fetchPersonPerformanceMetrics,
   fetchSubEntityAchievementContexts,
   listEligibleClientsForAchievements,
   listEligibleTeamMembersForAchievements,
@@ -16,6 +17,7 @@ import { CLIENT_RULES } from "@/lib/achievement-client-rules";
 import { SUB_ENTITY_RULES } from "@/lib/achievement-sub-entity-rules";
 import { AGENCY_RULES, type AgencyAchievementContext } from "@/lib/achievement-agency-rules";
 import { PERSON_RULES, type PersonAchievementContext } from "@/lib/achievement-person-rules";
+import { PERSON_PERFORMANCE_RULES, type PersonPerformanceAchievementContext } from "@/lib/achievement-person-performance-rules";
 import { MAX_CLIENT_ACHIEVEMENTS_PER_DAY } from "@/lib/achievement-thresholds";
 import type { AchievementCandidate, AchievementLevel } from "@/lib/achievement-types";
 
@@ -213,6 +215,13 @@ export interface EvaluateAchievementsOptions {
    * funções em ambos os casos, nunca uma segunda implementação. */
   agencyRules?: ((ctx: AgencyAchievementContext) => AchievementCandidate | null)[];
   personRules?: ((ctx: PersonAchievementContext) => AchievementCandidate | null)[];
+  /** Etapa "Equipe — Fase 4" — `PERSON_PERFORMANCE_RULES` por padrão. Seguro
+   * incluir sem exclusão nenhuma no backfill (diferente das 2 regras de
+   * Agência excluídas em `AGENCY_BACKFILL_SAFE_RULES`): o próprio contexto
+   * (`fetchPersonPerformanceMetrics`) já nasce vazio pra qualquer data sem
+   * `client_manager_assignments` cobrindo o mês inteiro, então nenhum dos 3
+   * detectores pode disparar retroativamente de forma falsa. */
+  personPerformanceRules?: ((ctx: PersonPerformanceAchievementContext) => AchievementCandidate | null)[];
 }
 
 /** Núcleo do motor — avalia TODOS os clientes/organizações/pessoas pra UMA
@@ -227,6 +236,7 @@ export async function evaluateAchievementsForDate(
 ): Promise<AchievementRunSummary> {
   const agencyRules = options.agencyRules ?? AGENCY_RULES;
   const personRules = options.personRules ?? PERSON_RULES;
+  const personPerformanceRules = options.personPerformanceRules ?? PERSON_PERFORMANCE_RULES;
   const summary = emptySummary(evaluationDate);
 
   function recordCreated(candidate: AchievementCandidate) {
@@ -327,6 +337,22 @@ export async function evaluateAchievementsForDate(
 
         for (const rule of personRules) {
           const candidate = rule(personContext);
+          if (!candidate) continue;
+          summary.personCandidates++;
+          if (await persistCandidate(supabase, organizationId, candidate)) {
+            summary.personInserted++;
+            recordCreated(candidate);
+          }
+        }
+
+        // Etapa "Equipe — Fase 4": mesmo membro, mesmo loop — contexto
+        // PRÓPRIO (`fetchPersonPerformanceMetrics`) porque a fonte é
+        // inteiramente diferente (Fase 3 + `client_manager_assignments`,
+        // nunca `operational_events` de atividade). Nunca reaproveita
+        // `personContext` acima.
+        const personPerformanceContext = await fetchPersonPerformanceMetrics(supabase, member, evaluationDate);
+        for (const rule of personPerformanceRules) {
+          const candidate = rule(personPerformanceContext);
           if (!candidate) continue;
           summary.personCandidates++;
           if (await persistCandidate(supabase, organizationId, candidate)) {
