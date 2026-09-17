@@ -19,6 +19,16 @@ interface SettingsLink {
  * ambiguidade nova em vez de resolver uma. */
 const SETTINGS_GROUPS: { label: string; items: SettingsLink[] }[] = [
   {
+    label: "Equipe",
+    items: [
+      {
+        href: "/settings/team",
+        title: "Equipe",
+        description: "Convidar, editar cargo/papel e desativar membros da equipe — gestão administrativa, separada do Perfil Profissional em Equipe (/team).",
+      },
+    ],
+  },
+  {
     label: "Clientes",
     items: [
       {

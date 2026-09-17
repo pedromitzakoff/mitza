@@ -23,7 +23,7 @@ import type { TeamSystemRole } from "@/lib/supabase/database.types";
  */
 
 function revalidateTeam() {
-  revalidatePath("/team");
+  revalidatePath("/settings/team");
 }
 
 /** Volta pro drawer de edição de onde a ação partiu (`editId`), em vez de
@@ -34,13 +34,13 @@ function revalidateTeam() {
 function failure(message: string, editId?: string): never {
   const params = new URLSearchParams({ error: message });
   if (editId) params.set("edit", editId);
-  redirect(`/team?${params.toString()}`);
+  redirect(`/settings/team?${params.toString()}`);
 }
 
 function success(message: string, editId?: string): never {
   const params = new URLSearchParams({ saved: message });
   if (editId) params.set("edit", editId);
-  redirect(`/team?${params.toString()}`);
+  redirect(`/settings/team?${params.toString()}`);
 }
 
 const SYSTEM_ROLES: TeamSystemRole[] = ["admin", "gestor"];

@@ -29,10 +29,10 @@ export function OperationalActivityPanel({
   timelineHasMore: boolean;
 }) {
   function periodHref(p: ActivityPeriodKey) {
-    return `/team?edit=${memberId}&period=${p}`;
+    return `/settings/team?edit=${memberId}&period=${p}`;
   }
   function pageHref(p: number) {
-    return `/team?edit=${memberId}&period=${period}&timelinePage=${p}`;
+    return `/settings/team?edit=${memberId}&period=${period}&timelinePage=${p}`;
   }
 
   return (

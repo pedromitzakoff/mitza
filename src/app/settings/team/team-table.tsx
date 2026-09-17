@@ -97,7 +97,7 @@ export function TeamTable({ rows, isAdmin }: { rows: TeamTableRow[]; isAdmin: bo
               <td className="px-3 py-2">
                 <div className="flex items-center gap-2">
                   <Link
-                    href={`/team?edit=${member.id}`}
+                    href={`/settings/team?edit=${member.id}`}
                     scroll={false}
                     className="rounded text-xs font-medium text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                   >

@@ -31,13 +31,18 @@ export const SETTINGS_DESTRUCTIVE_BUTTON_CLASSES =
 /**
  * Casco padrão de toda subpágina de Configurações (Etapa "Evolução da
  * Settings") — título, descrição, ação de cabeçalho (quando existir) e link
- * de volta sempre na mesma posição/tamanho, e a mesma largura de conteúdo
- * já usada em Equipe (`/team`), a outra tela irmã de Administração na
- * sidebar. Antes, cada subpágina montava seu próprio cabeçalho: larguras
- * (`max-w-2xl`/`max-w-4xl`/`max-w-6xl`) e tamanhos de título diferentes
- * entre telas da MESMA área. Puramente visual — nenhuma tela perdeu campo,
- * dado ou comportamento, só passou a herdar este invólucro em vez de
- * montar o cabeçalho à mão.
+ * de volta sempre na mesma posição/tamanho. Antes, cada subpágina montava
+ * seu próprio cabeçalho: larguras (`max-w-2xl`/`max-w-4xl`/`max-w-6xl`) e
+ * tamanhos de título diferentes entre telas da MESMA área. Puramente
+ * visual — nenhuma tela perdeu campo, dado ou comportamento, só passou a
+ * herdar este invólucro em vez de montar o cabeçalho à mão.
+ *
+ * Etapa "Equipe — Perfil Profissional": a gestão administrativa de membros
+ * (convidar/editar cargo/papel) mudou de `/team` (nav principal) pra
+ * `/settings/team`, pra abrir espaço pro novo Perfil Profissional em
+ * `/team` — mesma largura/cabeçalho de sempre, agora via este invólucro em
+ * vez do próprio (era a única subpágina fora de Configurações a reproduzir
+ * esta largura à mão).
  */
 export function SettingsPageShell({
   title,
