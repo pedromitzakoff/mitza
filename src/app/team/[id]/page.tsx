@@ -5,15 +5,22 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayUTC } from "@/lib/today";
 import { currentMonthRange, shiftMonthParam } from "@/lib/sprint-financials";
 import { formatCurrency, formatMonthLabel, formatRelativeShortDateTime, formatDateFromInstant } from "@/lib/format";
-import { loadTeamMemberProfiles, loadManagerAssignmentHistory, type TeamMemberPortfolioClient, type ManagerAssignmentHistoryEntry } from "@/lib/team-performance-data";
+import {
+  loadTeamMemberProfiles,
+  loadManagerAssignmentHistory,
+  type TeamMemberPortfolioClient,
+  type ManagerAssignmentHistoryEntry,
+  type TeamMemberPortfolioSummary,
+} from "@/lib/team-performance-data";
 import {
   loadManagerPortfolioEvolution,
   describePortfolioUnavailableReason,
   type PortfolioClientEvaluation,
   type ManagerPortfolioEvolutionPoint,
+  type PortfolioPerformanceSummary,
 } from "@/lib/team-portfolio-performance";
 import { curateTeamMemberTrajectory, type TrajectoryPoint } from "@/lib/team-trajectory";
-import { buildInsigniaCollection, selectUpcomingMilestones, type Insignia } from "@/lib/achievement-insignia";
+import { buildInsigniaCollection, selectFeaturedInsignias, selectUpcomingMilestones, type Insignia } from "@/lib/achievement-insignia";
 import { PERSON_FAMILY_LABEL } from "@/lib/achievement-labels";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { IconButton, Button } from "@/components/workspace/button";
@@ -64,6 +71,20 @@ import { OperationMetric } from "@/app/operation-metric";
  * usa `selectUpcomingMilestones`. Nenhuma outra seção desta página foi
  * tocada nesta etapa — cabeçalho, ordem das seções e demais componentes
  * seguem intocados (isso é trabalho da Etapa 6C, ainda não aprovada).
+ *
+ * Etapa "Redesign do Perfil + Sistema Visual de Insígnias — 6C": cabeçalho
+ * redesenhado — identidade (nome, cargo/status, avatar em paleta KOFF via
+ * `ClientAvatar palette="koff"`, opt-in, padrão de todo outro uso
+ * intocado) ganha a maior hierarquia da página; até 3 insígnias em
+ * destaque (`selectFeaturedInsignias`, Etapa 6A — nenhuma segunda seleção)
+ * aparecem como objeto visual puro (`InsigniaMark`, sem credencial
+ * completa — essa continua só na coleção, seção "Insígnias"); uma leitura
+ * curta do estado profissional atual (`resolveProfileContextLine`, abaixo
+ * — só reaproveita `portfolio`/`portfolioPerformance` já calculados,
+ * nenhum cálculo novo, nunca menciona investimento). Seletor de mês
+ * preservado, deslocado pra um papel visualmente secundário. Nenhuma outra
+ * seção da página foi tocada (isso é trabalho de etapas futuras, ainda não
+ * aprovadas).
  */
 export default async function TeamMemberProfilePage({
   params,
@@ -109,6 +130,8 @@ export default async function TeamMemberProfilePage({
     person_clients_served_milestone: distinctClientsServed,
   });
   const upcomingMilestones = selectUpcomingMilestones(insignias);
+  const featuredInsignias = selectFeaturedInsignias(insignias);
+  const profileContextLine = resolveProfileContextLine(portfolio, portfolioPerformance);
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -116,22 +139,46 @@ export default async function TeamMemberProfilePage({
         &larr; Equipe
       </Link>
 
-      <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3.5">
-          <ClientAvatar name={member.name} imageUrl={member.avatarUrl} size="lg" />
-          <div>
-            <h1 className="text-xl font-semibold text-overview-text-primary">{member.name}</h1>
-            <p className="mt-0.5 text-sm text-overview-text-secondary">
+      {/* IDENTIDADE — Etapa "Equipe — Redesign do Perfil — 6C": a pessoa é o
+          elemento de maior hierarquia da página, nunca o mês/KPIs/carteira.
+          Rail em areia (mesmo token de `SectionHeader accent`, nenhuma cor
+          nova) separa a coluna de identidade do avatar. Seletor de mês
+          preservado, mas deslocado pra um papel visualmente secundário
+          (controle da página, não parte da identidade) e empurrado pra
+          depois da identidade na ordem de leitura mobile. */}
+      <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-4">
+          <ClientAvatar name={member.name} imageUrl={member.avatarUrl} size="lg" palette="koff" />
+          <div className="border-l-[3px] border-sand pl-4">
+            <h1 className="text-2xl font-semibold tracking-tight text-overview-text-primary sm:text-3xl">{member.name}</h1>
+            <p className="mt-1 text-sm text-overview-text-secondary">
               {member.jobTitle ?? "Sem cargo definido"} · {member.status === "ativo" ? "Ativo" : "Inativo"}
             </p>
+
+            {/* Até 3 insígnias em destaque — objeto visual puro (nunca a
+                credencial completa, essa é só da coleção abaixo). Seleção
+                determinística da Etapa 6A (`selectFeaturedInsignias`),
+                nunca reimplementada aqui. 0 destaques = nenhuma linha, sem
+                cadeado/placeholder. */}
+            {featuredInsignias.length > 0 && (
+              <div className="mt-3 flex items-center gap-2">
+                {featuredInsignias.map((insignia) => (
+                  <span key={insignia.type} role="img" aria-label={insignia.achievement.headline} title={insignia.achievement.headline} className="inline-flex">
+                    <InsigniaMark insignia={insignia} size="sm" />
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <p className="mt-3 text-[13px] text-overview-text-secondary">{profileContextLine}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-0.5 sm:pt-0.5">
           <IconButton href={buildMonthHref(shiftMonthParam({ firstDay: monthParam }, -1))} aria-label="Mês anterior" variant="ghost" size="sm">
             &lsaquo;
           </IconButton>
-          <span className="min-w-[8rem] text-center text-sm font-medium text-overview-text-primary">{monthLabel}</span>
+          <span className="min-w-[7rem] text-center text-[13px] text-overview-text-muted">{monthLabel}</span>
           <IconButton href={buildMonthHref(shiftMonthParam({ firstDay: monthParam }, 1))} aria-label="Próximo mês" variant="ghost" size="sm">
             &rsaquo;
           </IconButton>
@@ -354,6 +401,34 @@ export default async function TeamMemberProfilePage({
       </div>
     </div>
   );
+}
+
+/**
+ * Leitura curta do "estado profissional atual" pro cabeçalho (Etapa 6C) —
+ * só reaproveita `portfolio.clientCount` (Carteira atual) e
+ * `portfolioPerformance.evaluableCount`/`.withinTargetCount` (Performance
+ * da carteira atual, Fase 3), nenhum cálculo novo. Nunca menciona
+ * investimento (nunca mérito por volume administrado — pedido explícito).
+ *
+ * 3 estados, sempre honestos, nunca uma frase fabricada/enganosa:
+ * - sem cliente algum -> frase própria, sem tentar falar de performance;
+ * - com cliente(s) mas nenhuma conta avaliável -> diz isso explicitamente,
+ *   nunca "0 de 0 dentro da meta";
+ * - caso geral -> "X de Y contas avaliáveis dentro da meta", onde Y
+ *   (`evaluableCount`) pode ser menor que a carteira inteira (contas sem
+ *   meta/amostra/objetivo comparável ficam de fora do denominador, exatamente
+ *   como a seção "Performance da carteira atual" já faz) — nunca escondido,
+ *   só não detalhado aqui; o motivo completo já vive na seção logo abaixo.
+ */
+export function resolveProfileContextLine(portfolio: TeamMemberPortfolioSummary, portfolioPerformance: PortfolioPerformanceSummary): string {
+  if (portfolio.clientCount === 0) return "Nenhum cliente sob responsabilidade no momento.";
+
+  const clientsClause = `${portfolio.clientCount} cliente${portfolio.clientCount !== 1 ? "s" : ""} sob responsabilidade`;
+
+  if (portfolioPerformance.evaluableCount === 0) return `${clientsClause} · nenhuma conta avaliável no momento`;
+
+  const accountWord = portfolioPerformance.evaluableCount === 1 ? "conta avaliável" : "contas avaliáveis";
+  return `${clientsClause} · ${portfolioPerformance.withinTargetCount} de ${portfolioPerformance.evaluableCount} ${accountWord} dentro da meta`;
 }
 
 function PortfolioClientRow({ client, today }: { client: TeamMemberPortfolioClient; today: Date }) {

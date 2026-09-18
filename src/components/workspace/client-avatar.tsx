@@ -21,6 +21,13 @@ function paletteClassFor(name: string): string {
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
 }
 
+/** Etapa "Equipe — Redesign do Perfil — 6C": paleta fixa da identidade KOFF
+ * (areia + grafite), pro cabeçalho do Perfil Profissional — nunca o padrão
+ * (`AVATAR_PALETTE`, arco-íris por hash do nome), que continua intocado em
+ * todo uso existente (Operação, Clientes, `/team` lista). Opt-in via
+ * `palette="koff"`; nenhum call site existente passa essa prop. */
+const KOFF_AVATAR_PALETTE_CLASS = "bg-sand-subtle text-overview-text-primary";
+
 const SIZE_CLASSES = {
   xs: "h-5 w-5 text-[9px]",
   sm: "h-8 w-8 text-sm",
@@ -46,10 +53,15 @@ export function ClientAvatar({
   name,
   imageUrl,
   size = "sm",
+  palette = "auto",
 }: {
   name: string;
   imageUrl: string | null;
   size?: ClientAvatarSize;
+  /** `"auto"` (padrão, INTOCADO) = paleta arco-íris por hash do nome.
+   * `"koff"` (Etapa 6C, opt-in) = paleta fixa da marca, só pro cabeçalho
+   * do Perfil Profissional. */
+  palette?: "auto" | "koff";
 }) {
   const [failed, setFailed] = useState(false);
   const sizeClass = SIZE_CLASSES[size];
@@ -66,9 +78,11 @@ export function ClientAvatar({
     );
   }
 
+  const fallbackClass = palette === "koff" ? KOFF_AVATAR_PALETTE_CLASS : paletteClassFor(name);
+
   return (
     <span
-      className={`flex shrink-0 items-center justify-center rounded-full font-semibold ${sizeClass} ${paletteClassFor(name)}`}
+      className={`flex shrink-0 items-center justify-center rounded-full font-semibold ${sizeClass} ${fallbackClass}`}
       aria-hidden="true"
     >
       {initialOf(name)}

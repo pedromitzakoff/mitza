@@ -158,7 +158,12 @@ console.log("\n15 — Nenhuma outra seção da página foi alterada nesta etapa 
   for (const title of ["Trajetória", "Carteira atual", "Performance da carteira atual", "Evolução", "Histórico de carteira", "Experiência", "Conquistas"]) {
     ok(`seção "${title}" continua presente e intocada`, pageSource.includes(`"${title}"`) || pageSource.includes(`title={\`${title}`));
   }
-  ok("ClientAvatar continua importado e usado como antes (nenhuma variante nova nesta etapa)", /<ClientAvatar name=\{member\.name\} imageUrl=\{member\.avatarUrl\} size="lg" \/>/.test(pageSource));
+  // Etapa 6C (posterior a este arquivo, "Redesign do Cabeçalho") passou a
+  // usar `palette="koff"` no cabeçalho — variante opt-in, nunca o padrão do
+  // componente (ver `test-team-header.ts` para a cobertura completa dessa
+  // etapa). Esta asserção só confirma que ClientAvatar continua a fonte
+  // única do avatar, nunca reimplementado.
+  ok("ClientAvatar continua sendo o único componente de avatar usado na página", /<ClientAvatar name=\{member\.name\} imageUrl=\{member\.avatarUrl\}/.test(pageSource));
 }
 
 console.log(`\nTodos os ${passed} testes passaram.`);
