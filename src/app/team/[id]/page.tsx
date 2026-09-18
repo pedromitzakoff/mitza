@@ -97,10 +97,23 @@ import { OperationMetric } from "@/app/operation-metric";
  * UMA seção ("Experiência") — all-time é o número principal,
  * `activityInPeriod` vira contexto (`OperationMetric.context`) do MESMO
  * metric, nunca um segundo metric-peer repetindo o rótulo; as duas janelas
- * continuam dados diferentes, nunca somadas. Ordem provisória desta etapa:
+ * continuam dados diferentes, nunca somadas.
+ *
+ * Etapa "Redesign do Perfil + Sistema Visual de Insígnias — 6E: Acabamento
+ * final do perfil profissional": nenhuma seção nova, nenhum cálculo/fonte
+ * novo — só ritmo, hierarquia e consistência visual sobre o que 6A-6D já
+ * construíram. A página passa a se ler como 3 grupos (nunca como
+ * containers próprios — só espaço/linha/composição marcam a transição):
+ * Identidade (cabeçalho) → História profissional (Trajetória, Carteira &
+ * Performance, Experiência — mesma régua visual, as 3 com `accent` no
+ * título) → Reconhecimento (Insígnias, Conquistas — sem `accent`, entrada
+ * marcada por um respiro maior que o ritmo interno de cada grupo, nunca por
+ * um container novo). Dentro de Reconhecimento, Conquistas propositalmente
+ * pesa menos que Insígnias (tipografia mais discreta, linhas mais densas) —
+ * Insígnias é a coleção curada, Conquistas é o registro histórico; a
+ * diferença precisa ser perceptível sem parágrafo explicativo. Ordem final:
  * Perfil → Trajetória → Carteira & Performance → Experiência → Insígnias →
- * Conquistas (revisão final de ordem é trabalho da Etapa 6E, ainda não
- * aprovada).
+ * Conquistas.
  */
 export default async function TeamMemberProfilePage({
   params,
@@ -324,7 +337,7 @@ export default async function TeamMemberProfilePage({
           atendeu (atividade histórica) nunca é o mesmo que ser responsável
           (atribuição atual), ver `lib/team-performance-data.ts`. */}
       <div className="mt-8 border-t border-overview-border pt-4">
-        <SectionHeader title="Experiência" />
+        <SectionHeader title="Experiência" accent />
         <div className="mt-3 grid grid-cols-2 gap-x-10 gap-y-5 sm:grid-cols-3">
           <OperationMetric label="Clientes atendidos" value={String(distinctClientsServed)} />
           <OperationMetric
@@ -360,7 +373,7 @@ export default async function TeamMemberProfilePage({
           quando a Etapa 6A já tem sinal confiável (família com atividade
           real, nunca uma família zerada). */}
       {insignias.length > 0 && (
-        <div className="mt-8 border-t border-overview-border pt-4">
+        <div className="mt-14 border-t border-overview-border pt-4">
           <SectionHeader title="Insígnias" />
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {insignias.map((insignia) => (
@@ -370,7 +383,7 @@ export default async function TeamMemberProfilePage({
 
           {upcomingMilestones.length > 0 && (
             <div className="mt-5 border-t border-overview-border pt-3">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">Próximos marcos</p>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">Próximos marcos</p>
               <div className="mt-2 flex flex-col gap-1">
                 {upcomingMilestones.map((insignia) => (
                   <p key={insignia.type} className="text-[13px] text-overview-text-secondary">
@@ -386,17 +399,23 @@ export default async function TeamMemberProfilePage({
       {/* CONQUISTAS — só escopo Pessoa (ator real, gravado no momento da
           conquista). Conquistas de escopo Cliente nunca aparecem aqui (sem
           ator gravado — ver auditoria). Sem tokens/medalhas nesta fase. */}
-      <div className="mt-8 border-t border-overview-border pt-4">
+      {/* Etapa 6E — Conquistas é o registro histórico (denso, textual),
+          Insígnias é a coleção curada (símbolo, protagonista). A diferença
+          de peso vem só de tipografia/densidade, nunca de um parágrafo
+          explicando a distinção. Quando não há Insígnias pra abrir o grupo
+          Reconhecimento, Conquistas herda o respiro maior de entrada do
+          grupo (mesma regra visual, nunca um container novo). */}
+      <div className={insignias.length > 0 ? "mt-8 border-t border-overview-border pt-4" : "mt-14 border-t border-overview-border pt-4"}>
         <SectionHeader title="Conquistas" />
         {achievements.length > 0 ? (
           <div className="mt-3 flex flex-col divide-y divide-overview-border">
             {achievements.map((achievement) => (
-              <div key={achievement.id} className="py-2.5">
+              <div key={achievement.id} className="py-2">
                 <div className="flex items-baseline justify-between gap-3">
-                  <p className="text-sm font-medium text-overview-text-primary">{achievement.headline}</p>
+                  <p className="text-[13px] text-overview-text-secondary">{achievement.headline}</p>
                   <span className="shrink-0 text-[12px] text-overview-text-muted">{formatRelativeShortDateTime(achievement.occurredAt, now)}</span>
                 </div>
-                {achievement.detail && <p className="mt-0.5 text-[13px] text-overview-text-secondary">{achievement.detail}</p>}
+                {achievement.detail && <p className="mt-0.5 text-[12px] text-overview-text-muted">{achievement.detail}</p>}
               </div>
             ))}
           </div>
@@ -581,7 +600,7 @@ function InsigniaCredential({ insignia }: { insignia: Insignia }) {
     <div className="flex items-start gap-3 rounded-md border border-overview-border-strong bg-overview-surface-subtle p-3" title={insignia.achievement.headline}>
       <InsigniaMark insignia={insignia} />
       <div className="min-w-0">
-        <p className="text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">{familyLabel}</p>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">{familyLabel}</p>
         {insignia.stage && <p className="mt-0.5 text-[12px] font-medium text-overview-text-secondary">Estágio {stageNumeral(insignia.stage.current)}</p>}
         <p className="mt-0.5 text-sm font-semibold text-overview-text-primary">{insigniaHeadline(insignia)}</p>
         <p className="mt-0.5 text-[12px] text-overview-text-muted">Conquistada em {formatDateFromInstant(insignia.occurredAt)}</p>

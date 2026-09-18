@@ -90,7 +90,7 @@ console.log("\n6 — Investimento: contexto operacional discreto, NUNCA mais um 
 
 console.log("\n7 — Experiência: all-time é o número principal, mês vira contexto do MESMO metric — nunca duas janelas somadas ou substituídas\n");
 {
-  const experienceSectionSource = pageSource.match(/<SectionHeader title="Experiência" \/>[\s\S]*?Nenhum valor de investimento[\s\S]*?<\/p>\s*<\/div>/)?.[0] ?? "";
+  const experienceSectionSource = pageSource.match(/<SectionHeader title="Experiência" accent \/>[\s\S]*?Nenhum valor de investimento[\s\S]*?<\/p>\s*<\/div>/)?.[0] ?? "";
   ok('seção "Experiência" existe uma única vez (antiga "Atuação em [mês]" não existe mais separada)', !/Atuação em \$\{monthLabel/.test(pageSource));
   ok("valor principal de Otimizações é o all-time (activityAllTime.optimizations), nunca activityInPeriod sozinho", /value=\{String\(activityAllTime\.optimizations\)\}/.test(experienceSectionSource));
   ok("contexto do mês usa activityInPeriod (dado DIFERENTE do all-time, nunca somado)", /activityInPeriod\.optimizations > 0 \? `\$\{activityInPeriod\.optimizations\} neste mês`/.test(experienceSectionSource));
