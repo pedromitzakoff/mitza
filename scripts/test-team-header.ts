@@ -135,10 +135,10 @@ console.log("\n12 — Mobile: identidade empilha antes do seletor de mês, nunca
   ok("nenhuma classe de overflow-x/scroll horizontal no bloco de identidade", !/overflow-x/.test(identityBlockSource));
 }
 
-console.log("\n13 — Nenhuma outra seção da página foi tocada nesta etapa (fora do bloco de identidade)\n");
+console.log('\n13 — Seções da página continuam presentes (Etapa 6D, posterior a este arquivo, consolidou Carteira/Performance/Evolução/Histórico em "Carteira & Performance" — mudança intencional, ver relatório da Etapa 6D)\n');
 {
-  for (const title of ["Trajetória", "Carteira atual", "Performance da carteira atual", "Evolução", "Histórico de carteira", "Experiência", "Insígnias", "Conquistas"]) {
-    ok(`seção "${title}" continua presente e intocada`, pageSource.includes(`"${title}"`) || pageSource.includes(`title={\`${title}`));
+  for (const title of ["Trajetória", "Carteira & Performance", "Experiência", "Insígnias", "Conquistas"]) {
+    ok(`seção "${title}" continua presente`, pageSource.includes(`"${title}"`) || pageSource.includes(`title={\`${title}`));
   }
 }
 

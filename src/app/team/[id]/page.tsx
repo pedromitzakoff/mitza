@@ -82,9 +82,25 @@ import { OperationMetric } from "@/app/operation-metric";
  * curta do estado profissional atual (`resolveProfileContextLine`, abaixo
  * — só reaproveita `portfolio`/`portfolioPerformance` já calculados,
  * nenhum cálculo novo, nunca menciona investimento). Seletor de mês
- * preservado, deslocado pra um papel visualmente secundário. Nenhuma outra
- * seção da página foi tocada (isso é trabalho de etapas futuras, ainda não
- * aprovadas).
+ * preservado, deslocado pra um papel visualmente secundário.
+ *
+ * Etapa "Redesign do Perfil + Sistema Visual de Insígnias — 6D:
+ * Consolidação Visual": reduz fragmentação, nenhum cálculo/fonte/regra
+ * nova. "Carteira atual" + "Performance da carteira atual" + "Evolução" +
+ * "Histórico de carteira" viram UMA seção ("Carteira & Performance") —
+ * lista por cliente fundida numa linha só (`PortfolioClientRow`, abaixo,
+ * combina os campos das duas antigas linhas), Evolução como subleitura com
+ * estado vazio honesto (nunca mais some inteira), Histórico revelável via
+ * `<details>` nativo (nenhuma dependência nova). Investimento vira
+ * contexto operacional discreto, nunca mais um `OperationMetric` de peso
+ * igual à performance. "Atuação em [mês]" + "Experiência" (Fase 5) viram
+ * UMA seção ("Experiência") — all-time é o número principal,
+ * `activityInPeriod` vira contexto (`OperationMetric.context`) do MESMO
+ * metric, nunca um segundo metric-peer repetindo o rótulo; as duas janelas
+ * continuam dados diferentes, nunca somadas. Ordem provisória desta etapa:
+ * Perfil → Trajetória → Carteira & Performance → Experiência → Insígnias →
+ * Conquistas (revisão final de ordem é trabalho da Etapa 6E, ainda não
+ * aprovada).
  */
 export default async function TeamMemberProfilePage({
   params,
@@ -132,6 +148,12 @@ export default async function TeamMemberProfilePage({
   const upcomingMilestones = selectUpcomingMilestones(insignias);
   const featuredInsignias = selectFeaturedInsignias(insignias);
   const profileContextLine = resolveProfileContextLine(portfolio, portfolioPerformance);
+  // Etapa 6D — funde a leitura de carteira (portfolio.clients) com a de
+  // performance (portfolioPerformance.clients) por cliente, numa única
+  // linha (`PortfolioClientRow`, abaixo). Os dois arrays vêm sempre do
+  // MESMO `managerStates` (`lib/team-performance-data.ts`), mesmo
+  // clientId — o Map só existe pra casar os dois sem depender de ordem.
+  const performanceByClientId = new Map(portfolioPerformance.clients.map((client) => [client.clientId, client]));
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -208,43 +230,30 @@ export default async function TeamMemberProfilePage({
         </div>
       )}
 
-      {/* CARTEIRA ATUAL — fato do estado atual (`primary_manager_id`), nunca
-          um total histórico (auditoria: não existe histórico de troca de
-          gestor confiável no schema). */}
+      {/* CARTEIRA & PERFORMANCE — Etapa "Equipe — Redesign do Perfil — 6D":
+          consolida as 4 antigas seções (Carteira atual / Performance da
+          carteira atual / Evolução / Histórico de carteira) numa única
+          leitura editorial — "qual é a responsabilidade atual dessa pessoa
+          e como essa carteira está performando", nenhum cálculo novo, só
+          composição. Nenhuma fonte/regra/período mudou: `portfolio.clientCount`
+          e `portfolioPerformance.evaluableCount/withinTargetCount` continuam
+          exatamente os mesmos agregados de sempre; `portfolioEvolution`
+          continua só meses com responsabilidade INTEIRA (Fase 3,
+          `periodCoversFullMonth`); `assignmentHistory` continua vindo de
+          `client_manager_assignments` via `loadManagerAssignmentHistory`
+          (Fase 2), nunca reconstruído.
+          Investimento vira contexto operacional discreto (nunca mais um
+          `OperationMetric` de peso igual aos números de performance —
+          pedido explícito: nunca "mais investimento = melhor gestor").
+          A lista por cliente funde as duas antigas linhas (Carteira atual +
+          Performance) numa só (`PortfolioClientRow`, abaixo) — MESMOS
+          campos dos dois lados, nenhuma informação removida, só uma leitura
+          por cliente em vez de duas. */}
       <div className="mt-8 border-t border-overview-border pt-4">
-        <SectionHeader title="Carteira atual" accent />
-        <div className="mt-3 grid grid-cols-2 gap-x-10 gap-y-5 sm:grid-cols-3">
-          <OperationMetric label="Clientes" value={String(portfolio.clientCount)} />
-          <OperationMetric label={`Investimento da carteira atual em ${monthLabel.toLowerCase()}`} value={formatCurrency(portfolio.investmentActual)} />
-        </div>
-
-        {portfolio.clients.length > 0 ? (
-          <div className="mt-4 flex flex-col divide-y divide-overview-border">
-            {portfolio.clients.map((client) => (
-              <PortfolioClientRow key={client.clientId} client={client} today={now} />
-            ))}
-          </div>
-        ) : (
-          <p className="mt-3 text-[13px] text-overview-text-secondary">Nenhum cliente atribuído atualmente.</p>
-        )}
-      </div>
-
-      {/* PERFORMANCE DA CARTEIRA ATUAL — Etapa "Equipe — Fase 3": cada
-          cliente comparado contra a PRÓPRIA meta, nunca volume/investimento
-          absoluto (princípio central aprovado). Reaproveita
-          `evaluation.dimensions.cost` (Motor de Saúde) já calculado por
-          `loadClientOperationalStates` — nenhum cálculo novo, só a
-          classificação do motivo quando não avaliável (ver
-          `lib/team-portfolio-performance.ts`). "Seguidores" fica fora da
-          avaliação nesta fase (decisão explícita — o pipeline hoje mistura
-          investimento de todos os canais no denominador do custo por
-          seguidor, mesmo quando só Meta Ads deveria contar). */}
-      <div className="mt-8 border-t border-overview-border pt-4">
-        <SectionHeader title="Performance da carteira atual" />
-        <div className="mt-3 grid grid-cols-3 gap-x-10 gap-y-5">
-          <OperationMetric label="Contas avaliáveis" value={String(portfolioPerformance.evaluableCount)} />
-          <OperationMetric label="Dentro da meta" value={String(portfolioPerformance.withinTargetCount)} />
-          <OperationMetric label="Fora da meta" value={String(portfolioPerformance.outsideTargetCount)} />
+        <SectionHeader title="Carteira & Performance" accent />
+        <div className="mt-3 grid grid-cols-2 gap-x-10 gap-y-5">
+          <OperationMetric label="Clientes sob responsabilidade" value={String(portfolio.clientCount)} />
+          <OperationMetric label="Dentro da meta" value={`${portfolioPerformance.withinTargetCount} / ${portfolioPerformance.evaluableCount}`} />
         </div>
         {portfolioPerformance.unavailableCount > 0 && (
           <p className="mt-2 text-[13px] text-overview-text-muted">
@@ -252,91 +261,87 @@ export default async function TeamMemberProfilePage({
             contam nem a favor nem contra.
           </p>
         )}
+        <p className="mt-2 text-[13px] text-overview-text-muted">
+          Investimento da carteira atual em {monthLabel.toLowerCase()}: {formatCurrency(portfolio.investmentActual)} — contexto operacional, não é
+          leitura de performance.
+        </p>
 
-        {portfolioPerformance.clients.length > 0 ? (
+        {portfolio.clients.length > 0 ? (
           <div className="mt-4 flex flex-col divide-y divide-overview-border">
-            {portfolioPerformance.clients.map((client) => (
-              <PortfolioPerformanceRow key={client.clientId} client={client} />
+            {portfolio.clients.map((client) => (
+              <PortfolioClientRow key={client.clientId} client={client} evaluation={performanceByClientId.get(client.clientId)} today={now} />
             ))}
           </div>
         ) : (
-          <p className="mt-3 text-[13px] text-overview-text-secondary">Nenhum cliente atribuído atualmente.</p>
+          <p className="mt-3 text-[13px] text-overview-text-secondary">Nenhum cliente sob responsabilidade atualmente.</p>
+        )}
+
+        {/* EVOLUÇÃO — subleitura, mesma regra temporal da Fase 3. Estado
+            vazio honesto e discreto (nunca a seção inteira some mais —
+            agora vive dentro de um bloco persistente). */}
+        <div className="mt-6 border-t border-overview-border pt-4">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-overview-text-muted">Evolução</p>
+          {portfolioEvolution.length > 0 ? (
+            <div className="mt-2 flex flex-col divide-y divide-overview-border">
+              {portfolioEvolution.map((point) => (
+                <EvolutionRow key={point.monthParam} point={point} />
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[13px] text-overview-text-muted">Ainda sem meses completos suficientes para mostrar evolução da carteira.</p>
+          )}
+        </div>
+
+        {/* HISTÓRICO DE CARTEIRA — revelável (`<details>` nativo, sem
+            dependência nova), nunca escondido de forma inacessível. Some
+            inteiro só quando não há NENHUM período pra mostrar (nada antes
+            do deploy da Fase 2 existe com confiança). */}
+        {assignmentHistory.length > 0 && (
+          <details className="mt-5 border-t border-overview-border pt-3">
+            <summary className="cursor-pointer text-[11px] font-medium uppercase tracking-wide text-overview-text-muted hover:text-overview-text-secondary">
+              Histórico de carteira
+            </summary>
+            <div className="mt-3 flex flex-col divide-y divide-overview-border">
+              {assignmentHistory.map((entry) => (
+                <AssignmentHistoryRow key={`${entry.clientId}-${entry.startedAt}`} entry={entry} />
+              ))}
+            </div>
+          </details>
         )}
       </div>
 
-      {/* EVOLUÇÃO — Etapa "Equipe — Fase 3": só meses com responsabilidade
-          INTEIRA (nunca parcial) sobre pelo menos 1 cliente entram aqui (ver
-          `periodCoversFullMonth`, `lib/team-portfolio-performance.ts`).
-          Como `client_manager_assignments` só existe a partir do deploy da
-          Fase 2, é esperado que esta seção comece vazia (o primeiro mês
-          potencialmente elegível é o seguinte ao deploy) — a seção some
-          inteira nesse caso, nunca mostra um "0/0" ou um mês fabricado. */}
-      {portfolioEvolution.length > 0 && (
-        <div className="mt-8 border-t border-overview-border pt-4">
-          <SectionHeader title="Evolução" />
-          <div className="mt-3 flex flex-col divide-y divide-overview-border">
-            {portfolioEvolution.map((point) => (
-              <EvolutionRow key={point.monthParam} point={point} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* HISTÓRICO DE CARTEIRA — Etapa "Equipe — Fase 2": fonte é
-          `client_manager_assignments` (via `loadManagerAssignmentHistory`),
-          nunca reconstruída/inventada — todo período aqui é real a partir
-          do deploy dessa etapa; nada antes disso aparece, porque nada antes
-          disso existe com confiança (ver auditoria em
-          `supabase/client-manager-assignments.sql`). Cada linha é um fato
-          (cliente, início, fim/"atual"), nunca um agregado/score. Agrupada
-          junto de Carteira/Performance/Evolução (Etapa "Equipe — Fase 5":
-          reorganização de seções). */}
-      {assignmentHistory.length > 0 && (
-        <div className="mt-8 border-t border-overview-border pt-4">
-          <SectionHeader title="Histórico de carteira" />
-          <div className="mt-3 flex flex-col divide-y divide-overview-border">
-            {assignmentHistory.map((entry) => (
-              <AssignmentHistoryRow key={`${entry.clientId}-${entry.startedAt}`} entry={entry} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ATUAÇÃO NO MÊS — sempre por ATOR (quem de fato registrou a ação),
-          nunca por gestor atual do cliente; cada evento é 1:1 com uma ação
-          real (ver auditoria — otimizações somam account_optimization_recorded,
-          nunca account_review_recorded no mesmo total, pra não contar a
-          mesma análise duas vezes). */}
-      <div className="mt-8 border-t border-overview-border pt-4">
-        <SectionHeader title={`Atuação em ${monthLabel.toLowerCase()}`} />
-        <div className="mt-3 grid grid-cols-3 gap-x-10 gap-y-5">
-          <OperationMetric label="Otimizações" value={String(activityInPeriod.optimizations)} />
-          <OperationMetric label="Reports enviados" value={String(activityInPeriod.reportsSent)} />
-          <OperationMetric label="Reuniões" value={String(activityInPeriod.meetings)} />
-        </div>
-      </div>
-
-      {/* EXPERIÊNCIA — Etapa "Equipe — Fase 5": substitui a antiga seção
-          "Histórico" (mesmos 3 números, all-time, só o que é seguro
-          historicamente — eventos com ator + data reais, tabela
-          append-only). "Clientes atendidos" é NOVO: distinto de
-          `portfolio.clientCount` (carteira atual/`primary_manager_id`) —
-          atendeu (atividade registrada) nunca é a mesma coisa que ser
-          responsável (atribuição); os dois nunca são somados ou chamados
-          pelo mesmo nome (ver `lib/team-performance-data.ts`). "Meses com
-          carteira avaliável" (`portfolioEvolution.length`) só aparece
-          quando > 0 — nunca um "0 meses" destacado (mesma regra de nunca
-          fabricar um estado vazio como se fosse informação). Deliberadamente
-          SEM nenhum total de investimento: não existe histórico de troca de
-          gestor confiável pra provar que os clientes da carteira ATUAL já
-          eram dele em períodos passados. */}
+      {/* EXPERIÊNCIA — Etapa "Equipe — Redesign do Perfil — 6D": funde as
+          antigas "Atuação em [mês]" + "Experiência" (Fase 5) — mesmos 3
+          números de atuação, agora numa ÚNICA leitura por métrica: all-time
+          é o número principal, o período selecionado vira contexto
+          (`OperationMetric.context`, nunca um segundo metric-peer repetindo
+          o mesmo rótulo). As duas janelas continuam sendo DOIS dados
+          diferentes (`activityAllTime` / `activityInPeriod`, nenhuma soma,
+          nenhuma substituição) — só a apresentação foi unificada. Contexto
+          só aparece quando > 0 (nunca "0 neste mês" como se fosse
+          informação). "Clientes atendidos" (`distinctClientsServed`)
+          continua distinto de `portfolio.clientCount` (carteira atual) —
+          atendeu (atividade histórica) nunca é o mesmo que ser responsável
+          (atribuição atual), ver `lib/team-performance-data.ts`. */}
       <div className="mt-8 border-t border-overview-border pt-4">
         <SectionHeader title="Experiência" />
         <div className="mt-3 grid grid-cols-2 gap-x-10 gap-y-5 sm:grid-cols-3">
           <OperationMetric label="Clientes atendidos" value={String(distinctClientsServed)} />
-          <OperationMetric label="Otimizações" value={String(activityAllTime.optimizations)} />
-          <OperationMetric label="Reports enviados" value={String(activityAllTime.reportsSent)} />
-          <OperationMetric label="Reuniões concluídas" value={String(activityAllTime.meetings)} />
+          <OperationMetric
+            label="Otimizações"
+            value={String(activityAllTime.optimizations)}
+            context={activityInPeriod.optimizations > 0 ? `${activityInPeriod.optimizations} neste mês` : undefined}
+          />
+          <OperationMetric
+            label="Reports enviados"
+            value={String(activityAllTime.reportsSent)}
+            context={activityInPeriod.reportsSent > 0 ? `${activityInPeriod.reportsSent} neste mês` : undefined}
+          />
+          <OperationMetric
+            label="Reuniões concluídas"
+            value={String(activityAllTime.meetings)}
+            context={activityInPeriod.meetings > 0 ? `${activityInPeriod.meetings} neste mês` : undefined}
+          />
           {portfolioEvolution.length > 0 && <OperationMetric label="Meses com carteira avaliável" value={String(portfolioEvolution.length)} />}
         </div>
         <p className="mt-3 text-[12px] text-overview-text-muted">
@@ -431,7 +436,28 @@ export function resolveProfileContextLine(portfolio: TeamMemberPortfolioSummary,
   return `${clientsClause} · ${portfolioPerformance.withinTargetCount} de ${portfolioPerformance.evaluableCount} ${accountWord} dentro da meta`;
 }
 
-function PortfolioClientRow({ client, today }: { client: TeamMemberPortfolioClient; today: Date }) {
+/**
+ * Etapa "Equipe — Redesign do Perfil — 6D": linha ÚNICA por cliente,
+ * fundindo as antigas `PortfolioClientRow` (carteira: objetivo/canais/
+ * "assumiu em") + `PortfolioPerformanceRow` (performance: avaliável/custo/
+ * meta/desvio/motivo de indisponibilidade) — mesmos campos dos dois lados,
+ * nenhum removido. A leitura de custo usa `evaluation` (mais completa —
+ * `evaluable` já exclui objetivos não suportados/sem meta/amostra
+ * insuficiente/escopo não comparável, ver `evaluatePortfolioClient`,
+ * `lib/team-portfolio-performance.ts`) em vez do `client.costComparable`
+ * mais estreito — os VALORES (`costActual`/`costTarget`) são idênticos nos
+ * dois lados (mesma leitura de `state.evaluation.dimensions.cost`), só a
+ * classificação "isso é comparável?" é mais completa em `evaluation`.
+ */
+function PortfolioClientRow({
+  client,
+  evaluation,
+  today,
+}: {
+  client: TeamMemberPortfolioClient;
+  evaluation: PortfolioClientEvaluation | undefined;
+  today: Date;
+}) {
   const goalLabel = client.performanceGoal === "leads" ? "Leads" : client.performanceGoal === "sales" ? "Vendas" : client.performanceGoal === "followers" ? "Seguidores" : null;
 
   return (
@@ -445,11 +471,23 @@ function PortfolioClientRow({ client, today }: { client: TeamMemberPortfolioClie
           <p className="mt-0.5 text-[12px] text-overview-text-muted">Assumiu esta conta em {formatRelativeShortDateTime(client.assignedWithinPeriodAt, today)}</p>
         )}
       </div>
-      <p className="text-[13px] text-overview-text-secondary tabular-nums">
-        {client.costComparable && client.costActual !== null && client.costTarget !== null
-          ? `${client.costMetricShortLabel} ${formatCurrency(client.costActual)} · Meta ${formatCurrency(client.costTarget)}`
-          : "Sem meta de custo comparável"}
-      </p>
+      {evaluation?.evaluable && evaluation.costActual !== null && evaluation.costTarget !== null ? (
+        <p className="text-[13px] text-overview-text-secondary tabular-nums sm:text-right">
+          {evaluation.costMetricShortLabel} {formatCurrency(evaluation.costActual)} · Meta {formatCurrency(evaluation.costTarget)}
+          {evaluation.relativeDeviation !== null && (
+            <>
+              {" · "}
+              <span className={evaluation.withinTarget ? "text-overview-text-secondary" : "text-overview-danger"}>
+                {formatRelativeDeviationLabel(evaluation.relativeDeviation)}
+              </span>
+            </>
+          )}
+        </p>
+      ) : (
+        <p className="text-[13px] text-overview-text-muted">
+          Sem avaliação confiável{evaluation?.unavailableReason ? ` — ${describePortfolioUnavailableReason(evaluation.unavailableReason).toLowerCase()}` : ""}
+        </p>
+      )}
     </div>
   );
 }
@@ -570,36 +608,6 @@ function upcomingMilestoneLabel(insignia: Insignia): string {
 function formatRelativeDeviationLabel(deviation: number): string {
   const pct = Math.round(Math.abs(deviation) * 100);
   return deviation < 0 ? `${pct}% melhor que a meta` : `${pct}% acima da meta`;
-}
-
-function PortfolioPerformanceRow({ client }: { client: PortfolioClientEvaluation }) {
-  const goalLabel = client.performanceGoal === "leads" ? "Leads" : client.performanceGoal === "sales" ? "Vendas" : client.performanceGoal === "followers" ? "Seguidores" : null;
-
-  return (
-    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2.5">
-      <div>
-        <p className="text-sm font-medium text-overview-text-primary">{client.clientName}</p>
-        <p className="mt-0.5 text-[13px] text-overview-text-secondary">{goalLabel ?? "Objetivo não configurado"}</p>
-      </div>
-      {client.evaluable && client.costActual !== null && client.costTarget !== null ? (
-        <p className="text-right text-[13px] text-overview-text-secondary tabular-nums">
-          {client.costMetricShortLabel} {formatCurrency(client.costActual)} · Meta {formatCurrency(client.costTarget)}
-          {client.relativeDeviation !== null && (
-            <>
-              {" · "}
-              <span className={client.withinTarget ? "text-overview-text-secondary" : "text-overview-danger"}>
-                {formatRelativeDeviationLabel(client.relativeDeviation)}
-              </span>
-            </>
-          )}
-        </p>
-      ) : (
-        <p className="text-[13px] text-overview-text-muted">
-          Sem avaliação confiável — {client.unavailableReason ? describePortfolioUnavailableReason(client.unavailableReason).toLowerCase() : ""}
-        </p>
-      )}
-    </div>
-  );
 }
 
 function EvolutionRow({ point }: { point: ManagerPortfolioEvolutionPoint }) {

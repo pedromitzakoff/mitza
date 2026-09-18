@@ -174,7 +174,14 @@ console.log("\n5 — Investimento NUNCA é somado/tratado como histórico, e a U
     'rótulo do investimento do período é "Investimento da carteira atual em {mês}" (nunca "gerenciado")',
     /Investimento da carteira atual em/.test(teamProfilePageSource) && /Investimento da carteira atual em/.test(teamListPageSource),
   );
-  ok('seção de performance se chama "Performance da carteira atual" (nunca sem o qualificador "atual")', /Performance da carteira atual/.test(teamProfilePageSource));
+  // Etapa "Equipe — Redesign do Perfil — 6D": "Carteira atual" +
+  // "Performance da carteira atual" viraram uma única seção "Carteira &
+  // Performance" — a leitura de performance continua sempre sobre a
+  // carteira ATUAL (nenhuma mudança de fonte/regra), só a separação visual
+  // em duas seções foi removida (mudança de título intencional, ver
+  // relatório da Etapa 6D).
+  ok('seção consolidada se chama "Carteira & Performance" (Etapa 6D)', /Carteira & Performance/.test(teamProfilePageSource));
+  ok('rótulo "Dentro da meta" continua presente na seção consolidada', /Dentro da meta/.test(teamProfilePageSource));
 
   // Etapa "Revisão semântica — atribuição de investimento/performance":
   // varredura ampla nas 3 fontes (código VIVO, sem comentários — stripComments

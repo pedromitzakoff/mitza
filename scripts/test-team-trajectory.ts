@@ -194,9 +194,16 @@ console.log('\n11 — "Meses com carteira avaliável" respeita a Fase 3 e nunca 
 
 console.log("\n12 — Página reorganizada preserva todas as seções existentes (nenhuma removida silenciosamente)\n");
 {
-  for (const title of ["Trajetória", "Carteira atual", "Performance da carteira atual", "Evolução", "Histórico de carteira", "Experiência", "Insígnias", "Conquistas"]) {
+  // Etapa "Equipe — Redesign do Perfil — 6D": "Carteira atual" +
+  // "Performance da carteira atual" + "Evolução" (título próprio) +
+  // "Histórico de carteira" (título próprio) foram consolidadas em
+  // "Carteira & Performance" — mudança de título INTENCIONAL (ver
+  // relatório da Etapa 6D), lista atualizada deliberadamente.
+  for (const title of ["Trajetória", "Carteira & Performance", "Experiência", "Insígnias", "Conquistas"]) {
     ok(`seção "${title}" presente em app/team/[id]/page.tsx`, teamProfilePageSource.includes(`"${title}"`) || teamProfilePageSource.includes(`title={\`${title}`));
   }
+  ok('"Evolução" continua presente como subleitura dentro de Carteira & Performance (não mais título de seção própria)', /Evolução/.test(teamProfilePageSource));
+  ok('"Histórico de carteira" continua presente, agora revelável (<details>) dentro de Carteira & Performance', /Histórico de carteira/.test(teamProfilePageSource));
   ok('seção "Histórico" antiga (substituída por "Experiência") não existe mais isolada', !/title="Histórico"/.test(teamProfilePageSource));
 }
 

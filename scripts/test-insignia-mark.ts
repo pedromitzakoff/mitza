@@ -153,10 +153,10 @@ console.log("\n14 — Contagens vivas usadas no 'próximo marco' são reaproveit
   ok("revisões nunca recebe contagem viva nesta etapa (sem query nova pra isso)", !/person_reviews_milestone: /.test(pageSource));
 }
 
-console.log("\n15 — Nenhuma outra seção da página foi alterada nesta etapa (cabeçalho, ordem, demais componentes intactos)\n");
+console.log('\n15 — Seção "Insígnias" (escopo deste arquivo) e as demais seções continuam presentes (Etapa 6D consolidou títulos de Carteira/Performance/Evolução/Histórico — mudança intencional, ver relatório da Etapa 6D)\n');
 {
-  for (const title of ["Trajetória", "Carteira atual", "Performance da carteira atual", "Evolução", "Histórico de carteira", "Experiência", "Conquistas"]) {
-    ok(`seção "${title}" continua presente e intocada`, pageSource.includes(`"${title}"`) || pageSource.includes(`title={\`${title}`));
+  for (const title of ["Trajetória", "Carteira & Performance", "Experiência", "Conquistas"]) {
+    ok(`seção "${title}" continua presente`, pageSource.includes(`"${title}"`) || pageSource.includes(`title={\`${title}`));
   }
   // Etapa 6C (posterior a este arquivo, "Redesign do Cabeçalho") passou a
   // usar `palette="koff"` no cabeçalho — variante opt-in, nunca o padrão do
