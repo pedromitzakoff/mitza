@@ -12,12 +12,13 @@ import {
   type PortfolioClientEvaluation,
   type ManagerPortfolioEvolutionPoint,
 } from "@/lib/team-portfolio-performance";
-import { selectPersonBadges } from "@/lib/achievement-badges";
 import { curateTeamMemberTrajectory, type TrajectoryPoint } from "@/lib/team-trajectory";
-import type { AchievementRow } from "@/lib/achievements-data";
+import { buildInsigniaCollection, selectUpcomingMilestones, type Insignia } from "@/lib/achievement-insignia";
+import { PERSON_FAMILY_LABEL } from "@/lib/achievement-labels";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { IconButton, Button } from "@/components/workspace/button";
 import { SectionHeader } from "@/components/workspace/section-header";
+import { InsigniaMark, stageNumeral } from "@/components/workspace/insignia-mark";
 import { OperationMetric } from "@/app/operation-metric";
 
 /**
@@ -52,6 +53,17 @@ import { OperationMetric } from "@/app/operation-metric";
  * "Entrou na KOFF em...", nem "Perfil registrado desde..." (pedido
  * explícito: omitir completamente, não substituir por uma frase mais
  * cautelosa).
+ *
+ * Etapa "Redesign do Perfil + Sistema Visual de Insígnias — 6B": a seção
+ * "Insígnias" passa a usar `buildInsigniaCollection`/`InsigniaMark`
+ * (`lib/achievement-insignia.ts` + `components/workspace/insignia-mark.tsx`,
+ * Etapa 6A/6B) no lugar do antigo `selectPersonBadges`/`BadgeCredential` —
+ * mesma fonte (`achievements`), nenhum dado novo, só a representação visual
+ * própria da KOFF (placa geométrica + glifo por família + prestígio
+ * Marco/Destaque/Elite). "Próximos marcos" (nova, discreta, texto puro)
+ * usa `selectUpcomingMilestones`. Nenhuma outra seção desta página foi
+ * tocada nesta etapa — cabeçalho, ordem das seções e demais componentes
+ * seguem intocados (isso é trabalho da Etapa 6C, ainda não aprovada).
  */
 export default async function TeamMemberProfilePage({
   params,
@@ -85,8 +97,18 @@ export default async function TeamMemberProfilePage({
   const now = new Date();
 
   const { portfolio, portfolioPerformance, activityInPeriod, activityAllTime, distinctClientsServed, achievements } = member;
-  const badges = selectPersonBadges(achievements);
   const trajectory = curateTeamMemberTrajectory(achievements);
+  // Contagens vivas já carregadas por esta mesma página (nenhuma query
+  // nova) — exatamente os 3 tipos com contagem canônica simples disponível
+  // aqui (ver auditoria da Etapa 6A). "Revisões" fica de fora: não existe
+  // hoje uma contagem viva exposta por `loadTeamMemberProfiles` pra ela —
+  // sem esse número, `buildInsigniaCollection` já nunca fabrica progresso.
+  const insignias = buildInsigniaCollection(achievements, {
+    person_optimizations_milestone: activityAllTime.optimizations,
+    person_reports_milestone: activityAllTime.reportsSent,
+    person_clients_served_milestone: distinctClientsServed,
+  });
+  const upcomingMilestones = selectUpcomingMilestones(insignias);
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -276,19 +298,36 @@ export default async function TeamMemberProfilePage({
         </p>
       </div>
 
-      {/* INSÍGNIAS — Etapa "Equipe — Fase 4": maior patamar já cruzado por
-          `type` escalonável (`selectPersonBadges`, `lib/achievement-badges.ts`),
-          nunca um evento novo — reagrupamento puro sobre as mesmas
-          conquistas já carregadas abaixo. Credencial editorial (borda +
-          tipografia + acento verde-limão), nunca medalha/estrela/XP. */}
-      {badges.length > 0 && (
+      {/* INSÍGNIAS — Etapa "Equipe — Redesign do Perfil + Sistema Visual de
+          Insígnias — 6A/6B": `buildInsigniaCollection` (maior patamar já
+          cruzado por tipo escalonável, mais os tipos únicos/recorrente de
+          Performance — Etapa 6A) representada pelo sistema visual próprio
+          da KOFF (`InsigniaMark` — Etapa 6B), nunca um evento novo, nunca
+          medalha/estrela/XP. "Próximos marcos" é deliberadamente discreto
+          (texto puro, sem símbolo, sem parede de cadeados) — só aparece
+          quando a Etapa 6A já tem sinal confiável (família com atividade
+          real, nunca uma família zerada). */}
+      {insignias.length > 0 && (
         <div className="mt-8 border-t border-overview-border pt-4">
           <SectionHeader title="Insígnias" />
-          <div className="mt-3 flex flex-wrap gap-2">
-            {badges.map((badge) => (
-              <BadgeCredential key={badge.type} achievement={badge} />
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {insignias.map((insignia) => (
+              <InsigniaCredential key={insignia.type} insignia={insignia} />
             ))}
           </div>
+
+          {upcomingMilestones.length > 0 && (
+            <div className="mt-5 border-t border-overview-border pt-3">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">Próximos marcos</p>
+              <div className="mt-2 flex flex-col gap-1">
+                {upcomingMilestones.map((insignia) => (
+                  <p key={insignia.type} className="text-[13px] text-overview-text-secondary">
+                    {upcomingMilestoneLabel(insignia)}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -380,52 +419,74 @@ function AssignmentHistoryRow({ entry }: { entry: ManagerAssignmentHistoryEntry 
   );
 }
 
-/** Rótulo curto por `type` de insígnia — único lugar que decide isso (nunca
- * reimplementado por card). Todo `type` de `ESCALATING_BADGE_TYPES`
- * (`lib/achievement-badges.ts`) precisa de uma entrada aqui. */
-const BADGE_LABELS: Record<string, string> = {
-  person_consecutive_months_fully_within_target: "Consistência",
-  person_optimizations_milestone: "Otimizações",
-  person_reviews_milestone: "Revisões",
-  person_reports_milestone: "Reports",
-  person_clients_served_milestone: "Clientes atendidos",
-  person_tenure_milestone: "Tempo de casa",
-};
-
-/** Valor curto exibido no selo — mesma leitura de `metric.target` que já
- * sustenta a conquista (nenhum recálculo), só formatado pro espaço
- * compacto do selo. Tempo de casa e Consistência têm unidade própria (meses/
- * anos); o resto é contagem simples. */
-function formatBadgeValue(achievement: AchievementRow): string {
-  const target = achievement.metric?.target;
-  if (target === null || target === undefined) return "";
-  if (achievement.type === "person_tenure_milestone") {
-    if (target >= 24) return `${target / 12} anos`;
-    if (target === 12) return "1 ano";
-    return `${target} meses`;
+/** Texto compacto de "o que foi conquistado" por `type` — estilo rótulo
+ * ("100 otimizações"), sempre a partir de `insignia.milestone`/`type`
+ * (campos já classificados pela Etapa 6A, nenhum recálculo). Deliberadamente
+ * uma função PRÓPRIA, nunca reaproveita `buildTrajectoryHeadline`
+ * (`lib/team-trajectory.ts`, Fase 5): aquela escreve pra uma linha do tempo
+ * narrativa ("100 otimizações registradas"), esta pra uma credencial
+ * compacta ("100 otimizações") — finalidades diferentes, mesmo dado de
+ * origem. Nunca reaproveita `achievement.headline` bruto (escrito pro feed
+ * de Conquistas compartilhado, sempre com nome). */
+function insigniaHeadline(insignia: Insignia): string {
+  const n = insignia.milestone ?? 0;
+  switch (insignia.type) {
+    case "person_reviews_milestone":
+      return `${n} ${n === 1 ? "revisão" : "revisões"}`;
+    case "person_optimizations_milestone":
+      return `${n} ${n === 1 ? "otimização" : "otimizações"}`;
+    case "person_clients_served_milestone":
+      return `${n} ${n === 1 ? "cliente atendido" : "clientes atendidos"}`;
+    case "person_reports_milestone":
+      return `${n} ${n === 1 ? "report enviado" : "reports enviados"}`;
+    case "person_consecutive_months_fully_within_target":
+      return `${n} ${n === 1 ? "mês" : "meses"} de consistência`;
+    case "person_first_meeting_completed":
+      return "Primeira reunião concluída";
+    case "person_first_creative_delivery_completed":
+      return "Primeira entrega de criativo concluída";
+    case "person_first_client_within_target":
+      return "Primeira conta dentro da meta";
+    case "person_portfolio_fully_within_target":
+      return "Carteira inteira dentro da meta";
+    default:
+      // Defensivo — nunca deveria ocorrer: todo `type` que chega até aqui já
+      // passou pela classificação da Etapa 6A (`buildInsigniaCollection`).
+      return insignia.achievement.headline;
   }
-  if (achievement.type === "person_consecutive_months_fully_within_target") return `${target} meses`;
-  return String(target);
 }
 
-/** Credencial profissional — editorial/sóbria (borda + tipografia + filete
- * verde-limão como único acento), deliberadamente sem medalha/estrela/XP/
- * pódio. `title` (tooltip nativo) carrega o `headline` completo da conquista
- * por trás do selo, sem precisar de um componente de detalhe novo nesta
- * fase. */
-function BadgeCredential({ achievement }: { achievement: AchievementRow }) {
-  const label = BADGE_LABELS[achievement.type] ?? achievement.family;
-  const value = formatBadgeValue(achievement);
+/** Credencial profissional — Etapa 6B: o símbolo (`InsigniaMark`) é
+ * protagonista, texto mínimo e hierárquico (família → estágio, só
+ * progressivas → o que foi conquistado → data), nunca um card grande.
+ * `title` (tooltip nativo) carrega o `headline` completo da conquista de
+ * origem, sem precisar de um componente de detalhe novo nesta etapa. */
+function InsigniaCredential({ insignia }: { insignia: Insignia }) {
+  const familyLabel = PERSON_FAMILY_LABEL[insignia.family] ?? insignia.family;
 
   return (
-    <div className="flex items-stretch gap-2 rounded-md border border-overview-border-strong bg-overview-surface-subtle px-3 py-2" title={achievement.headline}>
-      <span className="w-0.5 shrink-0 rounded-full bg-lime" aria-hidden="true" />
-      <div>
-        <p className="text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">{label}</p>
-        {value && <p className="text-sm font-semibold tabular-nums text-overview-text-primary">{value}</p>}
+    <div className="flex items-start gap-3 rounded-md border border-overview-border-strong bg-overview-surface-subtle p-3" title={insignia.achievement.headline}>
+      <InsigniaMark insignia={insignia} />
+      <div className="min-w-0">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">{familyLabel}</p>
+        {insignia.stage && <p className="mt-0.5 text-[12px] font-medium text-overview-text-secondary">Estágio {stageNumeral(insignia.stage.current)}</p>}
+        <p className="mt-0.5 text-sm font-semibold text-overview-text-primary">{insigniaHeadline(insignia)}</p>
+        <p className="mt-0.5 text-[12px] text-overview-text-muted">Conquistada em {formatDateFromInstant(insignia.occurredAt)}</p>
       </div>
     </div>
   );
+}
+
+/** "Otimizações IV · 187 / 250" — linha discreta de texto puro (sem
+ * símbolo, sem cadeado), Etapa 6B. `progress` só existe quando a Etapa 6A
+ * recebeu uma contagem viva pra este tipo (ver `LIVE_PROGRESS_ALLOWED_TYPES`,
+ * `lib/achievement-insignia.ts`) — sem ela, cai pro texto "próximo: N", nunca
+ * uma fração fabricada. */
+function upcomingMilestoneLabel(insignia: Insignia): string {
+  const familyLabel = PERSON_FAMILY_LABEL[insignia.family] ?? insignia.family;
+  const nextStage = insignia.stage ? ` ${stageNumeral(insignia.stage.current + 1)}` : "";
+  const progress = insignia.progress ? `${insignia.progress.current} / ${insignia.progress.next}` : `próximo: ${insignia.nextMilestone}`;
+  return `${familyLabel}${nextStage} · ${progress}`;
 }
 
 /** Texto de distância relativa da meta — "20% melhor que a meta"/"20% acima
