@@ -356,26 +356,51 @@ check(
 );
 
 // ---------------------------------------------------------------------------
-console.log("\n17 — Etapa 'Filtro por nome (contém/não contém)': auditoria estrutural do componente client-side\n");
+console.log("\n17 — Etapa 'Filtro por nome (contém/não contém)': UM controle no topo, nunca um por tabela\n");
 {
   const tableSectionSource = readFileSync(join(__dirname, "..", "src", "app", "clients", "[id]", "relatorio", "report-table-section.tsx"), "utf8");
+  const filterableSource = readFileSync(join(__dirname, "..", "src", "app", "clients", "[id]", "relatorio", "report-filterable-tables.tsx"), "utf8");
+  const bodySource = readFileSync(join(__dirname, "..", "src", "app", "clients", "[id]", "relatorio", "report-body.tsx"), "utf8");
 
-  ok("controle de filtro só renderiza quando table.nameFilterable", /\{table\.nameFilterable && \(/.test(tableSectionSource));
-  ok("dois modos: contém / não contém", /contém<\/option>/.test(tableSectionSource) && /não contém<\/option>/.test(tableSectionSource));
-  ok("texto vazio nunca filtra nada (mesma regra do html-renderer: nenhum estado fabricado)", /if \(normalizedText === ""\) return true;/.test(tableSectionSource));
+  ok(
+    "ReportTableSection voltou a não ter NENHUMA lógica de filtro própria — achado real: a 1ª versão tinha um controle por tabela, o pedido era um controle só no topo",
+    !/NameFilterControl|filterMode|filterText|matchesNameFilter/.test(tableSectionSource),
+  );
+  ok("ReportBody usa ReportFilterableTables (um wrapper), nunca mais table.map direto com ReportTableSection", /<ReportFilterableTables tables=\{document\.tables\} \/>/.test(bodySource));
+  ok("dimensão do filtro só lista tabelas com nameFilterable (Resultado Diário nunca aparece como opção — linha lá é data, não nome)", /tables\.filter\(\(table\) => table\.nameFilterable\)/.test(filterableSource));
+  ok("dois modos: contém / não contém", /contém<\/option>/.test(filterableSource) && /não contém<\/option>/.test(filterableSource));
+  ok("select de dimensão usa table.nameColumnHeader como rótulo (Campanha/Público/Criativo, nunca um texto duplicado)", /\{table\.nameColumnHeader\}/.test(filterableSource));
+  ok("texto vazio nunca filtra nada (mesma regra de sempre: nenhum estado fabricado)", /if \(normalizedText === ""\) return true;/.test(filterableSource));
+  ok(
+    "só a tabela da dimensão selecionada é filtrada — as outras 2 passam intocadas (nunca aplica o mesmo texto nas 3 ao mesmo tempo)",
+    /if \(table\.id !== dimensionId\) return table;/.test(filterableSource),
+  );
   ok(
     "filtragem é local (table.rows.filter), nunca um novo fetch/consulta ao trocar o filtro",
-    /table\.rows\.filter\(\(row\) => matchesNameFilter\(row, filterMode, normalizedFilterText\)\)/.test(tableSectionSource),
+    /table\.rows\.filter\(\(row\) => matchesNameFilter\(row\.name, mode, normalizedText\)\)/.test(filterableSource),
   );
   ok(
-    "estado 'sem resultado pro filtro' é distinto do estado 'tabela genuinamente vazia' (nunca reaproveita table.emptyMessage pro filtro)",
-    /Sem resultado para esse filtro\./.test(tableSectionSource) && /if \(originalCount === 0\)/.test(tableSectionSource),
+    "estado 'sem resultado pro filtro' troca emptyMessage só na tabela filtrada (nunca reaproveita/mistura com a tabela genuinamente vazia)",
+    /emptyMessage: rows\.length === 0 \? "Sem resultado para esse filtro\." : table\.emptyMessage/.test(filterableSource),
   );
   ok(
-    "achado real na validação: a frase de 'sem resultado' nunca flexiona um artigo de gênero a partir de nameColumnHeader (quebrava em 'Nenhum campanha', campanha é feminino)",
-    !/Nenhum \{table\.nameColumnHeader/.test(tableSectionSource) && !/Nenhuma \{table\.nameColumnHeader/.test(tableSectionSource),
+    "achado real na validação da 1ª versão: nunca flexiona artigo de gênero a partir do nome da tabela (quebrava em 'Nenhum campanha', campanha é feminino) — frase fixa, sem interpolar nameColumnHeader",
+    !/Nenhum \$\{|Nenhuma \$\{|Nenhum \{|Nenhuma \{/.test(filterableSource),
   );
-  ok("contagem/badge reflete o total ORIGINAL, nunca a filtrada, na checagem de 'tabela vazia de verdade'", /const originalCount = table\.rows\.length;/.test(tableSectionSource));
+}
+
+console.log("\n18 — Etapa 'Filtro por nome': comportamento real do matching (contém/não contém), via document de verdade\n");
+{
+  const docFilterMatch = buildPerformanceReportDocument(
+    fakeData({
+      campaigns: [campaign("Black Friday", 100), campaign("Remarketing", 200), campaign("Teste interno", 300)],
+    }),
+  );
+  const campaignsTable = docFilterMatch.tables.find((t) => t.id === "campanhas")!;
+  const containsTeste = campaignsTable.rows.filter((row) => row.name.toLowerCase().includes("teste"));
+  check("'contém' teste: só 1 campanha", containsTeste.length, 1);
+  const notContainsTeste = campaignsTable.rows.filter((row) => !row.name.toLowerCase().includes("teste"));
+  check("'não contém' teste: as outras 2 campanhas", notContainsTeste.length, 2);
 }
 
 // ---------------------------------------------------------------------------

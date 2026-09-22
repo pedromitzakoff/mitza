@@ -1,7 +1,7 @@
 import type { PerformanceReportDocument } from "@/lib/performance-report/report-document";
 import { flattenPeriodReadingLines } from "@/lib/performance-report/report-derivatives";
 import { ReportKpiGrid } from "./report-kpi-grid";
-import { ReportTableSection } from "./report-table-section";
+import { ReportFilterableTables } from "./report-filterable-tables";
 
 /**
  * "Leitura do período": bloco 100% determinístico (nunca IA generativa) —
@@ -92,9 +92,7 @@ export function ReportBody({ document }: { document: PerformanceReportDocument }
         <PeriodReading document={document} />
       </section>
 
-      {document.tables.map((table) => (
-        <ReportTableSection key={table.id} table={table} />
-      ))}
+      <ReportFilterableTables tables={document.tables} />
 
       {/* "Relatório de Performance" já está no <h1> do cabeçalho da página
           (`report-header.tsx`) — nunca repetir aqui, só o que é novo
