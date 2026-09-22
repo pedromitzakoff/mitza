@@ -35,6 +35,7 @@ import { resolveClientMonthlyPlan, resolveTargetCostPerResult, primaryGoalResult
 import { listClientGoals, fetchGoalDisplaySummaries } from "@/lib/client-goals";
 import { fetchSecondaryGoalsPerformance } from "@/lib/secondary-goal-performance";
 import { SecondaryGoalsPerformance } from "../secondary-goals-performance";
+import { ConversionRateCard } from "../conversion-rate-card";
 import { getClientMonthHorizon } from "@/lib/client-month-horizons";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import {
@@ -81,6 +82,7 @@ import {
   aggregatePerformanceResults,
   buildEditableChannelValues,
   buildSprintPerformanceView,
+  computeConversionRate,
   computePerformanceSummary,
 } from "@/lib/performance";
 import type { SprintPerformanceProps } from "../sprint-card";
@@ -619,6 +621,22 @@ export default async function ClientPage({
     source: r.source,
     sourceUpdatedAt: r.source_updated_at,
   }));
+  // Taxa de conversão (vendas ÷ carrinhos) — pedido explícito do usuário
+  // ("carrinho é uma métrica secundária, só pra calcular a conversão").
+  // `performanceRecords` acima já vem SEM filtro de `resultType` (a query em
+  // `resolvePerformanceRowsForSprints` não filtra por tipo — só
+  // `computePerformanceSummary`, abaixo, filtra pro objetivo principal), pra
+  // já ter tudo que precisa disso: nenhuma consulta nova. Carrinho nunca é
+  // um `performance_goal` (não existe no tipo `PerformanceGoal`
+  // compartilhado por 65+ arquivos) — 'carts' é aditivo só no banco
+  // (supabase/secondary-cart-metric.sql), por isso comparado como string.
+  // `null` sem nenhum carrinho registrado no mês selecionado (caso comum
+  // hoje: só Leonardo Darcadia tem essa coluna mapeada no Stract).
+  const cartsResultCount = performanceRecords
+    .filter((r) => (r.resultType as string) === "carts")
+    .reduce((sum, r) => sum + r.resultCount, 0);
+  const salesResultCount = performanceRecords.filter((r) => r.resultType === "sales").reduce((sum, r) => sum + r.resultCount, 0);
+  const conversionRate = computeConversionRate(salesResultCount, cartsResultCount);
 
   assertSingleCurrentSprint(sprints, today);
   const sprintFinancials = sprints.map((sprint) => {
@@ -1674,6 +1692,8 @@ export default async function ClientPage({
           </div>
 
           <SecondaryGoalsPerformance goals={secondaryGoalsPerformance} />
+
+          <ConversionRateCard conversionRate={conversionRate} />
 
           {/* Tarefas do mês (Etapa "Tarefas e Sprints separadas") — novo
               módulo principal: substitui "Foco agora" (`SprintFocusBar`,

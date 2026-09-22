@@ -19,6 +19,7 @@ import type { CampaignSummary } from "../src/lib/campaign-analytics";
 import type { AdSetSummary } from "../src/lib/ad-set-analytics";
 import type { CreativeSummary } from "../src/lib/creative-analytics";
 import type { PerformanceSummary } from "../src/lib/performance";
+import { computeConversionRate } from "../src/lib/performance";
 
 // Etapa "Otimização do Performance Report": `PerformanceReportSummary`
 // (status "ok") passou a exigir o `PerformanceSummary` canônico também —
@@ -126,6 +127,7 @@ function fakeData(overrides: Partial<PerformanceReportData> = {}): PerformanceRe
     campaignDailyRows: [],
     adSetDailyRows: [],
     creativeDailyRows: [],
+    conversionRate: null,
     generatedAt: "2026-09-01T12:00:00.000Z",
     ...overrides,
   };
@@ -454,6 +456,33 @@ console.log("\n19 — report-filter-recompute.ts: recomputeDailyRows/recomputeFi
     check("nunca compara contra meta da carteira inteira — targetCostPerResult sempre null aqui", summary.targetCostPerResult, null);
     check("comparison.status = not_available (mesma regra de compareCostToTarget sem meta)", summary.comparison.status, "not_available");
   }
+}
+
+// ---------------------------------------------------------------------------
+console.log("\n20 — Taxa de conversão (vendas ÷ carrinhos): pura, passthrough no documento, some sob filtro\n");
+{
+  console.log("  20a — computeConversionRate (lib/performance.ts)\n");
+  check("10 vendas / 40 carrinhos = 0.25 (fração, nunca 0-100)", computeConversionRate(10, 40), 0.25);
+  check("zero carrinho no período: null, nunca 0/Infinity fabricado", computeConversionRate(10, 0), null);
+  check("zero venda com carrinho existente: 0 real (divisão válida, não ausência de dado)", computeConversionRate(0, 40), 0);
+
+  console.log("\n  20b — buildPerformanceReportDocument: passthrough sem cálculo próprio\n");
+  const docWithRate = buildPerformanceReportDocument(fakeData({ conversionRate: 0.32 }));
+  check("document.conversionRate é exatamente o que report-data.ts calculou, nunca recalculado aqui", docWithRate.conversionRate, 0.32);
+  const docNoRate = buildPerformanceReportDocument(fakeData());
+  check("sem carrinho no período (fakeData default): document.conversionRate é null", docNoRate.conversionRate, null);
+
+  console.log("\n  20c — ReportFilterableTables: card só existe com dado real, some enquanto filtrando (conta inteira, não recalculável por dimensão)\n");
+  const filterableSource = readFileSync(join(__dirname, "..", "src", "app", "clients", "[id]", "relatorio", "report-filterable-tables.tsx"), "utf8");
+  ok(
+    "ConversionRateNote retorna null sem conversionRate — nunca um card com 0%/traço fabricado",
+    /if \(conversionRate === null\) return null;/.test(filterableSource),
+  );
+  ok(
+    "card de Taxa de conversão some enquanto o filtro de Campanha/Público/Criativo está ativo — carrinho só existe no nível de conta",
+    /\{!isFiltering && <ConversionRateNote conversionRate=\{document\.conversionRate\} \/>\}/.test(filterableSource),
+  );
+  ok("formatação usa formatPercent (mesma convenção de % do resto da MITZA), nunca um toFixed/string manual", /formatPercent\(conversionRate \* 100\)/.test(filterableSource));
 }
 
 // ---------------------------------------------------------------------------

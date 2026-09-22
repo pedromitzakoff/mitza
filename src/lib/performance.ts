@@ -128,6 +128,17 @@ export function computeAverageTicket(revenue: number | null, resultCount: number
   return safeDivide(revenue, resultCount);
 }
 
+/** Taxa de conversão — vendas ÷ carrinhos (fração 0-1, nunca 0-100; quem
+ * exibe formata com `formatPercent(rate * 100)`, mesma convenção do resto da
+ * MITZA). Carrinho é sempre uma métrica SECUNDÁRIA (nunca um
+ * `performance_goal`), então esta função nunca sabe de onde `cartsCount`
+ * veio — só garante a mesma divisão segura já usada por toda métrica
+ * derivada (`safeDivide`): sem carrinho registrado no período (`0`), a taxa
+ * é `null`, nunca `0`/`Infinity`. */
+export function computeConversionRate(salesCount: number, cartsCount: number): number | null {
+  return safeDivide(salesCount, cartsCount);
+}
+
 /** Por que `costPerResult` é `null` num escopo — pra interface escolher o
  * texto auxiliar certo (seção 16) sem duplicar a mesma cadeia de ifs em
  * cada componente. */

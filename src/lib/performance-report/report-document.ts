@@ -161,6 +161,12 @@ export interface PerformanceReportDocument {
   campaignDailyRows: CampaignDailyMetricRow[];
   adSetDailyRows: AdSetDailyMetricRow[];
   creativeDailyRows: AdCreativeDailyMetricRow[];
+  /** Passthrough de `PerformanceReportData.conversionRate` (vendas ÷
+   * carrinhos) — `null` sem carrinho registrado no período (caso comum:
+   * carrinho é uma métrica secundária, só existe pra quem tem essa coluna
+   * mapeada no Stract). Nunca recalculado sob filtro (ver comentário em
+   * `report-data.ts`). */
+  conversionRate: number | null;
 }
 
 // Etapa "Otimização do Performance Report": nota de metodologia reduzida a
@@ -525,5 +531,6 @@ export function buildPerformanceReportDocument(data: PerformanceReportData): Per
     campaignDailyRows: data.campaignDailyRows,
     adSetDailyRows: data.adSetDailyRows,
     creativeDailyRows: data.creativeDailyRows,
+    conversionRate: data.conversionRate,
   };
 }

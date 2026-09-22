@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatPercent } from "@/lib/format";
 import { buildAnalyticsKpiCards } from "@/lib/analytics";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import { buildDailyTable, type PerformanceReportDocument } from "@/lib/performance-report/report-document";
@@ -64,6 +64,27 @@ function PeriodReading({ document }: { document: PerformanceReportDocument }) {
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Taxa de conversão (vendas ÷ carrinhos) — pedido explícito do usuário
+ * ("carrinho é uma métrica secundária, só pra calcular a conversão").
+ * `null` sem nenhum carrinho registrado no período (caso comum: só clientes
+ * com a coluna de carrinho mapeada no Stract têm isso, hoje só Leonardo
+ * Darcadia) — some por inteiro nesse caso, nunca um card com "—"/0%. Só
+ * existe no nível de CONTA (`report-data.ts`), então nunca aparece enquanto
+ * o filtro de Campanha/Público/Criativo está ativo — mesmo tratamento de
+ * `PeriodReading`, evita mostrar um número que o filtro não afeta ao lado
+ * de números que afeta.
+ */
+function ConversionRateNote({ conversionRate }: { conversionRate: number | null }) {
+  if (conversionRate === null) return null;
+  return (
+    <div className="mt-3 inline-flex w-fit items-center gap-2 rounded-full border border-[#D9D3C9] bg-white/70 px-3 py-1.5 text-xs font-semibold text-[#17171A]">
+      <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-[#6F6B65]">Taxa de conversão</span>
+      <span>{formatPercent(conversionRate * 100)}</span>
+    </div>
   );
 }
 
@@ -225,6 +246,7 @@ export function ReportFilterableTables({ document }: { document: PerformanceRepo
         <div className="mt-2 sm:mt-5">
           <ReportKpiGrid summary={summaryBlock} hero={hero} />
         </div>
+        {!isFiltering && <ConversionRateNote conversionRate={document.conversionRate} />}
         {/* "Leitura do período" é uma narrativa calculada pro período INTEIRO
             (melhor campanha, variação vs. meta da carteira inteira) — some
             enquanto o filtro está ativo pra nunca ficar contraditória com um

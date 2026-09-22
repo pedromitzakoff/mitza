@@ -10,9 +10,10 @@ import { getAdSetDailyMetricsForPeriod } from "@/lib/ad-set-analytics-data";
 import { buildAdSetSummaries, type AdSetSummary, type AdSetDailyMetricRow } from "@/lib/ad-set-analytics";
 import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
 import { buildCreativeSummaries, type CreativeSummary, type AdCreativeDailyMetricRow } from "@/lib/creative-analytics";
-import { computeCostPerResult, computeRoas, type PerformanceSummary } from "@/lib/performance";
+import { computeCostPerResult, computeRoas, computeConversionRate, type PerformanceSummary } from "@/lib/performance";
 import { listDatesInclusive } from "@/lib/monthly-budget";
 import type { PerformanceGoal } from "@/lib/performance-goals";
+import { getDailyPerformanceRowsForPeriod } from "@/lib/performance-queries";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -90,6 +91,19 @@ export interface PerformanceReportData {
   campaignDailyRows: CampaignDailyMetricRow[];
   adSetDailyRows: AdSetDailyMetricRow[];
   creativeDailyRows: AdCreativeDailyMetricRow[];
+  /** Taxa de conversão (vendas ÷ carrinhos) — pedido explícito do usuário
+   * ("carrinho é uma métrica secundária, só pra calcular a conversão").
+   * Carrinho NUNCA é um `performance_goal`/aparece em `client_goals`: é só
+   * mais um `result_type` dentro de `daily_performance` (`goal = 'carts'`
+   * em `metric_mappings`, ver supabase/secondary-cart-metric.sql), somado
+   * aqui direto da mesma tabela — `null` sem nenhum carrinho registrado no
+   * período (cliente sem essa métrica configurada, caso comum hoje: só
+   * Leonardo Darcadia tem). Só existe no nível de CONTA (os agregados por
+   * campanha/público/criativo ignoram qualquer goal fora de leads/sales,
+   * ver `lib/stract-sync.ts`) — por isso nunca recalculada sob o filtro de
+   * Campanha/Público/Criativo (`ReportFilterableTables` some com o card
+   * enquanto o filtro está ativo, mesmo tratamento de `periodReading`). */
+  conversionRate: number | null;
   generatedAt: string;
 }
 
@@ -149,12 +163,18 @@ export async function buildPerformanceReportData(
   clientId: string,
   period: { start: string; end: string },
 ): Promise<PerformanceReportData> {
-  const [clientRows, analyticsData, campaignRowsAllChannels, adSetRowsAllChannels, creativeRows] = await Promise.all([
+  const [clientRows, analyticsData, campaignRowsAllChannels, adSetRowsAllChannels, creativeRows, dailyPerformanceRows] = await Promise.all([
     requireQuery(supabase.from("clients").select("id, name").eq("id", clientId), "clients:performance-report"),
     fetchClientAnalyticsData(supabase, clientId, period, "meta"),
     getCampaignDailyMetricsForPeriod(supabase, clientId, period),
     getAdSetDailyMetricsForPeriod(supabase, clientId, period),
     getAdCreativeDailyMetricsForPeriod(supabase, clientId, period),
+    // Taxa de conversão: `daily_performance` sem filtro de `result_type`
+    // (`fetchClientAnalyticsData` acima já filtra pro objetivo principal só
+    // — carrinho nunca é o objetivo principal, por isso precisa da sua
+    // própria leitura, sem cálculo novo: MESMA função já usada pela janela
+    // diária da Visão Geral, `getDailyPerformanceRowsForPeriod`).
+    getDailyPerformanceRowsForPeriod(supabase, clientId, { firstDay: period.start, lastDay: period.end }),
   ]);
 
   const client = clientRows[0];
@@ -169,6 +189,20 @@ export async function buildPerformanceReportData(
   const adSets = buildAdSetSummaries(adSetDailyRows);
   const creatives = buildCreativeSummaries(creativeRows);
 
+  // Taxa de conversão: Meta-only (mesmo escopo do resto do relatório) —
+  // soma direta por `result_type`, sem passar por `aggregatePerformanceResults`
+  // (essa função filtra por UM `resultType` só; aqui precisamos de dois ao
+  // mesmo tempo). `resultType` comparado como string porque 'carts' é
+  // aditivo só no banco (supabase/secondary-cart-metric.sql) — nunca
+  // adicionado ao tipo `PerformanceGoal` compartilhado por 65+ arquivos.
+  const metaDailyPerformanceRows = dailyPerformanceRows.filter((row) => row.channel === "meta");
+  const cartsCount = metaDailyPerformanceRows
+    .filter((row) => (row.resultType as string) === "carts")
+    .reduce((sum, row) => sum + row.resultCount, 0);
+  const salesCount = metaDailyPerformanceRows
+    .filter((row) => row.resultType === "sales")
+    .reduce((sum, row) => sum + row.resultCount, 0);
+
   return {
     client: { id: client.id, name: client.name },
     period: { start: period.start, end: period.end, label: formatDateRange(period.start, period.end) },
@@ -181,6 +215,7 @@ export async function buildPerformanceReportData(
     campaignDailyRows,
     adSetDailyRows,
     creativeDailyRows: creativeRows,
+    conversionRate: computeConversionRate(salesCount, cartsCount),
     generatedAt: new Date().toISOString(),
   };
 }
