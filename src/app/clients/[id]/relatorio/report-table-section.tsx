@@ -40,6 +40,22 @@ const INITIAL_VISIBLE_ROWS = 10;
 
 type SortState = { columnIndex: number; direction: "asc" | "desc" };
 
+type NameFilterMode = "contains" | "not_contains";
+
+/**
+ * Etapa "Filtro por nome (contém/não contém)": só chamado quando
+ * `table.nameFilterable` (Campanhas/Públicos/Criativos) — comparação
+ * simples, sem acento-insensibilidade (mesma convenção de busca por texto
+ * já usada em outras telas da MITZA, nunca uma segunda biblioteca de
+ * normalização só pra isso). Texto vazio = nenhum filtro (todas as linhas
+ * passam), independente do modo selecionado.
+ */
+function matchesNameFilter(row: PerformanceReportRow, mode: NameFilterMode, normalizedText: string): boolean {
+  if (normalizedText === "") return true;
+  const nameContains = row.name.toLowerCase().includes(normalizedText);
+  return mode === "contains" ? nameContains : !nameContains;
+}
+
 function isSafeHttpUrl(value: string | null | undefined): value is string {
   return typeof value === "string" && /^https?:\/\//i.test(value);
 }
@@ -205,10 +221,62 @@ function renderRowCells(row: PerformanceReportRow, hasPreviewColumn: boolean, me
   );
 }
 
+/**
+ * Controle "contém"/"não contém" por nome — só renderizado quando
+ * `table.nameFilterable`. Puramente client-side (mesmo array já buscado,
+ * nunca um novo cálculo/consulta), texto vazio nunca filtra nada.
+ */
+function NameFilterControl({
+  nameColumnHeader,
+  mode,
+  text,
+  onModeChange,
+  onTextChange,
+}: {
+  nameColumnHeader: string;
+  mode: NameFilterMode;
+  text: string;
+  onModeChange: (mode: NameFilterMode) => void;
+  onTextChange: (text: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <select
+        aria-label={`Filtrar ${nameColumnHeader.toLowerCase()} por`}
+        value={mode}
+        onChange={(event) => onModeChange(event.target.value as NameFilterMode)}
+        className="min-h-9 rounded-lg border border-[#D9D3C9] bg-white px-2 text-xs text-[#17171A]"
+      >
+        <option value="contains">contém</option>
+        <option value="not_contains">não contém</option>
+      </select>
+      <input
+        type="text"
+        value={text}
+        onChange={(event) => onTextChange(event.target.value)}
+        placeholder={nameColumnHeader}
+        aria-label={`Texto do filtro de ${nameColumnHeader.toLowerCase()}`}
+        className="min-h-9 min-w-0 flex-1 rounded-lg border border-[#D9D3C9] bg-white px-2.5 text-xs text-[#17171A] placeholder:text-[#9C978D] sm:w-48 sm:flex-none"
+      />
+      {text !== "" && (
+        <button
+          type="button"
+          onClick={() => onTextChange("")}
+          className="text-xs font-semibold text-[#6F6B65] underline underline-offset-2 hover:text-[#17171A]"
+        >
+          Limpar
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function ReportTableSection({ table }: { table: PerformanceReportTable }) {
   const [sort, setSort] = useState<SortState | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [expandedNames, setExpandedNames] = useState<ReadonlySet<string>>(() => new Set());
+  const [filterMode, setFilterMode] = useState<NameFilterMode>("contains");
+  const [filterText, setFilterText] = useState("");
 
   function toggleNameExpanded(rowId: string) {
     setExpandedNames((current) => {
@@ -219,22 +287,35 @@ export function ReportTableSection({ table }: { table: PerformanceReportTable })
     });
   }
 
-  const sortedRows = useMemo(() => sortRows(table.rows, sort), [table.rows, sort]);
+  const normalizedFilterText = filterText.trim().toLowerCase();
+  const isFiltering = table.nameFilterable && normalizedFilterText !== "";
+
+  const filteredRows = useMemo(
+    () => (isFiltering ? table.rows.filter((row) => matchesNameFilter(row, filterMode, normalizedFilterText)) : table.rows),
+    [table.rows, isFiltering, filterMode, normalizedFilterText],
+  );
+  const sortedRows = useMemo(() => sortRows(filteredRows, sort), [filteredRows, sort]);
   // Etapa "Resultado Diário": `disclosure: false` mostra TODOS os dias
   // sempre, sem botão "ver todos" — pedido explícito do usuário pra essa
   // tabela específica; as demais (Campanhas/Públicos/Criativos) continuam
   // com a disclosure de sempre.
   const visibleRows = !table.disclosure || expanded ? sortedRows : sortedRows.slice(0, INITIAL_VISIBLE_ROWS);
-  const count = table.rows.length;
+  // Contagem do badge/"ver todos" reflete o que está filtrado — igual a
+  // qualquer lista com filtro ativo, nunca o total original escondido atrás
+  // de um número que não bate com o que está na tela.
+  const count = filteredRows.length;
+  const originalCount = table.rows.length;
 
   function toggleSort(columnIndex: number) {
     setSort((prev) => (prev && prev.columnIndex === columnIndex ? { columnIndex, direction: prev.direction === "asc" ? "desc" : "asc" } : { columnIndex, direction: "asc" }));
   }
 
-  // Etapa "Otimização do Performance Report", item 6: sem NENHUMA linha,
-  // a seção vira um bloco compacto (nome + mensagem), nunca o cabeçalho
-  // completo seguido de um parágrafo vazio — mesma regra do html-renderer.
-  if (count === 0) {
+  // Etapa "Otimização do Performance Report", item 6: sem NENHUMA linha (na
+  // fonte original, nunca por causa do filtro — ver o estado "filtrado sem
+  // resultado" logo abaixo), a seção vira um bloco compacto (nome +
+  // mensagem), nunca o cabeçalho completo seguido de um parágrafo vazio —
+  // mesma regra do html-renderer.
+  if (originalCount === 0) {
     return (
       <section id={table.id} className="border-t border-[#D9D3C9] py-6">
         <div className="flex flex-wrap items-baseline gap-2.5">
@@ -262,93 +343,118 @@ export function ReportTableSection({ table }: { table: PerformanceReportTable })
         )}
       </div>
 
-      {/* Etapa "Otimização Mobile": abaixo de `sm`, cards verticais no lugar
-          da tabela — a auditoria confirmou até 604px de conteúdo real
-          (`scrollWidth`) dentro de uma caixa de 236px em 320px de viewport,
-          ou seja, rolagem horizontal como ÚNICA forma de ver a maior parte
-          de cada linha. Mesmas `visibleRows`/`totalRow`, mesma ordenação —
-          só a apresentação muda. */}
-      <ul className="mt-4 flex flex-col gap-2 sm:hidden">
-        {visibleRows.map((row) => (
-          <RowCard
-            key={row.id}
-            row={row}
-            table={table}
-            expanded={expandedNames.has(row.id)}
-            onToggleExpanded={() => toggleNameExpanded(row.id)}
+      {table.nameFilterable && (
+        <div className="mt-3">
+          <NameFilterControl
+            nameColumnHeader={table.nameColumnHeader}
+            mode={filterMode}
+            text={filterText}
+            onModeChange={setFilterMode}
+            onTextChange={setFilterText}
           />
-        ))}
-        {table.totalRow && (
-          <RowCard
-            row={table.totalRow}
-            table={table}
-            expanded={expandedNames.has(table.totalRow.id)}
-            onToggleExpanded={() => toggleNameExpanded(table.totalRow!.id)}
-            isTotal
-          />
-        )}
-      </ul>
+        </div>
+      )}
 
-      <div className="mt-5 hidden max-h-[620px] overflow-auto rounded-2xl border border-[#D9D3C9] bg-white sm:block">
-        <table className="w-full border-collapse text-xs">
-          <thead>
-            <tr>
-              <th
-                onClick={() => toggleSort(0)}
-                className="sticky top-0 z-10 min-w-[220px] cursor-pointer whitespace-nowrap bg-[#17171A] px-3 py-3 text-left font-semibold text-white"
-              >
-                {table.nameColumnHeader}
-              </th>
-              {table.metricColumns.map((column, index) => (
-                <th
-                  key={column.key}
-                  onClick={() => toggleSort(index + 1)}
-                  className="sticky top-0 z-10 cursor-pointer whitespace-nowrap bg-[#17171A] px-3 py-3 text-right font-semibold text-white"
-                >
-                  {column.header}
-                </th>
-              ))}
-              {table.hasPreviewColumn && (
-                <th className="sticky top-0 z-10 whitespace-nowrap bg-[#17171A] px-3 py-3 text-left font-semibold text-white">Prévia</th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
+      {isFiltering && filteredRows.length === 0 ? (
+        // Achado real na validação (visual + interação de verdade, não só
+        // leitura de código): "Nenhum {nameColumnHeader}" quebrava a
+        // concordância de gênero em português pra tabelas com nome
+        // feminino ("Nenhum campanha", errado — deveria ser "Nenhuma"). Em
+        // vez de flexionar o artigo por tabela (frágil, exige saber o
+        // gênero de cada nameColumnHeader futuro), a frase evita o artigo
+        // de gênero por completo — correta pras 3 tabelas sem exceção.
+        <p className="mt-4 text-sm text-[#6F6B65]">Sem resultado para esse filtro.</p>
+      ) : (
+        <>
+          {/* Etapa "Otimização Mobile": abaixo de `sm`, cards verticais no lugar
+              da tabela — a auditoria confirmou até 604px de conteúdo real
+              (`scrollWidth`) dentro de uma caixa de 236px em 320px de viewport,
+              ou seja, rolagem horizontal como ÚNICA forma de ver a maior parte
+              de cada linha. Mesmas `visibleRows`/`totalRow`, mesma ordenação —
+              só a apresentação muda. */}
+          <ul className="mt-4 flex flex-col gap-2 sm:hidden">
             {visibleRows.map((row) => (
-              <tr key={row.id} className="border-b border-[#ECE8E1] last:border-0 hover:bg-[#FAF8F4]">
-                <td className="px-3 py-2.5 text-left font-semibold text-[#17171A]">
-                  <div className="flex items-center gap-2">
-                    {isSafeHttpUrl(row.thumbnailUrl) && (
-                      // eslint-disable-next-line @next/next/no-img-element -- imagem de origem externa (Stract), sem allowlist de domínio pro next/image
-                      <img src={row.thumbnailUrl} alt="" loading="lazy" className="h-7 w-7 shrink-0 rounded-md bg-[#C8BEAD] object-cover" />
-                    )}
-                    <span>{row.name}</span>
-                    <RowBadges row={row} />
-                  </div>
-                </td>
-                {renderRowCells(row, table.hasPreviewColumn, table.metricColumns.length)}
-              </tr>
+              <RowCard
+                key={row.id}
+                row={row}
+                table={table}
+                expanded={expandedNames.has(row.id)}
+                onToggleExpanded={() => toggleNameExpanded(row.id)}
+              />
             ))}
-            {/* Total — Etapa "Resultado Diário": sempre por último,
-                nunca ordenado/recolhido junto das linhas de dia (visual
-                distinto pra nunca ser confundido com um dia real). */}
             {table.totalRow && (
-              <tr className="border-t-2 border-[#17171A] bg-[#FAF8F4] font-bold">
-                <td className="px-3 py-2.5 text-left text-[#17171A]">{table.totalRow.name}</td>
-                {renderRowCells(table.totalRow, table.hasPreviewColumn, table.metricColumns.length)}
-              </tr>
+              <RowCard
+                row={table.totalRow}
+                table={table}
+                expanded={expandedNames.has(table.totalRow.id)}
+                onToggleExpanded={() => toggleNameExpanded(table.totalRow!.id)}
+                isTotal
+              />
             )}
-          </tbody>
-        </table>
-      </div>
-      {table.disclosure && count > INITIAL_VISIBLE_ROWS && (
-        <button
-          type="button"
-          onClick={() => setExpanded((value) => !value)}
-          className="-mx-1 mt-1 flex min-h-11 items-center px-1 text-sm font-semibold text-[#17171A] underline underline-offset-4"
-        >
-          {expanded ? "Recolher ↑" : `Ver todos os ${count} itens ↓`}
-        </button>
+          </ul>
+
+          <div className="mt-5 hidden max-h-[620px] overflow-auto rounded-2xl border border-[#D9D3C9] bg-white sm:block">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr>
+                  <th
+                    onClick={() => toggleSort(0)}
+                    className="sticky top-0 z-10 min-w-[220px] cursor-pointer whitespace-nowrap bg-[#17171A] px-3 py-3 text-left font-semibold text-white"
+                  >
+                    {table.nameColumnHeader}
+                  </th>
+                  {table.metricColumns.map((column, index) => (
+                    <th
+                      key={column.key}
+                      onClick={() => toggleSort(index + 1)}
+                      className="sticky top-0 z-10 cursor-pointer whitespace-nowrap bg-[#17171A] px-3 py-3 text-right font-semibold text-white"
+                    >
+                      {column.header}
+                    </th>
+                  ))}
+                  {table.hasPreviewColumn && (
+                    <th className="sticky top-0 z-10 whitespace-nowrap bg-[#17171A] px-3 py-3 text-left font-semibold text-white">Prévia</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRows.map((row) => (
+                  <tr key={row.id} className="border-b border-[#ECE8E1] last:border-0 hover:bg-[#FAF8F4]">
+                    <td className="px-3 py-2.5 text-left font-semibold text-[#17171A]">
+                      <div className="flex items-center gap-2">
+                        {isSafeHttpUrl(row.thumbnailUrl) && (
+                          // eslint-disable-next-line @next/next/no-img-element -- imagem de origem externa (Stract), sem allowlist de domínio pro next/image
+                          <img src={row.thumbnailUrl} alt="" loading="lazy" className="h-7 w-7 shrink-0 rounded-md bg-[#C8BEAD] object-cover" />
+                        )}
+                        <span>{row.name}</span>
+                        <RowBadges row={row} />
+                      </div>
+                    </td>
+                    {renderRowCells(row, table.hasPreviewColumn, table.metricColumns.length)}
+                  </tr>
+                ))}
+                {/* Total — Etapa "Resultado Diário": sempre por último,
+                    nunca ordenado/recolhido junto das linhas de dia (visual
+                    distinto pra nunca ser confundido com um dia real). */}
+                {table.totalRow && (
+                  <tr className="border-t-2 border-[#17171A] bg-[#FAF8F4] font-bold">
+                    <td className="px-3 py-2.5 text-left text-[#17171A]">{table.totalRow.name}</td>
+                    {renderRowCells(table.totalRow, table.hasPreviewColumn, table.metricColumns.length)}
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {table.disclosure && count > INITIAL_VISIBLE_ROWS && (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              className="-mx-1 mt-1 flex min-h-11 items-center px-1 text-sm font-semibold text-[#17171A] underline underline-offset-4"
+            >
+              {expanded ? "Recolher ↑" : `Ver todos os ${count} itens ↓`}
+            </button>
+          )}
+        </>
       )}
     </section>
   );

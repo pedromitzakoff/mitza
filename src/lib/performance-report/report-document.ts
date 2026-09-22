@@ -95,6 +95,15 @@ export interface PerformanceReportTable {
    * que já é sempre o período inteiro, dia a dia). As demais continuam
    * mostrando a contagem, mesmo padrão de sempre. */
   showItemCount: boolean;
+  /** Etapa "Filtro por nome (contém/não contém)": `true` só nas 3 tabelas
+   * nomeadas por entidade (Campanhas/Públicos/Criativos) — cada linha tem
+   * um nome real (campanha/público/criativo) que faz sentido filtrar por
+   * texto. `false` na tabela de Resultado Diário: linha é uma data, nunca
+   * um nome livre, filtro de texto não se aplica. Filtragem em si acontece
+   * 100% client-side em `ReportTableSection` (mesmo padrão da ordenação:
+   * reorganiza `rows` já buscado, nunca um novo cálculo/consulta) — este
+   * campo só liga/desliga a UI do filtro por tabela. */
+  nameFilterable: boolean;
 }
 
 export type PerformanceReportSummaryBlock =
@@ -221,6 +230,7 @@ function buildCampaignsTable(campaigns: CampaignSummary[], targetCostPerResult: 
     disclosure: true,
     totalRow: null,
     showItemCount: true,
+    nameFilterable: true,
   };
 }
 
@@ -264,6 +274,7 @@ function buildAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTable {
     disclosure: true,
     totalRow: null,
     showItemCount: true,
+    nameFilterable: true,
   };
 }
 
@@ -314,6 +325,7 @@ function buildCreativesTable(creatives: CreativeSummary[]): PerformanceReportTab
     disclosure: true,
     totalRow: null,
     showItemCount: true,
+    nameFilterable: true,
   };
 }
 
@@ -412,6 +424,9 @@ function buildDailyTable(daily: PerformanceReportDailyRow[], performanceGoal: Pe
     // não agrega valor numa tabela que já é sempre "todo o período, dia a
     // dia" — omitida só aqui, a estrutura de dados (`rows`) continua igual.
     showItemCount: false,
+    // Cada linha aqui é uma data (`formatShortDate`), nunca um nome livre de
+    // campanha/público/criativo — filtro de texto não se aplica.
+    nameFilterable: false,
   };
 }
 

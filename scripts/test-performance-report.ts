@@ -9,6 +9,8 @@
  * Rodar: npx tsx scripts/test-performance-report.ts
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { buildPerformanceReportDocument, type PerformanceReportTable } from "../src/lib/performance-report/report-document";
 import { renderPerformanceReportHtml } from "../src/lib/performance-report/renderers/html-renderer";
 import type { PerformanceReportData } from "../src/lib/performance-report/report-data";
@@ -332,6 +334,49 @@ check("resultado inalterado", regressionRow.metrics[1].sortValue, 186);
 check("CPA inalterado", regressionRow.metrics[2].sortValue, 25.97);
 check("receita inalterada", regressionRow.metrics[3].sortValue, 60821.51);
 check("ROAS inalterado", regressionRow.metrics[4].sortValue, 12.59);
+
+// ---------------------------------------------------------------------------
+console.log("\n16 — Etapa 'Filtro por nome (contém/não contém)': nameFilterable ligado só onde faz sentido\n");
+
+const docFilterFlags = buildPerformanceReportDocument(
+  fakeData({
+    campaigns: [campaign("Campanha A", 100)],
+    adSets: [adSet("Público A", 100)],
+    creatives: [creative("Criativo A", 100)],
+    dailyRows: [{ date: "2026-08-01", spend: 100, resultCount: 3, revenue: null, costPerResult: 33.33, roas: null }],
+  }),
+);
+check("Campanhas: nameFilterable = true (linha tem nome real de campanha)", docFilterFlags.tables.find((t) => t.id === "campanhas")!.nameFilterable, true);
+check("Públicos: nameFilterable = true (linha tem nome real de público)", docFilterFlags.tables.find((t) => t.id === "publicos")!.nameFilterable, true);
+check("Criativos: nameFilterable = true (linha tem nome real de criativo)", docFilterFlags.tables.find((t) => t.id === "criativos")!.nameFilterable, true);
+check(
+  "Resultado Diário: nameFilterable = false (linha é uma data, nunca um nome livre)",
+  docFilterFlags.tables.find((t) => t.id === "resultado-diario")!.nameFilterable,
+  false,
+);
+
+// ---------------------------------------------------------------------------
+console.log("\n17 — Etapa 'Filtro por nome (contém/não contém)': auditoria estrutural do componente client-side\n");
+{
+  const tableSectionSource = readFileSync(join(__dirname, "..", "src", "app", "clients", "[id]", "relatorio", "report-table-section.tsx"), "utf8");
+
+  ok("controle de filtro só renderiza quando table.nameFilterable", /\{table\.nameFilterable && \(/.test(tableSectionSource));
+  ok("dois modos: contém / não contém", /contém<\/option>/.test(tableSectionSource) && /não contém<\/option>/.test(tableSectionSource));
+  ok("texto vazio nunca filtra nada (mesma regra do html-renderer: nenhum estado fabricado)", /if \(normalizedText === ""\) return true;/.test(tableSectionSource));
+  ok(
+    "filtragem é local (table.rows.filter), nunca um novo fetch/consulta ao trocar o filtro",
+    /table\.rows\.filter\(\(row\) => matchesNameFilter\(row, filterMode, normalizedFilterText\)\)/.test(tableSectionSource),
+  );
+  ok(
+    "estado 'sem resultado pro filtro' é distinto do estado 'tabela genuinamente vazia' (nunca reaproveita table.emptyMessage pro filtro)",
+    /Sem resultado para esse filtro\./.test(tableSectionSource) && /if \(originalCount === 0\)/.test(tableSectionSource),
+  );
+  ok(
+    "achado real na validação: a frase de 'sem resultado' nunca flexiona um artigo de gênero a partir de nameColumnHeader (quebrava em 'Nenhum campanha', campanha é feminino)",
+    !/Nenhum \{table\.nameColumnHeader/.test(tableSectionSource) && !/Nenhuma \{table\.nameColumnHeader/.test(tableSectionSource),
+  );
+  ok("contagem/badge reflete o total ORIGINAL, nunca a filtrada, na checagem de 'tabela vazia de verdade'", /const originalCount = table\.rows\.length;/.test(tableSectionSource));
+}
 
 // ---------------------------------------------------------------------------
 console.log(`\nTodos os ${passed} testes passaram.`);
