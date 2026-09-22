@@ -223,6 +223,9 @@ console.log("\n6 — Total: aditivas somadas, derivadas recalculadas do total (n
   const dailyRows = buildDailyRows({ start: "2026-09-01", end: "2026-09-02" }, sparse);
 
   const data: PerformanceReportData = {
+    campaignDailyRows: [],
+    adSetDailyRows: [],
+    creativeDailyRows: [],
     client: { id: "client-1", name: "Cliente Teste" },
     period: { start: "2026-09-01", end: "2026-09-02", label: "01 set 2026 → 02 set 2026" },
     summary: { status: "ok", kpis: [], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
@@ -260,6 +263,9 @@ console.log("\n6 — Total: aditivas somadas, derivadas recalculadas do total (n
   ];
   const dailyRows = buildDailyRows({ start: "2026-09-01", end: "2026-09-02" }, sparse);
   const data: PerformanceReportData = {
+    campaignDailyRows: [],
+    adSetDailyRows: [],
+    creativeDailyRows: [],
     client: { id: "client-2", name: "Cliente Teste 2" },
     period: { start: "2026-09-01", end: "2026-09-02", label: "" },
     summary: { status: "ok", kpis: [], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
@@ -284,6 +290,9 @@ console.log("\n7 — Dia sem NENHUM sinal ganha 'Sem dados'; dia parcial nunca g
   const sparse: ClientAnalyticsDailyRow[] = [{ date: "2026-09-01", spend: 500, resultCount: null, revenue: null }];
   const dailyRows = buildDailyRows({ start: "2026-09-01", end: "2026-09-03" }, sparse);
   const data: PerformanceReportData = {
+    campaignDailyRows: [],
+    adSetDailyRows: [],
+    creativeDailyRows: [],
     client: { id: "client-3", name: "Cliente Teste 3" },
     period: { start: "2026-09-01", end: "2026-09-03", label: "" },
     summary: { status: "no_goal" },
@@ -316,6 +325,9 @@ console.log("\n8 — 'Resultado' respeita o objetivo do cliente (nunca uma segun
     campaigns: [],
     adSets: [],
     creatives: [],
+    campaignDailyRows: [],
+    adSetDailyRows: [],
+    creativeDailyRows: [],
     generatedAt: "2026-09-02T00:00:00.000Z",
   };
 
@@ -335,6 +347,9 @@ console.log("\n9 — Receita/ROAS só aparecem quando aplicáveis (preserva a l�
 {
   const dailyRowsNoRevenue = buildDailyRows({ start: "2026-09-01", end: "2026-09-01" }, [{ date: "2026-09-01", spend: 100, resultCount: 4, revenue: null }]);
   const data: PerformanceReportData = {
+    campaignDailyRows: [],
+    adSetDailyRows: [],
+    creativeDailyRows: [],
     client: { id: "client-5", name: "Cliente Teste 5" },
     period: { start: "2026-09-01", end: "2026-09-01", label: "" },
     summary: { status: "ok", kpis: [], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
@@ -356,6 +371,9 @@ console.log("\n10 — Integração: posição/estrutura da seção, sem progress
 {
   const dailyRows = buildDailyRows({ start: "2026-09-01", end: "2026-09-01" }, [{ date: "2026-09-01", spend: 777, resultCount: 3, revenue: null }]);
   const data: PerformanceReportData = {
+    campaignDailyRows: [],
+    adSetDailyRows: [],
+    creativeDailyRows: [],
     client: { id: "client-6", name: "Cliente Teste 6" },
     period: { start: "2026-09-01", end: "2026-09-01", label: "01 set 2026 → 01 set 2026" },
     summary: { status: "ok", kpis: [{ key: "investment", label: "Investimento", value: formatCurrency(777) }], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
@@ -393,6 +411,9 @@ console.log("\n11 — Campanhas: nenhuma mudança de comportamento nesta etapa (
     { date: "2026-09-01", channel: "meta", campaignName: "Campanha A", spend: 100, impressions: null, reach: null, clicks: null, resultType: "leads", resultCount: 5, revenue: null },
   ]);
   const data: PerformanceReportData = {
+    campaignDailyRows: [],
+    adSetDailyRows: [],
+    creativeDailyRows: [],
     client: { id: "client-7", name: "Cliente Teste 7" },
     period: { start: "2026-09-01", end: "2026-09-01", label: "" },
     summary: { status: "ok", kpis: [], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },

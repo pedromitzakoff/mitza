@@ -3,9 +3,9 @@ import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals
 import { computeCostPerResult, computeRoas, type PerformanceSummary } from "@/lib/performance";
 import { NO_ANALYTICS_DATA_MESSAGE, NO_CAMPAIGNS_MESSAGE, NO_CREATIVES_MESSAGE, NO_PERFORMANCE_GOAL_MESSAGE } from "@/lib/analytics-messages";
 import type { AnalyticsKpiCard, AnalyticsKpiComparisonTone } from "@/lib/analytics";
-import type { CampaignSummary } from "@/lib/campaign-analytics";
-import type { AdSetSummary } from "@/lib/ad-set-analytics";
-import type { CreativeSummary } from "@/lib/creative-analytics";
+import type { CampaignSummary, CampaignDailyMetricRow } from "@/lib/campaign-analytics";
+import type { AdSetSummary, AdSetDailyMetricRow } from "@/lib/ad-set-analytics";
+import type { CreativeSummary, AdCreativeDailyMetricRow } from "@/lib/creative-analytics";
 import type { PerformanceReportData, PerformanceReportDailyRow } from "./report-data";
 import {
   buildCampaignBadges,
@@ -148,6 +148,19 @@ export interface PerformanceReportDocument {
    * desktop nativo). */
   periodReading: PeriodReading | null;
   tables: PerformanceReportTable[];
+  /** Etapa "Filtro no topo afeta o dashboard inteiro" — passthrough de
+   * `PerformanceReportData` (Camada 1), sem NENHUM formato/cálculo próprio
+   * desta camada: `ReportFilterableTables` (client-side) usa isso pra
+   * recalcular o Resumo do período/"Resultado Diário" só pra quem bate no
+   * filtro ativo, reaproveitando `buildDailyTable`/`buildAnalyticsKpiCards`
+   * — nunca uma segunda fórmula. `performanceGoal`/`period` também
+   * passam adiante porque esses recálculos precisam deles (não existiam
+   * neste tipo antes por não serem exibidos diretamente). */
+  performanceGoal: PerformanceGoal | null;
+  period: { start: string; end: string };
+  campaignDailyRows: CampaignDailyMetricRow[];
+  adSetDailyRows: AdSetDailyMetricRow[];
+  creativeDailyRows: AdCreativeDailyMetricRow[];
 }
 
 // Etapa "Otimização do Performance Report": nota de metodologia reduzida a
@@ -352,7 +365,13 @@ function buildCreativesTable(creatives: CreativeSummary[]): PerformanceReportTab
  * só reagrupadas por data em vez de somadas direto — ver
  * `scripts/test-performance-report-daily.ts`.
  */
-function buildDailyTable(daily: PerformanceReportDailyRow[], performanceGoal: PerformanceGoal | null): PerformanceReportTable {
+/** Exportada (Etapa "Filtro no topo afeta o dashboard inteiro") — o
+ * client-side `ReportFilterableTables` reaproveita esta MESMA função pra
+ * montar "Resultado Diário" a partir de linhas recalculadas (via
+ * `recomputeDailyRows`, `report-filter-recompute.ts`) quando o filtro do
+ * topo está ativo — nunca uma segunda formatação/coluna/total pra essa
+ * tabela. */
+export function buildDailyTable(daily: PerformanceReportDailyRow[], performanceGoal: PerformanceGoal | null): PerformanceReportTable {
   const config = performanceGoal ? PERFORMANCE_GOALS[performanceGoal] : null;
   const resultLabel = config?.resultMetricLabel ?? "Resultado";
   const costLabel = config?.costMetricShortLabel ?? "Custo por resultado";
@@ -501,5 +520,10 @@ export function buildPerformanceReportDocument(data: PerformanceReportData): Per
       buildAdSetsTable(data.adSets),
       buildCreativesTable(data.creatives),
     ],
+    performanceGoal: data.performanceGoal,
+    period: { start: data.period.start, end: data.period.end },
+    campaignDailyRows: data.campaignDailyRows,
+    adSetDailyRows: data.adSetDailyRows,
+    creativeDailyRows: data.creativeDailyRows,
   };
 }

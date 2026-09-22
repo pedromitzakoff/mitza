@@ -5,11 +5,11 @@ import { buildAnalyticsKpiCards, type AnalyticsKpiCard } from "@/lib/analytics";
 import type { ClientAnalyticsData, ClientAnalyticsDailyRow } from "@/app/clients/analytics-data";
 import { fetchClientAnalyticsData } from "@/app/clients/analytics-data";
 import { getCampaignDailyMetricsForPeriod } from "@/lib/campaign-analytics-data";
-import { buildCampaignSummaries, type CampaignSummary } from "@/lib/campaign-analytics";
+import { buildCampaignSummaries, type CampaignSummary, type CampaignDailyMetricRow } from "@/lib/campaign-analytics";
 import { getAdSetDailyMetricsForPeriod } from "@/lib/ad-set-analytics-data";
-import { buildAdSetSummaries, type AdSetSummary } from "@/lib/ad-set-analytics";
+import { buildAdSetSummaries, type AdSetSummary, type AdSetDailyMetricRow } from "@/lib/ad-set-analytics";
 import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
-import { buildCreativeSummaries, type CreativeSummary } from "@/lib/creative-analytics";
+import { buildCreativeSummaries, type CreativeSummary, type AdCreativeDailyMetricRow } from "@/lib/creative-analytics";
 import { computeCostPerResult, computeRoas, type PerformanceSummary } from "@/lib/performance";
 import { listDatesInclusive } from "@/lib/monthly-budget";
 import type { PerformanceGoal } from "@/lib/performance-goals";
@@ -79,6 +79,17 @@ export interface PerformanceReportData {
   campaigns: CampaignSummary[];
   adSets: AdSetSummary[];
   creatives: CreativeSummary[];
+  /** Etapa "Filtro no topo afeta o dashboard inteiro": as MESMAS linhas
+   * brutas (por dia, por campanha/público/criativo) que `campaigns`/
+   * `adSets`/`creatives` já resumem em totais do período — antes eram
+   * descartadas depois de alimentar `buildCampaignSummaries`/etc; agora
+   * seguem adiante pra Camada 2/3 poder recalcular "Resultado Diário" e o
+   * Resumo do período só pra quem bate no filtro ativo. Nenhuma consulta
+   * nova: já eram buscadas aqui (Meta-only, mesmo filtro por canal de
+   * sempre) — só não eram mais expostas fora desta função. */
+  campaignDailyRows: CampaignDailyMetricRow[];
+  adSetDailyRows: AdSetDailyMetricRow[];
+  creativeDailyRows: AdCreativeDailyMetricRow[];
   generatedAt: string;
 }
 
@@ -152,8 +163,10 @@ export async function buildPerformanceReportData(
   // channel-aware (podem ter linhas de outros canais se o cliente também
   // usa Google) — filtra explicitamente. ad_creative_daily_metrics já é
   // implicitamente Meta-only (sem coluna de canal), nenhum filtro necessário.
-  const campaigns = buildCampaignSummaries(campaignRowsAllChannels.filter((row) => row.channel === "meta"));
-  const adSets = buildAdSetSummaries(adSetRowsAllChannels.filter((row) => row.channel === "meta"));
+  const campaignDailyRows = campaignRowsAllChannels.filter((row) => row.channel === "meta");
+  const adSetDailyRows = adSetRowsAllChannels.filter((row) => row.channel === "meta");
+  const campaigns = buildCampaignSummaries(campaignDailyRows);
+  const adSets = buildAdSetSummaries(adSetDailyRows);
   const creatives = buildCreativeSummaries(creativeRows);
 
   return {
@@ -165,6 +178,9 @@ export async function buildPerformanceReportData(
     campaigns,
     adSets,
     creatives,
+    campaignDailyRows,
+    adSetDailyRows,
+    creativeDailyRows: creativeRows,
     generatedAt: new Date().toISOString(),
   };
 }

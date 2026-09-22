@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { buildPerformanceReportDocument, type PerformanceReportTable } from "../src/lib/performance-report/report-document";
 import { renderPerformanceReportHtml } from "../src/lib/performance-report/renderers/html-renderer";
 import type { PerformanceReportData } from "../src/lib/performance-report/report-data";
+import { recomputeDailyRows, recomputeFilteredSummary, type FilterableDailyRow } from "../src/lib/performance-report/report-filter-recompute";
 import type { CampaignSummary } from "../src/lib/campaign-analytics";
 import type { AdSetSummary } from "../src/lib/ad-set-analytics";
 import type { CreativeSummary } from "../src/lib/creative-analytics";
@@ -122,6 +123,9 @@ function fakeData(overrides: Partial<PerformanceReportData> = {}): PerformanceRe
     campaigns: [],
     adSets: [],
     creatives: [],
+    campaignDailyRows: [],
+    adSetDailyRows: [],
+    creativeDailyRows: [],
     generatedAt: "2026-09-01T12:00:00.000Z",
     ...overrides,
   };
@@ -356,40 +360,48 @@ check(
 );
 
 // ---------------------------------------------------------------------------
-console.log("\n17 — Etapa 'Filtro por nome (contém/não contém)': UM controle no topo, nunca um por tabela\n");
+console.log("\n17 — Etapa 'Filtro no topo afeta o dashboard inteiro': UM controle no topo, acima do Resumo do período\n");
 {
   const tableSectionSource = readFileSync(join(__dirname, "..", "src", "app", "clients", "[id]", "relatorio", "report-table-section.tsx"), "utf8");
   const filterableSource = readFileSync(join(__dirname, "..", "src", "app", "clients", "[id]", "relatorio", "report-filterable-tables.tsx"), "utf8");
   const bodySource = readFileSync(join(__dirname, "..", "src", "app", "clients", "[id]", "relatorio", "report-body.tsx"), "utf8");
 
   ok(
-    "ReportTableSection voltou a não ter NENHUMA lógica de filtro própria — achado real: a 1ª versão tinha um controle por tabela, o pedido era um controle só no topo",
+    "ReportTableSection não tem NENHUMA lógica de filtro própria — vive só em ReportFilterableTables",
     !/NameFilterControl|filterMode|filterText|matchesNameFilter/.test(tableSectionSource),
   );
-  ok("ReportBody usa ReportFilterableTables (um wrapper), nunca mais table.map direto com ReportTableSection", /<ReportFilterableTables tables=\{document\.tables\} \/>/.test(bodySource));
-  ok("dimensão do filtro só lista tabelas com nameFilterable (Resultado Diário nunca aparece como opção — linha lá é data, não nome)", /tables\.filter\(\(table\) => table\.nameFilterable\)/.test(filterableSource));
+  ok("ReportBody delega pra ReportFilterableTables, passando o document inteiro (não só as tabelas)", /<ReportFilterableTables document=\{document\} \/>/.test(bodySource));
+  ok("ReportBody não monta mais o Resumo do período/KPI grid diretamente — isso virou parte de ReportFilterableTables", !/<ReportKpiGrid/.test(bodySource));
+  ok("dimensão do filtro só lista tabelas com nameFilterable (Resultado Diário nunca aparece como opção)", /tables\.filter\(\(table\) => table\.nameFilterable\)/.test(filterableSource));
   ok("dois modos: contém / não contém", /contém<\/option>/.test(filterableSource) && /não contém<\/option>/.test(filterableSource));
-  ok("select de dimensão usa table.nameColumnHeader como rótulo (Campanha/Público/Criativo, nunca um texto duplicado)", /\{table\.nameColumnHeader\}/.test(filterableSource));
-  ok("texto vazio nunca filtra nada (mesma regra de sempre: nenhum estado fabricado)", /if \(normalizedText === ""\) return true;/.test(filterableSource));
   ok(
-    "só a tabela da dimensão selecionada é filtrada — as outras 2 passam intocadas (nunca aplica o mesmo texto nas 3 ao mesmo tempo)",
+    "só a tabela da dimensão selecionada é filtrada — as outras 2 passam intocadas",
     /if \(table\.id !== dimensionId\) return table;/.test(filterableSource),
   );
   ok(
-    "filtragem é local (table.rows.filter), nunca um novo fetch/consulta ao trocar o filtro",
-    /table\.rows\.filter\(\(row\) => matchesNameFilter\(row\.name, mode, normalizedText\)\)/.test(filterableSource),
+    "'Resultado Diário' é RECONSTRUÍDO via buildDailyTable (a mesma função de sempre), nunca uma segunda formatação de tabela",
+    /buildDailyTable\(recomputedDaily, document\.performanceGoal\)/.test(filterableSource),
   );
   ok(
-    "estado 'sem resultado pro filtro' troca emptyMessage só na tabela filtrada (nunca reaproveita/mistura com a tabela genuinamente vazia)",
-    /emptyMessage: rows\.length === 0 \? "Sem resultado para esse filtro\." : table\.emptyMessage/.test(filterableSource),
+    "Resumo do período recalculado usa a MESMA buildAnalyticsKpiCards de sempre — nunca uma segunda fórmula/rótulo de KPI",
+    /buildAnalyticsKpiCards\(document\.performanceGoal, filteredSummary\.actualSpend/.test(filterableSource),
   );
   ok(
-    "achado real na validação da 1ª versão: nunca flexiona artigo de gênero a partir do nome da tabela (quebrava em 'Nenhum campanha', campanha é feminino) — frase fixa, sem interpolar nameColumnHeader",
+    "sem performanceGoal, o Resumo NUNCA é recalculado (mesmo com filtro ativo nas tabelas) — não existe rótulo de objetivo pra montar um Resumo com sentido",
+    /if \(!isFiltering \|\| !document\.performanceGoal\) return null;/.test(filterableSource),
+  );
+  ok(
+    "'Leitura do período' some enquanto filtrando — narrativa do período inteiro nunca fica ao lado de números já filtrados",
+    /\{!isFiltering && <PeriodReading document=\{document\} \/>\}/.test(filterableSource),
+  );
+  ok('selo "Mostrando só" sempre visível quando filtrando — números filtrados nunca parecem o total real por engano', /Mostrando só:/.test(filterableSource));
+  ok(
+    "achado real na validação da 1ª versão: nunca flexiona artigo de gênero a partir do nome da tabela (quebrava em 'Nenhum campanha') — frase fixa",
     !/Nenhum \$\{|Nenhuma \$\{|Nenhum \{|Nenhuma \{/.test(filterableSource),
   );
 }
 
-console.log("\n18 — Etapa 'Filtro por nome': comportamento real do matching (contém/não contém), via document de verdade\n");
+console.log("\n18 — Etapa 'Filtro no topo': comportamento real do matching (contém/não contém), via document de verdade\n");
 {
   const docFilterMatch = buildPerformanceReportDocument(
     fakeData({
@@ -401,6 +413,47 @@ console.log("\n18 — Etapa 'Filtro por nome': comportamento real do matching (c
   check("'contém' teste: só 1 campanha", containsTeste.length, 1);
   const notContainsTeste = campaignsTable.rows.filter((row) => !row.name.toLowerCase().includes("teste"));
   check("'não contém' teste: as outras 2 campanhas", notContainsTeste.length, 2);
+}
+
+// ---------------------------------------------------------------------------
+console.log("\n19 — report-filter-recompute.ts: recomputeDailyRows/recomputeFilteredSummary são puras e corretas (teste real, não estrutural)\n");
+{
+  const rows: FilterableDailyRow[] = [
+    { date: "2026-08-01", name: "Black Friday", spend: 100, resultCount: 4, revenue: null },
+    { date: "2026-08-01", name: "Remarketing", spend: 50, resultCount: 2, revenue: null },
+    { date: "2026-08-02", name: "Black Friday", spend: 80, resultCount: 3, revenue: null },
+    { date: "2026-08-03", name: "Teste interno", spend: 10, resultCount: 1, revenue: null },
+  ];
+  const period = { start: "2026-08-01", end: "2026-08-03" };
+
+  console.log("  19a — recomputeDailyRows\n");
+  {
+    const daily = recomputeDailyRows(period, rows, "contains", "black");
+    check("3 dias no período, mesmo sem sinal em algum (nunca corta o período)", daily.length, 3);
+    check("dia 1: só Black Friday somada (Remarketing não bate no filtro)", daily[0]!.spend, 100);
+    check("dia 2: Black Friday do dia 2", daily[1]!.spend, 80);
+    check("dia 3: nenhuma linha bate 'black' nesse dia — spend null, nunca 0 fabricado", daily[2]!.spend, null);
+  }
+  {
+    const dailyNotContains = recomputeDailyRows(period, rows, "not_contains", "black");
+    check("'não contém black', dia 1: só Remarketing (50)", dailyNotContains[0]!.spend, 50);
+    check("'não contém black', dia 2: nenhuma linha sobra (Black Friday é a única do dia 2)", dailyNotContains[1]!.spend, null);
+    check("'não contém black', dia 3: Teste interno (10)", dailyNotContains[2]!.spend, 10);
+  }
+  {
+    const dailyEmpty = recomputeDailyRows(period, rows, "contains", "");
+    ok("texto vazio: todos os dias somam TODAS as linhas (nenhum filtro aplicado)", dailyEmpty[0]!.spend === 150 && dailyEmpty[1]!.spend === 80 && dailyEmpty[2]!.spend === 10);
+  }
+
+  console.log("\n  19b — recomputeFilteredSummary\n");
+  {
+    const summary = recomputeFilteredSummary("leads", rows, "contains", "black");
+    check("investimento somado só das linhas 'black' (100 + 80)", summary.actualSpend, 180);
+    check("resultado somado só das linhas 'black' (4 + 3)", summary.resultCount, 7);
+    check("CPL recalculado a partir do total filtrado (180 / 7), nunca uma média simples", summary.costPerResult, 180 / 7);
+    check("nunca compara contra meta da carteira inteira — targetCostPerResult sempre null aqui", summary.targetCostPerResult, null);
+    check("comparison.status = not_available (mesma regra de compareCostToTarget sem meta)", summary.comparison.status, "not_available");
+  }
 }
 
 // ---------------------------------------------------------------------------

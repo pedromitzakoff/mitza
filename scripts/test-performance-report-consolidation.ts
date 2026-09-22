@@ -263,6 +263,9 @@ console.log("\n11 — Integração: PerformanceReportDocument já chega consolid
   ];
 
   const data: PerformanceReportData = {
+    campaignDailyRows: [],
+    adSetDailyRows: [],
+    creativeDailyRows: [],
     client: { id: "client-1", name: "Cliente Teste" },
     period: { start: "2026-08-01", end: "2026-08-31", label: "01 ago 2026 → 31 ago 2026" },
     summary: { status: "no_goal" },
@@ -309,6 +312,9 @@ console.log("\n12 — Integração: progressive disclosure conta itens CONSOLIDA
   // report-table-section.tsx) se a consolidação não tivesse acontecido.
   const manyRawRows = Array.from({ length: 15 }, (_, i) => adSetRow({ adSetName: "Público Único", campaignName: `Campanha ${i + 1}`, spend: 10 }));
   const data: PerformanceReportData = {
+    campaignDailyRows: [],
+    adSetDailyRows: [],
+    creativeDailyRows: [],
     client: { id: "client-2", name: "Cliente Teste 2" },
     period: { start: "2026-08-01", end: "2026-08-31", label: "01 ago 2026 → 31 ago 2026" },
     summary: { status: "no_goal" },
