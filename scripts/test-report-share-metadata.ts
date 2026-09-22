@@ -50,7 +50,8 @@ console.log('\n3 — auditoria estrutural: generateMetadata nunca usa a pipeline
   ok("generateMetadata resolve o nome via resolveReportShareClientName (nunca expõe clientId)", /resolveReportShareClientName\(token\)/.test(metadataSource));
   ok("generateMetadata nunca declara variável/campo clientId", !/\bclientId\b/.test(metadataSource));
   ok("generateMetadata usa resolvePublicShareLinkBaseUrl (mesma resolução de domínio de produção do painel admin)", /resolvePublicShareLinkBaseUrl\(\)/.test(metadataSource));
-  ok("título institucional fixo 'KOFF — Relatório de Performance'", /KOFF — Relatório de Performance/.test(metadataSource) || /REPORT_SHARE_TITLE/.test(metadataSource));
+  ok("título fixo 'Relatório de Performance', sem marca da agência (white label)", /REPORT_SHARE_TITLE = "Relatório de Performance"/.test(pageSource));
+  ok("openGraph nunca declara siteName (nenhum nome neutro pra colocar sem reintroduzir uma marca)", !/siteName/.test(metadataSource));
   ok("robots: noindex/nofollow (link privado do cliente nunca deve ser indexado)", /robots:\s*\{\s*index:\s*false,\s*follow:\s*false\s*\}/.test(metadataSource));
   ok("openGraph e twitter declarados", /openGraph:/.test(metadataSource) && /twitter:/.test(metadataSource));
   ok("generateMetadata nunca declara openGraph.images (a convenção de arquivo opengraph-image.tsx cuida disso)", !/images:/.test(metadataSource));
@@ -66,6 +67,7 @@ console.log("\n4 — auditoria estrutural: opengraph-image.tsx nunca usa a pipel
   ok("opengraph-image.tsx resolve o nome via resolveReportShareClientName", /resolveReportShareClientName\(token\)/.test(imageSource));
   ok("paleta institucional pedida (creme/areia/grafite/verde-limão) presente", ["#EFE9E0", "#C8BEAD", "#17171A", "#D8F238"].every((hex) => imageSource.includes(hex)));
   ok("nenhum número (custo, ROAS, investimento, resultado) é interpolado na imagem — só clientName/periodLabel", !/summary\.|record\.|revenue|spend|roas|costPerResult/i.test(imageSource));
+  ok("nenhuma wordmark 'KOFF' na imagem (white label — pedido explícito)", !/>KOFF</.test(imageSource) && !/alt = "KOFF/.test(imageSource));
 }
 
 console.log("\n5 — auditoria estrutural: resolução do nome do cliente reaproveita resolveClientIdFromShareToken (nunca uma segunda lógica de token)\n");

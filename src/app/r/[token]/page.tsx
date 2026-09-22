@@ -11,7 +11,7 @@ import { ReportBody } from "@/app/clients/[id]/relatorio/report-body";
 import { ReportHeader } from "@/app/clients/[id]/relatorio/report-header";
 import { formatReportPeriodLabel, resolveReportShareClientName, resolveReportShareDefaultPeriod } from "./report-share-metadata";
 
-const REPORT_SHARE_TITLE = "KOFF — Relatório de Performance";
+const REPORT_SHARE_TITLE = "Relatório de Performance";
 const REPORT_SHARE_DESCRIPTION_FALLBACK = "Acompanhe os resultados, investimento e principais indicadores da campanha.";
 
 /**
@@ -32,6 +32,12 @@ const REPORT_SHARE_DESCRIPTION_FALLBACK = "Acompanhe os resultados, investimento
  * deployment da Vercel. A imagem (`og:image`/`twitter:image`) vem sozinha da
  * convenção de arquivo colocada ao lado (`opengraph-image.tsx`), nunca
  * declarada aqui.
+ *
+ * Etapa "White label no link público": título/descrição/imagem nunca
+ * mencionam "KOFF" — o link é enviado em nome do cliente final da agência,
+ * que pode não querer a marca da agência aparecendo no preview (pedido
+ * explícito). `siteName` foi removido do openGraph pelo mesmo motivo (não
+ * existe um nome neutro pra colocar no lugar sem reintroduzir uma marca).
  */
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
   const { token } = await params;
@@ -52,7 +58,6 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
       title: REPORT_SHARE_TITLE,
       description,
       url: canonicalUrl,
-      siteName: "KOFF",
       type: "website",
     },
     twitter: {
