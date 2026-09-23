@@ -128,6 +128,7 @@ function fakeData(overrides: Partial<PerformanceReportData> = {}): PerformanceRe
     campaignDailyRows: [],
     adSetDailyRows: [],
     creativeDailyRows: [],
+    placementDailyRows: [],
     conversionRate: null,
     placements: [],
     generatedAt: "2026-09-01T12:00:00.000Z",
@@ -384,8 +385,20 @@ console.log("\n17 — Etapa 'Filtro no topo afeta o dashboard inteiro': UM contr
   ok("dimensão do filtro só lista tabelas com nameFilterable (Resultado Diário nunca aparece como opção)", /tables\.filter\(\(table\) => table\.nameFilterable\)/.test(filterableSource));
   ok("dois modos: contém / não contém", /contém<\/option>/.test(filterableSource) && /não contém<\/option>/.test(filterableSource));
   ok(
-    "só a tabela da dimensão selecionada é filtrada — as outras 2 passam intocadas",
-    /if \(table\.id !== dimensionId\) return table;/.test(filterableSource),
+    "filtrando por Público/Criativo: só a tabela da dimensão selecionada é filtrada, as outras nunca (matchingCampaignNames só existe quando a dimensão é campanha)",
+    /if \(table\.id === dimensionId\) \{/.test(filterableSource) && /isFilteringByCampaign = isFiltering && dimensionId === CAMPAIGNS_TABLE_ID/.test(filterableSource),
+  );
+  ok(
+    "Etapa 'Filtro por campanha afeta o Relatório inteiro': filtrando por Campanha, Públicos/Criativos/Posicionamentos também são reconstruídos (só pra essa dimensão, nunca Público/Criativo propagando pras outras)",
+    /matchingCampaignNames && table\.id === "publicos"/.test(filterableSource) &&
+      /matchingCampaignNames && table\.id === "criativos"/.test(filterableSource) &&
+      /matchingCampaignNames && table\.id === "posicionamentos"/.test(filterableSource),
+  );
+  ok(
+    "reconstrução usa os MESMOS agregadores/builders canônicos (buildAdSetSummaries/buildCreativeSummaries/buildPlacementSummaries + buildAdSetsTable/buildCreativesTable/buildPlacementsTable) — nunca uma segunda fórmula",
+    /buildAdSetsTable\(buildAdSetSummaries\(/.test(filterableSource) &&
+      /buildCreativesTable\(buildCreativeSummaries\(/.test(filterableSource) &&
+      /buildPlacementsTable\(buildPlacementSummaries\(/.test(filterableSource),
   );
   ok(
     "'Resultado Diário' é RECONSTRUÍDO via buildDailyTable (a mesma função de sempre), nunca uma segunda formatação de tabela",

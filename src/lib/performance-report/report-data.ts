@@ -104,6 +104,14 @@ export interface PerformanceReportData {
   campaignDailyRows: CampaignDailyMetricRow[];
   adSetDailyRows: AdSetDailyMetricRow[];
   creativeDailyRows: AdCreativeDailyMetricRow[];
+  /** Etapa "Filtro por campanha afeta o Relatório inteiro": mesma razão de
+   * `campaignDailyRows`/`adSetDailyRows`/`creativeDailyRows` acima —
+   * Posicionamentos só ganhou acesso à linha bruta agora porque, até esta
+   * etapa, nada precisava reconstruir a tabela a partir dela (a agregação
+   * sempre ignorava `campaignName` de propósito, ver
+   * `lib/campaign-placement-analytics.ts`). Continua ignorado na agregação
+   * em si — só usado pra FILTRAR as linhas por campanha antes de agregar. */
+  placementDailyRows: CampaignPlacementDailyMetricRow[];
   /** Taxa de conversão (vendas ÷ carrinhos) — pedido explícito do usuário
    * ("carrinho é uma métrica secundária, só pra calcular a conversão").
    * Carrinho NUNCA é um `performance_goal`/aparece em `client_goals`: é só
@@ -396,6 +404,7 @@ export async function buildPerformanceReportData(
     campaignDailyRows,
     adSetDailyRows,
     creativeDailyRows,
+    placementDailyRows,
     conversionRate,
     placements,
     generatedAt: new Date().toISOString(),

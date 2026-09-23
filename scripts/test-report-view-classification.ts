@@ -17,15 +17,12 @@ import {
   buildPurposeByCampaignName,
   isConfidentlySecondaryByName,
   resolveReportView,
-  REPORT_PURPOSE_CONFIG,
   REPORT_PURPOSE_OPTIONS,
   type ReportCampaignPurpose,
 } from "../src/lib/report-view-classification";
 import { buildPerformanceReportDocument } from "../src/lib/performance-report/report-document";
 import type { PerformanceReportData } from "../src/lib/performance-report/report-data";
 import type { CampaignSummary } from "../src/lib/campaign-analytics";
-import type { AdSetSummary } from "../src/lib/ad-set-analytics";
-import type { CreativeSummary } from "../src/lib/creative-analytics";
 import type { PerformanceSummary } from "../src/lib/performance";
 
 let passed = 0;
@@ -154,47 +151,6 @@ function campaign(name: string, spend: number, overrides: Partial<CampaignSummar
   };
 }
 
-function adSet(name: string, spend: number, overrides: Partial<AdSetSummary> = {}): AdSetSummary {
-  return {
-    adSetName: name,
-    channel: "meta",
-    campaignNames: ["C"],
-    totalSpend: spend,
-    totalImpressions: null,
-    totalReach: null,
-    totalClicks: null,
-    resultType: null,
-    totalResultCount: null,
-    totalRevenue: null,
-    cpa: null,
-    cpc: null,
-    ctr: null,
-    roas: null,
-    ...overrides,
-  };
-}
-
-function creative(name: string, spend: number, overrides: Partial<CreativeSummary> = {}): CreativeSummary {
-  return {
-    creativeName: name,
-    permalinkUrl: null,
-    previewImageUrl: null,
-    campaignNames: ["C"],
-    totalSpend: spend,
-    totalImpressions: null,
-    totalReach: null,
-    totalClicks: null,
-    resultType: null,
-    totalResultCount: null,
-    totalRevenue: null,
-    cpa: null,
-    cpc: null,
-    ctr: null,
-    roas: null,
-    ...overrides,
-  };
-}
-
 function fakeData(overrides: Partial<PerformanceReportData> = {}): PerformanceReportData {
   return {
     client: { id: "client-1", name: "Cliente Teste" },
@@ -208,6 +164,7 @@ function fakeData(overrides: Partial<PerformanceReportData> = {}): PerformanceRe
     campaignDailyRows: [],
     adSetDailyRows: [],
     creativeDailyRows: [],
+    placementDailyRows: [],
     conversionRate: null,
     placements: [],
     generatedAt: "2026-09-01T12:00:00.000Z",

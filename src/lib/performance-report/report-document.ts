@@ -6,7 +6,7 @@ import type { AnalyticsKpiCard, AnalyticsKpiComparisonTone } from "@/lib/analyti
 import type { CampaignSummary, CampaignDailyMetricRow } from "@/lib/campaign-analytics";
 import type { AdSetSummary, AdSetDailyMetricRow } from "@/lib/ad-set-analytics";
 import type { CreativeSummary, AdCreativeDailyMetricRow } from "@/lib/creative-analytics";
-import type { PlacementSummary } from "@/lib/campaign-placement-analytics";
+import type { PlacementSummary, CampaignPlacementDailyMetricRow } from "@/lib/campaign-placement-analytics";
 import type { PerformanceReportData, PerformanceReportDailyRow } from "./report-data";
 import {
   buildCampaignBadges,
@@ -169,6 +169,12 @@ export interface PerformanceReportDocument {
   campaignDailyRows: CampaignDailyMetricRow[];
   adSetDailyRows: AdSetDailyMetricRow[];
   creativeDailyRows: AdCreativeDailyMetricRow[];
+  /** Etapa "Filtro por campanha afeta o Relatório inteiro" — passthrough de
+   * `PerformanceReportData.placementDailyRows`, mesmo motivo dos 3 acima:
+   * `ReportFilterableTables` usa isso pra reconstruir a tabela de
+   * Posicionamentos filtrada por campanha quando o filtro ativo é por
+   * Campanha. */
+  placementDailyRows: CampaignPlacementDailyMetricRow[];
   /** Passthrough de `PerformanceReportData.conversionRate` (vendas ÷
    * carrinhos) — `null` sem carrinho registrado no período (caso comum:
    * carrinho é uma métrica secundária, só existe pra quem tem essa coluna
@@ -369,7 +375,7 @@ function buildSecondaryCampaignsTable(campaigns: CampaignSummary[], purposeByCam
   };
 }
 
-function buildAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTable {
+export function buildAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTable {
   const { resultLabel, costLabel } = resolveResultLabels(adSets.map((a) => a.resultType));
   const hasRevenue = adSets.some((a) => a.totalRevenue !== null);
   const hasRoas = adSets.some((a) => a.roas !== null);
@@ -423,7 +429,7 @@ function buildAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTable {
  * `buildSecondaryCampaignsTable` (Investimento + Impressões/Alcance/
  * Cliques, nunca Resultado/Custo) — `AdSetSummary` não carrega finalidade
  * por público (só por campanha), então sem badge de finalidade aqui. */
-function buildSecondaryAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTable {
+export function buildSecondaryAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTable {
   const hasImpressions = adSets.some((a) => a.totalImpressions !== null);
   const hasReach = adSets.some((a) => a.totalReach !== null);
   const hasClicks = adSets.some((a) => a.totalClicks !== null);
@@ -473,7 +479,7 @@ function buildSecondaryAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTab
  * linhas é sempre pequeno (poucos posicionamentos possíveis), então sem
  * `disclosure` (sempre mostra tudo, mesmo tratamento de Resultado Diário).
  */
-function buildPlacementsTable(placements: PlacementSummary[]): PerformanceReportTable {
+export function buildPlacementsTable(placements: PlacementSummary[]): PerformanceReportTable {
   const { resultLabel, costLabel } = resolveResultLabels(placements.map((p) => p.resultType));
   const hasResultShare = placements.some((p) => p.resultShare !== null);
 
@@ -518,7 +524,7 @@ function buildPlacementsTable(placements: PlacementSummary[]): PerformanceReport
  * `lib/campaign-placement-analytics.ts`) — por isso, ao contrário das
  * outras 3 tabelas secundárias, só sobra Investimento + % Investimento
  * aqui (nunca Resultado/Custo, mesma regra das outras). */
-function buildSecondaryPlacementsTable(placements: PlacementSummary[]): PerformanceReportTable {
+export function buildSecondaryPlacementsTable(placements: PlacementSummary[]): PerformanceReportTable {
   const metricColumns: PerformanceReportColumn[] = [
     { key: "investment", header: "Investimento" },
     { key: "spendShare", header: "% Investimento" },
@@ -547,7 +553,7 @@ function buildSecondaryPlacementsTable(placements: PlacementSummary[]): Performa
   };
 }
 
-function buildCreativesTable(creatives: CreativeSummary[]): PerformanceReportTable {
+export function buildCreativesTable(creatives: CreativeSummary[]): PerformanceReportTable {
   const { resultLabel, costLabel } = resolveResultLabels(creatives.map((c) => c.resultType));
   const hasCtr = creatives.some((c) => c.ctr !== null);
   const hasCpc = creatives.some((c) => c.cpc !== null);
@@ -607,7 +613,7 @@ function buildCreativesTable(creatives: CreativeSummary[]): PerformanceReportTab
  * perfil (cliques já é a própria métrica de resultado ali), então é
  * mantido — nunca CTR (taxa é derivada de resultado ÷ impressão, mistura o
  * conceito de "resultado" que esta visão evita). */
-function buildSecondaryCreativesTable(creatives: CreativeSummary[]): PerformanceReportTable {
+export function buildSecondaryCreativesTable(creatives: CreativeSummary[]): PerformanceReportTable {
   const hasCpc = creatives.some((c) => c.cpc !== null);
   const hasImpressions = creatives.some((c) => c.totalImpressions !== null);
   const hasReach = creatives.some((c) => c.totalReach !== null);
@@ -852,6 +858,7 @@ export function buildPerformanceReportDocument(data: PerformanceReportData): Per
     campaignDailyRows: data.campaignDailyRows,
     adSetDailyRows: data.adSetDailyRows,
     creativeDailyRows: data.creativeDailyRows,
+    placementDailyRows: data.placementDailyRows,
     conversionRate: data.conversionRate,
     view: data.view,
     hasSecondaryCampaigns: data.hasSecondaryCampaigns,

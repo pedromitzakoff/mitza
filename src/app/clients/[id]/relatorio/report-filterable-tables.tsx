@@ -4,7 +4,17 @@ import { useId, useMemo, useState } from "react";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { buildAnalyticsKpiCards } from "@/lib/analytics";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
-import { buildDailyTable, type PerformanceReportDocument } from "@/lib/performance-report/report-document";
+import { buildAdSetSummaries } from "@/lib/ad-set-analytics";
+import { buildCreativeSummaries } from "@/lib/creative-analytics";
+import { buildPlacementSummaries } from "@/lib/campaign-placement-analytics";
+import {
+  buildDailyTable,
+  buildAdSetsTable,
+  buildCreativesTable,
+  buildPlacementsTable,
+  type PerformanceReportDocument,
+  type PerformanceReportTable,
+} from "@/lib/performance-report/report-document";
 import { flattenPeriodReadingLines } from "@/lib/performance-report/report-derivatives";
 import {
   matchesNameFilter,
@@ -15,6 +25,11 @@ import {
 } from "@/lib/performance-report/report-filter-recompute";
 import { ReportKpiGrid } from "./report-kpi-grid";
 import { ReportTableSection } from "./report-table-section";
+
+/** `ReportFilterableTables` só renderiza a visão "principal" (a visão
+ * "secundario" usa `ReportSecondaryView`, sem este filtro — ver
+ * `report-body.tsx`), então o único id de Campanhas possível aqui é este. */
+const CAMPAIGNS_TABLE_ID = "campanhas";
 
 /**
  * "Leitura do período" — movida de `report-body.tsx` pra cá (Etapa "Filtro
@@ -146,21 +161,52 @@ export function ReportFilterableTables({ document }: { document: PerformanceRepo
   const isFiltering = dimensionId !== "" && normalizedText !== "";
   const dimensionTable = filterableTables.find((table) => table.id === dimensionId);
 
+  // Etapa "Filtro por campanha afeta o Relatório inteiro" (pedido explícito
+  // do usuário: "se eu colocar campanha contém WPP, então todas infos do
+  // relatório devem ser das campanhas que contém WPP no nome") — só quando
+  // a dimensão filtrada é CAMPANHA (Público/Criativo não têm uma campanha
+  // única pra propagar a partir deles, continuam com o comportamento de
+  // sempre: só a própria tabela filtra). O nome que decide é sempre o de
+  // `campaignDailyRows` (a mesma fonte que já resolve "Resultado Diário"/
+  // Resumo pra esse caso) — nunca uma segunda lista de nomes.
+  const isFilteringByCampaign = isFiltering && dimensionId === CAMPAIGNS_TABLE_ID;
+  const matchingCampaignNames = useMemo(() => {
+    if (!isFilteringByCampaign) return null;
+    return new Set(
+      document.campaignDailyRows.filter((row) => matchesNameFilter(row.campaignName, mode, normalizedText)).map((row) => row.campaignName),
+    );
+  }, [document, isFilteringByCampaign, mode, normalizedText]);
+
   const effectiveTables = useMemo(() => {
     if (!isFiltering) return document.tables;
     const rawRows = toFilterableRows(document, dimensionId);
 
-    return document.tables.map((table) => {
+    return document.tables.map((table): PerformanceReportTable => {
       if (table.id === "resultado-diario") {
         const recomputedDaily = recomputeDailyRows(document.period, rawRows, mode, normalizedText);
         return buildDailyTable(recomputedDaily, document.performanceGoal);
       }
-      if (table.id !== dimensionId) return table;
-      const rows = table.rows.filter((row) => matchesNameFilter(row.name, mode, normalizedText));
-      if (rows.length === table.rows.length) return table;
-      return { ...table, rows, emptyMessage: rows.length === 0 ? "Sem resultado para esse filtro." : table.emptyMessage };
+      if (table.id === dimensionId) {
+        const rows = table.rows.filter((row) => matchesNameFilter(row.name, mode, normalizedText));
+        if (rows.length === table.rows.length) return table;
+        return { ...table, rows, emptyMessage: rows.length === 0 ? "Sem resultado para esse filtro." : table.emptyMessage };
+      }
+      // Reconstroem a partir das linhas BRUTAS (têm `campaignName`, ao
+      // contrário das linhas já resumidas que a tabela original usou) via os
+      // MESMOS agregadores/builders canônicos de sempre — nunca uma segunda
+      // fórmula, só um subconjunto de linhas diferente entrando neles.
+      if (matchingCampaignNames && table.id === "publicos") {
+        return buildAdSetsTable(buildAdSetSummaries(document.adSetDailyRows.filter((row) => matchingCampaignNames.has(row.campaignName))));
+      }
+      if (matchingCampaignNames && table.id === "criativos") {
+        return buildCreativesTable(buildCreativeSummaries(document.creativeDailyRows.filter((row) => matchingCampaignNames.has(row.campaignName))));
+      }
+      if (matchingCampaignNames && table.id === "posicionamentos") {
+        return buildPlacementsTable(buildPlacementSummaries(document.placementDailyRows.filter((row) => matchingCampaignNames.has(row.campaignName))));
+      }
+      return table;
     });
-  }, [document, isFiltering, dimensionId, mode, normalizedText]);
+  }, [document, isFiltering, dimensionId, mode, normalizedText, matchingCampaignNames]);
 
   const filteredSummary = useMemo(() => {
     if (!isFiltering || !document.performanceGoal) return null;
