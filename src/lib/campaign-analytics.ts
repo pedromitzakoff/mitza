@@ -26,6 +26,12 @@ export interface CampaignDailyMetricRow {
   date: string;
   channel: TrafficChannel;
   campaignName: string;
+  /** ID estável da campanha na plataforma — `null` quando a fonte não tem
+   * `campaign_id_column` configurado (Etapa "Separar o Relatório por
+   * finalidade das campanhas"). Só existe nesta granularidade — Públicos/
+   * Criativos/Posicionamentos nunca tiveram essa coluna (ver
+   * `lib/report-view-classification.ts`). */
+  campaignId: string | null;
   spend: number;
   impressions: number | null;
   reach: number | null;

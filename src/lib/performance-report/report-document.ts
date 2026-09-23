@@ -16,6 +16,13 @@ import {
   findHighestVolumeCampaign,
   type PeriodReading,
 } from "./report-derivatives";
+import {
+  REPORT_FOLLOWERS_NO_METRIC_NOTE,
+  REPORT_PROFILE_VISITS_PROXY_NOTE,
+  REPORT_PURPOSE_CONFIG,
+  type ReportCampaignPurpose,
+  type ReportView,
+} from "@/lib/report-view-classification";
 
 /**
  * Camada 2 — ESTRUTURA (KPIs + tabelas), independente de HTML/PDF. Cada
@@ -168,6 +175,19 @@ export interface PerformanceReportDocument {
    * mapeada no Stract). Nunca recalculado sob filtro (ver comentário em
    * `report-data.ts`). */
   conversionRate: number | null;
+  /** Etapa "Separar o Relatório por finalidade das campanhas": qual visão
+   * este documento representa — decide, na página, se renderiza o
+   * `ReportFilterableTables` de sempre (visão "principal", 100% intocado)
+   * ou o bloco novo da visão "secundario" (`secondarySummary` + as 4
+   * tabelas secundárias, sem KPI grid/Resultado Diário — não existe
+   * "resultado" único pra combinar awareness/alcance/seguidores/tráfego/
+   * visitas). */
+  view: ReportView;
+  /** Decide se o seletor de visão aparece — `false` pra todo cliente que
+   * nunca classificou nenhuma campanha numa finalidade secundária (Relatório
+   * continua idêntico ao de sempre, nenhum elemento novo visível). */
+  hasSecondaryCampaigns: boolean;
+  secondarySummary: { totalSpend: number; breakdown: { purpose: ReportCampaignPurpose; label: string; spend: number }[] } | null;
 }
 
 // Etapa "Otimização do Performance Report": nota de metodologia reduzida a
@@ -203,11 +223,29 @@ function metricCell(display: string | null, sortValue: number | null): Performan
  * `targetCostPerResult` vem do MESMO `PerformanceSummary` do Resumo
  * Executivo — nunca uma meta diferente pro badge "Acima/Abaixo da meta".
  */
-function buildCampaignsTable(campaigns: CampaignSummary[], targetCostPerResult: number | null): PerformanceReportTable {
+/**
+ * Etapa "Separar o Relatório por finalidade das campanhas": badge "Não
+ * classificada" — só quando o cliente realmente usa a separação
+ * (`unclassifiedCampaignNames` vem `[]` de `report-data.ts` pra quem não
+ * usa, então isso nunca aparece pra quem nunca abriu o classificador).
+ * Campanha sem classificação continua 100% presente na tabela (auditoria:
+ * nunca desaparece silenciosamente) — só ganha esse aviso identificável.
+ */
+function buildUnclassifiedBadges(campaignName: string, unclassifiedCampaignNames: string[]): string[] | undefined {
+  return unclassifiedCampaignNames.includes(campaignName) ? ["Não classificada"] : undefined;
+}
+
+function buildCampaignsTable(
+  campaigns: CampaignSummary[],
+  targetCostPerResult: number | null,
+  unclassifiedCampaignNames: string[],
+): PerformanceReportTable {
   const { resultLabel, costLabel } = resolveResultLabels(campaigns.map((c) => c.resultType));
   const hasRevenue = campaigns.some((c) => c.totalRevenue !== null);
   const hasRoas = campaigns.some((c) => c.roas !== null);
   const hasImpressions = campaigns.some((c) => c.totalImpressions !== null);
+  const hasReach = campaigns.some((c) => c.totalReach !== null);
+  const hasClicks = campaigns.some((c) => c.totalClicks !== null);
   const bestCostCampaign = findBestCostCampaign(campaigns);
   const highestVolumeCampaign = findHighestVolumeCampaign(campaigns);
 
@@ -218,6 +256,8 @@ function buildCampaignsTable(campaigns: CampaignSummary[], targetCostPerResult: 
     ...(hasRevenue ? [{ key: "revenue", header: "Receita" }] : []),
     ...(hasRoas ? [{ key: "roas", header: "ROAS" }] : []),
     ...(hasImpressions ? [{ key: "impressions", header: "Impressões" }] : []),
+    ...(hasReach ? [{ key: "reach", header: "Alcance" }] : []),
+    ...(hasClicks ? [{ key: "clicks", header: "Cliques" }] : []),
   ];
 
   const rows: PerformanceReportRow[] = campaigns.map((c) => {
@@ -229,10 +269,16 @@ function buildCampaignsTable(campaigns: CampaignSummary[], targetCostPerResult: 
     if (hasRevenue) metrics.push(metricCell(c.totalRevenue !== null ? formatCurrency(c.totalRevenue) : null, c.totalRevenue));
     if (hasRoas) metrics.push(metricCell(c.roas !== null ? `${c.roas.toFixed(2)}x` : null, c.roas));
     if (hasImpressions) metrics.push(metricCell(c.totalImpressions !== null ? String(c.totalImpressions) : null, c.totalImpressions));
+    if (hasReach) metrics.push(metricCell(c.totalReach !== null ? String(c.totalReach) : null, c.totalReach));
+    if (hasClicks) metrics.push(metricCell(c.totalClicks !== null ? String(c.totalClicks) : null, c.totalClicks));
+    const badges = [
+      ...(buildCampaignBadges(c, bestCostCampaign, highestVolumeCampaign, targetCostPerResult) ?? []),
+      ...(buildUnclassifiedBadges(c.campaignName, unclassifiedCampaignNames) ?? []),
+    ];
     return {
       id: `${c.channel}-${c.campaignName}`,
       name: c.campaignName,
-      badges: buildCampaignBadges(c, bestCostCampaign, highestVolumeCampaign, targetCostPerResult),
+      badges: badges.length > 0 ? badges : undefined,
       metrics,
     };
   });
@@ -254,11 +300,82 @@ function buildCampaignsTable(campaigns: CampaignSummary[], targetCostPerResult: 
   };
 }
 
+/**
+ * Campanhas — visão "Objetivos secundários" (Etapa "Separar o Relatório
+ * por finalidade das campanhas"). Nunca reaproveita `buildCampaignsTable`:
+ * aquela sempre mostra Resultado/Custo por resultado, que não existe pra
+ * nenhuma finalidade secundária (auditoria — `metric_mappings` nunca
+ * resolve goal fora de leads/sales no nível de campanha). Aqui: Investimento
+ * + Finalidade (badge) + Impressões/Alcance/Cliques, cada campanha só com
+ * as métricas compatíveis com a SUA finalidade — nunca uma célula "0"
+ * fabricada pra métrica que não se aplica (fica "—", igual a qualquer dado
+ * ausente no resto do Relatório). Nunca soma impressões+alcance+cliques —
+ * cada um é uma coluna própria, nunca combinado.
+ */
+function buildSecondaryCampaignsTable(campaigns: CampaignSummary[], purposeByCampaignName: Map<string, ReportCampaignPurpose>): PerformanceReportTable {
+  const hasImpressions = campaigns.some((c) => c.totalImpressions !== null);
+  const hasReach = campaigns.some((c) => c.totalReach !== null);
+  const hasClicks = campaigns.some((c) => c.totalClicks !== null);
+
+  const metricColumns: PerformanceReportColumn[] = [
+    { key: "investment", header: "Investimento" },
+    ...(hasImpressions ? [{ key: "impressions", header: "Impressões" }] : []),
+    ...(hasReach ? [{ key: "reach", header: "Alcance" }] : []),
+    ...(hasClicks ? [{ key: "clicks", header: "Cliques" }] : []),
+  ];
+
+  const rows: PerformanceReportRow[] = campaigns.map((c) => {
+    const metrics: PerformanceReportMetricCell[] = [metricCell(formatCurrency(c.totalSpend), c.totalSpend)];
+    if (hasImpressions) metrics.push(metricCell(c.totalImpressions !== null ? String(c.totalImpressions) : null, c.totalImpressions));
+    if (hasReach) metrics.push(metricCell(c.totalReach !== null ? String(c.totalReach) : null, c.totalReach));
+    if (hasClicks) metrics.push(metricCell(c.totalClicks !== null ? String(c.totalClicks) : null, c.totalClicks));
+
+    const purpose = purposeByCampaignName.get(c.campaignName);
+    const purposeConfig = purpose ? REPORT_PURPOSE_CONFIG[purpose] : null;
+
+    return {
+      id: `meta-${c.campaignName}`,
+      name: c.campaignName,
+      badges: purposeConfig ? [purposeConfig.label] : undefined,
+      metrics,
+    };
+  });
+
+  // Visitas ao perfil usa Cliques como aproximação e Seguidores não tem
+  // métrica de resultado por campanha — sinalizado na descrição da tabela
+  // (nunca escondido, ver REPORT_PROFILE_VISITS_PROXY_NOTE/
+  // REPORT_FOLLOWERS_NO_METRIC_NOTE) só quando alguma campanha do período
+  // usa essas finalidades.
+  const purposesInTable = new Set(campaigns.map((c) => purposeByCampaignName.get(c.campaignName)).filter((p): p is ReportCampaignPurpose => p !== undefined));
+  const captionNotes = [
+    purposesInTable.has("profile_visits") ? REPORT_PROFILE_VISITS_PROXY_NOTE : null,
+    purposesInTable.has("followers") ? REPORT_FOLLOWERS_NO_METRIC_NOTE : null,
+  ].filter((note): note is string => note !== null);
+
+  return {
+    id: "campanhas-secundarias",
+    eyebrow: "CAMPANHAS",
+    title: "Campanhas",
+    description: ["Investimento e alcance/impressões/cliques por campanha, conforme a finalidade de cada uma.", ...captionNotes].join(" "),
+    nameColumnHeader: "Campanha",
+    metricColumns,
+    hasPreviewColumn: false,
+    rows,
+    emptyMessage: "Nenhuma campanha classificada como objetivo secundário neste período.",
+    disclosure: true,
+    totalRow: null,
+    showItemCount: true,
+    nameFilterable: true,
+  };
+}
+
 function buildAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTable {
   const { resultLabel, costLabel } = resolveResultLabels(adSets.map((a) => a.resultType));
   const hasRevenue = adSets.some((a) => a.totalRevenue !== null);
   const hasRoas = adSets.some((a) => a.roas !== null);
   const hasImpressions = adSets.some((a) => a.totalImpressions !== null);
+  const hasReach = adSets.some((a) => a.totalReach !== null);
+  const hasClicks = adSets.some((a) => a.totalClicks !== null);
 
   const metricColumns: PerformanceReportColumn[] = [
     { key: "investment", header: "Investimento" },
@@ -267,6 +384,8 @@ function buildAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTable {
     ...(hasRevenue ? [{ key: "revenue", header: "Receita" }] : []),
     ...(hasRoas ? [{ key: "roas", header: "ROAS" }] : []),
     ...(hasImpressions ? [{ key: "impressions", header: "Impressões" }] : []),
+    ...(hasReach ? [{ key: "reach", header: "Alcance" }] : []),
+    ...(hasClicks ? [{ key: "clicks", header: "Cliques" }] : []),
   ];
 
   const rows: PerformanceReportRow[] = adSets.map((a) => {
@@ -278,6 +397,8 @@ function buildAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTable {
     if (hasRevenue) metrics.push(metricCell(a.totalRevenue !== null ? formatCurrency(a.totalRevenue) : null, a.totalRevenue));
     if (hasRoas) metrics.push(metricCell(a.roas !== null ? `${a.roas.toFixed(2)}x` : null, a.roas));
     if (hasImpressions) metrics.push(metricCell(a.totalImpressions !== null ? String(a.totalImpressions) : null, a.totalImpressions));
+    if (hasReach) metrics.push(metricCell(a.totalReach !== null ? String(a.totalReach) : null, a.totalReach));
+    if (hasClicks) metrics.push(metricCell(a.totalClicks !== null ? String(a.totalClicks) : null, a.totalClicks));
     return { id: `${a.channel}-${a.adSetName}`, name: a.adSetName, metrics };
   });
 
@@ -286,6 +407,47 @@ function buildAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTable {
     eyebrow: "PÚBLICOS",
     title: "Públicos",
     description: "Desempenho por público no período.",
+    nameColumnHeader: "Público",
+    metricColumns,
+    hasPreviewColumn: false,
+    rows,
+    emptyMessage: "Dados não disponíveis neste período.",
+    disclosure: true,
+    totalRow: null,
+    showItemCount: true,
+    nameFilterable: true,
+  };
+}
+
+/** Públicos — visão "Objetivos secundários". Mesma lógica de
+ * `buildSecondaryCampaignsTable` (Investimento + Impressões/Alcance/
+ * Cliques, nunca Resultado/Custo) — `AdSetSummary` não carrega finalidade
+ * por público (só por campanha), então sem badge de finalidade aqui. */
+function buildSecondaryAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTable {
+  const hasImpressions = adSets.some((a) => a.totalImpressions !== null);
+  const hasReach = adSets.some((a) => a.totalReach !== null);
+  const hasClicks = adSets.some((a) => a.totalClicks !== null);
+
+  const metricColumns: PerformanceReportColumn[] = [
+    { key: "investment", header: "Investimento" },
+    ...(hasImpressions ? [{ key: "impressions", header: "Impressões" }] : []),
+    ...(hasReach ? [{ key: "reach", header: "Alcance" }] : []),
+    ...(hasClicks ? [{ key: "clicks", header: "Cliques" }] : []),
+  ];
+
+  const rows: PerformanceReportRow[] = adSets.map((a) => {
+    const metrics: PerformanceReportMetricCell[] = [metricCell(formatCurrency(a.totalSpend), a.totalSpend)];
+    if (hasImpressions) metrics.push(metricCell(a.totalImpressions !== null ? String(a.totalImpressions) : null, a.totalImpressions));
+    if (hasReach) metrics.push(metricCell(a.totalReach !== null ? String(a.totalReach) : null, a.totalReach));
+    if (hasClicks) metrics.push(metricCell(a.totalClicks !== null ? String(a.totalClicks) : null, a.totalClicks));
+    return { id: `${a.channel}-${a.adSetName}`, name: a.adSetName, metrics };
+  });
+
+  return {
+    id: "publicos-secundarios",
+    eyebrow: "PÚBLICOS",
+    title: "Públicos",
+    description: "Investimento e alcance/impressões/cliques por público, dentro das campanhas de objetivos secundários.",
     nameColumnHeader: "Público",
     metricColumns,
     hasPreviewColumn: false,
@@ -351,6 +513,40 @@ function buildPlacementsTable(placements: PlacementSummary[]): PerformanceReport
   };
 }
 
+/** Posicionamentos — visão "Objetivos secundários". `campaign_placement_daily_metrics`
+ * não captura impressões/alcance/cliques (só spend/resultado, ver
+ * `lib/campaign-placement-analytics.ts`) — por isso, ao contrário das
+ * outras 3 tabelas secundárias, só sobra Investimento + % Investimento
+ * aqui (nunca Resultado/Custo, mesma regra das outras). */
+function buildSecondaryPlacementsTable(placements: PlacementSummary[]): PerformanceReportTable {
+  const metricColumns: PerformanceReportColumn[] = [
+    { key: "investment", header: "Investimento" },
+    { key: "spendShare", header: "% Investimento" },
+  ];
+
+  const rows: PerformanceReportRow[] = placements.map((p) => ({
+    id: p.platformPosition,
+    name: p.platformPosition,
+    metrics: [metricCell(formatCurrency(p.totalSpend), p.totalSpend), metricCell(formatPercent(p.spendShare * 100), p.spendShare)],
+  }));
+
+  return {
+    id: "posicionamentos-secundarios",
+    eyebrow: "POSICIONAMENTOS",
+    title: "Posicionamentos",
+    description: "Investimento por posicionamento do anúncio, dentro das campanhas de objetivos secundários.",
+    nameColumnHeader: "Posicionamento",
+    metricColumns,
+    hasPreviewColumn: false,
+    rows,
+    emptyMessage: "Dados não disponíveis neste período.",
+    disclosure: false,
+    totalRow: null,
+    showItemCount: true,
+    nameFilterable: false,
+  };
+}
+
 function buildCreativesTable(creatives: CreativeSummary[]): PerformanceReportTable {
   const { resultLabel, costLabel } = resolveResultLabels(creatives.map((c) => c.resultType));
   const hasCtr = creatives.some((c) => c.ctr !== null);
@@ -358,6 +554,7 @@ function buildCreativesTable(creatives: CreativeSummary[]): PerformanceReportTab
   const hasRevenue = creatives.some((c) => c.totalRevenue !== null);
   const hasRoas = creatives.some((c) => c.roas !== null);
   const hasImpressions = creatives.some((c) => c.totalImpressions !== null);
+  const hasReach = creatives.some((c) => c.totalReach !== null);
   const hasAnyPermalink = creatives.some((c) => c.permalinkUrl !== null);
 
   const metricColumns: PerformanceReportColumn[] = [
@@ -369,6 +566,7 @@ function buildCreativesTable(creatives: CreativeSummary[]): PerformanceReportTab
     ...(hasRevenue ? [{ key: "revenue", header: "Receita" }] : []),
     ...(hasRoas ? [{ key: "roas", header: "ROAS" }] : []),
     ...(hasImpressions ? [{ key: "impressions", header: "Impressões" }] : []),
+    ...(hasReach ? [{ key: "reach", header: "Alcance" }] : []),
   ];
 
   const rows: PerformanceReportRow[] = creatives.map((c) => {
@@ -382,6 +580,7 @@ function buildCreativesTable(creatives: CreativeSummary[]): PerformanceReportTab
     if (hasRevenue) metrics.push(metricCell(c.totalRevenue !== null ? formatCurrency(c.totalRevenue) : null, c.totalRevenue));
     if (hasRoas) metrics.push(metricCell(c.roas !== null ? `${c.roas.toFixed(2)}x` : null, c.roas));
     if (hasImpressions) metrics.push(metricCell(c.totalImpressions !== null ? String(c.totalImpressions) : null, c.totalImpressions));
+    if (hasReach) metrics.push(metricCell(c.totalReach !== null ? String(c.totalReach) : null, c.totalReach));
     return { id: c.creativeName, name: c.creativeName, thumbnailUrl: c.previewImageUrl, previewUrl: c.permalinkUrl, metrics };
   });
 
@@ -390,6 +589,53 @@ function buildCreativesTable(creatives: CreativeSummary[]): PerformanceReportTab
     eyebrow: "CRIATIVOS",
     title: "Criativos",
     description: "Desempenho por criativo, com miniatura e link quando disponíveis.",
+    nameColumnHeader: "Criativo",
+    metricColumns,
+    hasPreviewColumn: hasAnyPermalink,
+    rows,
+    emptyMessage: NO_CREATIVES_MESSAGE,
+    disclosure: true,
+    totalRow: null,
+    showItemCount: true,
+    nameFilterable: true,
+  };
+}
+
+/** Criativos — visão "Objetivos secundários". Mesma lógica das outras 3
+ * tabelas secundárias (Investimento + Impressões/Alcance/Cliques, nunca
+ * Resultado/Custo). CPC continua fazendo sentido pra tráfego/visitas ao
+ * perfil (cliques já é a própria métrica de resultado ali), então é
+ * mantido — nunca CTR (taxa é derivada de resultado ÷ impressão, mistura o
+ * conceito de "resultado" que esta visão evita). */
+function buildSecondaryCreativesTable(creatives: CreativeSummary[]): PerformanceReportTable {
+  const hasCpc = creatives.some((c) => c.cpc !== null);
+  const hasImpressions = creatives.some((c) => c.totalImpressions !== null);
+  const hasReach = creatives.some((c) => c.totalReach !== null);
+  const hasClicks = creatives.some((c) => c.totalClicks !== null);
+  const hasAnyPermalink = creatives.some((c) => c.permalinkUrl !== null);
+
+  const metricColumns: PerformanceReportColumn[] = [
+    { key: "investment", header: "Investimento" },
+    ...(hasImpressions ? [{ key: "impressions", header: "Impressões" }] : []),
+    ...(hasReach ? [{ key: "reach", header: "Alcance" }] : []),
+    ...(hasClicks ? [{ key: "clicks", header: "Cliques" }] : []),
+    ...(hasCpc ? [{ key: "cpc", header: "CPC" }] : []),
+  ];
+
+  const rows: PerformanceReportRow[] = creatives.map((c) => {
+    const metrics: PerformanceReportMetricCell[] = [metricCell(formatCurrency(c.totalSpend), c.totalSpend)];
+    if (hasImpressions) metrics.push(metricCell(c.totalImpressions !== null ? String(c.totalImpressions) : null, c.totalImpressions));
+    if (hasReach) metrics.push(metricCell(c.totalReach !== null ? String(c.totalReach) : null, c.totalReach));
+    if (hasClicks) metrics.push(metricCell(c.totalClicks !== null ? String(c.totalClicks) : null, c.totalClicks));
+    if (hasCpc) metrics.push(metricCell(c.cpc !== null ? formatCurrency(c.cpc) : null, c.cpc));
+    return { id: c.creativeName, name: c.creativeName, thumbnailUrl: c.previewImageUrl, previewUrl: c.permalinkUrl, metrics };
+  });
+
+  return {
+    id: "criativos-secundarios",
+    eyebrow: "CRIATIVOS",
+    title: "Criativos",
+    description: "Investimento e alcance/impressões/cliques por criativo, dentro das campanhas de objetivos secundários.",
     nameColumnHeader: "Criativo",
     metricColumns,
     hasPreviewColumn: hasAnyPermalink,
@@ -561,6 +807,29 @@ function buildPeriodReadingForDocument(data: PerformanceReportData): PeriodReadi
 export function buildPerformanceReportDocument(data: PerformanceReportData): PerformanceReportDocument {
   const targetCostPerResult = data.summary.status === "ok" ? data.summary.performanceSummary.targetCostPerResult : null;
 
+  // Etapa "Separar o Relatório por finalidade das campanhas": visão
+  // "secundario" nunca tem Resultado Diário (não existe um objetivo único
+  // pra recalcular "resultado"/"custo por resultado" — awareness, alcance,
+  // seguidores, tráfego e visitas ao perfil não são somáveis entre si) e usa
+  // os 4 builders secundários (Investimento + Impressões/Alcance/Cliques,
+  // nunca Resultado/Custo). `campaignPurposeByName` já vem resolvido pela
+  // Camada 1 — esta camada só lê, nunca reclassifica.
+  const tables: PerformanceReportTable[] =
+    data.view === "secundario"
+      ? [
+          buildSecondaryCampaignsTable(data.campaigns, new Map(Object.entries(data.campaignPurposeByName))),
+          buildSecondaryAdSetsTable(data.adSets),
+          buildSecondaryCreativesTable(data.creatives),
+          buildSecondaryPlacementsTable(data.placements),
+        ]
+      : [
+          buildDailyTable(data.dailyRows, data.performanceGoal),
+          buildCampaignsTable(data.campaigns, targetCostPerResult, data.unclassifiedCampaignNames),
+          buildAdSetsTable(data.adSets),
+          buildCreativesTable(data.creatives),
+          buildPlacementsTable(data.placements),
+        ];
+
   return {
     clientName: data.client.name,
     periodLabel: `${formatDateWithYear(data.period.start)} → ${formatDateWithYear(data.period.end)}`,
@@ -577,18 +846,15 @@ export function buildPerformanceReportDocument(data: PerformanceReportData): Per
     // documento). Posicionamentos vai por último — pedido do usuário foi
     // adicioná-la ao Relatório existente, nunca reordenar as 4 seções já
     // aprovadas.
-    tables: [
-      buildDailyTable(data.dailyRows, data.performanceGoal),
-      buildCampaignsTable(data.campaigns, targetCostPerResult),
-      buildAdSetsTable(data.adSets),
-      buildCreativesTable(data.creatives),
-      buildPlacementsTable(data.placements),
-    ],
+    tables,
     performanceGoal: data.performanceGoal,
     period: { start: data.period.start, end: data.period.end },
     campaignDailyRows: data.campaignDailyRows,
     adSetDailyRows: data.adSetDailyRows,
     creativeDailyRows: data.creativeDailyRows,
     conversionRate: data.conversionRate,
+    view: data.view,
+    hasSecondaryCampaigns: data.hasSecondaryCampaigns,
+    secondarySummary: data.secondarySummary,
   };
 }

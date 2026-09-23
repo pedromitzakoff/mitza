@@ -241,8 +241,8 @@ console.log("\n10 — Campanhas: regressão — nunca tocadas nesta etapa\n");
   // espaço continuam 2 linhas em Campanhas (comportamento inalterado),
   // diferente de Públicos/Criativos (que agora normalizam).
   const rows: CampaignDailyMetricRow[] = [
-    { date: "2026-08-01", channel: "meta", campaignName: "Campanha 1", spend: 10, impressions: null, reach: null, clicks: null, resultType: null, resultCount: null, revenue: null },
-    { date: "2026-08-01", channel: "meta", campaignName: " Campanha 1", spend: 20, impressions: null, reach: null, clicks: null, resultType: null, resultCount: null, revenue: null },
+    { date: "2026-08-01", channel: "meta", campaignName: "Campanha 1", campaignId: null, spend: 10, impressions: null, reach: null, clicks: null, resultType: null, resultCount: null, revenue: null },
+    { date: "2026-08-01", channel: "meta", campaignName: " Campanha 1", campaignId: null, spend: 20, impressions: null, reach: null, clicks: null, resultType: null, resultCount: null, revenue: null },
   ];
   const summaries = buildCampaignSummaries(rows);
   check("Campanhas não ganharam normalização de espaço nesta etapa (fora de escopo) — continuam 2 linhas", summaries.length, 2);
@@ -277,6 +277,11 @@ console.log("\n11 — Integração: PerformanceReportDocument já chega consolid
     conversionRate: null,
     placements: [],
     generatedAt: "2026-09-01T00:00:00.000Z",
+    view: "principal",
+    hasSecondaryCampaigns: false,
+    unclassifiedCampaignNames: [],
+    secondarySummary: null,
+    campaignPurposeByName: {},
   };
 
   const document = buildPerformanceReportDocument(data);
@@ -328,6 +333,11 @@ console.log("\n12 — Integração: progressive disclosure conta itens CONSOLIDA
     conversionRate: null,
     placements: [],
     generatedAt: "2026-09-01T00:00:00.000Z",
+    view: "principal",
+    hasSecondaryCampaigns: false,
+    unclassifiedCampaignNames: [],
+    secondarySummary: null,
+    campaignPurposeByName: {},
   };
   const document = buildPerformanceReportDocument(data);
   const publicosTable = document.tables.find((t) => t.id === "publicos")!;

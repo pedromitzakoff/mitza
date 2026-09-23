@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { ANALYTICS_PERIOD_PRESET_OPTIONS, resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
 import { PeriodRangeSelector, type PeriodRangePreset } from "@/components/ui/period-range-selector";
+import type { ReportView } from "@/lib/report-view-classification";
 import { buildReportPeriodHref } from "./report-period-nav";
 
 /**
@@ -28,6 +29,7 @@ export function ReportPeriodControl({
   customStart,
   customEnd,
   today,
+  view,
 }: {
   /** Rota atual do relatório já resolvida por quem chama — `/clients/<id>/relatorio`
    * na página interna, `/r/<token>` no link externo (Etapa "Link Externo V1"). */
@@ -41,6 +43,10 @@ export function ReportPeriodControl({
   /** `YYYY-MM-DD` do dia real — usado só pra resolver os presets e formatar
    * o rótulo compacto, nunca uma segunda semântica de "hoje". */
   today: string;
+  /** Visão atual (Etapa "Separar o Relatório por finalidade das
+   * campanhas") — carregada adiante em toda troca de período, pra nunca
+   * voltar pra "principal" só porque o período mudou. */
+  view: ReportView;
 }) {
   const router = useRouter();
 
@@ -54,10 +60,10 @@ export function ReportPeriodControl({
 
   function handleApply(next: { start: string; end: string; presetKey: string | null }) {
     if (next.presetKey) {
-      router.push(buildReportPeriodHref(basePath, next.presetKey as AnalyticsPeriodPreset));
+      router.push(buildReportPeriodHref(basePath, next.presetKey as AnalyticsPeriodPreset, undefined, view));
       return;
     }
-    router.push(buildReportPeriodHref(basePath, "custom", { start: next.start, end: next.end }));
+    router.push(buildReportPeriodHref(basePath, "custom", { start: next.start, end: next.end }, view));
   }
 
   return <PeriodRangeSelector value={value} presets={presets} onApply={handleApply} today={today} />;

@@ -131,6 +131,11 @@ function fakeData(overrides: Partial<PerformanceReportData> = {}): PerformanceRe
     conversionRate: null,
     placements: [],
     generatedAt: "2026-09-01T12:00:00.000Z",
+    view: "principal",
+    hasSecondaryCampaigns: false,
+    unclassifiedCampaignNames: [],
+    secondarySummary: null,
+    campaignPurposeByName: {},
     ...overrides,
   };
 }

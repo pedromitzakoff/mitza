@@ -1,5 +1,6 @@
 import type { AnalyticsPeriodPreset } from "@/lib/analytics";
 import { isValidDateRange } from "@/lib/date-range-picker";
+import type { ReportView } from "@/lib/report-view-classification";
 
 /**
  * Etapa "Relatório Nativo": núcleo puro de HREF da página nativa do
@@ -10,13 +11,21 @@ import { isValidDateRange } from "@/lib/date-range-picker";
  * (`lib/analytics.ts`) — garante que refresh/back/forward sempre reproduzem
  * exatamente o mesmo período (a URL É o estado, nunca um estado de cliente
  * paralelo).
+ *
+ * `view` (Etapa "Separar o Relatório por finalidade das campanhas") segue a
+ * MESMA convenção — parâmetro de URL, nunca estado de cliente paralelo —
+ * pra período e visão nunca ficarem dessincronizados ao trocar só um dos
+ * dois (`ReportPeriodControl` sempre carrega a visão atual adiante,
+ * `ReportViewToggle` sempre carrega o período atual adiante). Omitido =
+ * "principal" (`resolveReportViewParam`, `page.tsx`).
  */
-function buildPeriodParams(preset: AnalyticsPeriodPreset, custom?: { start: string; end: string }): URLSearchParams {
+function buildPeriodParams(preset: AnalyticsPeriodPreset, custom?: { start: string; end: string }, view?: ReportView): URLSearchParams {
   const params = new URLSearchParams({ analyticsPreset: preset });
   if (preset === "custom" && custom) {
     params.set("analyticsStart", custom.start);
     params.set("analyticsEnd", custom.end);
   }
+  if (view && view !== "principal") params.set("view", view);
   return params;
 }
 
@@ -25,8 +34,20 @@ function buildPeriodParams(preset: AnalyticsPeriodPreset, custom?: { start: stri
  * `basePath` já resolvido por quem chama (`/clients/<id>/relatorio` na
  * página interna, `/r/<token>` na Etapa "Link Externo V1") — este helper
  * nunca sabe se está montando o link pra dentro ou pra fora da plataforma. */
-export function buildReportPeriodHref(basePath: string, preset: AnalyticsPeriodPreset, custom?: { start: string; end: string }): string {
-  return `${basePath}?${buildPeriodParams(preset, custom).toString()}`;
+export function buildReportPeriodHref(basePath: string, preset: AnalyticsPeriodPreset, custom?: { start: string; end: string }, view?: ReportView): string {
+  return `${basePath}?${buildPeriodParams(preset, custom, view).toString()}`;
+}
+
+/** Trocar de visão nunca é um link pra fora, sempre a MESMA rota com outra
+ * querystring — mesmo período em exibição (`preset`/`custom` vêm de quem
+ * chama, já resolvidos pela página). */
+export function buildReportViewHref(
+  basePath: string,
+  view: ReportView,
+  preset: AnalyticsPeriodPreset,
+  custom?: { start: string; end: string },
+): string {
+  return `${basePath}?${buildPeriodParams(preset, custom, view).toString()}`;
 }
 
 /** "Baixar PDF" — mesmo período em exibição, mesma rota de geração de PDF

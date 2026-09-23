@@ -11,11 +11,22 @@ import { buildAdSetSummaries, type AdSetSummary, type AdSetDailyMetricRow } from
 import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
 import { buildCreativeSummaries, type CreativeSummary, type AdCreativeDailyMetricRow } from "@/lib/creative-analytics";
 import { getCampaignPlacementDailyMetricsForPeriod } from "@/lib/campaign-placement-analytics-data";
-import { buildPlacementSummaries, type PlacementSummary } from "@/lib/campaign-placement-analytics";
+import { buildPlacementSummaries, type PlacementSummary, type CampaignPlacementDailyMetricRow } from "@/lib/campaign-placement-analytics";
 import { computeCostPerResult, computeRoas, computeConversionRate, type PerformanceSummary } from "@/lib/performance";
+import { recomputeDailyRows, recomputeFilteredSummary, type FilterableDailyRow } from "@/lib/performance-report/report-filter-recompute";
 import { listDatesInclusive } from "@/lib/monthly-budget";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { getDailyPerformanceRowsForPeriod } from "@/lib/performance-queries";
+import { fetchReportCampaignClassifications } from "@/lib/report-campaign-classification-data";
+import {
+  buildPurposeByCampaignId,
+  buildPurposeByCampaignName,
+  isConfidentlySecondaryByName,
+  resolveReportView,
+  REPORT_PURPOSE_CONFIG,
+  type ReportCampaignPurpose,
+  type ReportView,
+} from "@/lib/report-view-classification";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -115,6 +126,34 @@ export interface PerformanceReportData {
    * estado vazio nesse caso, nunca um dado fabricado. */
   placements: PlacementSummary[];
   generatedAt: string;
+  /** Etapa "Separar o Relatório por finalidade das campanhas": qual das
+   * duas visões este documento representa. `campaigns`/`adSets`/
+   * `creatives`/`placements`/`dailyRows` acima já vêm FILTRADOS pra esta
+   * visão — nunca um segundo filtro em `report-document.ts`. */
+  view: ReportView;
+  /** `true` quando o cliente tem pelo menos UMA campanha classificada numa
+   * finalidade secundária (independente do período em exibição) — decide
+   * se o seletor de visão aparece. `false` = Relatório continua
+   * exatamente como sempre foi, sem nenhum elemento novo (cliente com
+   * finalidade única continua com relatório simples, pedido explícito). */
+  hasSecondaryCampaigns: boolean;
+  /** Nomes de campanha (visão "principal") sem NENHUMA classificação —
+   * nunca escondidas da tabela, só identificáveis (badge "Não
+   * classificada" em `report-document.ts`). Vazio quando
+   * `hasSecondaryCampaigns` é `false` (nunca mostra o badge pra quem não
+   * usa a funcionalidade). */
+  unclassifiedCampaignNames: string[];
+  /** Só preenchido na visão "secundario" — investimento é a ÚNICA métrica
+   * comparável entre finalidades diferentes (nunca soma
+   * impressões+alcance+cliques), por isso é o único consolidado oferecido
+   * aqui. `null` na visão "principal". */
+  secondarySummary: { totalSpend: number; breakdown: { purpose: ReportCampaignPurpose; label: string; spend: number }[] } | null;
+  /** Finalidade por NOME de campanha (`campaigns`/`campaignDailyRows` já
+   * filtrados pra esta visão) — só as entradas classificadas, nunca todas
+   * as campanhas do cliente. `report-document.ts` usa isso só pro badge de
+   * finalidade da tabela Campanhas da visão "secundario" (Camada 2 nunca
+   * recalcula classificação, só lê o que a Camada 1 já resolveu). */
+  campaignPurposeByName: Record<string, ReportCampaignPurpose>;
 }
 
 /**
@@ -168,29 +207,72 @@ function buildReportSummary(data: ClientAnalyticsData): PerformanceReportSummary
   return { status: "ok", kpis, performanceSummary: data.summary! };
 }
 
+function toFilterableCampaignRows(rows: CampaignDailyMetricRow[]): FilterableDailyRow[] {
+  return rows.map((row) => ({ date: row.date, name: row.campaignName, spend: row.spend, resultCount: row.resultCount, revenue: row.revenue }));
+}
+
+/**
+ * Etapa "Separar o Relatório por finalidade das campanhas": Resumo/
+ * Resultado Diário recalculados a partir SÓ das campanhas da visão
+ * "principal" (`campaignDailyRows` já filtrado por quem chama) — nunca o
+ * total de `daily_performance` da conta inteira, que incluiria também o
+ * investimento das campanhas secundárias. Reaproveita `recomputeFilteredSummary`/
+ * `recomputeDailyRows` (`report-filter-recompute.ts`, Etapa "Filtro no topo
+ * afeta o dashboard inteiro") com texto de filtro vazio — mesmo cálculo já
+ * testado, só aplicado sobre um subconjunto pré-filtrado em vez do texto
+ * digitado pelo usuário.
+ *
+ * Só usada quando `hasSecondaryCampaigns` é verdadeiro (cliente realmente
+ * usa a separação) — cliente sem nenhuma campanha secundária continua
+ * lendo o total real da conta (`buildReportSummary`/`buildDailyRows`),
+ * porque as duas fontes reconciliam exatamente quando não há nenhuma
+ * campanha excluída da visão "principal".
+ */
+function buildCampaignRecomputedSummary(goal: PerformanceGoal, campaignDailyRows: CampaignDailyMetricRow[]): PerformanceReportSummary {
+  if (campaignDailyRows.length === 0) return { status: "no_data" };
+  const rows = toFilterableCampaignRows(campaignDailyRows);
+  const performanceSummary = recomputeFilteredSummary(goal, rows, "contains", "");
+  if (!performanceSummary.hasAnyRecord && (performanceSummary.actualSpend ?? 0) === 0) return { status: "no_data" };
+  const kpis = buildAnalyticsKpiCards(goal, performanceSummary.actualSpend ?? 0, performanceSummary, null, formatCurrency);
+  return { status: "ok", kpis, performanceSummary };
+}
+
 export async function buildPerformanceReportData(
   supabase: Supabase,
   clientId: string,
   period: { start: string; end: string },
+  view: ReportView = "principal",
 ): Promise<PerformanceReportData> {
-  const [clientRows, analyticsData, campaignRowsAllChannels, adSetRowsAllChannels, creativeRows, dailyPerformanceRows, placementRowsAllChannels] =
-    await Promise.all([
-      requireQuery(supabase.from("clients").select("id, name").eq("id", clientId), "clients:performance-report"),
-      fetchClientAnalyticsData(supabase, clientId, period, "meta"),
-      getCampaignDailyMetricsForPeriod(supabase, clientId, period),
-      getAdSetDailyMetricsForPeriod(supabase, clientId, period),
-      getAdCreativeDailyMetricsForPeriod(supabase, clientId, period),
-      // Taxa de conversão: `daily_performance` sem filtro de `result_type`
-      // (`fetchClientAnalyticsData` acima já filtra pro objetivo principal só
-      // — carrinho nunca é o objetivo principal, por isso precisa da sua
-      // própria leitura, sem cálculo novo: MESMA função já usada pela janela
-      // diária da Visão Geral, `getDailyPerformanceRowsForPeriod`).
-      getDailyPerformanceRowsForPeriod(supabase, clientId, { firstDay: period.start, lastDay: period.end }),
-      // Posicionamentos: `[]` pra cliente sem fonte com platform_position_column
-      // configurado — nenhuma linha nessa tabela nesse caso, mesmo padrão de
-      // getCampaignDailyMetricsForPeriod/getAdSetDailyMetricsForPeriod.
-      getCampaignPlacementDailyMetricsForPeriod(supabase, clientId, period),
-    ]);
+  const [
+    clientRows,
+    analyticsData,
+    campaignRowsAllChannels,
+    adSetRowsAllChannels,
+    creativeRows,
+    dailyPerformanceRows,
+    placementRowsAllChannels,
+    classifications,
+  ] = await Promise.all([
+    requireQuery(supabase.from("clients").select("id, name").eq("id", clientId), "clients:performance-report"),
+    fetchClientAnalyticsData(supabase, clientId, period, "meta"),
+    getCampaignDailyMetricsForPeriod(supabase, clientId, period),
+    getAdSetDailyMetricsForPeriod(supabase, clientId, period),
+    getAdCreativeDailyMetricsForPeriod(supabase, clientId, period),
+    // Taxa de conversão: `daily_performance` sem filtro de `result_type`
+    // (`fetchClientAnalyticsData` acima já filtra pro objetivo principal só
+    // — carrinho nunca é o objetivo principal, por isso precisa da sua
+    // própria leitura, sem cálculo novo: MESMA função já usada pela janela
+    // diária da Visão Geral, `getDailyPerformanceRowsForPeriod`).
+    getDailyPerformanceRowsForPeriod(supabase, clientId, { firstDay: period.start, lastDay: period.end }),
+    // Posicionamentos: `[]` pra cliente sem fonte com platform_position_column
+    // configurado — nenhuma linha nessa tabela nesse caso, mesmo padrão de
+    // getCampaignDailyMetricsForPeriod/getAdSetDailyMetricsForPeriod.
+    getCampaignPlacementDailyMetricsForPeriod(supabase, clientId, period),
+    // Etapa "Separar o Relatório por finalidade das campanhas" — classificação
+    // vigente (independente do período em exibição, ver
+    // `lib/report-campaign-classification-data.ts`).
+    fetchReportCampaignClassifications(supabase, clientId),
+  ]);
 
   const client = clientRows[0];
 
@@ -198,45 +280,129 @@ export async function buildPerformanceReportData(
   // channel-aware (podem ter linhas de outros canais se o cliente também
   // usa Google) — filtra explicitamente. ad_creative_daily_metrics já é
   // implicitamente Meta-only (sem coluna de canal), nenhum filtro necessário.
-  const campaignDailyRows = campaignRowsAllChannels.filter((row) => row.channel === "meta");
-  const adSetDailyRows = adSetRowsAllChannels.filter((row) => row.channel === "meta");
+  const campaignDailyRowsAll = campaignRowsAllChannels.filter((row) => row.channel === "meta");
+  const adSetDailyRowsAll = adSetRowsAllChannels.filter((row) => row.channel === "meta");
+  const placementDailyRowsAll: CampaignPlacementDailyMetricRow[] = placementRowsAllChannels.filter((row) => row.channel === "meta");
+
+  // Etapa "Separar o Relatório por finalidade das campanhas": `campaignId`
+  // é a identidade de classificação (nunca o nome — auditoria); Públicos/
+  // Criativos/Posicionamentos só têm `campaignName`, então usam uma ponte
+  // por nome derivada das linhas de campanha do MESMO período
+  // (`buildPurposeByCampaignName`) — nome que resolve com ambiguidade
+  // (`"ambiguous"`) nunca é tratado como secundário nem excluído da visão
+  // principal, só fica de fora da visão secundária (ver
+  // `isConfidentlySecondaryByName`).
+  const purposeByCampaignId = buildPurposeByCampaignId(classifications);
+  const hasSecondaryCampaigns = classifications.some((c) => resolveReportView(c.purpose) === "secundario");
+  const purposeByCampaignName = buildPurposeByCampaignName(purposeByCampaignId, campaignDailyRowsAll);
+
+  function campaignRowMatchesView(row: CampaignDailyMetricRow): boolean {
+    const purpose = row.campaignId ? purposeByCampaignId.get(row.campaignId) : undefined;
+    if (view === "secundario") return purpose !== undefined && resolveReportView(purpose) === "secundario";
+    // "principal": mantém classificadas em leads/sales + NÃO classificadas
+    // (nunca escondidas, auditoria seção 5) — só exclui as classificadas
+    // numa finalidade secundária.
+    return purpose === undefined || resolveReportView(purpose) === "principal";
+  }
+
+  function nameMatchesView(campaignName: string): boolean {
+    const isSecondary = isConfidentlySecondaryByName(purposeByCampaignName, campaignName);
+    return view === "secundario" ? isSecondary : !isSecondary;
+  }
+
+  const campaignDailyRows = campaignDailyRowsAll.filter(campaignRowMatchesView);
+  const adSetDailyRows = adSetDailyRowsAll.filter((row) => nameMatchesView(row.campaignName));
+  const creativeDailyRows = creativeRows.filter((row) => nameMatchesView(row.campaignName));
+  const placementDailyRows = placementDailyRowsAll.filter((row) => nameMatchesView(row.campaignName));
+
   const campaigns = buildCampaignSummaries(campaignDailyRows);
   const adSets = buildAdSetSummaries(adSetDailyRows);
-  const creatives = buildCreativeSummaries(creativeRows);
-
-  // Taxa de conversão: Meta-only (mesmo escopo do resto do relatório) —
-  // soma direta por `result_type`, sem passar por `aggregatePerformanceResults`
-  // (essa função filtra por UM `resultType` só; aqui precisamos de dois ao
-  // mesmo tempo). `resultType` comparado como string porque 'carts' é
-  // aditivo só no banco (supabase/secondary-cart-metric.sql) — nunca
-  // adicionado ao tipo `PerformanceGoal` compartilhado por 65+ arquivos.
-  const metaDailyPerformanceRows = dailyPerformanceRows.filter((row) => row.channel === "meta");
-  const cartsCount = metaDailyPerformanceRows
-    .filter((row) => (row.resultType as string) === "carts")
-    .reduce((sum, row) => sum + row.resultCount, 0);
-  const salesCount = metaDailyPerformanceRows
-    .filter((row) => row.resultType === "sales")
-    .reduce((sum, row) => sum + row.resultCount, 0);
-
-  // Posicionamentos: Meta-only (mesmo escopo do resto do relatório), mesmo
-  // filtro de canal já usado por campaignDailyRows/adSetDailyRows acima.
-  const placementDailyRows = placementRowsAllChannels.filter((row) => row.channel === "meta");
+  const creatives = buildCreativeSummaries(creativeDailyRows);
   const placements = buildPlacementSummaries(placementDailyRows);
+
+  const unclassifiedCampaignNames =
+    hasSecondaryCampaigns && view === "principal"
+      ? Array.from(
+          new Set(
+            campaignDailyRows.filter((row) => !(row.campaignId && purposeByCampaignId.has(row.campaignId))).map((row) => row.campaignName),
+          ),
+        )
+      : [];
+
+  // Resumo/Resultado Diário: recalculado a partir só das campanhas da
+  // visão quando o cliente realmente separa finalidades (ver comentário de
+  // `buildCampaignRecomputedSummary`); senão, o total real da conta de
+  // sempre — idêntico ao Relatório de antes desta etapa.
+  const summary: PerformanceReportSummary =
+    view === "secundario"
+      ? { status: "no_data" } // não renderizado nesta visão — ver `secondarySummary`.
+      : hasSecondaryCampaigns && analyticsData.performanceGoal
+        ? buildCampaignRecomputedSummary(analyticsData.performanceGoal, campaignDailyRows)
+        : buildReportSummary(analyticsData);
+
+  const dailyRows: PerformanceReportDailyRow[] =
+    view === "secundario"
+      ? []
+      : hasSecondaryCampaigns
+        ? recomputeDailyRows(period, toFilterableCampaignRows(campaignDailyRows), "contains", "")
+        : buildDailyRows(period, analyticsData.dailyRows);
+
+  // Taxa de conversão: só faz sentido na visão "principal" (carrinho/venda
+  // nunca é uma finalidade secundária) — Meta-only, soma direta por
+  // `result_type` (ver comentário original: 'carts' é aditivo só no banco,
+  // nunca no tipo `PerformanceGoal` compartilhado por 65+ arquivos).
+  let conversionRate: number | null = null;
+  if (view === "principal") {
+    const metaDailyPerformanceRows = dailyPerformanceRows.filter((row) => row.channel === "meta");
+    const cartsCount = metaDailyPerformanceRows.filter((row) => (row.resultType as string) === "carts").reduce((sum, row) => sum + row.resultCount, 0);
+    const salesCount = metaDailyPerformanceRows.filter((row) => row.resultType === "sales").reduce((sum, row) => sum + row.resultCount, 0);
+    conversionRate = computeConversionRate(salesCount, cartsCount);
+  }
+
+  // Consolidado da visão "secundario": SÓ investimento (auditoria — a única
+  // métrica comparável entre awareness/alcance/seguidores/tráfego/visitas,
+  // nunca soma impressões+alcance+cliques).
+  const secondarySummary =
+    view === "secundario"
+      ? (() => {
+          const spendByPurpose = new Map<ReportCampaignPurpose, number>();
+          for (const row of campaignDailyRows) {
+            const purpose = row.campaignId ? purposeByCampaignId.get(row.campaignId) : undefined;
+            if (!purpose) continue;
+            spendByPurpose.set(purpose, (spendByPurpose.get(purpose) ?? 0) + row.spend);
+          }
+          const breakdown = Array.from(spendByPurpose.entries())
+            .map(([purpose, spend]) => ({ purpose, label: REPORT_PURPOSE_CONFIG[purpose].label, spend }))
+            .sort((a, b) => b.spend - a.spend);
+          return { totalSpend: breakdown.reduce((sum, b) => sum + b.spend, 0), breakdown };
+        })()
+      : null;
+
+  const campaignPurposeByName: Record<string, ReportCampaignPurpose> = {};
+  for (const row of campaignDailyRows) {
+    const purpose = row.campaignId ? purposeByCampaignId.get(row.campaignId) : undefined;
+    if (purpose) campaignPurposeByName[row.campaignName] = purpose;
+  }
 
   return {
     client: { id: client.id, name: client.name },
     period: { start: period.start, end: period.end, label: formatDateRange(period.start, period.end) },
-    summary: buildReportSummary(analyticsData),
+    summary,
     performanceGoal: analyticsData.performanceGoal,
-    dailyRows: buildDailyRows(period, analyticsData.dailyRows),
+    dailyRows,
     campaigns,
     adSets,
     creatives,
     campaignDailyRows,
     adSetDailyRows,
-    creativeDailyRows: creativeRows,
-    conversionRate: computeConversionRate(salesCount, cartsCount),
+    creativeDailyRows,
+    conversionRate,
     placements,
     generatedAt: new Date().toISOString(),
+    view,
+    hasSecondaryCampaigns,
+    unclassifiedCampaignNames,
+    secondarySummary,
+    campaignPurposeByName,
   };
 }

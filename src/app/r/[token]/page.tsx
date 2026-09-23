@@ -122,6 +122,7 @@ export default async function PublicPerformanceReportPage({
             customStart={period.start}
             customEnd={period.end}
             today={today}
+            view="principal"
           />
         }
       />

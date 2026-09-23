@@ -22,6 +22,13 @@ export type PerformanceGoalDb = "leads" | "sales" | "followers";
  * período (hoje, sempre o caso de "followers", ver client_goals.sql). */
 export type GoalResultSourceDb = "automatic" | "manual";
 
+/** Finalidade real de uma campanha pro Relatório (Etapa "Separar o
+ * Relatório por finalidade das campanhas") — independente de
+ * `PerformanceGoalDb`, ver `campaign-report-classifications.sql`.
+ * "leads"/"sales" = Resultados principais; as outras 5 = Objetivos
+ * secundários. */
+export type ReportCampaignPurposeDb = "leads" | "sales" | "awareness" | "reach" | "followers" | "profile_visits" | "traffic";
+
 /** Tema visual do AnalyticsReport (Fase 1) — pertence ao domínio do cliente,
  * não é uma preferência de sessão. Sem UI de seleção ainda; hoje todo
  * cliente nasce "mitza". */
@@ -2698,6 +2705,54 @@ export interface Database {
           },
           {
             foreignKeyName: "client_campaign_goal_assignments_assigned_by_fkey";
+            columns: ["assigned_by"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campaign_report_classifications: {
+        Row: {
+          id: string;
+          client_id: string;
+          channel: TrafficChannelDb;
+          campaign_id: string;
+          purpose: ReportCampaignPurposeDb;
+          assigned_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          channel: TrafficChannelDb;
+          campaign_id: string;
+          purpose: ReportCampaignPurposeDb;
+          assigned_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          channel?: TrafficChannelDb;
+          campaign_id?: string;
+          purpose?: ReportCampaignPurposeDb;
+          assigned_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_report_classifications_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_report_classifications_assigned_by_fkey";
             columns: ["assigned_by"];
             isOneToOne: false;
             referencedRelation: "team_members";

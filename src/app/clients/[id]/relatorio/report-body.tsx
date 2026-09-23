@@ -1,5 +1,6 @@
 import type { PerformanceReportDocument } from "@/lib/performance-report/report-document";
 import { ReportFilterableTables } from "./report-filterable-tables";
+import { ReportSecondaryView } from "./report-secondary-view";
 
 /**
  * Corpo do Relatório de Performance nativo — identidade visual aprovada
@@ -16,13 +17,23 @@ import { ReportFilterableTables } from "./report-filterable-tables";
  * dessincronizados, então viraram um componente só. `ReportBody` continua
  * dono só do que NUNCA muda com o filtro: a superfície/moldura do
  * relatório e o rodapé com a nota metodológica + timestamp.
+ *
+ * Etapa "Separar o Relatório por finalidade das campanhas": `topControls`
+ * (seletor de visão + "Classificar campanhas", ambos opcionais — só a
+ * página interna passa algo aqui, `/r/[token]` nunca) fica acima de tudo,
+ * e o corpo em si bifurca por `document.view`: "principal" continua sendo
+ * `ReportFilterableTables` 100% intocado (mesmo filtro por nome/KPI/
+ * Resultado Diário de sempre); "secundario" é `ReportSecondaryView`, sem
+ * nenhum desses três — não existe "resultado" único pra combinar
+ * awareness/alcance/seguidores/tráfego/visitas ao perfil.
  */
-export function ReportBody({ document }: { document: PerformanceReportDocument }) {
+export function ReportBody({ document, topControls }: { document: PerformanceReportDocument; topControls?: React.ReactNode }) {
   const methodologyNote = document.summary.status === "ok" ? document.summary.note : null;
 
   return (
     <div className="mt-3.5 rounded-lg bg-[#EFE9E0] px-3.5 py-4 sm:mt-5 sm:rounded-2xl sm:border sm:border-[#D9D3C9] sm:px-8 sm:py-6">
-      <ReportFilterableTables document={document} />
+      {topControls && <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5">{topControls}</div>}
+      {document.view === "secundario" ? <ReportSecondaryView document={document} /> : <ReportFilterableTables document={document} />}
 
       {/* "Relatório de Performance" já está no <h1> do cabeçalho da página
           (`report-header.tsx`) — nunca repetir aqui, só o que é novo

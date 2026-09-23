@@ -1,15 +1,24 @@
 import { notFound } from "next/navigation";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth";
 import { todayDateString } from "@/lib/today";
 import { resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
 import { buildPerformanceReportDocument } from "@/lib/performance-report/report-document";
 import { getReportShareLinkStatus } from "@/lib/report-share-links";
+import { listCampaignsForReportClassification } from "@/lib/report-campaign-classification-data";
+import type { ReportView } from "@/lib/report-view-classification";
 import { ReportPeriodControl } from "./report-period-control";
 import { buildReportPdfHref } from "./report-period-nav";
 import { ReportBody } from "./report-body";
 import { ReportHeader } from "./report-header";
 import { CopyReportLinkButton } from "./copy-report-link-button";
+import { ReportViewToggle } from "./report-view-toggle";
+import { ReportClassificationEntry } from "./report-classification-drawer";
+
+function resolveReportViewParam(value: string | undefined): ReportView {
+  return value === "secundario" ? "secundario" : "principal";
+}
 
 /**
  * Etapa "Relatório Nativo": "Cliente → Relatório → relatório" — esta rota É
@@ -37,10 +46,15 @@ export default async function ClientPerformanceReportPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ analyticsPreset?: string; analyticsStart?: string; analyticsEnd?: string }>;
+  searchParams: Promise<{ analyticsPreset?: string; analyticsStart?: string; analyticsEnd?: string; view?: string }>;
 }) {
   const { id } = await params;
-  const { analyticsPreset: presetParam, analyticsStart: startParam, analyticsEnd: endParam } = await searchParams;
+  const {
+    analyticsPreset: presetParam,
+    analyticsStart: startParam,
+    analyticsEnd: endParam,
+    view: viewParam,
+  } = await searchParams;
   const supabase = await createSupabaseClient();
 
   // Mesmo critério de RLS + 404 silencioso de `clients/[id]/page.tsx` — só a
@@ -54,9 +68,20 @@ export default async function ClientPerformanceReportPage({
   const today = todayDateString();
   const activePreset = (presetParam ?? "this_month") as AnalyticsPeriodPreset;
   const period = resolveAnalyticsPeriod(presetParam, today, { start: startParam, end: endParam });
+  const view = resolveReportViewParam(viewParam);
 
-  const data = await buildPerformanceReportData(supabase, id, period);
+  // Etapa "Separar o Relatório por finalidade das campanhas": só admin
+  // classifica campanhas (mesma regra de `saveReportClassificationsAction`)
+  // — `getCurrentProfile` nunca redireciona (ao contrário de `requireAdmin`),
+  // então um gestor sem esse papel continua vendo o Relatório normalmente,
+  // só sem o botão "Classificar campanhas".
+  const [data, profile, classificationCampaigns] = await Promise.all([
+    buildPerformanceReportData(supabase, id, period, view),
+    getCurrentProfile(),
+    listCampaignsForReportClassification(supabase, id, today),
+  ]);
   const document = buildPerformanceReportDocument(data);
+  const isAdmin = profile?.role === "admin";
 
   const pdfHref = buildReportPdfHref(client.id, activePreset, { start: period.start, end: period.end });
 
@@ -66,6 +91,8 @@ export default async function ClientPerformanceReportPage({
   // geração/revogação são), então qualquer gestor com acesso a este
   // relatório também vê/copia um link já ativo.
   const reportShareLinkStatus = await getReportShareLinkStatus(id);
+
+  const basePath = `/clients/${client.id}/relatorio`;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 sm:py-6">
@@ -81,18 +108,26 @@ export default async function ClientPerformanceReportPage({
         pdfHref={pdfHref}
         clearsMobileMenuButton
         periodControl={
-          <ReportPeriodControl
-            basePath={`/clients/${client.id}/relatorio`}
-            activePreset={activePreset}
-            customStart={period.start}
-            customEnd={period.end}
-            today={today}
-          />
+          <ReportPeriodControl basePath={basePath} activePreset={activePreset} customStart={period.start} customEnd={period.end} today={today} view={view} />
         }
         copyLinkControl={<CopyReportLinkButton clientId={client.id} initialUrl={reportShareLinkStatus.url} />}
       />
 
-      <ReportBody document={document} />
+      <ReportBody
+        document={document}
+        topControls={
+          (document.hasSecondaryCampaigns || isAdmin) && (
+            <>
+              {document.hasSecondaryCampaigns ? (
+                <ReportViewToggle basePath={basePath} activePreset={activePreset} period={period} view={view} />
+              ) : (
+                <span />
+              )}
+              {isAdmin && <ReportClassificationEntry clientId={client.id} campaigns={classificationCampaigns} />}
+            </>
+          )
+        }
+      />
     </div>
   );
 }

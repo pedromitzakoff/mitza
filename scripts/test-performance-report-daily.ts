@@ -237,6 +237,11 @@ console.log("\n6 — Total: aditivas somadas, derivadas recalculadas do total (n
     adSets: [],
     creatives: [],
     generatedAt: "2026-09-03T00:00:00.000Z",
+    view: "principal",
+    hasSecondaryCampaigns: false,
+    unclassifiedCampaignNames: [],
+    secondarySummary: null,
+    campaignPurposeByName: {},
   };
   const document = buildPerformanceReportDocument(data);
   const table = document.tables.find((t) => t.id === "resultado-diario")!;
@@ -279,6 +284,11 @@ console.log("\n6 — Total: aditivas somadas, derivadas recalculadas do total (n
     adSets: [],
     creatives: [],
     generatedAt: "2026-09-03T00:00:00.000Z",
+    view: "principal",
+    hasSecondaryCampaigns: false,
+    unclassifiedCampaignNames: [],
+    secondarySummary: null,
+    campaignPurposeByName: {},
   };
   const table = buildPerformanceReportDocument(data).tables.find((t) => t.id === "resultado-diario")!;
   // Total: 200 investido / 11 resultados = 18,18 — NUNCA a média simples
@@ -308,6 +318,11 @@ console.log("\n7 — Dia sem NENHUM sinal ganha 'Sem dados'; dia parcial nunca g
     adSets: [],
     creatives: [],
     generatedAt: "2026-09-04T00:00:00.000Z",
+    view: "principal",
+    hasSecondaryCampaigns: false,
+    unclassifiedCampaignNames: [],
+    secondarySummary: null,
+    campaignPurposeByName: {},
   };
   const table = buildPerformanceReportDocument(data).tables.find((t) => t.id === "resultado-diario")!;
 
@@ -337,6 +352,11 @@ console.log("\n8 — 'Resultado' respeita o objetivo do cliente (nunca uma segun
     conversionRate: null,
     placements: [],
     generatedAt: "2026-09-02T00:00:00.000Z",
+    view: "principal",
+    hasSecondaryCampaigns: false,
+    unclassifiedCampaignNames: [],
+    secondarySummary: null,
+    campaignPurposeByName: {},
   };
 
   const leadsTable = buildPerformanceReportDocument({ ...baseData, performanceGoal: "leads" }).tables.find((t) => t.id === "resultado-diario")!;
@@ -369,6 +389,11 @@ console.log("\n9 — Receita/ROAS só aparecem quando aplicáveis (preserva a l�
     adSets: [],
     creatives: [],
     generatedAt: "2026-09-02T00:00:00.000Z",
+    view: "principal",
+    hasSecondaryCampaigns: false,
+    unclassifiedCampaignNames: [],
+    secondarySummary: null,
+    campaignPurposeByName: {},
   };
   const table = buildPerformanceReportDocument(data).tables.find((t) => t.id === "resultado-diario")!;
   check("Leads sem receita: só 3 colunas (Data implícita + Investimento/Resultado/Custo)", table.metricColumns.length, 3);
@@ -395,6 +420,11 @@ console.log("\n10 — Integração: posição/estrutura da seção, sem progress
     adSets: [],
     creatives: [],
     generatedAt: "2026-09-02T00:00:00.000Z",
+    view: "principal",
+    hasSecondaryCampaigns: false,
+    unclassifiedCampaignNames: [],
+    secondarySummary: null,
+    campaignPurposeByName: {},
   };
   const document = buildPerformanceReportDocument(data);
 
@@ -424,7 +454,7 @@ console.log("\n11 — Campanhas: nenhuma mudança de comportamento nesta etapa (
 
 {
   const campaigns = buildCampaignSummaries([
-    { date: "2026-09-01", channel: "meta", campaignName: "Campanha A", spend: 100, impressions: null, reach: null, clicks: null, resultType: "leads", resultCount: 5, revenue: null },
+    { date: "2026-09-01", channel: "meta", campaignName: "Campanha A", campaignId: null, spend: 100, impressions: null, reach: null, clicks: null, resultType: "leads", resultCount: 5, revenue: null },
   ]);
   const data: PerformanceReportData = {
     campaignDailyRows: [],
@@ -441,6 +471,11 @@ console.log("\n11 — Campanhas: nenhuma mudança de comportamento nesta etapa (
     adSets: [],
     creatives: [],
     generatedAt: "2026-09-02T00:00:00.000Z",
+    view: "principal",
+    hasSecondaryCampaigns: false,
+    unclassifiedCampaignNames: [],
+    secondarySummary: null,
+    campaignPurposeByName: {},
   };
   const campaignsTable = buildPerformanceReportDocument(data).tables.find((t) => t.id === "campanhas")!;
   check("Campanhas: 1 linha, exatamente como antes desta etapa", campaignsTable.rows.length, 1);
