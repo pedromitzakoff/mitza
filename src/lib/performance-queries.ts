@@ -214,7 +214,6 @@ export async function getEnabledImportSourceIdsForClient(supabase: Supabase, cli
   return (data ?? []).map((row) => row.id);
 }
 
-
 export interface SyncRunSummary {
   id: string;
   startedAt: string;

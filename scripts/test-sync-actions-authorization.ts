@@ -98,10 +98,7 @@ console.log("\n4 — syncClientMetaAction: cliente inexistente continua um camin
 
 console.log("\n5 — syncClientStractSourcesAction: mesma autorização explícita via requireClientManagerAccess\n");
 {
-  ok(
-    'importa requireClientManagerAccess de "@/lib/auth"',
-    /import\s*\{[^}]*\brequireClientManagerAccess\b[^}]*\}\s*from\s*"@\/lib\/auth"/.test(stractSource),
-  );
+  ok('importa requireClientManagerAccess de "@/lib/auth"', /import\s*\{\s*requireClientManagerAccess\s*\}\s*from\s*"@\/lib\/auth"/.test(stractSource));
   ok("chama requireClientManagerAccess(clientId) dentro da action", /await requireClientManagerAccess\(clientId\)/.test(stractSource));
 }
 
@@ -130,66 +127,6 @@ console.log("\n8 — as duas actions continuam funcionalmente idênticas depois 
   ok(
     "syncClientStractSourcesAction ainda soma falhas por fonte e preserva a mensagem de 'sem integração ativa'",
     /Este cliente não tem nenhuma integração ativa para sincronizar\./.test(stractSource) && /failedCount/.test(stractSource),
-  );
-}
-
-console.log("\n9 — updateImportSourceAction: admin-only (requireAdmin, nunca requireClientManagerAccess) — configuração técnica bruta\n");
-{
-  ok('importa requireAdmin de "@/lib/auth"', /import\s*\{[^}]*\brequireAdmin\b[^}]*\}\s*from\s*"@\/lib\/auth"/.test(stractSource));
-  ok("chama requireAdmin() dentro da action", /export async function updateImportSourceAction[\s\S]*?await requireAdmin\(\)/.test(stractSource));
-  const updateActionSource = stractSource.split("export async function applyStandardStractColumnsAction")[0];
-  const idxAuth = updateActionSource.indexOf("await requireAdmin()");
-  const idxUpdate = updateActionSource.indexOf('.from("import_sources")\n    .update({');
-  ok("requireAdmin() aparece no código", idxAuth !== -1);
-  ok("a escrita em import_sources aparece no código", idxUpdate !== -1);
-  ok("requireAdmin() está ANTES da escrita (nunca depois)", idxAuth < idxUpdate);
-  ok(
-    "escopada por id E client_id — nunca atualiza uma fonte de outro cliente por engano",
-    /\.eq\("id", importSourceId\)\s*\n\s*\.eq\("client_id", clientId\)/.test(stractSource),
-  );
-  ok(
-    "campos obrigatórios (tabela, conta, coluna de conta/data/investimento) validados ANTES de escrever, nunca uma constraint not null crua como erro",
-    /if \(!tableName \|\| !externalAccountId \|\| !accountIdColumn \|\| !dateColumn \|\| !spendColumn\)/.test(stractSource),
-  );
-  ok(
-    "campo opcional vazio limpa a config (null), nunca grava string vazia — mesmo efeito de nunca ter sido configurado",
-    /return value\.length > 0 \? value : null;/.test(stractSource),
-  );
-}
-
-console.log("\n10 — applyStandardStractColumnsAction: admin-only, nunca sobrescreve config existente, nunca confia cego no padrão\n");
-{
-  ok(
-    "chama requireAdmin() dentro da action",
-    /export async function applyStandardStractColumnsAction\(\)[\s\S]*?await requireAdmin\(\)/.test(stractSource),
-  );
-  ok(
-    "campos padrão são exatamente os observados idênticos nos 3 clientes inspecionados (conta/data/investimento/campanha/público/anúncio/link/imagem) — nunca objetivo ou posicionamento, que são específicos por cliente",
-    /account_id_column: "insights_account_id"/.test(stractSource) &&
-      /date_column: "adhoc__daily"/.test(stractSource) &&
-      /spend_column: "insights_spend"/.test(stractSource) &&
-      /campaign_name_column: "insights_campaign_name"/.test(stractSource) &&
-      /ad_set_name_column: "insights_adset_name"/.test(stractSource) &&
-      /ad_name_column: "insights_ad_name"/.test(stractSource) &&
-      /creative_permalink_column: "creative_instagram_permalink_url"/.test(stractSource) &&
-      /preview_image_column: "creative_thumbnail_url"/.test(stractSource) &&
-      !/platform_position_column: "/.test(stractSource.split("applyStandardStractColumnsAction")[1] ?? ""),
-  );
-  ok(
-    "table_name/external_account_id NUNCA fazem parte do padrão aplicado em massa — são identidade própria de cada cliente, nunca herdadas de outro",
-    !/table_name: STANDARD_STRACT_COLUMNS|external_account_id: STANDARD_STRACT_COLUMNS/.test(stractSource),
-  );
-  ok(
-    "só preenche campo que hoje está vazio — nunca sobrescreve o que já foi configurado manualmente",
-    /if \(isEmpty\(source\.account_id_column\)\) patch\.account_id_column = STANDARD_STRACT_COLUMNS\.account_id_column;/.test(stractSource),
-  );
-  ok(
-    "dispara runImportForSource pra cada fonte afetada e ativa — nunca confia cegamente que o nome padrão bateu, sempre valida com sincronização real",
-    /await runImportForSource\(source\.id\)/.test(stractSource),
-  );
-  ok(
-    "resultado (inclusive erro/0 linhas) é devolvido pra tela, nunca escondido — próximo passo de quem chama consegue ver exatamente o que aconteceu",
-    /syncStatus: syncResult\.status,\s*\n\s*spendRowsWritten: syncResult\.spendRowsWritten,/.test(stractSource),
   );
 }
 
