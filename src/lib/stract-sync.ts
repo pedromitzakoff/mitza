@@ -7,16 +7,20 @@ import {
   aggregateColumnByAdCreativeGroup,
   aggregateColumnByAdSetGroup,
   aggregateColumnByCampaignGroup,
+  aggregateColumnByPlacementGroup,
   aggregateDailyColumn,
+  aggregatePlacementDailyRows,
   buildAdCreativeDailyMetricsUpsertRows,
   buildAdSetDailyMetricsUpsertRows,
   buildCampaignDailyMetricsUpsertRows,
+  buildCampaignPlacementDailyMetricsUpsertRows,
   buildDailyPerformanceUpsertRows,
   buildDailySpendUpsertRows,
   combineAdCreativeGroupValues,
   combineAdSetGroupValues,
   combineAggregatedDailyValues,
   combineCampaignGroupValues,
+  combinePlacementGroupValues,
   excludeRowsByCampaignName,
   filterRowsByCampaignName,
   validateAccountIdColumn,
@@ -73,6 +77,7 @@ export interface ImportSourceRunResult {
   creativeRowsWritten: number;
   campaignRowsWritten: number;
   adSetRowsWritten: number;
+  placementRowsWritten: number;
   errorMessage: string | null;
 }
 
@@ -104,7 +109,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
   const { data: importSource, error: importSourceError } = await supabase
     .from("import_sources")
     .select(
-      "id, client_id, provider, channel, external_account_id, table_name, account_id_column, date_column, spend_column, campaign_name_column, campaign_name_filter, campaign_name_exclude, campaign_id_column, ad_name_column, ad_set_name_column, creative_permalink_column, preview_image_column, preview_image_fallback_column, impressions_column, reach_column, clicks_column",
+      "id, client_id, provider, channel, external_account_id, table_name, account_id_column, date_column, spend_column, campaign_name_column, campaign_name_filter, campaign_name_exclude, campaign_id_column, ad_name_column, ad_set_name_column, creative_permalink_column, preview_image_column, preview_image_fallback_column, impressions_column, reach_column, clicks_column, platform_position_column",
     )
     .eq("id", importSourceId)
     .single();
@@ -156,6 +161,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
         creativeRowsWritten: 0,
         campaignRowsWritten: 0,
         adSetRowsWritten: 0,
+      placementRowsWritten: 0,
         errorMessage: concurrencyMessage,
       };
     }
@@ -172,6 +178,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
       creativeRowsWritten: 0,
       campaignRowsWritten: 0,
       adSetRowsWritten: 0,
+      placementRowsWritten: 0,
       errorMessage: "Execução interrompida sem finalizar (provável timeout) — marcada como falha automaticamente ao iniciar uma nova tentativa.",
     });
   }
@@ -225,6 +232,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
       creativeRowsWritten: 0,
       campaignRowsWritten: 0,
       adSetRowsWritten: 0,
+      placementRowsWritten: 0,
       errorMessage,
     });
     await supabase.from("import_sources").update({ status: "error" }).eq("id", importSourceId);
@@ -238,6 +246,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
       creativeRowsWritten: 0,
       campaignRowsWritten: 0,
       adSetRowsWritten: 0,
+      placementRowsWritten: 0,
       errorMessage,
     };
   }
@@ -260,6 +269,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
   let creativeRowsWritten = 0;
   let campaignRowsWritten = 0;
   let adSetRowsWritten = 0;
+  let placementRowsWritten = 0;
   const partialReasons: string[] = [];
 
   // Backfill automático de Sprints históricas (achado na validação: dado
@@ -528,6 +538,93 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
     }
   }
 
+  // Posicionamentos (`campaign_placement_daily_metrics`, seção "Posicionamentos"
+  // do Relatório de Performance) — granularidade EXTRA em relação a
+  // `campaign_daily_metrics` (que continua sempre o total real por campanha/
+  // dia, escrita acima, intocada). Só roda quando a fonte tiver
+  // `platform_position_column` E `campaign_name_column` configurados — sem
+  // isso, degrada graciosamente (nenhum erro, só não escreve nada aqui),
+  // mesmo padrão de Públicos/Criativos. O nome bruto da coluna de origem
+  // (ex.: `breakdowns_platform_position` no Stract) só existe na
+  // configuração de `import_sources` — este bloco já trabalha só com o
+  // conceito `platform_position` da própria MITZA.
+  if (importSource.platform_position_column && importSource.campaign_name_column) {
+    const placementAggregate = aggregatePlacementDailyRows(rows, {
+      dateColumn: importSource.date_column,
+      campaignNameColumn: importSource.campaign_name_column,
+      platformPositionColumn: importSource.platform_position_column,
+      spendColumn: importSource.spend_column,
+    });
+    hadInvalidRows = hadInvalidRows || placementAggregate.some((row) => row.invalidRowCount > 0);
+
+    if (placementAggregate.length > 0) {
+      // Mesma resolução de metric_mappings já usada por daily_performance/
+      // ad_creative_daily_metrics/campaign_daily_metrics/ad_set_daily_metrics
+      // — nunca uma segunda lógica de mapeamento. Um objetivo por
+      // posicionamento (mesma limitação das outras 3 tabelas).
+      let placementResultType: PerformanceGoal | null = null;
+      let resultByGroup: Map<string, number> | null = null;
+      let revenueByGroup: Map<string, number> | null = null;
+
+      for (const [goal, { resultColumns, valueColumns }] of mappingGroupsByGoal) {
+        if (goal !== "leads" && goal !== "sales") continue;
+
+        const resultColumnAggregates = resultColumns.map((resultColumn) =>
+          aggregateColumnByPlacementGroup(
+            rows,
+            importSource.date_column,
+            importSource.campaign_name_column!,
+            importSource.platform_position_column!,
+            resultColumn,
+          ),
+        );
+        for (const columnAggregate of resultColumnAggregates) {
+          hadInvalidRows = hadInvalidRows || columnAggregate.some((row) => row.invalidRowCount > 0);
+        }
+
+        const combinedResult = combinePlacementGroupValues(resultColumnAggregates);
+        if (combinedResult.length === 0) continue;
+
+        placementResultType = goal;
+        resultByGroup = new Map(combinedResult.map((row) => [`${row.date} ${row.campaignName} ${row.platformPosition}`, row.value]));
+
+        if (valueColumns.length > 0) {
+          const valueColumnAggregates = valueColumns.map((valueColumn) =>
+            aggregateColumnByPlacementGroup(
+              rows,
+              importSource.date_column,
+              importSource.campaign_name_column!,
+              importSource.platform_position_column!,
+              valueColumn,
+            ),
+          );
+          for (const columnAggregate of valueColumnAggregates) {
+            hadInvalidRows = hadInvalidRows || columnAggregate.some((row) => row.invalidRowCount > 0);
+          }
+          const combinedValue = combinePlacementGroupValues(valueColumnAggregates);
+          revenueByGroup = new Map(combinedValue.map((row) => [`${row.date} ${row.campaignName} ${row.platformPosition}`, row.value]));
+        }
+        break;
+      }
+
+      const placementUpsertRows = buildCampaignPlacementDailyMetricsUpsertRows(importSource.client_id, importSourceId, importSource.channel, placementAggregate, {
+        resultType: placementResultType,
+        resultByGroup,
+        revenueByGroup,
+      });
+
+      const { error: placementUpsertError } = await supabase
+        .from("campaign_placement_daily_metrics")
+        .upsert(placementUpsertRows, { onConflict: "import_source_id,date,channel,campaign_name,platform_position" });
+
+      if (placementUpsertError) {
+        partialReasons.push(`posicionamentos não gravados: ${placementUpsertError.message}`);
+      } else {
+        placementRowsWritten = placementUpsertRows.length;
+      }
+    }
+  }
+
   // Públicos (`ad_set_daily_metrics`) — achado da inspeção somente leitura:
   // `insights_adset_name` já chega na MESMA linha que alimenta campanha/
   // criativo hoje, grão dia×campanha×ad set×anúncio. Agrega por
@@ -622,6 +719,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
     creativeRowsWritten,
     campaignRowsWritten,
     adSetRowsWritten,
+    placementRowsWritten,
     errorMessage: finalErrorMessage,
   });
 
@@ -660,6 +758,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
     creativeRowsWritten,
     campaignRowsWritten,
     adSetRowsWritten,
+    placementRowsWritten,
     errorMessage: finalErrorMessage,
   };
 }
@@ -730,6 +829,7 @@ async function finishRun(
     creativeRowsWritten: number;
     campaignRowsWritten: number;
     adSetRowsWritten: number;
+    placementRowsWritten: number;
     errorMessage: string | null;
   },
 ) {
@@ -744,6 +844,7 @@ async function finishRun(
       creative_rows_written: result.creativeRowsWritten,
       campaign_rows_written: result.campaignRowsWritten,
       ad_set_rows_written: result.adSetRowsWritten,
+      placement_rows_written: result.placementRowsWritten,
       error_message: result.errorMessage,
     })
     .eq("id", runId);

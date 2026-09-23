@@ -148,6 +148,7 @@ function formatSyncRunCounts(run: SyncRunSummary): string {
   if (run.creativeRowsWritten !== null) parts.push(`${run.creativeRowsWritten} criativos`);
   if (run.campaignRowsWritten !== null) parts.push(`${run.campaignRowsWritten} campanhas`);
   if (run.adSetRowsWritten !== null) parts.push(`${run.adSetRowsWritten} públicos`);
+  if (run.placementRowsWritten !== null) parts.push(`${run.placementRowsWritten} posicionamentos`);
   return parts.join(" · ");
 }
 

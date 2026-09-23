@@ -6,6 +6,7 @@ import type { AnalyticsKpiCard, AnalyticsKpiComparisonTone } from "@/lib/analyti
 import type { CampaignSummary, CampaignDailyMetricRow } from "@/lib/campaign-analytics";
 import type { AdSetSummary, AdSetDailyMetricRow } from "@/lib/ad-set-analytics";
 import type { CreativeSummary, AdCreativeDailyMetricRow } from "@/lib/creative-analytics";
+import type { PlacementSummary } from "@/lib/campaign-placement-analytics";
 import type { PerformanceReportData, PerformanceReportDailyRow } from "./report-data";
 import {
   buildCampaignBadges,
@@ -297,6 +298,59 @@ function buildAdSetsTable(adSets: AdSetSummary[]): PerformanceReportTable {
   };
 }
 
+/**
+ * "Posicionamentos" — pedido explícito do usuário (comparar investimento/
+ * resultado por onde o anúncio apareceu: feed, stories, reels etc.).
+ * `placements` já vem agregado no TOTAL DA CONTA (`buildPlacementSummaries`,
+ * `lib/campaign-placement-analytics.ts` — escopo combinado com o usuário
+ * pra esta v1, nunca por campanha). `[]` quando nenhuma fonte do cliente
+ * tem `platform_position_column` configurado — vira o mesmo estado vazio
+ * de Públicos/Criativos, nunca uma linha fabricada. Não é `nameFilterable`
+ * (posicionamento não é uma entidade nomeada como campanha/público/
+ * criativo — só um punhado de valores fixos vindos da origem) e o número de
+ * linhas é sempre pequeno (poucos posicionamentos possíveis), então sem
+ * `disclosure` (sempre mostra tudo, mesmo tratamento de Resultado Diário).
+ */
+function buildPlacementsTable(placements: PlacementSummary[]): PerformanceReportTable {
+  const { resultLabel, costLabel } = resolveResultLabels(placements.map((p) => p.resultType));
+  const hasResultShare = placements.some((p) => p.resultShare !== null);
+
+  const metricColumns: PerformanceReportColumn[] = [
+    { key: "investment", header: "Investimento" },
+    { key: "result", header: resultLabel },
+    { key: "cost", header: costLabel },
+    { key: "spendShare", header: "% Investimento" },
+    ...(hasResultShare ? [{ key: "resultShare", header: "% Resultado" }] : []),
+  ];
+
+  const rows: PerformanceReportRow[] = placements.map((p) => {
+    const metrics: PerformanceReportMetricCell[] = [
+      metricCell(formatCurrency(p.totalSpend), p.totalSpend),
+      metricCell(p.totalResultCount !== null ? String(p.totalResultCount) : null, p.totalResultCount),
+      metricCell(p.cpa !== null ? formatCurrency(p.cpa) : null, p.cpa),
+      metricCell(formatPercent(p.spendShare * 100), p.spendShare),
+    ];
+    if (hasResultShare) metrics.push(metricCell(p.resultShare !== null ? formatPercent(p.resultShare * 100) : null, p.resultShare));
+    return { id: p.platformPosition, name: p.platformPosition, metrics };
+  });
+
+  return {
+    id: "posicionamentos",
+    eyebrow: "POSICIONAMENTOS",
+    title: "Posicionamentos",
+    description: "Investimento e resultado por posicionamento do anúncio no período.",
+    nameColumnHeader: "Posicionamento",
+    metricColumns,
+    hasPreviewColumn: false,
+    rows,
+    emptyMessage: "Dados não disponíveis neste período.",
+    disclosure: false,
+    totalRow: null,
+    showItemCount: true,
+    nameFilterable: false,
+  };
+}
+
 function buildCreativesTable(creatives: CreativeSummary[]): PerformanceReportTable {
   const { resultLabel, costLabel } = resolveResultLabels(creatives.map((c) => c.resultType));
   const hasCtr = creatives.some((c) => c.ctr !== null);
@@ -518,13 +572,17 @@ export function buildPerformanceReportDocument(data: PerformanceReportData): Per
     hero: buildHero(data),
     periodReading: buildPeriodReadingForDocument(data),
     // Ordem = ordem de renderização: Resultado Diário → Campanhas →
-    // Públicos → Criativos (Resumo Executivo é renderizado à parte, fora
-    // deste array, por quem consome o documento).
+    // Públicos → Criativos → Posicionamentos (Resumo Executivo é
+    // renderizado à parte, fora deste array, por quem consome o
+    // documento). Posicionamentos vai por último — pedido do usuário foi
+    // adicioná-la ao Relatório existente, nunca reordenar as 4 seções já
+    // aprovadas.
     tables: [
       buildDailyTable(data.dailyRows, data.performanceGoal),
       buildCampaignsTable(data.campaigns, targetCostPerResult),
       buildAdSetsTable(data.adSets),
       buildCreativesTable(data.creatives),
+      buildPlacementsTable(data.placements),
     ],
     performanceGoal: data.performanceGoal,
     period: { start: data.period.start, end: data.period.end },

@@ -275,6 +275,7 @@ console.log("\n11 — Integração: PerformanceReportDocument já chega consolid
     adSets: buildAdSetSummaries(adSetRows),
     creatives: buildCreativeSummaries(creativeRows),
     conversionRate: null,
+    placements: [],
     generatedAt: "2026-09-01T00:00:00.000Z",
   };
 
@@ -325,6 +326,7 @@ console.log("\n12 — Integração: progressive disclosure conta itens CONSOLIDA
     adSets: buildAdSetSummaries(manyRawRows),
     creatives: [],
     conversionRate: null,
+    placements: [],
     generatedAt: "2026-09-01T00:00:00.000Z",
   };
   const document = buildPerformanceReportDocument(data);

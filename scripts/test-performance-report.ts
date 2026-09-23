@@ -11,6 +11,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { formatPercent } from "../src/lib/format";
 import { buildPerformanceReportDocument, type PerformanceReportTable } from "../src/lib/performance-report/report-document";
 import { renderPerformanceReportHtml } from "../src/lib/performance-report/renderers/html-renderer";
 import type { PerformanceReportData } from "../src/lib/performance-report/report-data";
@@ -128,6 +129,7 @@ function fakeData(overrides: Partial<PerformanceReportData> = {}): PerformanceRe
     adSetDailyRows: [],
     creativeDailyRows: [],
     conversionRate: null,
+    placements: [],
     generatedAt: "2026-09-01T12:00:00.000Z",
     ...overrides,
   };
@@ -483,6 +485,44 @@ console.log("\n20 — Taxa de conversão (vendas ÷ carrinhos): pura, passthroug
     /\{!isFiltering && <ConversionRateNote conversionRate=\{document\.conversionRate\} \/>\}/.test(filterableSource),
   );
   ok("formatação usa formatPercent (mesma convenção de % do resto da MITZA), nunca um toFixed/string manual", /formatPercent\(conversionRate \* 100\)/.test(filterableSource));
+}
+
+// ---------------------------------------------------------------------------
+console.log("\n21 — Posicionamentos: nova tabela no Relatório, ao lado de Campanhas/Públicos/Criativos (nunca reordena as 4 já aprovadas)\n");
+{
+  const docNoPlacements = buildPerformanceReportDocument(fakeData());
+  check(
+    "ordem: Resultado Diário → Campanhas → Públicos → Criativos → Posicionamentos (sempre por último)",
+    docNoPlacements.tables.map((t) => t.id),
+    ["resultado-diario", "campanhas", "publicos", "criativos", "posicionamentos"],
+  );
+  const emptyPlacementsTable = docNoPlacements.tables.find((t) => t.id === "posicionamentos")!;
+  check("sem nenhuma fonte com platform_position_column configurado (fakeData default): 0 linhas, nunca fabricadas", emptyPlacementsTable.rows.length, 0);
+  ok("Posicionamentos não é nameFilterable (não é uma entidade nomeada como campanha/público/criativo)", emptyPlacementsTable.nameFilterable === false);
+  ok("Posicionamentos não usa progressive disclosure (sempre poucos valores possíveis)", emptyPlacementsTable.disclosure === false);
+
+  const docWithPlacements = buildPerformanceReportDocument(
+    fakeData({
+      placements: [
+        { platformPosition: "feed", totalSpend: 100, resultType: "sales", totalResultCount: 10, totalRevenue: 500, cpa: 10, roas: 5, spendShare: 0.625, resultShare: 0.8 },
+        { platformPosition: "instagram_reels", totalSpend: 60, resultType: null, totalResultCount: null, totalRevenue: null, cpa: null, roas: null, spendShare: 0.375, resultShare: null },
+      ],
+    }),
+  );
+  const placementsTable = docWithPlacements.tables.find((t) => t.id === "posicionamentos")!;
+  check("2 posicionamentos aparecem como linhas, exatamente como vieram de buildPlacementSummaries (nenhum recálculo aqui)", placementsTable.rows.length, 2);
+  ok(
+    "coluna '% Investimento' sempre presente (mesma unidade em toda linha)",
+    placementsTable.metricColumns.some((c) => c.key === "spendShare"),
+  );
+  ok(
+    "coluna '% Resultado' presente quando PELO MENOS um posicionamento tem resultShare (mesmo padrão de hasRevenue/hasRoas)",
+    placementsTable.metricColumns.some((c) => c.key === "resultShare"),
+  );
+  const feedRow = placementsTable.rows.find((r) => r.name === "feed")!;
+  check("linha 'feed': % Investimento formatado como percentual (62,50%)", feedRow.metrics[3].display, formatPercent(62.5));
+  const reelsRow = placementsTable.rows.find((r) => r.name === "instagram_reels")!;
+  check("linha sem resultShare: célula '—' (nunca 0% fabricado)", reelsRow.metrics[4].display, "—");
 }
 
 // ---------------------------------------------------------------------------

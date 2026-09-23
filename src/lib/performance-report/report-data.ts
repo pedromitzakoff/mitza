@@ -10,6 +10,8 @@ import { getAdSetDailyMetricsForPeriod } from "@/lib/ad-set-analytics-data";
 import { buildAdSetSummaries, type AdSetSummary, type AdSetDailyMetricRow } from "@/lib/ad-set-analytics";
 import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
 import { buildCreativeSummaries, type CreativeSummary, type AdCreativeDailyMetricRow } from "@/lib/creative-analytics";
+import { getCampaignPlacementDailyMetricsForPeriod } from "@/lib/campaign-placement-analytics-data";
+import { buildPlacementSummaries, type PlacementSummary } from "@/lib/campaign-placement-analytics";
 import { computeCostPerResult, computeRoas, computeConversionRate, type PerformanceSummary } from "@/lib/performance";
 import { listDatesInclusive } from "@/lib/monthly-budget";
 import type { PerformanceGoal } from "@/lib/performance-goals";
@@ -104,6 +106,14 @@ export interface PerformanceReportData {
    * Campanha/Público/Criativo (`ReportFilterableTables` some com o card
    * enquanto o filtro está ativo, mesmo tratamento de `periodReading`). */
   conversionRate: number | null;
+  /** "Posicionamentos" (Meta "Platform Position" — feed, stories, reels
+   * etc.) — pedido explícito do usuário. Escopo combinado com o usuário:
+   * comparação no TOTAL DA CONTA (`buildPlacementSummaries` agrupa só por
+   * posicionamento, nunca por campanha nesta v1). `[]` sem nenhuma fonte
+   * com `import_sources.platform_position_column` configurado (caso comum
+   * hoje: só Aibou tem) — a tabela "Posicionamentos" simplesmente mostra o
+   * estado vazio nesse caso, nunca um dado fabricado. */
+  placements: PlacementSummary[];
   generatedAt: string;
 }
 
@@ -163,19 +173,24 @@ export async function buildPerformanceReportData(
   clientId: string,
   period: { start: string; end: string },
 ): Promise<PerformanceReportData> {
-  const [clientRows, analyticsData, campaignRowsAllChannels, adSetRowsAllChannels, creativeRows, dailyPerformanceRows] = await Promise.all([
-    requireQuery(supabase.from("clients").select("id, name").eq("id", clientId), "clients:performance-report"),
-    fetchClientAnalyticsData(supabase, clientId, period, "meta"),
-    getCampaignDailyMetricsForPeriod(supabase, clientId, period),
-    getAdSetDailyMetricsForPeriod(supabase, clientId, period),
-    getAdCreativeDailyMetricsForPeriod(supabase, clientId, period),
-    // Taxa de conversão: `daily_performance` sem filtro de `result_type`
-    // (`fetchClientAnalyticsData` acima já filtra pro objetivo principal só
-    // — carrinho nunca é o objetivo principal, por isso precisa da sua
-    // própria leitura, sem cálculo novo: MESMA função já usada pela janela
-    // diária da Visão Geral, `getDailyPerformanceRowsForPeriod`).
-    getDailyPerformanceRowsForPeriod(supabase, clientId, { firstDay: period.start, lastDay: period.end }),
-  ]);
+  const [clientRows, analyticsData, campaignRowsAllChannels, adSetRowsAllChannels, creativeRows, dailyPerformanceRows, placementRowsAllChannels] =
+    await Promise.all([
+      requireQuery(supabase.from("clients").select("id, name").eq("id", clientId), "clients:performance-report"),
+      fetchClientAnalyticsData(supabase, clientId, period, "meta"),
+      getCampaignDailyMetricsForPeriod(supabase, clientId, period),
+      getAdSetDailyMetricsForPeriod(supabase, clientId, period),
+      getAdCreativeDailyMetricsForPeriod(supabase, clientId, period),
+      // Taxa de conversão: `daily_performance` sem filtro de `result_type`
+      // (`fetchClientAnalyticsData` acima já filtra pro objetivo principal só
+      // — carrinho nunca é o objetivo principal, por isso precisa da sua
+      // própria leitura, sem cálculo novo: MESMA função já usada pela janela
+      // diária da Visão Geral, `getDailyPerformanceRowsForPeriod`).
+      getDailyPerformanceRowsForPeriod(supabase, clientId, { firstDay: period.start, lastDay: period.end }),
+      // Posicionamentos: `[]` pra cliente sem fonte com platform_position_column
+      // configurado — nenhuma linha nessa tabela nesse caso, mesmo padrão de
+      // getCampaignDailyMetricsForPeriod/getAdSetDailyMetricsForPeriod.
+      getCampaignPlacementDailyMetricsForPeriod(supabase, clientId, period),
+    ]);
 
   const client = clientRows[0];
 
@@ -203,6 +218,11 @@ export async function buildPerformanceReportData(
     .filter((row) => row.resultType === "sales")
     .reduce((sum, row) => sum + row.resultCount, 0);
 
+  // Posicionamentos: Meta-only (mesmo escopo do resto do relatório), mesmo
+  // filtro de canal já usado por campaignDailyRows/adSetDailyRows acima.
+  const placementDailyRows = placementRowsAllChannels.filter((row) => row.channel === "meta");
+  const placements = buildPlacementSummaries(placementDailyRows);
+
   return {
     client: { id: client.id, name: client.name },
     period: { start: period.start, end: period.end, label: formatDateRange(period.start, period.end) },
@@ -216,6 +236,7 @@ export async function buildPerformanceReportData(
     adSetDailyRows,
     creativeDailyRows: creativeRows,
     conversionRate: computeConversionRate(salesCount, cartsCount),
+    placements,
     generatedAt: new Date().toISOString(),
   };
 }

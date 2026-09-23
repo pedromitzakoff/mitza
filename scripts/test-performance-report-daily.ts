@@ -227,6 +227,7 @@ console.log("\n6 — Total: aditivas somadas, derivadas recalculadas do total (n
     adSetDailyRows: [],
     creativeDailyRows: [],
     conversionRate: null,
+    placements: [],
     client: { id: "client-1", name: "Cliente Teste" },
     period: { start: "2026-09-01", end: "2026-09-02", label: "01 set 2026 → 02 set 2026" },
     summary: { status: "ok", kpis: [], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
@@ -268,6 +269,7 @@ console.log("\n6 — Total: aditivas somadas, derivadas recalculadas do total (n
     adSetDailyRows: [],
     creativeDailyRows: [],
     conversionRate: null,
+    placements: [],
     client: { id: "client-2", name: "Cliente Teste 2" },
     period: { start: "2026-09-01", end: "2026-09-02", label: "" },
     summary: { status: "ok", kpis: [], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
@@ -296,6 +298,7 @@ console.log("\n7 — Dia sem NENHUM sinal ganha 'Sem dados'; dia parcial nunca g
     adSetDailyRows: [],
     creativeDailyRows: [],
     conversionRate: null,
+    placements: [],
     client: { id: "client-3", name: "Cliente Teste 3" },
     period: { start: "2026-09-01", end: "2026-09-03", label: "" },
     summary: { status: "no_goal" },
@@ -332,6 +335,7 @@ console.log("\n8 — 'Resultado' respeita o objetivo do cliente (nunca uma segun
     adSetDailyRows: [],
     creativeDailyRows: [],
     conversionRate: null,
+    placements: [],
     generatedAt: "2026-09-02T00:00:00.000Z",
   };
 
@@ -355,6 +359,7 @@ console.log("\n9 — Receita/ROAS só aparecem quando aplicáveis (preserva a l�
     adSetDailyRows: [],
     creativeDailyRows: [],
     conversionRate: null,
+    placements: [],
     client: { id: "client-5", name: "Cliente Teste 5" },
     period: { start: "2026-09-01", end: "2026-09-01", label: "" },
     summary: { status: "ok", kpis: [], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
@@ -380,6 +385,7 @@ console.log("\n10 — Integração: posição/estrutura da seção, sem progress
     adSetDailyRows: [],
     creativeDailyRows: [],
     conversionRate: null,
+    placements: [],
     client: { id: "client-6", name: "Cliente Teste 6" },
     period: { start: "2026-09-01", end: "2026-09-01", label: "01 set 2026 → 01 set 2026" },
     summary: { status: "ok", kpis: [{ key: "investment", label: "Investimento", value: formatCurrency(777) }], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },
@@ -392,7 +398,11 @@ console.log("\n10 — Integração: posição/estrutura da seção, sem progress
   };
   const document = buildPerformanceReportDocument(data);
 
-  check("ordem: Resultado Diário → Campanhas → Públicos → Criativos", document.tables.map((t) => t.id), ["resultado-diario", "campanhas", "publicos", "criativos"]);
+  check(
+    "ordem: Resultado Diário → Campanhas → Públicos → Criativos → Posicionamentos",
+    document.tables.map((t) => t.id),
+    ["resultado-diario", "campanhas", "publicos", "criativos", "posicionamentos"],
+  );
 
   const dailyTable = document.tables.find((t) => t.id === "resultado-diario")!;
   ok("Resultado Diário: disclosure desligada (todos os dias sempre visíveis)", dailyTable.disclosure === false);
@@ -421,6 +431,7 @@ console.log("\n11 — Campanhas: nenhuma mudança de comportamento nesta etapa (
     adSetDailyRows: [],
     creativeDailyRows: [],
     conversionRate: null,
+    placements: [],
     client: { id: "client-7", name: "Cliente Teste 7" },
     period: { start: "2026-09-01", end: "2026-09-01", label: "" },
     summary: { status: "ok", kpis: [], performanceSummary: NEUTRAL_PERFORMANCE_SUMMARY },

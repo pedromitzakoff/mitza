@@ -225,6 +225,7 @@ export interface SyncRunSummary {
   creativeRowsWritten: number | null;
   campaignRowsWritten: number | null;
   adSetRowsWritten: number | null;
+  placementRowsWritten: number | null;
   errorMessage: string | null;
 }
 
@@ -250,7 +251,7 @@ export async function getRecentSyncRunsForClient(
   const { data } = await supabase
     .from("data_sync_runs")
     .select(
-      "id, started_at, finished_at, status, rows_read, spend_rows_written, performance_rows_written, creative_rows_written, campaign_rows_written, ad_set_rows_written, error_message",
+      "id, started_at, finished_at, status, rows_read, spend_rows_written, performance_rows_written, creative_rows_written, campaign_rows_written, ad_set_rows_written, placement_rows_written, error_message",
     )
     .in("import_source_id", importSourceIds)
     .order("started_at", { ascending: false })
@@ -267,6 +268,7 @@ export async function getRecentSyncRunsForClient(
     creativeRowsWritten: row.creative_rows_written,
     campaignRowsWritten: row.campaign_rows_written,
     adSetRowsWritten: row.ad_set_rows_written,
+    placementRowsWritten: row.placement_rows_written,
     errorMessage: row.error_message,
   }));
 }

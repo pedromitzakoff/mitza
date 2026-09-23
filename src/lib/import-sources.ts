@@ -895,3 +895,165 @@ export function buildCampaignDailyMetricsUpsertRows(
     };
   });
 }
+
+/**
+ * Núcleo puro da camada de POSICIONAMENTO (`campaign_placement_daily_metrics`,
+ * seção "Posicionamentos" do Relatório de Performance) — granularidade
+ * EXTRA em relação a `aggregateCampaignDailyRows` (que continua a fonte de
+ * verdade do total real por campanha/dia, intocada). Agrega por
+ * `(date, campaignName, platformPosition)`, somando TODAS as linhas do
+ * mesmo grupo — mesma disciplina de sempre: nunca assume 1 linha = 1
+ * posicionamento (o Stract pode trazer mais de uma linha por posicionamento
+ * no mesmo dia, ex.: por anúncio). Só disparada quando a fonte tiver
+ * `platform_position_column` E `campaign_name_column` configurados — sem
+ * isso, degrada graciosamente (nenhum erro, só não escreve nada aqui,
+ * mesmo padrão de Públicos/Criativos).
+ *
+ * Deliberadamente SEM impressions/reach/clicks (pedido explícito do
+ * usuário: "não replicar indiscriminadamente todas as colunas do Stract" —
+ * só o necessário pra comparar investimento e resultado por posicionamento).
+ */
+export interface AggregatePlacementRowsColumns {
+  dateColumn: string;
+  campaignNameColumn: string;
+  platformPositionColumn: string;
+  spendColumn: string;
+}
+
+export interface AggregatedPlacementRow {
+  date: string;
+  campaignName: string;
+  platformPosition: string;
+  spend: number;
+  invalidRowCount: number;
+}
+
+export function aggregatePlacementDailyRows(rows: RawSourceRow[], columns: AggregatePlacementRowsColumns): AggregatedPlacementRow[] {
+  const { dateColumn, campaignNameColumn, platformPositionColumn, spendColumn } = columns;
+
+  const groups = new Map<string, AggregatedPlacementRow>();
+
+  for (const row of rows) {
+    const rawDate = row[dateColumn];
+    if (typeof rawDate !== "string" || rawDate.length === 0) continue;
+
+    const campaignName = toStringColumnValue(row[campaignNameColumn]);
+    const platformPosition = toStringColumnValue(row[platformPositionColumn]);
+    const key = `${rawDate} ${campaignName} ${platformPosition}`;
+    const group = groups.get(key) ?? { date: rawDate, campaignName, platformPosition, spend: 0, invalidRowCount: 0 };
+
+    const spendValue = parseSourceNumericValue(row[spendColumn]);
+    if (spendValue.kind === "ok") group.spend += spendValue.value;
+    if (spendValue.kind === "invalid") group.invalidRowCount += 1;
+
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values()).sort(
+    (a, b) => a.date.localeCompare(b.date) || a.campaignName.localeCompare(b.campaignName) || a.platformPosition.localeCompare(b.platformPosition),
+  );
+}
+
+export interface AggregatedPlacementGroupValue {
+  date: string;
+  campaignName: string;
+  platformPosition: string;
+  value: number;
+  invalidRowCount: number;
+}
+
+/** Soma uma coluna por `(date, campaignName, platformPosition)` — irmã de
+ * `aggregateColumnByCampaignGroup`, na granularidade de posicionamento.
+ * Usada pra resolver `result_column`/`value_column` de `metric_mappings`
+ * por posicionamento. */
+export function aggregateColumnByPlacementGroup(
+  rows: RawSourceRow[],
+  dateColumn: string,
+  campaignNameColumn: string,
+  platformPositionColumn: string,
+  valueColumn: string,
+): AggregatedPlacementGroupValue[] {
+  const groups = new Map<string, AggregatedPlacementGroupValue>();
+
+  for (const row of rows) {
+    const rawDate = row[dateColumn];
+    if (typeof rawDate !== "string" || rawDate.length === 0) continue;
+
+    const campaignName = toStringColumnValue(row[campaignNameColumn]);
+    const platformPosition = toStringColumnValue(row[platformPositionColumn]);
+    const key = `${rawDate} ${campaignName} ${platformPosition}`;
+    const group = groups.get(key) ?? { date: rawDate, campaignName, platformPosition, value: 0, invalidRowCount: 0 };
+
+    const parsed = parseSourceNumericValue(row[valueColumn]);
+    if (parsed.kind === "ok") group.value += parsed.value;
+    if (parsed.kind === "invalid") group.invalidRowCount += 1;
+
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values());
+}
+
+export function combinePlacementGroupValues(aggregates: AggregatedPlacementGroupValue[][]): AggregatedPlacementGroupValue[] {
+  const groups = new Map<string, AggregatedPlacementGroupValue>();
+
+  for (const aggregate of aggregates) {
+    for (const row of aggregate) {
+      const key = `${row.date} ${row.campaignName} ${row.platformPosition}`;
+      const group = groups.get(key) ?? { date: row.date, campaignName: row.campaignName, platformPosition: row.platformPosition, value: 0, invalidRowCount: 0 };
+      group.value += row.value;
+      group.invalidRowCount += row.invalidRowCount;
+      groups.set(key, group);
+    }
+  }
+
+  return Array.from(groups.values());
+}
+
+export interface CampaignPlacementDailyMetricsUpsertRow {
+  client_id: string;
+  import_source_id: string;
+  channel: TrafficChannel;
+  date: string;
+  campaign_name: string;
+  platform_position: string;
+  spend: number;
+  result_type: PerformanceGoal | null;
+  result_count: number | null;
+  revenue: number | null;
+}
+
+/**
+ * Monta as linhas prontas pro upsert em `campaign_placement_daily_metrics`
+ * — chave `(import_source_id, date, channel, campaign_name,
+ * platform_position)`. `channel` nunca inferido, sempre o mesmo de
+ * `import_sources.channel` da fonte.
+ */
+export function buildCampaignPlacementDailyMetricsUpsertRows(
+  clientId: string,
+  importSourceId: string,
+  channel: TrafficChannel,
+  aggregated: AggregatedPlacementRow[],
+  options?: {
+    resultType?: PerformanceGoal | null;
+    resultByGroup?: Map<string, number> | null;
+    revenueByGroup?: Map<string, number> | null;
+  },
+): CampaignPlacementDailyMetricsUpsertRow[] {
+  return aggregated.map((row) => {
+    const key = `${row.date} ${row.campaignName} ${row.platformPosition}`;
+    const resultCount = options?.resultByGroup?.get(key);
+    return {
+      client_id: clientId,
+      import_source_id: importSourceId,
+      channel,
+      date: row.date,
+      campaign_name: row.campaignName,
+      platform_position: row.platformPosition,
+      spend: row.spend,
+      result_type: resultCount !== undefined ? (options?.resultType ?? null) : null,
+      result_count: resultCount !== undefined ? Math.round(resultCount) : null,
+      revenue: options?.revenueByGroup?.get(key) ?? null,
+    };
+  });
+}
