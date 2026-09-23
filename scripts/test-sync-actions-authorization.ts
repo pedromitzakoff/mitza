@@ -98,7 +98,10 @@ console.log("\n4 — syncClientMetaAction: cliente inexistente continua um camin
 
 console.log("\n5 — syncClientStractSourcesAction: mesma autorização explícita via requireClientManagerAccess\n");
 {
-  ok('importa requireClientManagerAccess de "@/lib/auth"', /import\s*\{\s*requireClientManagerAccess\s*\}\s*from\s*"@\/lib\/auth"/.test(stractSource));
+  ok(
+    'importa requireClientManagerAccess de "@/lib/auth"',
+    /import\s*\{[^}]*\brequireClientManagerAccess\b[^}]*\}\s*from\s*"@\/lib\/auth"/.test(stractSource),
+  );
   ok("chama requireClientManagerAccess(clientId) dentro da action", /await requireClientManagerAccess\(clientId\)/.test(stractSource));
 }
 
@@ -127,6 +130,25 @@ console.log("\n8 — as duas actions continuam funcionalmente idênticas depois 
   ok(
     "syncClientStractSourcesAction ainda soma falhas por fonte e preserva a mensagem de 'sem integração ativa'",
     /Este cliente não tem nenhuma integração ativa para sincronizar\./.test(stractSource) && /failedCount/.test(stractSource),
+  );
+}
+
+console.log("\n9 — setStractPlacementColumnAction: admin-only (requireAdmin, nunca requireClientManagerAccess) — configuração técnica bruta\n");
+{
+  ok('importa requireAdmin de "@/lib/auth"', /import\s*\{[^}]*\brequireAdmin\b[^}]*\}\s*from\s*"@\/lib\/auth"/.test(stractSource));
+  ok("chama requireAdmin() dentro da action", /await requireAdmin\(\)/.test(stractSource));
+  const idxAuth = stractSource.indexOf("await requireAdmin()");
+  const idxUpdate = stractSource.indexOf('.from("import_sources")\n    .update({ platform_position_column');
+  ok("requireAdmin() aparece no código", idxAuth !== -1);
+  ok("a escrita em import_sources.platform_position_column aparece no código", idxUpdate !== -1);
+  ok("requireAdmin() está ANTES da escrita (nunca depois)", idxAuth < idxUpdate);
+  ok(
+    "escopada por client_id além de id — nunca atualiza uma fonte de outro cliente por engano",
+    /\.eq\("id", importSourceId\)\s*\n\s*\.eq\("client_id", clientId\)/.test(stractSource),
+  );
+  ok(
+    "campo vazio limpa a config (null), nunca grava string vazia — mesmo efeito de nunca ter sido configurada",
+    /raw\.length > 0 \? raw : null/.test(stractSource),
   );
 }
 

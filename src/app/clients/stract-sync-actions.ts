@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { requireClientManagerAccess } from "@/lib/auth";
+import { requireAdmin, requireClientManagerAccess } from "@/lib/auth";
 import { getEnabledImportSourceIdsForClient } from "@/lib/performance-queries";
 import { runImportForSource } from "@/lib/stract-sync";
 import { toUserFacingError } from "@/lib/user-facing-error";
@@ -65,5 +65,37 @@ export async function syncClientStractSourcesAction(clientId: string) {
     query = `?error=${encodeURIComponent(message)}`;
   }
 
+  redirect(`/clients/${clientId}${query}`);
+}
+
+/**
+ * "Posicionamentos" (Etapa "Posicionamentos no Relatório") — configurar
+ * `import_sources.platform_position_column` direto pela interface, sem
+ * precisar do SQL Editor. Pedido explícito do usuário depois de conectar a
+ * primeira conta manualmente ("quero fazer isso com todos outros clientes,
+ * mas não tem um caminho mais rápido?").
+ *
+ * Admin-only (`requireAdmin`, não `requireClientManagerAccess`) — mesmo
+ * critério de "Compartilhamento" no mesmo drawer: é configuração técnica
+ * bruta (nome de coluna da origem), não uma ação operacional do dia a dia
+ * como "Sincronizar agora". Campo vazio limpa a config (`null` — mesmo
+ * efeito de nunca ter sido configurada, Import Service simplesmente não
+ * escreve em `campaign_placement_daily_metrics` pra essa fonte).
+ */
+export async function setStractPlacementColumnAction(importSourceId: string, clientId: string, formData: FormData) {
+  await requireAdmin();
+
+  const raw = String(formData.get("platformPositionColumn") ?? "").trim();
+  const supabase = await createSupabaseClient();
+
+  const { error } = await supabase
+    .from("import_sources")
+    .update({ platform_position_column: raw.length > 0 ? raw : null })
+    .eq("id", importSourceId)
+    .eq("client_id", clientId);
+
+  const query = error ? `?error=${encodeURIComponent(toUserFacingError(error, "Não foi possível salvar a coluna de posicionamento."))}` : "";
+
+  revalidatePath(`/clients/${clientId}`);
   redirect(`/clients/${clientId}${query}`);
 }

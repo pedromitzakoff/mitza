@@ -83,6 +83,8 @@ export function AccountInfoDrawer({
   reviewsHistoryHref,
   clientId,
   isAdmin,
+  placementColumnValue,
+  setPlacementColumnAction,
   hasActiveReportShareLink,
   reportShareLinkCreatedAtLabel,
   reportShareLinkUrl,
@@ -117,6 +119,17 @@ export function AccountInfoDrawer({
   /** Etapa "Link Externo V1": gerar/revogar o link é admin-only — a seção
    * "Compartilhamento" nem aparece pra gestor. */
   isAdmin: boolean;
+  /** Etapa "Posicionamentos": valor atual de
+   * `import_sources.platform_position_column` pra primeira fonte Stract
+   * habilitada — `null` sem fonte Stract ou sem essa coluna configurada
+   * ainda. `undefined` só quando `setPlacementColumnAction` também é
+   * `undefined` (sem fonte pra configurar, campo nem aparece). */
+  placementColumnValue?: string | null;
+  /** Server Action já vinculada ao `importSourceId`/`clientId`
+   * (`setStractPlacementColumnAction.bind(null, importSourceId, clientId)`)
+   * — `undefined` sem nenhuma fonte Stract habilitada (campo admin-only nem
+   * renderiza nesse caso, mesmo padrão condicional de `hasStractSource`). */
+  setPlacementColumnAction?: NonNullable<React.ComponentPropsWithoutRef<"form">["action"]>;
   hasActiveReportShareLink: boolean;
   reportShareLinkCreatedAtLabel: string | null;
   /** Etapa "Link Externo — token recuperável": URL completa do link ativo,
@@ -173,6 +186,23 @@ export function AccountInfoDrawer({
                         <form action={syncAction} className="mt-1">
                           <SubmitButton pendingChildren="Sincronizando..." className={SYNC_SUBMIT_BUTTON_CLASSES}>
                             Sincronizar agora
+                          </SubmitButton>
+                        </form>
+                      )}
+                      {isAdmin && setPlacementColumnAction && (
+                        <form action={setPlacementColumnAction} className="mt-2 flex items-end gap-1.5">
+                          <label className="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <span className="text-[10px] text-overview-text-muted">Coluna de posicionamento (Stract)</span>
+                            <input
+                              type="text"
+                              name="platformPositionColumn"
+                              defaultValue={placementColumnValue ?? ""}
+                              placeholder="ex.: breakdowns_platform_position"
+                              className="min-h-8 rounded-md border border-overview-border bg-overview-surface px-2 text-xs text-overview-text-primary placeholder:text-overview-text-muted"
+                            />
+                          </label>
+                          <SubmitButton pendingChildren="Salvando..." className={SYNC_SUBMIT_BUTTON_CLASSES}>
+                            Salvar
                           </SubmitButton>
                         </form>
                       )}
