@@ -133,22 +133,26 @@ console.log("\n8 — as duas actions continuam funcionalmente idênticas depois 
   );
 }
 
-console.log("\n9 — setStractPlacementColumnAction: admin-only (requireAdmin, nunca requireClientManagerAccess) — configuração técnica bruta\n");
+console.log("\n9 — updateImportSourceAction: admin-only (requireAdmin, nunca requireClientManagerAccess) — configuração técnica bruta\n");
 {
   ok('importa requireAdmin de "@/lib/auth"', /import\s*\{[^}]*\brequireAdmin\b[^}]*\}\s*from\s*"@\/lib\/auth"/.test(stractSource));
-  ok("chama requireAdmin() dentro da action", /await requireAdmin\(\)/.test(stractSource));
-  const idxAuth = stractSource.indexOf("await requireAdmin()");
-  const idxUpdate = stractSource.indexOf('.from("import_sources")\n    .update({ platform_position_column');
+  ok("chama requireAdmin() dentro da action", /export async function updateImportSourceAction[\s\S]*?await requireAdmin\(\)/.test(stractSource));
+  const idxAuth = stractSource.lastIndexOf("await requireAdmin()");
+  const idxUpdate = stractSource.indexOf('.from("import_sources")\n    .update({');
   ok("requireAdmin() aparece no código", idxAuth !== -1);
-  ok("a escrita em import_sources.platform_position_column aparece no código", idxUpdate !== -1);
+  ok("a escrita em import_sources aparece no código", idxUpdate !== -1);
   ok("requireAdmin() está ANTES da escrita (nunca depois)", idxAuth < idxUpdate);
   ok(
-    "escopada por client_id além de id — nunca atualiza uma fonte de outro cliente por engano",
+    "escopada por id E client_id — nunca atualiza uma fonte de outro cliente por engano",
     /\.eq\("id", importSourceId\)\s*\n\s*\.eq\("client_id", clientId\)/.test(stractSource),
   );
   ok(
-    "campo vazio limpa a config (null), nunca grava string vazia — mesmo efeito de nunca ter sido configurada",
-    /raw\.length > 0 \? raw : null/.test(stractSource),
+    "campos obrigatórios (tabela, conta, coluna de conta/data/investimento) validados ANTES de escrever, nunca uma constraint not null crua como erro",
+    /if \(!tableName \|\| !externalAccountId \|\| !accountIdColumn \|\| !dateColumn \|\| !spendColumn\)/.test(stractSource),
+  );
+  ok(
+    "campo opcional vazio limpa a config (null), nunca grava string vazia — mesmo efeito de nunca ter sido configurado",
+    /return value\.length > 0 \? value : null;/.test(stractSource),
   );
 }
 

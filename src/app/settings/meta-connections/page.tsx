@@ -144,6 +144,7 @@ export default async function MetaConnectionsPage() {
                   <th className="px-4 py-2.5">Público</th>
                   <th className="px-4 py-2.5">Anúncio</th>
                   <th className="px-4 py-2.5">Última sincronização</th>
+                  <th className="px-4 py-2.5"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -203,6 +204,13 @@ export default async function MetaConnectionsPage() {
                     </td>
                     <td className="px-4 py-2.5 text-muted-foreground">
                       {audit.importSource?.last_success_at ? formatRelativeDateTime(audit.importSource.last_success_at, new Date()) : "Nunca"}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {audit.importSource !== null && (
+                        <Link href={`/settings/meta-connections/${audit.clientId}`} className="font-medium text-brand hover:underline">
+                          Editar
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}

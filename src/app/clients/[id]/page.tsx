@@ -14,7 +14,6 @@ import {
   getEnabledImportSourceIdsForClient,
   getLatestDailySpendDate,
   getRecentSyncRunsForClient,
-  getStractPlacementConfigForClient,
   resolvePerformanceRowsForSprints,
   type SyncRunSummary,
 } from "@/lib/performance-queries";
@@ -57,7 +56,7 @@ import { resolveOperationPriorityGroup } from "@/lib/operation-triage";
 import { PRIORITY_GROUP_TONE } from "@/app/operation/operation-client-card";
 import { emphasizeDeviationText } from "@/components/workspace/status-dot";
 import { SubmitButton } from "@/app/submit-button";
-import { setStractPlacementColumnAction, syncClientStractSourcesAction } from "../stract-sync-actions";
+import { syncClientStractSourcesAction } from "../stract-sync-actions";
 import { getLatestSyncRunStatusForSources } from "@/lib/stract-sync";
 import { getReportShareLinkStatus } from "@/lib/report-share-links";
 import { ClientIdentitySticky } from "../client-identity-sticky";
@@ -353,11 +352,6 @@ export default async function ClientPage({
   // (ver nota lá sobre por que `synced_at` não serve pra isso).
   const latestSpendDate = stractImportSourceIds.length > 0 ? await getLatestDailySpendDate(supabase, id) : null;
   const recentSyncRuns = isAdmin && stractImportSourceIds.length > 0 ? await getRecentSyncRunsForClient(supabase, stractImportSourceIds) : [];
-  // Etapa "Posicionamentos": config admin-only de `platform_position_column`
-  // pela interface (pedido explícito do usuário — "não tem um caminho mais
-  // rápido?" depois de configurar a Aibou manualmente por SQL). Mesmo gate
-  // de `recentSyncRuns` — só busca pra admin, nunca pra gestor.
-  const stractPlacementConfig = isAdmin && stractImportSourceIds.length > 0 ? await getStractPlacementConfigForClient(supabase, id) : null;
 
   // Etapa "Link Externo V1" — só admin gerencia o link (`account-info-drawer.tsx`),
   // mesmo critério de `recentSyncRuns` acima: nem consulta pra outro perfil.
@@ -1596,10 +1590,6 @@ export default async function ClientPage({
             lastOptimizationTooltip={lastOptimizationTooltip}
             canOperate={canOperate}
             syncAction={syncClientStractSourcesAction.bind(null, client.id)}
-            placementColumnValue={stractPlacementConfig?.platformPositionColumn ?? null}
-            setPlacementColumnAction={
-              stractPlacementConfig ? setStractPlacementColumnAction.bind(null, stractPlacementConfig.importSourceId, client.id) : undefined
-            }
             recentSyncRuns={accountInfoRecentSyncRuns}
             reviewsHistoryHref={reviewsHistoryHref}
             clientId={client.id}

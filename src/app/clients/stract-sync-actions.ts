@@ -69,33 +69,85 @@ export async function syncClientStractSourcesAction(clientId: string) {
 }
 
 /**
- * "Posicionamentos" (Etapa "Posicionamentos no Relatório") — configurar
- * `import_sources.platform_position_column` direto pela interface, sem
- * precisar do SQL Editor. Pedido explícito do usuário depois de conectar a
- * primeira conta manualmente ("quero fazer isso com todos outros clientes,
- * mas não tem um caminho mais rápido?").
+ * Editor completo de `import_sources` (Etapa "Editor de Integração Stract")
+ * — pedido explícito do usuário depois de configurar Aibou manualmente por
+ * SQL: "vou ter que refazer a conexão no Stract [pra vários clientes], não
+ * quero ter que refazer novamente um por um no Supabase". 17 de 26 clientes
+ * Meta ativos hoje têm pelo menos uma conexão faltando (auditoria de
+ * `/settings/meta-connections`) — reconfigurar isso é rotina, não exceção,
+ * daí uma tela de verdade em vez de mais um campo isolado.
  *
- * Admin-only (`requireAdmin`, não `requireClientManagerAccess`) — mesmo
- * critério de "Compartilhamento" no mesmo drawer: é configuração técnica
- * bruta (nome de coluna da origem), não uma ação operacional do dia a dia
- * como "Sincronizar agora". Campo vazio limpa a config (`null` — mesmo
- * efeito de nunca ter sido configurada, Import Service simplesmente não
- * escreve em `campaign_placement_daily_metrics` pra essa fonte).
+ * Admin-only (`requireAdmin`, não `requireClientManagerAccess`) — é
+ * configuração técnica bruta (nomes de coluna/tabela da origem, conta de
+ * anúncio), nunca uma ação operacional do dia a dia como "Sincronizar
+ * agora". Campos obrigatórios em `import_sources` (tabela, conta, colunas
+ * de conta/data/investimento) são validados aqui antes de escrever — uma
+ * constraint `not null` bruta do banco nunca vira a mensagem de erro que o
+ * usuário vê. Os demais campos: string vazia sempre limpa a config (`null`),
+ * nunca grava string vazia.
+ *
+ * Nunca reimplementa a validação de `account_id` (isso é
+ * `validateAccountIdColumn`, `lib/import-sources.ts` — roda a cada
+ * sincronização, aborta se a conta configurada aqui não bater com a real).
+ * Uma configuração errada nunca corrompe dado silenciosamente: a próxima
+ * sincronização falha com uma mensagem clara, visível em "Ver últimas
+ * execuções".
  */
-export async function setStractPlacementColumnAction(importSourceId: string, clientId: string, formData: FormData) {
+export async function updateImportSourceAction(importSourceId: string, clientId: string, formData: FormData) {
   await requireAdmin();
 
-  const raw = String(formData.get("platformPositionColumn") ?? "").trim();
+  function str(name: string): string {
+    return String(formData.get(name) ?? "").trim();
+  }
+  function nullableStr(name: string): string | null {
+    const value = str(name);
+    return value.length > 0 ? value : null;
+  }
+
+  const tableName = str("table_name");
+  const externalAccountId = str("external_account_id");
+  const accountIdColumn = str("account_id_column");
+  const dateColumn = str("date_column");
+  const spendColumn = str("spend_column");
+
+  if (!tableName || !externalAccountId || !accountIdColumn || !dateColumn || !spendColumn) {
+    const message = "Tabela, conta de anúncio, coluna de conta, coluna de data e coluna de investimento são obrigatórias.";
+    redirect(`/settings/meta-connections/${clientId}?error=${encodeURIComponent(message)}`);
+  }
+
   const supabase = await createSupabaseClient();
 
   const { error } = await supabase
     .from("import_sources")
-    .update({ platform_position_column: raw.length > 0 ? raw : null })
+    .update({
+      table_name: tableName,
+      external_account_id: externalAccountId,
+      account_id_column: accountIdColumn,
+      date_column: dateColumn,
+      spend_column: spendColumn,
+      enabled: formData.get("enabled") === "on",
+      campaign_name_column: nullableStr("campaign_name_column"),
+      campaign_name_filter: nullableStr("campaign_name_filter"),
+      campaign_name_exclude: nullableStr("campaign_name_exclude"),
+      campaign_id_column: nullableStr("campaign_id_column"),
+      ad_set_name_column: nullableStr("ad_set_name_column"),
+      ad_name_column: nullableStr("ad_name_column"),
+      creative_permalink_column: nullableStr("creative_permalink_column"),
+      preview_image_column: nullableStr("preview_image_column"),
+      preview_image_fallback_column: nullableStr("preview_image_fallback_column"),
+      impressions_column: nullableStr("impressions_column"),
+      reach_column: nullableStr("reach_column"),
+      clicks_column: nullableStr("clicks_column"),
+      platform_position_column: nullableStr("platform_position_column"),
+    })
     .eq("id", importSourceId)
     .eq("client_id", clientId);
 
-  const query = error ? `?error=${encodeURIComponent(toUserFacingError(error, "Não foi possível salvar a coluna de posicionamento."))}` : "";
+  const query = error
+    ? `?error=${encodeURIComponent(toUserFacingError(error, "Não foi possível salvar a configuração da integração."))}`
+    : "?saved=1";
 
   revalidatePath(`/clients/${clientId}`);
-  redirect(`/clients/${clientId}${query}`);
+  revalidatePath("/settings/meta-connections");
+  redirect(`/settings/meta-connections/${clientId}${query}`);
 }

@@ -931,6 +931,19 @@ export interface AggregatedPlacementRow {
 export function aggregatePlacementDailyRows(rows: RawSourceRow[], columns: AggregatePlacementRowsColumns): AggregatedPlacementRow[] {
   const { dateColumn, campaignNameColumn, platformPositionColumn, spendColumn } = columns;
 
+  // Achado real, antes de liberar pré-configuração em massa: se
+  // platformPositionColumn está CONFIGURADO mas a tabela bruta desta fonte
+  // ainda não tem essa coluna de verdade, toda linha colapsaria num único
+  // grupo fantasma de posicionamento "" (String(undefined ?? "")),
+  // mostrando 100% do investimento como "um posicionamento só" — pior que
+  // não mostrar nada. hasOwnProperty na primeira linha (schema idêntico em
+  // toda linha da mesma extração) distingue "coluna não existe na origem"
+  // (chave ausente — PostgREST só inclui colunas reais) de "coluna existe,
+  // valor vazio nesta linha" (tratado normalmente). Sem coluna real: `[]`,
+  // mesmo efeito de platform_position_column nulo — nunca uma linha
+  // fabricada.
+  if (rows.length > 0 && !Object.prototype.hasOwnProperty.call(rows[0], platformPositionColumn)) return [];
+
   const groups = new Map<string, AggregatedPlacementRow>();
 
   for (const row of rows) {

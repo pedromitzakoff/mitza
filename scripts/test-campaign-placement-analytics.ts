@@ -155,4 +155,35 @@ ok("spendShare continua calculado normalmente (não depende de resultado)", noRe
 check("CPA null sem nenhum resultado registrado (hasAnyRecord=false), nunca 0/Infinity", noResultSummaries[0].cpa, null);
 
 // ---------------------------------------------------------------------------
+console.log(
+  "\n6 — Achado real: platform_position_column CONFIGURADO mas a coluna ainda não existe na tabela bruta — nunca fabrica linha fantasma\n",
+);
+{
+  // Cenário real que motivou a checagem: usuário quer pré-configurar
+  // platform_position_column em TODOS os clientes agora, antes de
+  // reconfigurar a extração de cada um no Stract — a coluna simplesmente
+  // não existe ainda nessas linhas (schema real do Stract pra esses
+  // clientes, sem breakdowns_platform_position).
+  const rowsWithoutColumn: RawSourceRow[] = [
+    { adhoc__daily: "2026-09-22", insights_campaign_name: "C1", insights_spend: "100" },
+    { adhoc__daily: "2026-09-22", insights_campaign_name: "C2", insights_spend: "50" },
+  ];
+  const aggWithoutColumn = aggregatePlacementDailyRows(rowsWithoutColumn, COLUMNS);
+  check(
+    "coluna configurada mas ausente do schema real: [] — nunca um grupo fantasma de posicionamento vazio somando 100% do investimento",
+    aggWithoutColumn,
+    [],
+  );
+
+  // Contraste: coluna existe, mas o VALOR está vazio/nulo numa linha real
+  // (Stract pode legitimamente mandar isso) — aí sim é um posicionamento
+  // "" de verdade, tratado normalmente (nunca descartado).
+  const rowsWithNullValue: RawSourceRow[] = [
+    { adhoc__daily: "2026-09-22", insights_campaign_name: "C1", breakdowns_platform_position: null, insights_spend: "100" },
+  ];
+  const aggWithNullValue = aggregatePlacementDailyRows(rowsWithNullValue, COLUMNS);
+  check("coluna EXISTE mas valor é null numa linha real: 1 grupo (posicionamento vazio genuíno, nunca descartado)", aggWithNullValue.length, 1);
+}
+
+// ---------------------------------------------------------------------------
 console.log(`\nTodos os ${passed} testes passaram.`);

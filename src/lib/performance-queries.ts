@@ -214,32 +214,6 @@ export async function getEnabledImportSourceIdsForClient(supabase: Supabase, cli
   return (data ?? []).map((row) => row.id);
 }
 
-export interface StractPlacementConfig {
-  importSourceId: string;
-  platformPositionColumn: string | null;
-}
-
-/** Config de "Posicionamentos" pro campo admin-only em "Informações da
- * conta" — pedido explícito do usuário ("quero fazer isso com todos outros
- * clientes... não tem um caminho mais rápido") pra configurar
- * `platform_position_column` direto pela interface, sem precisar do SQL
- * Editor. Só a PRIMEIRA fonte Stract habilitada do cliente — hoje nenhum
- * cliente real tem mais de uma fonte ativa ao mesmo tempo (mesma limitação
- * já aceita por `AccountInfoDrawer`/`syncStatusLabel`, que também só reflete
- * uma leitura consolidada, nunca por fonte). `null` sem nenhuma fonte
- * habilitada. */
-export async function getStractPlacementConfigForClient(supabase: Supabase, clientId: string): Promise<StractPlacementConfig | null> {
-  const { data } = await supabase
-    .from("import_sources")
-    .select("id, platform_position_column")
-    .eq("client_id", clientId)
-    .eq("enabled", true)
-    .limit(1)
-    .maybeSingle();
-
-  if (!data) return null;
-  return { importSourceId: data.id, platformPositionColumn: data.platform_position_column };
-}
 
 export interface SyncRunSummary {
   id: string;
