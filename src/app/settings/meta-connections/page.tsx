@@ -7,7 +7,9 @@ import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { resolveClientMediaChannels } from "@/lib/traffic-channels";
 import type { ImportSourceStatusDb } from "@/lib/supabase/database.types";
 import { EmptyState } from "@/components/ui/empty-state";
-import { SettingsPageShell } from "../settings-shell";
+import { applyStandardStractColumnsAction, type BulkStandardColumnsResult } from "@/app/clients/stract-sync-actions";
+import { SubmitButton } from "@/app/submit-button";
+import { SettingsPageShell, SETTINGS_SECONDARY_BUTTON_CLASSES } from "../settings-shell";
 
 const IMPORT_SOURCE_STATUS_LABEL: Record<ImportSourceStatusDb, string> = {
   active: "Ativa",
@@ -65,8 +67,13 @@ function hasColumn(value: string | null): boolean {
  *    campanha/público/anúncio no relatório — daí as 3 colunas separadas em
  *    vez de um único "conectado sim/não".
  */
-export default async function MetaConnectionsPage() {
+export default async function MetaConnectionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ bulkResult?: string; error?: string }>;
+}) {
   await requireAdmin();
+  const { bulkResult, error } = await searchParams;
 
   const supabase = await createSupabaseClient();
   const [clients, importSources] = await Promise.all([
@@ -118,12 +125,64 @@ export default async function MetaConnectionsPage() {
 
   const problemCount = audits.filter((audit) => audit.hasProblem).length;
 
+  // "Aplicar padrão em todos" (pedido explícito do usuário: "o Stract não
+  // muda o nome da tabela, é igual pra todos") — resultado real da última
+  // aplicação, vindo da query string (`applyStandardStractColumnsAction`).
+  // Nome do cliente sempre resolvido pela MESMA lista já buscada acima —
+  // nunca uma segunda consulta só pra rotular o resultado.
+  let bulkResults: BulkStandardColumnsResult[] = [];
+  if (bulkResult) {
+    try {
+      bulkResults = JSON.parse(bulkResult);
+    } catch {
+      bulkResults = [];
+    }
+  }
+  const clientNameById = new Map((clients ?? []).map((c) => [c.id, c.name]));
+
   return (
     <SettingsPageShell
       title="Conexões Meta"
       description="Conta de anúncio, campanha, público e anúncio (criativo) sincronizados por cliente ativo com Meta configurado — pra saber onde corrigir a integração antes de fechar um relatório."
       backHref="/settings"
+      actions={
+        <form action={applyStandardStractColumnsAction}>
+          <SubmitButton pendingChildren="Aplicando..." className={`${SETTINGS_SECONDARY_BUTTON_CLASSES} px-3 py-1.5 text-xs`}>
+            Aplicar padrão em todos
+          </SubmitButton>
+        </form>
+      }
     >
+      {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{error}</p>}
+
+      {bulkResults.length > 0 && (
+        <div className="mb-4 rounded-lg border border-border p-3">
+          <p className="mb-2 text-sm font-medium text-foreground">
+            Padrão aplicado em {bulkResults.length} cliente{bulkResults.length === 1 ? "" : "s"} — resultado da sincronização de cada um:
+          </p>
+          <ul className="flex flex-col gap-1 text-sm">
+            {bulkResults.map((result) => (
+              <li key={result.clientId} className="flex flex-wrap items-baseline gap-2">
+                <Link href={`/settings/meta-connections/${result.clientId}`} className="font-medium text-brand hover:underline">
+                  {clientNameById.get(result.clientId) ?? result.clientId}
+                </Link>
+                {result.syncError ? (
+                  <span className="text-red-700 dark:text-red-300">{result.syncError}</span>
+                ) : result.syncStatus === null ? (
+                  <span className="text-muted-foreground">Campos preenchidos, fonte desativada — não sincronizado.</span>
+                ) : result.spendRowsWritten !== null && result.spendRowsWritten > 0 ? (
+                  <span className="text-green-700 dark:text-green-300">{result.syncStatus} — {result.spendRowsWritten} dia(s) de investimento sincronizado(s).</span>
+                ) : (
+                  <span className="font-medium text-red-700 dark:text-red-300">
+                    {result.syncStatus} — 0 linhas sincronizadas, confira se o nome da coluna bate com a extração deste cliente.
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {audits.length === 0 ? (
         <EmptyState>Nenhum cliente ativo com Meta configurado em Canais de mídia.</EmptyState>
       ) : (
