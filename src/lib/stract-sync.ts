@@ -106,17 +106,32 @@ export interface ImportSourceRunResult {
 export async function runImportForSource(importSourceId: string, dateRange?: ImportDateRange): Promise<ImportSourceRunResult> {
   const supabase = createAdminClient();
 
-  const { data: importSource, error: importSourceError } = await supabase
+  const { data: importSourceRow, error: importSourceError } = await supabase
     .from("import_sources")
     .select(
-      "id, client_id, provider, channel, external_account_id, table_name, account_id_column, date_column, spend_column, campaign_name_column, campaign_name_filter, campaign_name_exclude, campaign_id_column, ad_name_column, ad_set_name_column, creative_permalink_column, preview_image_column, preview_image_fallback_column, impressions_column, reach_column, clicks_column, platform_position_column",
+      "id, client_id, provider, channel, external_account_id, table_name, account_id_column, date_column, spend_column, campaign_name_column, campaign_name_filter, campaign_name_exclude, campaign_id_column, ad_name_column, ad_set_name_column, ad_set_id_column, ad_id_column, creative_permalink_column, preview_image_column, preview_image_fallback_column, impressions_column, reach_column, clicks_column, platform_position_column",
     )
     .eq("id", importSourceId)
     .single();
 
-  if (importSourceError || !importSource) {
+  if (importSourceError || !importSourceRow) {
     throw new Error(`import_source ${importSourceId} não encontrada: ${importSourceError?.message ?? "sem dados"}`);
   }
+
+  // Etapa "n8n + API oficial da Meta": `table_name`/`account_id_column`/
+  // `date_column`/`spend_column` viraram nullable no schema (só fazem
+  // sentido pra provider = 'stract' — `meta_api` não lê tabela nenhuma, ver
+  // `supabase/meta-api-import-source.sql`). Esta função inteira é só o
+  // caminho Stract (lê uma tabela física); `findMissingRequiredFields`
+  // abaixo valida em runtime que os 4 campos vêm preenchidos antes de
+  // qualquer uso — o cast só estreita o tipo de volta pro shape que sempre
+  // valeu aqui, o TypeScript não enxerga através dessa checagem de conteúdo.
+  const importSource = importSourceRow as typeof importSourceRow & {
+    table_name: string;
+    account_id_column: string;
+    date_column: string;
+    spend_column: string;
+  };
 
   const { data: mappings, error: mappingsError } = await supabase
     .from("metric_mappings")
@@ -385,6 +400,13 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
       impressionsColumn: importSource.impressions_column,
       reachColumn: importSource.reach_column,
       clicksColumn: importSource.clicks_column,
+      // Nenhuma extração Stract conhecida hoje configura campaign_id_column/
+      // ad_id_column pra Criativos — chega sempre `null`/`undefined` aqui,
+      // mesmo comportamento de sempre. Preparado pra quando a fonte tiver
+      // (o pipeline n8n + API oficial escreve pelo endpoint próprio, nunca
+      // por aqui — ver lib/meta-api-ingest.ts).
+      campaignIdColumn: importSource.campaign_id_column,
+      adIdColumn: importSource.ad_id_column,
     });
     hadInvalidRows = hadInvalidRows || creativeAggregate.some((row) => row.invalidRowCount > 0);
 
@@ -554,6 +576,7 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
       campaignNameColumn: importSource.campaign_name_column,
       platformPositionColumn: importSource.platform_position_column,
       spendColumn: importSource.spend_column,
+      campaignIdColumn: importSource.campaign_id_column,
     });
     hadInvalidRows = hadInvalidRows || placementAggregate.some((row) => row.invalidRowCount > 0);
 
@@ -642,6 +665,8 @@ export async function runImportForSource(importSourceId: string, dateRange?: Imp
       impressionsColumn: importSource.impressions_column,
       reachColumn: importSource.reach_column,
       clicksColumn: importSource.clicks_column,
+      campaignIdColumn: importSource.campaign_id_column,
+      adSetIdColumn: importSource.ad_set_id_column,
     });
     hadInvalidRows = hadInvalidRows || adSetAggregate.some((row) => row.invalidRowCount > 0);
 

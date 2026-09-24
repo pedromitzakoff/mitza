@@ -23,7 +23,7 @@ export async function getAdSetDailyMetricsForPeriod(
   const rows = await requireQuery(
     supabase
       .from("ad_set_daily_metrics")
-      .select("date, channel, campaign_name, ad_set_name, spend, impressions, reach, clicks, result_type, result_count, revenue")
+      .select("date, channel, campaign_name, campaign_id, ad_set_name, spend, impressions, reach, clicks, result_type, result_count, revenue")
       .eq("client_id", clientId)
       .gte("date", period.start)
       .lte("date", period.end),
@@ -34,6 +34,7 @@ export async function getAdSetDailyMetricsForPeriod(
     date: row.date,
     channel: row.channel as TrafficChannel,
     campaignName: row.campaign_name,
+    campaignId: row.campaign_id,
     adSetName: row.ad_set_name,
     spend: row.spend,
     impressions: row.impressions,

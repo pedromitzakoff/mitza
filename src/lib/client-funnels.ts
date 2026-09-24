@@ -147,6 +147,26 @@ export function resolveFunnelForCampaignName(byName: Map<string, string | "ambig
   return funnelId === undefined || funnelId === "ambiguous" ? null : funnelId;
 }
 
+/**
+ * Resolve o funil de uma linha de Públicos/Criativos/Posicionamentos — SEMPRE
+ * prioriza `campaignId` da própria linha quando presente (fonte com ID
+ * confiável nessa granularidade, ex.: pipeline n8n + API oficial da Meta),
+ * só cai pra ponte por nome (`resolveFunnelForCampaignName`, sempre um
+ * fallback, nunca tratado como vínculo confiável) quando a linha não tem
+ * `campaignId` — caso de toda fonte Stract hoje, que só entrega nome nessas
+ * 3 granularidades. Nunca o contrário: uma linha com `campaignId` NUNCA cai
+ * pro nome, mesmo que o nome resolvesse diferente — o ID é sempre a fonte de
+ * verdade quando existe.
+ */
+export function resolveFunnelForRow(
+  row: { campaignId: string | null; campaignName: string },
+  funnelByCampaignId: Map<string, string>,
+  funnelByCampaignName: Map<string, string | "ambiguous">,
+): string | null {
+  if (row.campaignId) return funnelByCampaignId.get(row.campaignId) ?? null;
+  return resolveFunnelForCampaignName(funnelByCampaignName, row.campaignName);
+}
+
 export interface PendingCampaign {
   /** Chave de deduplicação só pra esta lista — campaignId quando confiável,
    * senão um valor derivado do nome. NUNCA usada pra classificar (isso exige

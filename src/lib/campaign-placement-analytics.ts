@@ -23,6 +23,11 @@ export interface CampaignPlacementDailyMetricRow {
   date: string;
   channel: TrafficChannel;
   campaignName: string;
+  /** ID estável da campanha — `null` quando a fonte não tem `campaign_id`
+   * populado (todo Stract hoje). Com ele (pipeline n8n + API oficial), o
+   * Relatório filtra Posicionamentos por funil direto por ID, nunca por
+   * nome. */
+  campaignId: string | null;
   platformPosition: string;
   spend: number;
   resultType: PerformanceGoal | null;

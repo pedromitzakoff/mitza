@@ -60,6 +60,10 @@ import type { PerformanceGoal } from "./performance-goals";
 export interface AdCreativeDailyMetricRow {
   date: string;
   campaignName: string;
+  /** ID estável da campanha — `null` quando a fonte não tem `campaign_id`
+   * populado (todo Stract hoje). Com ele (pipeline n8n + API oficial), o
+   * Relatório filtra Criativos por funil direto por ID, nunca por nome. */
+  campaignId: string | null;
   creativeName: string;
   creativePermalinkUrl: string | null;
   /**

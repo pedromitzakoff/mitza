@@ -122,9 +122,9 @@ check(
 console.log("\n4 — buildPlacementSummaries: TOTAL DA CONTA, agrupado só por posicionamento (nunca por campanha)\n");
 
 const summaryRows: CampaignPlacementDailyMetricRow[] = [
-  { date: "2026-09-22", channel: "meta", campaignName: "C1", platformPosition: "feed", spend: 30, resultType: "sales", resultCount: 3, revenue: 300 },
-  { date: "2026-09-22", channel: "meta", campaignName: "C2", platformPosition: "feed", spend: 10, resultType: "sales", resultCount: 1, revenue: 100 },
-  { date: "2026-09-22", channel: "meta", campaignName: "C1", platformPosition: "instagram_reels", spend: 60, resultType: "sales", resultCount: 6, revenue: 900 },
+  { date: "2026-09-22", channel: "meta", campaignName: "C1", campaignId: null, platformPosition: "feed", spend: 30, resultType: "sales", resultCount: 3, revenue: 300 },
+  { date: "2026-09-22", channel: "meta", campaignName: "C2", campaignId: null, platformPosition: "feed", spend: 10, resultType: "sales", resultCount: 1, revenue: 100 },
+  { date: "2026-09-22", channel: "meta", campaignName: "C1", campaignId: null, platformPosition: "instagram_reels", spend: 60, resultType: "sales", resultCount: 6, revenue: 900 },
 ];
 const summaries = buildPlacementSummaries(summaryRows);
 check("2 posicionamentos na saída, mesmo tendo 2 campanhas diferentes — C1+C2 do feed somados numa linha só", summaries.length, 2);
@@ -146,8 +146,8 @@ check("feed: resultShare = 4/10", feedSummary.resultShare, 4 / totalResult);
 console.log("\n5 — buildPlacementSummaries: sem nenhum resultado mapeado, resultShare é null (nunca 0 fabricado)\n");
 
 const noResultRows: CampaignPlacementDailyMetricRow[] = [
-  { date: "2026-09-22", channel: "meta", campaignName: "C1", platformPosition: "feed", spend: 30, resultType: null, resultCount: null, revenue: null },
-  { date: "2026-09-22", channel: "meta", campaignName: "C1", platformPosition: "instagram_stories", spend: 10, resultType: null, resultCount: null, revenue: null },
+  { date: "2026-09-22", channel: "meta", campaignName: "C1", campaignId: null, platformPosition: "feed", spend: 30, resultType: null, resultCount: null, revenue: null },
+  { date: "2026-09-22", channel: "meta", campaignName: "C1", campaignId: null, platformPosition: "instagram_stories", spend: 10, resultType: null, resultCount: null, revenue: null },
 ];
 const noResultSummaries = buildPlacementSummaries(noResultRows);
 ok("nenhum posicionamento tem resultShare (sem base pra calcular participação)", noResultSummaries.every((s) => s.resultShare === null));

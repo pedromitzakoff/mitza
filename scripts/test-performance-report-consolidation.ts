@@ -48,6 +48,7 @@ function adSetRow(overrides: Partial<AdSetDailyMetricRow> & { adSetName: string 
     date: "2026-08-01",
     channel: "meta",
     campaignName: "Campanha padrão",
+    campaignId: null,
     spend: 0,
     impressions: null,
     reach: null,
@@ -63,6 +64,7 @@ function creativeRow(overrides: Partial<AdCreativeDailyMetricRow> & { creativeNa
   return {
     date: "2026-08-01",
     campaignName: "Campanha padrão",
+    campaignId: null,
     creativePermalinkUrl: null,
     previewImageUrl: null,
     spend: 0,

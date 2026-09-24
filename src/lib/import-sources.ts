@@ -1,5 +1,6 @@
 import type { PerformanceGoal } from "./performance-goals";
 import type { TrafficChannel } from "./traffic-channels";
+import type { ImportProviderDb } from "./supabase/database.types";
 
 /**
  * Núcleo puro do Import Service (integração Stract → Supabase → MITZA,
@@ -182,7 +183,7 @@ export interface DailyPerformanceUpsertRow {
    * conversão mapeado). Nunca fabricado. */
   revenue: number | null;
   source: "import";
-  provider: "stract";
+  provider: ImportProviderDb;
   source_updated_at: string;
 }
 
@@ -224,6 +225,7 @@ export function buildDailyPerformanceUpsertRows(
   aggregated: AggregatedDailyValue[],
   sourceUpdatedAt: string,
   revenueByDate?: Map<string, number> | null,
+  provider: ImportProviderDb = "stract",
 ): DailyPerformanceUpsertRow[] {
   return aggregated.map((row) => ({
     client_id: clientId,
@@ -233,7 +235,7 @@ export function buildDailyPerformanceUpsertRows(
     result_count: Math.round(row.value),
     revenue: revenueByDate?.get(row.date) ?? null,
     source: "import",
-    provider: "stract",
+    provider,
     source_updated_at: sourceUpdatedAt,
   }));
 }
@@ -275,12 +277,24 @@ export interface AggregateAdCreativeRowsColumns {
   impressionsColumn?: string | null;
   reachColumn?: string | null;
   clicksColumn?: string | null;
+  /** ID estável da campanha — mesmo padrão de `AggregateCampaignRowsColumns.campaignIdColumn`. */
+  campaignIdColumn?: string | null;
+  /** ID estável do anúncio — opcional, hoje só disponível via API oficial da
+   * Meta. NUNCA substitui `creativeName` (= `ad_name`) como identidade do
+   * criativo (ids do Meta não são estáveis entre edições/reuploads, ver
+   * `creative-analytics.sql`) — só preparação auxiliar. */
+  adIdColumn?: string | null;
 }
 
 export interface AggregatedAdCreativeRow {
   date: string;
   campaignName: string;
+  /** `null` quando a fonte não tem `campaignIdColumn` configurado. */
+  campaignId: string | null;
   creativeName: string;
+  /** `null` quando a fonte não tem `adIdColumn` configurado. Nunca a
+   * identidade do criativo (essa continua sempre `creativeName`). */
+  adId: string | null;
   /** Permalink da PRIMEIRA linha vista pra essa combinação de
    * data+campanha+criativo — nunca sobrescrito depois (regra do usuário: a
    * miniatura é fixada na primeira aparição, sem cache de imagem/vídeo). */
@@ -308,6 +322,8 @@ export function aggregateAdCreativeDailyRows(
     impressionsColumn,
     reachColumn,
     clicksColumn,
+    campaignIdColumn,
+    adIdColumn,
   } = columns;
 
   // creativeNameColumn ausente já se protege sozinho abaixo (toda linha
@@ -333,7 +349,9 @@ export function aggregateAdCreativeDailyRows(
     const group = groups.get(key) ?? {
       date: rawDate,
       campaignName,
+      campaignId: null,
       creativeName,
+      adId: null,
       creativePermalinkUrl: null,
       previewImageUrl: null,
       spend: 0,
@@ -342,6 +360,15 @@ export function aggregateAdCreativeDailyRows(
       clicks: null,
       invalidRowCount: 0,
     };
+
+    if (campaignIdColumn && !group.campaignId) {
+      const rawId = toStringColumnValue(row[campaignIdColumn]);
+      if (rawId.length > 0) group.campaignId = rawId;
+    }
+    if (adIdColumn && !group.adId) {
+      const rawId = toStringColumnValue(row[adIdColumn]);
+      if (rawId.length > 0) group.adId = rawId;
+    }
 
     if (!group.creativePermalinkUrl && permalinkColumn) {
       const rawPermalink = row[permalinkColumn];
@@ -458,7 +485,9 @@ export interface AdCreativeDailyMetricsUpsertRow {
   import_source_id: string;
   date: string;
   campaign_name: string;
+  campaign_id: string | null;
   creative_name: string;
+  ad_id: string | null;
   creative_permalink_url: string | null;
   preview_image_url: string | null;
   spend: number;
@@ -497,7 +526,9 @@ export function buildAdCreativeDailyMetricsUpsertRows(
       import_source_id: importSourceId,
       date: row.date,
       campaign_name: row.campaignName,
+      campaign_id: row.campaignId,
       creative_name: row.creativeName,
+      ad_id: row.adId,
       creative_permalink_url: row.creativePermalinkUrl,
       preview_image_url: row.previewImageUrl,
       spend: row.spend,
@@ -687,12 +718,28 @@ export interface AggregateAdSetRowsColumns {
   impressionsColumn?: string | null;
   reachColumn?: string | null;
   clicksColumn?: string | null;
+  /** ID estável da campanha — mesmo padrão de `AggregateCampaignRowsColumns.campaignIdColumn`.
+   * Opcional; sem ela (caso de toda fonte Stract hoje), `campaignId` sai
+   * sempre `null` e o vínculo campanha→funil continua dependendo da ponte
+   * por nome (`lib/client-funnels.ts`, sinalizada como possivelmente
+   * incompleta). Com ela (pipeline n8n + API oficial), o Relatório passa a
+   * filtrar Públicos por ID direto, nunca por nome. */
+  campaignIdColumn?: string | null;
+  /** ID estável do conjunto de anúncios — opcional, hoje só disponível via
+   * API oficial da Meta (nenhuma extração Stract conhecida fornece). Nunca
+   * substitui `adSetName` como identidade de exibição. */
+  adSetIdColumn?: string | null;
 }
 
 export interface AggregatedAdSetRow {
   date: string;
   campaignName: string;
   adSetName: string;
+  /** `null` quando a fonte não tem `campaignIdColumn` configurado. Nunca
+   * derivado do nome. */
+  campaignId: string | null;
+  /** `null` quando a fonte não tem `adSetIdColumn` configurado. */
+  adSetId: string | null;
   spend: number;
   impressions: number | null;
   reach: number | null;
@@ -701,7 +748,8 @@ export interface AggregatedAdSetRow {
 }
 
 export function aggregateAdSetDailyRows(rows: RawSourceRow[], columns: AggregateAdSetRowsColumns): AggregatedAdSetRow[] {
-  const { dateColumn, campaignNameColumn, adSetNameColumn, spendColumn, impressionsColumn, reachColumn, clicksColumn } = columns;
+  const { dateColumn, campaignNameColumn, adSetNameColumn, spendColumn, impressionsColumn, reachColumn, clicksColumn, campaignIdColumn, adSetIdColumn } =
+    columns;
 
   // Mesma falha de aggregatePlacementDailyRows/aggregateCampaignDailyRows —
   // campaignNameColumn OU adSetNameColumn configurado mas ausente da
@@ -727,12 +775,26 @@ export function aggregateAdSetDailyRows(rows: RawSourceRow[], columns: Aggregate
       date: rawDate,
       campaignName,
       adSetName,
+      campaignId: null,
+      adSetId: null,
       spend: 0,
       impressions: null,
       reach: null,
       clicks: null,
       invalidRowCount: 0,
     };
+
+    // IDs não variam por linha dentro do mesmo grupo — capturados uma vez,
+    // nunca sobrescritos por um valor vazio de linha subsequente (mesmo
+    // padrão de `aggregateCampaignDailyRows`).
+    if (campaignIdColumn && !group.campaignId) {
+      const rawId = toStringColumnValue(row[campaignIdColumn]);
+      if (rawId.length > 0) group.campaignId = rawId;
+    }
+    if (adSetIdColumn && !group.adSetId) {
+      const rawId = toStringColumnValue(row[adSetIdColumn]);
+      if (rawId.length > 0) group.adSetId = rawId;
+    }
 
     const spendValue = parseSourceNumericValue(row[spendColumn]);
     if (spendValue.kind === "ok") group.spend += spendValue.value;
@@ -824,7 +886,9 @@ export interface AdSetDailyMetricsUpsertRow {
   channel: TrafficChannel;
   date: string;
   campaign_name: string;
+  campaign_id: string | null;
   ad_set_name: string;
+  ad_set_id: string | null;
   spend: number;
   impressions: number | null;
   reach: number | null;
@@ -859,7 +923,9 @@ export function buildAdSetDailyMetricsUpsertRows(
       channel,
       date: row.date,
       campaign_name: row.campaignName,
+      campaign_id: row.campaignId,
       ad_set_name: row.adSetName,
+      ad_set_id: row.adSetId,
       spend: row.spend,
       impressions: row.impressions,
       reach: row.reach,
@@ -946,18 +1012,22 @@ export interface AggregatePlacementRowsColumns {
   campaignNameColumn: string;
   platformPositionColumn: string;
   spendColumn: string;
+  /** ID estável da campanha — mesmo padrão de `AggregateCampaignRowsColumns.campaignIdColumn`. */
+  campaignIdColumn?: string | null;
 }
 
 export interface AggregatedPlacementRow {
   date: string;
   campaignName: string;
+  /** `null` quando a fonte não tem `campaignIdColumn` configurado. */
+  campaignId: string | null;
   platformPosition: string;
   spend: number;
   invalidRowCount: number;
 }
 
 export function aggregatePlacementDailyRows(rows: RawSourceRow[], columns: AggregatePlacementRowsColumns): AggregatedPlacementRow[] {
-  const { dateColumn, campaignNameColumn, platformPositionColumn, spendColumn } = columns;
+  const { dateColumn, campaignNameColumn, platformPositionColumn, spendColumn, campaignIdColumn } = columns;
 
   // Achado real, antes de liberar pré-configuração em massa: se
   // platformPositionColumn está CONFIGURADO mas a tabela bruta desta fonte
@@ -981,7 +1051,12 @@ export function aggregatePlacementDailyRows(rows: RawSourceRow[], columns: Aggre
     const campaignName = toStringColumnValue(row[campaignNameColumn]);
     const platformPosition = toStringColumnValue(row[platformPositionColumn]);
     const key = `${rawDate} ${campaignName} ${platformPosition}`;
-    const group = groups.get(key) ?? { date: rawDate, campaignName, platformPosition, spend: 0, invalidRowCount: 0 };
+    const group = groups.get(key) ?? { date: rawDate, campaignName, campaignId: null, platformPosition, spend: 0, invalidRowCount: 0 };
+
+    if (campaignIdColumn && !group.campaignId) {
+      const rawId = toStringColumnValue(row[campaignIdColumn]);
+      if (rawId.length > 0) group.campaignId = rawId;
+    }
 
     const spendValue = parseSourceNumericValue(row[spendColumn]);
     if (spendValue.kind === "ok") group.spend += spendValue.value;
@@ -1057,6 +1132,7 @@ export interface CampaignPlacementDailyMetricsUpsertRow {
   channel: TrafficChannel;
   date: string;
   campaign_name: string;
+  campaign_id: string | null;
   platform_position: string;
   spend: number;
   result_type: PerformanceGoal | null;
@@ -1090,6 +1166,7 @@ export function buildCampaignPlacementDailyMetricsUpsertRows(
       channel,
       date: row.date,
       campaign_name: row.campaignName,
+      campaign_id: row.campaignId,
       platform_position: row.platformPosition,
       spend: row.spend,
       result_type: resultCount !== undefined ? (options?.resultType ?? null) : null,

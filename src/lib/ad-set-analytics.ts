@@ -26,6 +26,11 @@ export interface AdSetDailyMetricRow {
   date: string;
   channel: TrafficChannel;
   campaignName: string;
+  /** ID estável da campanha — `null` quando a fonte não tem `campaign_id`
+   * populado (todo Stract hoje). Com ele (pipeline n8n + API oficial), o
+   * Relatório filtra Públicos por funil direto por ID, nunca por nome (ver
+   * `lib/client-funnels.ts`/`performance-report/report-data.ts`). */
+  campaignId: string | null;
   adSetName: string;
   spend: number;
   impressions: number | null;

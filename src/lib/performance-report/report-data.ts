@@ -21,7 +21,7 @@ import { fetchClientFunnels, fetchCampaignFunnelAssignments } from "@/lib/client
 import {
   buildFunnelByCampaignId,
   buildFunnelByCampaignName,
-  resolveFunnelForCampaignName,
+  resolveFunnelForRow,
   aggregateSpendByFunnel,
   funnelShowsResults,
   sortFunnelsForDisplay,
@@ -291,15 +291,22 @@ export async function buildPerformanceReportData(
   let funnelFilterMayBeIncomplete = false;
 
   if (selectedFunnel) {
+    // Campanhas: sempre por ID — uma campanha sem `campaignId` confiável
+    // nunca entra na Visão por Funil (não filtrável com segurança, nunca
+    // adivinhada pelo nome).
     campaignDailyRows = campaignDailyRowsAll.filter((row) => row.campaignId && funnelByCampaignId.get(row.campaignId) === selectedFunnel.id);
-    adSetDailyRows = adSetDailyRowsAll.filter((row) => resolveFunnelForCampaignName(funnelByCampaignName, row.campaignName) === selectedFunnel.id);
-    creativeDailyRows = creativeRows.filter((row) => resolveFunnelForCampaignName(funnelByCampaignName, row.campaignName) === selectedFunnel.id);
-    placementDailyRows = placementDailyRowsAll.filter(
-      (row) => resolveFunnelForCampaignName(funnelByCampaignName, row.campaignName) === selectedFunnel.id,
-    );
-    funnelFilterMayBeIncomplete = campaignDailyRows.some(
-      (row) => !row.campaignId || funnelByCampaignName.get(row.campaignName) === "ambiguous",
-    );
+    // Públicos/Criativos/Posicionamentos: prioriza o `campaignId` da PRÓPRIA
+    // linha quando a fonte o fornece (pipeline n8n + API oficial) — a ponte
+    // por nome (`funnelByCampaignName`) é sempre um fallback pra fontes sem
+    // ID nessas granularidades (todo Stract hoje), nunca tratada como
+    // vínculo confiável (ver `resolveFunnelForRow`, `lib/client-funnels.ts`).
+    adSetDailyRows = adSetDailyRowsAll.filter((row) => resolveFunnelForRow(row, funnelByCampaignId, funnelByCampaignName) === selectedFunnel.id);
+    creativeDailyRows = creativeRows.filter((row) => resolveFunnelForRow(row, funnelByCampaignId, funnelByCampaignName) === selectedFunnel.id);
+    placementDailyRows = placementDailyRowsAll.filter((row) => resolveFunnelForRow(row, funnelByCampaignId, funnelByCampaignName) === selectedFunnel.id);
+
+    // Incompleto = pelo menos uma linha incluída aqui veio da ponte por nome
+    // (sem `campaignId` próprio) — nunca as que já resolveram por ID.
+    funnelFilterMayBeIncomplete = [...adSetDailyRows, ...creativeDailyRows, ...placementDailyRows].some((row) => !row.campaignId);
   }
 
   const campaigns = buildCampaignSummaries(campaignDailyRows);

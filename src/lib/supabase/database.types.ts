@@ -44,7 +44,7 @@ export type PerformanceSourceDb = "manual" | "meta" | "google";
 /** Integração Stract → Supabase → MITZA — provider é o único suportado
  * nesta primeira versão (Google/TikTok/LinkedIn ficam preparados
  * conceitualmente pelo `channel`, sem exigir nova migration quando chegarem). */
-export type ImportProviderDb = "stract";
+export type ImportProviderDb = "stract" | "meta_api";
 /** Saúde/configuração PERSISTENTE de uma import_source — distinto do status
  * de UMA execução (`DataSyncRunStatusDb`). */
 export type ImportSourceStatusDb = "pending" | "active" | "error" | "disabled" | "no_data";
@@ -1033,10 +1033,10 @@ export interface Database {
           provider: ImportProviderDb;
           channel: TrafficChannelDb;
           external_account_id: string;
-          table_name: string;
-          account_id_column: string;
-          date_column: string;
-          spend_column: string;
+          table_name: string | null;
+          account_id_column: string | null;
+          date_column: string | null;
+          spend_column: string | null;
           campaign_name_column: string | null;
           campaign_name_filter: string | null;
           campaign_name_exclude: string | null;
@@ -1065,10 +1065,10 @@ export interface Database {
           provider: ImportProviderDb;
           channel: TrafficChannelDb;
           external_account_id: string;
-          table_name: string;
-          account_id_column: string;
-          date_column: string;
-          spend_column: string;
+          table_name?: string | null;
+          account_id_column?: string | null;
+          date_column?: string | null;
+          spend_column?: string | null;
           campaign_name_column?: string | null;
           campaign_name_filter?: string | null;
           campaign_name_exclude?: string | null;
@@ -1097,10 +1097,10 @@ export interface Database {
           provider?: ImportProviderDb;
           channel?: TrafficChannelDb;
           external_account_id?: string;
-          table_name?: string;
-          account_id_column?: string;
-          date_column?: string;
-          spend_column?: string;
+          table_name?: string | null;
+          account_id_column?: string | null;
+          date_column?: string | null;
+          spend_column?: string | null;
           campaign_name_column?: string | null;
           campaign_name_filter?: string | null;
           campaign_name_exclude?: string | null;

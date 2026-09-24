@@ -22,7 +22,7 @@ export async function getCampaignPlacementDailyMetricsForPeriod(
   const rows = await requireQuery(
     supabase
       .from("campaign_placement_daily_metrics")
-      .select("date, channel, campaign_name, platform_position, spend, result_type, result_count, revenue")
+      .select("date, channel, campaign_name, campaign_id, platform_position, spend, result_type, result_count, revenue")
       .eq("client_id", clientId)
       .gte("date", period.start)
       .lte("date", period.end),
@@ -33,6 +33,7 @@ export async function getCampaignPlacementDailyMetricsForPeriod(
     date: row.date,
     channel: row.channel as TrafficChannel,
     campaignName: row.campaign_name,
+    campaignId: row.campaign_id,
     platformPosition: row.platform_position,
     spend: row.spend,
     resultType: row.result_type as PerformanceGoal | null,

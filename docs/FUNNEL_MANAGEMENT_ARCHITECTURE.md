@@ -51,32 +51,26 @@ Isso é uma substituição funcional e compatível da Etapa anterior: um funil "
 
 Investimento nunca é duplicado (Visão geral sempre soma as linhas de campanha uma única vez; o painorama usa a mesma agregação); resultados de funis diferentes nunca são somados entre si (só investimento é comparável entre funis).
 
-## Limitação assumida nesta entrega
+## Prioridade de identidade: ID sempre antes de nome
 
-As colunas de ID futuras (`ad_set_id`, `ad_id`, `campaign_id` nas granularidades que não tinham) foram **preparadas no schema** (nullable, sem afetar nenhum comportamento hoje) mas **não foram conectadas** ao pipeline de leitura/escrita (`lib/import-sources.ts`, `lib/stract-sync.ts`). Motivo: nenhuma extração Stract conhecida hoje expõe essas colunas — conectar agora seria trabalho morto sem uma fonte real pra popular. Quando o pipeline n8n + API oficial da Meta (próxima seção) estiver pronto, essas colunas já existem e só precisam ser preenchidas.
+`lib/client-funnels.ts` expõe `resolveFunnelForRow`, usada por `report-data.ts` pra filtrar Públicos/Criativos/Posicionamentos por funil: quando a própria linha carrega `campaignId` (fonte com ID nessa granularidade — hoje, só o pipeline n8n/API oficial), ele é SEMPRE usado, nunca o nome. A ponte por nome (`buildFunnelByCampaignName`/`resolveFunnelForCampaignName`) só entra como fallback pra linhas sem `campaignId` (todo Stract hoje) — nunca tratada como um vínculo confiável, sempre sinalizada (`funnelFilterMayBeIncomplete`) quando usada. Campanhas em si (`campaign_daily_metrics`) sempre exigem `campaignId` pra entrar na Visão por Funil — nunca incluídas por nome.
 
-## Requisitos para o futuro pipeline n8n + API oficial da Meta
+## Pipeline n8n + API oficial da Meta — estado desta entrega
 
-A extração via Stract será substituída no futuro por n8n + API oficial da Meta, inicialmente ainda escrevendo nas mesmas tabelas Supabase (nenhuma mudança de modelo interno nessa transição — só a origem dos dados muda). Para que os funis, o Relatório e a classificação por campanha funcionem com a mesma (ou melhor) confiabilidade que têm hoje, o pipeline futuro precisa fornecer:
+Decisão do usuário (com orientação do mentor): a extração passa a ser feita via n8n + API oficial da Meta, escrevendo ainda no Supabase/modelo interno da MITZA — nenhum workflow n8n foi construído nesta entrega (fica com o usuário/mentor), só o lado MITZA:
 
-### Identidade estável (obrigatório para igualar o nível de confiança atual)
+- **Migration** `supabase/meta-api-import-source.sql` (não executada) — `import_sources.provider` aceita `'meta_api'` além de `'stract'`; os 4 campos Stract-only (`table_name`/`account_id_column`/`date_column`/`spend_column`) viram nullable (só obrigatórios quando `provider = 'stract'`).
+- **Núcleo puro** `lib/meta-api-ingest.ts` — valida o payload inteiro (todos os erros coletados, nunca só o primeiro) e converte pra `RawSourceRow`, o MESMO formato que `lib/import-sources.ts` já consome de qualquer fonte, com nomes de coluna FIXOS (o contrato é nosso, nunca configurável como no Stract).
+- **Orquestração** `lib/meta-api-ingest-run.ts` — irmã de `runImportForSource` (`stract-sync.ts`): reaproveita as MESMAS funções de agregação/upsert (`lib/import-sources.ts`), o MESMO `metric_mappings`, o MESMO `data_sync_runs`. Nenhuma regra de negócio de relatório duplicada — o n8n nunca decide objetivo, nunca escreve numa tabela interna diretamente.
+- **Endpoint** `POST /api/n8n/meta-insights` (`lib/n8n-auth.ts` pra autenticação — `Bearer <N8N_INGEST_SECRET>`, fail-closed, mesmo padrão de `lib/cron-auth.ts`) — contrato completo de campos/erros/teste em `docs/N8N_META_INGESTION_GUIDE.md`.
+- **IDs granulares conectados**: diferente da entrega anterior (que só preparava as colunas sem popular), `lib/import-sources.ts` agora captura `campaign_id`/`ad_set_id`/`ad_id` nas agregações de ad set/criativo/posicionamento (não só campanha) — usado tanto pelo pipeline n8n (que sempre fornece) quanto, opcionalmente, por uma futura extração Stract que venha a configurar essas colunas (mesmo código, nunca dois caminhos).
+- **Testes**: `scripts/test-meta-api-ingest.ts` (payload → flatten → agregação → resolução de objetivo → idempotência → prioridade de ID sobre nome, ponta a ponta sem precisar de Supabase real) + `scripts/test-client-funnels.ts` atualizado.
 
-- **`campaign_id`** em toda granularidade (campanha, conjunto de anúncios, criativo, posicionamento) — hoje só existe de forma confiável em `campaign_daily_metrics`. A API oficial da Meta expõe isso nativamente em qualquer nível (`campaign_id` está presente em todo relatório de insights, independente do `level` pedido).
-- **`ad_set_id`** e **`ad_id`** — preparados no schema (`media-granular-identifiers.sql`) mas nunca populados hoje. A API oficial expõe os dois nativamente.
-- Nomes (`campaign_name`, `ad_set_name`, `creative_name`/`ad_name`) continuam sendo capturados **em paralelo** aos IDs — nunca substituídos por eles. Nome é sempre a identidade de EXIBIÇÃO/sugestão (nunca de classificação); ID é sempre a identidade de classificação.
+### O que ainda depende de uma ação humana antes de funcionar de verdade
 
-### Métricas
+1. Aprovar e rodar `supabase/meta-api-import-source.sql` (e as migrations anteriores de funis, se ainda não rodadas) em produção.
+2. Configurar `N8N_INGEST_SECRET` como variável de ambiente do projeto (Vercel).
+3. Registrar cada conta (`import_sources` + `metric_mappings`) antes do primeiro envio — nunca criado automaticamente a partir do payload (ver `docs/N8N_META_INGESTION_GUIDE.md`, seção 5).
+4. Construir o workflow n8n em si (fora do escopo desta entrega).
 
-- `spend`, `impressions`, `reach`, `clicks` em toda granularidade que hoje já os tem (campanha, conjunto, criativo) — sem mudança de significado.
-- Resultado por objetivo (leads/vendas/seguidores) na mesma granularidade de hoje (`metric_mappings` continua resolvendo qual ação da Meta corresponde a qual objetivo — isso não muda com a troca de pipeline).
-- `platform_position` (posicionamento) já como uma dimensão de breakdown nativa da API oficial (`breakdowns=publisher_platform,platform_position` no Marketing API), preservando a granularidade que hoje só existe com `campaign_name` (sem ID) em `campaign_placement_daily_metrics`.
-
-### Granularidade e cadência
-
-- Diária, por `account_id`/`campaign_id` (mesmo grão de hoje) — nenhuma mudança na unidade de tempo que a MITZA já assume em todo o pipeline de agregação (`daily_spend`/`daily_performance`/`campaign_daily_metrics` etc.).
-- Reimportação idempotente (upsert por chave natural, nunca duplicando linha) — mesma disciplina que `stract-sync.ts` já segue hoje.
-
-### O que NÃO muda com a troca de pipeline
-
-- O modelo de funis (`client_funnels`/`campaign_funnel_assignments`) é inteiramente independente do formato da fonte — foi desenhado deliberadamente pra não depender de nomes de coluna específicos do Stract (só de `campaign_id`, que qualquer fonte squarely precisa fornecer). Trocar a fonte não exige nenhuma migration nova no modelo de funis.
-- A classificação campanha→funil já confirmada sobrevive à reimportação: o vínculo é por `campaign_id`, e o `campaign_id` de uma campanha real na Meta não muda ao trocar de pipeline de extração (é o identificador da plataforma, não um identificador interno da MITZA).
+Nenhum desses 4 pontos foi executado nesta sessão — só implementado e testado localmente, conforme pedido.
