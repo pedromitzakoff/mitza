@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { ANALYTICS_PERIOD_PRESET_OPTIONS, resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
 import { PeriodRangeSelector, type PeriodRangePreset } from "@/components/ui/period-range-selector";
-import type { ReportView } from "@/lib/report-view-classification";
+import type { ReportView } from "@/lib/performance-report/report-data";
 import { buildReportPeriodHref } from "./report-period-nav";
 
 /**
@@ -43,9 +43,9 @@ export function ReportPeriodControl({
   /** `YYYY-MM-DD` do dia real — usado só pra resolver os presets e formatar
    * o rótulo compacto, nunca uma segunda semântica de "hoje". */
   today: string;
-  /** Visão atual (Etapa "Separar o Relatório por finalidade das
-   * campanhas") — carregada adiante em toda troca de período, pra nunca
-   * voltar pra "principal" só porque o período mudou. */
+  /** Visão atual (Etapa "Gestão de Funis Estratégicos por Cliente") —
+   * carregada adiante em toda troca de período, pra nunca voltar pra "Visão
+   * geral" só porque o período mudou. */
   view: ReportView;
 }) {
   const router = useRouter();

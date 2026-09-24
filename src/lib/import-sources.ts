@@ -310,6 +310,14 @@ export function aggregateAdCreativeDailyRows(
     clicksColumn,
   } = columns;
 
+  // creativeNameColumn ausente já se protege sozinho abaixo (toda linha
+  // teria creativeName = "" e seria pulada, resultando em `[]`) — mas
+  // campaignNameColumn ausente não tinha a mesma proteção: toda linha
+  // ficaria com campaignName = "" em vez de pular, misturando criativos de
+  // campanhas diferentes sob um nome de campanha em branco. Mesma correção
+  // de aggregatePlacementDailyRows/aggregateCampaignDailyRows/aggregateAdSetDailyRows.
+  if (rows.length > 0 && !Object.prototype.hasOwnProperty.call(rows[0], campaignNameColumn)) return [];
+
   const groups = new Map<string, AggregatedAdCreativeRow>();
 
   for (const row of rows) {
@@ -544,6 +552,15 @@ export interface AggregatedCampaignRow {
 export function aggregateCampaignDailyRows(rows: RawSourceRow[], columns: AggregateCampaignRowsColumns): AggregatedCampaignRow[] {
   const { dateColumn, campaignNameColumn, spendColumn, impressionsColumn, reachColumn, clicksColumn, campaignIdColumn } = columns;
 
+  // Mesma falha corrigida em aggregatePlacementDailyRows (auditoria de
+  // arquitetura): campaignNameColumn CONFIGURADO mas ausente da tabela
+  // bruta faria toda linha do dia colapsar num único grupo fantasma
+  // (campaignName = "" pra todas), somando 100% do investimento sob uma
+  // campanha em branco — pior que não mostrar nada. hasOwnProperty na
+  // primeira linha distingue "coluna não existe" (chave ausente) de
+  // "coluna existe, valor vazio nesta linha".
+  if (rows.length > 0 && !Object.prototype.hasOwnProperty.call(rows[0], campaignNameColumn)) return [];
+
   const groups = new Map<string, AggregatedCampaignRow>();
 
   for (const row of rows) {
@@ -685,6 +702,17 @@ export interface AggregatedAdSetRow {
 
 export function aggregateAdSetDailyRows(rows: RawSourceRow[], columns: AggregateAdSetRowsColumns): AggregatedAdSetRow[] {
   const { dateColumn, campaignNameColumn, adSetNameColumn, spendColumn, impressionsColumn, reachColumn, clicksColumn } = columns;
+
+  // Mesma falha de aggregatePlacementDailyRows/aggregateCampaignDailyRows —
+  // campaignNameColumn OU adSetNameColumn configurado mas ausente da
+  // tabela bruta colapsaria linhas num grupo fantasma. As duas colunas
+  // compõem a chave de identidade aqui, então as duas precisam existir de
+  // verdade.
+  if (
+    rows.length > 0 &&
+    (!Object.prototype.hasOwnProperty.call(rows[0], campaignNameColumn) || !Object.prototype.hasOwnProperty.call(rows[0], adSetNameColumn))
+  )
+    return [];
 
   const groups = new Map<string, AggregatedAdSetRow>();
 

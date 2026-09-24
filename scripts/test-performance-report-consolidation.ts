@@ -25,6 +25,7 @@ import assert from "node:assert/strict";
 import { buildAdSetSummaries, type AdSetDailyMetricRow } from "../src/lib/ad-set-analytics";
 import { buildCreativeSummaries, type AdCreativeDailyMetricRow } from "../src/lib/creative-analytics";
 import { buildCampaignSummaries, type CampaignDailyMetricRow } from "../src/lib/campaign-analytics";
+import { GENERAL_REPORT_VIEW } from "../src/lib/performance-report/report-data";
 import type { PerformanceReportData } from "../src/lib/performance-report/report-data";
 import { buildPerformanceReportDocument } from "../src/lib/performance-report/report-document";
 import { renderPerformanceReportHtml } from "../src/lib/performance-report/renderers/html-renderer";
@@ -278,11 +279,12 @@ console.log("\n11 — Integração: PerformanceReportDocument já chega consolid
     conversionRate: null,
     placements: [],
     generatedAt: "2026-09-01T00:00:00.000Z",
-    view: "principal",
-    hasSecondaryCampaigns: false,
-    unclassifiedCampaignNames: [],
-    secondarySummary: null,
-    campaignPurposeByName: {},
+    view: GENERAL_REPORT_VIEW,
+    activeFunnels: [],
+    funnelPanorama: null,
+    pendingFunnelCampaignNames: [],
+    funnelFilterMayBeIncomplete: false,
+    selectedFunnelIndicators: null,
   };
 
   const document = buildPerformanceReportDocument(data);
@@ -335,11 +337,12 @@ console.log("\n12 — Integração: progressive disclosure conta itens CONSOLIDA
     conversionRate: null,
     placements: [],
     generatedAt: "2026-09-01T00:00:00.000Z",
-    view: "principal",
-    hasSecondaryCampaigns: false,
-    unclassifiedCampaignNames: [],
-    secondarySummary: null,
-    campaignPurposeByName: {},
+    view: GENERAL_REPORT_VIEW,
+    activeFunnels: [],
+    funnelPanorama: null,
+    pendingFunnelCampaignNames: [],
+    funnelFilterMayBeIncomplete: false,
+    selectedFunnelIndicators: null,
   };
   const document = buildPerformanceReportDocument(data);
   const publicosTable = document.tables.find((t) => t.id === "publicos")!;

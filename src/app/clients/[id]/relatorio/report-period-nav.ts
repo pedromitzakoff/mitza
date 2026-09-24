@@ -1,6 +1,6 @@
 import type { AnalyticsPeriodPreset } from "@/lib/analytics";
 import { isValidDateRange } from "@/lib/date-range-picker";
-import type { ReportView } from "@/lib/report-view-classification";
+import { GENERAL_REPORT_VIEW, type ReportView } from "@/lib/performance-report/report-data";
 
 /**
  * Etapa "Relatório Nativo": núcleo puro de HREF da página nativa do
@@ -12,12 +12,12 @@ import type { ReportView } from "@/lib/report-view-classification";
  * exatamente o mesmo período (a URL É o estado, nunca um estado de cliente
  * paralelo).
  *
- * `view` (Etapa "Separar o Relatório por finalidade das campanhas") segue a
- * MESMA convenção — parâmetro de URL, nunca estado de cliente paralelo —
- * pra período e visão nunca ficarem dessincronizados ao trocar só um dos
- * dois (`ReportPeriodControl` sempre carrega a visão atual adiante,
- * `ReportViewToggle` sempre carrega o período atual adiante). Omitido =
- * "principal" (`resolveReportViewParam`, `page.tsx`).
+ * `view` (Etapa "Gestão de Funis Estratégicos por Cliente" — `"geral"` ou o
+ * id de um `client_funnels` do cliente) segue a MESMA convenção — parâmetro
+ * de URL, nunca estado de cliente paralelo — pra período e visão nunca
+ * ficarem dessincronizados ao trocar só um dos dois (`ReportPeriodControl`
+ * sempre carrega a visão atual adiante, `ReportFunnelSelector` sempre carrega
+ * o período atual adiante). Omitido = `GENERAL_REPORT_VIEW`.
  */
 function buildPeriodParams(preset: AnalyticsPeriodPreset, custom?: { start: string; end: string }, view?: ReportView): URLSearchParams {
   const params = new URLSearchParams({ analyticsPreset: preset });
@@ -25,7 +25,7 @@ function buildPeriodParams(preset: AnalyticsPeriodPreset, custom?: { start: stri
     params.set("analyticsStart", custom.start);
     params.set("analyticsEnd", custom.end);
   }
-  if (view && view !== "principal") params.set("view", view);
+  if (view && view !== GENERAL_REPORT_VIEW) params.set("view", view);
   return params;
 }
 

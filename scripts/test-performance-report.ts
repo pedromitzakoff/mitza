@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { formatPercent } from "../src/lib/format";
 import { buildPerformanceReportDocument, type PerformanceReportTable } from "../src/lib/performance-report/report-document";
 import { renderPerformanceReportHtml } from "../src/lib/performance-report/renderers/html-renderer";
+import { GENERAL_REPORT_VIEW } from "../src/lib/performance-report/report-data";
 import type { PerformanceReportData } from "../src/lib/performance-report/report-data";
 import { recomputeDailyRows, recomputeFilteredSummary, type FilterableDailyRow } from "../src/lib/performance-report/report-filter-recompute";
 import type { CampaignSummary } from "../src/lib/campaign-analytics";
@@ -132,11 +133,12 @@ function fakeData(overrides: Partial<PerformanceReportData> = {}): PerformanceRe
     conversionRate: null,
     placements: [],
     generatedAt: "2026-09-01T12:00:00.000Z",
-    view: "principal",
-    hasSecondaryCampaigns: false,
-    unclassifiedCampaignNames: [],
-    secondarySummary: null,
-    campaignPurposeByName: {},
+    view: GENERAL_REPORT_VIEW,
+    activeFunnels: [],
+    funnelPanorama: null,
+    pendingFunnelCampaignNames: [],
+    funnelFilterMayBeIncomplete: false,
+    selectedFunnelIndicators: null,
     ...overrides,
   };
 }

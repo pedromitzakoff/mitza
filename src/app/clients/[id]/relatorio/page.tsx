@@ -1,24 +1,16 @@
 import { notFound } from "next/navigation";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth";
 import { todayDateString } from "@/lib/today";
 import { resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
 import { buildPerformanceReportDocument } from "@/lib/performance-report/report-document";
 import { getReportShareLinkStatus } from "@/lib/report-share-links";
-import { listCampaignsForReportClassification } from "@/lib/report-campaign-classification-data";
-import type { ReportView } from "@/lib/report-view-classification";
 import { ReportPeriodControl } from "./report-period-control";
 import { buildReportPdfHref } from "./report-period-nav";
 import { ReportBody } from "./report-body";
 import { ReportHeader } from "./report-header";
 import { CopyReportLinkButton } from "./copy-report-link-button";
-import { ReportViewToggle } from "./report-view-toggle";
-import { ReportClassificationEntry } from "./report-classification-drawer";
-
-function resolveReportViewParam(value: string | undefined): ReportView {
-  return value === "secundario" ? "secundario" : "principal";
-}
+import { ReportFunnelSelector } from "./report-funnel-selector";
 
 /**
  * Etapa "Relatório Nativo": "Cliente → Relatório → relatório" — esta rota É
@@ -68,20 +60,13 @@ export default async function ClientPerformanceReportPage({
   const today = todayDateString();
   const activePreset = (presetParam ?? "this_month") as AnalyticsPeriodPreset;
   const period = resolveAnalyticsPeriod(presetParam, today, { start: startParam, end: endParam });
-  const view = resolveReportViewParam(viewParam);
 
-  // Etapa "Separar o Relatório por finalidade das campanhas": só admin
-  // classifica campanhas (mesma regra de `saveReportClassificationsAction`)
-  // — `getCurrentProfile` nunca redireciona (ao contrário de `requireAdmin`),
-  // então um gestor sem esse papel continua vendo o Relatório normalmente,
-  // só sem o botão "Classificar campanhas".
-  const [data, profile, classificationCampaigns] = await Promise.all([
-    buildPerformanceReportData(supabase, id, period, view),
-    getCurrentProfile(),
-    listCampaignsForReportClassification(supabase, id, today),
-  ]);
+  // `buildPerformanceReportData` já carrega os funis do cliente pra resolver
+  // `viewParam` (um id de funil desativado/removido cai em "geral" sem
+  // quebrar) — nenhuma segunda consulta de funis aqui.
+  const data = await buildPerformanceReportData(supabase, id, period, viewParam);
   const document = buildPerformanceReportDocument(data);
-  const isAdmin = profile?.role === "admin";
+  const view = document.view;
 
   const pdfHref = buildReportPdfHref(client.id, activePreset, { start: period.start, end: period.end });
 
@@ -116,16 +101,9 @@ export default async function ClientPerformanceReportPage({
       <ReportBody
         document={document}
         topControls={
-          (document.hasSecondaryCampaigns || isAdmin) && (
-            <>
-              {document.hasSecondaryCampaigns ? (
-                <ReportViewToggle basePath={basePath} activePreset={activePreset} period={period} view={view} />
-              ) : (
-                <span />
-              )}
-              {isAdmin && <ReportClassificationEntry clientId={client.id} campaigns={classificationCampaigns} />}
-            </>
-          )
+          document.activeFunnels.length > 0 ? (
+            <ReportFunnelSelector basePath={basePath} activePreset={activePreset} period={period} view={view} funnels={document.activeFunnels} />
+          ) : undefined
         }
       />
     </div>

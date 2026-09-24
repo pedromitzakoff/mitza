@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { todayDateString } from "@/lib/today";
 import { resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
-import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
+import { buildPerformanceReportData, GENERAL_REPORT_VIEW } from "@/lib/performance-report/report-data";
 import { buildPerformanceReportDocument } from "@/lib/performance-report/report-document";
 import { resolveClientIdFromShareToken, resolvePublicShareLinkBaseUrl } from "@/lib/report-share-links";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -122,7 +122,7 @@ export default async function PublicPerformanceReportPage({
             customStart={period.start}
             customEnd={period.end}
             today={today}
-            view="principal"
+            view={GENERAL_REPORT_VIEW}
           />
         }
       />

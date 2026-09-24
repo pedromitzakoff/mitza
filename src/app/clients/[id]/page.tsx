@@ -36,6 +36,8 @@ import { listClientGoals, fetchGoalDisplaySummaries } from "@/lib/client-goals";
 import { fetchSecondaryGoalsPerformance } from "@/lib/secondary-goal-performance";
 import { SecondaryGoalsPerformance } from "../secondary-goals-performance";
 import { ConversionRateCard } from "../conversion-rate-card";
+import { fetchClientFunnels, listCampaignsForFunnelClassification } from "@/lib/client-funnels-data";
+import { FunnelsSection } from "../funnels-section";
 import { getClientMonthHorizon } from "@/lib/client-month-horizons";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import {
@@ -690,6 +692,13 @@ export default async function ClientPage({
     { firstDay, lastDay },
     new Map(Array.from(secondaryGoalTargets.entries()).map(([goal, summary]) => [goal, summary.targetResultCount])),
   );
+
+  // Etapa "Gestão de Funis Estratégicos por Cliente": bloco adicional,
+  // mesmo padrão de await sequencial isolado dos Objetivos secundários
+  // acima — funis são independentes de `client_goals`, nunca lidos dentro
+  // do mesmo Promise.all pra manter os diffs de cada Etapa separados.
+  const clientFunnels = await fetchClientFunnels(supabase, client.id);
+  const funnelClassificationCampaigns = await listCampaignsForFunnelClassification(supabase, client.id, todayStr);
 
   const monthPlanned = clientPlan.consolidated.investment ?? sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay });
   const monthActual = sumActualSpendForMonth(sprints ?? [], { firstDay, lastDay }, dailySpend ?? []);
@@ -1695,6 +1704,16 @@ export default async function ClientPage({
           <SecondaryGoalsPerformance goals={secondaryGoalsPerformance} />
 
           <ConversionRateCard conversionRate={conversionRate} />
+
+          <Section title="Funis">
+            <FunnelsSection
+              clientId={client.id}
+              returnTo={returnTo}
+              funnels={clientFunnels}
+              campaigns={funnelClassificationCampaigns}
+              isAdmin={isAdmin}
+            />
+          </Section>
 
           {/* Tarefas do mês (Etapa "Tarefas e Sprints separadas") — novo
               módulo principal: substitui "Foco agora" (`SprintFocusBar`,

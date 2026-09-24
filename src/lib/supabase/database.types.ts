@@ -22,12 +22,6 @@ export type PerformanceGoalDb = "leads" | "sales" | "followers";
  * período (hoje, sempre o caso de "followers", ver client_goals.sql). */
 export type GoalResultSourceDb = "automatic" | "manual";
 
-/** Finalidade real de uma campanha pro Relatório (Etapa "Separar o
- * Relatório por finalidade das campanhas") — independente de
- * `PerformanceGoalDb`, ver `campaign-report-classifications.sql`.
- * "leads"/"sales" = Resultados principais; as outras 5 = Objetivos
- * secundários. */
-export type ReportCampaignPurposeDb = "leads" | "sales" | "awareness" | "reach" | "followers" | "profile_visits" | "traffic";
 
 /** Tema visual do AnalyticsReport (Fase 1) — pertence ao domínio do cliente,
  * não é uma preferência de sessão. Sem UI de seleção ainda; hoje todo
@@ -820,7 +814,9 @@ export interface Database {
           import_source_id: string;
           date: string;
           campaign_name: string;
+          campaign_id: string | null;
           creative_name: string;
+          ad_id: string | null;
           creative_permalink_url: string | null;
           preview_image_url: string | null;
           spend: number;
@@ -839,7 +835,9 @@ export interface Database {
           import_source_id: string;
           date: string;
           campaign_name: string;
+          campaign_id?: string | null;
           creative_name: string;
+          ad_id?: string | null;
           creative_permalink_url?: string | null;
           preview_image_url?: string | null;
           spend?: number;
@@ -858,7 +856,9 @@ export interface Database {
           import_source_id?: string;
           date?: string;
           campaign_name?: string;
+          campaign_id?: string | null;
           creative_name?: string;
+          ad_id?: string | null;
           creative_permalink_url?: string | null;
           preview_image_url?: string | null;
           spend?: number;
@@ -968,6 +968,7 @@ export interface Database {
           channel: TrafficChannelDb;
           date: string;
           campaign_name: string;
+          campaign_id: string | null;
           platform_position: string;
           spend: number;
           result_type: PerformanceGoalDb | null;
@@ -983,6 +984,7 @@ export interface Database {
           channel: TrafficChannelDb;
           date: string;
           campaign_name: string;
+          campaign_id?: string | null;
           platform_position: string;
           spend?: number;
           result_type?: PerformanceGoalDb | null;
@@ -998,6 +1000,7 @@ export interface Database {
           channel?: TrafficChannelDb;
           date?: string;
           campaign_name?: string;
+          campaign_id?: string | null;
           platform_position?: string;
           spend?: number;
           result_type?: PerformanceGoalDb | null;
@@ -1040,6 +1043,8 @@ export interface Database {
           campaign_id_column: string | null;
           ad_name_column: string | null;
           ad_set_name_column: string | null;
+          ad_set_id_column: string | null;
+          ad_id_column: string | null;
           creative_permalink_column: string | null;
           preview_image_column: string | null;
           preview_image_fallback_column: string | null;
@@ -1070,6 +1075,8 @@ export interface Database {
           campaign_id_column?: string | null;
           ad_name_column?: string | null;
           ad_set_name_column?: string | null;
+          ad_set_id_column?: string | null;
+          ad_id_column?: string | null;
           creative_permalink_column?: string | null;
           preview_image_column?: string | null;
           preview_image_fallback_column?: string | null;
@@ -1100,6 +1107,8 @@ export interface Database {
           campaign_id_column?: string | null;
           ad_name_column?: string | null;
           ad_set_name_column?: string | null;
+          ad_set_id_column?: string | null;
+          ad_id_column?: string | null;
           creative_permalink_column?: string | null;
           preview_image_column?: string | null;
           preview_image_fallback_column?: string | null;
@@ -1132,7 +1141,9 @@ export interface Database {
           channel: TrafficChannelDb;
           date: string;
           campaign_name: string;
+          campaign_id: string | null;
           ad_set_name: string;
+          ad_set_id: string | null;
           spend: number;
           impressions: number | null;
           reach: number | null;
@@ -1150,7 +1161,9 @@ export interface Database {
           channel: TrafficChannelDb;
           date: string;
           campaign_name: string;
+          campaign_id?: string | null;
           ad_set_name: string;
+          ad_set_id?: string | null;
           spend?: number;
           impressions?: number | null;
           reach?: number | null;
@@ -1168,7 +1181,9 @@ export interface Database {
           channel?: TrafficChannelDb;
           date?: string;
           campaign_name?: string;
+          campaign_id?: string | null;
           ad_set_name?: string;
+          ad_set_id?: string | null;
           spend?: number;
           impressions?: number | null;
           reach?: number | null;
@@ -2712,14 +2727,62 @@ export interface Database {
           },
         ];
       };
-      campaign_report_classifications: {
+      client_funnels: {
+        Row: {
+          id: string;
+          client_id: string;
+          name: string;
+          naming_key: string;
+          is_active: boolean;
+          linked_result_type: PerformanceGoalDb | null;
+          relevant_indicators: string[];
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          name: string;
+          naming_key: string;
+          is_active?: boolean;
+          linked_result_type?: PerformanceGoalDb | null;
+          relevant_indicators?: string[];
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          name?: string;
+          naming_key?: string;
+          is_active?: boolean;
+          linked_result_type?: PerformanceGoalDb | null;
+          relevant_indicators?: string[];
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_funnels_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campaign_funnel_assignments: {
         Row: {
           id: string;
           client_id: string;
           channel: TrafficChannelDb;
           campaign_id: string;
-          purpose: ReportCampaignPurposeDb;
+          funnel_id: string;
           assigned_by: string | null;
+          confirmed_at: string;
           created_at: string;
           updated_at: string;
         };
@@ -2728,8 +2791,9 @@ export interface Database {
           client_id: string;
           channel: TrafficChannelDb;
           campaign_id: string;
-          purpose: ReportCampaignPurposeDb;
+          funnel_id: string;
           assigned_by?: string | null;
+          confirmed_at?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -2738,21 +2802,29 @@ export interface Database {
           client_id?: string;
           channel?: TrafficChannelDb;
           campaign_id?: string;
-          purpose?: ReportCampaignPurposeDb;
+          funnel_id?: string;
           assigned_by?: string | null;
+          confirmed_at?: string;
           created_at?: string;
           updated_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "campaign_report_classifications_client_id_fkey";
+            foreignKeyName: "campaign_funnel_assignments_client_id_fkey";
             columns: ["client_id"];
             isOneToOne: false;
             referencedRelation: "clients";
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "campaign_report_classifications_assigned_by_fkey";
+            foreignKeyName: "campaign_funnel_assignments_funnel_id_fkey";
+            columns: ["funnel_id"];
+            isOneToOne: false;
+            referencedRelation: "client_funnels";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_funnel_assignments_assigned_by_fkey";
             columns: ["assigned_by"];
             isOneToOne: false;
             referencedRelation: "team_members";
