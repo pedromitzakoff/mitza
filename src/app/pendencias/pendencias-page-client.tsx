@@ -78,6 +78,11 @@ function QuickCreateForm({
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Cliente/Responsável usam SearchableSelect (não é um <select> nativo,
+  // então não aparece em FormData) — estado controlado, mesmo padrão dos
+  // filtros do topo da página.
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const { showToast } = useToast();
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -85,8 +90,6 @@ function QuickCreateForm({
     const formData = new FormData(event.currentTarget);
     const title = String(formData.get("title") ?? "").trim();
     if (!title) return;
-    const clientId = String(formData.get("client_id") ?? "") || null;
-    const assigneeId = String(formData.get("assignee_id") ?? "") || null;
     const dueDate = String(formData.get("due_date") ?? "") || todayDateString();
     const priority = (String(formData.get("priority") ?? "normal") || "normal") as TaskPriority;
 
@@ -111,6 +114,8 @@ function QuickCreateForm({
     }
     showToast(result?.message ?? "Demanda criada.");
     (event.target as HTMLFormElement).reset();
+    setClientId(null);
+    setAssigneeId(null);
     setOpen(false);
     onCreated();
   }
@@ -130,22 +135,26 @@ function QuickCreateForm({
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-1.5 rounded-md border border-overview-border bg-overview-surface p-2">
       <input name="title" required autoFocus placeholder="Título da demanda" className={`${fieldClasses} min-w-[200px] flex-1`} />
-      <select name="client_id" defaultValue="" className={fieldClasses} aria-label="Cliente">
-        <option value="">Interna</option>
-        {clientOptions.map((client) => (
-          <option key={client.id} value={client.id}>
-            {client.name}
-          </option>
-        ))}
-      </select>
-      <select name="assignee_id" defaultValue="" className={fieldClasses} aria-label="Responsável">
-        <option value="">Sem responsável</option>
-        {assigneeOptions.map((member) => (
-          <option key={member.id} value={member.id}>
-            {member.name}
-          </option>
-        ))}
-      </select>
+      <div className="w-40">
+        <SearchableSelect
+          options={clientOptions.map((c) => ({ id: c.id, label: c.name }))}
+          selectedId={clientId}
+          onSelect={setClientId}
+          placeholder="Interna"
+          searchPlaceholder="Buscar cliente..."
+          ariaLabel="Cliente"
+        />
+      </div>
+      <div className="w-40">
+        <SearchableSelect
+          options={assigneeOptions.map((m) => ({ id: m.id, label: m.name, sublabel: m.status === "inativo" ? "(inativo)" : undefined }))}
+          selectedId={assigneeId}
+          onSelect={setAssigneeId}
+          placeholder="Sem responsável"
+          searchPlaceholder="Buscar responsável..."
+          ariaLabel="Responsável"
+        />
+      </div>
       <input type="date" name="due_date" defaultValue={todayDateString()} className={fieldClasses} aria-label="Prazo" />
       <select name="priority" defaultValue="normal" className={fieldClasses} aria-label="Prioridade">
         {TASK_PRIORITY_OPTIONS.map((option) => (
