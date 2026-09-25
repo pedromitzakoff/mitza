@@ -11,9 +11,10 @@ import {
   TASK_PRIORITY_LABEL,
 } from "@/app/clients/task-labels";
 import { formatDueDate } from "@/app/clients/task-row";
+import { formatDateTimeWithYear } from "@/lib/format";
 import { InlineEditTaskForm, type InlineTaskManagerOption } from "@/app/clients/inline-task-form";
 import { CommentThread, type CommentItem } from "@/app/clients/comment-thread";
-import { listTaskCommentsAction } from "./pendencias-actions";
+import { getTaskCompletionActorAction, listTaskCommentsAction } from "./pendencias-actions";
 import { useToast } from "@/app/toast-provider";
 
 /**
@@ -44,8 +45,10 @@ export function PendenciaDrawer({
   onClose: () => void;
 }) {
   const [comments, setComments] = useState<CommentItem[] | null>(null);
+  const [completedByName, setCompletedByName] = useState<string | null>(null);
   const { showToast } = useToast();
   const isTerminal = item.status === "feito" || item.status === "nao_realizado";
+  const isCompleted = item.status === "feito";
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +66,24 @@ export function PendenciaDrawer({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- showToast é estável (contexto), só o id importa pra refazer a busca.
   }, [item.id]);
+
+  // "Concluída por" — só quando há evento real (nunca inferido); demanda
+  // aberta/reaberta nem tenta buscar (evita uma leitura sem sentido pra
+  // toda demanda aberta). Sem reset explícito pra `null` aqui: quem
+  // renderiza este componente já passa `key={item.id}` (doc-comment acima),
+  // então trocar de demanda remonta o componente do zero — o estado
+  // inicial (`null`) já é o valor certo pra uma demanda aberta.
+  useEffect(() => {
+    if (!isCompleted) return;
+    let cancelled = false;
+    getTaskCompletionActorAction(item.id).then((result) => {
+      if (cancelled) return;
+      setCompletedByName(result.actorName ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [item.id, isCompleted]);
 
   return (
     <>
@@ -103,6 +124,24 @@ export function PendenciaDrawer({
             <dt className="text-overview-text-secondary">Prazo</dt>
             <dd className="text-overview-text-primary">{formatDueDate(item.dueDate)}</dd>
           </div>
+          {/* Só aparece pra demanda REALMENTE concluída (item.status ===
+              "feito") — nunca pra aberta/reaberta. Prazo (due_date) e
+              conclusão (completed_at) são datas com significados
+              diferentes, mostradas aqui lado a lado sem se confundir. */}
+          {isCompleted && (
+            <div>
+              <dt className="text-overview-text-secondary">Concluída em</dt>
+              <dd className="text-overview-text-primary">
+                {item.completedAt ? formatDateTimeWithYear(item.completedAt) : "Data não registrada"}
+              </dd>
+            </div>
+          )}
+          {isCompleted && completedByName && (
+            <div>
+              <dt className="text-overview-text-secondary">Concluída por</dt>
+              <dd className="text-overview-text-primary">{completedByName}</dd>
+            </div>
+          )}
         </dl>
 
         {!isTerminal && (

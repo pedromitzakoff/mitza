@@ -62,6 +62,7 @@ function item(overrides: Partial<PendenciaItem> & { id: string }): PendenciaItem
     status: "pendente",
     priority: "normal",
     dueDate: "2026-09-25",
+    completedAt: null,
     notes: null,
     sprintId: null,
     client: null,

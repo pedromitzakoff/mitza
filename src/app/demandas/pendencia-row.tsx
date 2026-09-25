@@ -11,6 +11,7 @@ import {
   TASK_STATUS_BADGE_CLASSES,
 } from "@/app/clients/task-labels";
 import { formatDueDate } from "@/app/clients/task-row";
+import { formatDateFromInstant, formatShortDateFromInstant } from "@/lib/format";
 import { Tooltip } from "@/components/ui/tooltip";
 import { todayDateString } from "@/lib/today";
 import type { PendenciasAssigneeOption, PendenciasClientOption } from "./pendencias-data";
@@ -167,15 +168,27 @@ export function PendenciaRow({
         </select>
       </span>
 
-      <input
-        type="date"
-        value={item.dueDate}
-        disabled={pendingField === "dueDate"}
-        onChange={(event) => event.target.value && run("dueDate", () => onUpdateDueDate(item.id, event.target.value))}
-        aria-label="Prazo"
-        title={formatDueDate(item.dueDate)}
-        className={`${selectClasses} w-[124px] shrink-0 ${isOverdue ? "text-red-600 dark:text-red-400" : item.dueDate === todayDateString() ? "text-brand" : ""}`}
-      />
+      <div className="flex w-[124px] shrink-0 flex-col">
+        <input
+          type="date"
+          value={item.dueDate}
+          disabled={pendingField === "dueDate"}
+          onChange={(event) => event.target.value && run("dueDate", () => onUpdateDueDate(item.id, event.target.value))}
+          aria-label="Prazo"
+          title={formatDueDate(item.dueDate)}
+          className={`${selectClasses} ${isOverdue ? "text-red-600 dark:text-red-400" : item.dueDate === todayDateString() ? "text-brand" : ""}`}
+        />
+        {/* Prazo (due_date) e conclusão (completed_at) são datas com
+            significados diferentes — nunca confundidas. Só aparece quando
+            REALMENTE concluída (item.status === "feito"); demanda aberta ou
+            reaberta nunca mostra esta linha (completedAt já vem null nesses
+            casos, direto da fonte canônica). */}
+        {item.status === "feito" && item.completedAt && (
+          <span className="mt-0.5 truncate px-1.5 text-[10px] text-overview-text-muted" title={`Concluída em ${formatDateFromInstant(item.completedAt)}`}>
+            Concl. {formatShortDateFromInstant(item.completedAt)}
+          </span>
+        )}
+      </div>
 
       <span className="flex shrink-0 items-center gap-1.5">
         {isTerminal && (

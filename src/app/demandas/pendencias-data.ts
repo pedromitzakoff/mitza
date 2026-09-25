@@ -26,6 +26,7 @@ interface TaskRow {
   status: PendenciaItem["rawStatus"];
   priority: PendenciaItem["priority"];
   due_date: string;
+  completed_at: string | null;
   notes: string | null;
   sprint_id: string | null;
   client_id: string | null;
@@ -87,7 +88,7 @@ export async function loadPendenciasRawData(supabase: Supabase, scopeClientId?: 
   let taskQuery = supabase
     .from("tasks")
     .select(
-      "id, title, type, status, priority, due_date, notes, sprint_id, client_id, client:clients(id, name, status), assignee:team_members!tasks_assignee_id_fkey(id, name, status)",
+      "id, title, type, status, priority, due_date, completed_at, notes, sprint_id, client_id, client:clients(id, name, status), assignee:team_members!tasks_assignee_id_fkey(id, name, status)",
     )
     .eq("origin", "manual");
   // Workspace do cliente (`/clients/[id]/demandas`, Etapa "MITZA — Reformulação
@@ -127,6 +128,7 @@ export async function loadPendenciasRawData(supabase: Supabase, scopeClientId?: 
       status,
       priority: row.priority,
       dueDate: row.due_date,
+      completedAt: row.completed_at,
       notes: row.notes,
       sprintId: row.sprint_id,
       client: client ? { id: client.id, name: client.name } : null,

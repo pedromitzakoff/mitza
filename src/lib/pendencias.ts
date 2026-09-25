@@ -49,6 +49,17 @@ export interface PendenciaItem {
   status: TaskStatus;
   priority: TaskPriority;
   dueDate: string;
+  /** Timestamp REAL da conclusão MAIS RECENTE — fonte canônica `tasks.
+   * completed_at`, gravado atomicamente por `complete_task_and_record_event`
+   * (RPC), nunca `updated_at` (que muda por edição normal, sem relação com
+   * conclusão). `reopenTaskAction` zera este campo pra `null` ao reabrir, e
+   * uma nova conclusão grava um `v_now` fresco — nunca a data da primeira
+   * conclusão de um ciclo reaberto. `null` sempre que `status !== "feito"`
+   * (aberta/reaberta) OU quando a tarefa foi concluída antes da migration
+   * que introduziu esta coluna (`operational-events.sql`) — nesse caso
+   * histórico não existe registro confiável, e a UI deve mostrar a ausência
+   * explicitamente, nunca inventar um valor. */
+  completedAt: string | null;
   notes: string | null;
   sprintId: string | null;
   client: PendenciaClientRef | null;
