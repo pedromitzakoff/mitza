@@ -231,4 +231,39 @@ console.log("\n4 — Operação por Canal (CPA-only) permanece intocada\n");
   // confirmamos que esta etapa não introduziu nenhuma referência nova.
 }
 
+console.log("\n5 — correção: duplo-submit de \"Criar cliente\" (duplicata por duplo-clique antes da hidratação)\n");
+{
+  // Auditoria em produção (2026-09) achou 3 pares de clientes com o MESMO
+  // nome criados a menos de 4 segundos de distância um do outro (Giulio
+  // Kai, Pedro mitzakoff, Rei do Cupim) — `SubmitButton` (`useFormStatus`)
+  // só desabilita o botão DEPOIS que a página hidrata; um duplo-clique
+  // rápido antes disso dispara duas submissões nativas do `<form>`, cada
+  // uma chamando `createClientAction` de verdade. A correção é no
+  // SERVIDOR (única camada que funciona independente de hidratação),
+  // nunca só no cliente.
+  const actionsSource = loadSource("src", "app", "clients", "actions.ts");
+  const createFnSource = actionsSource.slice(
+    actionsSource.indexOf("export async function createClientAction"),
+    actionsSource.indexOf("function isNextControlFlowError"),
+  );
+
+  ok(
+    "createClientAction checa cliente com o MESMO nome criado nos últimos segundos ANTES de inserir",
+    /\.eq\("name", name\)[\s\S]*?\.gte\("created_at",/.test(createFnSource) &&
+      createFnSource.indexOf('.eq("name", name)') < createFnSource.indexOf(".insert({ name, meta_ad_account_id"),
+  );
+  ok(
+    "quando acha duplicata recente, redireciona pro cliente JÁ existente em vez de inserir um segundo",
+    /if \(recentDuplicate\) \{\s*redirect\(`\/clients\/\$\{recentDuplicate\.id\}`\);/.test(createFnSource),
+  );
+  ok(
+    "a janela de dedupe é curta (segundos, não minutos/horas) — nunca bloqueia criar um cliente genuinamente novo com o mesmo nome depois",
+    createFnSource.includes("Date.now() - 10_000"),
+  );
+  ok(
+    "updateClientAction NÃO tem essa checagem (edição de cliente já existente não cria linha nova, duplo-submit ali não duplica cliente)",
+    !actionsSource.slice(actionsSource.indexOf("export async function updateClientAction")).includes("recentDuplicate"),
+  );
+}
+
 console.log(`\n${passed} verificações passaram.`);

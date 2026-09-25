@@ -179,6 +179,29 @@ export async function createClientAction(formData: FormData) {
 
   const supabase = await createSupabaseClient();
 
+  // Guarda contra duplo-submit: o botão "Criar cliente" (`SubmitButton`,
+  // via `useFormStatus`) só se desabilita DEPOIS que a página hidrata —
+  // um duplo-clique rápido enquanto a página ainda está só com o HTML
+  // renderizado pelo servidor (antes do JS assumir) dispara duas
+  // submissões nativas do `<form>`, cada uma chamando esta Server Action
+  // de verdade. Auditoria em produção confirmou o padrão: pares de
+  // clientes com o MESMO nome criados a menos de 10 segundos de distância
+  // (ex.: 0,6s, 1,2s, 3,9s). Se já existe um cliente com este nome criado
+  // há poucos segundos, trata como o mesmo envio — redireciona pro que já
+  // existe em vez de criar um segundo.
+  const { data: recentDuplicate } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("name", name)
+    .gte("created_at", new Date(Date.now() - 10_000).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (recentDuplicate) {
+    redirect(`/clients/${recentDuplicate.id}`);
+  }
+
   const { data: client, error } = await supabase
     .from("clients")
     .insert({ name, meta_ad_account_id, ...structural })
