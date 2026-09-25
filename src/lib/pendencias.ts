@@ -1,4 +1,4 @@
-import type { TaskPriority, TaskStatus, TaskType, TeamMemberStatus } from "@/lib/supabase/database.types";
+import type { TaskOrigin, TaskPriority, TaskStatus, TaskType, TeamMemberStatus } from "@/lib/supabase/database.types";
 import { TASK_PRIORITY_REGISTRY, TASK_STATUS_REGISTRY } from "@/lib/status-registry";
 
 const VALID_STATUSES: readonly TaskStatus[] = [
@@ -202,6 +202,60 @@ export function filterPendencias(
 
     return true;
   });
+}
+
+/** Campos do original lidos do banco antes de duplicar (seção 6 do pedido
+ * "Pendências — Segunda Rodada"). */
+export interface PendenciaDuplicateSource {
+  client_id: string | null;
+  title: string;
+  type: TaskType;
+  assignee_id: string | null;
+  due_date: string;
+  priority: TaskPriority;
+  notes: string | null;
+}
+
+/** Campos da nova linha a inserir — sem `original_due_date` (isso é
+ * responsabilidade de `withOriginalDueDate`, aplicado por cima do
+ * resultado desta função, nunca duplicado aqui). */
+export interface PendenciaDuplicateRow {
+  client_id: string | null;
+  title: string;
+  type: TaskType;
+  assignee_id: string | null;
+  due_date: string;
+  priority: TaskPriority;
+  notes: string | null;
+  sprint_id: null;
+  status: TaskStatus;
+  origin: TaskOrigin;
+}
+
+/**
+ * Regra pura de duplicação (seção 6 do pedido) — extraída de
+ * `duplicateTasksAction` pra ser testável sem banco. Copia
+ * título/descrição/cliente/responsável/prioridade/prazo; NUNCA copia
+ * comentários/histórico/timestamps/identidade original (a nova linha nem
+ * carrega `id` — quem chama recebe um id novo do INSERT). Status inicial
+ * sempre "pendente" (nunca herdado — mesmo raciocínio de `reopenTaskAction`,
+ * que também sempre volta pra "pendente"). `origin: "manual"` sempre —
+ * duplicar é, em si, um ato humano explícito, mesmo quando o original era
+ * `origin: "template"`.
+ */
+export function buildDuplicateTaskRow(original: PendenciaDuplicateSource): PendenciaDuplicateRow {
+  return {
+    client_id: original.client_id,
+    title: original.title,
+    type: original.type,
+    assignee_id: original.assignee_id,
+    due_date: original.due_date,
+    priority: original.priority,
+    notes: original.notes,
+    sprint_id: null,
+    status: "pendente",
+    origin: "manual",
+  };
 }
 
 function sortPendencias(items: PendenciaItem[]): PendenciaItem[] {

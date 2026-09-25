@@ -1,5 +1,5 @@
 import type { TaskPriority, TaskRecurrence, TaskStatus, TaskType } from "@/lib/supabase/database.types";
-import { TASK_PRIORITY_REGISTRY, TASK_STATUS_REGISTRY } from "@/lib/status-registry";
+import { TASK_PRIORITY_REGISTRY, TASK_STATUS_REGISTRY, toneDotClassName } from "@/lib/status-registry";
 
 export const TASK_TYPE_LABEL: Record<TaskType, string> = {
   otimizacao: "Otimização",
@@ -75,3 +75,13 @@ export const TASK_PRIORITY_BADGE_CLASSES: Record<TaskPriority, string> = {
 export const TASK_PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = (["urgente", "alta", "normal", "baixa"] as const).map(
   (priority) => ({ value: priority, label: TASK_PRIORITY_LABEL[priority] }),
 );
+
+/** Cor do pontinho de prioridade (seção 4 do pedido) — mesma cor do badge,
+ * só reduzida a um indicador compacto (`toneDotClassName` deriva do mesmo
+ * `tone`, nunca uma paleta paralela). */
+export const TASK_PRIORITY_DOT_CLASS: Record<TaskPriority, string> = {
+  urgente: toneDotClassName(TASK_PRIORITY_REGISTRY["task_priority.urgente"].tone),
+  alta: toneDotClassName(TASK_PRIORITY_REGISTRY["task_priority.alta"].tone),
+  normal: toneDotClassName(TASK_PRIORITY_REGISTRY["task_priority.normal"].tone),
+  baixa: toneDotClassName(TASK_PRIORITY_REGISTRY["task_priority.baixa"].tone),
+};

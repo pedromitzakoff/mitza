@@ -27,17 +27,20 @@ import { join } from "node:path";
 import {
   DEFAULT_PENDENCIAS_FILTERS,
   DEFAULT_PENDENCIAS_GROUP_BY,
+  buildDuplicateTaskRow,
   endOfWeek,
   filterPendencias,
   groupPendencias,
   parsePendenciasFilters,
   parsePendenciasGroupBy,
   serializePendenciasFilters,
+  type PendenciaDuplicateSource,
   type PendenciaItem,
   type PendenciasFilterState,
 } from "../src/lib/pendencias";
 import { effectiveTaskStatus } from "../src/lib/task-status";
-import { TASK_EDITABLE_STATUS_OPTIONS } from "../src/app/clients/task-labels";
+import { TASK_EDITABLE_STATUS_OPTIONS, TASK_PRIORITY_BADGE_CLASSES, TASK_PRIORITY_DOT_CLASS } from "../src/app/clients/task-labels";
+import { filterSearchableOptions, type SearchableSelectOption } from "../src/components/ui/searchable-select";
 
 let passed = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -343,8 +346,8 @@ console.log("\n13 — correção de conceito: Pendências mostra só DEMANDA man
   const homeSource = readFileSync(join(__dirname, "../src/app/page.tsx"), "utf8");
 
   ok(
-    "a regra que decide 'aparece em Pendências' é template_id is null, filtrada na própria query (nunca em memória)",
-    dataSource.includes('.is("template_id", null)'),
+    "a regra que decide 'aparece em Pendências' é origin='manual', filtrada na própria query (nunca em memória, nunca mais template_id)",
+    dataSource.includes('.eq("origin", "manual")'),
   );
   ok(
     "loadPendingRecurringTasks (seção de Recorrências) não existe mais em pendencias-data.ts",
@@ -364,8 +367,231 @@ console.log("\n13 — correção de conceito: Pendências mostra só DEMANDA man
   );
 
   ok(
-    "resumo da Home busca template_id (mesma coluna, mesma regra da página) e ignora tarefa com template_id preenchido",
-    homeSource.includes("template_id") && /if \(task\.template_id\) continue;/.test(homeSource),
+    "resumo da Home busca origin (mesma coluna, mesma regra da página) e ignora tarefa cujo origin não é 'manual'",
+    homeSource.includes(", origin,") && /if \(task\.origin !== "manual"\) continue;/.test(homeSource),
+  );
+}
+
+console.log("\n14 — regra estrutural 'origin': gravada explicitamente em CADA caminho que insere em tasks (nunca inferida depois)\n");
+{
+  const tasksActionsSource = readFileSync(join(__dirname, "../src/app/clients/tasks-actions.ts"), "utf8");
+  const reportActionsSource = readFileSync(join(__dirname, "../src/app/reports/report-actions.ts"), "utf8");
+  const migrationSource = readFileSync(join(__dirname, "../supabase/tasks-origin.sql"), "utf8");
+
+  ok("performCreateTask (criação manual — toda tela) grava origin: 'manual'", tasksActionsSource.includes('origin: "manual",'));
+  ok(
+    "completeTaskAction (próxima ocorrência de recorrência leve, sempre configurada manualmente) grava origin: 'manual'",
+    tasksActionsSource.includes('origin: "manual" as const,'),
+  );
+  ok(
+    "sendActionItemToSprintAction (Relatório -> \"Enviar para próxima sprint\", clique humano) grava origin: 'manual'",
+    reportActionsSource.includes('origin: "manual" as const,'),
+  );
+  ok(
+    "generate_sprint_tasks_from_templates (ÚNICO caminho 100% automático) grava origin: 'template' na migration",
+    /insert into tasks \([\s\S]*?origin[\s\S]*?\)[\s\S]*?'template'/.test(migrationSource),
+  );
+  ok(
+    "record_account_review (tarefa opcional, só quando o gestor marca \"Criar tarefa\") grava origin: 'manual' na migration",
+    migrationSource.includes("'pendente',\n      'nenhuma',\n      p_issue_description,\n      'manual'"),
+  );
+  ok(
+    "coluna origin é NOT NULL com default 'manual' (qualquer insert futuro que esqueça de informar cai no lado seguro, nunca aparece como rotina por omissão)",
+    migrationSource.includes("alter table tasks alter column origin set default 'manual';") &&
+      migrationSource.includes("alter table tasks alter column origin set not null;"),
+  );
+  ok(
+    "backfill histórico usa heurística ESTRUTURAL por type (nunca por título) — só os 3 types que a geração automática usa viram 'template'",
+    migrationSource.includes("when type in ('otimizacao', 'verificacao_saldo', 'report') then 'template'"),
+  );
+  ok(
+    "backfill nunca usa comparação de título (ex.: title != 'Checar saldo') — proibido explicitamente pelo pedido",
+    !/title\s*[!=]=/.test(migrationSource),
+  );
+}
+
+console.log("\n15 — buildDuplicateTaskRow (núcleo puro de duplicação, seção 6 do pedido)\n");
+{
+  function duplicateSource(overrides: Partial<PendenciaDuplicateSource> = {}): PendenciaDuplicateSource {
+    return {
+      client_id: "c1",
+      title: "Corrigir integração",
+      type: "outro",
+      assignee_id: "tm-1",
+      due_date: "2026-10-01",
+      priority: "alta",
+      notes: "Contexto detalhado do problema.",
+      ...overrides,
+    };
+  }
+
+  const original = duplicateSource();
+  const copy = buildDuplicateTaskRow(original);
+
+  check("copia título/cliente/responsável/prioridade/prazo/descrição do original", {
+    client_id: copy.client_id,
+    title: copy.title,
+    assignee_id: copy.assignee_id,
+    due_date: copy.due_date,
+    priority: copy.priority,
+    notes: copy.notes,
+  }, {
+    client_id: "c1",
+    title: "Corrigir integração",
+    assignee_id: "tm-1",
+    due_date: "2026-10-01",
+    priority: "alta",
+    notes: "Contexto detalhado do problema.",
+  });
+
+  check("origin da cópia é sempre 'manual' — duplicar é, em si, um ato humano explícito", copy.origin, "manual");
+  check("status inicial da cópia é sempre 'pendente'", copy.status, "pendente");
+  check("sprint_id da cópia é sempre null (não herda a sprint do original)", copy.sprint_id, null);
+
+  const doneOriginal = duplicateSource({ title: "Tarefa já concluída" });
+  check(
+    "duplicar uma tarefa CONCLUÍDA ainda assim gera cópia com status 'pendente' (nunca herda status terminal)",
+    buildDuplicateTaskRow(doneOriginal).status,
+    "pendente",
+  );
+
+  ok(
+    "PendenciaDuplicateRow não tem campo id/comments/history/timestamps — o tipo só inclui os campos de conteúdo copiáveis",
+    Object.keys(copy).sort().join(",") === "assignee_id,client_id,due_date,notes,origin,priority,sprint_id,status,title,type",
+  );
+}
+
+console.log("\n16 — duplicateTasksAction: uma leitura + um insert, nunca herda id/comentários/histórico do original\n");
+{
+  const tasksActionsSource = readFileSync(join(__dirname, "../src/app/clients/tasks-actions.ts"), "utf8");
+  ok(
+    "duplicateTasksAction seleciona os originais numa única query (.in(\"id\", taskIds)), nunca um loop de leituras",
+    /originalsResult = await queryOrError[\s\S]*?\.in\("id", taskIds\)/.test(tasksActionsSource),
+  );
+  ok(
+    "duplicateTasksAction insere todas as cópias em uma única chamada (.insert(newRows)), nunca um insert por item",
+    tasksActionsSource.includes(".from(\"tasks\").insert(newRows)"),
+  );
+  ok(
+    "cada cópia recebe seu próprio TASK_CREATED (nunca reaproveita o rastro do original)",
+    tasksActionsSource.includes('eventType: OperationalEventType.TASK_CREATED,') && tasksActionsSource.includes('metadata: { task_title: row.title, origin: "duplicate" }'),
+  );
+  ok(
+    "select dos originais não traz id de comentários/histórico — só os campos de conteúdo (id é só pra identificar QUAL duplicar)",
+    tasksActionsSource.includes('.select("id, client_id, title, type, assignee_id, due_date, priority, notes")'),
+  );
+}
+
+console.log("\n17 — exclusão em lote: admin-only, uma leitura + um delete, nunca uma chamada por item\n");
+{
+  const tasksActionsSource = readFileSync(join(__dirname, "../src/app/clients/tasks-actions.ts"), "utf8");
+  const pageClientSource = readFileSync(join(__dirname, "../src/app/pendencias/pendencias-page-client.tsx"), "utf8");
+
+  ok(
+    "bulkDeleteTasksAction exige admin (mesma regra da exclusão individual)",
+    /export async function bulkDeleteTasksAction[\s\S]{0,300}requireAdmin\(\)/.test(tasksActionsSource),
+  );
+  ok(
+    "bulkDeleteTasksAction apaga todos os selecionados numa única chamada (.delete().in(\"id\", taskIds)), nunca um delete por item",
+    tasksActionsSource.includes('.from("tasks").delete().in("id", taskIds)'),
+  );
+  ok(
+    "botão 'Excluir' da barra de ação em lote só aparece pra admin (isAdmin &&)",
+    /isAdmin &&\s*\(confirmingBulkDelete/.test(pageClientSource),
+  );
+  ok(
+    "confirmação de exclusão em lote avisa explicitamente que é permanente",
+    pageClientSource.includes("Isso é permanente."),
+  );
+  ok(
+    "cancelar a confirmação de exclusão em lote (botão 'Não') não dispara nenhuma action, só fecha o estado de confirmação",
+    /onClick=\{\(\) => setConfirmingBulkDelete\(false\)\}/.test(pageClientSource),
+  );
+  const duplicateButtonBlock = pageClientSource.match(/onClick=\{handleBulkDuplicate\}[\s\S]*?<\/button>/);
+  ok(
+    "botão 'Duplicar' da barra de ação em lote NÃO é restrito a admin (qualquer usuário autenticado pode duplicar)",
+    !!duplicateButtonBlock && !duplicateButtonBlock[0].includes("isAdmin"),
+  );
+}
+
+console.log("\n18 — seleção respeita filtros: 'todas visíveis' nunca inclui item escondido por filtro\n");
+{
+  const pageClientSource = readFileSync(join(__dirname, "../src/app/pendencias/pendencias-page-client.tsx"), "utf8");
+  ok(
+    "visibleIds deriva de `filtered` (o recorte já filtrado), nunca da lista completa `items`",
+    /const visibleIds = useMemo\(\(\) => filtered\.map/.test(pageClientSource),
+  );
+  ok(
+    "toggleSelectAllVisible só adiciona/remove ids de visibleIds, nunca de items inteiro",
+    /function toggleSelectAllVisible\(\) \{[\s\S]{0,300}for \(const id of visibleIds\)/.test(pageClientSource),
+  );
+}
+
+console.log("\n19 — identidade visual de prioridade: 4 cores distintas, sem azul (restrição de marca KOFF)\n");
+{
+  const priorities = ["urgente", "alta", "normal", "baixa"] as const;
+  const dotClasses = priorities.map((p) => TASK_PRIORITY_DOT_CLASS[p]);
+  ok("as 4 prioridades têm classes de ponto TODAS diferentes entre si", new Set(dotClasses).size === 4);
+
+  const badgeClasses = priorities.map((p) => TASK_PRIORITY_BADGE_CLASSES[p]);
+  ok("as 4 prioridades têm classes de badge TODAS diferentes entre si", new Set(badgeClasses).size === 4);
+
+  ok(
+    "nenhuma classe de prioridade usa 'blue' (restrição de marca: azul foi deliberadamente eliminado do código)",
+    !dotClasses.some((c) => c.includes("blue")) && !badgeClasses.some((c) => c.includes("blue")),
+  );
+
+  const rowSource = readFileSync(join(__dirname, "../src/app/pendencias/pendencia-row.tsx"), "utf8");
+  const drawerSource = readFileSync(join(__dirname, "../src/app/pendencias/pendencia-drawer.tsx"), "utf8");
+  ok("a linha da lista usa TASK_PRIORITY_DOT_CLASS (ponto pequeno, não pinta a linha inteira)", rowSource.includes("TASK_PRIORITY_DOT_CLASS[item.priority]"));
+  ok("o drawer também usa TASK_PRIORITY_DOT_CLASS (mesma identidade visual, consistente)", drawerSource.includes("TASK_PRIORITY_DOT_CLASS[item.priority]"));
+}
+
+console.log("\n20 — SearchableSelect/SearchableMultiSelect: busca case-insensitive por substring\n");
+{
+  function opt(id: string, label: string): SearchableSelectOption {
+    return { id, label };
+  }
+  const options = [opt("1", "Kaizen"), opt("2", "Kaizen Digital"), opt("3", "Acme"), opt("4", "beta ltda")];
+
+  check(
+    "busca 'kai' (minúsculo) encontra 'Kaizen'/'Kaizen Digital' (case-insensitive)",
+    filterSearchableOptions(options, "kai").map((o) => o.id),
+    ["1", "2"],
+  );
+  check(
+    "busca 'KAI' (maiúsculo) encontra o mesmo resultado — nunca depende de caixa",
+    filterSearchableOptions(options, "KAI").map((o) => o.id),
+    ["1", "2"],
+  );
+  check("busca por substring no meio da palavra também encontra ('eta' em 'beta ltda')", filterSearchableOptions(options, "eta").map((o) => o.id), ["4"]);
+  check("query vazia (ou só espaços) devolve todas as opções, sem filtrar", filterSearchableOptions(options, "   ").map((o) => o.id), ["1", "2", "3", "4"]);
+  check("busca sem nenhum resultado devolve lista vazia (nunca undefined/erro)", filterSearchableOptions(options, "zzz-nao-existe"), []);
+  check(
+    "busca nunca casa contra sublabel (ex.: '(inativo)'), só contra label",
+    filterSearchableOptions([{ id: "5", label: "Fulano", sublabel: "(inativo)" }], "inativo"),
+    [],
+  );
+}
+
+console.log("\n21 — descrição: reaproveita o campo `notes` já existente, textarea maior no drawer\n");
+{
+  const drawerSource = readFileSync(join(__dirname, "../src/app/pendencias/pendencia-drawer.tsx"), "utf8");
+  const formSource = readFileSync(join(__dirname, "../src/app/clients/inline-task-form.tsx"), "utf8");
+
+  ok(
+    "TaskFormFields aceita notesRows/notesLabel configuráveis (default preserva comportamento existente nos outros lugares)",
+    formSource.includes("notesRows = 2,") && formSource.includes('notesLabel = "Observações (opcional)",'),
+  );
+  ok("drawer de Pendências passa notesRows=7 (textarea grande, 6-8 linhas confortáveis)", drawerSource.includes("notesRows={7}"));
+  ok('drawer de Pendências rotula o campo como "Descrição" (separado do título)', drawerSource.includes('notesLabel="Descrição"'));
+  ok(
+    "drawer não cria nenhum campo novo — defaultNotes vem de item.notes, a mesma coluna de sempre",
+    drawerSource.includes("defaultNotes={item.notes}"),
+  );
+  ok(
+    "indicador de descrição na linha é discreto (ícone com tooltip), nunca o texto completo inline",
+    readFileSync(join(__dirname, "../src/app/pendencias/pendencia-row.tsx"), "utf8").includes('<Tooltip label="Tem descrição">'),
   );
 }
 

@@ -237,6 +237,10 @@ export async function sendActionItemToSprintAction(actionItemId: string, clientI
         assignee_id: item.responsible_id,
         due_date: item.due_date ?? nextSprint.start_date,
         sprint_id: nextSprint.id,
+        // Gestor clicou "Enviar para próxima sprint" — ato humano
+        // explícito, nunca gerado por template (Etapa "Pendências —
+        // Correção de Origem").
+        origin: "manual" as const,
       }),
     )
     .select("id")

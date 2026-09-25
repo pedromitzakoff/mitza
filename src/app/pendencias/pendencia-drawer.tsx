@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import type { PendenciaItem } from "@/lib/pendencias";
-import { TASK_STATUS_BADGE_CLASSES, TASK_STATUS_LABEL, TASK_TYPE_LABEL, TASK_PRIORITY_BADGE_CLASSES, TASK_PRIORITY_LABEL } from "@/app/clients/task-labels";
+import {
+  TASK_STATUS_BADGE_CLASSES,
+  TASK_STATUS_LABEL,
+  TASK_TYPE_LABEL,
+  TASK_PRIORITY_BADGE_CLASSES,
+  TASK_PRIORITY_DOT_CLASS,
+  TASK_PRIORITY_LABEL,
+} from "@/app/clients/task-labels";
 import { formatDueDate } from "@/app/clients/task-row";
 import { InlineEditTaskForm, type InlineTaskManagerOption } from "@/app/clients/inline-task-form";
 import { CommentThread, type CommentItem } from "@/app/clients/comment-thread";
@@ -80,7 +87,8 @@ export function PendenciaDrawer({
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TASK_STATUS_BADGE_CLASSES[item.status]}`}>
             {TASK_STATUS_LABEL[item.status]}
           </span>
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TASK_PRIORITY_BADGE_CLASSES[item.priority]}`}>
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${TASK_PRIORITY_BADGE_CLASSES[item.priority]}`}>
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TASK_PRIORITY_DOT_CLASS[item.priority]}`} aria-hidden="true" />
             {TASK_PRIORITY_LABEL[item.priority]}
           </span>
           <span className="text-xs text-overview-text-secondary">{TASK_TYPE_LABEL[item.type]}</span>
@@ -111,14 +119,21 @@ export function PendenciaDrawer({
               open
               hideTrigger
               onOpenChange={() => {}}
+              // Seção 3 do pedido: TÍTULO (acima) e DESCRIÇÃO claramente
+              // separados, textarea grande e confortável (6-8 linhas
+              // visíveis) — mesmo campo `notes` de sempre, nunca outro.
+              notesRows={7}
+              notesLabel="Descrição"
             />
           </div>
         )}
 
         {item.notes && isTerminal && (
           <div className="mt-4">
-            <p className="text-xs font-medium text-overview-text-secondary">Observações</p>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-overview-text-primary">{item.notes}</p>
+            <p className="text-xs font-medium text-overview-text-secondary">Descrição</p>
+            <p className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md border border-overview-border p-2 text-sm text-overview-text-primary">
+              {item.notes}
+            </p>
           </div>
         )}
 

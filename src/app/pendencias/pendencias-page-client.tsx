@@ -17,8 +17,10 @@ import { todayDateString } from "@/lib/today";
 import type { TaskPriority, TaskStatus } from "@/lib/supabase/database.types";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_LABEL } from "@/app/clients/task-labels";
 import {
+  bulkDeleteTasksAction,
   createTaskInlineAction,
   deleteTaskAction,
+  duplicateTasksAction,
   reopenTaskAction,
   updateTaskAssigneeInlineAction,
   updateTaskClientInlineAction,
@@ -28,10 +30,13 @@ import {
   type EditableNonTerminalStatus,
 } from "@/app/clients/tasks-actions";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SearchableMultiSelect, SearchableSelect } from "@/components/ui/searchable-select";
 import { useToast } from "@/app/toast-provider";
 import { PendenciaRow } from "./pendencia-row";
 import { PendenciaDrawer } from "./pendencia-drawer";
 import type { PendenciasAssigneeOption, PendenciasClientOption } from "./pendencias-data";
+
+const INTERNAL_OPTION_ID = "__interna__";
 
 /**
  * Etapa "Pendências — Demandas": os quick filters passaram a recortar por
@@ -171,35 +176,6 @@ function QuickCreateForm({
   );
 }
 
-function MultiSelectDisclosure({
-  label,
-  options,
-  selected,
-  onToggle,
-}: {
-  label: string;
-  options: { value: string; label: string }[];
-  selected: string[];
-  onToggle: (value: string) => void;
-}) {
-  return (
-    <details className="relative">
-      <summary className="mitza-pressable cursor-pointer list-none rounded-md border border-overview-border px-2 py-1 text-xs text-overview-text-primary hover:bg-overview-surface-hover">
-        {label}
-        {selected.length > 0 ? ` (${selected.length})` : ""}
-      </summary>
-      <div className="absolute z-20 mt-1 w-44 rounded-md border border-overview-border bg-overview-surface p-1.5 shadow-[var(--shadow-float)]">
-        {options.map((option) => (
-          <label key={option.value} className="flex items-center gap-1.5 rounded px-1 py-1 text-xs hover:bg-overview-surface-hover">
-            <input type="checkbox" checked={selected.includes(option.value)} onChange={() => onToggle(option.value)} className="accent-brand" />
-            {option.label}
-          </label>
-        ))}
-      </div>
-    </details>
-  );
-}
-
 /**
  * Orquestrador client-side da Etapa "Pendências" — filtro/agrupamento
  * rodam inteiramente no navegador (`lib/pendencias.ts`, puro) sobre os
@@ -234,6 +210,9 @@ export function PendenciasPageClient({
   const [items, setItems] = useState(initialItems);
   const [syncedInitialItems, setSyncedInitialItems] = useState(initialItems);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
+  const [bulkPending, setBulkPending] = useState(false);
   const { showToast } = useToast();
 
   // Padrão oficial do React pra "ajustar estado quando uma prop muda"
@@ -259,6 +238,34 @@ export function PendenciasPageClient({
   );
   const groups = useMemo(() => groupPendencias(filtered, groupBy, today), [filtered, groupBy, today]);
   const drawerItem = drawerTaskId ? (items.find((item) => item.id === drawerTaskId) ?? null) : null;
+
+  // Seção 5 do pedido: "visíveis" = o recorte atual (`filtered`, já com
+  // todos os filtros aplicados) — nunca a lista completa. Sem paginação
+  // hoje, então "visível" e "filtrado" são o mesmo conjunto; se uma
+  // paginação existir no futuro, é só este array que precisa mudar.
+  const visibleIds = useMemo(() => filtered.map((item) => item.id), [filtered]);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+
+  function toggleSelect(taskId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  }
+
+  function toggleSelectAllVisible() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        for (const id of visibleIds) next.delete(id);
+      } else {
+        for (const id of visibleIds) next.add(id);
+      }
+      return next;
+    });
+  }
 
   function patchItem(taskId: string, patch: Partial<PendenciaItem>) {
     setItems((prev) => prev.map((item) => (item.id === taskId ? { ...item, ...patch } : item)));
@@ -350,6 +357,38 @@ export function PendenciasPageClient({
     showToast("Pendência excluída.");
   }
 
+  async function handleBulkDuplicate() {
+    setBulkPending(true);
+    const result = await duplicateTasksAction(Array.from(selectedIds));
+    setBulkPending(false);
+    if (result?.error) {
+      showToast(result.error, "error");
+      return;
+    }
+    showToast(result?.message ?? "Demandas duplicadas.");
+    setSelectedIds(new Set());
+    // As cópias são itens NOVOS — chegam via revalidatePath (prop `items`
+    // muda, sincronizado no ajuste de render acima), nunca inseridas
+    // otimisticamente aqui (não temos os dados completos delas ainda,
+    // ex.: nome do cliente/responsável resolvidos por join).
+  }
+
+  async function handleBulkDelete() {
+    setBulkPending(true);
+    const idsToDelete = Array.from(selectedIds);
+    const result = await bulkDeleteTasksAction(idsToDelete);
+    setBulkPending(false);
+    setConfirmingBulkDelete(false);
+    if (result?.error) {
+      showToast(result.error, "error");
+      return;
+    }
+    showToast(result?.message ?? "Demandas excluídas.");
+    setItems((prev) => prev.filter((item) => !idsToDelete.includes(item.id)));
+    if (drawerTaskId && idsToDelete.includes(drawerTaskId)) setDrawerTaskId(null);
+    setSelectedIds(new Set());
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
       <div>
@@ -375,64 +414,58 @@ export function PendenciasPageClient({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <select
-          value={filters.internalOnly ? "interna" : (filters.clientId ?? "")}
-          onChange={(event) => {
-            const value = event.target.value;
-            setFilters((prev) => ({ ...prev, internalOnly: value === "interna", clientId: value === "interna" ? null : value || null }));
-          }}
-          aria-label="Filtrar por cliente"
-          className={fieldClasses}
-        >
-          <option value="">Todos os clientes</option>
-          <option value="interna">Interna</option>
-          {clientOptions.map((client) => (
-            <option key={client.id} value={client.id}>
-              {client.name}
-            </option>
-          ))}
-        </select>
+        <div className="w-44">
+          <SearchableSelect
+            options={[{ id: INTERNAL_OPTION_ID, label: "Interna" }, ...clientOptions.map((c) => ({ id: c.id, label: c.name }))]}
+            selectedId={filters.internalOnly ? INTERNAL_OPTION_ID : filters.clientId}
+            onSelect={(id) =>
+              setFilters((prev) => ({ ...prev, internalOnly: id === INTERNAL_OPTION_ID, clientId: id === INTERNAL_OPTION_ID ? null : id }))
+            }
+            placeholder="Todos os clientes"
+            allLabel="Todos os clientes"
+            searchPlaceholder="Buscar cliente..."
+            ariaLabel="Filtrar por cliente"
+          />
+        </div>
 
-        <select
-          value={filters.assigneeId ?? ""}
-          onChange={(event) => setFilters((prev) => ({ ...prev, assigneeId: event.target.value || null }))}
-          aria-label="Filtrar por responsável"
-          className={fieldClasses}
-        >
-          <option value="">Todos os responsáveis</option>
-          {assigneeOptions.map((member) => (
-            <option key={member.id} value={member.id}>
-              {member.name}
-            </option>
-          ))}
-        </select>
+        <div className="w-44">
+          <SearchableSelect
+            options={assigneeOptions.map((m) => ({ id: m.id, label: m.name, sublabel: m.status === "inativo" ? "(inativo)" : undefined }))}
+            selectedId={filters.assigneeId}
+            onSelect={(id) => setFilters((prev) => ({ ...prev, assigneeId: id }))}
+            placeholder="Todos os responsáveis"
+            allLabel="Todos os responsáveis"
+            searchPlaceholder="Buscar responsável..."
+            ariaLabel="Filtrar por responsável"
+          />
+        </div>
 
-        <MultiSelectDisclosure
-          label="Status"
-          options={EDITABLE_STATUSES.concat("atrasado").map((status) => ({ value: status, label: TASK_STATUS_LABEL[status] }))}
-          selected={filters.statuses}
-          onToggle={(value) =>
+        <SearchableMultiSelect
+          options={EDITABLE_STATUSES.concat("atrasado").map((status) => ({ id: status, label: TASK_STATUS_LABEL[status] }))}
+          selectedIds={filters.statuses}
+          onToggle={(id) =>
             setFilters((prev) => ({
               ...prev,
-              statuses: prev.statuses.includes(value as TaskStatus)
-                ? prev.statuses.filter((s) => s !== value)
-                : [...prev.statuses, value as TaskStatus],
+              statuses: prev.statuses.includes(id as TaskStatus) ? prev.statuses.filter((s) => s !== id) : [...prev.statuses, id as TaskStatus],
             }))
           }
+          onClear={() => setFilters((prev) => ({ ...prev, statuses: [] }))}
+          triggerLabel="Status"
+          searchPlaceholder="Buscar status..."
         />
 
-        <MultiSelectDisclosure
-          label="Prioridade"
-          options={TASK_PRIORITY_OPTIONS}
-          selected={filters.priorities}
-          onToggle={(value) =>
+        <SearchableMultiSelect
+          options={TASK_PRIORITY_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
+          selectedIds={filters.priorities}
+          onToggle={(id) =>
             setFilters((prev) => ({
               ...prev,
-              priorities: prev.priorities.includes(value as TaskPriority)
-                ? prev.priorities.filter((p) => p !== value)
-                : [...prev.priorities, value as TaskPriority],
+              priorities: prev.priorities.includes(id as TaskPriority) ? prev.priorities.filter((p) => p !== id) : [...prev.priorities, id as TaskPriority],
             }))
           }
+          onClear={() => setFilters((prev) => ({ ...prev, priorities: [] }))}
+          triggerLabel="Prioridade"
+          searchPlaceholder="Buscar prioridade..."
         />
 
         <label className="flex items-center gap-1.5 text-xs text-overview-text-secondary">
@@ -470,6 +503,20 @@ export function PendenciasPageClient({
 
       <div className="mt-4 flex flex-col gap-4">
         {groups.length === 0 && <EmptyState size="sm">Nenhuma demanda encontrada com esses filtros.</EmptyState>}
+
+        {groups.length > 0 && (
+          <label className="flex w-fit items-center gap-1.5 text-xs text-overview-text-secondary">
+            <input
+              type="checkbox"
+              checked={allVisibleSelected}
+              onChange={toggleSelectAllVisible}
+              aria-label="Selecionar todas as demandas visíveis"
+              className="h-3.5 w-3.5 cursor-pointer accent-brand"
+            />
+            Selecionar todas ({visibleIds.length})
+          </label>
+        )}
+
         {groups.map((group) => (
           <div key={group.key} className="rounded-lg border border-overview-border">
             <div className="flex items-center gap-2 border-b border-overview-border bg-overview-surface-subtle px-2 py-1.5">
@@ -484,6 +531,8 @@ export function PendenciasPageClient({
                   clientOptions={clientOptions}
                   assigneeOptions={assigneeOptions}
                   isAdmin={isAdmin}
+                  selected={selectedIds.has(item.id)}
+                  onToggleSelect={toggleSelect}
                   onOpenDrawer={setDrawerTaskId}
                   onUpdateStatus={handleUpdateStatus}
                   onUpdatePriority={handleUpdatePriority}
@@ -498,6 +547,60 @@ export function PendenciasPageClient({
           </div>
         ))}
       </div>
+
+      {selectedIds.size > 0 && (
+        <div className="fixed inset-x-0 bottom-4 z-30 flex justify-center px-4">
+          <div className="flex items-center gap-3 rounded-full border border-overview-border bg-overview-surface px-4 py-2 shadow-[var(--shadow-float)]">
+            <span className="text-xs font-medium text-overview-text-primary">
+              {selectedIds.size} selecionada{selectedIds.size === 1 ? "" : "s"}
+            </span>
+            <button
+              type="button"
+              disabled={bulkPending}
+              onClick={handleBulkDuplicate}
+              className="mitza-pressable rounded-md border border-overview-border px-2.5 py-1 text-xs font-medium text-overview-text-primary hover:bg-overview-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Duplicar
+            </button>
+            {isAdmin &&
+              (confirmingBulkDelete ? (
+                <span className="flex items-center gap-2 text-xs">
+                  <span className="text-overview-text-secondary">Excluir {selectedIds.size} demanda{selectedIds.size === 1 ? "" : "s"}? Isso é permanente.</span>
+                  <button
+                    type="button"
+                    disabled={bulkPending}
+                    onClick={handleBulkDelete}
+                    className="font-medium text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400"
+                  >
+                    {bulkPending ? "Excluindo..." : "Sim"}
+                  </button>
+                  <button type="button" onClick={() => setConfirmingBulkDelete(false)} className="text-overview-text-secondary hover:underline">
+                    Não
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={bulkPending}
+                  onClick={() => setConfirmingBulkDelete(true)}
+                  className="mitza-pressable rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+                >
+                  Excluir
+                </button>
+              ))}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedIds(new Set());
+                setConfirmingBulkDelete(false);
+              }}
+              className="text-xs text-overview-text-secondary hover:underline"
+            >
+              Limpar seleção
+            </button>
+          </div>
+        </div>
+      )}
 
       {drawerItem && (
         <PendenciaDrawer

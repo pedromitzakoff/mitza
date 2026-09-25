@@ -13,6 +13,7 @@ import { withOriginalDueDate } from "@/lib/task-creation";
 import { toUserFacingError } from "@/lib/user-facing-error";
 import { queryOrError } from "@/lib/require-query";
 import { checkWorkspaceClientAction } from "@/lib/require-workspace-client";
+import { buildDuplicateTaskRow } from "@/lib/pendencias";
 import type { TaskPriority, TaskRecurrence, TaskStatus, TaskType } from "@/lib/supabase/database.types";
 
 function resolveReturnTo(formData: FormData, fallback: string): string {
@@ -83,6 +84,12 @@ async function performCreateTask(
         notes: fields.notes,
         sprint_id: fields.sprintId,
         priority: fields.priority,
+        // Todo caminho que chama performCreateTask é uma pessoa preenchendo
+        // um formulário (quick-create de Pendências, "+ Tarefa" do
+        // cliente/Sprint, rota legada /tasks/new) — nunca o gerador
+        // automático de Modelo de Tarefa de Sprint (esse insere direto via
+        // SQL, `generate_sprint_tasks_from_templates`, nunca por aqui).
+        origin: "manual" as const,
       }),
     )
     .select("id")
@@ -457,6 +464,11 @@ export async function completeTaskAction(taskId: string, clientId: string | null
         due_date: nextDate,
         recurrence: task.recurrence,
         notes: task.notes,
+        // Continuação de uma recorrência leve (tasks.recurrence — não
+        // confundir com o eixo separado `recurring_tasks`), que só existe
+        // em tarefa que uma pessoa criou (o gerador de Modelo de Tarefa de
+        // Sprint nunca grava recurrence != 'nenhuma') — sempre "manual".
+        origin: "manual" as const,
       }),
     );
   }
@@ -617,8 +629,15 @@ export async function deleteTaskAction(
 }
 
 function pendenciasRevalidate(clientId: string | null, otherClientId?: string | null) {
-  if (clientId) revalidatePath(`/clients/${clientId}`);
-  if (otherClientId && otherClientId !== clientId) revalidatePath(`/clients/${otherClientId}`);
+  pendenciasRevalidateMany([clientId, otherClientId ?? null]);
+}
+
+/** Mesma revalidação de sempre, generalizada pra N clientes de uma vez —
+ * usada pelas ações em lote (duplicar/excluir várias demandas, que podem
+ * tocar clientes diferentes numa única chamada). */
+function pendenciasRevalidateMany(clientIds: (string | null)[]) {
+  const unique = new Set(clientIds.filter((id): id is string => id !== null));
+  for (const clientId of unique) revalidatePath(`/clients/${clientId}`);
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
@@ -883,4 +902,140 @@ export async function reopenTaskAction(taskId: string, clientId: string | null):
 
   pendenciasRevalidate(clientId);
   return { message: "Pendência reaberta." };
+}
+
+/**
+ * Duplicar demandas em lote (Etapa "Pendências — Segunda Rodada", seção 6)
+ * — UMA leitura dos originais + UM insert com todas as cópias, nunca uma
+ * requisição por item selecionado (seção 11 do pedido, performance).
+ *
+ * Preserva: título, descrição (`notes`), cliente, responsável, prioridade,
+ * prazo, tipo. NUNCA copia: comentários (tabela própria, nada aqui os
+ * referencia), `operational_events`/histórico (cada cópia recebe seu
+ * próprio TASK_CREATED, nunca herda o rastro do original),
+ * completion_count/reassignment_count/due_date_change_count/reopened_count
+ * (ficam no default 0 — identidade nova, sem histórico herdado),
+ * completed_at (null — mesmo se o original estava concluído). `sprint_id`
+ * também não é copiado (null): uma cópia é sempre uma demanda solta nova,
+ * mesmo padrão de toda criação manual em Pendências.
+ *
+ * Status inicial: sempre "pendente" ("A fazer"), NUNCA herdado do
+ * original — decisão validada contra a arquitetura (mesmo raciocínio de
+ * `reopenTaskAction`: reabrir também sempre volta pra "pendente", nunca
+ * pro status anterior a "feito"/"nao_realizado" — consistente).
+ * `origin: 'manual'` sempre — duplicar é, em si, um ato humano explícito.
+ */
+export async function duplicateTasksAction(taskIds: string[]): Promise<{ error?: string; message?: string }> {
+  if (taskIds.length === 0) return { error: "Nenhuma demanda selecionada." };
+
+  const supabase = await createSupabaseClient();
+  const profile = await getCurrentProfile();
+  if (!profile) redirect("/login");
+
+  const originalsResult = await queryOrError<
+    {
+      id: string;
+      client_id: string | null;
+      title: string;
+      type: TaskType;
+      assignee_id: string | null;
+      due_date: string;
+      priority: TaskPriority;
+      notes: string | null;
+    }[]
+  >(
+    supabase.from("tasks").select("id, client_id, title, type, assignee_id, due_date, priority, notes").in("id", taskIds),
+    "tasks:duplicate-originals",
+    "Não foi possível carregar as demandas selecionadas.",
+  );
+  if ("error" in originalsResult) return { error: originalsResult.error };
+  const originals = originalsResult.data ?? [];
+  if (originals.length === 0) return { error: "Nenhuma demanda encontrada." };
+
+  const uniqueClientIds = Array.from(new Set(originals.map((o) => o.client_id).filter((id): id is string => id !== null)));
+  for (const clientId of uniqueClientIds) {
+    const blocked = await checkWorkspaceClientAction(supabase, clientId);
+    if (blocked) return { error: blocked };
+  }
+
+  const newRows = originals.map((original) => withOriginalDueDate(buildDuplicateTaskRow(original)));
+
+  const { data: created, error } = await supabase.from("tasks").insert(newRows).select("id, client_id, title");
+  if (error || !created) {
+    return { error: toUserFacingError(error, "Não foi possível duplicar as demandas.") };
+  }
+
+  const actor = actorFromProfile(profile);
+  for (const row of created) {
+    await recordOperationalEvent(supabase, actor, {
+      eventType: OperationalEventType.TASK_CREATED,
+      entityType: "task",
+      entityId: row.id,
+      clientId: row.client_id,
+      source: "web",
+      metadata: { task_title: row.title, origin: "duplicate" },
+    });
+  }
+
+  pendenciasRevalidateMany(uniqueClientIds);
+  return { message: `${created.length} demanda${created.length === 1 ? "" : "s"} duplicada${created.length === 1 ? "" : "s"}.` };
+}
+
+/**
+ * Exclusão em lote (Etapa "Pendências — Segunda Rodada", seção 6) — admin
+ * only, mesma regra do botão de exclusão individual (`deleteTaskAction`).
+ * Auditoria feita antes de implementar: `comments.commentable_id` (ver
+ * `supabase/schema.sql`) NUNCA foi uma foreign key de verdade — é uma
+ * coluna polimórfica solta (`commentable_type` + `commentable_id`, sem
+ * `references`), então excluir uma tarefa NUNCA apaga em cascata seus
+ * comentários — eles ficam órfãos (permanecem no banco, apenas
+ * inacessíveis pela interface, já que nada mais os referencia). Esse já é
+ * o comportamento aceito pra exclusão individual hoje; esta ação em lote
+ * só aplica a MESMA estratégia várias vezes, nunca uma nova. Auditoria
+ * histórica: cada exclusão grava TASK_DELETED em `operational_events`
+ * ANTES do delete de fato — `entity_id` ali nunca é uma foreign key
+ * (entidade polimórfica), então o evento sobrevive à tarefa apagada,
+ * preservando o rastro mesmo sem a linha original.
+ *
+ * UMA leitura + UM delete + UM insert de eventos — nunca uma chamada por
+ * item selecionado.
+ */
+export async function bulkDeleteTasksAction(taskIds: string[]): Promise<{ error?: string; message?: string }> {
+  if (taskIds.length === 0) return { error: "Nenhuma demanda selecionada." };
+
+  const profile = await requireAdmin();
+  const supabase = await createSupabaseClient();
+
+  const tasksResult = await queryOrError<
+    { id: string; title: string; type: TaskType; due_date: string; assignee_id: string | null; client_id: string | null }[]
+  >(
+    supabase.from("tasks").select("id, title, type, due_date, assignee_id, client_id").in("id", taskIds),
+    "tasks:bulk-delete-audit",
+    "Não foi possível carregar os dados das demandas para o registro de auditoria.",
+  );
+  const tasks = "data" in tasksResult ? (tasksResult.data ?? []) : [];
+
+  const { error } = await supabase.from("tasks").delete().in("id", taskIds);
+  if (error) return { error: toUserFacingError(error, "Não foi possível excluir as demandas.") };
+
+  const actor = actorFromProfile(profile);
+  for (const task of tasks) {
+    await recordOperationalEvent(supabase, actor, {
+      eventType: OperationalEventType.TASK_DELETED,
+      entityType: "task",
+      entityId: task.id,
+      clientId: task.client_id,
+      source: "web",
+      metadata: {
+        task_title: task.title,
+        task_type: task.type,
+        due_date: task.due_date,
+        assignee_team_member_id: task.assignee_id,
+      },
+    });
+  }
+
+  const uniqueClientIds = Array.from(new Set(tasks.map((t) => t.client_id).filter((id): id is string => id !== null)));
+  pendenciasRevalidateMany(uniqueClientIds);
+  return { message: `${tasks.length} demanda${tasks.length === 1 ? "" : "s"} excluída${tasks.length === 1 ? "" : "s"}.` };
 }

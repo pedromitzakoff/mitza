@@ -63,19 +63,23 @@ export interface PendenciasRawData {
  * `/operation`/`/sprints`/Dashboard. Pendência INTERNA (sem cliente) nunca é
  * afetada por esse filtro (não existe "cliente pausado" pra ela).
  *
- * Etapa "Pendências — Demandas" (correção de conceito): Pendências mostra
- * só DEMANDA criada manualmente por alguém — nunca rotina operacional nem
- * tarefa gerada pelo sistema. `tasks.template_id` já é o sinal existente
- * (auditado, nenhuma coluna nova) que distingue os dois: toda tarefa
- * gerada automaticamente por um Modelo de Tarefa de Sprint
- * (`sprint_task_templates`, ver /settings/sprint-task-templates) grava seu
- * `template_id`; toda tarefa criada por uma pessoa — via este quick-create,
- * via "+ Tarefa" no cliente, ou pelo formulário legado — nunca grava
- * `template_id` (fica `null`). `.is("template_id", null)` é portanto a
- * REGRA que decide "esta task aparece em Pendências" — filtrada aqui, na
- * própria query, nunca em memória (mais barato, e a única fonte da regra).
- * Recorrências (`recurring_tasks`) nunca aparecem aqui em nenhuma hipótese
- * — são um eixo à parte (permanente, execuções em
+ * Etapa "Pendências — Correção de Origem": Pendências mostra só DEMANDA
+ * criada manualmente por alguém — nunca rotina operacional nem tarefa
+ * gerada pelo sistema. A regra é `tasks.origin = 'manual'` — coluna
+ * dedicada e explícita, gravada no momento da criação por CADA caminho que
+ * insere em `tasks` (nunca inferida). Substituiu `template_id is null`:
+ * esse sinal parecia suficiente mas não era — uma migration antiga (Etapa
+ * 12, `global-sprint-task-templates.sql`) zerou `template_id` em massa ao
+ * trocar de modelo de template, então ~124 tarefas legadas de rotina
+ * (Checar saldo/Otimização/Report, geradas automaticamente antes daquela
+ * troca) ficaram com `template_id` nulo — indistinguíveis de demanda por
+ * esse campo. `origin` não sofre esse problema: é decidido uma vez, na
+ * criação, e nunca mais recalculado.
+ *
+ * `.eq("origin", "manual")` é portanto a REGRA que decide "esta task
+ * aparece em Pendências" — filtrada aqui, na própria query, nunca em
+ * memória. Recorrências (`recurring_tasks`) nunca aparecem aqui em nenhuma
+ * hipótese — são um eixo à parte (permanente, execuções em
  * `recurring_task_executions`), sem nenhuma linha em `tasks`; continuam
  * tratadas só pela Operação/`/sprints`, nunca representadas nesta página.
  */
@@ -87,7 +91,7 @@ export async function loadPendenciasRawData(supabase: Supabase): Promise<Pendenc
         .select(
           "id, title, type, status, priority, due_date, notes, sprint_id, client_id, client:clients(id, name, status), assignee:team_members!tasks_assignee_id_fkey(id, name, status)",
         )
-        .is("template_id", null),
+        .eq("origin", "manual"),
       "tasks:pendencias",
     ),
     requireQuery(supabase.from("clients").select("id, name").eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS).order("name"), "clients:pendencias"),

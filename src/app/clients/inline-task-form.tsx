@@ -46,6 +46,8 @@ function TaskFormFields({
   showRecurrence,
   managers,
   titleInputRef,
+  notesRows = 2,
+  notesLabel = "Observações (opcional)",
 }: {
   defaultTitle?: string;
   defaultType?: TaskType;
@@ -58,6 +60,13 @@ function TaskFormFields({
   showRecurrence: boolean;
   managers: InlineTaskManagerOption[];
   titleInputRef: React.RefObject<HTMLInputElement | null>;
+  /** Etapa "Pendências — Segunda Rodada" (seção 3): o drawer de Pendências
+   * passa um valor bem maior (6-8) — mesmo campo (`notes`), só uma área de
+   * texto confortável pra descrição em vez do textarea pequeno padrão.
+   * Omitir preserva o tamanho de sempre (2 linhas) nos outros lugares que
+   * usam este formulário (client page/Sprints/Operação). */
+  notesRows?: number;
+  notesLabel?: string;
 }) {
   return (
     <>
@@ -109,10 +118,10 @@ function TaskFormFields({
       )}
       <textarea
         name="notes"
-        rows={2}
+        rows={notesRows}
         defaultValue={defaultNotes ?? ""}
-        placeholder="Observações (opcional)"
-        className={`${fieldClasses} w-full`}
+        placeholder={notesLabel}
+        className={`${fieldClasses} w-full resize-y`}
       />
     </>
   );
@@ -245,6 +254,8 @@ export function InlineEditTaskForm({
   open: controlledOpen,
   onOpenChange,
   hideTrigger,
+  notesRows,
+  notesLabel,
 }: {
   taskId: string;
   /** `null` pra pendência interna (Etapa "Pendências") — `updateTaskInlineAction`
@@ -271,6 +282,10 @@ export function InlineEditTaskForm({
    * quem chama já fornece seu próprio gatilho de abertura (a própria linha
    * expansível em `TaskRow`). */
   hideTrigger?: boolean;
+  /** Repassados direto pra `TaskFormFields` — ver doc lá (drawer de
+   * Pendências usa uma área maior/rótulo "Descrição"). */
+  notesRows?: number;
+  notesLabel?: string;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
@@ -339,6 +354,8 @@ export function InlineEditTaskForm({
         showRecurrence={false}
         managers={managers}
         titleInputRef={titleInputRef}
+        notesRows={notesRows}
+        notesLabel={notesLabel}
       />
       {error && <p className="text-[11px] text-red-600 dark:text-red-400">{error}</p>}
       <div className="flex items-center gap-2 text-[11px]">

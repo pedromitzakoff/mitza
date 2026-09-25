@@ -1,9 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { AlignLeft } from "lucide-react";
 import type { PendenciaItem } from "@/lib/pendencias";
-import { TASK_EDITABLE_STATUS_OPTIONS, TASK_PRIORITY_BADGE_CLASSES, TASK_PRIORITY_OPTIONS, TASK_STATUS_BADGE_CLASSES } from "@/app/clients/task-labels";
+import {
+  TASK_EDITABLE_STATUS_OPTIONS,
+  TASK_PRIORITY_BADGE_CLASSES,
+  TASK_PRIORITY_DOT_CLASS,
+  TASK_PRIORITY_OPTIONS,
+  TASK_STATUS_BADGE_CLASSES,
+} from "@/app/clients/task-labels";
 import { formatDueDate } from "@/app/clients/task-row";
+import { Tooltip } from "@/components/ui/tooltip";
 import { todayDateString } from "@/lib/today";
 import type { PendenciasAssigneeOption, PendenciasClientOption } from "./pendencias-data";
 
@@ -27,6 +35,8 @@ export function PendenciaRow({
   clientOptions,
   assigneeOptions,
   isAdmin,
+  selected,
+  onToggleSelect,
   onOpenDrawer,
   onUpdateStatus,
   onUpdatePriority,
@@ -40,6 +50,8 @@ export function PendenciaRow({
   clientOptions: PendenciasClientOption[];
   assigneeOptions: PendenciasAssigneeOption[];
   isAdmin: boolean;
+  selected: boolean;
+  onToggleSelect: (taskId: string) => void;
   onOpenDrawer: (taskId: string) => void;
   onUpdateStatus: (taskId: string, status: string) => Promise<void>;
   onUpdatePriority: (taskId: string, priority: string) => Promise<void>;
@@ -65,13 +77,26 @@ export function PendenciaRow({
 
   return (
     <li className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-overview-border/60 px-2 py-1.5 last:border-0 hover:bg-overview-surface-hover">
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={() => onToggleSelect(item.id)}
+        aria-label={`Selecionar "${item.title}"`}
+        className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-brand"
+      />
+
       <button
         type="button"
         onClick={() => onOpenDrawer(item.id)}
-        className="min-w-[180px] flex-1 truncate text-left text-sm font-medium text-overview-text-primary hover:underline"
+        className="flex min-w-[180px] flex-1 items-center gap-1.5 truncate text-left text-sm font-medium text-overview-text-primary hover:underline"
         title={item.title}
       >
-        {item.title}
+        <span className="truncate">{item.title}</span>
+        {item.notes && (
+          <Tooltip label="Tem descrição">
+            <AlignLeft className="h-3 w-3 shrink-0 text-overview-text-muted" aria-hidden="true" />
+          </Tooltip>
+        )}
       </button>
 
       <select
@@ -125,19 +150,22 @@ export function PendenciaRow({
         </select>
       )}
 
-      <select
-        value={item.priority}
-        disabled={pendingField === "priority"}
-        onChange={(event) => run("priority", () => onUpdatePriority(item.id, event.target.value))}
-        aria-label="Prioridade"
-        className={`${selectClasses} w-[90px] shrink-0 ${TASK_PRIORITY_BADGE_CLASSES[item.priority]}`}
-      >
-        {TASK_PRIORITY_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <span className={`flex w-[90px] shrink-0 items-center gap-1 rounded-md px-1 ${TASK_PRIORITY_BADGE_CLASSES[item.priority]}`}>
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TASK_PRIORITY_DOT_CLASS[item.priority]}`} aria-hidden="true" />
+        <select
+          value={item.priority}
+          disabled={pendingField === "priority"}
+          onChange={(event) => run("priority", () => onUpdatePriority(item.id, event.target.value))}
+          aria-label="Prioridade"
+          className={`${selectClasses} w-full border-transparent bg-transparent px-0.5`}
+        >
+          {TASK_PRIORITY_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </span>
 
       <input
         type="date"

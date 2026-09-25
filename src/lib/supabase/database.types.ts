@@ -4,6 +4,18 @@ export type TaskType = "otimizacao" | "verificacao_saldo" | "report" | "outro" |
 export type TaskStatus = "pendente" | "em_andamento" | "aguardando" | "bloqueado" | "feito" | "atrasado" | "nao_realizado";
 export type TaskRecurrence = "nenhuma" | "diaria" | "semanal" | "mensal";
 export type TaskPriority = "urgente" | "alta" | "normal" | "baixa";
+/** Etapa "Pendências — Correção de Origem": distingue de forma EXPLÍCITA
+ * (gravada no momento da criação, nunca inferida depois) tarefa criada por
+ * uma pessoa ("manual" — inclui o quick-create de Pendências, o formulário
+ * geral de tarefa e a tarefa opcional de Revisão de Conta, sempre um ato
+ * humano deliberado) de tarefa gerada automaticamente por um Modelo de
+ * Tarefa de Sprint ("template", `generate_sprint_tasks_from_templates`).
+ * Existe porque `template_id is null` deixou de ser confiável: uma
+ * migration antiga (Etapa 12, `global-sprint-task-templates.sql`) zerou
+ * `template_id` em massa ao trocar de modelo de template, poluindo o sinal
+ * pra sempre nas linhas antigas — `origin` nunca sofre esse problema porque
+ * é gravado direto, nunca recalculado. */
+export type TaskOrigin = "manual" | "template";
 
 export type CommentableType = "sprint" | "task";
 
@@ -1371,6 +1383,7 @@ export interface Database {
           recurrence: TaskRecurrence;
           sprint_id: string | null;
           template_id: string | null;
+          origin: TaskOrigin;
           notes: string | null;
           created_at: string;
           original_due_date: string;
@@ -1393,6 +1406,12 @@ export interface Database {
           recurrence?: TaskRecurrence;
           sprint_id?: string | null;
           template_id?: string | null;
+          /** Sem default seguro em TS de propósito (tem default no banco,
+           * `'manual'`, mas cada Server Action deve decidir explicitamente
+           * — é exatamente esse hábito que evita o problema que gerou esta
+           * coluna: um campo cujo valor real ninguém mais escolhe fica
+           * fácil de esquecer/zerar sem querer numa migration futura). */
+          origin: TaskOrigin;
           notes?: string | null;
           created_at?: string;
           /** NOT NULL sem default no banco (ver operational-events.sql) —
@@ -1420,6 +1439,7 @@ export interface Database {
           recurrence?: TaskRecurrence;
           sprint_id?: string | null;
           template_id?: string | null;
+          origin?: TaskOrigin;
           notes?: string | null;
           created_at?: string;
           original_due_date?: string;

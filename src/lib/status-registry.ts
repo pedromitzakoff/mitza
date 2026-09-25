@@ -86,13 +86,38 @@ export const TASK_STATUS_REGISTRY: Record<`task.${TaskStatus}`, StatusEntry> = {
 /** Prioridade operacional (Etapa "Pendências") — dimensão nova, nunca
  * existiu antes em `tasks`. Mesmo padrão de `StatusEntry` (label/badge/
  * ordem), mas como eixo PRÓPRIO — prioridade nunca é um status (uma tarefa
- * "Bloqueada" pode ser "Urgente" ao mesmo tempo, as duas coexistem). */
+ * "Bloqueada" pode ser "Urgente" ao mesmo tempo, as duas coexistem).
+ *
+ * Etapa "Pendências — Segunda Rodada": "Baixa" saiu de um zinc quase
+ * idêntico ao de "Normal" (pouco diferenciável, achado do pedido) pro
+ * mesmo tom suave da marca já usado como "quarta cor discreta" em outro
+ * lugar do produto (`INFO`/`BRAND_SOFT`, ver Etapa "Identidade Visual
+ * KOFF" — não introduz azul, que foi deliberadamente removido do código).
+ * "Urgente"/"Alta"/"Normal" mantidos (já eram vermelho/âmbar/cinza,
+ * exatamente a progressão pedida). */
 export const TASK_PRIORITY_REGISTRY: Record<`task_priority.${TaskPriority}`, StatusEntry> = {
   "task_priority.urgente": { label: "Urgente", badgeClassName: DANGER, tone: "danger", order: 0 },
   "task_priority.alta": { label: "Alta", badgeClassName: WARNING, tone: "warning", order: 1 },
   "task_priority.normal": { label: "Normal", badgeClassName: NEUTRAL_MUTED, tone: "neutral", order: 2 },
-  "task_priority.baixa": { label: "Baixa", badgeClassName: "bg-zinc-50 text-zinc-400 dark:bg-zinc-900 dark:text-zinc-600", tone: "neutral", order: 3 },
+  "task_priority.baixa": { label: "Baixa", badgeClassName: INFO, tone: "info", order: 3 },
 };
+
+/** Cor do "pequeno indicador/ponto" de prioridade/status (seção 4 do
+ * pedido) — deriva do MESMO `tone` já definido em cada `StatusEntry`,
+ * nunca uma segunda paleta: onde já existe cor semântica (badge), o ponto
+ * só repete essa cor de forma mais compacta. */
+const TONE_DOT_CLASS: Record<StatusTone, string> = {
+  success: "bg-green-500",
+  warning: "bg-amber-500",
+  danger: "bg-red-500",
+  neutral: "bg-zinc-400 dark:bg-zinc-500",
+  info: "bg-brand",
+  brand: "bg-brand",
+};
+
+export function toneDotClassName(tone: StatusTone): string {
+  return TONE_DOT_CLASS[tone];
+}
 
 export const CLIENT_CONTRACT_STATUS_REGISTRY: Record<`client_contract.${ClientContractStatus}`, StatusEntry> = {
   "client_contract.ativo": { label: "Ativo", badgeClassName: SUCCESS, tone: "success", order: 0 },
