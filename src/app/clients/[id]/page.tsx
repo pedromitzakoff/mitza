@@ -6,14 +6,11 @@ import { requireQuery } from "@/lib/require-query";
 import {
   assertSingleCurrentSprint,
   currentMonthRange,
-  findSprintForDate,
-  getSprintTemporalStatus,
   monthRangeFromParam,
   shiftMonthParam,
   sumActualSpendForMonth,
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
-import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus } from "@/lib/spend-status";
 import { resolveBudgetEffectiveDate, computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { resolveClientMonthlyPlan, resolveTargetCostPerResult, primaryGoalResultTypeFilter } from "@/lib/client-plan";
@@ -22,7 +19,7 @@ import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { sumChannelEffectiveSpend, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatMonthLabel, formatRelativeDateTime } from "@/lib/format";
+import { formatMonthLabel } from "@/lib/format";
 import { contractStatusBannerText } from "@/lib/client-fields";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
 import { resolveOperationPriorityGroup } from "@/lib/operation-triage";
@@ -46,7 +43,13 @@ import { countOpenDemandas } from "@/lib/pendencias";
 import { loadPendenciasRawData } from "@/app/demandas/pendencias-data";
 import { formatDueDate } from "../task-row";
 import { TASK_PRIORITY_DOT_CLASS } from "../task-labels";
-import { ACCOUNT_REVIEW_OUTCOME_LABEL } from "@/lib/account-reviews";
+import { fetchClientFunnels, listCampaignsForFunnelClassification } from "@/lib/client-funnels-data";
+import { FunnelsSection } from "../funnels-section";
+import { Section } from "../section";
+import { loadOperationSectionData } from "../operation-section-data";
+import { OperationSection } from "../operation-section";
+import { generateClientUpdateAction } from "../client-update-actions";
+import { SubmitButton } from "@/app/submit-button";
 import { WorkspaceContainer } from "../workspace-container";
 import { IconButton } from "@/components/workspace/button";
 
@@ -55,40 +58,40 @@ function withParam(url: string, param: string): string {
 }
 
 /**
- * `/clients/[id]` — PAINEL PRINCIPAL do cliente (Etapa "Correção de UX do
- * Workspace", que corrige — sem desfazer — a Etapa "MITZA — Reformulação
- * Estrutural" anterior). A pergunta que esta página responde: "como está
- * esse cliente e o que preciso saber/fazer agora?".
+ * `/clients/[id]` — PAINEL PRINCIPAL do cliente (Etapa "Correção de
+ * Direção do Workspace" — sucede e corrige a Etapa "Correção de UX do
+ * Workspace" anterior). A pergunta que esta página responde: "como está
+ * esse cliente e o que preciso fazer, sem sair daqui?".
  *
- * A Fase 1 tinha transformado esta rota só na "Visão geral", uma de 5 abas
- * equivalentes (Visão geral/Performance/Operação/Demandas/Configurações)
- * — na prática, 5 mini-sistemas. Validação visual no deploy mostrou que
- * isso fragmentou demais a experiência. Esta correção reintegra Performance
- * + Operação + Demandas numa ÚNICA visão de trabalho, sem desfazer nenhuma
- * rota/loader/pipeline da Fase 1:
+ * A rodada anterior tinha reduzido Performance/Operação/Demandas a
+ * resumos, com links de aprofundamento como única forma de trabalhar o
+ * cliente de fato. Validação de uso real mostrou que isso fragmentou a
+ * experiência de novo —
+ * pedido explícito: "página completa do cliente como era antes + novo
+ * header/navegador + nova largura generosa". Esta é essa restauração.
  *
- * 1. PERFORMANCE — `AccountFollowUpPanel` (KPIs + ritmo do mês, já existia
- *    aqui) + `SecondaryGoalsPerformance`/`ConversionRateCard`, com um CTA
- *    "Ver relatório completo →" pra `/relatorio` (que continua existindo
- *    intacto — mesma Camada 1/2, nenhum cálculo duplicado).
- * 2. OPERAÇÃO — resumo leve (sprint atual, última otimização, saúde/motivo
- *    do CPA — os MESMOS dados/funções já usados por `/operation` e pela
- *    fila global de Operação, nunca uma segunda implementação) com CTA
- *    "Ver operação completa →" pra `/operation`.
- * 3. DEMANDAS — contagem + até 3 itens mais urgentes, reaproveitando
- *    `loadPendenciasRawData`/`countOpenDemandas` (MESMA fonte/regra de
- *    `/demandas` e da Home — `origin='manual'`), com CTA "Ver todas →"
- *    pra `/clients/[id]/demandas`.
+ * Auditoria feita via `git show 402e0af:src/app/clients/[id]/page.tsx`
+ * (commit imediatamente anterior à Fase 1, arquivo monolítico de 1944
+ * linhas) — comparação completa entregue à parte no relatório desta
+ * rodada. Restaura a COMPLETUDE daquela página (KPIs/Ritmo/Objetivos
+ * secundários/Conversão/Funis/Tarefas/Sprints/Histórico/Revisões/drawers)
+ * SEM voltar ao arquivo único: o corpo de Operação (Tarefas `origin=
+ * 'template'`/Sprints/Histórico/revisões/drawers) foi extraído pra
+ * `../operation-section-data.ts`/`../operation-section.tsx` — MESMO
+ * módulo usado por `/operation` (rota de aprofundamento, nunca deletada).
+ * Funis reaproveita `fetchClientFunnels`/`listCampaignsForFunnelClassification`/
+ * `FunnelsSection`, os MESMOS de `/relatorio`. Demandas reaproveita
+ * `loadPendenciasRawData`/`countOpenDemandas`, os MESMOS de
+ * `/clients/[id]/demandas` — nunca uma terceira implementação de nenhuma
+ * regra.
  *
- * `/relatorio`, `/operation`, `/clients/[id]/demandas` e `/edit` continuam
- * existindo como rotas de APROFUNDAMENTO (seção 15 do pedido de correção:
- * "as rotas da Fase 1 não foram um erro") — só deixaram de competir como
- * abas iguais no header; a barra `role="tablist"` saiu de
- * `client-workspace-header.tsx`.
- *
- * Nenhum cálculo de investimento/performance mudou nesta correção — só a
- * composição visual e a largura (`WorkspaceContainer`, ver doc-comment de
- * `workspace-container.tsx` pra a causa raiz do `max-w-5xl` estreito).
+ * Correção que NÃO volta ao bug antigo: a página anterior a 402e0af
+ * buscava `tasks` inteira (sem filtro de `origin`), misturando Demandas
+ * (`manual`) com rotina operacional (`template`) no mesmo `MonthTasksPanel`
+ * — o bug real que a Fase 1 corrigiu. Aqui, Operação (via
+ * `loadOperationSectionData`) filtra SEMPRE `origin='template'`; Demandas
+ * (via `loadPendenciasRawData`) filtra SEMPRE `origin='manual'` — cada uma
+ * com sua própria seção, nunca mais misturadas.
  */
 export default async function ClientPage({
   params,
@@ -102,10 +105,39 @@ export default async function ClientPage({
     month?: string;
     historicoOrcamento?: string;
     metricsChannel?: string;
+    task?: string;
+    taskError?: string;
+    review?: string;
+    reviewError?: string;
+    reviewDetail?: string;
+    reviewSaved?: string;
+    clientUpdateError?: string;
+    recurringTaskDetail?: string;
+    recurringTaskSprint?: string;
+    recurringTaskError?: string;
+    historyPage?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, synced, saved, month: monthQueryParam, historicoOrcamento, metricsChannel: metricsChannelParam } = await searchParams;
+  const {
+    error,
+    synced,
+    saved,
+    month: monthQueryParam,
+    historicoOrcamento,
+    metricsChannel: metricsChannelParam,
+    task: openTaskId,
+    taskError,
+    review: openReview,
+    reviewError,
+    reviewDetail: openReviewDetailId,
+    reviewSaved,
+    clientUpdateError,
+    recurringTaskDetail: openRecurringTaskId,
+    recurringTaskSprint: openRecurringTaskSprintId,
+    recurringTaskError,
+    historyPage: historyPageParam,
+  } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
   const supabase = await createSupabaseClient();
@@ -113,7 +145,7 @@ export default async function ClientPage({
   const { data: client, error: clientQueryError } = await supabase
     .from("clients")
     .select(
-      "id, name, meta_ad_account_id, status, primary_manager:team_members!clients_primary_manager_id_fkey(name), performance_goal, target_cost_per_result, avatar_url, media_channels",
+      "id, name, meta_ad_account_id, status, primary_manager:team_members!clients_primary_manager_id_fkey(name), performance_goal, target_cost_per_result, avatar_url, media_channels, dashboard_url, balance_url, monthly_closing_sheet_url",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -121,6 +153,7 @@ export default async function ClientPage({
   if (clientQueryError) console.error(`[ClientPage] falha ao buscar cliente ${id}:`, clientQueryError);
   if (!client) notFound();
 
+  const canOperate = client.status === "ativo";
   const metricsChannelOptions = resolveClientChannelScopeOptions(client.media_channels);
   const metricsChannel: VisaoGeralMetricsChannel = resolveSelectedChannelScope(metricsChannelParam, client.media_channels);
 
@@ -140,6 +173,31 @@ export default async function ClientPage({
   const nextMonthHref = `/clients/${id}?month=${shiftMonthParam({ firstDay }, 1)}`;
   const returnTo = `/clients/${id}${monthQuery}`;
   const metricsChannelBaseHref = `/clients/${id}${monthQuery}`;
+  const taskHrefPrefix = `/clients/${id}${monthQuery ? `${monthQuery}&` : "?"}task=`;
+
+  // Funis e a seção Operação (sprint/tarefas `origin='template'`/histórico/
+  // revisões — `../operation-section-data.ts`) são independentes do bloco
+  // de Performance abaixo — disparados AGORA, em paralelo com o
+  // Promise.all de Performance mais adiante (seção 18 do pedido: nenhuma
+  // cascata desnecessária, tudo que não depende de outra coisa corre
+  // junto). `await`s ficam só onde o valor é de fato consumido.
+  const funnelsPromise = Promise.all([fetchClientFunnels(supabase, id), listCampaignsForFunnelClassification(supabase, id, todayStr)]);
+  const operationSectionDataPromise = loadOperationSectionData(supabase, {
+    id,
+    firstDay,
+    lastDay,
+    today,
+    todayStr,
+    isCurrentMonth,
+    performanceGoal: client.performance_goal,
+    targetCostPerResultFallback: client.target_cost_per_result,
+    returnTo,
+    openTaskId,
+    openReviewDetailId,
+    openRecurringTaskId,
+    openRecurringTaskSprintId,
+    historyPageParam,
+  });
 
   const [sprintsRaw, dailySpend, plannedAllocations, budgetChanges, performanceTargetHistory, channelSpendRows, planningEndDate] = await Promise.all([
     requireQuery(
@@ -329,49 +387,30 @@ export default async function ClientPage({
       }
     : null;
 
-  // Demandas — resumo (Etapa "Correção de UX do Workspace", seção 10 do
-  // pedido): contagem + até 3 itens mais urgentes, nunca a List View
-  // inteira. Reaproveita `loadPendenciasRawData` (MESMA fonte/regra de
-  // `/clients/[id]/demandas` e da área global — `origin='manual'`), nunca
-  // uma terceira implementação da regra nem uma query paralela.
+  // Funis — seção completa (não mais preview), MESMOS loaders/componente
+  // de `/relatorio` (`fetchClientFunnels`/`listCampaignsForFunnelClassification`/
+  // `FunnelsSection`), independente do mês em exibição (cadastro do
+  // cliente, não um recorte de data).
+  const [clientFunnels, funnelClassificationCampaigns] = await funnelsPromise;
+
+  // Operação — seção completa (não mais resumo): sprint/tarefas
+  // `origin='template'`/histórico/revisões, via `loadOperationSectionData`
+  // (MESMO loader que `/operation` usa) — disparado em paralelo acima,
+  // resolvido aqui.
+  const operationSectionData = await operationSectionDataPromise;
+
+  // Demandas — seção completa (todas as abertas, não mais só 3), MESMA
+  // fonte/regra de `/clients/[id]/demandas` e da área global
+  // (`loadPendenciasRawData`/`countOpenDemandas`, `origin='manual'`).
   const { items: demandaItems } = await loadPendenciasRawData(supabase, id);
   const { openCount: demandasOpenCount, overdueCount: demandasOverdueCount } = countOpenDemandas(
     demandaItems.map((item) => ({ origin: "manual" as const, client_id: id, status: item.rawStatus, due_date: item.dueDate })),
     () => true,
     today,
   );
-  const demandasPreview = demandaItems
+  const demandasOpenItems = demandaItems
     .filter((item) => item.status !== "feito" && item.status !== "nao_realizado")
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
-    .slice(0, 3);
-
-  // Operação — resumo (seção 9 do pedido): sprint atual, última otimização,
-  // saúde/motivo do CPA. MESMOS dados/funções já usados por `/operation` e
-  // pela fila global de Operação — nenhum cálculo novo, nunca tasks (isso
-  // é Demandas×Operação de novo — ver bug corrigido na Fase 1). Sprint
-  // atual só quando a Performance está no mês corrente (`isCurrentMonth`)
-  // — fora dele o resumo operacional não reaproveitaria o `sprints` já
-  // buscado pro mês em exibição, e buscar um segundo conjunto só pra isso
-  // violaria "não duplicar dados" (seção 19).
-  const currentSprint = isCurrentMonth ? findSprintForDate(sprints, todayStr) : null;
-  const currentSprintLabel = currentSprint
-    ? `${formatSprintPeriodLabel(currentSprint.start_date, currentSprint.end_date)} · ${
-        getSprintTemporalStatus(currentSprint, today) === "atual" ? "em andamento" : "concluída"
-      }`
-    : null;
-
-  const [lastReviewRow] = await requireQuery(
-    supabase
-      .from("account_reviews")
-      .select("reviewed_at, outcome, team_member:team_members!account_reviews_team_member_id_fkey(name)")
-      .eq("client_id", id)
-      .order("reviewed_at", { ascending: false })
-      .limit(1),
-    "account_reviews:painel-operacao-resumo",
-  );
-  const lastOptimizationLabel = lastReviewRow
-    ? `${ACCOUNT_REVIEW_OUTCOME_LABEL[lastReviewRow.outcome]} · ${formatRelativeDateTime(lastReviewRow.reviewed_at, new Date())}${lastReviewRow.team_member?.name ? ` · ${lastReviewRow.team_member.name}` : ""}`
-    : "Nenhuma otimização registrada";
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
   // Sinal de sincronização com problema real agora vive só em "Informações
   // da conta" (drawer global do workspace) — nunca mais duplicado aqui.
@@ -384,6 +423,12 @@ export default async function ClientPage({
   ].filter((banner): banner is { tone: "red" | "green" | "amber"; text: string } => Boolean(banner));
 
   const historyDrawerHref = withParam(returnTo, "historicoOrcamento=1");
+
+  const externalLinks = [
+    client.dashboard_url && { label: "Dashboard", href: client.dashboard_url },
+    client.balance_url && { label: "Saldo", href: client.balance_url },
+    client.monthly_closing_sheet_url && { label: "Fechamento", href: client.monthly_closing_sheet_url },
+  ].filter((link): link is { label: string; href: string } => Boolean(link));
 
   return (
     <WorkspaceContainer>
@@ -410,7 +455,9 @@ export default async function ClientPage({
       )}
 
       {/* CONTEXTO — mês/canal/planejamento em exibição, compartilhado pelos
-          blocos de Performance abaixo (seção 6 do pedido de correção). */}
+          blocos de Performance abaixo. Links externos (Dashboard/Saldo/
+          Fechamento) restaurados da página antiga — viviam na barra de
+          navegação de então, sem lugar equivalente após a Fase 1. */}
       <div className="mt-3 flex flex-wrap items-center gap-3 border-b border-overview-border pb-2 text-sm">
         <div className="flex items-center gap-0.5">
           <IconButton href={prevMonthHref} aria-label="Mês anterior" variant="ghost" size="sm">
@@ -434,12 +481,21 @@ export default async function ClientPage({
             performanceGoal={performanceGoal}
           />
         )}
+        {externalLinks.length > 0 && (
+          <div className="ml-auto flex items-center gap-3">
+            {externalLinks.map((link) => (
+              <a key={link.label} href={link.href} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-overview-text-secondary hover:underline">
+                {link.label}
+              </a>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* PERFORMANCE — "o que está acontecendo?" (seção 7 do pedido de
-          correção): KPIs + ritmo do mês (já existia aqui) + metas
-          secundárias/conversão, com CTA pro Relatório completo (`/relatorio`,
-          reaproveitado 100%, nenhum cálculo duplicado). */}
+      {/* PERFORMANCE — "o que está acontecendo?": KPIs + ritmo do mês +
+          metas secundárias + conversão + Funis, na mesma ordem/composição
+          da página antiga (auditoria via git). CTA pro Relatório completo
+          é aprofundamento SECUNDÁRIO — nunca substitui este conteúdo. */}
       <div className="mt-6">
         <AccountFollowUpPanel
           monthActual={visaoGeralMonthActual}
@@ -480,50 +536,86 @@ export default async function ClientPage({
 
       <ConversionRateCard conversionRate={conversionRate} />
 
+      <Section title="Funis">
+        <FunnelsSection clientId={id} returnTo={returnTo} funnels={clientFunnels} campaigns={funnelClassificationCampaigns} isAdmin={isAdmin} />
+      </Section>
+
       <div className="mt-2 flex justify-end">
         <Link href={`/clients/${client.id}/relatorio`} className="text-xs font-medium text-brand hover:underline">
           Ver relatório completo →
         </Link>
       </div>
 
-      {/* OPERAÇÃO — "estamos executando corretamente?" (seção 9 do pedido de
-          correção): resumo leve (sprint atual, última otimização, saúde do
-          CPA) — MESMOS dados/funções de `/operation` e da fila global de
-          Operação, nunca tasks aqui (Demandas×Operação nunca se misturam —
-          correção da Fase 1 permanece intacta). */}
+      {/* OPERAÇÃO — "estamos executando corretamente?": sprint/tarefas
+          (`origin='template'`)/histórico/revisões por completo, via
+          `OperationSection` (MESMO componente/loader de `/operation`).
+          "Saúde"/motivo do CPA (Motor de Diagnóstico Único, já carregado
+          acima) continua como sinal rápido — não duplicado em nenhum
+          outro lugar da página. */}
       <div className="mt-6 border-t border-overview-border pt-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Operação</h2>
-          <Link href={`/clients/${client.id}/operation`} className="shrink-0 text-xs font-medium text-brand hover:underline">
-            Ver operação completa →
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href={withParam(returnTo, "review=new")} scroll={false} className="text-xs font-medium text-brand hover:underline">
+              + Registrar revisão
+            </Link>
+            <Link href={`/clients/${client.id}/operation`} className="shrink-0 text-xs font-medium text-overview-text-secondary hover:underline">
+              Ver operação completa →
+            </Link>
+          </div>
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
-          <div>
-            <p className="text-[11px] text-overview-text-muted">Sprint atual</p>
-            <p className="mt-0.5 text-sm font-medium text-overview-text-primary">{currentSprintLabel ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-[11px] text-overview-text-muted">Última otimização</p>
-            <p className="mt-0.5 text-sm font-medium text-overview-text-primary">{lastOptimizationLabel}</p>
-          </div>
-          <div className="col-span-2">
-            <p className="text-[11px] text-overview-text-muted">Saúde</p>
-            {primaryReasonText ? (
-              <p className="mt-0.5 text-sm font-medium" title={primaryReasonText}>
-                {emphasizeDeviationText(primaryReasonText, primaryReasonTone)}
+        {primaryReasonText && (
+          <p className="mt-1 text-xs text-overview-text-secondary" title={primaryReasonText}>
+            {emphasizeDeviationText(primaryReasonText, primaryReasonTone)}
+          </p>
+        )}
+
+        {(taskError || reviewError || recurringTaskError || clientUpdateError) && (
+          <div className="mt-2 flex flex-col gap-2">
+            {[taskError, reviewError, recurringTaskError, clientUpdateError].filter(Boolean).map((message, index) => (
+              <p key={index} className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+                {message}
               </p>
-            ) : (
-              <p className="mt-0.5 text-sm font-medium text-overview-text-primary">Sem sinais de atenção</p>
-            )}
+            ))}
           </div>
-        </div>
+        )}
+
+        {reviewSaved && !operationSectionData.clientUpdatesByReviewId.has(reviewSaved) && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-overview-border bg-overview-surface px-3 py-2 text-sm">
+            <span className="text-overview-text-primary">Revisão de conta registrada com sucesso.</span>
+            <div className="flex items-center gap-2">
+              <form action={generateClientUpdateAction.bind(null, reviewSaved, withParam(returnTo, `reviewDetail=${reviewSaved}`))}>
+                <SubmitButton pendingChildren="Gerando..." className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover">
+                  Gerar atualização
+                </SubmitButton>
+              </form>
+              <Link href={returnTo} className="rounded-md border border-overview-border px-3 py-1.5 text-xs font-medium text-overview-text-secondary hover:bg-overview-surface-hover">
+                Fechar
+              </Link>
+            </div>
+          </div>
+        )}
+
+        <OperationSection
+          data={operationSectionData}
+          clientId={id}
+          clientName={client.name}
+          primaryManagerName={client.primary_manager?.name ?? null}
+          monthLabel={monthLabel}
+          isAdmin={isAdmin}
+          canOperate={canOperate}
+          returnTo={returnTo}
+          taskHrefPrefix={taskHrefPrefix}
+          openReview={openReview}
+          reviewError={reviewError}
+        />
       </div>
 
-      {/* DEMANDAS — "o que precisa ser feito?" (seção 10 do pedido de
-          correção): contagem + até 3 itens mais urgentes, nunca a List View
-          inteira. MESMA fonte/regra de `/clients/[id]/demandas` e da área
-          global (`origin='manual'`). */}
+      {/* DEMANDAS — "o que precisa ser feito?": todas as demandas abertas
+          deste cliente (nunca preview de 3), MESMA fonte/regra de
+          `/clients/[id]/demandas` e da área global (`origin='manual'`).
+          "Ver todas →" continua útil pra edição em lote/filtros/histórico
+          de concluídas — nunca a única forma de ver o que está aberto. */}
       <div className="mt-6 border-t border-overview-border pt-4">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -537,16 +629,19 @@ export default async function ClientPage({
             Ver todas →
           </Link>
         </div>
-        {demandasPreview.length > 0 && (
+        {demandasOpenItems.length > 0 ? (
           <ul className="mt-3 flex flex-col gap-1.5">
-            {demandasPreview.map((item) => (
+            {demandasOpenItems.map((item) => (
               <li key={item.id} className="flex items-center gap-2 text-sm">
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TASK_PRIORITY_DOT_CLASS[item.priority]}`} aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate text-overview-text-primary">{item.title}</span>
+                {item.assignee && <span className="shrink-0 text-xs text-overview-text-muted">{item.assignee.name}</span>}
                 <span className="shrink-0 text-xs text-overview-text-muted">{formatDueDate(item.dueDate)}</span>
               </li>
             ))}
           </ul>
+        ) : (
+          <p className="mt-3 text-sm text-overview-text-secondary">Nenhuma demanda aberta.</p>
         )}
       </div>
 
