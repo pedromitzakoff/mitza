@@ -4,7 +4,7 @@ import { completeReminderAction } from "./reminders-actions";
 import { ReminderCompleteButton } from "./reminder-complete-button";
 import { ReminderRowMenu } from "./reminder-row-menu";
 
-/** Uma linha do módulo de Pendências — compacta, horizontal, sem descrição
+/** Uma linha do módulo de Lembretes — compacta, horizontal, sem descrição
  * longa (a observação só aparece ao editar). Indicador de atrasada é só
  * cor (mesmo princípio de `task-row.tsx`: "badge saiu, sobra só círculo e
  * data em vermelho discreto"), nunca um texto/badge "Atrasada". */

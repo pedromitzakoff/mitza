@@ -156,6 +156,7 @@ export function InlineCreateTaskForm({
       recurrence: String(formData.get("recurrence") ?? "nenhuma") as TaskRecurrence,
       notes: String(formData.get("notes") ?? "").trim() || null,
       sprintId,
+      priority: "normal" as const,
     };
     setError(null);
     startTransition(async () => {
@@ -246,7 +247,9 @@ export function InlineEditTaskForm({
   hideTrigger,
 }: {
   taskId: string;
-  clientId: string;
+  /** `null` pra pendência interna (Etapa "Pendências") — `updateTaskInlineAction`
+   * já aceita cliente opcional. */
+  clientId: string | null;
   managers: InlineTaskManagerOption[];
   defaultTitle: string;
   defaultType: TaskType;

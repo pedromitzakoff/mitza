@@ -225,6 +225,7 @@ export default async function ClientsPage({
 
   const tasksByClient = new Map<string, OperationClientRawData["tasks"]>();
   for (const t of tasks ?? []) {
+    if (!t.client_id) continue;
     const list = tasksByClient.get(t.client_id) ?? [];
     list.push(t);
     tasksByClient.set(t.client_id, list);

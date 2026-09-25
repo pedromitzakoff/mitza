@@ -2,6 +2,7 @@ import type {
   ClientContractStatus,
   MonthlyReportStatus,
   ReportActionItemStatus,
+  TaskPriority,
   TaskStatus,
   TeamInvitationStatus,
   TeamMemberStatus,
@@ -67,10 +68,30 @@ const BRAND_SOFT = "bg-brand/10 text-brand";
 const INFO = BRAND_SOFT;
 
 export const TASK_STATUS_REGISTRY: Record<`task.${TaskStatus}`, StatusEntry> = {
-  "task.pendente": { label: "Pendente", badgeClassName: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300", tone: "neutral", order: 0 },
-  "task.feito": { label: "Feito", badgeClassName: SUCCESS, tone: "success", order: 1 },
-  "task.atrasado": { label: "Atrasado", badgeClassName: DANGER, tone: "danger", order: 2 },
-  "task.nao_realizado": { label: "Não realizado", badgeClassName: NEUTRAL_MUTED, tone: "neutral", order: 3 },
+  "task.pendente": { label: "A fazer", badgeClassName: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300", tone: "neutral", order: 0 },
+  // Etapa "Pendências": 3 status intermediários novos — nunca substituem
+  // "pendente" (A fazer), somam pra dar mais granularidade ao fluxo
+  // operacional (ver docs/PENDENCIAS_ARCHITECTURE.md).
+  "task.em_andamento": { label: "Em andamento", badgeClassName: INFO, tone: "brand", order: 1 },
+  "task.aguardando": { label: "Aguardando", badgeClassName: WARNING, tone: "warning", order: 2 },
+  "task.bloqueado": { label: "Bloqueado", badgeClassName: DANGER, tone: "danger", order: 3 },
+  "task.feito": { label: "Concluído", badgeClassName: SUCCESS, tone: "success", order: 4 },
+  // "Atrasado" nunca é gravado (sempre derivado de due_date em tempo de
+  // leitura, ver lib/task-status.ts) — a entrada aqui existe só pra exibir
+  // o badge quando `effectiveTaskStatus` devolve esse valor computado.
+  "task.atrasado": { label: "Atrasado", badgeClassName: DANGER, tone: "danger", order: 5 },
+  "task.nao_realizado": { label: "Não realizado", badgeClassName: NEUTRAL_MUTED, tone: "neutral", order: 6 },
+};
+
+/** Prioridade operacional (Etapa "Pendências") — dimensão nova, nunca
+ * existiu antes em `tasks`. Mesmo padrão de `StatusEntry` (label/badge/
+ * ordem), mas como eixo PRÓPRIO — prioridade nunca é um status (uma tarefa
+ * "Bloqueada" pode ser "Urgente" ao mesmo tempo, as duas coexistem). */
+export const TASK_PRIORITY_REGISTRY: Record<`task_priority.${TaskPriority}`, StatusEntry> = {
+  "task_priority.urgente": { label: "Urgente", badgeClassName: DANGER, tone: "danger", order: 0 },
+  "task_priority.alta": { label: "Alta", badgeClassName: WARNING, tone: "warning", order: 1 },
+  "task_priority.normal": { label: "Normal", badgeClassName: NEUTRAL_MUTED, tone: "neutral", order: 2 },
+  "task_priority.baixa": { label: "Baixa", badgeClassName: "bg-zinc-50 text-zinc-400 dark:bg-zinc-900 dark:text-zinc-600", tone: "neutral", order: 3 },
 };
 
 export const CLIENT_CONTRACT_STATUS_REGISTRY: Record<`client_contract.${ClientContractStatus}`, StatusEntry> = {
@@ -138,6 +159,7 @@ export const KPI_TARGET_STATUS_REGISTRY: Record<`kpi_target.${KpiTargetStatus}`,
  * consumo normal continua sendo direto pelo registry do próprio domínio. */
 export const STATUS_REGISTRIES = {
   task: TASK_STATUS_REGISTRY,
+  task_priority: TASK_PRIORITY_REGISTRY,
   client_contract: CLIENT_CONTRACT_STATUS_REGISTRY,
   spend: SPEND_STATUS_REGISTRY,
   operational_activity: OPERATIONAL_ACTIVITY_STATUS_REGISTRY,

@@ -5,7 +5,7 @@ import type { ReminderRow } from "@/lib/reminders";
 import { restoreReminderAction } from "./reminders-actions";
 import { ReminderRestoreButton } from "./reminder-complete-button";
 
-/** "Ver concluídas" — permite restaurar uma pendência finalizada por
+/** "Ver concluídas" — permite restaurar um lembrete finalizado por
  * engano (pedido explícito do usuário). Mesmo padrão de drawer (backdrop +
  * painel deslizante) já usado em `record-account-review-drawer.tsx`. */
 export function RemindersCompletedDrawer({ reminders, closeHref }: { reminders: ReminderRow[]; closeHref: string }) {
@@ -14,7 +14,7 @@ export function RemindersCompletedDrawer({ reminders, closeHref }: { reminders: 
       <Link href={closeHref} scroll={false} className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
       <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col overflow-y-auto border-l border-overview-border bg-overview-surface p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-overview-text-primary">Pendências concluídas</h2>
+          <h2 className="text-lg font-semibold text-overview-text-primary">Lembretes concluídos</h2>
           <Link
             href={closeHref}
             scroll={false}
@@ -42,7 +42,7 @@ export function RemindersCompletedDrawer({ reminders, closeHref }: { reminders: 
               </div>
             ))
           ) : (
-            <EmptyState title="Nenhuma pendência concluída ainda." />
+            <EmptyState title="Nenhum lembrete concluído ainda." />
           )}
         </div>
       </div>

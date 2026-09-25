@@ -104,7 +104,15 @@ export async function loadClientOperationalStates(
   let lastActivityQuery = supabase.from("client_last_operational_activity").select("client_id, last_activity_at");
   if (clientId) lastActivityQuery = lastActivityQuery.eq("client_id", clientId);
 
-  let openTasksQuery = supabase.from("tasks").select("client_id, status, due_date").in("status", ["pendente", "atrasado"]);
+  // Etapa "Pendências": "aberta" agora inclui os 3 status intermediários
+  // novos (em_andamento/aguardando/bloqueado) — são tão "não resolvida"
+  // quanto "pendente" pra fins de contagem operacional, nunca só o valor
+  // antigo. "atrasado" nunca é gravado (é sempre derivado), mas continua no
+  // filtro por segurança histórica.
+  let openTasksQuery = supabase
+    .from("tasks")
+    .select("client_id, status, due_date")
+    .in("status", ["pendente", "em_andamento", "aguardando", "bloqueado", "atrasado"]);
   if (clientId) openTasksQuery = openTasksQuery.eq("client_id", clientId);
 
   // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
@@ -273,6 +281,10 @@ export async function loadClientOperationalStates(
   // ainda não migraram pro novo motor de diagnóstico).
   const openCountByClient = new Map<string, number>();
   for (const task of openTasks ?? []) {
+    // Etapa "Pendências": pendência interna (client_id null) nunca conta
+    // pro estado operacional de um cliente — este mapa é sempre por
+    // cliente, uma tarefa sem cliente simplesmente não participa dele.
+    if (!task.client_id) continue;
     openCountByClient.set(task.client_id, (openCountByClient.get(task.client_id) ?? 0) + 1);
     if (effectiveTaskStatus(task, today) !== "atrasado") continue;
     overdueCountByClient.set(task.client_id, (overdueCountByClient.get(task.client_id) ?? 0) + 1);

@@ -1,8 +1,9 @@
 export type UserRole = "admin" | "gestor";
 
 export type TaskType = "otimizacao" | "verificacao_saldo" | "report" | "outro" | "reuniao" | "entrega_criativo";
-export type TaskStatus = "pendente" | "feito" | "atrasado" | "nao_realizado";
+export type TaskStatus = "pendente" | "em_andamento" | "aguardando" | "bloqueado" | "feito" | "atrasado" | "nao_realizado";
 export type TaskRecurrence = "nenhuma" | "diaria" | "semanal" | "mensal";
+export type TaskPriority = "urgente" | "alta" | "normal" | "baixa";
 
 export type CommentableType = "sprint" | "task";
 
@@ -1359,13 +1360,14 @@ export interface Database {
       tasks: {
         Row: {
           id: string;
-          client_id: string;
+          client_id: string | null;
           title: string;
           type: TaskType;
           assignee_id: string | null;
           due_date: string;
           due_time: string | null;
           status: TaskStatus;
+          priority: TaskPriority;
           recurrence: TaskRecurrence;
           sprint_id: string | null;
           template_id: string | null;
@@ -1380,13 +1382,14 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          client_id: string;
+          client_id?: string | null;
           title: string;
           type: TaskType;
           assignee_id?: string | null;
           due_date: string;
           due_time?: string | null;
           status?: TaskStatus;
+          priority?: TaskPriority;
           recurrence?: TaskRecurrence;
           sprint_id?: string | null;
           template_id?: string | null;
@@ -1406,13 +1409,14 @@ export interface Database {
         };
         Update: {
           id?: string;
-          client_id?: string;
+          client_id?: string | null;
           title?: string;
           type?: TaskType;
           assignee_id?: string | null;
           due_date?: string;
           due_time?: string | null;
           status?: TaskStatus;
+          priority?: TaskPriority;
           recurrence?: TaskRecurrence;
           sprint_id?: string | null;
           template_id?: string | null;

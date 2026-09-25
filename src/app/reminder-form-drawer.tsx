@@ -18,7 +18,7 @@ export interface ReminderTeamMemberOption {
 }
 
 /**
- * Drawer "Adicionar/Editar pendência" — mesmo padrão de overlay já usado em
+ * Drawer "Adicionar/Editar lembrete" — mesmo padrão de overlay já usado em
  * toda a plataforma (`record-account-review-drawer.tsx`), preferido aqui
  * a um modal centralizado pra manter a experiência coerente com o resto do
  * produto. `useActionState`: erro nunca fecha o drawer nem perde o que foi
@@ -62,7 +62,7 @@ export function ReminderFormDrawer({
       <Link href={closeHref} scroll={false} className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30" aria-label="Fechar" />
       <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto border-l border-overview-border bg-overview-surface p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-overview-text-primary">{isEdit ? "Editar pendência" : "Adicionar pendência"}</h2>
+          <h2 className="text-lg font-semibold text-overview-text-primary">{isEdit ? "Editar lembrete" : "Adicionar lembrete"}</h2>
           <Link
             href={closeHref}
             scroll={false}
@@ -74,7 +74,7 @@ export function ReminderFormDrawer({
 
         <form action={formAction} className="mt-4 flex flex-1 flex-col gap-3.5">
           <label className="flex flex-col gap-1 text-sm text-overview-text-primary">
-            Pendência
+            Lembrete
             <input
               name="title"
               type="text"
@@ -145,7 +145,7 @@ export function ReminderFormDrawer({
               pendingChildren="Salvando..."
               className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
             >
-              {isEdit ? "Salvar alterações" : "Adicionar pendência"}
+              {isEdit ? "Salvar alterações" : "Adicionar lembrete"}
             </SubmitButton>
             <Link
               href={closeHref}

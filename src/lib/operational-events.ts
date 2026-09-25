@@ -96,9 +96,6 @@ export type OperationalEventType = (typeof OperationalEventType)[keyof typeof Op
  * quem for implementar o recurso de domínio que falta saber que o evento já
  * está reservado e não precisa inventar um novo nome.
  *
- * - TASK_REOPENED: não existe funcionalidade de reabrir tarefa concluída no
- *   app hoje (só existe "reabrir relatório mensal", outra entidade). Emitir
- *   este evento fica pra quando essa funcionalidade for implementada.
  * - MEETING_SCHEDULED/RESCHEDULED/CANCELLED e
  *   CREATIVE_DELIVERY_SCHEDULED: reunião e entrega de criativo são só
  *   `tasks.type`, sem tabela própria — "agendar"/"reagendar" já SÃO
@@ -120,7 +117,6 @@ export type OperationalEventType = (typeof OperationalEventType)[keyof typeof Op
  * Análise da Conta.
  */
 export const NOT_YET_EMITTED_EVENT_TYPES: readonly OperationalEventType[] = [
-  OperationalEventType.TASK_REOPENED,
   OperationalEventType.MEETING_SCHEDULED,
   OperationalEventType.MEETING_RESCHEDULED,
   OperationalEventType.MEETING_CANCELLED,

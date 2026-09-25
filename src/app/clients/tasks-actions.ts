@@ -13,7 +13,7 @@ import { withOriginalDueDate } from "@/lib/task-creation";
 import { toUserFacingError } from "@/lib/user-facing-error";
 import { queryOrError } from "@/lib/require-query";
 import { checkWorkspaceClientAction } from "@/lib/require-workspace-client";
-import type { TaskRecurrence, TaskType } from "@/lib/supabase/database.types";
+import type { TaskPriority, TaskRecurrence, TaskStatus, TaskType } from "@/lib/supabase/database.types";
 
 function resolveReturnTo(formData: FormData, fallback: string): string {
   const returnTo = formData.get("return_to");
@@ -35,6 +35,9 @@ export interface TaskActionFields {
   recurrence: TaskRecurrence;
   notes: string | null;
   sprintId: string | null;
+  /** Etapa "Pendências": default "normal" em qualquer caminho que não
+   * conheça o campo — nunca deixa uma tarefa sem prioridade explícita. */
+  priority: TaskPriority;
 }
 
 function parseTaskFormData(formData: FormData): TaskActionFields {
@@ -47,6 +50,7 @@ function parseTaskFormData(formData: FormData): TaskActionFields {
     recurrence: String(formData.get("recurrence") ?? "nenhuma") as TaskRecurrence,
     notes: String(formData.get("notes") ?? "").trim() || null,
     sprintId: String(formData.get("sprint_id") ?? "") || null,
+    priority: (String(formData.get("priority") ?? "normal") as TaskPriority) || "normal",
   };
 }
 
@@ -55,13 +59,15 @@ function parseTaskFormData(formData: FormData): TaskActionFields {
  * nunca decide mensagem de UI: isso é responsabilidade de quem chama
  * (`createTaskAction`, legado, ou `createTaskInlineAction`, oficial). */
 async function performCreateTask(
-  clientId: string,
+  clientId: string | null,
   fields: TaskActionFields,
 ): Promise<{ error: string } | { taskId: string }> {
   const supabase = await createSupabaseClient();
 
-  const blocked = await checkWorkspaceClientAction(supabase, clientId);
-  if (blocked) return { error: blocked };
+  if (clientId) {
+    const blocked = await checkWorkspaceClientAction(supabase, clientId);
+    if (blocked) return { error: blocked };
+  }
 
   const { data: created, error } = await supabase
     .from("tasks")
@@ -76,6 +82,7 @@ async function performCreateTask(
         recurrence: fields.recurrence,
         notes: fields.notes,
         sprint_id: fields.sprintId,
+        priority: fields.priority,
       }),
     )
     .select("id")
@@ -90,13 +97,18 @@ async function performCreateTask(
 
   const profile = await getCurrentProfile();
   if (profile) {
-    await logOperationalActivity(supabase, {
-      clientId,
-      sprintId: fields.sprintId,
-      taskId: created.id,
-      userId: profile.id,
-      activityType: "task_created",
-    });
+    // operational_activities.client_id é NOT NULL — pendência interna (sem
+    // cliente) nunca grava aqui, só em operational_events (client_id já
+    // nullable desde a Etapa "Pendências").
+    if (clientId) {
+      await logOperationalActivity(supabase, {
+        clientId,
+        sprintId: fields.sprintId,
+        taskId: created.id,
+        userId: profile.id,
+        activityType: "task_created",
+      });
+    }
 
     const actor = actorFromProfile(profile);
     await recordOperationalEvent(supabase, actor, {
@@ -128,10 +140,12 @@ async function performCreateTask(
     }
   }
 
-  revalidatePath(`/clients/${clientId}`);
+  if (clientId) revalidatePath(`/clients/${clientId}`);
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
+  revalidatePath("/pendencias");
+  revalidatePath("/");
 
   return { taskId: created.id };
 }
@@ -164,7 +178,7 @@ export async function createTaskAction(clientId: string, formData: FormData): Pr
  * `createTaskAction` (via `performCreateTask`) — só o desfecho muda.
  */
 export async function createTaskInlineAction(
-  clientId: string,
+  clientId: string | null,
   fields: TaskActionFields,
 ): Promise<{ error?: string; message?: string }> {
   const result = await performCreateTask(clientId, fields);
@@ -193,6 +207,10 @@ export interface TaskUpdateFields {
   notes: string | null;
   dueTime?: string | null;
   recurrence?: TaskRecurrence;
+  /** Mesmo padrão "undefined preserva o valor atual" de `dueTime`/
+   * `recurrence` acima — nem todo formulário que edita a tarefa mostra
+   * prioridade. */
+  priority?: TaskPriority;
 }
 
 /** Atualiza a tarefa e grava os eventos operacionais — única implementação
@@ -202,13 +220,15 @@ export interface TaskUpdateFields {
  * caminho que chame esta função. */
 async function performUpdateTask(
   taskId: string,
-  clientId: string,
+  clientId: string | null,
   fields: TaskUpdateFields,
 ): Promise<{ error: string } | { title: string }> {
   const supabase = await createSupabaseClient();
 
-  const blocked = await checkWorkspaceClientAction(supabase, clientId);
-  if (blocked) return { error: blocked };
+  if (clientId) {
+    const blocked = await checkWorkspaceClientAction(supabase, clientId);
+    if (blocked) return { error: blocked };
+  }
 
   // Lê o estado anterior ANTES de sobrescrever — necessário pra detectar
   // reatribuição/alteração de prazo, preservar original_due_date e (achado
@@ -221,13 +241,14 @@ async function performUpdateTask(
     due_date: string;
     due_time: string | null;
     recurrence: TaskRecurrence;
+    priority: TaskPriority;
     sprint_id: string | null;
     reassignment_count: number;
     due_date_change_count: number;
   }>(
     supabase
       .from("tasks")
-      .select("assignee_id, due_date, due_time, recurrence, sprint_id, reassignment_count, due_date_change_count")
+      .select("assignee_id, due_date, due_time, recurrence, priority, sprint_id, reassignment_count, due_date_change_count")
       .eq("id", taskId)
       .single(),
     "tasks:previous-state",
@@ -242,6 +263,7 @@ async function performUpdateTask(
   const isDueDateChange = previous ? fields.dueDate !== previous.due_date : false;
   const nextDueTime = fields.dueTime !== undefined ? fields.dueTime : (previous?.due_time ?? null);
   const nextRecurrence = fields.recurrence !== undefined ? fields.recurrence : (previous?.recurrence ?? "nenhuma");
+  const nextPriority = fields.priority !== undefined ? fields.priority : (previous?.priority ?? "normal");
 
   const { data: updated, error } = await supabase
     .from("tasks")
@@ -252,6 +274,7 @@ async function performUpdateTask(
       due_date: fields.dueDate,
       due_time: nextDueTime,
       recurrence: nextRecurrence,
+      priority: nextPriority,
       notes: fields.notes,
       reassignment_count: (previous?.reassignment_count ?? 0) + (isReassignment && !isFirstAssignment ? 1 : 0),
       due_date_change_count: (previous?.due_date_change_count ?? 0) + (isDueDateChange ? 1 : 0),
@@ -269,13 +292,15 @@ async function performUpdateTask(
 
   const profile = await getCurrentProfile();
   if (profile) {
-    await logOperationalActivity(supabase, {
-      clientId,
-      sprintId: updated?.sprint_id ?? null,
-      taskId,
-      userId: profile.id,
-      activityType: "task_updated",
-    });
+    if (clientId) {
+      await logOperationalActivity(supabase, {
+        clientId,
+        sprintId: updated?.sprint_id ?? null,
+        taskId,
+        userId: profile.id,
+        activityType: "task_updated",
+      });
+    }
 
     const actor = actorFromProfile(profile);
     const sprintId = updated?.sprint_id ?? null;
@@ -315,10 +340,12 @@ async function performUpdateTask(
     }
   }
 
-  revalidatePath(`/clients/${clientId}`);
+  if (clientId) revalidatePath(`/clients/${clientId}`);
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
+  revalidatePath("/pendencias");
+  revalidatePath("/");
 
   return { title: fields.title };
 }
@@ -349,7 +376,7 @@ export async function updateTaskAction(taskId: string, clientId: string, formDat
  */
 export async function updateTaskInlineAction(
   taskId: string,
-  clientId: string,
+  clientId: string | null,
   fields: TaskUpdateFields,
 ): Promise<{ error?: string; message?: string }> {
   const result = await performUpdateTask(taskId, clientId, fields);
@@ -359,11 +386,13 @@ export async function updateTaskInlineAction(
   return { message: `"${result.title}" atualizada.` };
 }
 
-export async function completeTaskAction(taskId: string, clientId: string): Promise<{ error?: string }> {
+export async function completeTaskAction(taskId: string, clientId: string | null): Promise<{ error?: string }> {
   const supabase = await createSupabaseClient();
 
-  const blocked = await checkWorkspaceClientAction(supabase, clientId);
-  if (blocked) return { error: blocked };
+  if (clientId) {
+    const blocked = await checkWorkspaceClientAction(supabase, clientId);
+    if (blocked) return { error: blocked };
+  }
 
   const { data: task, error: fetchError } = await supabase
     .from("tasks")
@@ -399,13 +428,15 @@ export async function completeTaskAction(taskId: string, clientId: string): Prom
     return { error: toUserFacingError(rpcError, "Não foi possível concluir a tarefa.") };
   }
 
-  await logOperationalActivity(supabase, {
-    clientId,
-    sprintId: task.sprint_id,
-    taskId,
-    userId: profile.id,
-    activityType: "task_completed",
-  });
+  if (clientId) {
+    await logOperationalActivity(supabase, {
+      clientId,
+      sprintId: task.sprint_id,
+      taskId,
+      userId: profile.id,
+      activityType: "task_completed",
+    });
+  }
 
   const nextDate = nextDueDate(task.due_date, task.recurrence);
   if (nextDate) {
@@ -434,10 +465,12 @@ export async function completeTaskAction(taskId: string, clientId: string): Prom
   // certa (linha da tarefa ou drawer) — só revalida os dados em cima da
   // mesma URL, sem navegar, pra não resetar o scroll nem fechar o que
   // estava expandido.
-  revalidatePath(`/clients/${clientId}`);
+  if (clientId) revalidatePath(`/clients/${clientId}`);
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
+  revalidatePath("/pendencias");
+  revalidatePath("/");
 
   return {};
 }
@@ -451,11 +484,13 @@ export async function completeTaskAction(taskId: string, clientId: string): Prom
  * escreve completed_at, só resolved_at, pra não inflar o indicador
  * "Tarefas concluídas" da Visão Geral com tarefas que não foram concluídas.
  */
-export async function markTaskNotDoneAction(taskId: string, clientId: string): Promise<{ error?: string }> {
+export async function markTaskNotDoneAction(taskId: string, clientId: string | null): Promise<{ error?: string }> {
   const supabase = await createSupabaseClient();
 
-  const blocked = await checkWorkspaceClientAction(supabase, clientId);
-  if (blocked) return { error: blocked };
+  if (clientId) {
+    const blocked = await checkWorkspaceClientAction(supabase, clientId);
+    if (blocked) return { error: blocked };
+  }
 
   const profile = await getCurrentProfile();
 
@@ -476,18 +511,22 @@ export async function markTaskNotDoneAction(taskId: string, clientId: string): P
     return { error: toUserFacingError(rpcError, "Não foi possível marcar como não realizada.") };
   }
 
-  await logOperationalActivity(supabase, {
-    clientId,
-    sprintId: null,
-    taskId,
-    userId: profile.id,
-    activityType: "task_updated",
-  });
+  if (clientId) {
+    await logOperationalActivity(supabase, {
+      clientId,
+      sprintId: null,
+      taskId,
+      userId: profile.id,
+      activityType: "task_updated",
+    });
+  }
 
-  revalidatePath(`/clients/${clientId}`);
+  if (clientId) revalidatePath(`/clients/${clientId}`);
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
+  revalidatePath("/pendencias");
+  revalidatePath("/");
 
   return {};
 }
@@ -515,11 +554,11 @@ export async function markTaskNotDoneAction(taskId: string, clientId: string): P
  * `requireAdmin()` — só o desfecho (redirecionar vs. retornar) muda
  * conforme quem chama.
  */
-export async function deleteTaskAction(taskId: string, clientId: string, formData: FormData): Promise<void>;
-export async function deleteTaskAction(taskId: string, clientId: string): Promise<{ error?: string }>;
+export async function deleteTaskAction(taskId: string, clientId: string | null, formData: FormData): Promise<void>;
+export async function deleteTaskAction(taskId: string, clientId: string | null): Promise<{ error?: string }>;
 export async function deleteTaskAction(
   taskId: string,
-  clientId: string,
+  clientId: string | null,
   formData?: FormData,
 ): Promise<{ error?: string } | void> {
   const profile = await requireAdmin();
@@ -546,7 +585,8 @@ export async function deleteTaskAction(
 
   if (error) {
     if (!formData) return { error: "Não foi possível excluir a tarefa." };
-    redirect(`/clients/${clientId}?taskError=${encodeURIComponent("Não foi possível excluir a tarefa.")}`);
+    const fallback = clientId ? `/clients/${clientId}` : "/pendencias";
+    redirect(`${fallback}?taskError=${encodeURIComponent("Não foi possível excluir a tarefa.")}`);
   }
 
   const actor = actorFromProfile(profile);
@@ -565,11 +605,282 @@ export async function deleteTaskAction(
     },
   });
 
-  revalidatePath(`/clients/${clientId}`);
+  if (clientId) revalidatePath(`/clients/${clientId}`);
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
+  revalidatePath("/pendencias");
+  revalidatePath("/");
 
   if (!formData) return {};
-  redirect(resolveReturnTo(formData, `/clients/${clientId}`));
+  redirect(resolveReturnTo(formData, clientId ? `/clients/${clientId}` : "/pendencias"));
+}
+
+function pendenciasRevalidate(clientId: string | null, otherClientId?: string | null) {
+  if (clientId) revalidatePath(`/clients/${clientId}`);
+  if (otherClientId && otherClientId !== clientId) revalidatePath(`/clients/${otherClientId}`);
+  revalidatePath("/operation");
+  revalidatePath("/sprints");
+  revalidatePath("/clients");
+  revalidatePath("/pendencias");
+  revalidatePath("/");
+}
+
+/** Status "editáveis" via seletor inline da linha da Pendência — nunca
+ * inclui "feito" (delega pra `completeTaskAction`, que grava o evento
+ * atômico correto) nem os dois status derivados/terminais especiais
+ * ("atrasado", nunca gravado; "nao_realizado", só via `markTaskNotDoneAction`). */
+export type EditableNonTerminalStatus = "pendente" | "em_andamento" | "aguardando" | "bloqueado";
+
+/**
+ * Edição inline de status direto na linha da lista de Pendências (Etapa
+ * "Pendências") — escolher "Concluído" aqui delega pra `completeTaskAction`
+ * (mesmo evento atômico de sempre); os 4 status intermediários são um
+ * simples update, sem evento operacional próprio (não fazem parte da
+ * taxonomia de `operational_events`, que registra CRIAÇÃO/CONCLUSÃO/
+ * reatribuição/prazo — não cada transição de status intermediário).
+ */
+export async function updateTaskStatusInlineAction(
+  taskId: string,
+  clientId: string | null,
+  status: EditableNonTerminalStatus | "feito",
+): Promise<{ error?: string; message?: string }> {
+  if (status === "feito") {
+    const result = await completeTaskAction(taskId, clientId);
+    return result?.error ? { error: result.error } : { message: "Pendência concluída." };
+  }
+
+  const supabase = await createSupabaseClient();
+  if (clientId) {
+    const blocked = await checkWorkspaceClientAction(supabase, clientId);
+    if (blocked) return { error: blocked };
+  }
+
+  const { error } = await supabase.from("tasks").update({ status }).eq("id", taskId);
+  if (error) return { error: toUserFacingError(error, "Não foi possível atualizar o status.") };
+
+  pendenciasRevalidate(clientId);
+  return { message: "Status atualizado." };
+}
+
+/** Edição inline de prioridade direto na linha — simples update, sem evento
+ * operacional próprio (mesmo raciocínio de `updateTaskStatusInlineAction`). */
+export async function updateTaskPriorityInlineAction(
+  taskId: string,
+  clientId: string | null,
+  priority: TaskPriority,
+): Promise<{ error?: string; message?: string }> {
+  const supabase = await createSupabaseClient();
+  if (clientId) {
+    const blocked = await checkWorkspaceClientAction(supabase, clientId);
+    if (blocked) return { error: blocked };
+  }
+
+  const { error } = await supabase.from("tasks").update({ priority }).eq("id", taskId);
+  if (error) return { error: toUserFacingError(error, "Não foi possível atualizar a prioridade.") };
+
+  pendenciasRevalidate(clientId);
+  return { message: "Prioridade atualizada." };
+}
+
+/** Edição inline de responsável direto na linha — mesma lógica de
+ * reatribuição/primeira-atribuição de `performUpdateTask` (TASK_ASSIGNED vs.
+ * TASK_REASSIGNED), só que sem exigir reenviar o resto do formulário. */
+export async function updateTaskAssigneeInlineAction(
+  taskId: string,
+  clientId: string | null,
+  assigneeId: string | null,
+): Promise<{ error?: string; message?: string }> {
+  const supabase = await createSupabaseClient();
+  if (clientId) {
+    const blocked = await checkWorkspaceClientAction(supabase, clientId);
+    if (blocked) return { error: blocked };
+  }
+
+  const previousResult = await queryOrError<{ assignee_id: string | null; sprint_id: string | null }>(
+    supabase.from("tasks").select("assignee_id, sprint_id").eq("id", taskId).single(),
+    "tasks:assignee-previous-state",
+    "Não foi possível carregar o estado atual da pendência.",
+  );
+  if ("error" in previousResult) return { error: previousResult.error };
+  const previous = previousResult.data;
+
+  const isReassignment = previous ? assigneeId !== previous.assignee_id : false;
+  if (!isReassignment) return { message: "Responsável atualizado." };
+
+  const isFirstAssignment = !previous?.assignee_id;
+
+  const { error } = await supabase.from("tasks").update({ assignee_id: assigneeId }).eq("id", taskId);
+  if (error) return { error: toUserFacingError(error, "Não foi possível atualizar o responsável.") };
+
+  const profile = await getCurrentProfile();
+  if (profile) {
+    const actor = actorFromProfile(profile);
+    await recordOperationalEvent(supabase, actor, {
+      eventType: isFirstAssignment ? OperationalEventType.TASK_ASSIGNED : OperationalEventType.TASK_REASSIGNED,
+      entityType: "task",
+      entityId: taskId,
+      clientId,
+      sprintId: previous?.sprint_id ?? null,
+      source: "web",
+      metadata: {
+        previous_assignee_team_member_id: previous?.assignee_id ?? null,
+        new_assignee_team_member_id: assigneeId,
+      },
+    });
+  }
+
+  pendenciasRevalidate(clientId);
+  return { message: "Responsável atualizado." };
+}
+
+/** Edição inline de prazo direto na linha — mesma lógica de
+ * `performUpdateTask` pra `TASK_DUE_DATE_CHANGED` (was_already_overdue,
+ * due_date_change_count), sem exigir reenviar o resto do formulário. */
+export async function updateTaskDueDateInlineAction(
+  taskId: string,
+  clientId: string | null,
+  dueDate: string,
+): Promise<{ error?: string; message?: string }> {
+  const supabase = await createSupabaseClient();
+  if (clientId) {
+    const blocked = await checkWorkspaceClientAction(supabase, clientId);
+    if (blocked) return { error: blocked };
+  }
+
+  const previousResult = await queryOrError<{ due_date: string; due_date_change_count: number; sprint_id: string | null }>(
+    supabase.from("tasks").select("due_date, due_date_change_count, sprint_id").eq("id", taskId).single(),
+    "tasks:due-date-previous-state",
+    "Não foi possível carregar o estado atual da pendência.",
+  );
+  if ("error" in previousResult) return { error: previousResult.error };
+  const previous = previousResult.data;
+
+  const isDueDateChange = previous ? dueDate !== previous.due_date : false;
+  if (!isDueDateChange) return { message: "Prazo atualizado." };
+
+  const wasAlreadyOverdue = previous ? previous.due_date < todayDateString() : false;
+  const nextChangeCount = (previous?.due_date_change_count ?? 0) + 1;
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({ due_date: dueDate, due_date_change_count: nextChangeCount })
+    .eq("id", taskId);
+  if (error) return { error: toUserFacingError(error, "Não foi possível atualizar o prazo.") };
+
+  const profile = await getCurrentProfile();
+  if (profile) {
+    const actor = actorFromProfile(profile);
+    await recordOperationalEvent(supabase, actor, {
+      eventType: OperationalEventType.TASK_DUE_DATE_CHANGED,
+      entityType: "task",
+      entityId: taskId,
+      clientId,
+      sprintId: previous?.sprint_id ?? null,
+      source: "web",
+      metadata: {
+        previous_due_date: previous?.due_date ?? null,
+        new_due_date: dueDate,
+        was_already_overdue: wasAlreadyOverdue,
+        due_date_change_count: nextChangeCount,
+      },
+    });
+  }
+
+  pendenciasRevalidate(clientId);
+  return { message: "Prazo atualizado." };
+}
+
+/** Edição inline de cliente direto na linha (seção 8 do pedido: "cliente
+ * relacional de verdade, com pendência interna também suportada") — move a
+ * pendência entre clientes ou entre um cliente e "Interna" (`null`).
+ * `sprint_id` é sempre zerado na troca: uma sprint pertence a um cliente
+ * específico, então trocar o cliente sem isso deixaria a pendência apontando
+ * pra uma sprint de outro cliente. */
+export async function updateTaskClientInlineAction(
+  taskId: string,
+  currentClientId: string | null,
+  newClientId: string | null,
+): Promise<{ error?: string; message?: string }> {
+  const supabase = await createSupabaseClient();
+
+  if (currentClientId) {
+    const blocked = await checkWorkspaceClientAction(supabase, currentClientId);
+    if (blocked) return { error: blocked };
+  }
+  if (newClientId) {
+    const blocked = await checkWorkspaceClientAction(supabase, newClientId);
+    if (blocked) return { error: blocked };
+  }
+
+  const { error } = await supabase.from("tasks").update({ client_id: newClientId, sprint_id: null }).eq("id", taskId);
+  if (error) return { error: toUserFacingError(error, "Não foi possível mover a pendência.") };
+
+  pendenciasRevalidate(currentClientId, newClientId);
+  return { message: "Pendência movida." };
+}
+
+/**
+ * Reabre uma pendência concluída ou marcada como não realizada — único
+ * caminho que emite TASK_REOPENED (Etapa "Pendências"; até aqui o tipo
+ * existia na taxonomia mas nunca era emitido, ver `NOT_YET_EMITTED_EVENT_TYPES`
+ * em `operational-events.ts`). Não é uma RPC atômica (ao contrário de
+ * completar/não-realizar): reabrir não precisa recalcular no_prazo/atraso,
+ * só voltar pro estado "pendente" e contar mais uma reabertura.
+ */
+export async function reopenTaskAction(taskId: string, clientId: string | null): Promise<{ error?: string; message?: string }> {
+  const supabase = await createSupabaseClient();
+  if (clientId) {
+    const blocked = await checkWorkspaceClientAction(supabase, clientId);
+    if (blocked) return { error: blocked };
+  }
+
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    redirect("/login");
+  }
+
+  const previousResult = await queryOrError<{ status: TaskStatus; sprint_id: string | null; reopened_count: number }>(
+    supabase.from("tasks").select("status, sprint_id, reopened_count").eq("id", taskId).single(),
+    "tasks:reopen-previous-state",
+    "Não foi possível carregar o estado atual da pendência.",
+  );
+  if ("error" in previousResult) return { error: previousResult.error };
+  const previous = previousResult.data;
+
+  if (previous && previous.status !== "feito" && previous.status !== "nao_realizado") {
+    return { error: "Esta pendência já está em aberto." };
+  }
+
+  const nextReopenedCount = (previous?.reopened_count ?? 0) + 1;
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({ status: "pendente", completed_at: null, reopened_count: nextReopenedCount })
+    .eq("id", taskId);
+  if (error) return { error: toUserFacingError(error, "Não foi possível reabrir a pendência.") };
+
+  if (clientId) {
+    await logOperationalActivity(supabase, {
+      clientId,
+      sprintId: previous?.sprint_id ?? null,
+      taskId,
+      userId: profile.id,
+      activityType: "task_updated",
+    });
+  }
+
+  const actor = actorFromProfile(profile);
+  await recordOperationalEvent(supabase, actor, {
+    eventType: OperationalEventType.TASK_REOPENED,
+    entityType: "task",
+    entityId: taskId,
+    clientId,
+    sprintId: previous?.sprint_id ?? null,
+    source: "web",
+    metadata: { previous_status: previous?.status ?? null, reopened_count: nextReopenedCount },
+  });
+
+  pendenciasRevalidate(clientId);
+  return { message: "Pendência reaberta." };
 }

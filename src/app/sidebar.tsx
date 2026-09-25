@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
+  ClipboardList,
   Clock,
   History,
   LayoutGrid,
@@ -157,9 +158,13 @@ interface NavItem {
  * comemorado") agora vivem DENTRO da Timeline (família "Performance", ver
  * `lib/agency-timeline.ts`), nunca perdidos, só sem uma entrada de
  * navegação própria. `/achievements` continua existindo como redirect
- * seguro pra `/timeline?family=performance` (nenhum link antigo quebra). A
- * constituição do produto passa a ser Visão Geral → Operação → Timeline →
- * Cliente — ainda sem espaço pra um quarto pilar (Relatórios/Clientes/
+ * seguro pra `/timeline?family=performance` (nenhum link antigo quebra).
+ *
+ * Etapa "Pendências": quarto pilar — gestão de tarefas evoluiu de módulo
+ * disperso (por cliente/sprint) pra área dedicada (`/pendencias`), que
+ * merece porta de entrada própria (é onde o gestor passa a resolver
+ * trabalho do dia a dia, não só consultar). Constituição atual: Visão
+ * Geral → Operação → Pendências → Timeline → Cliente (Relatórios/Clientes/
  * Sprints continuam cobertos por outros fluxos, mesmo raciocínio de
  * sempre). */
 const NAV_ITEMS: NavItem[] = [
@@ -169,6 +174,13 @@ const NAV_ITEMS: NavItem[] = [
     href: "/operation",
     icon: ListChecks,
     isActive: (p) => p === "/operation",
+    group: "principal",
+  },
+  {
+    label: "Pendências",
+    href: "/pendencias",
+    icon: ClipboardList,
+    isActive: (p) => p.startsWith("/pendencias"),
     group: "principal",
   },
   {

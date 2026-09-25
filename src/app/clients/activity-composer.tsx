@@ -118,6 +118,7 @@ export function ActivityComposer({
           recurrence: "nenhuma",
           notes: null,
           sprintId,
+          priority: "normal",
         });
         if (result?.error) {
           showToast(result.error, "error");

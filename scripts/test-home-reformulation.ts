@@ -297,23 +297,27 @@ console.log("\n8 — Limite de eventos (6), sem segunda composição/sort própr
   ok("busca já vem com limite 6 (nenhuma query pesada, nenhum .slice adicional escondendo um limite diferente)", /fetchRecentAgencyEvents\(supabase, profile\.organizationId, 6\)/.test(homePageSource));
 }
 
-console.log("\n9 — Pendências continua funcional: mesmas ações/props preservadas em RemindersPanel\n");
+console.log("\n9 — Lembretes continua funcional: mesmas ações/props preservadas em RemindersPanel\n");
 {
-  ok("addHref (+ Adicionar pendência) preservado", /addHref=\{addReminderHref\}/.test(homePageSource) && /addHref,/.test(remindersPanelSource));
+  ok("addHref (+ Adicionar lembrete) preservado", /addHref=\{addReminderHref\}/.test(homePageSource) && /addHref,/.test(remindersPanelSource));
   ok("completedHref (Ver concluídas) preservado", /completedHref=\{openCompletedRemindersHref\}/.test(homePageSource) && /completedHref,/.test(remindersPanelSource));
   ok("buildFilterHref (chips Todas/Agência/Clientes/Minhas) preservado", /buildFilterHref=\{buildReminderFilterHref\}/.test(homePageSource) && /FILTERS\.map/.test(remindersPanelSource));
-  ok("buildEditHref (editar pendência por linha) preservado", /buildEditHref=\{buildReminderEditHref\}/.test(homePageSource) && /buildEditHref\(reminder\.id\)/.test(remindersPanelSource));
+  ok("buildEditHref (editar lembrete por linha) preservado", /buildEditHref=\{buildReminderEditHref\}/.test(homePageSource) && /buildEditHref\(reminder\.id\)/.test(remindersPanelSource));
   ok("novo controle de expandir/recolher (Ver todas) chega via props explícitas, nunca client-state efêmero perdido no reload", /expanded=\{pendenciaExpandirFilter\}/.test(homePageSource) && /expandHref,\s*\n\s*collapseHref,/.test(remindersPanelSource));
 }
 
 console.log("\n10 — Empty state de Pendências é compacto (uma linha, sem filtros/chips quando não há nenhuma pendência)\n");
 {
   ok(
-    'counts.openCount === 0 renderiza só "Nenhuma pendência em aberto." — sem os chips de filtro nesse ramo',
-    /counts\.openCount === 0 \? \(\s*<p[^>]*>Nenhuma pendência em aberto\.<\/p>/.test(remindersPanelSource),
+    // Etapa "Pendências": módulo renomeado de "Pendências" pra "Lembretes"
+    // (o nome "Pendências" passou a identificar a área nova e dedicada de
+    // gestão de tarefas, /pendencias) — texto atualizado de propósito,
+    // nenhum comportamento mudou (ver reminders-panel.tsx).
+    'counts.openCount === 0 renderiza só "Nenhum lembrete em aberto." — sem os chips de filtro nesse ramo',
+    /counts\.openCount === 0 \? \(\s*<p[^>]*>Nenhum lembrete em aberto\.<\/p>/.test(remindersPanelSource),
   );
   ok("painel deixou de ser um card com borda própria (rounded-lg/border/bg-overview-surface removidos)", !/rounded-lg border border-overview-border bg-overview-surface/.test(remindersPanelSource));
-  ok("lista de pendências (quando existe) continua capada (REMINDERS_HOME_VISIBLE_LIMIT) com 'Ver todas' explícito", /const REMINDERS_HOME_VISIBLE_LIMIT = 5/.test(remindersPanelSource) && /Ver todas as \{reminders\.length\} pendências/.test(remindersPanelSource));
+  ok("lista de lembretes (quando existe) continua capada (REMINDERS_HOME_VISIBLE_LIMIT) com 'Ver todos' explícito", /const REMINDERS_HOME_VISIBLE_LIMIT = 5/.test(remindersPanelSource) && /Ver todos os \{reminders\.length\} lembretes/.test(remindersPanelSource));
 }
 
 console.log('\n11 — "Ritmo de investimento" (agregado da agência) foi removido da Home, sem quebrar consumidores compartilhados\n');

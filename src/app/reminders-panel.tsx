@@ -7,7 +7,7 @@ import { ReminderRow } from "./reminder-row";
 const FILTERS: ReminderFilter[] = ["todas", "agencia", "clientes", "minhas"];
 
 /** Etapa "Reformulação da Home": nunca mostrar a carteira inteira de
- * pendências na Home — as mais relevantes (a ordenação de `sortReminders`
+ * lembretes na Home — os mais relevantes (a ordenação de `sortReminders`
  * já é atrasadas → vencem hoje → prazo futuro → sem prazo, nenhum critério
  * novo) primeiro, "Ver todas" expande sem perder filtro/posição. */
 const REMINDERS_HOME_VISIBLE_LIMIT = 5;
@@ -15,14 +15,22 @@ const REMINDERS_HOME_VISIBLE_LIMIT = 5;
 const LINK_ACTION_CLASSES = "text-[13px] text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary";
 
 /**
- * Módulo "Pendências" — Visão Geral da Agência. Etapa "Reformulação da
+ * Módulo "Lembretes" — Visão Geral da Agência. Etapa "Reformulação da
  * Home": deixa de ser um card com borda própria (`rounded-lg border
  * bg-overview-surface`) — passa a compartilhar a mesma linguagem de seção
  * (`border-t` fino) de "Atenção"/"Aconteceu recentemente" acima, pra reduzir
  * a sensação de "vários cards dentro de cards" pedida nesta etapa. Vazio
  * (`counts.openCount === 0`) fica numa linha só, sem os filtros (não há o
- * que filtrar) — "Adicionar pendência"/"Ver concluídas" continuam
+ * que filtrar) — "Adicionar lembrete"/"Ver concluídas" continuam
  * acessíveis, nenhuma funcionalidade removida.
+ *
+ * Etapa "Pendências" (nova área): renomeado de "Pendências" pra
+ * "Lembretes" — o nome "Pendências" passou a identificar a área nova e
+ * dedicada de gestão de tarefas (`/pendencias`, ver `lib/pendencias.ts`),
+ * conceitualmente diferente deste módulo (registros rápidos e leves, sem
+ * funil de status/prioridade/responsável formal). Nenhum dado migrou —
+ * `reminders` continua sendo exatamente o que sempre foi, só o rótulo
+ * mudou.
  */
 export function RemindersPanel({
   reminders,
@@ -57,19 +65,19 @@ export function RemindersPanel({
   return (
     <section>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Pendências</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Lembretes</h2>
         <div className="flex items-center gap-2">
           <Button href={completedHref} variant="ghost" size="sm">
             Ver concluídas
           </Button>
           <Button href={addHref} variant="primary" size="sm">
-            + Adicionar pendência
+            + Adicionar lembrete
           </Button>
         </div>
       </div>
 
       {counts.openCount === 0 ? (
-        <p className="mt-2 text-[13px] text-overview-text-secondary">Nenhuma pendência em aberto.</p>
+        <p className="mt-2 text-[13px] text-overview-text-secondary">Nenhum lembrete em aberto.</p>
       ) : (
         <>
           <p className="mt-2 text-[13px] text-overview-text-secondary">
@@ -103,15 +111,15 @@ export function RemindersPanel({
               </div>
             ) : (
               // Filtro de chip (Agência/Clientes/Minhas) sem nenhum resultado
-              // — diferente de `counts.openCount === 0` (nenhuma pendência em
-              // lugar nenhum): aqui existem pendências, só não deste recorte.
-              <EmptyState title="Nenhuma pendência neste filtro." />
+              // — diferente de `counts.openCount === 0` (nenhum lembrete em
+              // lugar nenhum): aqui existem lembretes, só não deste recorte.
+              <EmptyState title="Nenhum lembrete neste filtro." />
             )}
           </div>
 
           {hiddenCount > 0 && (
             <Link href={expandHref} scroll={false} className={`mt-2 inline-block ${LINK_ACTION_CLASSES}`}>
-              Ver todas as {reminders.length} pendências
+              Ver todos os {reminders.length} lembretes
             </Link>
           )}
           {expanded && reminders.length > REMINDERS_HOME_VISIBLE_LIMIT && (

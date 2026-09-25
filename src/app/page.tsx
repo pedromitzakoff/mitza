@@ -4,6 +4,7 @@ import { perfNow, perfLog } from "@/lib/perf-log";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { todayUTC, todayDateString } from "@/lib/today";
+import { effectiveTaskStatus } from "@/lib/task-status";
 import {
   currentMonthRange,
   findSprintForDate,
@@ -317,7 +318,7 @@ export default async function Home({
     loadOperationChannelStates(supabase, monthRange.firstDay, "meta", "todos"),
     loadOperationChannelStates(supabase, monthRange.firstDay, "google", "todos"),
   ]);
-  perfLog("visão geral bloco 1 (12 queries + ClientOperationalState + Pendências + Atividade recente)", __perfBlock1Start);
+  perfLog("visão geral bloco 1 (12 queries + ClientOperationalState + Lembretes + Atividade recente)", __perfBlock1Start);
 
   const clientIds = (clients ?? []).map((c) => c.id);
   const currentSprintIds = (sprints ?? [])
@@ -433,6 +434,7 @@ export default async function Home({
 
   const tasksByClient = new Map<string, OperationClientRawData["tasks"]>();
   for (const t of tasks ?? []) {
+    if (!t.client_id) continue;
     const list = tasksByClient.get(t.client_id) ?? [];
     list.push(t);
     tasksByClient.set(t.client_id, list);
@@ -667,11 +669,30 @@ export default async function Home({
   }
 
   const clientStatusById = new Map((clients ?? []).map((c) => [c.id, c.status]));
+
+  // Resumo compacto "Pendências" (Etapa "Pendências"): mesma fonte de
+  // verdade da área dedicada (`/pendencias`) — a mesma tabela `tasks` já
+  // buscada acima (`tasks`), o mesmo princípio "Workspace = só cliente
+  // ativo" (`clientStatusById`) e o mesmo `effectiveTaskStatus` (status
+  // "atrasado" nunca gravado, sempre derivado). Nunca uma segunda query:
+  // é só um recorte, na Home, do que a Home já buscava de qualquer forma.
+  let pendenciasOpenCount = 0;
+  let pendenciasOverdueCount = 0;
+  for (const task of tasks ?? []) {
+    if (task.client_id && clientStatusById.get(task.client_id) !== WORKSPACE_ACTIVE_CONTRACT_STATUS) continue;
+    const effective = effectiveTaskStatus(task, todayUTC());
+    if (effective === "feito" || effective === "nao_realizado") continue;
+    pendenciasOpenCount += 1;
+    if (effective === "atrasado") pendenciasOverdueCount += 1;
+  }
+
   const operationIndicators = computeOperationIndicators({
     cards: indicatorCards,
     clientStatusById,
     teamMembers: (teamMembersForIndicators ?? []).map((m) => ({ id: m.id, systemRole: m.system_role, status: m.status })),
-    completedTaskClientIds: (completedTasksForIndicators ?? []).map((t) => t.client_id),
+    completedTaskClientIds: (completedTasksForIndicators ?? [])
+      .map((t) => t.client_id)
+      .filter((id): id is string => id !== null),
     reviewClientIds: (reviewsForIndicators ?? []).map((r) => r.client_id),
     hasClientFilter: Boolean(clientFilter),
   });
@@ -818,7 +839,7 @@ export default async function Home({
     return `/?${next.toString()}`;
   };
 
-  // Módulo "Pendências" — independente de mês/gestor/plataforma de
+  // Módulo "Lembretes" — independente de mês/gestor/plataforma de
   // propósito (são registros rápidos, não parte do recorte financeiro/
   // operacional). Mesmo espírito de `prioritiesUrl`: abrir/fechar os
   // overlays (drawer de adicionar/editar, "Ver concluídas") nunca "gruda"
@@ -1078,7 +1099,27 @@ export default async function Home({
           )}
         </div>
 
-        {/* Módulo "Pendências": lembretes rápidos e leves (agência/cliente).
+        {/* Resumo compacto "Pendências" (Etapa "Pendências"): a Home nunca
+            mais carrega UI pesada de gestão de tarefas (lista, filtros,
+            edição inline) — isso agora vive só em `/pendencias`. Aqui é só
+            um número + link, mesma linguagem visual `border-t` das seções
+            acima, mesma fonte de verdade (`pendenciasOpenCount`/
+            `pendenciasOverdueCount`, calculados a partir do MESMO `tasks`
+            já buscado nesta página — nunca uma segunda consulta). */}
+        <div className="mt-6 border-t border-overview-border pt-4">
+          <Link href="/pendencias" className="flex items-center justify-between gap-3 hover:opacity-80">
+            <div>
+              <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Pendências</h2>
+              <p className="mt-1 text-[13px] text-overview-text-secondary">
+                {pendenciasOpenCount} em aberto
+                {pendenciasOverdueCount > 0 && ` · ${pendenciasOverdueCount} atrasada${pendenciasOverdueCount !== 1 ? "s" : ""}`}
+              </p>
+            </div>
+            <span className="shrink-0 text-xs font-medium text-brand">Ver tudo →</span>
+          </Link>
+        </div>
+
+        {/* Módulo "Lembretes": registros rápidos e leves (agência/cliente).
             Etapa "Reformulação da Home": mesmo `border-t` das seções acima
             (era um card com borda própria) — não deve dominar a página
             quando vazio, nem quando tem só 1-2 itens. Lista sempre capada

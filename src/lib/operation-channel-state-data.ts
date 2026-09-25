@@ -165,7 +165,11 @@ export async function loadOperationChannelStates(
         "client_last_operational_activity:operation-channel",
       ),
       requireQuery(
-        supabase.from("tasks").select("client_id, status, due_date").in("client_id", clientIds).in("status", ["pendente", "atrasado"]),
+        supabase
+          .from("tasks")
+          .select("client_id, status, due_date")
+          .in("client_id", clientIds)
+          .in("status", ["pendente", "em_andamento", "aguardando", "bloqueado", "atrasado"]),
         "tasks:operation-channel",
       ),
       requireQuery(
@@ -294,6 +298,7 @@ export async function loadOperationChannelStates(
   const overdueCountByClient = new Map<string, number>();
   const openCountByClient = new Map<string, number>();
   for (const task of openTasks ?? []) {
+    if (!task.client_id) continue;
     openCountByClient.set(task.client_id, (openCountByClient.get(task.client_id) ?? 0) + 1);
     if (effectiveTaskStatus(task, today) !== "atrasado") continue;
     overdueCountByClient.set(task.client_id, (overdueCountByClient.get(task.client_id) ?? 0) + 1);

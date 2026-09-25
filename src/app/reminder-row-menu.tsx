@@ -6,7 +6,7 @@ import { useFloatingMenuPosition, FloatingPortalPanel } from "@/lib/floating-men
 import { useToast } from "@/app/toast-provider";
 import { deleteReminderAction } from "./reminders-actions";
 
-/** Menu "•••" de cada linha do módulo de Pendências — mesma estrutura de
+/** Menu "•••" de cada linha do módulo de Lembretes — mesma estrutura de
  * `TaskRowMenu` (task-row.tsx), sem o modo de expansão inline (não existe
  * aqui) e sem gate por admin: a RLS de `reminders` já decide quem pode
  * excluir, um erro do servidor aparece por toast. */
@@ -44,7 +44,7 @@ export function ReminderRowMenu({ reminderId, reminderTitle, editHref }: { remin
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Mais ações da pendência"
+        aria-label="Mais ações do lembrete"
         className="mitza-pressable rounded px-1 text-sm text-overview-text-muted transition-colors hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       >
         •••

@@ -22,7 +22,7 @@ export function ReminderCompleteButton({ tone }: { tone: "overdue" | "today" | "
     <button
       type="submit"
       disabled={pending}
-      aria-label="Concluir pendência"
+      aria-label="Concluir lembrete"
       title="Concluir"
       className={`mitza-pressable h-4 w-4 shrink-0 rounded-full border-2 bg-transparent hover:bg-overview-surface-hover disabled:cursor-not-allowed disabled:opacity-50 ${toneClass}`}
     />
