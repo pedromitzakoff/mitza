@@ -1,9 +1,8 @@
 import type { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { effectiveTaskStatus } from "@/lib/task-status";
-import { todayDateString, todayUTC } from "@/lib/today";
+import { todayUTC } from "@/lib/today";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
-import { fetchRecurringTaskListsForSprints } from "@/lib/recurring-task-data";
 import type { PendenciaItem } from "@/lib/pendencias";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
@@ -63,6 +62,22 @@ export interface PendenciasRawData {
  * pausado/encerrado nunca aparece aqui — mesmo critério de
  * `/operation`/`/sprints`/Dashboard. Pendência INTERNA (sem cliente) nunca é
  * afetada por esse filtro (não existe "cliente pausado" pra ela).
+ *
+ * Etapa "Pendências — Demandas" (correção de conceito): Pendências mostra
+ * só DEMANDA criada manualmente por alguém — nunca rotina operacional nem
+ * tarefa gerada pelo sistema. `tasks.template_id` já é o sinal existente
+ * (auditado, nenhuma coluna nova) que distingue os dois: toda tarefa
+ * gerada automaticamente por um Modelo de Tarefa de Sprint
+ * (`sprint_task_templates`, ver /settings/sprint-task-templates) grava seu
+ * `template_id`; toda tarefa criada por uma pessoa — via este quick-create,
+ * via "+ Tarefa" no cliente, ou pelo formulário legado — nunca grava
+ * `template_id` (fica `null`). `.is("template_id", null)` é portanto a
+ * REGRA que decide "esta task aparece em Pendências" — filtrada aqui, na
+ * própria query, nunca em memória (mais barato, e a única fonte da regra).
+ * Recorrências (`recurring_tasks`) nunca aparecem aqui em nenhuma hipótese
+ * — são um eixo à parte (permanente, execuções em
+ * `recurring_task_executions`), sem nenhuma linha em `tasks`; continuam
+ * tratadas só pela Operação/`/sprints`, nunca representadas nesta página.
  */
 export async function loadPendenciasRawData(supabase: Supabase): Promise<PendenciasRawData> {
   const [taskRows, clientRows, teamMemberRows] = await Promise.all([
@@ -71,7 +86,8 @@ export async function loadPendenciasRawData(supabase: Supabase): Promise<Pendenc
         .from("tasks")
         .select(
           "id, title, type, status, priority, due_date, notes, sprint_id, client_id, client:clients(id, name, status), assignee:team_members!tasks_assignee_id_fkey(id, name, status)",
-        ),
+        )
+        .is("template_id", null),
       "tasks:pendencias",
     ),
     requireQuery(supabase.from("clients").select("id, name").eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS).order("name"), "clients:pendencias"),
@@ -114,70 +130,3 @@ export async function loadPendenciasRawData(supabase: Supabase): Promise<Pendenc
   };
 }
 
-export interface PendingRecurringTaskItem {
-  recurringTaskId: string;
-  title: string;
-  icon: string;
-  color: string;
-  clientId: string;
-  clientName: string;
-  /** "2/4 execuções nesta semana" — já formatado (mesmo helper que
-   * `/sprints` usa), pra esta seção nunca precisar reimplementar a
-   * lógica de exibição de progresso. */
-  progressLabel: string;
-  nextExecutionLabel: string;
-}
-
-/**
- * Recorrências da sprint ATUAL de cada cliente ativo que ainda não bateram
- * a meta semanal (seção 9 do pedido: "representadas, nunca duplicadas") —
- * reaproveita `fetchRecurringTaskListsForSprints` (o mesmo núcleo batched
- * que já alimenta `/sprints`) inteiro; nada aqui recalcula progresso ou
- * grava execução — a Pendência só aponta pra onde registrar (a página do
- * cliente, onde o drawer de recorrência já existe) em vez de reconstruir
- * esse fluxo do zero.
- */
-export async function loadPendingRecurringTasks(supabase: Supabase): Promise<PendingRecurringTaskItem[]> {
-  const today = todayDateString();
-
-  const [clientRows, sprintRows] = await Promise.all([
-    requireQuery(supabase.from("clients").select("id, name").eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS), "clients:pendencias-recurring"),
-    requireQuery(
-      supabase.from("sprints").select("id, client_id, start_date, end_date").lte("start_date", today).gte("end_date", today),
-      "sprints:pendencias-recurring",
-    ),
-  ]);
-
-  if (sprintRows.length === 0) return [];
-
-  const activeClientIds = new Set(clientRows.map((c) => c.id));
-  const clientNameById = new Map(clientRows.map((c) => [c.id, c.name]));
-  const currentSprints = sprintRows.filter((sprint) => activeClientIds.has(sprint.client_id));
-  if (currentSprints.length === 0) return [];
-
-  const listsBySprintId = await fetchRecurringTaskListsForSprints(supabase, currentSprints, today);
-
-  const items: PendingRecurringTaskItem[] = [];
-  for (const sprint of currentSprints) {
-    const list = listsBySprintId.get(sprint.id) ?? [];
-    for (const task of list) {
-      // Sem meta configurada: nada a cobrar (mesmo critério de
-      // `computePreviousSprintPending`, nunca é pendência sem meta). Meta
-      // já batida: também não é pendência.
-      if (task.progress.goal === null || task.progress.done >= task.progress.goal) continue;
-
-      items.push({
-        recurringTaskId: task.id,
-        title: task.title,
-        icon: task.icon,
-        color: task.color,
-        clientId: sprint.client_id,
-        clientName: clientNameById.get(sprint.client_id) ?? "Cliente",
-        progressLabel: `${task.progress.done}/${task.progress.goal} execuções nesta semana`,
-        nextExecutionLabel: task.nextExecutionLabel,
-      });
-    }
-  }
-
-  return items.sort((a, b) => a.clientName.localeCompare(b.clientName, "pt-BR") || a.title.localeCompare(b.title, "pt-BR"));
-}

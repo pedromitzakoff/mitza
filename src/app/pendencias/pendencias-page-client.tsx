@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   filterPendencias,
@@ -32,47 +31,21 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/app/toast-provider";
 import { PendenciaRow } from "./pendencia-row";
 import { PendenciaDrawer } from "./pendencia-drawer";
-import type { PendenciasAssigneeOption, PendenciasClientOption, PendingRecurringTaskItem } from "./pendencias-data";
+import type { PendenciasAssigneeOption, PendenciasClientOption } from "./pendencias-data";
 
 /**
- * Seção "Recorrências" (seção 9 do pedido) — nunca uma linha de `tasks`:
- * `recurring_tasks` é um eixo à parte (registro permanente + execuções em
- * `recurring_task_executions`, ver `lib/recurring-tasks.ts`), representado
- * aqui só como resumo ("2/4 execuções nesta semana"). Clicar leva pra
- * página do cliente, onde o drawer de registro de execução já existe — essa
- * seção nunca reimplementa registro/checklist/histórico.
+ * Etapa "Pendências — Demandas": os quick filters passaram a recortar por
+ * STATUS, nunca mais por prazo — "Atrasadas"/"Hoje"/"Esta semana" continuam
+ * plenamente acessíveis (filtro de status inclui "atrasado"; "Agrupar por
+ * Prazo" já tem esses buckets), só deixaram de ser atalho de primeira
+ * linha, pra manter a lista de atalhos simples e orientada à pergunta
+ * "o que ainda precisa da minha atenção", não "quando vence".
  */
-function RecurringTasksSection({ items }: { items: PendingRecurringTaskItem[] }) {
-  if (items.length === 0) return null;
-
-  return (
-    <div className="mt-4 rounded-lg border border-overview-border">
-      <div className="flex items-center gap-2 border-b border-overview-border bg-overview-surface-subtle px-2 py-1.5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-overview-text-secondary">Recorrências pendentes esta semana</p>
-        <span className="text-[11px] text-overview-text-muted">{items.length}</span>
-      </div>
-      <ul>
-        {items.map((item) => (
-          <li key={`${item.recurringTaskId}:${item.clientId}`} className="border-b border-overview-border/60 px-2 py-1.5 last:border-0">
-            <Link href={`/clients/${item.clientId}`} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 hover:underline">
-              <span className="text-sm font-medium text-overview-text-primary">{item.title}</span>
-              <span className="text-xs text-overview-text-secondary">{item.clientName}</span>
-              <span className="text-xs text-overview-text-secondary">{item.progressLabel}</span>
-              <span className="text-xs text-overview-text-muted">Próxima: {item.nextExecutionLabel}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 const QUICK_FILTERS: { value: PendenciaQuickFilter; label: string }[] = [
+  { value: "abertas", label: "Abertas" },
   { value: "minhas", label: "Minhas" },
-  { value: "todas", label: "Todas" },
-  { value: "atrasadas", label: "Atrasadas" },
-  { value: "hoje", label: "Hoje" },
-  { value: "semana", label: "Esta semana" },
+  { value: "aguardando", label: "Aguardando" },
+  { value: "concluidas", label: "Concluídas" },
 ];
 
 const GROUP_BY_OPTIONS: { value: PendenciaGroupBy; label: string }[] = [
@@ -131,7 +104,7 @@ function QuickCreateForm({
       setError(result.error);
       return;
     }
-    showToast(result?.message ?? "Pendência criada.");
+    showToast(result?.message ?? "Demanda criada.");
     (event.target as HTMLFormElement).reset();
     setOpen(false);
     onCreated();
@@ -144,14 +117,14 @@ function QuickCreateForm({
         onClick={() => setOpen(true)}
         className="mitza-pressable rounded-md border border-overview-border bg-overview-surface px-3 py-1.5 text-xs font-medium text-overview-text-primary hover:border-brand hover:text-brand"
       >
-        + Nova pendência
+        + Nova demanda
       </button>
     );
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-1.5 rounded-md border border-overview-border bg-overview-surface p-2">
-      <input name="title" required autoFocus placeholder="Título da pendência" className={`${fieldClasses} min-w-[200px] flex-1`} />
+      <input name="title" required autoFocus placeholder="Título da demanda" className={`${fieldClasses} min-w-[200px] flex-1`} />
       <select name="client_id" defaultValue="" className={fieldClasses} aria-label="Cliente">
         <option value="">Interna</option>
         {clientOptions.map((client) => (
@@ -246,14 +219,12 @@ export function PendenciasPageClient({
   items: initialItems,
   clientOptions,
   assigneeOptions,
-  recurringTasks,
   currentTeamMemberId,
   isAdmin,
 }: {
   items: PendenciaItem[];
   clientOptions: PendenciasClientOption[];
   assigneeOptions: PendenciasAssigneeOption[];
-  recurringTasks: PendingRecurringTaskItem[];
   currentTeamMemberId: string;
   isAdmin: boolean;
 }) {
@@ -383,7 +354,7 @@ export function PendenciasPageClient({
     <div className="mx-auto max-w-6xl px-6 py-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Pendências</h1>
-        <p className="text-sm text-muted-foreground">Todas as tarefas da agência — por cliente ou internas — em um só lugar.</p>
+        <p className="text-sm text-muted-foreground">Demandas criadas manualmente — por cliente ou internas — nunca rotina automática da Operação.</p>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-1.5">
@@ -493,14 +464,12 @@ export function PendenciasPageClient({
         </span>
       </div>
 
-      <RecurringTasksSection items={recurringTasks} />
-
       <div className="mt-4">
         <QuickCreateForm clientOptions={clientOptions} assigneeOptions={assigneeOptions} onCreated={() => {}} />
       </div>
 
       <div className="mt-4 flex flex-col gap-4">
-        {groups.length === 0 && <EmptyState size="sm">Nenhuma pendência encontrada com esses filtros.</EmptyState>}
+        {groups.length === 0 && <EmptyState size="sm">Nenhuma demanda encontrada com esses filtros.</EmptyState>}
         {groups.map((group) => (
           <div key={group.key} className="rounded-lg border border-overview-border">
             <div className="flex items-center gap-2 border-b border-overview-border bg-overview-surface-subtle px-2 py-1.5">

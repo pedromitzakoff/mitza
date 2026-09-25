@@ -11,7 +11,7 @@ const VALID_STATUSES: readonly TaskStatus[] = [
   "nao_realizado",
 ];
 const VALID_PRIORITIES: readonly TaskPriority[] = ["urgente", "alta", "normal", "baixa"];
-const VALID_QUICK_FILTERS: readonly PendenciaQuickFilter[] = ["minhas", "todas", "atrasadas", "hoje", "semana"];
+const VALID_QUICK_FILTERS: readonly PendenciaQuickFilter[] = ["abertas", "minhas", "aguardando", "concluidas"];
 const VALID_GROUP_BY: readonly PendenciaGroupBy[] = ["status", "cliente", "responsavel", "prazo", "nenhum"];
 
 /**
@@ -54,7 +54,12 @@ export interface PendenciaItem {
   assignee: PendenciaAssigneeRef | null;
 }
 
-export type PendenciaQuickFilter = "minhas" | "todas" | "atrasadas" | "hoje" | "semana";
+/** Etapa "Pendências — Demandas": recorte por STATUS (não mais por prazo —
+ * "Atrasadas"/"Hoje"/"Esta semana" continuam plenamente acessíveis via
+ * filtro de status/agrupamento por prazo, só deixaram de ser atalho de
+ * primeira linha). "abertas" (default) = tudo que não é terminal; nenhum
+ * recorte extra além da regra padrão de esconder concluídas. */
+export type PendenciaQuickFilter = "abertas" | "minhas" | "aguardando" | "concluidas";
 export type PendenciaGroupBy = "status" | "cliente" | "responsavel" | "prazo" | "nenhum";
 
 export interface PendenciasFilterState {
@@ -77,7 +82,7 @@ export interface PendenciasFilterState {
 }
 
 export const DEFAULT_PENDENCIAS_FILTERS: PendenciasFilterState = {
-  quickFilter: "todas",
+  quickFilter: "abertas",
   clientId: null,
   internalOnly: false,
   assigneeId: null,
@@ -162,8 +167,8 @@ export function filterPendencias(
   filters: PendenciasFilterState,
   context: PendenciasFilterContext,
 ): PendenciaItem[] {
-  const weekEnd = endOfWeek(context.today);
   const explicitlyShowsCompleted = filters.statuses.some((status) => TERMINAL_STATUSES.includes(status));
+  const quickFilterShowsCompleted = filters.quickFilter === "concluidas";
 
   return items.filter((item) => {
     if (filters.internalOnly) {
@@ -178,23 +183,20 @@ export function filterPendencias(
       case "minhas":
         if (!context.currentTeamMemberId || item.assignee?.id !== context.currentTeamMemberId) return false;
         break;
-      case "atrasadas":
-        if (item.status !== "atrasado") return false;
+      case "aguardando":
+        if (item.status !== "aguardando") return false;
         break;
-      case "hoje":
-        if (item.dueDate !== context.today) return false;
+      case "concluidas":
+        if (!TERMINAL_STATUSES.includes(item.status)) return false;
         break;
-      case "semana":
-        if (item.dueDate < context.today || item.dueDate > weekEnd) return false;
-        break;
-      case "todas":
+      case "abertas":
         break;
     }
 
     if (filters.statuses.length > 0 && !filters.statuses.includes(item.status)) return false;
     if (filters.priorities.length > 0 && !filters.priorities.includes(item.priority)) return false;
 
-    if (!filters.includeCompleted && !explicitlyShowsCompleted && TERMINAL_STATUSES.includes(item.status)) {
+    if (!filters.includeCompleted && !explicitlyShowsCompleted && !quickFilterShowsCompleted && TERMINAL_STATUSES.includes(item.status)) {
       return false;
     }
 

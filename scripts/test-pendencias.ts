@@ -4,24 +4,20 @@
  * novos nunca colapsam pra "pendente") + checagens ESTRUTURAIS (código-
  * fonte) confirmando invariantes que dependeriam de Supabase real pra
  * verificar em memória (mesmo padrão já usado em
- * `test-operation-goal-filter.ts`/`test-client-funnels.ts`). Cobre os 22
- * cenários pedidos: filtro por cliente específico/interna/todos; filtro por
- * responsável; os 5 quick filters (Minhas/Todas/Atrasadas/Hoje/Esta
- * semana); filtros combináveis (status + prioridade ao mesmo tempo);
- * concluídas escondidas por padrão; concluídas aparecem com seleção
- * explícita de status; concluídas aparecem com `includeCompleted`;
- * agrupamento por status (ordem fixa); por prazo (buckets); por cliente
- * (Interna sempre por último); por responsável (Sem responsável sempre por
- * último); "sem agrupamento" (um grupo só); grupos vazios nunca aparecem;
- * `endOfWeek` (segunda→domingo, domingo→domingo); round-trip de URL
- * (parse/serialize); URL vazia usa os defaults; valores inválidos na URL
- * caem pro default; regressão de `effectiveTaskStatus` (intermediários
- * nunca colapsam pra "pendente"; atrasado sobrepõe qualquer status não-
- * terminal; terminal nunca vira atrasado mesmo com prazo vencido);
- * `tasks-actions.ts` reabre emitindo TASK_REOPENED e trata cliente nulo em
- * toda mutação; consumidores de status fechado (client-operational-state-
- * data.ts/operation-channel-state-data.ts) guardam client_id nulo; status
- * editáveis inline nunca incluem "atrasado"/"nao_realizado".
+ * `test-operation-goal-filter.ts`/`test-client-funnels.ts`). Cobre os
+ * cenários originais (filtro por cliente/interna/todos; filtro por
+ * responsável; os 4 quick filters — Abertas/Minhas/Aguardando/Concluídas —
+ * reformulados na correção de conceito abaixo; filtros combináveis; regras
+ * de visibilidade de concluídas; agrupamento por status/prazo/cliente/
+ * responsável/nenhum; `endOfWeek`; round-trip de URL; regressão de
+ * `effectiveTaskStatus`; reabertura + cliente nulo em `tasks-actions.ts`;
+ * consumidores de status fechado guardando client_id nulo; status
+ * editáveis inline) MAIS a correção de conceito "Pendências — Demandas"
+ * (seção 13): a página deixou de mostrar toda `tasks` e passou a mostrar
+ * só demanda criada manualmente — nunca rotina/tarefa gerada pelo sistema
+ * (`sprint_task_templates`) nem `recurring_tasks` (que nunca teve
+ * representação em `/pendencias`, removida do card errado onde tinha sido
+ * colocada por engano).
  *
  * Rodar: npx tsx scripts/test-pendencias.ts
  */
@@ -110,40 +106,35 @@ console.log("\n2 — filtro por responsável\n");
   );
 }
 
-console.log("\n3 — 5 quick filters\n");
+console.log("\n3 — 4 quick filters (Abertas/Minhas/Aguardando/Concluídas)\n");
 {
-  const mine = item({ id: "1", assignee: { id: "tm-1", name: "Eu", status: "ativo" }, dueDate: "2026-09-30" });
-  const notMine = item({ id: "2", assignee: { id: "tm-2", name: "Outra pessoa", status: "ativo" }, dueDate: "2026-09-30" });
-  const overdue = item({ id: "3", status: "atrasado", rawStatus: "pendente", dueDate: "2026-09-20" });
-  const today = item({ id: "4", dueDate: TODAY });
-  const thisWeek = item({ id: "5", dueDate: "2026-09-27" }); // domingo desta semana ISO
-  const nextWeek = item({ id: "6", dueDate: "2026-10-05" });
-  const all = [mine, notMine, overdue, today, thisWeek, nextWeek];
+  const mine = item({ id: "1", assignee: { id: "tm-1", name: "Eu", status: "ativo" } });
+  const notMine = item({ id: "2", assignee: { id: "tm-2", name: "Outra pessoa", status: "ativo" } });
+  const waiting = item({ id: "3", status: "aguardando", rawStatus: "aguardando" });
+  const overdue = item({ id: "4", status: "atrasado", rawStatus: "pendente", dueDate: "2026-09-20" });
+  const done = item({ id: "5", status: "feito", rawStatus: "feito" });
+  const notDone = item({ id: "6", status: "nao_realizado", rawStatus: "nao_realizado" });
+  const all = [mine, notMine, waiting, overdue, done, notDone];
 
+  check(
+    "quickFilter=abertas (default) — tudo que não é terminal, mesmo comportamento do antigo 'todas'",
+    filterPendencias(all, { ...DEFAULT_PENDENCIAS_FILTERS, quickFilter: "abertas" }, CTX).map((i) => i.id),
+    ["1", "2", "3", "4"],
+  );
   check(
     "quickFilter=minhas",
     filterPendencias(all, { ...DEFAULT_PENDENCIAS_FILTERS, quickFilter: "minhas" }, CTX).map((i) => i.id),
     ["1"],
   );
   check(
-    "quickFilter=atrasadas",
-    filterPendencias(all, { ...DEFAULT_PENDENCIAS_FILTERS, quickFilter: "atrasadas" }, CTX).map((i) => i.id),
+    "quickFilter=aguardando",
+    filterPendencias(all, { ...DEFAULT_PENDENCIAS_FILTERS, quickFilter: "aguardando" }, CTX).map((i) => i.id),
     ["3"],
   );
   check(
-    "quickFilter=hoje",
-    filterPendencias(all, { ...DEFAULT_PENDENCIAS_FILTERS, quickFilter: "hoje" }, CTX).map((i) => i.id),
-    ["4"],
-  );
-  check(
-    "quickFilter=semana (inclui hoje até domingo, exclui a semana seguinte)",
-    filterPendencias(all, { ...DEFAULT_PENDENCIAS_FILTERS, quickFilter: "semana" }, CTX).map((i) => i.id),
-    ["4", "5"],
-  );
-  check(
-    "quickFilter=todas não aplica nenhum recorte adicional",
-    filterPendencias(all, { ...DEFAULT_PENDENCIAS_FILTERS, quickFilter: "todas" }, CTX).map((i) => i.id),
-    ["1", "2", "3", "4", "5", "6"],
+    "quickFilter=concluidas — mostra SÓ feito/não realizado, mesmo sem includeCompleted",
+    filterPendencias(all, { ...DEFAULT_PENDENCIAS_FILTERS, quickFilter: "concluidas" }, CTX).map((i) => i.id),
+    ["5", "6"],
   );
 }
 
@@ -240,7 +231,7 @@ console.log("\n7 — endOfWeek (fim da semana ISO)\n");
 console.log("\n8 — parse/serialize de filtros na URL\n");
 {
   const filters: PendenciasFilterState = {
-    quickFilter: "atrasadas",
+    quickFilter: "aguardando",
     clientId: "c1",
     internalOnly: false,
     assigneeId: "tm-2",
@@ -342,6 +333,40 @@ console.log("\n12 — checagens estruturais: consumidores de status fechado guar
     /"pendente", "em_andamento", "aguardando", "bloqueado", "atrasado"/.test(channelState),
   );
   ok("operation-channel-state-data.ts guarda client_id nulo antes de usar como chave de mapa", channelState.includes("if (!task.client_id) continue;"));
+}
+
+console.log("\n13 — correção de conceito: Pendências mostra só DEMANDA manual, nunca rotina/tarefa gerada pelo sistema\n");
+{
+  const dataSource = readFileSync(join(__dirname, "../src/app/pendencias/pendencias-data.ts"), "utf8");
+  const pageClientSource = readFileSync(join(__dirname, "../src/app/pendencias/pendencias-page-client.tsx"), "utf8");
+  const pageSource = readFileSync(join(__dirname, "../src/app/pendencias/page.tsx"), "utf8");
+  const homeSource = readFileSync(join(__dirname, "../src/app/page.tsx"), "utf8");
+
+  ok(
+    "a regra que decide 'aparece em Pendências' é template_id is null, filtrada na própria query (nunca em memória)",
+    dataSource.includes('.is("template_id", null)'),
+  );
+  ok(
+    "loadPendingRecurringTasks (seção de Recorrências) não existe mais em pendencias-data.ts",
+    !dataSource.includes("loadPendingRecurringTasks") && !dataSource.includes("fetchRecurringTaskListsForSprints"),
+  );
+  ok(
+    "a página /pendencias não chama nada de recurring_tasks (nunca representa recorrência aqui)",
+    !pageSource.includes("loadPendingRecurringTasks") && !pageClientSource.includes("RecurringTasksSection"),
+  );
+  ok(
+    "recurring-task-data.ts (o mecanismo real, usado por /sprints) não foi tocado por esta correção",
+    readFileSync(join(__dirname, "../src/lib/recurring-task-data.ts"), "utf8").includes("fetchRecurringTaskListsForSprints"),
+  );
+  ok(
+    "quick-create de Pendências continua criando type='outro' (nunca um tipo de rotina automática)",
+    pageClientSource.includes('type: "outro"'),
+  );
+
+  ok(
+    "resumo da Home busca template_id (mesma coluna, mesma regra da página) e ignora tarefa com template_id preenchido",
+    homeSource.includes("template_id") && /if \(task\.template_id\) continue;/.test(homeSource),
+  );
 }
 
 console.log(`\nTodos os ${passed} testes passaram.`);

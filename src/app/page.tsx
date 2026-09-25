@@ -206,7 +206,7 @@ export default async function Home({
       supabase
         .from("tasks")
         .select(
-          "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
+          "id, client_id, sprint_id, title, type, due_date, status, notes, template_id, assignee:team_members!tasks_assignee_id_fkey(name, status)",
         ),
       "tasks",
     ),
@@ -676,9 +676,15 @@ export default async function Home({
   // ativo" (`clientStatusById`) e o mesmo `effectiveTaskStatus` (status
   // "atrasado" nunca gravado, sempre derivado). Nunca uma segunda query:
   // é só um recorte, na Home, do que a Home já buscava de qualquer forma.
+  //
+  // Etapa "Pendências — Demandas" (correção de conceito): conta só DEMANDA
+  // manual, nunca rotina operacional/tarefa gerada pelo sistema — mesma
+  // regra exata da página (`template_id` não nulo = gerada por um Modelo de
+  // Tarefa de Sprint, nunca demanda).
   let pendenciasOpenCount = 0;
   let pendenciasOverdueCount = 0;
   for (const task of tasks ?? []) {
+    if (task.template_id) continue;
     if (task.client_id && clientStatusById.get(task.client_id) !== WORKSPACE_ACTIVE_CONTRACT_STATUS) continue;
     const effective = effectiveTaskStatus(task, todayUTC());
     if (effective === "feito" || effective === "nao_realizado") continue;
