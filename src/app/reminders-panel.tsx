@@ -26,7 +26,7 @@ const LINK_ACTION_CLASSES = "text-[13px] text-overview-text-muted underline deco
  *
  * Etapa "Pendências" (nova área): renomeado de "Pendências" pra
  * "Lembretes" — o nome "Pendências" passou a identificar a área nova e
- * dedicada de gestão de tarefas (`/pendencias`, ver `lib/pendencias.ts`),
+ * dedicada de gestão de tarefas (hoje `/demandas`, ver `lib/pendencias.ts`),
  * conceitualmente diferente deste módulo (registros rápidos e leves, sem
  * funil de status/prioridade/responsável formal). Nenhum dado migrou —
  * `reminders` continua sendo exatamente o que sempre foi, só o rótulo

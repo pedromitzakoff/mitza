@@ -24,6 +24,17 @@
  * para o ritmo/Ritmo recomendado) passa a ser o único texto secundário
  * abaixo das barras.
  *
+ * Rodada 5 ("MITZA — Reformulação Estrutural"): `[id]/page.tsx` deixou de
+ * ser "quase tudo" (Funis/Objetivos secundários/Taxa de conversão/Tarefas/
+ * Sprints/Timeline/drawers de revisão empilhados numa "Visão geral" só) —
+ * virou realmente só Visão Geral (KPIs/Ritmo/Demandas abertas), com abas
+ * IRMÃS de verdade (`/relatorio`, `/operation`, `/demandas`, `/edit`) sob um
+ * `layout.tsx` compartilhado que assumiu o header/seletor de cliente/tabs
+ * (antes `role="tablist"` dentro desta página). As seções abaixo que
+ * testavam Tarefas/Sprints/a toolbar de navegação foram atualizadas pra
+ * apontar pro arquivo certo — nunca reescritas do zero, só realocadas
+ * (mesmo componente, mesma prop, mesmo comportamento, arquivo diferente).
+ *
  * Rodar: npx tsx scripts/test-client-page-facelift.ts
  */
 import assert from "node:assert/strict";
@@ -48,7 +59,7 @@ function stripComments(source: string): string {
 }
 
 const pageCode = stripComments(loadSource("src", "app", "clients", "[id]", "page.tsx"));
-const stickyCode = stripComments(loadSource("src", "app", "clients", "client-identity-sticky.tsx"));
+const operationCode = stripComments(loadSource("src", "app", "clients", "[id]", "operation", "page.tsx"));
 const kpiCode = stripComments(loadSource("src", "app", "clients", "monthly-kpi-summary.tsx"));
 const tasksPanelCode = stripComments(loadSource("src", "app", "clients", "month-tasks-panel.tsx"));
 const recurringRowCode = stripComments(loadSource("src", "app", "clients", "recurring-task-row.tsx"));
@@ -58,11 +69,14 @@ const accountFollowUpCode = stripComments(loadSource("src", "app", "clients", "a
 const monthInvestmentCode = stripComments(loadSource("src", "app", "clients", "month-investment-summary.tsx"));
 const channelPlanEditorCode = stripComments(loadSource("src", "app", "clients", "channel-plan-editor.tsx"));
 
-console.log("1 — Largura do conteúdo: mesmo max-w-5xl no container principal e no sticky\n");
+console.log("1 — Largura do conteúdo: mesmo max-w-5xl no container principal (Visão Geral e Operação)\n");
 {
   ok("container principal da Visão Geral usa max-w-5xl (era max-w-6xl)", /max-w-5xl px-6 py-5/.test(pageCode));
   ok("nenhum max-w-6xl sobrevive no container principal", !pageCode.includes('"mx-auto max-w-6xl'));
-  ok("ClientIdentitySticky usa o MESMO max-w-5xl (nunca dois containers de largura diferente)", /max-w-5xl items-center gap-2 px-6 py-1\.5/.test(stickyCode));
+  ok(
+    "Operação (onde Sprints/Tarefas/Histórico moraram, Etapa 5) usa o MESMO max-w-5xl — nunca um container de largura diferente entre abas do mesmo cliente",
+    /max-w-5xl px-6 py-5/.test(operationCode),
+  );
 }
 
 console.log("\n2 — Ritmo vertical: cadência consistente entre as grandes regiões (mt-6)\n");
@@ -70,11 +84,13 @@ console.log("\n2 — Ritmo vertical: cadência consistente entre as grandes regi
   // Rodada 2: o wrapper de Performance perdeu bg-cream (ver seção 10) — a
   // margem mt-6 continua, só sem superfície nenhuma em volta.
   ok("bloco Performance usa mt-6 antes dele (sem superfície própria, ver seção 10)", /mt-6">\s*<AccountFollowUpPanel/.test(pageCode));
-  ok("bloco Tarefas (MonthTasksPanel) usa mt-6 antes dele", /mt-6">\s*<MonthTasksPanel/.test(pageCode));
+  // Rodada 5: Tarefas (MonthTasksPanel) realocado pra Operação — mesma
+  // cadência mt-6 preservada no arquivo novo, nunca perdida na mudança.
+  ok("bloco Tarefas (MonthTasksPanel) usa mt-6 antes dele — agora em Operação", /mt-6">\s*<MonthTasksPanel/.test(operationCode));
   ok("Outros objetivos (quando existe) usa a MESMA cadência mt-6", /mt-6 rounded-lg bg-overview-surface-subtle/.test(secondaryGoalsCode));
   ok(
-    "wrapper redundante mt-3 em torno de Sprints foi removido (Section já aplica seu próprio mt-6)",
-    !/<div className="mt-3">\s*<Section title=\{`Sprints/.test(pageCode),
+    "wrapper redundante mt-3 em torno de Sprints continua removido (Section já aplica seu próprio mt-6) — agora em Operação",
+    !/<div className="mt-3">\s*<Section title=\{`Sprints/.test(operationCode),
   );
 }
 
@@ -131,10 +147,13 @@ console.log("\n8 — Progresso (\"0/2\"): mantido (é informação real), só me
   ok("progresso fica junto do nome (items-baseline, mesma unidade visual)", /items-baseline gap-1\.5 text-sm/.test(recurringRowCode));
 }
 
-console.log("\n9 — Não mexeu no que não devia: Sprints continua com o mesmo SprintCard, mesmas props\n");
+console.log("\n9 — Não mexeu no que não devia: Sprints continua com o mesmo SprintCard, mesmas props (agora em Operação)\n");
 {
-  ok("Sprints continua chamando SprintCard com hideNextAction/hideTaskList (mesmo comportamento de sempre)", /hideNextAction\s*hideTaskList/.test(pageCode));
-  ok("nenhuma prop nova de negócio foi adicionada ao SprintCard nesta etapa", !/accordionRowsPrototype=\{true\}/.test(pageCode));
+  ok(
+    "Operação continua chamando SprintCard com hideNextAction/hideTaskList (mesmo comportamento de sempre, realocado da Visão Geral)",
+    /hideNextAction\s*hideTaskList/.test(operationCode),
+  );
+  ok("nenhuma prop nova de negócio foi adicionada ao SprintCard nesta etapa", !/accordionRowsPrototype=\{true\}/.test(operationCode));
 }
 
 // ---------------------------------------------------------------------------
@@ -151,15 +170,16 @@ console.log("\n10 — Performance sem grande card: superfície removida, assinat
   ok("Ritmo do mês continua com o mesmo divisor horizontal discreto (border-t) separando dos KPIs", /border-t border-overview-border pt-3/.test(accountFollowUpCode));
 }
 
-console.log("\n11 — Toolbar única: Mês + Canal (contexto) antes de Navegação, com divisória\n");
+console.log("\n11 — Toolbar de contexto: Mês + Canal + Planejamento, sem navegação própria (abas viraram rotas irmãs, Etapa 5)\n");
 {
-  ok("seletor de mês e canal vivem na MESMA linha da navegação (uma única div flex, não duas fileiras)", /flex flex-wrap items-center gap-3 border-b border-overview-border text-sm">[\s\S]*?IconButton href=\{prevMonthHref\}[\s\S]*?role="tablist"/.test(pageCode));
-  ok("contexto (mês+canal) vem ANTES da navegação na ordem do JSX", pageCode.indexOf("prevMonthHref") < pageCode.indexOf('role="tablist"'));
-  ok("divisória entre contexto e navegação reaproveita a mesma classe já usada entre navegação e ações (h-4 w-px bg-overview-border)", /hidden h-4 w-px shrink-0 bg-overview-border sm:block/.test(pageCode));
-  ok('navegação continua com role="tablist"/role="tab" (contexto nunca ganha esses papéis)', /<div role="tablist"/.test(pageCode) && !/<div className="flex items-center gap-3 pb-1\.5">\s*<div role="tablist"/.test(pageCode));
-  ok("Canal continua condicional a activeArea === 'visao-geral' (nunca aparece fora da Visão Geral)", /activeArea === "visao-geral" &&\s*\(\s*<VisaoGeralChannelSwitch/.test(pageCode));
-  ok("Mês continua SEM condição de aba (afeta Visão Geral e Timeline — fetchClientOperationalHistory usa o mês selecionado)", /firstDay, lastDay \}, historyPage\)/.test(pageCode));
-  ok("navegação mantém overflow-x-auto (scroll horizontal em telas estreitas, nunca vira tabela)", /role="tablist" className="flex min-w-0 flex-1 items-center gap-4 overflow-x-auto"/.test(pageCode));
+  // Rodada 5: a navegação por abas (`role="tablist"`) saiu de page.tsx —
+  // mora agora em `client-workspace-header.tsx` (layout compartilhado,
+  // rotas irmãs de verdade). page.tsx manteve só a toolbar de CONTEXTO
+  // (mês/canal/planejamento), que nunca foi navegação.
+  ok("page.tsx não declara mais role=\"tablist\" (navegação virou responsabilidade do layout compartilhado)", !pageCode.includes('role="tablist"'));
+  ok("mês e canal continuam na MESMA linha (uma única div flex)", /flex flex-wrap items-center gap-3 border-b border-overview-border[\s\S]{0,40}text-sm">[\s\S]*?IconButton href=\{prevMonthHref\}[\s\S]*?VisaoGeralChannelSwitch/.test(pageCode));
+  ok("Canal (VisaoGeralChannelSwitch) sempre visível — não é mais condicional a 'activeArea', já que esta página É a Visão Geral inteira agora", /<VisaoGeralChannelSwitch baseHref=\{metricsChannelBaseHref\}/.test(pageCode) && !pageCode.includes('activeArea === "visao-geral"'));
+  ok("Operação também tem sua própria navegação de mês (mesmos hrefs prevMonthHref/nextMonthHref, independente da Visão Geral)", /prevMonthHref/.test(operationCode) && /nextMonthHref/.test(operationCode));
 }
 
 console.log("\n12 — Regressão: decisões da rodada 1 continuam de pé\n");
@@ -172,7 +192,7 @@ console.log("\n12 — Regressão: decisões da rodada 1 continuam de pé\n");
 // ---------------------------------------------------------------------------
 // Rodada 3 — "Simplificação Pós-Facelift"
 // ---------------------------------------------------------------------------
-console.log("\n13 — Accordion removido, diferença/ritmo integrados, Planejamento na toolbar\n");
+console.log("\n13 — Accordion removido, diferença/ritmo integrados, Planejamento na toolbar de contexto\n");
 {
   ok('accordion "Ver/Ocultar detalhes do investimento" não existe mais', !/Ver detalhes do investimento|Ocultar detalhes do investimento/.test(monthInvestmentCode));
   ok("nenhum <details> sobrou em month-investment-summary.tsx", !/<details/.test(monthInvestmentCode));
@@ -189,10 +209,13 @@ console.log("\n13 — Accordion removido, diferença/ritmo integrados, Planejame
 
   ok("ChannelPlanEditor não é mais invocado dentro de Performance (só mencionado em comentário explicando a mudança)", !/<ChannelPlanEditor/.test(accountFollowUpCode));
   ok('gatilho de ChannelPlanEditor usa o rótulo curto "Planejamento" (não mais "Editar planejamento")', /\n\s*Planejamento\n/.test(loadSource("src", "app", "clients", "channel-plan-editor.tsx")) && !/Editar planejamento/.test(channelPlanEditorCode));
-  ok("Planejamento (ChannelPlanEditor) aparece no grupo de CONTEXTO da toolbar, antes da divisória/navegação", pageCode.indexOf("<ChannelPlanEditor") > pageCode.indexOf("prevMonthHref") && pageCode.indexOf("<ChannelPlanEditor") < pageCode.indexOf('<div role="tablist"'));
   ok(
-    "Planejamento NÃO é condicional a activeArea === 'visao-geral' (auditoria: não depende de canal nem de aba, ao contrário de VisaoGeralChannelSwitch)",
-    !/activeArea === "visao-geral" &&\s*\(\s*<ChannelPlanEditor/.test(pageCode),
+    "Planejamento (ChannelPlanEditor) aparece no grupo de CONTEXTO da toolbar de page.tsx (mês/canal/planejamento — nunca mais posicionado contra uma navegação por abas, que não existe mais aqui)",
+    pageCode.indexOf("<ChannelPlanEditor") > pageCode.indexOf("prevMonthHref"),
+  );
+  ok(
+    "Planejamento NÃO é condicional a nenhum 'activeArea' (esse conceito não existe mais — page.tsx É a Visão Geral inteira, Etapa 5)",
+    !pageCode.includes("activeArea"),
   );
   ok("Planejamento preserva a mesma condição de disponibilidade de sempre (admin, mês não encerrado, effectiveDate resolvido)", /isAdmin && !isClosedMonth && effectiveDate &&\s*\(\s*<ChannelPlanEditor/.test(pageCode));
   ok("Planejamento recebe os MESMOS dados de sempre (todos os canais, plano por canal, mês civil, horizonte, objetivo)", /channels=\{AVAILABLE_TRAFFIC_CHANNELS\}[\s\S]{0,80}byChannel=\{clientPlan\.byChannel\}[\s\S]{0,80}performanceGoal=\{performanceGoal\}/.test(pageCode));
@@ -222,6 +245,20 @@ console.log("\n14 — RitmoDiagnostic removido: barras + marker são a represent
 
   ok("MonthInvestmentPaceNote (Diferença para o ritmo/Ritmo recomendado) continua intocado por esta rodada", /export function MonthInvestmentPaceNote/.test(monthInvestmentCode));
   ok("ritmoDiff/plan.recommendedDaily continuam com a MESMA fórmula (nenhum cálculo tocado nesta rodada)", /const ritmoDiff = actual - expectedToDate;/.test(monthInvestmentCode) && /plan\.recommendedDaily/.test(monthInvestmentCode));
+}
+
+// ---------------------------------------------------------------------------
+// Rodada 5 — "MITZA — Reformulação Estrutural"
+// ---------------------------------------------------------------------------
+console.log("\n15 — Visão Geral realmente enxuta: nunca duplica Performance/Operação/Demandas completos\n");
+{
+  ok("FunnelsSection não é mais renderizado em page.tsx (foi pra Performance/relatorio)", !pageCode.includes("<FunnelsSection"));
+  ok("MonthTasksPanel não é mais renderizado em page.tsx (foi pra Operação — origin='template' — e Demandas — origin='manual' — separadamente)", !pageCode.includes("<MonthTasksPanel"));
+  ok("SprintCard não é mais renderizado em page.tsx (foi pra Operação)", !pageCode.includes("<SprintCard"));
+  ok("ClientHistoryList não é mais renderizado em page.tsx (histórico operacional foi pra Operação)", !pageCode.includes("<ClientHistoryList"));
+  ok("nenhum drawer de revisão (Record/DetailDrawer) sobrevive em page.tsx (revisões são Operação agora)", !pageCode.includes("RecordAccountReviewDrawer") && !pageCode.includes("AccountReviewDetailDrawer"));
+  ok("AccountInfoDrawer não é mais renderizado em page.tsx (virou drawer global do header do workspace)", !pageCode.includes("<AccountInfoDrawer"));
+  ok("Visão Geral mostra Demandas só como resumo (contagem + link pra /demandas, nunca a lista)", /demandasOpenCount\} em aberto/.test(pageCode) && /href=\{`\/clients\/\$\{client\.id\}\/demandas`\}/.test(pageCode));
 }
 
 console.log(`\n${passed} verificações passaram.`);

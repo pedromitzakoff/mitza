@@ -4,7 +4,7 @@ import { perfNow, perfLog } from "@/lib/perf-log";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { todayUTC, todayDateString } from "@/lib/today";
-import { effectiveTaskStatus } from "@/lib/task-status";
+import { countOpenDemandas } from "@/lib/pendencias";
 import {
   currentMonthRange,
   findSprintForDate,
@@ -670,26 +670,19 @@ export default async function Home({
 
   const clientStatusById = new Map((clients ?? []).map((c) => [c.id, c.status]));
 
-  // Resumo compacto "Pendências" (Etapa "Pendências"): mesma fonte de
-  // verdade da área dedicada (`/pendencias`) — a mesma tabela `tasks` já
-  // buscada acima (`tasks`), o mesmo princípio "Workspace = só cliente
-  // ativo" (`clientStatusById`) e o mesmo `effectiveTaskStatus` (status
-  // "atrasado" nunca gravado, sempre derivado). Nunca uma segunda query:
-  // é só um recorte, na Home, do que a Home já buscava de qualquer forma.
-  //
-  // Etapa "Pendências — Correção de Origem": conta só DEMANDA manual, nunca
-  // rotina operacional/tarefa gerada pelo sistema — mesma regra exata da
-  // página (`origin = 'manual'`, coluna dedicada, nunca `template_id`).
-  let pendenciasOpenCount = 0;
-  let pendenciasOverdueCount = 0;
-  for (const task of tasks ?? []) {
-    if (task.origin !== "manual") continue;
-    if (task.client_id && clientStatusById.get(task.client_id) !== WORKSPACE_ACTIVE_CONTRACT_STATUS) continue;
-    const effective = effectiveTaskStatus(task, todayUTC());
-    if (effective === "feito" || effective === "nao_realizado") continue;
-    pendenciasOpenCount += 1;
-    if (effective === "atrasado") pendenciasOverdueCount += 1;
-  }
+  // Resumo compacto "Demandas" (Etapa "MITZA — Reformulação Estrutural"):
+  // mesma fonte de verdade da área dedicada (`/demandas`) — a mesma tabela
+  // `tasks` já buscada acima, nunca uma segunda query. `countOpenDemandas`
+  // (`lib/pendencias.ts`) é a função PURA compartilhada que decide a regra
+  // (`origin = 'manual'`, cliente workspace-ativo, status efetivo
+  // não-terminal) — antes essa regra estava copiada aqui inline, só
+  // sincronizada por comentário com `loadPendenciasRawData`; agora é a
+  // MESMA função, nunca duas implementações que podem divergir.
+  const { openCount: pendenciasOpenCount, overdueCount: pendenciasOverdueCount } = countOpenDemandas(
+    tasks ?? [],
+    (clientId) => clientStatusById.get(clientId) === WORKSPACE_ACTIVE_CONTRACT_STATUS,
+    todayUTC(),
+  );
 
   const operationIndicators = computeOperationIndicators({
     cards: indicatorCards,
@@ -1104,17 +1097,17 @@ export default async function Home({
           )}
         </div>
 
-        {/* Resumo compacto "Pendências" (Etapa "Pendências"): a Home nunca
-            mais carrega UI pesada de gestão de tarefas (lista, filtros,
-            edição inline) — isso agora vive só em `/pendencias`. Aqui é só
-            um número + link, mesma linguagem visual `border-t` das seções
-            acima, mesma fonte de verdade (`pendenciasOpenCount`/
-            `pendenciasOverdueCount`, calculados a partir do MESMO `tasks`
-            já buscado nesta página — nunca uma segunda consulta). */}
+        {/* Resumo compacto "Demandas": a Home nunca mais carrega UI pesada
+            de gestão de tarefas (lista, filtros, edição inline) — isso
+            agora vive só em `/demandas`. Aqui é só um número + link, mesma
+            linguagem visual `border-t` das seções acima, mesma fonte de
+            verdade (`countOpenDemandas`, `lib/pendencias.ts`), calculada a
+            partir do MESMO `tasks` já buscado nesta página — nunca uma
+            segunda consulta. */}
         <div className="mt-6 border-t border-overview-border pt-4">
-          <Link href="/pendencias" className="flex items-center justify-between gap-3 hover:opacity-80">
+          <Link href="/demandas" className="flex items-center justify-between gap-3 hover:opacity-80">
             <div>
-              <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Pendências</h2>
+              <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Demandas</h2>
               <p className="mt-1 text-[13px] text-overview-text-secondary">
                 {pendenciasOpenCount} em aberto
                 {pendenciasOverdueCount > 0 && ` · ${pendenciasOverdueCount} atrasada${pendenciasOverdueCount !== 1 ? "s" : ""}`}

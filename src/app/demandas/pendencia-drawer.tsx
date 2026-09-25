@@ -146,7 +146,7 @@ export function PendenciaDrawer({
               <CommentThread comments={comments} commentableType="task" commentableId={item.id} clientId={item.client.id} />
             )
           ) : (
-            <p className="mt-2 text-xs text-overview-text-secondary">Disponível só para pendências vinculadas a um cliente.</p>
+            <p className="mt-2 text-xs text-overview-text-secondary">Disponível só para demandas vinculadas a um cliente.</p>
           )}
         </div>
       </div>

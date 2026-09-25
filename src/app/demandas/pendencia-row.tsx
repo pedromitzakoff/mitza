@@ -207,7 +207,7 @@ export function PendenciaRow({
             <button
               type="button"
               onClick={() => setConfirmingDelete(true)}
-              aria-label="Excluir pendência"
+              aria-label="Excluir demanda"
               className="mitza-pressable rounded px-1 text-sm text-overview-text-secondary hover:text-red-600 dark:hover:text-red-400"
             >
               •••

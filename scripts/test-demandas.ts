@@ -340,9 +340,9 @@ console.log("\n12 — checagens estruturais: consumidores de status fechado guar
 
 console.log("\n13 — correção de conceito: Pendências mostra só DEMANDA manual, nunca rotina/tarefa gerada pelo sistema\n");
 {
-  const dataSource = readFileSync(join(__dirname, "../src/app/pendencias/pendencias-data.ts"), "utf8");
-  const pageClientSource = readFileSync(join(__dirname, "../src/app/pendencias/pendencias-page-client.tsx"), "utf8");
-  const pageSource = readFileSync(join(__dirname, "../src/app/pendencias/page.tsx"), "utf8");
+  const dataSource = readFileSync(join(__dirname, "../src/app/demandas/pendencias-data.ts"), "utf8");
+  const pageClientSource = readFileSync(join(__dirname, "../src/app/demandas/pendencias-page-client.tsx"), "utf8");
+  const pageSource = readFileSync(join(__dirname, "../src/app/demandas/page.tsx"), "utf8");
   const homeSource = readFileSync(join(__dirname, "../src/app/page.tsx"), "utf8");
 
   ok(
@@ -367,8 +367,12 @@ console.log("\n13 — correção de conceito: Pendências mostra só DEMANDA man
   );
 
   ok(
-    "resumo da Home busca origin (mesma coluna, mesma regra da página) e ignora tarefa cujo origin não é 'manual'",
-    homeSource.includes(", origin,") && /if \(task\.origin !== "manual"\) continue;/.test(homeSource),
+    "resumo da Home busca origin (mesma coluna) e delega a contagem pra countOpenDemandas — nunca reimplementa a regra inline",
+    homeSource.includes(", origin,") && homeSource.includes("countOpenDemandas("),
+  );
+  ok(
+    "Home não reimplementa mais a checagem 'origin !== manual' inline (fonte única, lib/pendencias.ts)",
+    !/if \(task\.origin !== "manual"\) continue;/.test(homeSource),
   );
 }
 
@@ -485,7 +489,7 @@ console.log("\n16 — duplicateTasksAction: uma leitura + um insert, nunca herda
 console.log("\n17 — exclusão em lote: admin-only, uma leitura + um delete, nunca uma chamada por item\n");
 {
   const tasksActionsSource = readFileSync(join(__dirname, "../src/app/clients/tasks-actions.ts"), "utf8");
-  const pageClientSource = readFileSync(join(__dirname, "../src/app/pendencias/pendencias-page-client.tsx"), "utf8");
+  const pageClientSource = readFileSync(join(__dirname, "../src/app/demandas/pendencias-page-client.tsx"), "utf8");
 
   ok(
     "bulkDeleteTasksAction exige admin (mesma regra da exclusão individual)",
@@ -516,7 +520,7 @@ console.log("\n17 — exclusão em lote: admin-only, uma leitura + um delete, nu
 
 console.log("\n18 — seleção respeita filtros: 'todas visíveis' nunca inclui item escondido por filtro\n");
 {
-  const pageClientSource = readFileSync(join(__dirname, "../src/app/pendencias/pendencias-page-client.tsx"), "utf8");
+  const pageClientSource = readFileSync(join(__dirname, "../src/app/demandas/pendencias-page-client.tsx"), "utf8");
   ok(
     "visibleIds deriva de `filtered` (o recorte já filtrado), nunca da lista completa `items`",
     /const visibleIds = useMemo\(\(\) => filtered\.map/.test(pageClientSource),
@@ -541,8 +545,8 @@ console.log("\n19 — identidade visual de prioridade: 4 cores distintas, sem az
     !dotClasses.some((c) => c.includes("blue")) && !badgeClasses.some((c) => c.includes("blue")),
   );
 
-  const rowSource = readFileSync(join(__dirname, "../src/app/pendencias/pendencia-row.tsx"), "utf8");
-  const drawerSource = readFileSync(join(__dirname, "../src/app/pendencias/pendencia-drawer.tsx"), "utf8");
+  const rowSource = readFileSync(join(__dirname, "../src/app/demandas/pendencia-row.tsx"), "utf8");
+  const drawerSource = readFileSync(join(__dirname, "../src/app/demandas/pendencia-drawer.tsx"), "utf8");
   ok("a linha da lista usa TASK_PRIORITY_DOT_CLASS (ponto pequeno, não pinta a linha inteira)", rowSource.includes("TASK_PRIORITY_DOT_CLASS[item.priority]"));
   ok("o drawer também usa TASK_PRIORITY_DOT_CLASS (mesma identidade visual, consistente)", drawerSource.includes("TASK_PRIORITY_DOT_CLASS[item.priority]"));
 }
@@ -576,7 +580,7 @@ console.log("\n20 — SearchableSelect/SearchableMultiSelect: busca case-insensi
 
 console.log("\n21 — descrição: reaproveita o campo `notes` já existente, textarea maior no drawer\n");
 {
-  const drawerSource = readFileSync(join(__dirname, "../src/app/pendencias/pendencia-drawer.tsx"), "utf8");
+  const drawerSource = readFileSync(join(__dirname, "../src/app/demandas/pendencia-drawer.tsx"), "utf8");
   const formSource = readFileSync(join(__dirname, "../src/app/clients/inline-task-form.tsx"), "utf8");
 
   ok(
@@ -591,7 +595,7 @@ console.log("\n21 — descrição: reaproveita o campo `notes` já existente, te
   );
   ok(
     "indicador de descrição na linha é discreto (ícone com tooltip), nunca o texto completo inline",
-    readFileSync(join(__dirname, "../src/app/pendencias/pendencia-row.tsx"), "utf8").includes('<Tooltip label="Tem descrição">'),
+    readFileSync(join(__dirname, "../src/app/demandas/pendencia-row.tsx"), "utf8").includes('<Tooltip label="Tem descrição">'),
   );
 }
 

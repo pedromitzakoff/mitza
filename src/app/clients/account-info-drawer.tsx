@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { SubmitButton } from "@/app/submit-button";
@@ -37,44 +36,33 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 /**
- * "Informações da conta" (Etapa "Refinamento Visual 2.0 — Ajuste de
- * Arquitetura"): a rodada anterior tinha removido a faixa técnica sempre
- * visível do cabeçalho e reunido tudo num disclosure no FIM da página —
- * pouco acessível na prática, ninguém rola até lá. Vira, nesta etapa, uma
- * ação na própria barra de navegação (mesma linguagem visual dos demais
- * itens, nunca `role="tab"` — não troca o conteúdo principal, não mexe na
- * URL) que abre este drawer lateral, mesmo padrão visual dos demais
- * (`mitza-backdrop-in`/`mitza-panel-in`, ver `creative-comparison-drawer.tsx`/
- * `achievement-detail-drawer.tsx`).
+ * "Informações da conta" — drawer GLOBAL do workspace do cliente (Etapa
+ * "MITZA — Reformulação Estrutural", decisão 4): acessível de qualquer área
+ * (Visão geral/Performance/Operação/Demandas/Configurações), renderizado no
+ * header persistente (`client-workspace-header.tsx`), nunca mais dentro de
+ * uma aba específica. Componente CONTROLADO — quem chama (`AccountInfoDrawerLauncher`)
+ * decide quando montar/desmontar via `onClose`; este componente não tem
+ * mais trigger nem estado de `open` próprio, pra evitar um segundo botão
+ * "Informações da conta" quando embrulhado pelo launcher (que já renderiza
+ * o seu).
  *
- * Reorganização, não reprocessamento: todo valor chega já formatado por
- * `[id]/page.tsx` (mesmas variáveis/cálculos de sempre — `lastOptimization`,
- * `monthPerformanceSummary`, `latestSyncStatus`, `recentSyncRuns` — só
- * reagrupadas em 3 seções conceituais: Dados (o que a Visão Geral está
- * lendo) / Sincronização (saúde da integração) / Operação (acompanhamento
- * humano) + Histórico (link pro drawer já existente,
- * `ClientOperationalHistoryDrawer`, nunca duplicado). "Última revisão" não
- * existe como campo separado de propósito — nesta plataforma otimização
- * JÁ É a revisão da conta (`account_reviews`, ver `LastOptimizationInfo`),
- * um segundo campo duplicaria o mesmo evento.
- *
- * Exceção continua fora daqui: sincronização com problema real aparece nos
- * banners do topo da página (`stractSyncNeedsAttention`, `[id]/page.tsx`),
- * nunca escondida atrás deste drawer — aqui é só para ESTADO SAUDÁVEL,
- * consultável sob demanda.
+ * Todo valor chega pronto de `getAccountInfoDrawerDataAction`
+ * (`account-info-actions.ts`) — a Server Action que substituiu o antigo
+ * "recebe já calculado por `[id]/page.tsx`" (mesmos 3 grupos conceituais:
+ * Dados / Sincronização / Operação + Histórico). Sempre o estado ATUAL da
+ * conta agora, nunca mais escopado ao mês que uma aba específica estava
+ * exibindo — mais correto pra um painel que precisa fazer sentido em
+ * qualquer lugar do workspace.
  */
 export function AccountInfoDrawer({
-  triggerClassName,
-  lastPerformanceUpdateLabel,
+  onClose,
   lastPerformanceUpdateValue,
-  lastPerformanceUpdateSourceLabel,
   latestDataDateLabel,
   hasStractSource,
   syncStatusLabel,
   syncStatusBadgeClassName,
   syncStartedAtLabel,
   metaOnlyLastSyncLabel,
-  lastOptimizationLabel,
   lastOptimizationValue,
   lastOptimizationTooltip,
   canOperate,
@@ -87,10 +75,8 @@ export function AccountInfoDrawer({
   reportShareLinkCreatedAtLabel,
   reportShareLinkUrl,
 }: {
-  triggerClassName: string;
-  lastPerformanceUpdateLabel: string;
+  onClose: () => void;
   lastPerformanceUpdateValue: string;
-  lastPerformanceUpdateSourceLabel: string | null;
   /** `dados até DD/MM` — `null` quando o cliente não tem fonte Stract. */
   latestDataDateLabel: string | null;
   hasStractSource: boolean;
@@ -101,7 +87,6 @@ export function AccountInfoDrawer({
    * de status, mesma decisão de sempre (não existe "success/partial/failed"
    * pro Meta). */
   metaOnlyLastSyncLabel: string | null;
-  lastOptimizationLabel: string;
   lastOptimizationValue: string;
   lastOptimizationTooltip: string | null;
   canOperate: boolean;
@@ -124,41 +109,32 @@ export function AccountInfoDrawer({
    * pra um link ativo criado antes desta etapa (sem valor persistido). */
   reportShareLinkUrl: string | null;
 }) {
-  const [open, setOpen] = useState(false);
-
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={triggerClassName}>
-        Informações da conta
-      </button>
-
-      {open && (
-        <>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Fechar informações da conta"
+        className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30"
+      />
+      <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col overflow-y-auto border-l border-overview-border bg-overview-surface p-5 shadow-lg">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-lg font-semibold text-overview-text-primary">Informações da conta</h2>
           <button
             type="button"
-            onClick={() => setOpen(false)}
-            aria-label="Fechar informações da conta"
-            className="mitza-backdrop-in fixed inset-0 z-40 bg-black/30"
-          />
-          <div className="mitza-panel-in fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col overflow-y-auto border-l border-overview-border bg-overview-surface p-5 shadow-lg">
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="text-lg font-semibold text-overview-text-primary">Informações da conta</h2>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Fechar"
-                className="shrink-0 rounded-md border border-overview-border p-1.5 text-overview-text-secondary hover:bg-overview-surface-hover"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
+            onClick={onClose}
+            aria-label="Fechar"
+            className="shrink-0 rounded-md border border-overview-border p-1.5 text-overview-text-secondary hover:bg-overview-surface-hover"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
 
-            <div className="mt-4 flex flex-col gap-3">
-              <Section title="Dados">
-                <Row label={lastPerformanceUpdateLabel} value={lastPerformanceUpdateValue} />
-                {lastPerformanceUpdateSourceLabel && <Row label="Origem" value={lastPerformanceUpdateSourceLabel} />}
-                {latestDataDateLabel && <Row label="Dados disponíveis até" value={latestDataDateLabel} />}
-              </Section>
+        <div className="mt-4 flex flex-col gap-3">
+          <Section title="Dados">
+            <Row label="Dados atualizados" value={lastPerformanceUpdateValue} />
+            {latestDataDateLabel && <Row label="Dados disponíveis até" value={latestDataDateLabel} />}
+          </Section>
 
               {(hasStractSource || metaOnlyLastSyncLabel) && (
                 <Section title="Sincronização">
@@ -215,28 +191,20 @@ export function AccountInfoDrawer({
               )}
 
               <Section title="Operação">
-                <Row label={lastOptimizationLabel} value={lastOptimizationValue} />
+                <Row label="Última otimização" value={lastOptimizationValue} />
                 {lastOptimizationTooltip && <p className="text-xs text-overview-text-muted">{lastOptimizationTooltip}</p>}
               </Section>
 
               <Section title="Histórico">
-                {/* Fecha este drawer ao navegar — evita os dois drawers
-                    (este + `ClientOperationalHistoryDrawer`) empilhados ao
-                    mesmo tempo; o estado local de `open` não reseta sozinho
-                    numa navegação client-side (o componente não desmonta). */}
-                <Link
-                  href={reviewsHistoryHref}
-                  scroll={false}
-                  onClick={() => setOpen(false)}
-                  className="text-sm font-medium text-brand hover:underline"
-                >
+                {/* Fecha este drawer ao navegar — leva pra Operação
+                    (histórico operacional completo mora lá desde a Etapa
+                    "MITZA — Reformulação Estrutural"). */}
+                <Link href={reviewsHistoryHref} onClick={onClose} className="text-sm font-medium text-brand hover:underline">
                   Ver histórico completo →
                 </Link>
               </Section>
             </div>
-          </div>
-        </>
-      )}
+      </div>
     </>
   );
 }

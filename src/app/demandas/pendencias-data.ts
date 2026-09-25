@@ -83,18 +83,25 @@ export interface PendenciasRawData {
  * `recurring_task_executions`), sem nenhuma linha em `tasks`; continuam
  * tratadas só pela Operação/`/sprints`, nunca representadas nesta página.
  */
-export async function loadPendenciasRawData(supabase: Supabase): Promise<PendenciasRawData> {
+export async function loadPendenciasRawData(supabase: Supabase, scopeClientId?: string): Promise<PendenciasRawData> {
+  let taskQuery = supabase
+    .from("tasks")
+    .select(
+      "id, title, type, status, priority, due_date, notes, sprint_id, client_id, client:clients(id, name, status), assignee:team_members!tasks_assignee_id_fkey(id, name, status)",
+    )
+    .eq("origin", "manual");
+  // Workspace do cliente (`/clients/[id]/demandas`, Etapa "MITZA — Reformulação
+  // Estrutural"): MESMA fonte de verdade da área global — só acrescenta
+  // `client_id = X` na mesma query, nunca uma segunda implementação da
+  // regra `origin = 'manual'`. `clientOptions` fica vazio nesse modo (o
+  // filtro de cliente não faz sentido — já é o próprio contexto).
+  if (scopeClientId) taskQuery = taskQuery.eq("client_id", scopeClientId);
+
   const [taskRows, clientRows, teamMemberRows] = await Promise.all([
-    requireQuery(
-      supabase
-        .from("tasks")
-        .select(
-          "id, title, type, status, priority, due_date, notes, sprint_id, client_id, client:clients(id, name, status), assignee:team_members!tasks_assignee_id_fkey(id, name, status)",
-        )
-        .eq("origin", "manual"),
-      "tasks:pendencias",
-    ),
-    requireQuery(supabase.from("clients").select("id, name").eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS).order("name"), "clients:pendencias"),
+    requireQuery(taskQuery, "tasks:pendencias"),
+    scopeClientId
+      ? Promise.resolve([] as PendenciasClientOption[])
+      : requireQuery(supabase.from("clients").select("id, name").eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS).order("name"), "clients:pendencias"),
     requireQuery(supabase.from("team_members").select("id, name, status").order("name"), "team_members:pendencias"),
   ]);
 

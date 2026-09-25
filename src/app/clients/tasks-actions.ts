@@ -147,11 +147,14 @@ async function performCreateTask(
     }
   }
 
-  if (clientId) revalidatePath(`/clients/${clientId}`);
+  if (clientId) {
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath(`/clients/${clientId}/demandas`);
+  }
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
-  revalidatePath("/pendencias");
+  revalidatePath("/demandas");
   revalidatePath("/");
 
   return { taskId: created.id };
@@ -347,11 +350,14 @@ async function performUpdateTask(
     }
   }
 
-  if (clientId) revalidatePath(`/clients/${clientId}`);
+  if (clientId) {
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath(`/clients/${clientId}/demandas`);
+  }
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
-  revalidatePath("/pendencias");
+  revalidatePath("/demandas");
   revalidatePath("/");
 
   return { title: fields.title };
@@ -477,11 +483,14 @@ export async function completeTaskAction(taskId: string, clientId: string | null
   // certa (linha da tarefa ou drawer) — só revalida os dados em cima da
   // mesma URL, sem navegar, pra não resetar o scroll nem fechar o que
   // estava expandido.
-  if (clientId) revalidatePath(`/clients/${clientId}`);
+  if (clientId) {
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath(`/clients/${clientId}/demandas`);
+  }
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
-  revalidatePath("/pendencias");
+  revalidatePath("/demandas");
   revalidatePath("/");
 
   return {};
@@ -533,11 +542,14 @@ export async function markTaskNotDoneAction(taskId: string, clientId: string | n
     });
   }
 
-  if (clientId) revalidatePath(`/clients/${clientId}`);
+  if (clientId) {
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath(`/clients/${clientId}/demandas`);
+  }
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
-  revalidatePath("/pendencias");
+  revalidatePath("/demandas");
   revalidatePath("/");
 
   return {};
@@ -597,7 +609,7 @@ export async function deleteTaskAction(
 
   if (error) {
     if (!formData) return { error: "Não foi possível excluir a tarefa." };
-    const fallback = clientId ? `/clients/${clientId}` : "/pendencias";
+    const fallback = clientId ? `/clients/${clientId}` : "/demandas";
     redirect(`${fallback}?taskError=${encodeURIComponent("Não foi possível excluir a tarefa.")}`);
   }
 
@@ -617,15 +629,18 @@ export async function deleteTaskAction(
     },
   });
 
-  if (clientId) revalidatePath(`/clients/${clientId}`);
+  if (clientId) {
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath(`/clients/${clientId}/demandas`);
+  }
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
-  revalidatePath("/pendencias");
+  revalidatePath("/demandas");
   revalidatePath("/");
 
   if (!formData) return {};
-  redirect(resolveReturnTo(formData, clientId ? `/clients/${clientId}` : "/pendencias"));
+  redirect(resolveReturnTo(formData, clientId ? `/clients/${clientId}` : "/demandas"));
 }
 
 function pendenciasRevalidate(clientId: string | null, otherClientId?: string | null) {
@@ -637,11 +652,14 @@ function pendenciasRevalidate(clientId: string | null, otherClientId?: string | 
  * tocar clientes diferentes numa única chamada). */
 function pendenciasRevalidateMany(clientIds: (string | null)[]) {
   const unique = new Set(clientIds.filter((id): id is string => id !== null));
-  for (const clientId of unique) revalidatePath(`/clients/${clientId}`);
+  for (const clientId of unique) {
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath(`/clients/${clientId}/demandas`);
+  }
   revalidatePath("/operation");
   revalidatePath("/sprints");
   revalidatePath("/clients");
-  revalidatePath("/pendencias");
+  revalidatePath("/demandas");
   revalidatePath("/");
 }
 

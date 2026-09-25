@@ -1,10 +1,17 @@
 import { notFound } from "next/navigation";
+import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { todayDateString } from "@/lib/today";
 import { resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
 import { buildPerformanceReportDocument } from "@/lib/performance-report/report-document";
 import { getReportShareLinkStatus } from "@/lib/report-share-links";
+import { fetchClientFunnels, listCampaignsForFunnelClassification } from "@/lib/client-funnels-data";
+import { defaultReportPeriod } from "@/lib/client-reports";
+import { fetchClientReportDetail } from "../../client-report-data";
+import { ClientReportWizard } from "../../client-report-wizard";
+import { FunnelsSection } from "../../funnels-section";
+import { Section } from "../../section";
 import { ReportPeriodControl } from "./report-period-control";
 import { buildReportPdfHref } from "./report-period-nav";
 import { ReportBody } from "./report-body";
@@ -38,7 +45,16 @@ export default async function ClientPerformanceReportPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ analyticsPreset?: string; analyticsStart?: string; analyticsEnd?: string; view?: string }>;
+  searchParams: Promise<{
+    analyticsPreset?: string;
+    analyticsStart?: string;
+    analyticsEnd?: string;
+    view?: string;
+    clientReport?: string;
+    reportRecurringTaskId?: string;
+    reportPeriodStart?: string;
+    reportPeriodEnd?: string;
+  }>;
 }) {
   const { id } = await params;
   const {
@@ -46,7 +62,13 @@ export default async function ClientPerformanceReportPage({
     analyticsStart: startParam,
     analyticsEnd: endParam,
     view: viewParam,
+    clientReport: clientReportParam,
+    reportRecurringTaskId,
+    reportPeriodStart: reportPeriodStartParam,
+    reportPeriodEnd: reportPeriodEndParam,
   } = await searchParams;
+  const profile = await getCurrentProfile();
+  const isAdmin = profile?.role === "admin";
   const supabase = await createSupabaseClient();
 
   // Mesmo critério de RLS + 404 silencioso de `clients/[id]/page.tsx` — só a
@@ -78,6 +100,27 @@ export default async function ClientPerformanceReportPage({
   const reportShareLinkStatus = await getReportShareLinkStatus(id);
 
   const basePath = `/clients/${client.id}/relatorio`;
+  const returnTo = basePath;
+
+  // Funis (Etapa "MITZA — Reformulação Estrutural", decisão 5 do usuário:
+  // "Funis fica em Configurações? NÃO — fica em Performance, é
+  // principalmente uma dimensão estratégica de leitura de performance").
+  // Independente do período selecionado no Relatório (cadastro/classificação
+  // do cliente, não um recorte de data) — mesma consulta de sempre.
+  const [clientFunnels, funnelClassificationCampaigns] = await Promise.all([
+    fetchClientFunnels(supabase, id),
+    listCampaignsForFunnelClassification(supabase, id, today),
+  ]);
+
+  // Assistente de Relatório ("Reportar cliente", decisão 5: fica em
+  // Performance — "transforma os dados/resultados em comunicação para o
+  // cliente"). Entrada só pelo drawer de recorrência em Operação/`/sprints`
+  // (`?clientReport=new&reportRecurringTaskId=...`) — nenhum botão solto
+  // aqui ainda (mesmo comportamento de sempre, só a rota mudou).
+  const isNewClientReport = clientReportParam === "new";
+  const clientReportDetail = clientReportParam && !isNewClientReport ? await fetchClientReportDetail(supabase, id, clientReportParam) : null;
+  const suggestedReportPeriod =
+    reportPeriodStartParam && reportPeriodEndParam ? { start: reportPeriodStartParam, end: reportPeriodEndParam } : defaultReportPeriod(today);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 sm:py-6">
@@ -106,6 +149,37 @@ export default async function ClientPerformanceReportPage({
           ) : undefined
         }
       />
+
+      <Section title="Funis">
+        <FunnelsSection clientId={id} returnTo={returnTo} funnels={clientFunnels} campaigns={funnelClassificationCampaigns} isAdmin={isAdmin} />
+      </Section>
+
+      {isNewClientReport && (
+        <ClientReportWizard
+          clientId={id}
+          clientName={client.name}
+          closeHref={returnTo}
+          initialPeriodStart={suggestedReportPeriod.start}
+          initialPeriodEnd={suggestedReportPeriod.end}
+          recurringTaskId={reportRecurringTaskId ?? null}
+        />
+      )}
+
+      {clientReportDetail && (
+        <ClientReportWizard
+          clientId={id}
+          clientName={client.name}
+          closeHref={returnTo}
+          reportId={clientReportDetail.id}
+          initialPeriodStart={clientReportDetail.periodStart}
+          initialPeriodEnd={clientReportDetail.periodEnd}
+          initialMetrics={clientReportDetail.metrics}
+          initialObservations={clientReportDetail.observations}
+          initialStatus={clientReportDetail.status}
+          initialSentAt={clientReportDetail.sentAt}
+          initialSentByName={clientReportDetail.sentByName}
+        />
+      )}
     </div>
   );
 }

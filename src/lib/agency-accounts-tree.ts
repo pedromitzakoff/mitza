@@ -90,3 +90,42 @@ export function buildAgencyAccountsTree(
 
   return { managers: treeManagers, unassigned: sortByWalletPosition(unassignedRaw) };
 }
+
+/**
+ * Sequência GLOBAL e determinística da carteira (Etapa "MITZA — Reformulação
+ * Estrutural", seletor rápido/anterior-próximo do workspace do cliente) —
+ * mesma ordem já visível na árvore da Sidebar: gestores na ordem em que a
+ * árvore os lista (hoje, alfabética — `team_members.order("name")` em
+ * `agency-accounts-tree.tsx`), clientes de cada gestor por `wallet_position`,
+ * "Sem responsável" sempre por último. Nunca uma ordem alfabética da
+ * carteira inteira — decisão explícita: "anterior/próximo" deve navegar na
+ * MESMA sequência operacional que o gestor já usa/organiza na árvore, sem
+ * pular de gestor em gestor de forma imprevisível.
+ */
+export function flattenAgencyTree(tree: AgencyTree): AgencyTreeClient[] {
+  return [...tree.managers.flatMap((manager) => manager.clients), ...tree.unassigned];
+}
+
+export interface WalletSequencePosition {
+  /** 1-indexado (pra exibir "8 / 37", nunca "7 / 37"). */
+  position: number;
+  total: number;
+  prevId: string | null;
+  nextId: string | null;
+}
+
+/** `null` quando o cliente atual não está na carteira ativa (ex.: cliente
+ * pausado/encerrado — a árvore só lista workspace-ativo) — quem chama
+ * decide o que fazer (hoje: esconder anterior/próximo). */
+export function resolveWalletSequence(tree: AgencyTree, currentClientId: string): WalletSequencePosition | null {
+  const flat = flattenAgencyTree(tree);
+  const index = flat.findIndex((client) => client.id === currentClientId);
+  if (index === -1) return null;
+
+  return {
+    position: index + 1,
+    total: flat.length,
+    prevId: index > 0 ? flat[index - 1].id : null,
+    nextId: index < flat.length - 1 ? flat[index + 1].id : null,
+  };
+}

@@ -177,10 +177,13 @@ const NAV_ITEMS: NavItem[] = [
     group: "principal",
   },
   {
-    label: "Pendências",
-    href: "/pendencias",
+    label: "Demandas",
+    href: "/demandas",
     icon: ClipboardList,
-    isActive: (p) => p.startsWith("/pendencias"),
+    // `/pendencias` é um redirect permanente pra `/demandas` (nome antigo) —
+    // continua marcando este item como ativo se alguém chegar por um link
+    // velho, até o redirect completar.
+    isActive: (p) => p.startsWith("/demandas") || p.startsWith("/pendencias"),
     group: "principal",
   },
   {

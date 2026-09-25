@@ -841,7 +841,7 @@ export default async function SprintsPage({
   // resolvidos, igual ao mesmo CTA dentro de `/clients/[id]`.
   const recurringTaskReportHref =
     params.recurringTaskClient && recurringTaskSprint
-      ? `/clients/${params.recurringTaskClient}?clientReport=new&reportRecurringTaskId=${params.recurringTaskDetail}&reportPeriodStart=${recurringTaskSprint.start_date}&reportPeriodEnd=${recurringTaskSprint.end_date}`
+      ? `/clients/${params.recurringTaskClient}/relatorio?clientReport=new&reportRecurringTaskId=${params.recurringTaskDetail}&reportPeriodStart=${recurringTaskSprint.start_date}&reportPeriodEnd=${recurringTaskSprint.end_date}`
       : null;
 
   const activeTabKey =

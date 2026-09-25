@@ -69,10 +69,16 @@ const fieldClasses =
 function QuickCreateForm({
   clientOptions,
   assigneeOptions,
+  scopedClientId,
   onCreated,
 }: {
   clientOptions: PendenciasClientOption[];
   assigneeOptions: PendenciasAssigneeOption[];
+  /** Workspace do cliente (`/clients/[id]/demandas`, Etapa "MITZA —
+   * Reformulação Estrutural"): "+ Nova demanda" já nasce vinculada a este
+   * cliente — nunca pede pra escolher de novo o cliente em que você já
+   * está. `null`/omitido preserva o comportamento global de sempre. */
+  scopedClientId?: string;
   onCreated: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -81,7 +87,7 @@ function QuickCreateForm({
   // Cliente/Responsável usam SearchableSelect (não é um <select> nativo,
   // então não aparece em FormData) — estado controlado, mesmo padrão dos
   // filtros do topo da página.
-  const [clientId, setClientId] = useState<string | null>(null);
+  const [clientId, setClientId] = useState<string | null>(scopedClientId ?? null);
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const { showToast } = useToast();
 
@@ -114,7 +120,7 @@ function QuickCreateForm({
     }
     showToast(result?.message ?? "Demanda criada.");
     (event.target as HTMLFormElement).reset();
-    setClientId(null);
+    setClientId(scopedClientId ?? null);
     setAssigneeId(null);
     setOpen(false);
     onCreated();
@@ -135,16 +141,18 @@ function QuickCreateForm({
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-1.5 rounded-md border border-overview-border bg-overview-surface p-2">
       <input name="title" required autoFocus placeholder="Título da demanda" className={`${fieldClasses} min-w-[200px] flex-1`} />
-      <div className="w-40">
-        <SearchableSelect
-          options={clientOptions.map((c) => ({ id: c.id, label: c.name }))}
-          selectedId={clientId}
-          onSelect={setClientId}
-          placeholder="Interna"
-          searchPlaceholder="Buscar cliente..."
-          ariaLabel="Cliente"
-        />
-      </div>
+      {!scopedClientId && (
+        <div className="w-40">
+          <SearchableSelect
+            options={clientOptions.map((c) => ({ id: c.id, label: c.name }))}
+            selectedId={clientId}
+            onSelect={setClientId}
+            placeholder="Interna"
+            searchPlaceholder="Buscar cliente..."
+            ariaLabel="Cliente"
+          />
+        </div>
+      )}
       <div className="w-40">
         <SearchableSelect
           options={assigneeOptions.map((m) => ({ id: m.id, label: m.name, sublabel: m.status === "inativo" ? "(inativo)" : undefined }))}
@@ -195,7 +203,7 @@ function QuickCreateForm({
  *
  * Edição inline é otimista: cada mutação atualiza `items` na hora e reverte
  * sozinha se a Server Action falhar (nunca mostra um valor não salvo como
- * salvo). `revalidatePath("/pendencias")`, chamado por toda action de
+ * salvo). `revalidatePath("/demandas")`, chamado por toda action de
  * `tasks-actions.ts`, faz o Server Component pai buscar dados frescos em
  * segundo plano — quando chegam (prop `items` muda), substituem o estado
  * otimista sem piscar (já estavam corretos).
@@ -206,12 +214,24 @@ export function PendenciasPageClient({
   assigneeOptions,
   currentTeamMemberId,
   isAdmin,
+  scopedClientId,
+  hideHeading,
 }: {
   items: PendenciaItem[];
   clientOptions: PendenciasClientOption[];
   assigneeOptions: PendenciasAssigneeOption[];
   currentTeamMemberId: string;
   isAdmin: boolean;
+  /** Workspace do cliente (`/clients/[id]/demandas`, Etapa "MITZA —
+   * Reformulação Estrutural") — MESMO componente da List View global
+   * (`items` já vem pré-filtrado por `client_id` na camada de dados, ver
+   * `loadPendenciasRawData`), só esconde o que vira redundante quando toda
+   * linha já é do mesmo cliente: filtro de Cliente, coluna Cliente, e "+
+   * Nova demanda" nasce vinculada sem perguntar de novo. */
+  scopedClientId?: string;
+  /** Workspace do cliente já tem "Demandas" como título da aba — evita um
+   * <h1> duplicado logo abaixo do cabeçalho do workspace. */
+  hideHeading?: boolean;
 }) {
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<PendenciasFilterState>(() => parsePendenciasFilters(searchParams));
@@ -350,7 +370,7 @@ export function PendenciasPageClient({
       return;
     }
     patchItem(taskId, { status: "pendente", rawStatus: "pendente" });
-    showToast(result?.message ?? "Pendência reaberta.");
+    showToast(result?.message ?? "Demanda reaberta.");
   }
 
   async function handleDelete(taskId: string) {
@@ -363,7 +383,7 @@ export function PendenciasPageClient({
     }
     setItems((prev) => prev.filter((item) => item.id !== taskId));
     if (drawerTaskId === taskId) setDrawerTaskId(null);
-    showToast("Pendência excluída.");
+    showToast("Demanda excluída.");
   }
 
   async function handleBulkDuplicate() {
@@ -400,12 +420,14 @@ export function PendenciasPageClient({
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Pendências</h1>
-        <p className="text-sm text-muted-foreground">Demandas criadas manualmente — por cliente ou internas — nunca rotina automática da Operação.</p>
-      </div>
+      {!hideHeading && (
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Demandas</h1>
+          <p className="text-sm text-muted-foreground">Demandas criadas manualmente — por cliente ou internas — nunca rotina automática da Operação.</p>
+        </div>
+      )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-1.5">
+      <div className={`${hideHeading ? "" : "mt-4"} flex flex-wrap items-center gap-1.5`}>
         {QUICK_FILTERS.map((option) => (
           <button
             key={option.value}
@@ -423,19 +445,21 @@ export function PendenciasPageClient({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <div className="w-44">
-          <SearchableSelect
-            options={[{ id: INTERNAL_OPTION_ID, label: "Interna" }, ...clientOptions.map((c) => ({ id: c.id, label: c.name }))]}
-            selectedId={filters.internalOnly ? INTERNAL_OPTION_ID : filters.clientId}
-            onSelect={(id) =>
-              setFilters((prev) => ({ ...prev, internalOnly: id === INTERNAL_OPTION_ID, clientId: id === INTERNAL_OPTION_ID ? null : id }))
-            }
-            placeholder="Todos os clientes"
-            allLabel="Todos os clientes"
-            searchPlaceholder="Buscar cliente..."
-            ariaLabel="Filtrar por cliente"
-          />
-        </div>
+        {!scopedClientId && (
+          <div className="w-44">
+            <SearchableSelect
+              options={[{ id: INTERNAL_OPTION_ID, label: "Interna" }, ...clientOptions.map((c) => ({ id: c.id, label: c.name }))]}
+              selectedId={filters.internalOnly ? INTERNAL_OPTION_ID : filters.clientId}
+              onSelect={(id) =>
+                setFilters((prev) => ({ ...prev, internalOnly: id === INTERNAL_OPTION_ID, clientId: id === INTERNAL_OPTION_ID ? null : id }))
+              }
+              placeholder="Todos os clientes"
+              allLabel="Todos os clientes"
+              searchPlaceholder="Buscar cliente..."
+              ariaLabel="Filtrar por cliente"
+            />
+          </div>
+        )}
 
         <div className="w-44">
           <SearchableSelect
@@ -507,7 +531,7 @@ export function PendenciasPageClient({
       </div>
 
       <div className="mt-4">
-        <QuickCreateForm clientOptions={clientOptions} assigneeOptions={assigneeOptions} onCreated={() => {}} />
+        <QuickCreateForm clientOptions={clientOptions} assigneeOptions={assigneeOptions} scopedClientId={scopedClientId} onCreated={() => {}} />
       </div>
 
       <div className="mt-4 flex flex-col gap-4">

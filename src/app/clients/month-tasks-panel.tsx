@@ -88,6 +88,7 @@ export function MonthTasksPanel({
   canOperate = true,
   recurringTasks,
   recurringTaskHrefPrefix,
+  taskHrefPrefix,
 }: {
   monthLabel: string;
   tasks: TaskListItem[];
@@ -107,6 +108,14 @@ export function MonthTasksPanel({
    * da seleção em massa. */
   recurringTasks?: RecurringTaskListItem[];
   recurringTaskHrefPrefix?: string;
+  /** Etapa "MITZA — Reformulação Estrutural": o drawer de detalhe da
+   * tarefa (`?task=`) passou a ser lido por rotas diferentes conforme o
+   * `origin` (Demandas usa seu próprio drawer/List View; esta lista só
+   * mostra `origin='template'`, cujo drawer mora em `/clients/[id]/operation`
+   * agora). Prefixo configurável em vez de fixo em `/clients/${clientId}` —
+   * default preserva o comportamento antigo pra qualquer chamador que não
+   * passe nada. */
+  taskHrefPrefix?: string;
 }) {
   const [optimisticTasks, dispatchOptimisticTask] = useOptimisticTasks(tasks);
   const [filter, setFilter] = useState<TaskFilter>("todas");
@@ -358,7 +367,7 @@ export function MonthTasksPanel({
                     key={task.id}
                     task={task}
                     clientId={clientId}
-                    detailsHref={`/clients/${clientId}?task=${task.id}`}
+                    detailsHref={`${taskHrefPrefix ?? `/clients/${clientId}?task=`}${task.id}`}
                     isAdmin={isAdmin}
                     canOperate={canOperate}
                     hideAssignee

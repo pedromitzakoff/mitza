@@ -1,5 +1,6 @@
 import type { TaskOrigin, TaskPriority, TaskStatus, TaskType, TeamMemberStatus } from "@/lib/supabase/database.types";
 import { TASK_PRIORITY_REGISTRY, TASK_STATUS_REGISTRY } from "@/lib/status-registry";
+import { effectiveTaskStatus } from "@/lib/task-status";
 
 const VALID_STATUSES: readonly TaskStatus[] = [
   "pendente",
@@ -52,6 +53,44 @@ export interface PendenciaItem {
   sprintId: string | null;
   client: PendenciaClientRef | null;
   assignee: PendenciaAssigneeRef | null;
+}
+
+/** Contagem de demandas abertas para o resumo da Home ("Início — Cockpit",
+ * Etapa "MITZA — Reformulação Estrutural"). Fonte ÚNICA/canônica: antes a
+ * Home reimplementava esta contagem inline sobre o mesmo `tasks` que já
+ * buscava (evitando uma segunda query) — correto quanto a não duplicar a
+ * BUSCA, mas duplicava a REGRA em si, sincronizada só por comentário com
+ * `loadPendenciasRawData`. Esta função pura extrai essa regra pra um lugar
+ * só — a Home continua passando o `tasks` que já tinha (nenhuma query
+ * nova), só a lógica de contagem deixou de estar copiada.
+ *
+ * Mantém a MESMA regra de sempre: `origin = 'manual'`, cliente workspace-
+ * ativo (ou interna, sem cliente), status efetivo não-terminal — idêntica à
+ * usada por `loadPendenciasRawData`/`/demandas`, nunca uma segunda versão
+ * que pode divergir. */
+export interface CountableDemandaTask {
+  origin: TaskOrigin;
+  client_id: string | null;
+  status: TaskStatus;
+  due_date: string;
+}
+
+export function countOpenDemandas(
+  tasks: CountableDemandaTask[],
+  isClientWorkspaceActive: (clientId: string) => boolean,
+  today: Date,
+): { openCount: number; overdueCount: number } {
+  let openCount = 0;
+  let overdueCount = 0;
+  for (const task of tasks) {
+    if (task.origin !== "manual") continue;
+    if (task.client_id && !isClientWorkspaceActive(task.client_id)) continue;
+    const effective = effectiveTaskStatus(task, today);
+    if (effective === "feito" || effective === "nao_realizado") continue;
+    openCount += 1;
+    if (effective === "atrasado") overdueCount += 1;
+  }
+  return { openCount, overdueCount };
 }
 
 /** Etapa "Pendências — Demandas": recorte por STATUS (não mais por prazo —
