@@ -6,11 +6,14 @@ import { requireQuery } from "@/lib/require-query";
 import {
   assertSingleCurrentSprint,
   currentMonthRange,
+  findSprintForDate,
+  getSprintTemporalStatus,
   monthRangeFromParam,
   shiftMonthParam,
   sumActualSpendForMonth,
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
+import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus } from "@/lib/spend-status";
 import { resolveBudgetEffectiveDate, computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { resolveClientMonthlyPlan, resolveTargetCostPerResult, primaryGoalResultTypeFilter } from "@/lib/client-plan";
@@ -19,7 +22,7 @@ import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { sumChannelEffectiveSpend, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatMonthLabel } from "@/lib/format";
+import { formatMonthLabel, formatRelativeDateTime } from "@/lib/format";
 import { contractStatusBannerText } from "@/lib/client-fields";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
 import { resolveOperationPriorityGroup } from "@/lib/operation-triage";
@@ -40,6 +43,11 @@ import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
 import { AVAILABLE_TRAFFIC_CHANNELS, resolveClientChannelScopeOptions, resolveSelectedChannelScope, type TrafficChannel } from "@/lib/traffic-channels";
 import { VisaoGeralChannelSwitch, type VisaoGeralMetricsChannel } from "../visao-geral-channel-switch";
 import { countOpenDemandas } from "@/lib/pendencias";
+import { loadPendenciasRawData } from "@/app/demandas/pendencias-data";
+import { formatDueDate } from "../task-row";
+import { TASK_PRIORITY_DOT_CLASS } from "../task-labels";
+import { ACCOUNT_REVIEW_OUTCOME_LABEL } from "@/lib/account-reviews";
+import { WorkspaceContainer } from "../workspace-container";
 import { IconButton } from "@/components/workspace/button";
 
 function withParam(url: string, param: string): string {
@@ -47,19 +55,40 @@ function withParam(url: string, param: string): string {
 }
 
 /**
- * `/clients/[id]` — Visão Geral do cliente (Etapa "MITZA — Reformulação
- * Estrutural", seção 8 do pedido): "Como está esse cliente?", executiva e
- * enxuta — investimento, meta, resultados principais, ritmo do mês, saúde
- * operacional, Demandas abertas (contagem + link, nunca a lista inteira).
- * Nunca duplica o Relatório completo (Performance), a lista de tarefas
- * operacionais (Operação) nem a List View de Demandas — cada uma tem sua
- * própria aba agora.
+ * `/clients/[id]` — PAINEL PRINCIPAL do cliente (Etapa "Correção de UX do
+ * Workspace", que corrige — sem desfazer — a Etapa "MITZA — Reformulação
+ * Estrutural" anterior). A pergunta que esta página responde: "como está
+ * esse cliente e o que preciso saber/fazer agora?".
  *
- * Extraído do antigo `[id]/page.tsx` (1944 linhas, quase tudo empilhado
- * numa "Visão geral" só) — Funis/Objetivos secundários/Taxa de conversão
- * foram pra Performance; Tarefas/Sprints/Revisões/Histórico foram pra
- * Operação; header/seletor de cliente/abas agora vivem no `layout.tsx`
- * compartilhado. Nenhum cálculo mudou, só passou a morar na aba certa.
+ * A Fase 1 tinha transformado esta rota só na "Visão geral", uma de 5 abas
+ * equivalentes (Visão geral/Performance/Operação/Demandas/Configurações)
+ * — na prática, 5 mini-sistemas. Validação visual no deploy mostrou que
+ * isso fragmentou demais a experiência. Esta correção reintegra Performance
+ * + Operação + Demandas numa ÚNICA visão de trabalho, sem desfazer nenhuma
+ * rota/loader/pipeline da Fase 1:
+ *
+ * 1. PERFORMANCE — `AccountFollowUpPanel` (KPIs + ritmo do mês, já existia
+ *    aqui) + `SecondaryGoalsPerformance`/`ConversionRateCard`, com um CTA
+ *    "Ver relatório completo →" pra `/relatorio` (que continua existindo
+ *    intacto — mesma Camada 1/2, nenhum cálculo duplicado).
+ * 2. OPERAÇÃO — resumo leve (sprint atual, última otimização, saúde/motivo
+ *    do CPA — os MESMOS dados/funções já usados por `/operation` e pela
+ *    fila global de Operação, nunca uma segunda implementação) com CTA
+ *    "Ver operação completa →" pra `/operation`.
+ * 3. DEMANDAS — contagem + até 3 itens mais urgentes, reaproveitando
+ *    `loadPendenciasRawData`/`countOpenDemandas` (MESMA fonte/regra de
+ *    `/demandas` e da Home — `origin='manual'`), com CTA "Ver todas →"
+ *    pra `/clients/[id]/demandas`.
+ *
+ * `/relatorio`, `/operation`, `/clients/[id]/demandas` e `/edit` continuam
+ * existindo como rotas de APROFUNDAMENTO (seção 15 do pedido de correção:
+ * "as rotas da Fase 1 não foram um erro") — só deixaram de competir como
+ * abas iguais no header; a barra `role="tablist"` saiu de
+ * `client-workspace-header.tsx`.
+ *
+ * Nenhum cálculo de investimento/performance mudou nesta correção — só a
+ * composição visual e a largura (`WorkspaceContainer`, ver doc-comment de
+ * `workspace-container.tsx` pra a causa raiz do `max-w-5xl` estreito).
  */
 export default async function ClientPage({
   params,
@@ -300,17 +329,49 @@ export default async function ClientPage({
       }
     : null;
 
-  // Demandas abertas (seção 8 do pedido: "quantidade de Demandas abertas",
-  // nunca a lista inteira aqui) — MESMA regra/função de `/demandas` e da
-  // Home (`countOpenDemandas`, `lib/pendencias.ts`), nunca uma terceira
-  // implementação. Query mínima e própria (só os 4 campos que a função
-  // precisa) — não reaproveita `loadPendenciasRawData` (que traria joins de
-  // cliente/responsável desnecessários aqui, só pra um número).
-  const demandaTasks = await requireQuery(
-    supabase.from("tasks").select("origin, client_id, status, due_date").eq("client_id", id).eq("origin", "manual"),
-    "tasks:visao-geral-demandas-count",
+  // Demandas — resumo (Etapa "Correção de UX do Workspace", seção 10 do
+  // pedido): contagem + até 3 itens mais urgentes, nunca a List View
+  // inteira. Reaproveita `loadPendenciasRawData` (MESMA fonte/regra de
+  // `/clients/[id]/demandas` e da área global — `origin='manual'`), nunca
+  // uma terceira implementação da regra nem uma query paralela.
+  const { items: demandaItems } = await loadPendenciasRawData(supabase, id);
+  const { openCount: demandasOpenCount, overdueCount: demandasOverdueCount } = countOpenDemandas(
+    demandaItems.map((item) => ({ origin: "manual" as const, client_id: id, status: item.rawStatus, due_date: item.dueDate })),
+    () => true,
+    today,
   );
-  const { openCount: demandasOpenCount, overdueCount: demandasOverdueCount } = countOpenDemandas(demandaTasks ?? [], () => true, todayUTC());
+  const demandasPreview = demandaItems
+    .filter((item) => item.status !== "feito" && item.status !== "nao_realizado")
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 3);
+
+  // Operação — resumo (seção 9 do pedido): sprint atual, última otimização,
+  // saúde/motivo do CPA. MESMOS dados/funções já usados por `/operation` e
+  // pela fila global de Operação — nenhum cálculo novo, nunca tasks (isso
+  // é Demandas×Operação de novo — ver bug corrigido na Fase 1). Sprint
+  // atual só quando a Performance está no mês corrente (`isCurrentMonth`)
+  // — fora dele o resumo operacional não reaproveitaria o `sprints` já
+  // buscado pro mês em exibição, e buscar um segundo conjunto só pra isso
+  // violaria "não duplicar dados" (seção 19).
+  const currentSprint = isCurrentMonth ? findSprintForDate(sprints, todayStr) : null;
+  const currentSprintLabel = currentSprint
+    ? `${formatSprintPeriodLabel(currentSprint.start_date, currentSprint.end_date)} · ${
+        getSprintTemporalStatus(currentSprint, today) === "atual" ? "em andamento" : "concluída"
+      }`
+    : null;
+
+  const [lastReviewRow] = await requireQuery(
+    supabase
+      .from("account_reviews")
+      .select("reviewed_at, outcome, team_member:team_members!account_reviews_team_member_id_fkey(name)")
+      .eq("client_id", id)
+      .order("reviewed_at", { ascending: false })
+      .limit(1),
+    "account_reviews:painel-operacao-resumo",
+  );
+  const lastOptimizationLabel = lastReviewRow
+    ? `${ACCOUNT_REVIEW_OUTCOME_LABEL[lastReviewRow.outcome]} · ${formatRelativeDateTime(lastReviewRow.reviewed_at, new Date())}${lastReviewRow.team_member?.name ? ` · ${lastReviewRow.team_member.name}` : ""}`
+    : "Nenhuma otimização registrada";
 
   // Sinal de sincronização com problema real agora vive só em "Informações
   // da conta" (drawer global do workspace) — nunca mais duplicado aqui.
@@ -325,15 +386,9 @@ export default async function ClientPage({
   const historyDrawerHref = withParam(returnTo, "historicoOrcamento=1");
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-5">
+    <WorkspaceContainer>
       <ScrollRestoreOnMount />
       <ClientWorkspaceContext name={client.name} />
-
-      {primaryReasonText && (
-        <p className="mt-1 text-xs text-overview-text-secondary" title={primaryReasonText}>
-          {emphasizeDeviationText(primaryReasonText, primaryReasonTone)}
-        </p>
-      )}
 
       {banners.length > 0 && (
         <div className="mt-2 flex flex-col gap-2">
@@ -354,6 +409,8 @@ export default async function ClientPage({
         </div>
       )}
 
+      {/* CONTEXTO — mês/canal/planejamento em exibição, compartilhado pelos
+          blocos de Performance abaixo (seção 6 do pedido de correção). */}
       <div className="mt-3 flex flex-wrap items-center gap-3 border-b border-overview-border pb-2 text-sm">
         <div className="flex items-center gap-0.5">
           <IconButton href={prevMonthHref} aria-label="Mês anterior" variant="ghost" size="sm">
@@ -379,6 +436,10 @@ export default async function ClientPage({
         )}
       </div>
 
+      {/* PERFORMANCE — "o que está acontecendo?" (seção 7 do pedido de
+          correção): KPIs + ritmo do mês (já existia aqui) + metas
+          secundárias/conversão, com CTA pro Relatório completo (`/relatorio`,
+          reaproveitado 100%, nenhum cálculo duplicado). */}
       <div className="mt-6">
         <AccountFollowUpPanel
           monthActual={visaoGeralMonthActual}
@@ -419,11 +480,52 @@ export default async function ClientPage({
 
       <ConversionRateCard conversionRate={conversionRate} />
 
-      {/* Demandas abertas — resumo, nunca a lista inteira (seção 8 do
-          pedido). Análise aprofundada → Performance; rotina/processo →
-          Operação; trabalho específico → aqui é só a contagem + link. */}
+      <div className="mt-2 flex justify-end">
+        <Link href={`/clients/${client.id}/relatorio`} className="text-xs font-medium text-brand hover:underline">
+          Ver relatório completo →
+        </Link>
+      </div>
+
+      {/* OPERAÇÃO — "estamos executando corretamente?" (seção 9 do pedido de
+          correção): resumo leve (sprint atual, última otimização, saúde do
+          CPA) — MESMOS dados/funções de `/operation` e da fila global de
+          Operação, nunca tasks aqui (Demandas×Operação nunca se misturam —
+          correção da Fase 1 permanece intacta). */}
       <div className="mt-6 border-t border-overview-border pt-4">
-        <Link href={`/clients/${client.id}/demandas`} className="flex items-center justify-between gap-3 hover:opacity-80">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Operação</h2>
+          <Link href={`/clients/${client.id}/operation`} className="shrink-0 text-xs font-medium text-brand hover:underline">
+            Ver operação completa →
+          </Link>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+          <div>
+            <p className="text-[11px] text-overview-text-muted">Sprint atual</p>
+            <p className="mt-0.5 text-sm font-medium text-overview-text-primary">{currentSprintLabel ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-overview-text-muted">Última otimização</p>
+            <p className="mt-0.5 text-sm font-medium text-overview-text-primary">{lastOptimizationLabel}</p>
+          </div>
+          <div className="col-span-2">
+            <p className="text-[11px] text-overview-text-muted">Saúde</p>
+            {primaryReasonText ? (
+              <p className="mt-0.5 text-sm font-medium" title={primaryReasonText}>
+                {emphasizeDeviationText(primaryReasonText, primaryReasonTone)}
+              </p>
+            ) : (
+              <p className="mt-0.5 text-sm font-medium text-overview-text-primary">Sem sinais de atenção</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* DEMANDAS — "o que precisa ser feito?" (seção 10 do pedido de
+          correção): contagem + até 3 itens mais urgentes, nunca a List View
+          inteira. MESMA fonte/regra de `/clients/[id]/demandas` e da área
+          global (`origin='manual'`). */}
+      <div className="mt-6 border-t border-overview-border pt-4">
+        <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Demandas</h2>
             <p className="mt-1 text-[13px] text-overview-text-secondary">
@@ -431,8 +533,21 @@ export default async function ClientPage({
               {demandasOverdueCount > 0 && ` · ${demandasOverdueCount} atrasada${demandasOverdueCount !== 1 ? "s" : ""}`}
             </p>
           </div>
-          <span className="shrink-0 text-xs font-medium text-brand">Ver tudo →</span>
-        </Link>
+          <Link href={`/clients/${client.id}/demandas`} className="shrink-0 text-xs font-medium text-brand hover:underline">
+            Ver todas →
+          </Link>
+        </div>
+        {demandasPreview.length > 0 && (
+          <ul className="mt-3 flex flex-col gap-1.5">
+            {demandasPreview.map((item) => (
+              <li key={item.id} className="flex items-center gap-2 text-sm">
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TASK_PRIORITY_DOT_CLASS[item.priority]}`} aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate text-overview-text-primary">{item.title}</span>
+                <span className="shrink-0 text-xs text-overview-text-muted">{formatDueDate(item.dueDate)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {isAdmin && historicoOrcamento && (
@@ -455,6 +570,6 @@ export default async function ClientPage({
           closeHref={returnTo}
         />
       )}
-    </div>
+    </WorkspaceContainer>
   );
 }

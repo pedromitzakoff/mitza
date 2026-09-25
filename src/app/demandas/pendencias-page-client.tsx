@@ -35,6 +35,7 @@ import { useToast } from "@/app/toast-provider";
 import { PendenciaRow } from "./pendencia-row";
 import { PendenciaDrawer } from "./pendencia-drawer";
 import type { PendenciasAssigneeOption, PendenciasClientOption } from "./pendencias-data";
+import { WORKSPACE_CONTENT_MAX_WIDTH_CLASS } from "@/app/clients/workspace-container";
 
 const INTERNAL_OPTION_ID = "__interna__";
 
@@ -419,7 +420,7 @@ export function PendenciasPageClient({
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-6">
+    <div className={`mx-auto w-full ${WORKSPACE_CONTENT_MAX_WIDTH_CLASS} px-6 py-6 sm:px-8 lg:px-10`}>
       {!hideHeading && (
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Demandas</h1>

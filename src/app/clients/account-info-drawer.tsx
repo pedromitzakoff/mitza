@@ -203,6 +203,17 @@ export function AccountInfoDrawer({
                   Ver histórico completo →
                 </Link>
               </Section>
+
+              <Section title="Configurações">
+                {/* Etapa "Correção de UX do Workspace" (seção 12 do pedido):
+                    Configurações saiu do menu horizontal do cliente — esta é
+                    a via de acesso (ação ocasional, nunca competindo com
+                    Performance/Operação no dia a dia). Nunca duplica o
+                    formulário aqui — só o link pra `/edit`. */}
+                <Link href={`/clients/${clientId}/edit`} onClick={onClose} className="text-sm font-medium text-brand hover:underline">
+                  Editar configurações →
+                </Link>
+              </Section>
             </div>
       </div>
     </>

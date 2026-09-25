@@ -35,6 +35,14 @@
  * apontar pro arquivo certo — nunca reescritas do zero, só realocadas
  * (mesmo componente, mesma prop, mesmo comportamento, arquivo diferente).
  *
+ * Rodada 6 ("Correção de UX do Workspace" — corrige a Rodada 5, não a
+ * desfaz): a largura fixa `max-w-5xl` virou `WorkspaceContainer`
+ * (constante única, bem mais larga — ver `test-client-workspace.ts` seções
+ * 5/8 pro detalhe completo da correção de largura/painel integrado). As
+ * seções 1 e 12 abaixo foram ajustadas pra essa nova constante; o resto
+ * desta suíte (Performance/Tarefas/filtros/emojis/etc.) continua válido
+ * sem alteração — nenhuma dessas decisões visuais foi revertida.
+ *
  * Rodar: npx tsx scripts/test-client-page-facelift.ts
  */
 import assert from "node:assert/strict";
@@ -69,13 +77,12 @@ const accountFollowUpCode = stripComments(loadSource("src", "app", "clients", "a
 const monthInvestmentCode = stripComments(loadSource("src", "app", "clients", "month-investment-summary.tsx"));
 const channelPlanEditorCode = stripComments(loadSource("src", "app", "clients", "channel-plan-editor.tsx"));
 
-console.log("1 — Largura do conteúdo: mesmo max-w-5xl no container principal (Visão Geral e Operação)\n");
+console.log("1 — Largura do conteúdo: mesmo WorkspaceContainer no Painel principal e em Operação (Etapa 'Correção de UX do Workspace' — ver test-client-workspace.ts seção 5/8 pro detalhe da correção de largura)\n");
 {
-  ok("container principal da Visão Geral usa max-w-5xl (era max-w-6xl)", /max-w-5xl px-6 py-5/.test(pageCode));
-  ok("nenhum max-w-6xl sobrevive no container principal", !pageCode.includes('"mx-auto max-w-6xl'));
+  ok("Painel principal usa WorkspaceContainer (largura corrigida, nunca mais um max-w-5xl próprio)", pageCode.includes("<WorkspaceContainer>") && !pageCode.includes("max-w-5xl"));
   ok(
-    "Operação (onde Sprints/Tarefas/Histórico moraram, Etapa 5) usa o MESMO max-w-5xl — nunca um container de largura diferente entre abas do mesmo cliente",
-    /max-w-5xl px-6 py-5/.test(operationCode),
+    "Operação (onde Sprints/Tarefas/Histórico moraram, Etapa 5) usa o MESMO WorkspaceContainer — nunca um container de largura diferente entre seções do mesmo cliente",
+    operationCode.includes("<WorkspaceContainer>") && !operationCode.includes("max-w-5xl"),
   );
 }
 
@@ -184,7 +191,7 @@ console.log("\n11 — Toolbar de contexto: Mês + Canal + Planejamento, sem nave
 
 console.log("\n12 — Regressão: decisões da rodada 1 continuam de pé\n");
 {
-  ok("max-w-5xl da rodada 1 não foi revertido", /max-w-5xl px-6 py-5/.test(pageCode));
+  ok("largura consistente da rodada 1 não foi revertida (hoje via WorkspaceContainer, ver seção 1)", pageCode.includes("<WorkspaceContainer>"));
   ok("Tarefas continua sem grande card (rodada 1, intocada nesta rodada)", !tasksPanelCode.includes("bg-cream"));
   ok("filtros textuais de Tarefas continuam sem pill/cápsula (rodada 1, intocada)", !/rounded-full border px-2\.5 py-1/.test(tasksPanelCode));
 }

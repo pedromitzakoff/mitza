@@ -7,7 +7,8 @@ import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
 import type { ClientContractStatus } from "@/lib/supabase/database.types";
-import { WORKSPACE_TABS, buildWorkspaceHref, resolveActiveTab, resolveCurrentSuffix, resolveReplicableSuffix } from "@/lib/client-workspace-nav";
+import { buildWorkspaceHref, resolveCurrentSuffix, resolveReplicableSuffix } from "@/lib/client-workspace-nav";
+import { WORKSPACE_CONTENT_MAX_WIDTH_CLASS } from "./workspace-container";
 import { AccountInfoDrawerLauncher } from "./account-info-drawer-launcher";
 
 export interface WorkspaceClientOption {
@@ -19,22 +20,30 @@ const TRIGGER_CLASSES =
   "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-overview-text-secondary transition-colors hover:bg-overview-surface-hover hover:text-overview-text-primary disabled:cursor-not-allowed disabled:opacity-30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
 
 /**
- * Cabeçalho persistente do workspace do cliente (Etapa "MITZA —
- * Reformulação Estrutural", seções 4-7 do pedido) — vive no
- * `layout.tsx` de `clients/[id]/**`, então continua montado ao trocar
- * entre Visão geral/Performance/Operação/Demandas/Configurações (rotas
- * IRMÃS de verdade agora, nunca mais `?area=` numa página só).
+ * Cabeçalho persistente do workspace do cliente — vive no `layout.tsx` de
+ * `clients/[id]/**`, então continua montado em toda navegação entre o
+ * Painel principal e as rotas de aprofundamento (Relatório/Operação/
+ * Demandas/Configurações).
+ *
+ * Etapa "Correção de UX do Workspace" (corrige a Fase 1, não a desfaz —
+ * ver doc-comment de `workspace-container.tsx`): a barra de abas (antes
+ * um `nav` com role de lista de abas) foi REMOVIDA daqui — o header
+ * voltou a ser só CONTEXTO
+ * (identidade do cliente, troca rápida, anterior/próximo, posição,
+ * status, Informações da conta), nunca uma segunda navegação principal
+ * competindo com a Sidebar. O avatar agora é o link de volta pro Painel
+ * (`/clients/[id]`) — a única affordance de "voltar" que precisa viver
+ * aqui, já que ela precisa funcionar de QUALQUER rota de aprofundamento.
  *
  * Preserva `month` (único parâmetro verdadeiramente compartilhado entre
- * abas — cada aba mantém seus PRÓPRIOS filtros/período além disso, nunca
- * forçados a persistir entre abas conceitualmente diferentes) em toda
- * navegação: troca de aba, anterior/próximo, seletor de cliente.
+ * seções — cada rota mantém seus PRÓPRIOS filtros/período além disso) em
+ * toda navegação: anterior/próximo, seletor de cliente.
  *
- * Ao trocar de cliente (seletor OU anterior/próximo), preserva a ABA
+ * Ao trocar de cliente (seletor OU anterior/próximo), preserva a SEÇÃO
  * atual — decisão 1 do usuário: "Aibou → Performance, ao avançar cai em
- * JudClass → Performance, nunca Visão geral". Pra rotas que não são uma
- * das 5 abas (ex.: `/clients/[id]/tasks/new`, legado), cai pra Visão
- * geral do próximo cliente — replicar uma URL de formulário legado pro
+ * JudClass → Performance, nunca o Painel". Pra rotas que não são uma das
+ * 5 seções reconhecidas (ex.: `/clients/[id]/tasks/new`, legado), cai pro
+ * Painel do próximo cliente — replicar uma URL de formulário legado pro
  * cliente seguinte não faz sentido.
  */
 export function ClientWorkspaceHeader({
@@ -58,8 +67,8 @@ export function ClientWorkspaceHeader({
   const month = searchParams.get("month");
 
   const currentSuffix = resolveCurrentSuffix(pathname, client.id);
-  const activeTab = resolveActiveTab(pathname, client.id);
   const replicableSuffix = resolveReplicableSuffix(currentSuffix);
+  const isOnPanel = currentSuffix === "";
 
   function hrefFor(targetClientId: string, suffix: string): string {
     return buildWorkspaceHref(targetClientId, suffix, month);
@@ -72,8 +81,14 @@ export function ClientWorkspaceHeader({
 
   return (
     <div className="border-b border-overview-border bg-overview-surface">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2 px-6 py-3">
-        <ClientAvatar name={client.name} imageUrl={client.avatarUrl} size="sm" />
+      <div className={`mx-auto flex w-full ${WORKSPACE_CONTENT_MAX_WIDTH_CLASS} flex-wrap items-center gap-2 px-6 py-3 sm:px-8 lg:px-10`}>
+        {isOnPanel ? (
+          <ClientAvatar name={client.name} imageUrl={client.avatarUrl} size="sm" />
+        ) : (
+          <Link href={`/clients/${client.id}`} aria-label={`Voltar para o painel de ${client.name}`} className="shrink-0 rounded-full">
+            <ClientAvatar name={client.name} imageUrl={client.avatarUrl} size="sm" />
+          </Link>
+        )}
 
         <Link
           href={prevId ? hrefFor(prevId, replicableSuffix) : "#"}
@@ -121,25 +136,6 @@ export function ClientWorkspaceHeader({
           />
         </div>
       </div>
-
-      <nav className="mx-auto flex max-w-5xl gap-4 overflow-x-auto px-6" role="tablist" aria-label="Áreas do cliente">
-        {WORKSPACE_TABS.map((tab) => {
-          const isActive = activeTab?.key === tab.key;
-          return (
-            <Link
-              key={tab.key}
-              href={hrefFor(client.id, tab.suffix)}
-              role="tab"
-              aria-selected={isActive}
-              className={`-mb-px shrink-0 border-b-2 pb-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
-                isActive ? "border-brand text-brand" : "border-transparent text-overview-text-secondary hover:text-overview-text-primary"
-              }`}
-            >
-              {tab.label}
-            </Link>
-          );
-        })}
-      </nav>
     </div>
   );
 }

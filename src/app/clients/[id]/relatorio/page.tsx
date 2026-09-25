@@ -18,6 +18,7 @@ import { ReportBody } from "./report-body";
 import { ReportHeader } from "./report-header";
 import { CopyReportLinkButton } from "./copy-report-link-button";
 import { ReportFunnelSelector } from "./report-funnel-selector";
+import { WORKSPACE_CONTENT_MAX_WIDTH_CLASS } from "../../workspace-container";
 
 /**
  * Etapa "Relatório Nativo": "Cliente → Relatório → relatório" — esta rota É
@@ -123,7 +124,11 @@ export default async function ClientPerformanceReportPage({
     reportPeriodStartParam && reportPeriodEndParam ? { start: reportPeriodStartParam, end: reportPeriodEndParam } : defaultReportPeriod(today);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 sm:py-6">
+    <div className={`mx-auto w-full ${WORKSPACE_CONTENT_MAX_WIDTH_CLASS} px-4 py-4 sm:px-6 sm:py-6 lg:px-10`}>
+      {/* Etapa "Correção de UX do Workspace": largura alinhada à do Painel
+          principal e da Operação (mesma constante, `workspace-container.tsx`)
+          — antes era um valor independente, mais estreito que o resto do
+          workspace. Padding/paleta próprios do Relatório preservados. */}
       {/* Identidade visual do Relatório de Performance aprovada anteriormente
           (paleta fixa creme/areia/grafite/branco/verde-limão) — preservada
           tal como no HTML/PDF, só sem os elementos exclusivos de documento

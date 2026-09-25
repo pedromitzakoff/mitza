@@ -35,6 +35,7 @@ import { RecurringTaskDrawer } from "../../recurring-task-drawer";
 import { generateClientUpdateAction } from "../../client-update-actions";
 import { TaskDrawerPanel } from "@/app/operation/task-drawer-panel";
 import type { OperationTaskItem, PerformanceRecordRawRow } from "@/app/operation/operation-data";
+import { WorkspaceContainer } from "../../workspace-container";
 
 function withParam(url: string, param: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}${param}`;
@@ -57,6 +58,15 @@ function withParam(url: string, param: string): string {
  *
  * Sem seletor de canal (Consolidado/Meta/Google) — isso é leitura
  * analítica, ficou em Performance; Operação sempre mostra o consolidado.
+ *
+ * Etapa "Correção de UX do Workspace": deixou de ser uma das 5 abas
+ * equivalentes do header e virou rota de APROFUNDAMENTO — o Painel
+ * principal (`[id]/page.tsx`) já mostra um resumo operacional (sprint
+ * atual, última otimização, saúde) com um CTA "Ver operação completa →"
+ * pra cá. `WorkspaceContainer` (mesma largura do Painel — corrige a
+ * largura estreita herdada do monólito antigo) + link "← {cliente}" de
+ * volta pro Painel, já que esta rota não tem mais aba destacada no header
+ * pra sinalizar "você está aqui".
  */
 export default async function ClientOperationPage({
   params,
@@ -358,7 +368,11 @@ export default async function ClientOperationPage({
   const openTaskSprintPeriodLabel = openTaskSprint ? formatSprintPeriodLabel(openTaskSprint.startDate, openTaskSprint.endDate) : null;
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-5">
+    <WorkspaceContainer>
+      <Link href={`/clients/${id}`} className="text-sm font-semibold text-overview-text-secondary hover:text-overview-text-primary">
+        &larr; {client.name}
+      </Link>
+
       {(taskError || reviewError || recurringTaskError || clientUpdateError) && (
         <div className="flex flex-col gap-2">
           {[taskError, reviewError, recurringTaskError, clientUpdateError].filter(Boolean).map((message, index) => (
@@ -491,6 +505,6 @@ export default async function ClientOperationPage({
       {recurringTaskDetail && (
         <RecurringTaskDrawer detail={recurringTaskDetail} clientId={id} closeHref={returnTo} reportHref={recurringTaskReportHref} />
       )}
-    </div>
+    </WorkspaceContainer>
   );
 }
