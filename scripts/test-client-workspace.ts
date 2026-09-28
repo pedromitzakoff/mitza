@@ -297,4 +297,17 @@ console.log("\n12 — Correção de Direção do Workspace: Painel principal vol
   );
 }
 
+console.log("\n13 — Correção de incidente: Demandas/Funis/Operação disparados em PARALELO no Painel, nunca empilhados em série no final da função\n");
+{
+  const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
+  ok(
+    "loadPendenciasRawData é disparada cedo (demandaItemsPromise), na MESMA leva de funnelsPromise/operationSectionDataPromise — nunca um await isolado só no fim da função (round-trip extra em série, causa raiz de um incidente de produção)",
+    /const demandaItemsPromise = loadPendenciasRawData\(supabase, id\);/.test(pageSource),
+  );
+  ok(
+    "o await de demandaItemsPromise acontece só onde o valor é consumido (perto do JSX de Demandas) — a query em si já foi disparada bem antes",
+    pageSource.indexOf("const demandaItemsPromise = loadPendenciasRawData") < pageSource.indexOf("await demandaItemsPromise"),
+  );
+}
+
 console.log(`\n${passed} verificações passaram.`);

@@ -175,12 +175,23 @@ export default async function ClientPage({
   const metricsChannelBaseHref = `/clients/${id}${monthQuery}`;
   const taskHrefPrefix = `/clients/${id}${monthQuery ? `${monthQuery}&` : "?"}task=`;
 
-  // Funis e a seção Operação (sprint/tarefas `origin='template'`/histórico/
-  // revisões — `../operation-section-data.ts`) são independentes do bloco
-  // de Performance abaixo — disparados AGORA, em paralelo com o
-  // Promise.all de Performance mais adiante (seção 18 do pedido: nenhuma
-  // cascata desnecessária, tudo que não depende de outra coisa corre
-  // junto). `await`s ficam só onde o valor é de fato consumido.
+  // Funis, Operação (sprint/tarefas `origin='template'`/histórico/revisões
+  // — `../operation-section-data.ts`), Demandas (`loadPendenciasRawData`)
+  // e a última otimização são TODOS independentes do bloco de Performance
+  // abaixo — disparados AGORA, em paralelo com o Promise.all de Performance
+  // mais adiante (seção 18 do pedido: nenhuma cascata desnecessária, tudo
+  // que não depende de outra coisa corre junto). `await`s ficam só onde o
+  // valor é de fato consumido.
+  //
+  // Correção de incidente (produção: página do cliente quebrando pra TODOS
+  // os clientes): na primeira versão desta página integrada,
+  // `loadPendenciasRawData` ficava no FINAL da função, depois de tudo já
+  // resolvido — mais uma rodada de rede em série, empilhada em cima de uma
+  // cadeia já longa (Performance + Operação + Funis). Sob carga real isso
+  // estourava o tempo de resposta da function. Disparada aqui, corre em
+  // paralelo com o resto — mesmo padrão já usado por
+  // `funnelsPromise`/`operationSectionDataPromise`.
+  const demandaItemsPromise = loadPendenciasRawData(supabase, id);
   const funnelsPromise = Promise.all([fetchClientFunnels(supabase, id), listCampaignsForFunnelClassification(supabase, id, todayStr)]);
   const operationSectionDataPromise = loadOperationSectionData(supabase, {
     id,
@@ -401,8 +412,9 @@ export default async function ClientPage({
 
   // Demandas — seção completa (todas as abertas, não mais só 3), MESMA
   // fonte/regra de `/clients/[id]/demandas` e da área global
-  // (`loadPendenciasRawData`/`countOpenDemandas`, `origin='manual'`).
-  const { items: demandaItems } = await loadPendenciasRawData(supabase, id);
+  // (`loadPendenciasRawData`/`countOpenDemandas`, `origin='manual'`) —
+  // disparada em paralelo lá em cima, resolvida aqui.
+  const { items: demandaItems } = await demandaItemsPromise;
   const { openCount: demandasOpenCount, overdueCount: demandasOverdueCount } = countOpenDemandas(
     demandaItems.map((item) => ({ origin: "manual" as const, client_id: id, status: item.rawStatus, due_date: item.dueDate })),
     () => true,
