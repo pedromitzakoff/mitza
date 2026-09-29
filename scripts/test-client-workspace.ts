@@ -4,11 +4,21 @@
  * próximo, rotas de aprofundamento, separação Demandas×Operação por
  * `tasks.origin`) E a Etapa "Correção de UX do Workspace" que a sucedeu
  * (painel principal integrado, sem as 5 abas equivalentes, largura
- * corrigida). Núcleo puro (`lib/agency-accounts-tree.ts`,
- * `lib/client-workspace-nav.ts`) testado direto; o resto (layout/rotas/
- * queries reais) é ESTRUTURAL — mesma limitação de sempre neste ambiente
- * (sem Supabase real), mesmo padrão já usado por
- * `test-operation-goal-filter.ts`.
+ * corrigida).
+ *
+ * ROLLBACK DE INCIDENTE (2026-09-29): a Etapa "Correção de Direção do
+ * Workspace" (que integrava Performance/Operação/Demandas/Funis completos
+ * na própria página) foi revertida em produção por causar uma quebra
+ * restrita a alguns gestores/clientes (padrão consistente com RLS/permissão
+ * numa das tabelas novas, nunca diagnosticado com certeza por falta de
+ * acesso a logs/RLS de produção neste ambiente). Este arquivo volta a
+ * testar o Painel como RESUMO + CTAs — mesmo estado confirmado funcionando
+ * pra todos os usuários antes daquela rodada.
+ *
+ * Núcleo puro (`lib/agency-accounts-tree.ts`, `lib/client-workspace-nav.ts`)
+ * testado direto; o resto (layout/rotas/queries reais) é ESTRUTURAL —
+ * mesma limitação de sempre neste ambiente (sem Supabase real), mesmo
+ * padrão já usado por `test-operation-goal-filter.ts`.
  *
  * Rodar: npx tsx scripts/test-client-workspace.ts
  */
@@ -157,20 +167,39 @@ console.log("\n5 — Correção de UX do Workspace: header voltou a ser só CONT
   );
 }
 
-console.log("\n6 — Painel principal (/clients/[id]) integra Performance + Operação + Demandas — HISTÓRICO da rodada anterior, ver seção 12 pra o estado atual (Correção de Direção)\n");
+console.log("\n6 — Painel principal (/clients/[id]) integra Performance + Operação + Demandas numa única visão, sem duplicar dados/regras\n");
 {
   const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
 
   ok("Painel usa WorkspaceContainer (largura corrigida, mesma do resto do workspace)", pageSource.includes("<WorkspaceContainer>"));
+
   ok("PERFORMANCE: AccountFollowUpPanel (KPIs + ritmo do mês) continua no Painel — nenhum cálculo novo", pageSource.includes("<AccountFollowUpPanel"));
+  ok('PERFORMANCE: CTA "Ver relatório completo" pro Relatório completo (`/relatorio`), reaproveitado 100%', /Ver relatório completo/.test(pageSource) && pageSource.includes("${client.id}/relatorio"));
+
   ok(
-    "Painel NUNCA consulta `tasks` diretamente (bug de misturar Demandas×Operação não pode voltar por aqui) — Demandas via loadPendenciasRawData, Operação via loadOperationSectionData (origin='template' lá dentro)",
+    "OPERAÇÃO: resumo reaproveita `clientOperationalState`/`resolveOperationPriorityGroup` já carregados — nenhuma segunda fonte de saúde operacional",
+    pageSource.includes("resolveOperationPriorityGroup(clientOperationalState.evaluation)"),
+  );
+  ok(
+    "OPERAÇÃO: sprint atual via `findSprintForDate` sobre o MESMO `sprints` já buscado pro mês em exibição — nenhuma query paralela só pro resumo",
+    pageSource.includes("findSprintForDate(sprints, todayStr)"),
+  );
+  ok(
+    "Painel NUNCA consulta `tasks` diretamente (bug de misturar Demandas×Operação não pode voltar por aqui) — Demandas via loadPendenciasRawData, Operação via sprint/otimização/saúde já carregados",
     !pageSource.includes('from("tasks")'),
   );
+  ok('OPERAÇÃO: CTA "Ver operação completa" pra `/operation`', /Ver operação completa/.test(pageSource) && pageSource.includes("${client.id}/operation"));
+
   ok(
-    "DEMANDAS: reaproveita `loadPendenciasRawData`/`countOpenDemandas` (MESMA fonte/regra de `/clients/[id]/demandas` e da área global — origin='manual'), nunca uma terceira implementação",
-    pageSource.includes("loadPendenciasRawData(supabase, id)") && pageSource.includes("countOpenDemandas("),
+    "DEMANDAS: resumo reaproveita `loadPendenciasRawData` (MESMA fonte/regra de `/clients/[id]/demandas` e da área global — origin='manual'), nunca uma terceira implementação",
+    pageSource.includes("loadPendenciasRawData(supabase, id)"),
   );
+  ok(
+    "DEMANDAS: contagem usa a função canônica countOpenDemandas (mesma da Home e de `/demandas`), nunca um filtro inline novo",
+    pageSource.includes("countOpenDemandas("),
+  );
+  ok("DEMANDAS: mostra até 3 itens mais urgentes (nunca a List View inteira)", pageSource.includes(".slice(0, 3)"));
+  ok('DEMANDAS: CTA "Ver todas" pra `/clients/[id]/demandas`', /Ver todas/.test(pageSource) && pageSource.includes("${client.id}/demandas"));
 }
 
 console.log("\n7 — Configurações deixou de competir no menu horizontal — acessível via ação secundária (Informações da conta)\n");
@@ -208,10 +237,12 @@ console.log("\n8 — Largura das rotas de aprofundamento (Operação/Relatório/
 
 console.log("\n9 — Separação Demandas×Operação: cada rota filtra por origin, nunca mistura (correção da Fase 1, permanece intacta)\n");
 {
-  // Etapa "Correção de Direção do Workspace": a query de tasks operacionais
-  // saiu de operation/page.tsx pra operation-section-data.ts (compartilhado
-  // com o Painel) — o filtro por origin continua existindo, só mudou de
-  // endereço junto com o resto da lógica.
+  // A query de tasks de Operação mora em operation-section-data.ts desde a
+  // Etapa "Correção de Direção do Workspace" (extraída de operation/page.tsx
+  // pra ser reaproveitada pelo Painel principal quando ele mostrava a seção
+  // completa) — o rollback de incidente manteve essa extração intacta
+  // (só o Painel voltou a mostrar resumo), então a checagem aponta pro
+  // arquivo onde a query realmente está hoje, não mais operation/page.tsx.
   const operationSectionDataSource = loadSource("src", "app", "clients", "operation-section-data.ts");
   const demandasSource = loadSource("src", "app", "clients", "[id]", "demandas", "page.tsx");
   const pendenciasDataSource = loadSource("src", "app", "demandas", "pendencias-data.ts");
@@ -244,70 +275,6 @@ console.log("\n11 — Rename Pendências → Demandas: rota oficial + redirect p
   ok("redirect preserva a query string inteira (filtros/agrupamento ficam 100% na URL)", redirectSource.includes("new URLSearchParams()") && redirectSource.includes("query.append(key, entry)"));
   const sidebarSource = loadSource("src", "app", "sidebar.tsx");
   ok('menu principal usa "Demandas"/"/demandas" (nome antigo só reconhecido pra manter o item ativo em link velho)', sidebarSource.includes('label: "Demandas"') && sidebarSource.includes('href: "/demandas"'));
-}
-
-console.log("\n12 — Correção de Direção do Workspace: Painel principal volta a ser COMPLETO (Performance+Operação+Demandas+Funis), header/largura preservados, sem voltar ao monólito\n");
-{
-  const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
-  const operationPageSource = loadSource("src", "app", "clients", "[id]", "operation", "page.tsx");
-  const sectionDataSource = loadSource("src", "app", "clients", "operation-section-data.ts");
-  const sectionCode = loadSource("src", "app", "clients", "operation-section.tsx");
-  const headerSource = loadSource("src", "app", "clients", "client-workspace-header.tsx");
-
-  ok("PRESERVADO: header continua sem a barra de 5 abas (pedido explícito desta rodada: 'não redesenhar')", !headerSource.includes('role="tablist"'));
-  ok("PRESERVADO: header continua usando a MESMA largura generosa (WORKSPACE_CONTENT_MAX_WIDTH_CLASS)", headerSource.includes("WORKSPACE_CONTENT_MAX_WIDTH_CLASS"));
-  ok("PRESERVADO: Painel principal continua usando WorkspaceContainer (largura preservada)", pageSource.includes("<WorkspaceContainer>"));
-
-  ok("PERFORMANCE completa: Funis restaurado DIRETO no Painel (não mais só em /relatorio)", pageSource.includes("<FunnelsSection"));
-  ok(
-    "OPERAÇÃO completa: Painel usa <OperationSection> (Tarefas/Sprints/Histórico/drawers por inteiro) — MESMO componente/loader de /operation, nunca reimplementado",
-    pageSource.includes("<OperationSection") && operationPageSource.includes("<OperationSection"),
-  );
-  ok(
-    "loadOperationSectionData é chamado tanto pelo Painel quanto por /operation — fonte ÚNICA da lógica operacional, nunca duas implementações",
-    pageSource.includes("loadOperationSectionData(supabase") && operationPageSource.includes("loadOperationSectionData(supabase"),
-  );
-  ok(
-    "Separação origin nunca regride: operation-section-data.ts filtra SEMPRE origin='template' (Operação nunca mostra Demandas)",
-    /\.eq\("client_id", id\)\s*\n\s*\.eq\("origin", "template"\)/.test(sectionDataSource),
-  );
-  ok("operation-section.tsx nunca importa/renderiza nada de origin='manual' (Demandas continua sua própria seção)", !sectionCode.includes("loadPendenciasRawData"));
-  ok(
-    "DEMANDAS completa: Painel mostra TODAS as demandas abertas (nunca mais só 3) — mesma fonte/regra de sempre",
-    pageSource.includes("demandasOpenItems") && !pageSource.includes(".slice(0, 3)") && pageSource.includes("loadPendenciasRawData(supabase, id)"),
-  );
-
-  ok(
-    "Links externos restaurados (Dashboard/Saldo/Fechamento) — existiam na página anterior à Fase 1, sumiram sem substituto, voltaram sem inventar dado novo (mesmas 3 colunas de clients)",
-    pageSource.includes("dashboard_url") && pageSource.includes("balance_url") && pageSource.includes("monthly_closing_sheet_url"),
-  );
-
-  ok(
-    "CTA de Performance é AÇÃO SECUNDÁRIA, nunca substituto: o conteúdo completo (AccountFollowUpPanel) vem ANTES do link 'Ver relatório completo' no arquivo",
-    pageSource.indexOf("<AccountFollowUpPanel") < pageSource.indexOf("Ver relatório completo"),
-  );
-  ok(
-    "CTA de Operação é AÇÃO SECUNDÁRIA, nunca substituto: <OperationSection> (conteúdo completo) existe no mesmo bloco do link 'Ver operação completa'",
-    pageSource.includes("<OperationSection") && pageSource.includes("Ver operação completa"),
-  );
-
-  ok(
-    "Sem monólito: a lógica operacional vive em MÓDULOS PRÓPRIOS (operation-section-data.ts/operation-section.tsx), nunca de volta a um único arquivo de página",
-    sectionDataSource.includes("export async function loadOperationSectionData") && sectionCode.includes("export function OperationSection"),
-  );
-}
-
-console.log("\n13 — Correção de incidente: Demandas/Funis/Operação disparados em PARALELO no Painel, nunca empilhados em série no final da função\n");
-{
-  const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
-  ok(
-    "loadPendenciasRawData é disparada cedo (demandaItemsPromise), na MESMA leva de funnelsPromise/operationSectionDataPromise — nunca um await isolado só no fim da função (round-trip extra em série, causa raiz de um incidente de produção)",
-    /const demandaItemsPromise = loadPendenciasRawData\(supabase, id\);/.test(pageSource),
-  );
-  ok(
-    "o await de demandaItemsPromise acontece só onde o valor é consumido (perto do JSX de Demandas) — a query em si já foi disparada bem antes",
-    pageSource.indexOf("const demandaItemsPromise = loadPendenciasRawData") < pageSource.indexOf("await demandaItemsPromise"),
-  );
 }
 
 console.log(`\n${passed} verificações passaram.`);

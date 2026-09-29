@@ -43,6 +43,16 @@
  * desta suíte (Performance/Tarefas/filtros/emojis/etc.) continua válido
  * sem alteração — nenhuma dessas decisões visuais foi revertida.
  *
+ * ROLLBACK DE INCIDENTE (2026-09-29): a Etapa "Correção de Direção do
+ * Workspace" (que integrava Performance/Operação/Demandas/Funis completos
+ * na própria página) foi revertida em produção por causar uma quebra
+ * restrita a alguns gestores/clientes (padrão consistente com RLS/permissão
+ * numa das tabelas novas, nunca diagnosticado com certeza por falta de
+ * acesso a logs/RLS de produção neste ambiente). Este arquivo volta a
+ * testar o Painel como RESUMO + CTAs — mesmo estado confirmado funcionando
+ * pra todos os usuários antes daquela rodada (a seção 15 abaixo volta a
+ * valer; a seção 16, que testava o painel completo, foi removida).
+ *
  * Rodar: npx tsx scripts/test-client-page-facelift.ts
  */
 import assert from "node:assert/strict";
@@ -68,12 +78,13 @@ function stripComments(source: string): string {
 
 const pageCode = stripComments(loadSource("src", "app", "clients", "[id]", "page.tsx"));
 const operationCode = stripComments(loadSource("src", "app", "clients", "[id]", "operation", "page.tsx"));
-// Etapa "Correção de Direção do Workspace": o corpo de Operação (Tarefas/
-// Sprints/Histórico/drawers) foi extraído de operation/page.tsx pra
-// operation-section.tsx/operation-section-data.ts, reaproveitado também
-// pelo Painel principal — ver seção 16 abaixo.
+// MonthTasksPanel/SprintCard moraram direto em operation/page.tsx até a
+// Etapa "Correção de Direção do Workspace", quando foram extraídos pra
+// operation-section.tsx (reaproveitado pelo Painel principal quando ele
+// mostrava a seção completa). O rollback de incidente manteve essa
+// extração intacta (só o Painel voltou a mostrar resumo), então as
+// checagens de composição de Tarefas/Sprints apontam pra cá.
 const operationSectionCode = stripComments(loadSource("src", "app", "clients", "operation-section.tsx"));
-const operationSectionDataCode = stripComments(loadSource("src", "app", "clients", "operation-section-data.ts"));
 const kpiCode = stripComments(loadSource("src", "app", "clients", "monthly-kpi-summary.tsx"));
 const tasksPanelCode = stripComments(loadSource("src", "app", "clients", "month-tasks-panel.tsx"));
 const recurringRowCode = stripComments(loadSource("src", "app", "clients", "recurring-task-row.tsx"));
@@ -100,8 +111,7 @@ console.log("\n2 — Ritmo vertical: cadência consistente entre as grandes regi
   // Rodada 5: Tarefas (MonthTasksPanel) realocado pra Operação — mesma
   // cadência mt-6 preservada no arquivo novo, nunca perdida na mudança.
   // Rodada 6 ("Correção de Direção do Workspace"): o bloco em si mudou de
-  // arquivo de novo (operation-section.tsx, compartilhado com o Painel),
-  // a cadência mt-6 continua intacta.
+  // arquivo de novo (operation-section.tsx), a cadência mt-6 continua intacta.
   ok("bloco Tarefas (MonthTasksPanel) usa mt-6 antes dele — hoje em operation-section.tsx", /mt-6">\s*<MonthTasksPanel/.test(operationSectionCode));
   ok("Outros objetivos (quando existe) usa a MESMA cadência mt-6", /mt-6 rounded-lg bg-overview-surface-subtle/.test(secondaryGoalsCode));
   ok(
@@ -163,7 +173,7 @@ console.log("\n8 — Progresso (\"0/2\"): mantido (é informação real), só me
   ok("progresso fica junto do nome (items-baseline, mesma unidade visual)", /items-baseline gap-1\.5 text-sm/.test(recurringRowCode));
 }
 
-console.log("\n9 — Não mexeu no que não devia: Sprints continua com o mesmo SprintCard, mesmas props (agora em Operação)\n");
+console.log("\n9 — Não mexeu no que não devia: Sprints continua com o mesmo SprintCard, mesmas props (hoje em operation-section.tsx)\n");
 {
   ok(
     "Operação continua chamando SprintCard com hideNextAction/hideTaskList (mesmo comportamento de sempre, hoje em operation-section.tsx)",
@@ -266,57 +276,15 @@ console.log("\n14 — RitmoDiagnostic removido: barras + marker são a represent
 // ---------------------------------------------------------------------------
 // Rodada 5 — "MITZA — Reformulação Estrutural"
 // ---------------------------------------------------------------------------
-console.log("\n15 — Visão Geral enxuta (Rodada 5, HISTÓRICO — ver seção 16 pra o que mudou na Rodada 6)\n");
+console.log("\n15 — Visão Geral realmente enxuta: nunca duplica Performance/Operação/Demandas completos\n");
 {
-  // Rodada 6 ("Correção de Direção do Workspace") reverteu a premissa desta
-  // seção: o Painel principal volta a mostrar Performance/Operação/Demandas
-  // por completo, não mais resumos. Os itens abaixo continuam válidos no
-  // sentido estrito (nenhum desses componentes é importado/chamado
-  // DIRETAMENTE dentro de page.tsx) porque migraram pra dentro de
-  // operation-section.tsx (Operação) — reaproveitado por `<OperationSection>`,
-  // nunca duplicado. AccountInfoDrawer continua fora (drawer global do
-  // header). FunnelsSection é a ÚNICA excessão real: agora É renderizado
-  // direto em page.tsx de novo (seção 16).
-  ok("MonthTasksPanel não é chamado DIRETAMENTE em page.tsx (mora em operation-section.tsx, via <OperationSection>)", !pageCode.includes("<MonthTasksPanel"));
-  ok("SprintCard não é chamado DIRETAMENTE em page.tsx (mora em operation-section.tsx, via <OperationSection>)", !pageCode.includes("<SprintCard"));
-  ok("ClientHistoryList não é chamado DIRETAMENTE em page.tsx (mora em operation-section.tsx, via <OperationSection>)", !pageCode.includes("<ClientHistoryList"));
-  ok(
-    "nenhum drawer de revisão (Record/DetailDrawer) é chamado DIRETAMENTE em page.tsx (mora em operation-section.tsx, via <OperationSection>)",
-    !pageCode.includes("<RecordAccountReviewDrawer") && !pageCode.includes("<AccountReviewDetailDrawer"),
-  );
-  ok("AccountInfoDrawer não é renderizado em page.tsx (continua drawer global do header do workspace)", !pageCode.includes("<AccountInfoDrawer"));
-}
-
-// ---------------------------------------------------------------------------
-// Rodada 6 — "Correção de Direção do Workspace"
-// ---------------------------------------------------------------------------
-console.log("\n16 — Painel principal volta a ser COMPLETO: Performance + Operação + Demandas por inteiro, sem voltar ao monólito\n");
-{
-  ok("FunnelsSection volta a ser renderizado DIRETO em page.tsx (restaurado da página antiga, MESMO componente/loaders de /relatorio)", pageCode.includes("<FunnelsSection"));
-  ok(
-    "Operação é composta via <OperationSection> (componente extraído, compartilhado com /operation) — NUNCA reimplementada dentro de page.tsx",
-    pageCode.includes("<OperationSection") && !pageCode.includes("<MonthTasksPanel") && !pageCode.includes("<SprintCard"),
-  );
-  ok(
-    "operation-section-data.ts é o ÚNICO loader da lógica operacional — usado por page.tsx E por operation/page.tsx, nunca duplicado/reimplementado",
-    operationSectionDataCode.includes("export async function loadOperationSectionData"),
-  );
-  ok(
-    "Demandas no Painel mostra TODAS as abertas (não mais só 3) — MESMA fonte loadPendenciasRawData/countOpenDemandas de /clients/[id]/demandas",
-    pageCode.includes("demandasOpenItems") && !pageCode.includes(".slice(0, 3)"),
-  );
-  ok(
-    "Links externos (Dashboard/Saldo/Fechamento) restaurados — existiam na barra de navegação da página antiga (auditoria via git show 402e0af), sumiram na Fase 1 sem substituto",
-    pageCode.includes("dashboard_url") && pageCode.includes("balance_url") && pageCode.includes("monthly_closing_sheet_url"),
-  );
-  ok(
-    "CTAs de aprofundamento (Ver relatório completo/Ver operação completa/Ver todas) continuam existindo, mas como AÇÃO SECUNDÁRIA — nunca substituindo o conteúdo completo acima deles",
-    /Ver relatório completo/.test(pageCode) && /Ver operação completa/.test(pageCode) && /Ver todas/.test(pageCode),
-  );
-  ok(
-    "Nenhum arquivo-monólito: page.tsx continua compondo componentes extraídos (AccountFollowUpPanel/FunnelsSection/OperationSection), nunca um retorno ao arquivo único de 1944 linhas",
-    !pageCode.includes("function ClientOperationalHistoryDrawer") && pageCode.includes("<WorkspaceContainer>"),
-  );
+  ok("FunnelsSection não é mais renderizado em page.tsx (foi pra Performance/relatorio)", !pageCode.includes("<FunnelsSection"));
+  ok("MonthTasksPanel não é mais renderizado em page.tsx (foi pra Operação — origin='template' — e Demandas — origin='manual' — separadamente)", !pageCode.includes("<MonthTasksPanel"));
+  ok("SprintCard não é mais renderizado em page.tsx (foi pra Operação)", !pageCode.includes("<SprintCard"));
+  ok("ClientHistoryList não é mais renderizado em page.tsx (histórico operacional foi pra Operação)", !pageCode.includes("<ClientHistoryList"));
+  ok("nenhum drawer de revisão (Record/DetailDrawer) sobrevive em page.tsx (revisões são Operação agora)", !pageCode.includes("RecordAccountReviewDrawer") && !pageCode.includes("AccountReviewDetailDrawer"));
+  ok("AccountInfoDrawer não é mais renderizado em page.tsx (virou drawer global do header do workspace)", !pageCode.includes("<AccountInfoDrawer"));
+  ok("Visão Geral mostra Demandas só como resumo (contagem + link pra /demandas, nunca a lista)", /demandasOpenCount\} em aberto/.test(pageCode) && /href=\{`\/clients\/\$\{client\.id\}\/demandas`\}/.test(pageCode));
 }
 
 console.log(`\n${passed} verificações passaram.`);
