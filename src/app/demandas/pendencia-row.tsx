@@ -12,6 +12,7 @@ import {
 } from "@/app/clients/task-labels";
 import { formatDueDate, formatDateFromInstant, formatShortDateFromInstant } from "@/lib/format";
 import { Tooltip } from "@/components/ui/tooltip";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { todayDateString } from "@/lib/today";
 import type { PendenciasAssigneeOption, PendenciasClientOption } from "./pendencias-data";
 
@@ -99,36 +100,35 @@ export function PendenciaRow({
         )}
       </button>
 
-      <select
-        value={item.client?.id ?? ""}
-        disabled={pendingField === "client"}
-        onChange={(event) => run("client", () => onUpdateClient(item.id, event.target.value || null))}
-        aria-label="Cliente"
-        className={`${selectClasses} w-[140px] shrink-0`}
-      >
-        <option value="">Interna</option>
-        {clientOptions.map((client) => (
-          <option key={client.id} value={client.id}>
-            {client.name}
-          </option>
-        ))}
-      </select>
+      <div className="w-[140px] shrink-0">
+        <SearchableSelect
+          options={clientOptions.map((client) => ({ id: client.id, label: client.name }))}
+          selectedId={item.client?.id ?? null}
+          onSelect={(id) => run("client", () => onUpdateClient(item.id, id))}
+          placeholder="Interna"
+          allLabel="Interna"
+          searchPlaceholder="Buscar cliente..."
+          ariaLabel="Cliente"
+          disabled={pendingField === "client"}
+        />
+      </div>
 
-      <select
-        value={item.assignee?.id ?? ""}
-        disabled={pendingField === "assignee"}
-        onChange={(event) => run("assignee", () => onUpdateAssignee(item.id, event.target.value || null))}
-        aria-label="Responsável"
-        className={`${selectClasses} w-[130px] shrink-0`}
-      >
-        <option value="">Sem responsável</option>
-        {assigneeOptions.map((member) => (
-          <option key={member.id} value={member.id}>
-            {member.name}
-            {member.status === "inativo" ? " (inativo)" : ""}
-          </option>
-        ))}
-      </select>
+      <div className="w-[130px] shrink-0">
+        <SearchableSelect
+          options={assigneeOptions.map((member) => ({
+            id: member.id,
+            label: member.name,
+            sublabel: member.status === "inativo" ? "(inativo)" : undefined,
+          }))}
+          selectedId={item.assignee?.id ?? null}
+          onSelect={(id) => run("assignee", () => onUpdateAssignee(item.id, id))}
+          placeholder="Sem responsável"
+          allLabel="Sem responsável"
+          searchPlaceholder="Buscar responsável..."
+          ariaLabel="Responsável"
+          disabled={pendingField === "assignee"}
+        />
+      </div>
 
       {isTerminal ? (
         <span className={`w-[110px] shrink-0 rounded-full px-2 py-0.5 text-center text-[11px] font-medium ${TASK_STATUS_BADGE_CLASSES[item.status]}`}>

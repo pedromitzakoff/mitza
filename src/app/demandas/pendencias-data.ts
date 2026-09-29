@@ -98,13 +98,19 @@ export async function loadPendenciasRawData(supabase: Supabase, scopeClientId?: 
   // filtro de cliente não faz sentido — já é o próprio contexto).
   if (scopeClientId) taskQuery = taskQuery.eq("client_id", scopeClientId);
 
-  const [taskRows, clientRows, teamMemberRows] = await Promise.all([
+  const [taskRows, clientRowsRaw, teamMemberRows] = await Promise.all([
     requireQuery(taskQuery, "tasks:pendencias"),
     scopeClientId
       ? Promise.resolve([] as PendenciasClientOption[])
       : requireQuery(supabase.from("clients").select("id, name").eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS).order("name"), "clients:pendencias"),
     requireQuery(supabase.from("team_members").select("id, name, status").order("name"), "team_members:pendencias"),
   ]);
+
+  // Defesa contra `id` duplicado no resultado (visto em produção nos
+  // seletores de Cliente/Responsável de Pendências) — nunca remove uma
+  // conta legitimamente diferente que só compartilha o nome, só o mesmo
+  // `id` aparecendo mais de uma vez.
+  const clientRows = Array.from(new Map((clientRowsRaw ?? []).map((c) => [c.id, c])).values());
 
   const today = todayUTC();
 
@@ -138,7 +144,7 @@ export async function loadPendenciasRawData(supabase: Supabase, scopeClientId?: 
 
   return {
     items,
-    clientOptions: clientRows ?? [],
+    clientOptions: clientRows,
     assigneeOptions: (teamMemberRows ?? []) as PendenciasAssigneeOption[],
   };
 }
