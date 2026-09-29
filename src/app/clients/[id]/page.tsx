@@ -22,7 +22,7 @@ import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { sumChannelEffectiveSpend, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatMonthLabel, formatRelativeDateTime } from "@/lib/format";
+import { formatMonthLabel, formatRelativeDateTime, formatDueDate } from "@/lib/format";
 import { contractStatusBannerText } from "@/lib/client-fields";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
 import { resolveOperationPriorityGroup } from "@/lib/operation-triage";
@@ -44,7 +44,6 @@ import { AVAILABLE_TRAFFIC_CHANNELS, resolveClientChannelScopeOptions, resolveSe
 import { VisaoGeralChannelSwitch, type VisaoGeralMetricsChannel } from "../visao-geral-channel-switch";
 import { countOpenDemandas } from "@/lib/pendencias";
 import { loadPendenciasRawData } from "@/app/demandas/pendencias-data";
-import { formatDueDate } from "../task-row";
 import { TASK_PRIORITY_DOT_CLASS } from "../task-labels";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL } from "@/lib/account-reviews";
 import { WorkspaceContainer } from "../workspace-container";

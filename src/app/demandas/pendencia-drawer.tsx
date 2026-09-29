@@ -10,8 +10,7 @@ import {
   TASK_PRIORITY_DOT_CLASS,
   TASK_PRIORITY_LABEL,
 } from "@/app/clients/task-labels";
-import { formatDueDate } from "@/app/clients/task-row";
-import { formatDateTimeWithYear } from "@/lib/format";
+import { formatDueDate, formatDateTimeWithYear } from "@/lib/format";
 import { InlineEditTaskForm, type InlineTaskManagerOption } from "@/app/clients/inline-task-form";
 import { CommentThread, type CommentItem } from "@/app/clients/comment-thread";
 import { getTaskCompletionActorAction, listTaskCommentsAction } from "./pendencias-actions";

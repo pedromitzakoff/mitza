@@ -243,17 +243,6 @@ export interface TaskListItem {
   notes?: string | null;
 }
 
-const dueDateFormatter = new Intl.DateTimeFormat("pt-BR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-export function formatDueDate(value: string): string {
-  return dueDateFormatter.format(new Date(`${value}T00:00:00Z`));
-}
-
 /**
  * Linha densa de tarefa — ordem fixa [conclusão] [data] [tarefa]
  * [responsável] [status temporal] [ações], seguindo a prioridade de leitura

@@ -74,6 +74,18 @@ export function formatDateWithYear(value: string): string {
   return dayMonthYearFormatter.format(new Date(`${value}T00:00:00Z`));
 }
 
+/** Rollback de incidente (2026-09-29): antes vivia em `task-row.tsx` como
+ * `formatDueDate` (mesmo formato, "DD/MM/AAAA") — só que aquele arquivo é
+ * `"use client"`, e Server Components não podem chamar uma função exportada
+ * de um Client Component diretamente (só renderizá-la como `<Componente/>`);
+ * a página do cliente (`clients/[id]/page.tsx`) fazia exatamente isso pro
+ * preview de Demandas, o que derrubava a página pra qualquer cliente com ao
+ * menos uma demanda em aberto — intermitente o bastante pra nunca ter sido
+ * pego nos testes estruturais. Alias aqui (módulo puro, sem `"use client"`)
+ * pra ser importável tanto do server quanto dos Client Components que já
+ * usavam `formatDueDate`. */
+export const formatDueDate = formatDateWithYear;
+
 const weekdayLongFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: "UTC" });
 const weekdayShortFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "UTC" });
 const dayMonthLongFormatter = new Intl.DateTimeFormat("pt-BR", {

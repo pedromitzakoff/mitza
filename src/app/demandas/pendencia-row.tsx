@@ -10,8 +10,7 @@ import {
   TASK_PRIORITY_OPTIONS,
   TASK_STATUS_BADGE_CLASSES,
 } from "@/app/clients/task-labels";
-import { formatDueDate } from "@/app/clients/task-row";
-import { formatDateFromInstant, formatShortDateFromInstant } from "@/lib/format";
+import { formatDueDate, formatDateFromInstant, formatShortDateFromInstant } from "@/lib/format";
 import { Tooltip } from "@/components/ui/tooltip";
 import { todayDateString } from "@/lib/today";
 import type { PendenciasAssigneeOption, PendenciasClientOption } from "./pendencias-data";
