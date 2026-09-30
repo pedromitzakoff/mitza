@@ -127,7 +127,7 @@ export default async function ClientPage({
   const { data: client, error: clientQueryError } = await supabase
     .from("clients")
     .select(
-      "id, name, meta_ad_account_id, status, primary_manager:team_members!clients_primary_manager_id_fkey(name), performance_goal, target_cost_per_result, avatar_url, media_channels",
+      "id, name, meta_ad_account_id, status, primary_manager:team_members!clients_primary_manager_id_fkey(name), performance_goal, target_cost_per_result, avatar_url, media_channels, dashboard_url, balance_url, monthly_closing_sheet_url",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -399,6 +399,20 @@ export default async function ClientPage({
 
   const historyDrawerHref = withParam(returnTo, "historicoOrcamento=1");
 
+  // Links externos (Dashboard/Saldo/Fechamento) — existiam na barra de
+  // navegação da página antiga (auditoria via git show 402e0af), tinham
+  // sumido sem substituto na Fase 1; restaurados aqui na correção de
+  // direção (c707395) e removidos por engano no rollback de incidente
+  // (a252f78, que revertia só a composição de Performance/Operação/
+  // Demandas). Nunca tiveram relação com o bug real do incidente
+  // (`formatDueDate` chamada do server, corrigido em 54f451d) — seguros
+  // pra restaurar de volta.
+  const externalLinks = [
+    client.dashboard_url && { label: "Dashboard", href: client.dashboard_url },
+    client.balance_url && { label: "Saldo", href: client.balance_url },
+    client.monthly_closing_sheet_url && { label: "Fechamento", href: client.monthly_closing_sheet_url },
+  ].filter((link): link is { label: string; href: string } => Boolean(link));
+
   return (
     <WorkspaceContainer>
       <ScrollRestoreOnMount />
@@ -447,6 +461,21 @@ export default async function ClientPage({
             byChannel={clientPlan.byChannel}
             performanceGoal={performanceGoal}
           />
+        )}
+        {externalLinks.length > 0 && (
+          <div className="ml-auto flex items-center gap-3">
+            {externalLinks.map((link) => (
+              <a
+                key={link.label}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-medium text-overview-text-secondary hover:underline"
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
         )}
       </div>
 

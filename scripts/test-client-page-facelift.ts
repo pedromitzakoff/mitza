@@ -287,4 +287,20 @@ console.log("\n15 — Visão Geral realmente enxuta: nunca duplica Performance/O
   ok("Visão Geral mostra Demandas só como resumo (contagem + link pra /demandas, nunca a lista)", /demandasOpenCount\} em aberto/.test(pageCode) && /href=\{`\/clients\/\$\{client\.id\}\/demandas`\}/.test(pageCode));
 }
 
+// ---------------------------------------------------------------------------
+// Pós-rollback — restauração dos links externos
+// ---------------------------------------------------------------------------
+console.log("\n16 — Links externos (Dashboard/Saldo/Fechamento) restaurados após o rollback de incidente\n");
+{
+  // O rollback de incidente (a252f78) reverteu page.tsx pro estado de
+  // f3dbaf4, que não tinha esses links (eram uma adição só da rodada
+  // revertida, c707395). Nunca tiveram relação com o bug real do incidente
+  // (`formatDueDate` chamada do server, corrigido em 54f451d) — restaurados
+  // de volta em cima do estado já corrigido.
+  ok("clients é consultado com dashboard_url/balance_url/monthly_closing_sheet_url", /dashboard_url, balance_url, monthly_closing_sheet_url/.test(pageCode));
+  ok("externalLinks monta Dashboard/Saldo/Fechamento a partir das 3 colunas, cada um opcional", /client\.dashboard_url && \{ label: "Dashboard"/.test(pageCode) && /client\.balance_url && \{ label: "Saldo"/.test(pageCode) && /client\.monthly_closing_sheet_url && \{ label: "Fechamento"/.test(pageCode));
+  ok("links abrem em nova aba (target=_blank + rel=noopener noreferrer)", /target="_blank"\s*\n\s*rel="noopener noreferrer"/.test(pageCode));
+  ok("links ficam na mesma barra de contexto (mês/canal/planejamento), nunca uma seção própria", pageCode.indexOf("externalLinks.length > 0") > pageCode.indexOf("<ChannelPlanEditor") && pageCode.indexOf("externalLinks.length > 0") < pageCode.indexOf("PERFORMANCE"));
+}
+
 console.log(`\n${passed} verificações passaram.`);
