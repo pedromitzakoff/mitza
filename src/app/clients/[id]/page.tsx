@@ -462,21 +462,22 @@ export default async function ClientPage({
             performanceGoal={performanceGoal}
           />
         )}
-        {externalLinks.length > 0 && (
-          <div className="ml-auto flex items-center gap-3">
-            {externalLinks.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-medium text-overview-text-secondary hover:underline"
-              >
-                {link.label}
-              </a>
-            ))}
-          </div>
-        )}
+        <div className="ml-auto flex items-center gap-3">
+          <Link href={`/clients/${client.id}/relatorio`} className="text-xs font-medium text-overview-text-secondary hover:underline">
+            Relatório
+          </Link>
+          {externalLinks.map((link) => (
+            <a
+              key={link.label}
+              href={link.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-medium text-overview-text-secondary hover:underline"
+            >
+              {link.label}
+            </a>
+          ))}
+        </div>
       </div>
 
       {/* PERFORMANCE — "o que está acontecendo?" (seção 7 do pedido de

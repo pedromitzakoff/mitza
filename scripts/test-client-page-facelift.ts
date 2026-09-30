@@ -299,8 +299,23 @@ console.log("\n16 — Links externos (Dashboard/Saldo/Fechamento) restaurados ap
   // de volta em cima do estado já corrigido.
   ok("clients é consultado com dashboard_url/balance_url/monthly_closing_sheet_url", /dashboard_url, balance_url, monthly_closing_sheet_url/.test(pageCode));
   ok("externalLinks monta Dashboard/Saldo/Fechamento a partir das 3 colunas, cada um opcional", /client\.dashboard_url && \{ label: "Dashboard"/.test(pageCode) && /client\.balance_url && \{ label: "Saldo"/.test(pageCode) && /client\.monthly_closing_sheet_url && \{ label: "Fechamento"/.test(pageCode));
-  ok("links abrem em nova aba (target=_blank + rel=noopener noreferrer)", /target="_blank"\s*\n\s*rel="noopener noreferrer"/.test(pageCode));
-  ok("links ficam na mesma barra de contexto (mês/canal/planejamento), nunca uma seção própria", pageCode.indexOf("externalLinks.length > 0") > pageCode.indexOf("<ChannelPlanEditor") && pageCode.indexOf("externalLinks.length > 0") < pageCode.indexOf("PERFORMANCE"));
+  ok("links externos abrem em nova aba (target=_blank + rel=noopener noreferrer)", /target="_blank"\s*\n\s*rel="noopener noreferrer"/.test(pageCode));
+  // "Relatório" (pedido explícito) é link INTERNO (Next <Link>, nunca nova
+  // aba) pro mesmo /relatorio do CTA "Ver relatório completo →" mais abaixo
+  // — sempre visível (não depende de nenhuma coluna opcional de clients),
+  // na mesma barra de contexto, antes dos externos (Dashboard/Saldo/
+  // Fechamento) no grupo alinhado à direita.
+  ok(
+    "Relatório aparece como link interno sempre visível na barra de contexto, antes dos links externos",
+    /<Link href=\{`\/clients\/\$\{client\.id\}\/relatorio`\} className="text-xs font-medium text-overview-text-secondary hover:underline">\s*Relatório/.test(
+      pageCode,
+    ),
+  );
+  ok(
+    "grupo de links (Relatório + externos) fica na mesma barra de contexto (mês/canal/planejamento), nunca uma seção própria",
+    pageCode.indexOf('ml-auto flex items-center gap-3">\n          <Link href={`/clients/${client.id}/relatorio`}') > pageCode.indexOf("<ChannelPlanEditor") &&
+      pageCode.indexOf('ml-auto flex items-center gap-3">\n          <Link href={`/clients/${client.id}/relatorio`}') < pageCode.indexOf("PERFORMANCE"),
+  );
 }
 
 console.log(`\n${passed} verificações passaram.`);
