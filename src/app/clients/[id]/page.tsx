@@ -35,10 +35,9 @@ import { MonthlyBudgetHistoryDrawer } from "../monthly-budget-history-drawer";
 import { ChannelPlanEditor } from "../channel-plan-editor";
 import { AccountFollowUpPanel } from "../account-follow-up-panel";
 import { SecondaryGoalsPerformance } from "../secondary-goals-performance";
-import { ConversionRateCard } from "../conversion-rate-card";
 import { listClientGoals, fetchGoalDisplaySummaries } from "@/lib/client-goals";
 import { fetchSecondaryGoalsPerformance } from "@/lib/secondary-goal-performance";
-import { computePerformanceSummary, aggregatePerformanceResults, computeConversionRate } from "@/lib/performance";
+import { computePerformanceSummary, aggregatePerformanceResults } from "@/lib/performance";
 import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
 import { AVAILABLE_TRAFFIC_CHANNELS, resolveClientChannelScopeOptions, resolveSelectedChannelScope, type TrafficChannel } from "@/lib/traffic-channels";
 import { VisaoGeralChannelSwitch, type VisaoGeralMetricsChannel } from "../visao-geral-channel-switch";
@@ -67,11 +66,13 @@ function withParam(url: string, param: string): string {
  * rota/loader/pipeline da Fase 1:
  *
  * 1. PERFORMANCE — `AccountFollowUpPanel` (KPIs + ritmo do mês, já existia
- *    aqui) + `SecondaryGoalsPerformance`/`ConversionRateCard`. O CTA de
- *    aprofundamento que ficava no fim deste bloco foi removido — pedido
- *    explícito de simplificação, já que o link "Relatório" na barra de
- *    contexto (topo, junto de Dashboard/Saldo/Fechamento) cobre o mesmo
- *    destino (`/relatorio`, que continua existindo intacto — mesma Camada
+ *    aqui) + `SecondaryGoalsPerformance`. Taxa de conversão (carrinho→venda)
+ *    saiu daqui — pedido explícito de simplificação, fica só dentro de
+ *    `/relatorio` (`report-filterable-tables.tsx`), nunca duplicada. O CTA
+ *    de aprofundamento que ficava no fim deste bloco também foi removido —
+ *    o link "Relatório" na barra de contexto (topo, junto de Dashboard/
+ *    Saldo/Fechamento) cobre o mesmo destino (`/relatorio`, que continua
+ *    existindo intacto — mesma Camada
  *    1/2, nenhum cálculo duplicado).
  * 2. OPERAÇÃO — resumo leve (sprint atual, última otimização, saúde/motivo
  *    do CPA — os MESMOS dados/funções já usados por `/operation` e pela
@@ -240,14 +241,6 @@ export default async function ClientPage({
     source: r.source,
     sourceUpdatedAt: r.source_updated_at,
   }));
-
-  // Taxa de conversão (vendas ÷ carrinhos) — mesma leitura de sempre sobre
-  // `performanceRecords` já buscado acima, nenhuma query nova.
-  const cartsResultCount = performanceRecords
-    .filter((r) => (r.resultType as string) === "carts")
-    .reduce((sum, r) => sum + r.resultCount, 0);
-  const salesResultCount = performanceRecords.filter((r) => r.resultType === "sales").reduce((sum, r) => sum + r.resultCount, 0);
-  const conversionRate = computeConversionRate(salesResultCount, cartsResultCount);
 
   // Objetivos secundários — mesmo bloco de sempre, `await` sequencial
   // isolado (nenhuma dependência do Promise.all das queries do mês acima).
@@ -527,8 +520,6 @@ export default async function ClientPage({
       </div>
 
       <SecondaryGoalsPerformance goals={secondaryGoalsPerformance} />
-
-      <ConversionRateCard conversionRate={conversionRate} />
 
       {/* OPERAÇÃO — "estamos executando corretamente?" (seção 9 do pedido de
           correção): resumo leve (sprint atual, última otimização, saúde do

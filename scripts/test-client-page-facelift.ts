@@ -330,7 +330,12 @@ console.log("\n16 — Links externos (Dashboard/Saldo/Fechamento) restaurados ap
 console.log("\n17 — Simplificação: rótulos de seção removidos, CTA de relatório redundante removido\n");
 {
   ok('CTA "Ver relatório completo →" removido de page.tsx (redundante com o link "Relatório" no topo, seção 16)', !/Ver relatório completo/.test(pageCode));
-  ok("SecondaryGoalsPerformance/ConversionRateCard continuam renderizados sem alteração (só o CTA entre eles e a Operação saiu)", /<SecondaryGoalsPerformance/.test(pageCode) && /<ConversionRateCard/.test(pageCode));
+  ok("SecondaryGoalsPerformance continua renderizado sem alteração (só o que vinha depois dele saiu)", /<SecondaryGoalsPerformance/.test(pageCode));
+  // ConversionRateCard saiu de page.tsx por completo (pedido de
+  // simplificação à parte — ver test-conversion-rate-card.ts pro detalhe
+  // da remoção e confirmação de que a Taxa de conversão continua existindo
+  // só dentro de /relatorio, nunca duplicada).
+  ok("ConversionRateCard não é mais renderizado em page.tsx", !/<ConversionRateCard/.test(pageCode));
   ok('título "Performance do mês" removido de account-follow-up-panel.tsx', !/Performance do mês/.test(accountFollowUpCode));
   ok('título "Ritmo do mês" removido de account-follow-up-panel.tsx', !/Ritmo do mês/.test(accountFollowUpCode));
   ok("MonthlyKpiSummary/MonthlyGoalProgress/MonthInvestmentSummary continuam chamados sem alteração de props (só os rótulos acima deles saíram)", /<MonthlyKpiSummary/.test(accountFollowUpCode) && /<MonthInvestmentSummary/.test(accountFollowUpCode));
