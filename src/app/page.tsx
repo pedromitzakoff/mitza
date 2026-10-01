@@ -35,6 +35,7 @@ import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals
 import { computeOperationIndicators } from "@/lib/operation-indicators";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
+import { GlobalScopeSelect } from "./global-scope-select";
 import { OperationMetric } from "./operation-metric";
 import { PLATFORM_LABEL } from "./client-objective-table";
 import { getCompletedReminders, getOpenReminders, getReminderById } from "@/lib/reminders-data";
@@ -935,6 +936,16 @@ export default async function Home({
   return (
     <div className={`min-h-[calc(100dvh_-_3rem)] ${inter.variable}`} style={{ fontFamily: "var(--font-overview)" }}>
       <div className="mx-auto max-w-7xl px-6 pt-5 pb-3">
+        {/* Etapa "MEGA FACELIFT — Fase 4.6" (seção 4/10 do pedido):
+            "Dashboard" + contexto "Todos" É esta tela (Visão Geral
+            reaproveitada 100%, nenhum cálculo tocado) — o atalho abaixo só
+            cobre a ENTRADA "Todos -> cliente" (navega pro Dashboard de um
+            cliente específico, `/clients/[id]`). Nunca confundir com o
+            combobox "Cliente" dentro de `AgencyFilters` logo abaixo, que
+            FILTRA os números desta mesma tela sem sair dela. */}
+        <div className="mb-3 flex justify-end">
+          <GlobalScopeSelect module="dashboard" clientOptions={clientOptions} />
+        </div>
         <AgencyFilters
           defaultManager={isAdmin ? "all" : "me"}
           gestores={gestores ?? []}

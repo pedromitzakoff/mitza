@@ -12,7 +12,6 @@ import {
   Database,
   History,
   LayoutDashboard,
-  LayoutGrid,
   ListChecks,
   LogOut,
   Menu,
@@ -29,8 +28,7 @@ import { syncAllMetaAction } from "@/app/global-actions";
 import { SubmitButton } from "@/app/submit-button";
 import { formatAgencyDateTime } from "@/lib/format";
 import type { UserRole } from "@/lib/supabase/database.types";
-import { buildWorkspaceHref, resolveActiveClientIdFromPathname, resolveCurrentSuffix } from "@/lib/client-workspace-nav";
-import { useWorkspace } from "@/components/workspace-drawer/workspace-provider";
+import { buildModuleContextHref, resolveCurrentModuleAndContext, type AppContext, type ModuleKey } from "@/lib/client-workspace-nav";
 import {
   ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES,
   ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES,
@@ -121,152 +119,58 @@ function SidebarClock({ collapsed }: { collapsed: boolean }) {
 
 interface NavItem {
   label: string;
-  href?: string;
+  href: string;
   icon: LucideIcon;
   adminOnly?: boolean;
-  isActive?: (pathname: string, mode: string | null) => boolean;
-  /** principal: os únicos dois níveis operacionais da constituição do
-   * produto (Painel Geral, Operação). flexivel: Administração (Equipe,
-   * Configurações) — infraestrutura, empurrada pro fim da nav via spacer,
-   * nunca competindo visualmente com os níveis operacionais (Etapa "MITZA
-   * 2.0 — Fase H"). */
-  group: "principal" | "flexivel";
+  isActive: (pathname: string) => boolean;
 }
 
-/** Etapa "Sprint Workspace Polish 2.0" (Parte 8): posição antes de
- * Clientes preservada — é o centro operacional diário da plataforma (onde
- * o gestor começa o dia), Clientes é área de cadastro/configuração, usada
- * com menos frequência no dia a dia.
- *
- * Etapa "Operação 1.0": "Sprints" saiu da navegação principal — vira
- * "Operação" (`/operation`, tela nova de triagem, ver `lib/operation-triage.ts`).
- * `/sprints` continua existindo (nenhum arquivo/rota apagado), só sem
- * porta de entrada aqui — mesmo padrão já usado com "Reuniões".
- *
- * Etapa "Árvore Viva 1.0": "Clientes" também saiu da navegação principal —
- * a árvore "Contas da Agência" (busca + estrutura por gestor) e a Operação
- * (quando o cliente tem um desvio) já cobrem qualquer acesso operacional a
- * uma conta. `/clients` continua existindo (mesmo padrão acima) — cadastro
- * administrativo agora vive em Configurações > Clientes.
- *
- * Etapa "MITZA 2.0 — Fase G": "Relatórios" também sai da navegação
- * principal — o relatório individual agora é a aba "Relatórios" do Cliente
- * (`/clients/[id]?area=relatorios`) e a visibilidade de pendência migrou pro
- * filtro rápido "Relatório pendente" da Operação. `/reports` continua
- * existindo (mesmo padrão acima), só sem porta de entrada aqui.
- *
- * Etapa "Timeline Geral da Agência": terceiro pilar principal, ao lado de
- * Visão Geral e Operação — a tríade responde três perguntas distintas que
- * nunca competem entre si (Visão Geral: "como está a agência?"; Operação:
- * "qual cliente precisa de atenção?"; Timeline: "o que está acontecendo?").
- *
- * Etapa "Timeline 2.0": "Conquistas" deixou de ser um quarto pilar próprio —
- * os acontecimentos positivos que ela mostrava ("o que merece ser
- * comemorado") agora vivem DENTRO da Timeline (família "Performance", ver
- * `lib/agency-timeline.ts`), nunca perdidos, só sem uma entrada de
- * navegação própria. `/achievements` continua existindo como redirect
- * seguro pra `/timeline?family=performance` (nenhum link antigo quebra).
- *
- * Etapa "Pendências": quarto pilar — gestão de tarefas evoluiu de módulo
- * disperso (por cliente/sprint) pra área dedicada (`/pendencias`), que
- * merece porta de entrada própria (é onde o gestor passa a resolver
- * trabalho do dia a dia, não só consultar). Constituição atual: Visão
- * Geral → Operação → Pendências → Timeline → Cliente (Relatórios/Clientes/
- * Sprints continuam cobertos por outros fluxos, mesmo raciocínio de
- * sempre).
- *
- * Etapa "MEGA FACELIFT — Fase 4.5: Navegação da Carteira": "Clientes"
- * volta pra navegação principal — não como o cadastro administrativo de
- * antes (isso continua existindo via `/clients/new`/Configurações), mas
- * como a NOVA casa pra localizar/abrir/organizar a carteira (busca +
- * filtro por gestor/status + "Organizar carteira", ver `clients/page.tsx`),
- * substituindo o papel que a árvore "Contas da Agência" cumpria sozinha
- * dentro da própria Sidebar. A árvore em si (`AgencyAccountsTree`) não foi
- * deletada — só passou a ser renderizada ali, dentro de `/clients`, nunca
- * mais aqui (ver auditoria no relatório de entrega desta fase).
- * "Timeline" permanece em Carteira: auditoria confirmou que tem função
- * genuinamente distinta ("o que está acontecendo na agência inteira" —
- * `lib/agency-timeline.ts`, todos os gestores/clientes) da Timeline por
- * cliente (`/clients/[id]/timeline`, ainda um shell da Fase 1, sem
- * conteúdo funcional nenhum ainda) — nunca redundante, por isso
- * permanece, mesmo a estrutura sugerida no pedido não a listando
- * explicitamente (seção 12 do pedido: "estrutura desejada, salvo
- * descoberta importante na auditoria"). */
-const NAV_ITEMS: NavItem[] = [
-  { label: "Visão Geral", href: "/", icon: LayoutGrid, isActive: (p) => p === "/", group: "principal" },
-  {
-    label: "Clientes",
-    href: "/clients",
-    icon: Briefcase,
-    isActive: (p) => p === "/clients" || p.startsWith("/clients/new"),
-    group: "principal",
-  },
-  {
-    label: "Operação",
-    href: "/operation",
-    icon: ListChecks,
-    isActive: (p) => p === "/operation",
-    group: "principal",
-  },
-  {
-    label: "Demandas",
-    href: "/demandas",
-    icon: ClipboardList,
-    // `/pendencias` é um redirect permanente pra `/demandas` (nome antigo) —
-    // continua marcando este item como ativo se alguém chegar por um link
-    // velho, até o redirect completar.
-    isActive: (p) => p.startsWith("/demandas") || p.startsWith("/pendencias"),
-    group: "principal",
-  },
-  {
-    label: "Timeline",
-    href: "/timeline",
-    icon: History,
-    isActive: (p) => p.startsWith("/timeline") || p.startsWith("/achievements"),
-    group: "principal",
-  },
-  { label: "Equipe", href: "/team", icon: Users, isActive: (p) => p.startsWith("/team"), group: "flexivel" },
-  {
-    label: "Configurações",
-    href: "/settings",
-    icon: Settings,
-    adminOnly: true,
-    isActive: (p) => p.startsWith("/settings"),
-    group: "flexivel",
-  },
+/**
+ * Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente como Contexto
+ * Global": GESTÃO — administração/infraestrutura, nunca um nível
+ * operacional (mesmo raciocínio da antiga "Administração", Etapa "MITZA
+ * 2.0 — Fase H"). "Clientes" entrou aqui nesta fase (antes vivia junto
+ * dos módulos operacionais, Fase 4.5) — não é mais necessária pra
+ * simplesmente TROCAR de contexto durante o uso normal (isso agora é o
+ * seletor do header/`GlobalScopeSelect`), só pra localizar/organizar a
+ * carteira (busca, filtros, wallet_position) — tarefa de gestão, não de
+ * navegação do dia a dia (seção 11 do pedido). */
+const GESTAO_ITEMS: NavItem[] = [
+  { label: "Clientes", href: "/clients", icon: Briefcase, isActive: (p) => p === "/clients" || p.startsWith("/clients/new") },
+  { label: "Equipe", href: "/team", icon: Users, isActive: (p) => p.startsWith("/team") },
+  { label: "Configurações", href: "/settings", icon: Settings, adminOnly: true, isActive: (p) => p.startsWith("/settings") },
 ];
 
-interface ClientModuleItem {
+interface ModuleItem {
+  key: ModuleKey;
   label: string;
-  /** Sufixo relativo a `/clients/[id]` — mesmo vocabulário de
-   * `WORKSPACE_SECTION_SUFFIXES` (`lib/client-workspace-nav.ts`); os dois
-   * precisam ficar em sincronia manual (um módulo novo aqui sem entrada
-   * lá nunca é replicado ao trocar de cliente). */
-  suffix: string;
   icon: LucideIcon;
   group: "growth" | "execucao";
 }
 
 /**
- * Etapa "MEGA FACELIFT — Fase 1: Novo Shell da Growth Infra": os 7 módulos
- * da Growth Infra de UM cliente — só aparecem na Sidebar quando a rota
- * atual está dentro de `/clients/[id]/**` (`activeClientId`,
- * `SidebarContent`). Dashboard/Metas/Performance/Dados = GROWTH
- * (diagnóstico/planejamento); Operação/Demandas/Timeline = EXECUÇÃO
- * (ação) — mesma dualidade que já existe como itens GLOBAIS (grupo
- * `principal`, acima): não é duplicação acidental, é a mesma distinção
- * Carteira (transversal) / Cliente (um workspace) que o pedido define.
- * `/relatorio` continua sendo o nome técnico da rota de Performance
- * (nenhum link/PDF/`/r/[token]` muda) — só o rótulo aqui é novo.
+ * Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente como Contexto
+ * Global" — substitui a dualidade anterior ("Carteira" com Visão Geral/
+ * Operação/Demandas/Timeline GLOBAIS + "Cliente" com os mesmos nomes
+ * duplicados dentro do workspace) por UMA lista única de 7 módulos,
+ * SEMPRE visíveis, SEMPRE no mesmo lugar — "Visão Geral" deixou de
+ * existir como item próprio (virou "Dashboard" + contexto "Todos", seção
+ * 4 do pedido). MÓDULO é fixo; CLIENTE é só o CONTEXTO que decide o
+ * escopo (`AppContext`, `lib/client-workspace-nav.ts`) — cada item
+ * resolve seu próprio destino via `buildModuleContextHref(key, context,
+ * month)`, o único lugar que sabe montar essa URL (nunca uma segunda
+ * lógica de pathname aqui). `/relatorio` continua o nome técnico da rota
+ * de Performance (nenhum link/PDF/`/r/[token]` muda) — só o rótulo aqui é
+ * "Performance".
  */
-const CLIENT_MODULE_ITEMS: ClientModuleItem[] = [
-  { label: "Dashboard", suffix: "", icon: LayoutDashboard, group: "growth" },
-  { label: "Metas", suffix: "/metas", icon: Target, group: "growth" },
-  { label: "Performance", suffix: "/relatorio", icon: BarChart3, group: "growth" },
-  { label: "Dados", suffix: "/dados", icon: Database, group: "growth" },
-  { label: "Operação", suffix: "/operation", icon: ListChecks, group: "execucao" },
-  { label: "Demandas", suffix: "/demandas", icon: ClipboardList, group: "execucao" },
-  { label: "Timeline", suffix: "/timeline", icon: History, group: "execucao" },
+const MODULES: ModuleItem[] = [
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, group: "growth" },
+  { key: "metas", label: "Metas", icon: Target, group: "growth" },
+  { key: "performance", label: "Performance", icon: BarChart3, group: "growth" },
+  { key: "dados", label: "Dados", icon: Database, group: "growth" },
+  { key: "operation", label: "Operação", icon: ListChecks, group: "execucao" },
+  { key: "demandas", label: "Demandas", icon: ClipboardList, group: "execucao" },
+  { key: "timeline", label: "Timeline", icon: History, group: "execucao" },
 ];
 
 /** Label some no desktop quando `collapsed` (só md+ — no drawer mobile o
@@ -279,31 +183,14 @@ function ItemLabel({ collapsed, children }: { collapsed: boolean; children: Reac
 function NavLink({
   item,
   pathname,
-  mode,
   collapsed,
 }: {
   item: NavItem;
   pathname: string;
-  mode: string | null;
   collapsed: boolean;
 }) {
-  const active = item.isActive ? item.isActive(pathname, mode) : item.href ? pathname.startsWith(item.href) : false;
+  const active = item.isActive(pathname);
   const Icon = item.icon;
-
-  if (!item.href) {
-    return (
-      <span
-        title={item.label}
-        className={`flex items-center justify-between rounded-md px-2.5 py-1 text-[13px] text-sidebar-foreground-subtle ${collapsed ? "md:justify-center" : ""}`}
-      >
-        <span className="flex items-center gap-2">
-          <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <ItemLabel collapsed={collapsed}>{item.label}</ItemLabel>
-        </span>
-        <span className={`text-[10px] uppercase tracking-wide ${collapsed ? "md:hidden" : ""}`}>Em breve</span>
-      </span>
-    );
-  }
 
   // Etapa "KOFF Sidebar Polish": estado ativo formalizado como o "KOFF
   // Active Indicator" (`components/ui/active-indicator.ts`) — mesmas
@@ -325,30 +212,30 @@ function NavLink({
 }
 
 /**
- * Item de módulo da Growth Infra do cliente — mesmo visual de `NavLink`
- * (reaproveita as classes do "KOFF Active Indicator"), mas o destino é
- * montado por `buildWorkspaceHref` (preserva `?month=`, mesmo mecanismo
- * já usado por `ClientWorkspaceHeader`/anterior-próximo — nunca uma
- * segunda forma de montar a URL do workspace) e o estado ativo compara
- * contra `currentSuffix` (`resolveCurrentSuffix`), não contra `pathname`
- * bruto.
+ * Item de módulo (Etapa "MEGA FACELIFT — Fase 4.6") — mesmo visual de
+ * `NavLink` (reaproveita as classes do "KOFF Active Indicator"), mas o
+ * destino é montado por `buildModuleContextHref` (preserva `?month=` só
+ * no contexto de cliente, mesmo mecanismo já usado por
+ * `ClientWorkspaceHeader`/anterior-próximo — nunca uma segunda forma de
+ * montar a URL) e o estado ativo compara contra `currentModule`
+ * (`resolveCurrentModuleAndContext`), não contra `pathname` bruto.
  */
-function ClientModuleLink({
+function ModuleLink({
   item,
-  clientId,
-  currentSuffix,
+  context,
+  currentModule,
   month,
   collapsed,
 }: {
-  item: ClientModuleItem;
-  clientId: string;
-  currentSuffix: string;
+  item: ModuleItem;
+  context: AppContext;
+  currentModule: ModuleKey | null;
   month: string | null;
   collapsed: boolean;
 }) {
-  const active = item.suffix === currentSuffix;
+  const active = item.key === currentModule;
   const Icon = item.icon;
-  const href = buildWorkspaceHref(clientId, item.suffix, month);
+  const href = buildModuleContextHref(item.key, context, month);
 
   return (
     <Link
@@ -418,40 +305,31 @@ function useScrollEdges(): {
 function SidebarContent({
   profile,
   pathname,
-  mode,
   month,
   collapsed,
   toggleCollapsed,
 }: {
   profile: { name: string; role: UserRole };
   pathname: string;
-  mode: string | null;
   month: string | null;
   collapsed: boolean;
   toggleCollapsed: () => void;
 }) {
   const isAdmin = profile.role === "admin";
-  const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
-  const principal = items.filter((item) => item.group === "principal");
-  const flexivel = items.filter((item) => item.group === "flexivel");
+  const gestaoItems = GESTAO_ITEMS.filter((item) => !item.adminOnly || isAdmin);
   const initial = profile.name.trim().charAt(0).toUpperCase() || "?";
   const { scrollRef, contentRef, edges } = useScrollEdges();
-  // Etapa "MEGA FACELIFT — Fase 4.5" (seção 10 do pedido): nome do cliente
-  // ativo, registrado pelo `layout.tsx` do workspace via
-  // `useActiveClientName` — nenhuma busca/query nova aqui, só lê o
-  // contexto compartilhado (`WorkspaceProvider`, já envolve a Sidebar).
-  const { activeClientName } = useWorkspace();
 
-  // Etapa "MEGA FACELIFT — Fase 1": "dentro de um cliente" é só a presença
-  // de `/clients/[id]/...` no pathname (`resolveActiveClientIdFromPathname`,
-  // núcleo puro e testável em `lib/client-workspace-nav.ts`). Nenhuma
-  // busca aqui: o nome/avatar do cliente já aparece no
-  // `ClientWorkspaceHeader` (dado real, buscado no layout do workspace);
-  // repetir isso aqui exigiria uma segunda consulta só pra Sidebar.
-  const activeClientId = resolveActiveClientIdFromPathname(pathname);
-  const currentSuffix = activeClientId ? resolveCurrentSuffix(pathname, activeClientId) : "";
-  const growthItems = CLIENT_MODULE_ITEMS.filter((item) => item.group === "growth");
-  const execucaoItems = CLIENT_MODULE_ITEMS.filter((item) => item.group === "execucao");
+  // Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente como
+  // Contexto Global" — núcleo único que resolve módulo ATIVO (pra
+  // destacar o item certo) e contexto ATIVO (Todos ou um cliente) a
+  // partir do pathname, nunca uma segunda lógica de pathname aqui (seção
+  // 17 do pedido). Substitui `activeClientId`/`currentSuffix` da Fase 1 —
+  // mesma fonte (`resolveActiveClientIdFromPathname`/`resolveCurrentSuffix`
+  // internamente), só consolidada num resultado único.
+  const { module: currentModule, context } = resolveCurrentModuleAndContext(pathname);
+  const growthItems = MODULES.filter((item) => item.group === "growth");
+  const execucaoItems = MODULES.filter((item) => item.group === "execucao");
 
   return (
     <div className="flex h-full flex-col">
@@ -493,110 +371,58 @@ function SidebarContent({
       <div className="relative min-h-0 flex-1">
         <div ref={scrollRef} className="mitza-scrollbar-hidden h-full overflow-y-auto">
           <div ref={contentRef} className="flex min-h-full flex-col">
+            {/* Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente
+             * como Contexto Global" (seções 2/3/18 do pedido): MÓDULO é
+             * fixo — Growth/Execução SEMPRE visíveis, no MESMO lugar,
+             * independente de contexto (Todos ou um cliente específico).
+             * Deixou de existir "Carteira" com 4 itens globais + "Cliente"
+             * com os mesmos 7 duplicados dentro do workspace — cada
+             * `ModuleLink` resolve seu PRÓPRIO destino (`buildModuleContextHref`)
+             * a partir do contexto atual, nunca mais uma lista condicional
+             * a `activeClientId`. O nome do cliente ativo (quando houver)
+             * agora vive só no HEADER (`ClientWorkspaceHeader`/escopo
+             * global) — a Sidebar nunca repete avatar/status/posição nem
+             * nome de cliente (seção 18: "não mostrar nome do cliente
+             * dentro da sidebar"). */}
             <div className="flex flex-col gap-0.5 px-2.5">
               <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
-                Carteira
+                Growth
               </span>
               <nav className="flex flex-col gap-0.5">
-                {principal.map((item) => (
-                  <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
+                {growthItems.map((item) => (
+                  <ModuleLink key={item.key} item={item} context={context} currentModule={currentModule} month={month} collapsed={collapsed} />
                 ))}
               </nav>
             </div>
 
-            {/* Etapa "MEGA FACELIFT — Fase 4.5: Navegação da Carteira"
-             * (seção 3 do pedido): a árvore "Contas da Agência" deixou de
-             * ocupar a Sidebar permanentemente — ESCOLHER qual cliente
-             * abrir (busca + agrupamento por gestor + status + arrastar
-             * para reordenar `wallet_position`) agora é papel da área
-             * "Clientes" (`/clients`, item da nav acima), onde a MESMA
-             * árvore/lógica de drag-and-drop continua vivendo, dentro de
-             * "Organizar carteira" — nunca reescrita, só realocada. A
-             * Sidebar volta a responder só "em qual nível do sistema estou
-             * e para onde posso ir?", nunca mais como seletor de dezenas
-             * de clientes. */}
-
-            {/* Etapa "MEGA FACELIFT — Fase 1: Novo Shell da Growth Infra":
-             * bloco "Cliente" — só existe enquanto a rota atual está
-             * dentro de `/clients/[id]/**`. Fundo `sand-subtle` (mesmo
-             * token já usado como "superfície selecionada" em
-             * `account-follow-up-panel.tsx`/`globals.css` — nunca uma cor
-             * nova) é o único sinal de destaque necessário pra deixar
-             * claro que tudo daqui pra baixo pertence ao cliente
-             * selecionado; avatar/status continuam só no
-             * `ClientWorkspaceHeader`, no topo do conteúdo (Fase 4.5,
-             * seção 10: o nome abaixo é só contexto visual discreto —
-             * nunca repete avatar/status/posição X de Y, e some no modo
-             * recolhido/mobile junto com o resto do texto da Sidebar). */}
-            {activeClientId && (
-              <div className="mt-3 border-t border-sidebar-border px-2.5 pt-3">
-                <div className="rounded-lg bg-sand-subtle/70 p-2">
-                  <span className={`px-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
-                    Cliente
-                  </span>
-                  {activeClientName && (
-                    <p
-                      className={`truncate px-0.5 text-[13px] font-medium text-sidebar-foreground ${collapsed ? "md:hidden" : ""}`}
-                      title={activeClientName}
-                    >
-                      {activeClientName}
-                    </p>
-                  )}
-
-                  <div className="mt-1.5 flex flex-col gap-0.5">
-                    <span className={`px-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-subtle ${collapsed ? "md:hidden" : ""}`}>
-                      Growth
-                    </span>
-                    <nav className="flex flex-col gap-0.5">
-                      {growthItems.map((item) => (
-                        <ClientModuleLink
-                          key={item.label}
-                          item={item}
-                          clientId={activeClientId}
-                          currentSuffix={currentSuffix}
-                          month={month}
-                          collapsed={collapsed}
-                        />
-                      ))}
-                    </nav>
-
-                    <span className={`px-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-subtle ${collapsed ? "md:hidden" : ""}`}>
-                      Execução
-                    </span>
-                    <nav className="flex flex-col gap-0.5">
-                      {execucaoItems.map((item) => (
-                        <ClientModuleLink
-                          key={item.label}
-                          item={item}
-                          clientId={activeClientId}
-                          currentSuffix={currentSuffix}
-                          month={month}
-                          collapsed={collapsed}
-                        />
-                      ))}
-                    </nav>
-                  </div>
-                </div>
-              </div>
-            )}
+            <div className="mt-3 flex flex-col gap-0.5 px-2.5">
+              <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
+                Execução
+              </span>
+              <nav className="flex flex-col gap-0.5">
+                {execucaoItems.map((item) => (
+                  <ModuleLink key={item.key} item={item} context={context} currentModule={currentModule} month={month} collapsed={collapsed} />
+                ))}
+              </nav>
+            </div>
 
             <div className="flex-1" />
 
-            {flexivel.length > 0 && (
+            {gestaoItems.length > 0 && (
               <div className="flex flex-col gap-0.5 px-2.5 pb-2">
-                {/* Etapa "MITZA 2.0 — Fase H": rótulo visual só pra deixar
-                 * explícito que Equipe/Configurações são Administração —
-                 * infraestrutura fora da hierarquia operacional, nunca um
-                 * terceiro nível ao lado de Painel Geral/Operação. Etapa
-                 * "Revisão da Sidebar": "Atualizar Meta (todos)" saiu daqui
-                 * — não é uma rota, é uma ação técnica; agora vive no
-                 * rodapé, junto do relógio, com peso visual secundário. */}
+                {/* Etapa "MITZA 2.0 — Fase H" (renomeada "Gestão" na Fase
+                 * 4.6): rótulo visual só pra deixar explícito que Clientes/
+                 * Equipe/Configurações são administração — infraestrutura
+                 * fora da hierarquia operacional, nunca um terceiro nível
+                 * ao lado de Growth/Execução. "Atualizar Meta (todos)" não
+                 * é uma rota, é uma ação técnica; vive no rodapé, junto do
+                 * relógio, com peso visual secundário. */}
                 <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
-                  Administração
+                  Gestão
                 </span>
                 <nav className="flex flex-col gap-0.5">
-                  {flexivel.map((item) => (
-                    <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
+                  {gestaoItems.map((item) => (
+                    <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
                   ))}
                 </nav>
               </div>
@@ -695,9 +521,13 @@ function SidebarContent({
   );
 }
 
-function SidebarMode({ onMode }: { onMode: (mode: string | null, month: string | null) => React.ReactNode }) {
+/** Lê `?month=` via `useSearchParams()` (precisa de `Suspense`, ver uso
+ * abaixo) — `?mode=` (Etapa anterior a esta fase) nunca foi consumido por
+ * nenhum item de navegação; removido junto da consolidação dos módulos
+ * fixos (Fase 4.6), nenhuma funcionalidade real perdida. */
+function SidebarMonthParam({ onMonth }: { onMonth: (month: string | null) => React.ReactNode }) {
   const searchParams = useSearchParams();
-  return <>{onMode(searchParams.get("mode"), searchParams.get("month"))}</>;
+  return <>{onMonth(searchParams.get("month"))}</>;
 }
 
 /**
@@ -771,26 +601,12 @@ export function Sidebar({
       >
         <Suspense
           fallback={
-            <SidebarContent
-              profile={profile}
-              pathname={pathname}
-              mode={null}
-              month={null}
-              collapsed={collapsed}
-              toggleCollapsed={toggleCollapsed}
-            />
+            <SidebarContent profile={profile} pathname={pathname} month={null} collapsed={collapsed} toggleCollapsed={toggleCollapsed} />
           }
         >
-          <SidebarMode
-            onMode={(mode, month) => (
-              <SidebarContent
-                profile={profile}
-                pathname={pathname}
-                mode={mode}
-                month={month}
-                collapsed={collapsed}
-                toggleCollapsed={toggleCollapsed}
-              />
+          <SidebarMonthParam
+            onMonth={(month) => (
+              <SidebarContent profile={profile} pathname={pathname} month={month} collapsed={collapsed} toggleCollapsed={toggleCollapsed} />
             )}
           />
         </Suspense>

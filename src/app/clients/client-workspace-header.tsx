@@ -7,7 +7,13 @@ import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
 import type { ClientContractStatus } from "@/lib/supabase/database.types";
-import { buildWorkspaceHref, resolveCurrentSuffix, resolveReplicableSuffix } from "@/lib/client-workspace-nav";
+import {
+  buildModuleContextHref,
+  buildWorkspaceHref,
+  resolveCurrentModuleAndContext,
+  resolveCurrentSuffix,
+  resolveReplicableSuffix,
+} from "@/lib/client-workspace-nav";
 import { WORKSPACE_CONTENT_MAX_WIDTH_CLASS } from "./workspace-container";
 import { AccountInfoDrawerLauncher } from "./account-info-drawer-launcher";
 
@@ -74,8 +80,27 @@ export function ClientWorkspaceHeader({
     return buildWorkspaceHref(targetClientId, suffix, month);
   }
 
+  /**
+   * Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente como
+   * Contexto Global" (seção 6/9 do pedido) — `allLabel="Todos os
+   * clientes"` (abaixo) faz `SearchableSelect` chamar `onSelect(null)`
+   * quando essa linha é escolhida; aqui isso vira "sair pro contexto
+   * global do MESMO módulo atual" (`resolveCurrentModuleAndContext` +
+   * `buildModuleContextHref`, o núcleo único de resolução de módulo×
+   * contexto — nunca uma segunda lógica de URL). `month` não é propagado
+   * pra fora do contexto de cliente (seção 16: filtros locais continuam
+   * locais — a rota global, quando existe, tem seu próprio `?month=`
+   * independente). Metas/Performance/Dados não têm rota global (seção 7/8
+   * — "não inventar agregação consolidada"): `buildModuleContextHref` cai
+   * em `/clients` pra esses 3, decisão documentada no relatório desta
+   * fase.
+   */
   function handleSwitch(targetClientId: string | null) {
-    if (!targetClientId) return;
+    if (!targetClientId) {
+      const { module } = resolveCurrentModuleAndContext(pathname);
+      router.push(buildModuleContextHref(module ?? "dashboard", { type: "all" }, null));
+      return;
+    }
     router.push(hrefFor(targetClientId, replicableSuffix));
   }
 
@@ -105,6 +130,7 @@ export function ClientWorkspaceHeader({
             selectedId={client.id}
             onSelect={handleSwitch}
             placeholder={client.name}
+            allLabel="Todos os clientes"
             searchPlaceholder="Buscar cliente..."
             ariaLabel="Trocar de cliente"
           />

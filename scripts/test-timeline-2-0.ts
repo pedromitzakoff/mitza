@@ -42,6 +42,7 @@ const timelinePageSource = stripComments(readFileSync(join(__dirname, "..", "src
 const timelineFilterBarSource = stripComments(readFileSync(join(__dirname, "..", "src", "app", "timeline", "timeline-filter-bar.tsx"), "utf8"));
 const homePageSource = stripComments(readFileSync(join(__dirname, "..", "src", "app", "page.tsx"), "utf8"));
 const sidebarSource = stripComments(readFileSync(join(__dirname, "..", "src", "app", "sidebar.tsx"), "utf8"));
+const clientWorkspaceNavSource = stripComments(readFileSync(join(__dirname, "..", "src", "lib", "client-workspace-nav.ts"), "utf8"));
 const achievementsPageSource = readFileSync(join(__dirname, "..", "src", "app", "achievements", "page.tsx"), "utf8");
 const achievementEngineSource = readFileSync(join(__dirname, "..", "src", "lib", "achievement-engine.ts"), "utf8");
 
@@ -202,7 +203,13 @@ console.log("\n10b — Auditoria de acoplamento: fetchAgencyTimeline TINHA decis
 console.log("\n11 — Conquistas: motor/cron intocados; só a navegação mudou\n");
 {
   ok('Sidebar não tem mais a entrada "Conquistas" apontando pra /achievements', !/label: "Conquistas"/.test(sidebarSource));
-  ok('Timeline (item de nav) agora também fica ativo em /achievements (rota antiga continua acessível)', /isActive: \(p\) => p\.startsWith\("\/timeline"\) \|\| p\.startsWith\("\/achievements"\)/.test(sidebarSource));
+  // Etapa "MEGA FACELIFT — Fase 4.6": a resolução de módulo ativo saiu do
+  // item de nav (sidebar.tsx) pro núcleo único `resolveCurrentModuleAndContext`
+  // (lib/client-workspace-nav.ts) — mesma regra, outro arquivo.
+  ok(
+    'módulo Timeline (resolveCurrentModuleAndContext) também fica ativo em /achievements (rota antiga continua acessível)',
+    /pathname\.startsWith\("\/timeline"\) \|\| pathname\.startsWith\("\/achievements"\)/.test(clientWorkspaceNavSource),
+  );
   ok("/achievements continua sendo uma página funcional (export default async function), nunca um redirect que quebra os filtros existentes", /export default async function AchievementsPage/.test(achievementsPageSource));
   ok("achievement-engine.ts continua exportando exatamente as mesmas funções do motor (runAchievementEvaluation, evaluateAchievementsForDate, buildIdempotencyKey)", /export async function runAchievementEvaluation/.test(achievementEngineSource) && /export async function evaluateAchievementsForDate/.test(achievementEngineSource) && /export function buildIdempotencyKey/.test(achievementEngineSource));
   ok("lib/agency-timeline.ts NUNCA importa de achievement-engine.ts (presentation-only, nunca decide nada do motor)", !/from "@\/lib\/achievement-engine"/.test(agencyTimelineSource));

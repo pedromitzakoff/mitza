@@ -217,6 +217,7 @@ export function PendenciasPageClient({
   isAdmin,
   scopedClientId,
   hideHeading,
+  scopeSelector,
 }: {
   items: PendenciaItem[];
   clientOptions: PendenciasClientOption[];
@@ -233,6 +234,12 @@ export function PendenciasPageClient({
   /** Workspace do cliente já tem "Demandas" como título da aba — evita um
    * <h1> duplicado logo abaixo do cabeçalho do workspace. */
   hideHeading?: boolean;
+  /** Etapa "MEGA FACELIFT — Fase 4.6" (seção 10 do pedido) — atalho
+   * "Todos -> cliente" (`GlobalScopeSelect`), só passado por `/demandas`
+   * (nunca pelo workspace do cliente, que já tem `scopedClientId`). Nunca
+   * confundir com o filtro "Cliente" do próprio `PendenciasFilterBar`
+   * (aquele recorta a MESMA lista; este navega pra outra tela). */
+  scopeSelector?: React.ReactNode;
 }) {
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<PendenciasFilterState>(() => parsePendenciasFilters(searchParams));
@@ -422,9 +429,12 @@ export function PendenciasPageClient({
   return (
     <div className={`mx-auto w-full ${WORKSPACE_CONTENT_MAX_WIDTH_CLASS} px-6 py-6 sm:px-8 lg:px-10`}>
       {!hideHeading && (
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Demandas</h1>
-          <p className="text-sm text-muted-foreground">Demandas criadas manualmente — por cliente ou internas — nunca rotina automática da Operação.</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">Demandas</h1>
+            <p className="text-sm text-muted-foreground">Demandas criadas manualmente — por cliente ou internas — nunca rotina automática da Operação.</p>
+          </div>
+          {scopeSelector}
         </div>
       )}
 

@@ -37,44 +37,61 @@ function loadSource(...segments: string[]): string {
 
 const sidebarSource = loadSource("src", "app", "sidebar.tsx");
 
-console.log("\n1 — Carteira: os 4 itens globais continuam intactos (nenhuma duplicação acidental removida)\n");
+console.log("\n1 — Carteira/Cliente (Fase 1) foram substituídos por módulos fixos (Fase 4.6) — histórico preservado, assertivas atualizadas\n");
 {
-  ok("Visão Geral (Carteira) → /", /label: "Visão Geral", href: "\/"/.test(sidebarSource));
-  ok("Operação global (Carteira) → /operation", /label: "Operação",\s*\n\s*href: "\/operation"/.test(sidebarSource));
-  ok("Demandas global (Carteira) → /demandas", sidebarSource.includes('label: "Demandas"') && sidebarSource.includes('href: "/demandas"'));
-  ok("Timeline global (Carteira) → /timeline", sidebarSource.includes('label: "Timeline"') && sidebarSource.includes('href: "/timeline"'));
-  ok('eyebrow "Carteira" visível acima dos 4 itens globais', />\s*Carteira\s*</.test(sidebarSource));
-  ok('eyebrow "Administração" continua intacta (Equipe/Configurações)', />\s*Administração\s*</.test(sidebarSource));
+  // Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente como
+  // Contexto Global": a dualidade "Carteira" (4 itens globais) ×
+  // "Cliente" (7 módulos condicionais a activeClientId) desta Fase 1 foi
+  // substituída por UMA lista única de 7 módulos SEMPRE visíveis
+  // (MODULES, sidebar.tsx) — cobertura completa em
+  // test-mega-facelift-fase46-contexto-global.ts. Aqui só confirma que a
+  // intenção original da Fase 1 ("Visão Geral/Operação/Demandas/Timeline
+  // acessíveis globalmente" + "Dashboard/Metas/Performance/Dados/Operação/
+  // Demandas/Timeline acessíveis dentro do cliente") continua coberta,
+  // agora por um mecanismo único.
+  ok("Visão Geral virou Dashboard + contexto Todos (MODULES[0], mapeia pra / via buildModuleContextHref)", /\{ key: "dashboard", label: "Dashboard"/.test(sidebarSource));
+  ok("Operação continua acessível global (/operation) e por cliente, mesmo módulo único", /\{ key: "operation", label: "Operação"/.test(sidebarSource));
+  ok("Demandas continua acessível global (/demandas) e por cliente, mesmo módulo único", /\{ key: "demandas", label: "Demandas"/.test(sidebarSource));
+  ok("Timeline continua acessível global (/timeline) e por cliente, mesmo módulo único", /\{ key: "timeline", label: "Timeline"/.test(sidebarSource));
+  ok('eyebrow "Carteira" não existe mais (módulos não são mais "globais" separados de "do cliente")', !/>\s*Carteira\s*</.test(sidebarSource));
+  ok('eyebrow "Gestão" (antes "Administração") continua — Equipe/Configurações, agora com Clientes junto', />\s*Gestão\s*</.test(sidebarSource));
 }
 
-console.log("\n2 — Cliente: os 7 módulos da Growth Infra, agrupados Growth/Execução\n");
+console.log("\n2 — Os 7 módulos da Growth Infra, agrupados Growth/Execução — SEMPRE visíveis (Fase 4.6), não mais condicionais a um cliente ativo\n");
 {
-  ok("CLIENT_MODULE_ITEMS define Dashboard (sufixo vazio, grupo growth)", /\{ label: "Dashboard", suffix: "", icon: LayoutDashboard, group: "growth" \}/.test(sidebarSource));
-  ok("CLIENT_MODULE_ITEMS define Metas (/metas, grupo growth)", /\{ label: "Metas", suffix: "\/metas", icon: Target, group: "growth" \}/.test(sidebarSource));
+  ok("MODULES define Dashboard (módulo growth)", /\{ key: "dashboard", label: "Dashboard", icon: LayoutDashboard, group: "growth" \}/.test(sidebarSource));
+  ok("MODULES define Metas (módulo growth)", /\{ key: "metas", label: "Metas", icon: Target, group: "growth" \}/.test(sidebarSource));
   ok(
-    "CLIENT_MODULE_ITEMS define Performance (rota técnica /relatorio intacta, só o RÓTULO é novo, grupo growth)",
-    /\{ label: "Performance", suffix: "\/relatorio", icon: BarChart3, group: "growth" \}/.test(sidebarSource),
+    "MODULES define Performance (rota técnica /relatorio intacta, só o RÓTULO é novo, módulo growth)",
+    /\{ key: "performance", label: "Performance", icon: BarChart3, group: "growth" \}/.test(sidebarSource),
   );
-  ok("CLIENT_MODULE_ITEMS define Dados (/dados, grupo growth)", /\{ label: "Dados", suffix: "\/dados", icon: Database, group: "growth" \}/.test(sidebarSource));
-  ok("CLIENT_MODULE_ITEMS define Operação (/operation, grupo execucao)", /\{ label: "Operação", suffix: "\/operation", icon: ListChecks, group: "execucao" \}/.test(sidebarSource));
-  ok("CLIENT_MODULE_ITEMS define Demandas (/demandas, grupo execucao)", /\{ label: "Demandas", suffix: "\/demandas", icon: ClipboardList, group: "execucao" \}/.test(sidebarSource));
-  ok("CLIENT_MODULE_ITEMS define Timeline (/timeline, grupo execucao)", /\{ label: "Timeline", suffix: "\/timeline", icon: History, group: "execucao" \}/.test(sidebarSource));
+  ok("MODULES define Dados (módulo growth)", /\{ key: "dados", label: "Dados", icon: Database, group: "growth" \}/.test(sidebarSource));
+  ok("MODULES define Operação (módulo execucao)", /\{ key: "operation", label: "Operação", icon: ListChecks, group: "execucao" \}/.test(sidebarSource));
+  ok("MODULES define Demandas (módulo execucao)", /\{ key: "demandas", label: "Demandas", icon: ClipboardList, group: "execucao" \}/.test(sidebarSource));
+  ok("MODULES define Timeline (módulo execucao)", /\{ key: "timeline", label: "Timeline", icon: History, group: "execucao" \}/.test(sidebarSource));
 
-  ok('bloco "Cliente" só renderiza quando há cliente ativo na rota (activeClientId)', sidebarSource.includes("{activeClientId && ("));
-  ok('eyebrow "Cliente" presente dentro do bloco condicional', />\s*Cliente\s*</.test(sidebarSource));
-  ok('eyebrow "Growth" presente (subgrupo dentro do bloco Cliente)', />\s*Growth\s*</.test(sidebarSource));
-  ok('eyebrow "Execução" presente (subgrupo dentro do bloco Cliente)', />\s*Execução\s*</.test(sidebarSource));
-  ok(
-    'destaque visual do bloco Cliente usa token de design EXISTENTE (`sand-subtle`, já usado como "superfície selecionada" em outras telas) — nenhuma cor nova inventada',
-    sidebarSource.includes("bg-sand-subtle"),
-  );
+  // Fase 4.6 (seção 18 do pedido): "não criar bloco destacado de
+  // CLIENTE", "não mostrar nome do cliente dentro da sidebar" — o bloco
+  // condicional/eyebrow "Cliente"/superfície sand-subtle da Fase 1 saiu
+  // por completo; Growth/Execução ficam direto no corpo da nav.
+  ok("bloco condicional 'Cliente' (activeClientId && (...)) não existe mais — módulos sempre renderizam", !sidebarSource.includes("{activeClientId &&"));
+  ok('eyebrow "Cliente" não existe mais dentro da Sidebar', !/>\s*Cliente\s*</.test(sidebarSource));
+  ok('eyebrow "Growth" continua, agora no corpo principal (não mais dentro de um bloco condicional)', />\s*Growth\s*</.test(sidebarSource));
+  ok('eyebrow "Execução" continua, agora no corpo principal (não mais dentro de um bloco condicional)', />\s*Execução\s*</.test(sidebarSource));
+  ok("superfície sand-subtle do antigo bloco 'Cliente' saiu junto — nenhuma cor nova em seu lugar", !sidebarSource.includes("bg-sand-subtle"));
 }
 
-console.log("\n3 — ClientModuleLink reaproveita o mecanismo existente (buildWorkspaceHref, resolveCurrentSuffix) — não reconstrói nada\n");
+console.log("\n3 — ModuleLink (sucessor de ClientModuleLink) reaproveita o núcleo único de módulo×contexto — não reconstrói nada\n");
 {
-  ok("ClientModuleLink importa buildWorkspaceHref/resolveCurrentSuffix de lib/client-workspace-nav (núcleo já existente)", sidebarSource.includes('import { buildWorkspaceHref, resolveActiveClientIdFromPathname, resolveCurrentSuffix } from "@/lib/client-workspace-nav"'));
-  ok("ClientModuleLink monta o href com buildWorkspaceHref (preserva ?month=, nunca uma segunda forma de montar URL)", /const href = buildWorkspaceHref\(clientId, item\.suffix, month\)/.test(sidebarSource));
-  ok("estado ativo compara contra o SUFIXO resolvido (resolveCurrentSuffix), não contra pathname bruto", /const active = item\.suffix === currentSuffix/.test(sidebarSource));
+  ok(
+    "ModuleLink importa buildModuleContextHref/resolveCurrentModuleAndContext de lib/client-workspace-nav (núcleo único, Fase 4.6)",
+    sidebarSource.includes('import { buildModuleContextHref, resolveCurrentModuleAndContext, type AppContext, type ModuleKey } from "@/lib/client-workspace-nav"'),
+  );
+  ok(
+    "ModuleLink monta o href com buildModuleContextHref (preserva ?month= só no contexto de cliente, nunca uma segunda forma de montar URL)",
+    /const href = buildModuleContextHref\(item\.key, context, month\)/.test(sidebarSource),
+  );
+  ok("estado ativo compara o MÓDULO resolvido (currentModule) contra a key do item, não contra pathname bruto", /const active = item\.key === currentModule/.test(sidebarSource));
 }
 
 console.log("\n4 — Árvore 'Contas da Agência': Fase 1 a mantinha montada na Sidebar; Fase 4.5 ('Navegação da Carteira') a realocou pra /clients — não removida silenciosamente, nunca deletada\n");
@@ -144,9 +161,13 @@ console.log("\n8 — Preservação de ?month= ao trocar de módulo/cliente (cont
 {
   check("month preservado trocando de Dashboard para Performance do MESMO cliente", buildWorkspaceHref("leonardo", "/relatorio", "2026-08"), "/clients/leonardo/relatorio?month=2026-08");
   check("month preservado trocando de cliente mantendo Metas", buildWorkspaceHref("pet-fast", "/metas", "2026-08"), "/clients/pet-fast/metas?month=2026-08");
+  // Fase 4.6: "mode" (nunca consumido por nenhum item de nav) foi removido
+  // junto da consolidação dos módulos fixos — `SidebarMonthParam`/`onMonth`
+  // é o sucessor direto, só com `month` (o único parâmetro que a Sidebar
+  // de fato precisa pra montar os hrefs dos módulos).
   ok(
-    "Sidebar lê month via searchParams (mesmo mecanismo de 'mode' já existente) — nenhum header global novo com mês/objetivo/canal",
-    sidebarSource.includes('onMode={(mode, month) =>') && sidebarSource.includes("searchParams.get(\"month\")"),
+    "Sidebar lê month via searchParams (SidebarMonthParam/onMonth) — nenhum header global novo com mês/objetivo/canal",
+    sidebarSource.includes("onMonth={(month) =>") && sidebarSource.includes('searchParams.get("month")'),
   );
 }
 

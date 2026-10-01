@@ -149,6 +149,7 @@ export function OperationTriageView({
   goal,
   currentDateTimeLabel,
   summary,
+  scopeSelector,
 }: {
   clients: ClientOperationalState[];
   monthParam: string;
@@ -170,6 +171,13 @@ export function OperationTriageView({
    * página, nunca uma sincronização real). */
   currentDateTimeLabel: string;
   summary: OperationTriageSummary;
+  /** Etapa "MEGA FACELIFT — Fase 4.6" (seção 10 do pedido) — atalho
+   * "Todos -> cliente" (`GlobalScopeSelect`), opt-in: sem isso, a tela
+   * continua exatamente como sempre (`/operation` é sempre "Todos" por
+   * definição, nunca precisou de um seletor pra confirmar isso). Nunca
+   * confundir com o filtro "Gestor" abaixo (`managerFilter`) — aquele
+   * recorta a MESMA tela; este NAVEGA pra outra. */
+  scopeSelector?: React.ReactNode;
 }) {
   const [quickFilter, setQuickFilter] = useState<OperationQuickFilter>("todos");
   const [managerFilter, setManagerFilter] = useState<string>("todos");
@@ -207,6 +215,7 @@ export function OperationTriageView({
           <p className="text-sm text-muted-foreground">
             Qual cliente merece sua atenção agora, e por quê.
           </p>
+          {scopeSelector && <div className="mt-2">{scopeSelector}</div>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <OperationChannelSwitch monthParam={monthParam} goal={goal} active={channel} />

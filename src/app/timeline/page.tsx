@@ -15,6 +15,7 @@ import {
 } from "@/lib/agency-timeline";
 import { formatEventReference } from "@/lib/event-reference";
 import { TimelineFilterBar } from "./timeline-filter-bar";
+import { GlobalScopeSelect } from "../global-scope-select";
 
 /** UUID v4-ish, só pra nunca passar um `?highlight=` malformado direto pro
  * `.eq("id", ...)` do Postgres (que lançaria erro de tipo em vez de devolver
@@ -111,9 +112,12 @@ export default async function TimelinePage({
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4 md:p-6">
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Timeline</h1>
-        <p className="text-sm text-muted-foreground">O que está acontecendo na agência.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Timeline</h1>
+          <p className="text-sm text-muted-foreground">O que está acontecendo na agência.</p>
+        </div>
+        <GlobalScopeSelect module="timeline" clientOptions={clients ?? []} />
       </div>
 
       {highlightedEvent && <HighlightedEventCallout event={highlightedEvent} clearHref={pageHref({ clearHighlight: true })} />}

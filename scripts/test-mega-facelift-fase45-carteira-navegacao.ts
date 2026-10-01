@@ -94,21 +94,44 @@ console.log("\n6 — ClientWorkspaceHeader: busca/anterior/próximo/posição/st
   ok("clients/[id]/layout.tsx continua resolvendo a sequência global pela MESMA árvore (loadAgencyAccountsTree/resolveWalletSequence), nunca uma segunda fonte — Sidebar renderizar ou não a árvore nunca afetou isso", clientWorkspaceLayoutSource.includes("loadAgencyAccountsTree()") && clientWorkspaceLayoutSource.includes("resolveWalletSequence(tree, id)"));
 }
 
-console.log("\n7 — Bloco 'Cliente' na Sidebar: Dashboard/Metas/Performance/Dados (Growth) + Operação/Demandas/Timeline (Execução), intocados\n");
+console.log("\n7 — Bloco 'Cliente' na Sidebar (Fase 4.5): substituído por módulos fixos SEMPRE visíveis na Fase 4.6 — histórico preservado, assertivas atualizadas\n");
 {
-  ok('bloco "Cliente" só renderiza com cliente ativo (activeClientId)', sidebarSource.includes("{activeClientId && ("));
-  ok("Growth: Dashboard/Metas/Performance/Dados continuam os 4 itens", /\{ label: "Dashboard", suffix: "", icon: LayoutDashboard, group: "growth" \}/.test(sidebarSource) && /\{ label: "Metas", suffix: "\/metas", icon: Target, group: "growth" \}/.test(sidebarSource) && /\{ label: "Performance", suffix: "\/relatorio", icon: BarChart3, group: "growth" \}/.test(sidebarSource) && /\{ label: "Dados", suffix: "\/dados", icon: Database, group: "growth" \}/.test(sidebarSource));
-  ok("Execução: Operação/Demandas/Timeline continuam os 3 itens", /\{ label: "Operação", suffix: "\/operation", icon: ListChecks, group: "execucao" \}/.test(sidebarSource) && /\{ label: "Demandas", suffix: "\/demandas", icon: ClipboardList, group: "execucao" \}/.test(sidebarSource) && /\{ label: "Timeline", suffix: "\/timeline", icon: History, group: "execucao" \}/.test(sidebarSource));
+  // Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente como
+  // Contexto Global": o bloco condicional "Cliente" (só visível dentro de
+  // `/clients/[id]/**`) saiu por completo — Dashboard/Metas/Performance/
+  // Dados (Growth) e Operação/Demandas/Timeline (Execução) agora são
+  // SEMPRE visíveis (MODULES, sidebar.tsx), com o destino resolvido pelo
+  // CONTEXTO atual (Todos ou um cliente), não mais pela presença de
+  // `activeClientId`. Cobertura completa em
+  // test-mega-facelift-fase46-contexto-global.ts.
+  ok('bloco condicional "Cliente" não existe mais — módulos renderizam sempre (Fase 4.6)', !sidebarSource.includes("{activeClientId &&"));
+  ok(
+    "Growth: Dashboard/Metas/Performance/Dados continuam os 4 itens, agora sempre visíveis",
+    /\{ key: "dashboard", label: "Dashboard", icon: LayoutDashboard, group: "growth" \}/.test(sidebarSource) &&
+      /\{ key: "metas", label: "Metas", icon: Target, group: "growth" \}/.test(sidebarSource) &&
+      /\{ key: "performance", label: "Performance", icon: BarChart3, group: "growth" \}/.test(sidebarSource) &&
+      /\{ key: "dados", label: "Dados", icon: Database, group: "growth" \}/.test(sidebarSource),
+  );
+  ok(
+    "Execução: Operação/Demandas/Timeline continuam os 3 itens, agora sempre visíveis",
+    /\{ key: "operation", label: "Operação", icon: ListChecks, group: "execucao" \}/.test(sidebarSource) &&
+      /\{ key: "demandas", label: "Demandas", icon: ClipboardList, group: "execucao" \}/.test(sidebarSource) &&
+      /\{ key: "timeline", label: "Timeline", icon: History, group: "execucao" \}/.test(sidebarSource),
+  );
 }
 
-console.log("\n8 — Nome do cliente ativo aparece discretamente no bloco Cliente — sem repetir avatar/status/posição, sem query nova\n");
+console.log("\n8 — Nome do cliente ativo na Sidebar (Fase 4.5): removido na Fase 4.6 (seção 18 — 'não mostrar nome do cliente dentro da sidebar') — infraestrutura preservada, órfã, não deletada\n");
 {
-  ok("WorkspaceProvider ganha o campo activeClientName/setActiveClientName (próprio, nunca reaproveitando o contextLabel de notas)", /activeClientName: string \| null;/.test(workspaceProviderSource) && /setActiveClientName: \(name: string \| null\) => void;/.test(workspaceProviderSource));
-  ok("useActiveClientName registra no mount, limpa no unmount — mesmo padrão de useWorkspaceContextLabel, campo separado", /export function useActiveClientName\(name: string\): void/.test(workspaceProviderSource));
-  ok("ActiveClientSidebarName (novo) chama o hook — montado pelo layout do workspace, nunca uma query nova na Sidebar", clientWorkspaceContextSource.includes("export function ActiveClientSidebarName") && clientWorkspaceContextSource.includes("useActiveClientName(name)"));
-  ok("clients/[id]/layout.tsx monta ActiveClientSidebarName com o MESMO client.name já buscado pro header (nenhuma segunda consulta)", clientWorkspaceLayoutSource.includes("<ActiveClientSidebarName name={client.name} />"));
-  ok("Sidebar lê activeClientName do contexto compartilhado (useWorkspace), nunca um prop novo/segunda busca", sidebarSource.includes("const { activeClientName } = useWorkspace();"));
-  ok("nome só aparece dentro do bloco 'Cliente' já condicional a activeClientId — nunca repete avatar/status (isso é só do ClientWorkspaceHeader)", /\{activeClientName && \(\s*<p[\s\S]{0,200}>\s*\{activeClientName\}\s*<\/p>/.test(sidebarSource));
+  // A Fase 4.6 move o contexto do cliente pro HEADER (seção 19 do pedido)
+  // — a Sidebar nunca mais repete nome/avatar/status. O campo
+  // `activeClientName`/hook `useActiveClientName`/componente
+  // `ActiveClientSidebarName` continuam existindo (seção 26: "não fazer
+  // cleanup agressivo"), só sem consumidor na Sidebar.
+  ok("WorkspaceProvider continua com o campo activeClientName/setActiveClientName (infraestrutura preservada, não deletada)", /activeClientName: string \| null;/.test(workspaceProviderSource) && /setActiveClientName: \(name: string \| null\) => void;/.test(workspaceProviderSource));
+  ok("useActiveClientName continua exportado (órfão, documentado — não deletado)", /export function useActiveClientName\(name: string\): void/.test(workspaceProviderSource));
+  ok("ActiveClientSidebarName continua montado em clients/[id]/layout.tsx (órfão, não deletado)", clientWorkspaceContextSource.includes("export function ActiveClientSidebarName") && clientWorkspaceLayoutSource.includes("<ActiveClientSidebarName name={client.name} />"));
+  ok("Sidebar NÃO lê mais activeClientName (Fase 4.6, seção 18) — nenhum useWorkspace() nela", !sidebarSource.includes("useWorkspace"));
+  ok("nenhum nome de cliente é renderizado dentro de sidebar.tsx", !sidebarSource.includes("activeClientName"));
 }
 
 console.log("\n9 — Árvore 'Contas da Agência' não é mais renderizada na Sidebar (nem como prop) — removida da navegação permanente, nunca deletada do codebase\n");
@@ -121,7 +144,13 @@ console.log("\n9 — Árvore 'Contas da Agência' não é mais renderizada na Si
 
 console.log("\n10 — Timeline global permanece em Carteira (auditoria: função distinta da Timeline por cliente, que ainda é um shell vazio da Fase 1)\n");
 {
-  ok("Timeline global continua item de Carteira (não removida da nav, decisão documentada — seção 11/12 do pedido)", /\{\s*label: "Timeline",\s*href: "\/timeline",/.test(sidebarSource));
+  // Fase 4.6: "Timeline" não é mais um item global de "Carteira" com href
+  // fixo — virou o módulo único `{ key: "timeline", ... }` (MODULES),
+  // cujo destino em contexto "Todos" continua sendo /timeline
+  // (MODULE_GLOBAL_HREF, lib/client-workspace-nav.ts) — mesmo resultado,
+  // mecanismo consolidado.
+  ok("Timeline continua definida como módulo (não removida da nav)", /\{ key: "timeline", label: "Timeline", icon: History, group: "execucao" \}/.test(sidebarSource));
+  ok("contexto Todos + módulo Timeline continua resolvendo pra /timeline", loadSource("src", "lib", "client-workspace-nav.ts").includes('timeline: "/timeline"'));
   const clientTimelineSource = loadSource("src", "app", "clients", "[id]", "timeline", "page.tsx");
   ok("Timeline por cliente ainda é só o shell da Fase 1 (sem conteúdo funcional) — confirma que NÃO é redundante com a Timeline global", clientTimelineSource.includes("sem nenhum conteúdo funcional ainda"));
   ok("Timeline global (/timeline) continua agregando toda a agência (fetchAgencyTimeline), nunca um recorte por cliente só", loadSource("src", "app", "timeline", "page.tsx").includes("fetchAgencyTimeline("));
@@ -131,9 +160,13 @@ console.log("\n11 — Collapsed/mobile: Sidebar continua um único componente (d
 {
   ok("nenhum arquivo de 'mobile sidebar' separado foi criado nesta fase", !existsSync(join(__dirname, "..", "src", "app", "sidebar-mobile.tsx")));
   ok("item 'Clientes' usa o MESMO NavLink (ícone sempre visível, texto some só com md:hidden quando collapsed) — nenhum tratamento especial", !/label: "Clientes"[\s\S]{0,200}collapsed/.test(sidebarSource) || true);
+  // Fase 4.6: o nome do cliente ativo saiu da Sidebar por completo (ver
+  // seção 8 acima) — não há mais texto condicional a `collapsed` ligado a
+  // ele; os próprios módulos (ModuleLink/ItemLabel) continuam seguindo a
+  // mesma convenção md:hidden de sempre, intocada.
   ok(
-    "nome do cliente ativo também segue a convenção md:hidden quando collapsed (nunca depende do texto pra funcionar)",
-    /className=\{`truncate px-0\.5 text-\[13px\] font-medium text-sidebar-foreground \$\{collapsed \? "md:hidden" : ""\}`\}/.test(sidebarSource),
+    "todo ItemLabel (inclusive dos módulos) continua md:hidden quando collapsed — convenção única, nunca uma segunda regra",
+    /function ItemLabel\(\{ collapsed, children \}[\s\S]{0,120}collapsed \? "md:hidden" : ""/.test(sidebarSource),
   );
 }
 

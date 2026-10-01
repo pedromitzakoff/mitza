@@ -4,6 +4,7 @@ import { loadOperationTriageClients } from "./operation-triage-data";
 import { OperationTriageView } from "./operation-triage-view";
 import type { TrafficChannel } from "@/lib/traffic-channels";
 import type { PerformanceGoal } from "@/lib/performance-goals";
+import { GlobalScopeSelect } from "../global-scope-select";
 
 function currentMonthParam(): string {
   const now = new Date();
@@ -90,6 +91,7 @@ export default async function OperationPage({
       goal={goal}
       currentDateTimeLabel={`${weekdayShort} · ${dateShort} · ${time}`}
       summary={summary}
+      scopeSelector={<GlobalScopeSelect module="operation" clientOptions={clients.map((c) => ({ id: c.clientId, name: c.clientName }))} />}
     />
   );
 }

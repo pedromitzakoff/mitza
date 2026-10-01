@@ -305,7 +305,18 @@ console.log("\n11 — Rename Pendências → Demandas: rota oficial + redirect p
   ok("/pendencias é um redirect (nunca 404) pra /demandas", redirectSource.includes('redirect(queryString ? `/demandas?${queryString}` : "/demandas")'));
   ok("redirect preserva a query string inteira (filtros/agrupamento ficam 100% na URL)", redirectSource.includes("new URLSearchParams()") && redirectSource.includes("query.append(key, entry)"));
   const sidebarSource = loadSource("src", "app", "sidebar.tsx");
-  ok('menu principal usa "Demandas"/"/demandas" (nome antigo só reconhecido pra manter o item ativo em link velho)', sidebarSource.includes('label: "Demandas"') && sidebarSource.includes('href: "/demandas"'));
+  const clientWorkspaceNavSource = loadSource("src", "lib", "client-workspace-nav.ts");
+  // Etapa "MEGA FACELIFT — Fase 4.6": o módulo "Demandas" não tem mais um
+  // `href` fixo na Sidebar (é resolvido por `buildModuleContextHref`
+  // conforme o contexto) — a MESMA regra de reconhecer `/pendencias` como
+  // "Demandas" continua, só que agora dentro do núcleo único de módulo×
+  // contexto (lib/client-workspace-nav.ts), não mais espalhada num
+  // `isActive` por item.
+  ok('módulo "Demandas" continua definido na Sidebar (mapeia pra /demandas via buildModuleContextHref)', sidebarSource.includes('{ key: "demandas", label: "Demandas"'));
+  ok(
+    '"/pendencias" (nome antigo) continua reconhecido como módulo Demandas, nunca um link velho quebrado',
+    /pathname\.startsWith\("\/demandas"\) \|\| pathname\.startsWith\("\/pendencias"\)/.test(clientWorkspaceNavSource),
+  );
 }
 
 console.log(`\n${passed} verificações passaram.`);

@@ -2,6 +2,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { loadPendenciasRawData } from "./pendencias-data";
 import { PendenciasPageClient } from "./pendencias-page-client";
+import { GlobalScopeSelect } from "../global-scope-select";
 
 /**
  * `/demandas` — central de DEMANDAS criadas manualmente (nomenclatura
@@ -38,6 +39,7 @@ export default async function PendenciasPage() {
       assigneeOptions={assigneeOptions}
       currentTeamMemberId={profile.id}
       isAdmin={profile.role === "admin"}
+      scopeSelector={<GlobalScopeSelect module="demandas" clientOptions={clientOptions} />}
     />
   );
 }

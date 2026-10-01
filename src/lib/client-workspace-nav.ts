@@ -73,3 +73,88 @@ export function resolveActiveClientIdFromPathname(pathname: string): string | nu
   if (!match) return null;
   return match[1] === "new" ? null : match[1];
 }
+
+/**
+ * Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente como Contexto
+ * Global" — MÓDULO é fixo (os 7 da Growth Infra), CLIENTE é contexto. A
+ * Sidebar deixa de ter "Navegação da Carteira" e "Navegação do Cliente"
+ * como dois menus — vira UMA navegação (`ModuleKey`), e o CONTEXTO
+ * (`AppContext`: "Todos" ou um cliente específico) decide o escopo.
+ * `buildModuleContextHref`/`resolveCurrentModuleAndContext` são o núcleo
+ * puro ÚNICO que resolve "módulo atual + contexto desejado -> URL" —
+ * usado pela Sidebar, por `ClientWorkspaceHeader` (saída pra "Todos") e
+ * por `GlobalScopeSelect` (entrada de "Todos" pra um cliente), nunca
+ * duplicado/reimplementado em cada componente (seção 17 do pedido).
+ */
+export type ModuleKey = "dashboard" | "metas" | "performance" | "dados" | "operation" | "demandas" | "timeline";
+
+export type AppContext = { type: "all" } | { type: "client"; id: string };
+
+/** Mesmo vocabulário de sufixo de `WORKSPACE_SECTION_SUFFIXES` acima, só
+ * reindexado por módulo (chave estável, nunca o sufixo bruto) — os dois
+ * precisam ficar em sincronia manual (um módulo novo aqui sem entrada lá
+ * nunca é reconhecido ao trocar de cliente). */
+const MODULE_CLIENT_SUFFIX: Record<ModuleKey, string> = {
+  dashboard: "",
+  metas: "/metas",
+  performance: "/relatorio",
+  dados: "/dados",
+  operation: "/operation",
+  demandas: "/demandas",
+  timeline: "/timeline",
+};
+
+const SUFFIX_TO_MODULE: Record<string, ModuleKey> = {
+  "": "dashboard",
+  "/metas": "metas",
+  "/relatorio": "performance",
+  "/dados": "dados",
+  "/operation": "operation",
+  "/demandas": "demandas",
+  "/timeline": "timeline",
+};
+
+/** Só os módulos que têm uma rota GLOBAL de verdade hoje (seção 8 do
+ * pedido) — Metas/Performance/Dados nunca tiveram uma versão consolidada
+ * da carteira inteira, e esta fase explicitamente NÃO cria uma (seção 7:
+ * "não inventar dashboard/agregação consolidada"). Pra esses 3, contexto
+ * "Todos" cai em `/clients` (escolher um cliente), decisão documentada —
+ * nunca um redirect pra uma página que não existe. */
+const MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = {
+  dashboard: "/",
+  operation: "/operation",
+  demandas: "/demandas",
+  timeline: "/timeline",
+};
+
+/** Resolve "módulo atual + contexto desejado" pra uma URL — único lugar
+ * que sabe montar esse destino (seção 17 do pedido: "evitar lógica de
+ * pathname duplicada"). `month` só se aplica ao contexto de CLIENTE
+ * (mesmo `buildWorkspaceHref` de sempre) — nunca propagado pra uma rota
+ * global, cujo próprio `?month=` (quando existe) tem semântica e formato
+ * independentes (seção 16: filtros locais continuam locais). */
+export function buildModuleContextHref(module: ModuleKey, context: AppContext, month: string | null): string {
+  if (context.type === "client") return buildWorkspaceHref(context.id, MODULE_CLIENT_SUFFIX[module], month);
+  return MODULE_GLOBAL_HREF[module] ?? "/clients";
+}
+
+/** Resolve módulo + contexto ATUAIS a partir do pathname — núcleo único
+ * usado pela Sidebar (destaque do item ativo) e por `ClientWorkspaceHeader`
+ * (pra saber qual módulo replicar ao sair pra "Todos"). `module: null`
+ * cobre rotas que não são nenhum dos 7 módulos (`/clients`, `/team`,
+ * `/settings` — área "Gestão", sem conceito de módulo/contexto). Dentro
+ * de um cliente, reaproveita `resolveReplicableSuffix` — a MESMA regra
+ * de sempre pra rotas legadas fora dos 7 módulos (`/edit`,
+ * `/tasks/new`) cair no Dashboard, nunca uma segunda regra. */
+export function resolveCurrentModuleAndContext(pathname: string): { module: ModuleKey | null; context: AppContext } {
+  const clientId = resolveActiveClientIdFromPathname(pathname);
+  if (clientId) {
+    const suffix = resolveReplicableSuffix(resolveCurrentSuffix(pathname, clientId));
+    return { module: SUFFIX_TO_MODULE[suffix] ?? "dashboard", context: { type: "client", id: clientId } };
+  }
+  if (pathname === "/") return { module: "dashboard", context: { type: "all" } };
+  if (pathname.startsWith("/operation")) return { module: "operation", context: { type: "all" } };
+  if (pathname.startsWith("/demandas") || pathname.startsWith("/pendencias")) return { module: "demandas", context: { type: "all" } };
+  if (pathname.startsWith("/timeline") || pathname.startsWith("/achievements")) return { module: "timeline", context: { type: "all" } };
+  return { module: null, context: { type: "all" } };
+}
