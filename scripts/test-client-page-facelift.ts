@@ -122,8 +122,15 @@ console.log("\n2 — Ritmo vertical: cadência consistente entre as grandes regi
 
 console.log("\n3 — Performance: refinado, nunca redesenhado (mesmos componentes, gap mais compacto)\n");
 {
-  ok("KPIs continuam Resultado/Investimento/Custo por resultado no mesmo grid (nunca virou 3 cards)", /grid grid-cols-\[repeat\(auto-fit,minmax\(8rem,1fr\)\)\]/.test(kpiCode));
-  ok("gap horizontal do KPI foi reduzido (gap-x-6, era gap-x-8) — menos sensação de ilhas", /gap-x-6 gap-y-4/.test(kpiCode));
+  // Etapa "Primeira Rodada Visual — Contexto + Performance" (seção 9 do
+  // pedido): cada KPI virou um card com superfície própria (ver seção 18
+  // abaixo) — a largura mínima da coluna subiu de 8rem pra 9rem pra caber
+  // o padding novo sem apertar, e o grid passou a usar um `gap` uniforme
+  // (as colunas já não são mais "texto solto lado a lado", que era o
+  // motivo do gap-x/gap-y assimétrico de antes). Nenhum valor/cálculo
+  // mudou, só a moldura.
+  ok("KPIs continuam Resultado/Investimento/Custo por resultado no mesmo grid (nunca virou 3 cards soltos)", /grid grid-cols-\[repeat\(auto-fit,minmax\(9rem,1fr\)\)\]/.test(kpiCode));
+  ok("gap do grid de KPIs é uniforme (gap-3) — cada KPI já tem padding próprio como card", /gap-3/.test(kpiCode));
   ok("nenhuma sombra nova foi adicionada ao bloco Performance", !pageCode.includes("shadow"));
 }
 
@@ -201,15 +208,27 @@ console.log("\n10 — Performance sem grande card: superfície removida, assinat
   ok("Ritmo do mês continua com o mesmo divisor horizontal discreto (border-t) separando dos KPIs", /border-t border-overview-border pt-3/.test(accountFollowUpCode));
 }
 
-console.log("\n11 — Toolbar de contexto: Mês + Canal + Planejamento, sem navegação própria (abas viraram rotas irmãs, Etapa 5)\n");
+console.log("\n11 — Toolbar de contexto: Mês + Objetivo + Canal + Planejamento, sem navegação própria (abas viraram rotas irmãs, Etapa 5)\n");
 {
   // Rodada 5: a navegação por abas (`role="tablist"`) saiu de page.tsx —
   // mora agora em `client-workspace-header.tsx` (layout compartilhado,
   // rotas irmãs de verdade). page.tsx manteve só a toolbar de CONTEXTO
-  // (mês/canal/planejamento), que nunca foi navegação.
+  // (mês/objetivo/canal/planejamento), que nunca foi navegação.
   ok("page.tsx não declara mais role=\"tablist\" (navegação virou responsabilidade do layout compartilhado)", !pageCode.includes('role="tablist"'));
-  ok("mês e canal continuam na MESMA linha (uma única div flex)", /flex flex-wrap items-center gap-3 border-b border-overview-border[\s\S]{0,40}text-sm">[\s\S]*?IconButton href=\{prevMonthHref\}[\s\S]*?VisaoGeralChannelSwitch/.test(pageCode));
-  ok("Canal (VisaoGeralChannelSwitch) sempre visível — não é mais condicional a 'activeArea', já que esta página É a Visão Geral inteira agora", /<VisaoGeralChannelSwitch baseHref=\{metricsChannelBaseHref\}/.test(pageCode) && !pageCode.includes('activeArea === "visao-geral"'));
+  // Etapa "Primeira Rodada Visual — Contexto + Performance": mês/objetivo/
+  // canal viraram 3 dropdowns (`MonthSelect`/`GoalSelect`/
+  // `VisaoGeralChannelSwitch`) na MESMA linha — mesmo container flex de
+  // antes, só com o 3º controle novo no meio.
+  ok(
+    "mês, objetivo e canal continuam na MESMA linha (uma única div flex)",
+    /flex flex-wrap items-center gap-2 border-b border-overview-border[\s\S]{0,40}text-sm">[\s\S]*?MonthSelect[\s\S]*?GoalSelect[\s\S]*?VisaoGeralChannelSwitch/.test(
+      pageCode,
+    ),
+  );
+  ok(
+    "Canal (VisaoGeralChannelSwitch) sempre visível — não é mais condicional a 'activeArea', já que esta página É a Visão Geral inteira agora",
+    /<VisaoGeralChannelSwitch\s*\n\s*buildHref=/.test(pageCode) && !pageCode.includes('activeArea === "visao-geral"'),
+  );
   ok("Operação também tem sua própria navegação de mês (mesmos hrefs prevMonthHref/nextMonthHref, independente da Visão Geral)", /prevMonthHref/.test(operationCode) && /nextMonthHref/.test(operationCode));
 }
 
@@ -248,8 +267,14 @@ console.log("\n13 — Accordion removido, diferença/ritmo integrados, Planejame
     "Planejamento NÃO é condicional a nenhum 'activeArea' (esse conceito não existe mais — page.tsx É a Visão Geral inteira, Etapa 5)",
     !pageCode.includes("activeArea"),
   );
-  ok("Planejamento preserva a mesma condição de disponibilidade de sempre (admin, mês não encerrado, effectiveDate resolvido)", /isAdmin && !isClosedMonth && effectiveDate &&\s*\(\s*<ChannelPlanEditor/.test(pageCode));
-  ok("Planejamento recebe os MESMOS dados de sempre (todos os canais, plano por canal, mês civil, horizonte, objetivo)", /channels=\{AVAILABLE_TRAFFIC_CHANNELS\}[\s\S]{0,80}byChannel=\{clientPlan\.byChannel\}[\s\S]{0,80}performanceGoal=\{performanceGoal\}/.test(pageCode));
+  ok(
+    "Planejamento preserva a mesma condição de disponibilidade de sempre (admin, mês não encerrado, effectiveDate resolvido) — mais uma condição nova (seção 18): só pro objetivo PRINCIPAL nesta rodada (ver seção 20 abaixo)",
+    /isAdmin && !isClosedMonth && effectiveDate && performanceGoal === primaryResultType &&\s*\(\s*<ChannelPlanEditor/.test(pageCode),
+  );
+  ok(
+    "Planejamento recebe os MESMOS dados de sempre (todos os canais, plano por canal, mês civil, horizonte, objetivo) — plano agora é o do objetivo selecionado (`selectedGoalPlan`), idêntico ao antigo `clientPlan` quando o selecionado é o principal",
+    /channels=\{AVAILABLE_TRAFFIC_CHANNELS\}[\s\S]{0,80}byChannel=\{selectedGoalPlan\.byChannel\}[\s\S]{0,80}performanceGoal=\{performanceGoal\}/.test(pageCode),
+  );
 
   ok("código órfão removido: isClosedByHorizonOnly não existe mais em page.tsx (só servia ao texto do accordion removido)", !pageCode.includes("isClosedByHorizonOnly"));
   ok("mês/canal continuam preservados (mesmos hrefs/estado da rodada 2, nenhuma regressão)", /prevMonthHref/.test(pageCode) && /VisaoGeralChannelSwitch/.test(pageCode));

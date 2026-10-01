@@ -16,7 +16,8 @@ import {
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus } from "@/lib/spend-status";
 import { resolveBudgetEffectiveDate, computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
-import { resolveClientMonthlyPlan, resolveTargetCostPerResult, primaryGoalResultTypeFilter } from "@/lib/client-plan";
+import { resolveClientMonthlyGoals, resolveTargetCostPerResult, type ClientPlanChangeRow } from "@/lib/client-plan";
+import type { ChannelMetrics } from "@/lib/channel-metrics";
 import { getClientMonthHorizon } from "@/lib/client-month-horizons";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { sumChannelEffectiveSpend, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
@@ -35,12 +36,15 @@ import { MonthlyBudgetHistoryDrawer } from "../monthly-budget-history-drawer";
 import { ChannelPlanEditor } from "../channel-plan-editor";
 import { AccountFollowUpPanel } from "../account-follow-up-panel";
 import { SecondaryGoalsPerformance } from "../secondary-goals-performance";
-import { listClientGoals, fetchGoalDisplaySummaries } from "@/lib/client-goals";
+import { listClientGoals, resolvePrimaryGoal, fetchGoalDisplaySummaries, type ClientGoal } from "@/lib/client-goals";
 import { fetchSecondaryGoalsPerformance } from "@/lib/secondary-goal-performance";
 import { computePerformanceSummary, aggregatePerformanceResults } from "@/lib/performance";
 import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
+import type { PerformanceGoal } from "@/lib/performance-goals";
 import { AVAILABLE_TRAFFIC_CHANNELS, resolveClientChannelScopeOptions, resolveSelectedChannelScope, type TrafficChannel } from "@/lib/traffic-channels";
 import { VisaoGeralChannelSwitch, type VisaoGeralMetricsChannel } from "../visao-geral-channel-switch";
+import { MonthSelect } from "../month-select";
+import { GoalSelect } from "../goal-select";
 import { countOpenDemandas } from "@/lib/pendencias";
 import { loadPendenciasRawData } from "@/app/demandas/pendencias-data";
 import { TASK_PRIORITY_DOT_CLASS } from "../task-labels";
@@ -50,6 +54,52 @@ import { IconButton } from "@/components/workspace/button";
 
 function withParam(url: string, param: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}${param}`;
+}
+
+/**
+ * Objetivo em exibição na Performance (`?goal=`) — núcleo puro extraído de
+ * dentro do componente (Etapa "Primeira Rodada Visual — Contexto +
+ * Performance", seção 6/18 do pedido), mesmo padrão de
+ * `resolveOperationGoal` (`app/operation/page.tsx`): valor inválido/ausente
+ * NUNCA quebra a página, sempre cai num default seguro. Aqui o default é o
+ * objetivo PRINCIPAL do cliente (nunca `"todos"` como em Operação — a
+ * Performance sempre mostra EXATAMENTE um objetivo por vez), e "válido"
+ * significa literalmente "está entre os objetivos que ESTE cliente tem
+ * configurado" — nunca um objetivo de outro cliente sobrevivendo a uma
+ * troca (seção 6: "compatível com troca de cliente").
+ */
+export function resolveSelectedGoal(
+  goalParam: string | undefined,
+  availableGoalTypes: PerformanceGoal[],
+  primaryResultType: PerformanceGoal | null,
+): PerformanceGoal | null {
+  return goalParam && availableGoalTypes.includes(goalParam as PerformanceGoal) ? (goalParam as PerformanceGoal) : primaryResultType;
+}
+
+/**
+ * Monta a URL de um dos 3 dropdowns de contexto (Mês/Meta-Planejamento/
+ * Canal) — núcleo puro extraído de dentro do componente, mesmo motivo de
+ * `resolveSelectedGoal` acima (testável sem Next/Supabase). Preserva
+ * SEMPRE os 3 parâmetros juntos — nunca um dropdown reseta o estado dos
+ * outros dois (seção 6 do pedido). `undefined` num campo de `overrides`
+ * mantém o valor atual (`current`); `null` limpa o param explicitamente
+ * (usado pelo objetivo PRINCIPAL, que navega pra uma URL SEM `goal` —
+ * ausência é o estado "default", nunca um valor reservado).
+ */
+export function buildClientContextHref(
+  clientId: string,
+  current: { month?: string; metricsChannel?: string; goal?: string },
+  overrides: { month?: string; metricsChannel?: string | null; goal?: string | null },
+): string {
+  const params = new URLSearchParams();
+  const monthValue = overrides.month ?? current.month;
+  if (monthValue) params.set("month", monthValue);
+  const channelValue = overrides.metricsChannel !== undefined ? overrides.metricsChannel : current.metricsChannel;
+  if (channelValue) params.set("metricsChannel", channelValue);
+  const goalValue = overrides.goal !== undefined ? overrides.goal : current.goal;
+  if (goalValue) params.set("goal", goalValue);
+  const qs = params.toString();
+  return `/clients/${clientId}${qs ? `?${qs}` : ""}`;
 }
 
 /**
@@ -120,10 +170,24 @@ export default async function ClientPage({
     month?: string;
     historicoOrcamento?: string;
     metricsChannel?: string;
+    goal?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, synced, saved, month: monthQueryParam, historicoOrcamento, metricsChannel: metricsChannelParam } = await searchParams;
+  const {
+    error,
+    synced,
+    saved,
+    month: monthQueryParam,
+    historicoOrcamento,
+    metricsChannel: metricsChannelParam,
+    goal: goalParam,
+  } = await searchParams;
+
+  function buildContextHref(overrides: { month?: string; metricsChannel?: string | null; goal?: string | null }): string {
+    return buildClientContextHref(id, { month: monthQueryParam, metricsChannel: metricsChannelParam, goal: goalParam }, overrides);
+  }
+
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
   const supabase = await createSupabaseClient();
@@ -153,62 +217,69 @@ export default async function ClientPage({
 
   const monthParam = firstDay.slice(0, 7);
   const monthLabel = formatMonthLabel(firstDay);
-  const monthQuery = monthQueryParam ? `?month=${monthQueryParam}` : "";
-  const prevMonthHref = `/clients/${id}?month=${shiftMonthParam({ firstDay }, -1)}`;
-  const nextMonthHref = `/clients/${id}?month=${shiftMonthParam({ firstDay }, 1)}`;
-  const returnTo = `/clients/${id}${monthQuery}`;
-  const metricsChannelBaseHref = `/clients/${id}${monthQuery}`;
+  const prevMonthHref = buildContextHref({ month: shiftMonthParam({ firstDay }, -1) });
+  const nextMonthHref = buildContextHref({ month: shiftMonthParam({ firstDay }, 1) });
+  // Preserva mês + canal + objetivo juntos (antes só preservava mês) — mesma
+  // URL usada pro fechamento de drawers (histórico de orçamento,
+  // Planejamento) e por qualquer CTA que precise "voltar pro estado atual".
+  const returnTo = buildContextHref({});
 
-  const [sprintsRaw, dailySpend, plannedAllocations, budgetChanges, performanceTargetHistory, channelSpendRows, planningEndDate] = await Promise.all([
-    requireQuery(
-      supabase
-        .from("sprints")
-        .select(
-          "id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, manual_spend_updated_at, original_planned_amount, final_recommended_amount, final_actual_amount, snapshot_frozen_at",
-        )
-        .eq("client_id", id)
-        .lte("start_date", lastDay)
-        .gte("end_date", firstDay)
-        .order("start_date"),
-      "sprints",
-    ),
-    requireQuery(
-      supabase.from("daily_spend").select("date, spend, channel").eq("client_id", id).gte("date", firstDay).lte("date", lastDay),
-      "daily_spend",
-    ),
-    requireQuery(
-      supabase.from("sprint_planned_allocations").select("sprint_id, date, planned_amount").eq("client_id", id).gte("date", firstDay).lte("date", lastDay),
-      "sprint_planned_allocations",
-    ),
-    requireQuery(
-      supabase
-        .from("monthly_budget_changes")
-        .select(
-          "id, channel, effective_date, changed_at, previous_amount, new_amount, consolidated_amount, future_amount_distributed, resulting_total, is_below_consolidated, reason, changed_by_profile:team_members!monthly_budget_changes_changed_by_fkey(name)",
-        )
-        .eq("client_id", id)
-        .eq("month", firstDay)
-        .or(primaryGoalResultTypeFilter(client.performance_goal))
-        .order("changed_at", { ascending: false }),
-      "monthly_budget_changes:current-month",
-    ),
-    requireQuery(
-      supabase
-        .from("monthly_budget_changes")
-        .select("channel, month, changed_at, new_amount, target_result_count, target_cost_per_result")
-        .eq("client_id", id)
-        .lte("month", firstDay)
-        .or(primaryGoalResultTypeFilter(client.performance_goal))
-        .order("month", { ascending: false })
-        .order("changed_at", { ascending: false }),
-      "monthly_budget_changes:target-history",
-    ),
-    requireQuery(
-      supabase.from("sprint_channel_spend").select("sprint_id, channel, spend_source, manual_actual_spend").eq("client_id", id),
-      "sprint_channel_spend",
-    ),
-    getClientMonthHorizon(supabase, id, firstDay),
-  ]);
+  const [sprintsRaw, dailySpend, plannedAllocations, budgetChangesRaw, performanceTargetHistoryRaw, channelSpendRows, planningEndDate, allClientGoals] =
+    await Promise.all([
+      requireQuery(
+        supabase
+          .from("sprints")
+          .select(
+            "id, start_date, end_date, planned_spend, spend_source, manual_actual_spend, manual_spend_updated_at, original_planned_amount, final_recommended_amount, final_actual_amount, snapshot_frozen_at",
+          )
+          .eq("client_id", id)
+          .lte("start_date", lastDay)
+          .gte("end_date", firstDay)
+          .order("start_date"),
+        "sprints",
+      ),
+      requireQuery(
+        supabase.from("daily_spend").select("date, spend, channel").eq("client_id", id).gte("date", firstDay).lte("date", lastDay),
+        "daily_spend",
+      ),
+      requireQuery(
+        supabase.from("sprint_planned_allocations").select("sprint_id, date, planned_amount").eq("client_id", id).gte("date", firstDay).lte("date", lastDay),
+        "sprint_planned_allocations",
+      ),
+      // Etapa "Primeira Rodada Visual — Contexto + Performance" (seção 5 do
+      // pedido): busca TODOS os objetivos do mês (não mais só o principal
+      // via `.or(primaryGoalResultTypeFilter(...))`) — `result_type` agora
+      // selecionado explicitamente, a separação por objetivo acontece em
+      // JS logo abaixo (`primaryBudgetChanges`/`selectedBudgetChanges`),
+      // nunca duas queries por objetivo.
+      requireQuery(
+        supabase
+          .from("monthly_budget_changes")
+          .select(
+            "id, channel, result_type, effective_date, changed_at, previous_amount, new_amount, consolidated_amount, future_amount_distributed, resulting_total, is_below_consolidated, reason, changed_by_profile:team_members!monthly_budget_changes_changed_by_fkey(name)",
+          )
+          .eq("client_id", id)
+          .eq("month", firstDay)
+          .order("changed_at", { ascending: false }),
+        "monthly_budget_changes:current-month",
+      ),
+      requireQuery(
+        supabase
+          .from("monthly_budget_changes")
+          .select("channel, result_type, month, changed_at, new_amount, target_result_count, target_cost_per_result")
+          .eq("client_id", id)
+          .lte("month", firstDay)
+          .order("month", { ascending: false })
+          .order("changed_at", { ascending: false }),
+        "monthly_budget_changes:target-history",
+      ),
+      requireQuery(
+        supabase.from("sprint_channel_spend").select("sprint_id, channel, spend_source, manual_actual_spend").eq("client_id", id),
+        "sprint_channel_spend",
+      ),
+      getClientMonthHorizon(supabase, id, firstDay),
+      listClientGoals(supabase, id),
+    ]);
 
   const planningHorizon = resolvePlanningHorizon({ firstDay, lastDay }, planningEndDate);
 
@@ -242,10 +313,41 @@ export default async function ClientPage({
     sourceUpdatedAt: r.source_updated_at,
   }));
 
-  // Objetivos secundários — mesmo bloco de sempre, `await` sequencial
-  // isolado (nenhuma dependência do Promise.all das queries do mês acima).
-  const allClientGoals = await listClientGoals(supabase, id);
-  const secondaryClientGoals = allClientGoals.filter((g) => !g.isPrimary);
+  // Múltiplos Objetivos (Etapa "Primeira Rodada Visual — Contexto +
+  // Performance", seção 5 do pedido): ZERO migration — reaproveita
+  // `client_goals`/`monthly_budget_changes.result_type`/
+  // `resolveClientMonthlyGoals`, exatamente a estrutura que a auditoria
+  // confirmou já existir. Cliente legado sem nenhuma linha em
+  // `client_goals` (não deveria acontecer — todo `performance_goal`
+  // configurado foi backfilled na Etapa "Múltiplos Objetivos" — mas sem
+  // depender dessa garantia aqui) cai num objetivo "virtual" só com o
+  // `performance_goal` legado, pra `resolveClientMonthlyGoals` continuar
+  // funcionando sem um caso especial espalhado pela página inteira.
+  const effectiveClientGoals: ClientGoal[] =
+    allClientGoals.length > 0
+      ? allClientGoals
+      : client.performance_goal
+        ? [{ id: "", clientId: id, resultType: client.performance_goal, channels: [], isPrimary: true, resultSource: "automatic" }]
+        : [];
+  const primaryResultType = resolvePrimaryGoal(effectiveClientGoals)?.resultType ?? null;
+
+  // Objetivo em exibição — `resolveSelectedGoal` (núcleo puro acima, mesmo
+  // padrão de `resolveOperationGoal`). Substitui a antiga
+  // `performanceGoal = client.performance_goal` — todo o resto da página
+  // continua lendo esta MESMA variável, nenhum outro nome novo espalhado
+  // pela função.
+  const performanceGoal = resolveSelectedGoal(
+    goalParam,
+    effectiveClientGoals.map((g) => g.resultType),
+    primaryResultType,
+  );
+
+  // Objetivos secundários — agora exclui o que está SELECIONADO (nunca mais
+  // só "não-principal"), pra nunca duplicar o mesmo objetivo no bloco
+  // principal E no card de "Outros objetivos" ao mesmo tempo (seção 8 do
+  // pedido). Quando o selecionado É o principal (caso comum, default), o
+  // resultado é idêntico ao de antes desta etapa.
+  const secondaryClientGoals = effectiveClientGoals.filter((g) => g.resultType !== performanceGoal);
   const secondaryGoalTargets = await fetchGoalDisplaySummaries(supabase, id, secondaryClientGoals, firstDay);
   const secondaryGoalsPerformance = await fetchSecondaryGoalsPerformance(
     supabase,
@@ -255,21 +357,48 @@ export default async function ClientPage({
     new Map(Array.from(secondaryGoalTargets.entries()).map(([goal, summary]) => [goal, summary.targetResultCount])),
   );
 
-  const monthPlannedAllocationRows = (plannedAllocations ?? []).map((a) => ({ date: a.date, sprintId: a.sprint_id, amount: a.planned_amount }));
-  const clientPlan = resolveClientMonthlyPlan({
+  // `performanceTargetHistoryRaw` agora vem SEM filtro de objetivo (busca
+  // acima) — linha histórica com `result_type IS NULL` (de antes da Etapa
+  // "Múltiplos Objetivos") é sempre do objetivo PRINCIPAL (única leitura
+  // possível: só existia um objetivo por cliente nessa época), nunca do
+  // secundário — mesma regra que `primaryGoalResultTypeFilter` já
+  // codificava, só que resolvida aqui em JS pra poder atender QUALQUER
+  // objetivo selecionado na mesma passada, não só o principal.
+  const performanceTargetHistoryRows: ClientPlanChangeRow[] = (performanceTargetHistoryRaw ?? []).map((row) => ({
+    channel: row.channel as TrafficChannel,
+    month: row.month,
+    changedAt: row.changed_at,
+    investment: row.new_amount,
+    targetResultCount: row.target_result_count,
+    resultType: (row.result_type ?? primaryResultType) as PerformanceGoal | null,
+  }));
+  const clientGoalsPlan = resolveClientMonthlyGoals({
     channels: AVAILABLE_TRAFFIC_CHANNELS,
-    changes: (performanceTargetHistory ?? []).map((row) => ({
-      channel: row.channel as TrafficChannel,
-      month: row.month,
-      changedAt: row.changed_at,
-      investment: row.new_amount,
-      targetResultCount: row.target_result_count,
-    })),
+    changes: performanceTargetHistoryRows,
     selectedMonth: firstDay,
+    clientGoals: effectiveClientGoals,
   });
+  const EMPTY_GOAL_PLAN: { byChannel: Partial<Record<TrafficChannel, ChannelMetrics>>; consolidated: ChannelMetrics } = {
+    byChannel: {},
+    consolidated: { investment: null, resultCount: null, cpa: null },
+  };
+  const primaryGoalPlan = clientGoalsPlan.goals.find((g) => g.resultType === primaryResultType) ?? EMPTY_GOAL_PLAN;
+  const selectedGoalPlan = clientGoalsPlan.goals.find((g) => g.resultType === performanceGoal) ?? EMPTY_GOAL_PLAN;
 
-  const monthPlanned = clientPlan.consolidated.investment ?? sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay });
+  const monthPlannedAllocationRows = (plannedAllocations ?? []).map((a) => ({ date: a.date, sprintId: a.sprint_id, amount: a.planned_amount }));
   const monthActual = sumActualSpendForMonth(sprints ?? [], { firstDay, lastDay }, dailySpend ?? []);
+
+  // Congelamento de sprint (`ensureClosedSprintSnapshots`) SEMPRE usa o
+  // orçamento do objetivo PRINCIPAL, nunca o que está em exibição no
+  // momento — é uma escrita permanente (`sprints.original_planned_amount`/
+  // `final_recommended_amount`), não pode depender de qual objetivo um
+  // gestor específico escolheu olhar quando uma sprint fechou. Quando o
+  // objetivo selecionado É o principal (default), `primaryMonthPlanned`/
+  // `primaryBudgetChanges` são idênticos ao que a página já usava antes
+  // desta etapa — zero mudança de comportamento no caminho comum.
+  const primaryMonthPlanned = primaryGoalPlan.consolidated.investment ?? sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay });
+  const primaryBudgetChanges = (budgetChangesRaw ?? []).filter((c) => (c.result_type ?? primaryResultType) === primaryResultType);
+  const selectedBudgetChanges = (budgetChangesRaw ?? []).filter((c) => (c.result_type ?? primaryResultType) === performanceGoal);
 
   await ensureClosedSprintSnapshots(supabase, {
     clientId: id,
@@ -277,13 +406,17 @@ export default async function ClientPage({
     monthRange: planningHorizon,
     sprints: sprints ?? [],
     dailySpend: dailySpend ?? [],
-    budgetChanges: (budgetChanges ?? []).map((c) => ({ channel: c.channel as TrafficChannel, newAmount: c.new_amount, changedAt: c.changed_at })),
+    budgetChanges: primaryBudgetChanges.map((c) => ({ channel: c.channel as TrafficChannel, newAmount: c.new_amount, changedAt: c.changed_at })),
     plannedAllocations: monthPlannedAllocationRows,
-    currentMonthlyBudget: monthPlanned,
+    currentMonthlyBudget: primaryMonthPlanned,
   });
 
-  const monthExpectedToDate = computeMonthlyExpectedToDateByCalendar(monthPlanned, planningHorizon, todayStr).expectedToDate;
-  const monthStatus = classifySpendStatus(monthActual, monthExpectedToDate, monthPlanned);
+  // Daqui pra baixo, "o mês" pro PAINEL (Ritmo/KPIs/diagnóstico) é o
+  // orçamento do objetivo EM EXIBIÇÃO — responde ao seletor "Meta /
+  // Planejamento" (seção 7 do pedido), nunca mais travado no principal.
+  const selectedMonthPlanned = selectedGoalPlan.consolidated.investment ?? sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay });
+  const monthExpectedToDate = computeMonthlyExpectedToDateByCalendar(selectedMonthPlanned, planningHorizon, todayStr).expectedToDate;
+  const monthStatus = classifySpendStatus(monthActual, monthExpectedToDate, selectedMonthPlanned);
 
   const visaoGeralMonthActual =
     metricsChannel === "consolidated"
@@ -294,7 +427,7 @@ export default async function ClientPage({
           dailySpendChannelRows,
           channelSpendOverrideRows,
         );
-  const visaoGeralPlanned = metricsChannel === "consolidated" ? monthPlanned : (clientPlan.byChannel[metricsChannel]?.investment ?? 0);
+  const visaoGeralPlanned = metricsChannel === "consolidated" ? selectedMonthPlanned : (selectedGoalPlan.byChannel[metricsChannel]?.investment ?? 0);
   const visaoGeralExpectedToDate =
     metricsChannel === "consolidated"
       ? monthExpectedToDate
@@ -302,8 +435,14 @@ export default async function ClientPage({
   const visaoGeralStatus =
     metricsChannel === "consolidated" ? monthStatus : classifySpendStatus(visaoGeralMonthActual, visaoGeralExpectedToDate, visaoGeralPlanned);
 
-  const performanceGoal = client.performance_goal;
-  const scopedTargetCostPerResult = resolveTargetCostPerResult({ channel: metricsChannel, plan: clientPlan, legacyFallback: client.target_cost_per_result });
+  // `legacyFallback` (coluna antiga `clients.target_cost_per_result`) só se
+  // aplica ao objetivo PRINCIPAL — nunca inventa a meta de custo de um
+  // objetivo secundário a partir do campo legado do principal.
+  const scopedTargetCostPerResult = resolveTargetCostPerResult({
+    channel: metricsChannel,
+    plan: selectedGoalPlan,
+    legacyFallback: performanceGoal === primaryResultType ? client.target_cost_per_result : null,
+  });
   const visaoGeralPerformanceSummary = performanceGoal
     ? computePerformanceSummary({
         scope: metricsChannel,
@@ -315,7 +454,7 @@ export default async function ClientPage({
       })
     : null;
   const scopedTargetResultCount =
-    metricsChannel === "consolidated" ? clientPlan.consolidated.resultCount : (clientPlan.byChannel[metricsChannel]?.resultCount ?? null);
+    metricsChannel === "consolidated" ? selectedGoalPlan.consolidated.resultCount : (selectedGoalPlan.byChannel[metricsChannel]?.resultCount ?? null);
   const expectedResultsToDate =
     scopedTargetResultCount !== null ? computeMonthlyExpectedToDateByCalendar(scopedTargetResultCount, planningHorizon, todayStr).expectedToDate : null;
   const monthPerformanceChannelBreakdown =
@@ -329,13 +468,13 @@ export default async function ClientPage({
   const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate(planningHorizon, todayStr);
   const isFutureMonth = !isCurrentMonth && !isClosedMonth;
   const budgetSprints = sprints.map((sprint) => ({ sprintId: sprint.id, startDate: sprint.start_date, endDate: sprint.end_date }));
-  const lastBudgetChange = budgetChanges[0] ?? null;
+  const lastBudgetChange = selectedBudgetChanges[0] ?? null;
   const lastChange = lastBudgetChange
     ? {
         lastEffectiveDate: lastBudgetChange.effective_date,
         lastPreviousAmount: lastBudgetChange.previous_amount,
         lastNewAmount: lastBudgetChange.new_amount,
-        changeCountThisMonth: budgetChanges.length,
+        changeCountThisMonth: selectedBudgetChanges.length,
       }
     : null;
 
@@ -433,20 +572,37 @@ export default async function ClientPage({
         </div>
       )}
 
-      {/* CONTEXTO — mês/canal/planejamento em exibição, compartilhado pelos
-          blocos de Performance abaixo (seção 6 do pedido de correção). */}
-      <div className="mt-3 flex flex-wrap items-center gap-3 border-b border-overview-border pb-2 text-sm">
+      {/* CONTEXTO — mês/objetivo/canal em exibição, compartilhados pelo bloco
+          de performance abaixo (Etapa "Primeira Rodada Visual — Contexto +
+          Performance", seção 3 do pedido: hierarquia Cliente, depois Mês,
+          depois Meta/Objetivo, depois Canal, depois o conteúdo de
+          performance em si — visualmente homogênea entre os 3 dropdowns —
+          `ClientContextSelect`,
+          `month-select.tsx`/`goal-select.tsx`/`visao-geral-channel-switch.tsx`).
+          Prev/next continuam como atalho discreto ao lado do mês (seção 4:
+          "pode manter"). */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-overview-border pb-3 text-sm">
         <div className="flex items-center gap-0.5">
           <IconButton href={prevMonthHref} aria-label="Mês anterior" variant="ghost" size="sm">
             &lsaquo;
           </IconButton>
-          <span className="min-w-[6rem] px-1 text-center text-sm font-medium text-overview-text-primary">{monthLabel}</span>
+          <MonthSelect today={today} selectedMonthParam={monthParam} buildHref={(value) => buildContextHref({ month: value })} />
           <IconButton href={nextMonthHref} aria-label="Próximo mês" variant="ghost" size="sm">
             &rsaquo;
           </IconButton>
         </div>
-        <VisaoGeralChannelSwitch baseHref={metricsChannelBaseHref} active={metricsChannel} options={metricsChannelOptions} />
-        {isAdmin && !isClosedMonth && effectiveDate && (
+        <GoalSelect goals={effectiveClientGoals} selectedResultType={performanceGoal} buildHref={(goal) => buildContextHref({ goal })} />
+        <VisaoGeralChannelSwitch
+          buildHref={(channel) => buildContextHref({ metricsChannel: channel })}
+          active={metricsChannel}
+          options={metricsChannelOptions}
+        />
+        {/* Planejamento continua restrito ao objetivo PRINCIPAL nesta rodada
+            — editar o plano de um objetivo SECUNDÁRIO exigiria mexer em
+            `channel-plan-editor.tsx` (fora do escopo de arquivos desta
+            etapa) pra gravar o `result_type` certo; sem essa mudança,
+            arriscaria salvar no lugar errado. Ver relatório final, item M. */}
+        {isAdmin && !isClosedMonth && effectiveDate && performanceGoal === primaryResultType && (
           <ChannelPlanEditor
             clientId={client.id}
             monthParam={monthParam}
@@ -454,7 +610,7 @@ export default async function ClientPage({
             monthRange={{ firstDay, lastDay }}
             currentPlanningEndDate={planningEndDate}
             channels={AVAILABLE_TRAFFIC_CHANNELS}
-            byChannel={clientPlan.byChannel}
+            byChannel={selectedGoalPlan.byChannel}
             performanceGoal={performanceGoal}
           />
         )}
@@ -588,7 +744,7 @@ export default async function ClientPage({
       {isAdmin && historicoOrcamento && (
         <MonthlyBudgetHistoryDrawer
           monthLabel={monthLabel}
-          changes={(budgetChanges ?? []).map((change) => ({
+          changes={selectedBudgetChanges.map((change) => ({
             id: change.id,
             channel: change.channel as TrafficChannel,
             effectiveDate: change.effective_date,

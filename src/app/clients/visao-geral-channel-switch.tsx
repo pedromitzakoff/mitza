@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { TRAFFIC_CHANNELS, type ChannelScope } from "@/lib/traffic-channels";
+import { ClientContextSelect } from "./client-context-select";
 
 /** Etapa "Arquitetura Multicanal Unificada": alias de `ChannelScope`
  * (lib/traffic-channels.ts) — nenhuma tela deveria mais reinventar este
@@ -33,18 +33,24 @@ const CHANNEL_SCOPE_LABEL: Record<VisaoGeralMetricsChannel, string> = {
  * mostrar nem em que ordem, só renderiza o que recebe. Consolidado só
  * aparece quando `options` já o inclui (>1 canal ativo pro cliente); com
  * apenas 1 opção, não existe nada pra "trocar" — vira um rótulo estático,
- * sem pill/borda, pra não sugerir um controle interativo que não faz nada.
+ * mesmo critério de sempre.
  *
- * Server Component puro (Link + querystring) — sem `sessionStorage`/JS de
- * cliente aqui, já que este seletor não precisa lembrar a escolha entre
- * sessões.
+ * Etapa "Primeira Rodada Visual — Contexto + Performance" (seção 14 do
+ * pedido): virou dropdown (`ClientContextSelect`, mesmo controle de
+ * Mês/Meta-Planejamento, "hierarquia semelhante entre si") no lugar do
+ * grupo de pílulas — zero mudança na REGRA (mesmas `options`, mesma
+ * disponibilidade por cliente, mesmo param `metricsChannel`, ainda
+ * navegação por `Link`/querystring, nunca estado de cliente).
+ * `buildHref` substitui a antiga concatenação `${baseHref}&metricsChannel=`
+ * — quem chama decide a URL completa (preserva mês/objetivo também
+ * selecionados, nunca um dos três dropdowns reseta os outros dois).
  */
 export function VisaoGeralChannelSwitch({
-  baseHref,
+  buildHref,
   active,
   options,
 }: {
-  baseHref: string;
+  buildHref: (channel: VisaoGeralMetricsChannel) => string;
   active: VisaoGeralMetricsChannel;
   options: VisaoGeralMetricsChannel[];
 }) {
@@ -52,21 +58,12 @@ export function VisaoGeralChannelSwitch({
     return <span className="text-sm font-medium text-overview-text-primary">{CHANNEL_SCOPE_LABEL[options[0] ?? active]}</span>;
   }
 
-  return (
-    <div className="inline-flex items-center gap-0.5 rounded-full border border-overview-border bg-overview-surface p-0.5">
-      {options.map((option) => (
-        <Link
-          key={option}
-          href={`${baseHref}&metricsChannel=${option}`}
-          scroll={false}
-          aria-pressed={option === active}
-          className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-            option === active ? "bg-brand text-white" : "text-overview-text-secondary hover:text-overview-text-primary"
-          }`}
-        >
-          {CHANNEL_SCOPE_LABEL[option]}
-        </Link>
-      ))}
-    </div>
-  );
+  const selectOptions = options.map((option) => ({
+    value: option,
+    label: CHANNEL_SCOPE_LABEL[option],
+    href: buildHref(option),
+    active: option === active,
+  }));
+
+  return <ClientContextSelect label={CHANNEL_SCOPE_LABEL[active]} options={selectOptions} ariaLabel="Canal" />;
 }

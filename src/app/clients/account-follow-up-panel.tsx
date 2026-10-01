@@ -8,6 +8,7 @@ import { MonthlyKpiSummary } from "./monthly-kpi-summary";
 import { MonthlyGoalProgress } from "./monthly-goal-progress";
 import { MonthInvestmentSummary } from "./month-investment-summary";
 import { ResultsByChannel } from "./results-by-channel";
+import { PerformanceDiagnosticCard } from "./performance-diagnostic";
 
 /**
  * Última otimização (Etapa 74) — substitui os antigos indicadores separados
@@ -77,6 +78,17 @@ export interface LastOptimizationInfo {
  * O histórico do mês (antigo `CollapsibleAccountHistory`) continua fora da
  * apresentação padrão (decisão de etapa anterior, inalterada) — a Timeline
  * e o disclosure "Informações da conta" continuam cobrindo isso.
+ *
+ * Etapa "Primeira Rodada Visual — Contexto + Performance" (seções 10/12 do
+ * pedido): `PerformanceDiagnosticCard` entra logo abaixo da camada 3 (Ritmo
+ * + `investmentPaceNote`) — card curto, DETERMINÍSTICO
+ * (`metric-diagnostics.ts`, nunca `account-health-engine.ts`: as duas
+ * camadas continuam paralelas nesta rodada, unificação é etapa futura),
+ * nunca renderizado sem base real de comparação. Não é o mesmo texto do
+ * `RitmoDiagnostic` removido acima: aquele descrevia a MAGNITUDE do
+ * desvio em prosa a partir das MESMAS barras (redundante); este é um
+ * veredito curto (ATENÇÃO/FORA DO ESPERADO/DENTRO DO ESPERADO), pensado
+ * pra escaneabilidade, não pra reexplicar o gráfico.
  */
 export function AccountFollowUpPanel({
   monthActual,
@@ -180,6 +192,15 @@ export function AccountFollowUpPanel({
             sendo o único texto secundário abaixo das barras. */}
         {investmentPaceNote && <div className="mt-2.5">{investmentPaceNote}</div>}
       </div>
+
+      <PerformanceDiagnosticCard
+        performanceGoal={performanceGoal}
+        actualSpend={monthActual}
+        expectedToDate={investmentExpectedToDate}
+        costPerResult={performanceSummary?.costPerResult ?? null}
+        targetCostPerResult={targetCostPerResult}
+        resultCount={performanceSummary?.resultCount ?? 0}
+      />
 
       {performanceGoal && <ResultsByChannel goal={performanceGoal} channelBreakdown={channelBreakdown} />}
     </>

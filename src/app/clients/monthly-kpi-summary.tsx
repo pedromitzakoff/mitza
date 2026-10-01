@@ -6,9 +6,9 @@ import { formatCurrency, formatCount } from "@/lib/format";
 
 function Kpi({ label, value, auxiliary }: { label: string; value: string; auxiliary?: string | null }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-1 rounded-lg border border-overview-border bg-overview-surface p-3">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">{label}</p>
-      <p className="text-xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{value}</p>
+      <p className="text-2xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{value}</p>
       {/* Linha reservada mesmo vazia: nem todo Kpi tem auxiliar, mas os que
           estão na mesma linha precisam da mesma altura pra não ficar com a
           base desalinhada. */}
@@ -39,6 +39,12 @@ function Kpi({ label, value, auxiliary }: { label: string; value: string; auxili
  * `targetResultCount`/`investmentPlanned` da própria página); os textos de
  * resultado/custo vêm de `deriveMonthlyKpiTexts` (lib/performance.ts),
  * central e testável — nunca recomputados aqui.
+ *
+ * Etapa "Primeira Rodada Visual — Contexto + Performance" (seção 9 do
+ * pedido): cada KPI virou um card (`Kpi`, acima) com superfície própria
+ * (`overview-surface`, borda discreta, radius moderado) em vez de texto
+ * solto lado a lado — "cards mais claros e escaneáveis", só composição
+ * visual (grid/padding/tipografia). Nenhum valor, fonte ou cálculo mudou.
  */
 export function MonthlyKpiSummary({
   monthActual,
@@ -100,7 +106,7 @@ export function MonthlyKpiSummary({
           "ilhas" distantes demais numa tela larga; o container mais
           estreito (`[id]/page.tsx`, max-w-5xl) já ajuda, este gap menor
           termina o ajuste sem mudar o grid/breakpoints/valores. */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-x-6 gap-y-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
         <Kpi label={resultLabel} value={resultValue} auxiliary={resultAuxiliary} />
         <Kpi label="Investimento" value={formatCurrency(monthActual)} auxiliary={investmentAuxiliary} />
         <Kpi label="Custo por resultado" value={costValue} auxiliary={costAuxiliary} />
