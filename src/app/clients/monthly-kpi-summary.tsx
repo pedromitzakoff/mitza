@@ -4,11 +4,34 @@ import { deriveMonthlyKpiTexts } from "@/lib/performance";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { formatCurrency, formatCount } from "@/lib/format";
 
-function Kpi({ label, value, auxiliary }: { label: string; value: string; auxiliary?: string | null }) {
+function Kpi({
+  label,
+  value,
+  auxiliary,
+  accent,
+}: {
+  label: string;
+  value: string;
+  auxiliary?: string | null;
+  /** Etapa "MEGA FACELIFT — Fase 4: Dashboard" (seção 4 do pedido —
+   * "Executive Snapshot"): destaque visual pro KPI de Resultado, que é a
+   * primeira coisa a pergunta "como está o growth agora?" precisa responder
+   * — nenhum outro Kpi do grid recebe isto. Puramente de composição
+   * (superfície/borda/tamanho de fonte); nenhum valor/cálculo muda. */
+  accent?: boolean;
+}) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-overview-border bg-overview-surface p-3">
+    <div
+      className={
+        accent
+          ? "flex flex-col gap-1 rounded-lg border border-overview-border-strong bg-overview-surface-selected p-3.5"
+          : "flex flex-col gap-1 rounded-lg border border-overview-border bg-overview-surface p-3"
+      }
+    >
       <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">{label}</p>
-      <p className="text-2xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{value}</p>
+      <p className={accent ? "text-3xl font-bold tracking-tight text-overview-text-primary tabular-nums" : "text-2xl font-semibold tracking-tight text-overview-text-primary tabular-nums"}>
+        {value}
+      </p>
       {/* Linha reservada mesmo vazia: nem todo Kpi tem auxiliar, mas os que
           estão na mesma linha precisam da mesma altura pra não ficar com a
           base desalinhada. */}
@@ -107,7 +130,7 @@ export function MonthlyKpiSummary({
           estreito (`[id]/page.tsx`, max-w-5xl) já ajuda, este gap menor
           termina o ajuste sem mudar o grid/breakpoints/valores. */}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
-        <Kpi label={resultLabel} value={resultValue} auxiliary={resultAuxiliary} />
+        <Kpi label={resultLabel} value={resultValue} auxiliary={resultAuxiliary} accent />
         <Kpi label="Investimento" value={formatCurrency(monthActual)} auxiliary={investmentAuxiliary} />
         <Kpi label="Custo por resultado" value={costValue} auxiliary={costAuxiliary} />
         {hasRevenue && <Kpi label="Faturamento" value={revenueValue} />}

@@ -31,13 +31,13 @@ import { PRIORITY_GROUP_TONE } from "@/app/operation/operation-client-card";
 import { emphasizeDeviationText } from "@/components/workspace/status-dot";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
 import { ClientWorkspaceContext } from "../client-workspace-context";
-import { MonthInvestmentPaceNote } from "../month-investment-summary";
-import { MonthlyBudgetHistoryDrawer } from "../monthly-budget-history-drawer";
-import { ChannelPlanEditor } from "../channel-plan-editor";
-import { AccountFollowUpPanel } from "../account-follow-up-panel";
-import { SecondaryGoalsPerformance } from "../secondary-goals-performance";
-import { listClientGoals, resolvePrimaryGoal, fetchGoalDisplaySummaries, type ClientGoal } from "@/lib/client-goals";
-import { fetchSecondaryGoalsPerformance } from "@/lib/secondary-goal-performance";
+import { MonthInvestmentPaceNote, MonthInvestmentSummary } from "../month-investment-summary";
+import { MonthlyKpiSummary } from "../monthly-kpi-summary";
+import { MonthlyGoalProgress } from "../monthly-goal-progress";
+import { ResultsByChannel } from "../results-by-channel";
+import { PerformanceDiagnosticCard } from "../performance-diagnostic";
+import { evaluateInvestmentDiagnostic, evaluateCpaDiagnostic, metricToneSeverityRank, type MetricTone } from "@/lib/metric-diagnostics";
+import { listClientGoals, resolvePrimaryGoal, type ClientGoal } from "@/lib/client-goals";
 import { computePerformanceSummary, aggregatePerformanceResults } from "@/lib/performance";
 import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
 import type { PerformanceGoal } from "@/lib/performance-goals";
@@ -51,10 +51,7 @@ import { TASK_PRIORITY_DOT_CLASS } from "../task-labels";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL } from "@/lib/account-reviews";
 import { WorkspaceContainer } from "../workspace-container";
 import { IconButton } from "@/components/workspace/button";
-
-function withParam(url: string, param: string): string {
-  return `${url}${url.includes("?") ? "&" : "?"}${param}`;
-}
+import { buildMetasHref } from "./metas/page";
 
 /**
  * Objetivo em exibição na Performance (`?goal=`) — núcleo puro extraído de
@@ -103,60 +100,78 @@ export function buildClientContextHref(
 }
 
 /**
- * `/clients/[id]` — PAINEL PRINCIPAL do cliente (Etapa "Correção de UX do
- * Workspace", que corrige — sem desfazer — a Etapa "MITZA — Reformulação
- * Estrutural" anterior). A pergunta que esta página responde: "como está
- * esse cliente e o que preciso saber/fazer agora?".
+ * Resolve pra ONDE a CTA do diagnóstico único do Dashboard deve apontar —
+ * "Ver Metas →" quando o eixo fora do esperado é Investimento (ritmo de
+ * planejamento, módulo Metas) ou "Ver Performance →" quando é Custo por
+ * resultado (eficiência, módulo Performance). Etapa "MEGA FACELIFT — Fase
+ * 4: Dashboard" (seção 6 do pedido: "nunca inventar causalidade") — núcleo
+ * puro que REAPLICA os mesmos dois avaliadores e o mesmo desempate que
+ * `PerformanceDiagnosticCard` já usa internamente (`metric-diagnostics.ts`,
+ * Investimento primeiro em caso de empate de severidade), nunca um motor
+ * novo. `null` quando não há nenhum eixo com base real de comparação, ou
+ * quando o eixo escolhido está dentro do esperado (`tone === "normal"` —
+ * sem desvio, não há "o que mais merece atenção" pra apontar).
+ */
+export function resolveDashboardDiagnosticCtaTarget(input: {
+  actualSpend: number;
+  expectedToDate: number | null;
+  costPerResult: number | null;
+  targetCostPerResult: number | null;
+  resultCount: number;
+  hasPerformanceGoal: boolean;
+}): "metas" | "performance" | null {
+  const investmentDiag = evaluateInvestmentDiagnostic(input.actualSpend, input.expectedToDate);
+  const costDiag = input.hasPerformanceGoal ? evaluateCpaDiagnostic(input.costPerResult, input.targetCostPerResult, input.resultCount) : null;
+
+  const candidates: { target: "metas" | "performance"; tone: MetricTone }[] = [];
+  if (investmentDiag.expected !== null) candidates.push({ target: "metas", tone: investmentDiag.tone });
+  if (costDiag && costDiag.expected !== null) candidates.push({ target: "performance", tone: costDiag.tone });
+  if (candidates.length === 0) return null;
+
+  const chosen = candidates.reduce((worst, candidate) => (metricToneSeverityRank(candidate.tone) < metricToneSeverityRank(worst.tone) ? candidate : worst));
+  return chosen.tone === "normal" ? null : chosen.target;
+}
+
+/**
+ * `/clients/[id]` — DASHBOARD do cliente (Etapa "MEGA FACELIFT — Fase 4").
+ * A pergunta que esta página responde, e SÓ esta: "como está o growth
+ * deste cliente agora?" — um cockpit executivo, não mais um painel que
+ * tenta ser relatório/planejamento/operação/demandas/histórico/config ao
+ * mesmo tempo (esses agora são módulos próprios, ver abaixo).
  *
- * A Fase 1 tinha transformado esta rota só na "Visão geral", uma de 5 abas
- * equivalentes (Visão geral/Performance/Operação/Demandas/Configurações)
- * — na prática, 5 mini-sistemas. Validação visual no deploy mostrou que
- * isso fragmentou demais a experiência. Esta correção reintegra Performance
- * + Operação + Demandas numa ÚNICA visão de trabalho, sem desfazer nenhuma
- * rota/loader/pipeline da Fase 1:
+ * Fases 1-3 ("MEGA FACELIFT") já tinham extraído Metas (`/metas`) e
+ * recontextualizado Performance (`/relatorio`). Esta fase 4 termina a
+ * extração do que sobrou aqui dentro, deixando SÓ o que é genuinamente
+ * executivo — "o que saiu e para onde foi" (auditoria completa no
+ * relatório de entrega desta etapa, não repetida aqui pra não duplicar):
  *
- * 1. PERFORMANCE — `AccountFollowUpPanel` (KPIs + ritmo do mês, já existia
- *    aqui) + `SecondaryGoalsPerformance`. Taxa de conversão (carrinho→venda)
- *    saiu daqui — pedido explícito de simplificação, fica só dentro de
- *    `/relatorio` (`report-filterable-tables.tsx`), nunca duplicada. O CTA
- *    de aprofundamento que ficava no fim deste bloco também foi removido —
- *    o link "Relatório" na barra de contexto (topo, junto de Dashboard/
- *    Saldo/Fechamento) cobre o mesmo destino (`/relatorio`, que continua
- *    existindo intacto — mesma Camada
- *    1/2, nenhum cálculo duplicado).
- * 2. OPERAÇÃO — resumo leve (sprint atual, última otimização, saúde/motivo
- *    do CPA — os MESMOS dados/funções já usados por `/operation` e pela
- *    fila global de Operação, nunca uma segunda implementação) com CTA
- *    "Ver operação completa →" pra `/operation`.
- * 3. DEMANDAS — contagem + até 3 itens mais urgentes, reaproveitando
- *    `loadPendenciasRawData`/`countOpenDemandas` (MESMA fonte/regra de
- *    `/demandas` e da Home — `origin='manual'`), com CTA "Ver todas →"
- *    pra `/clients/[id]/demandas`.
+ * 1. PLANEJAMENTO DETALHADO (`ChannelPlanEditor`) — saiu por completo da
+ *    experiência principal. Vira só um CTA "Editar planejamento →" pra
+ *    `/clients/[id]/metas` (mesmo componente/dado, nunca deletado — só
+ *    parou de competir pelo espaço principal do Dashboard).
+ * 2. ANÁLISE PROFUNDA (campanhas/públicos/criativos/posicionamentos,
+ *    `SecondaryGoalsPerformance`) — já vivia em `/relatorio`
+ *    (Performance); o Dashboard mantém só uma síntese executiva
+ *    (KPIs + ritmo + 1 diagnóstico + canal), nunca a investigação
+ *    completa.
+ * 3. HISTÓRICO DE ORÇAMENTO (`MonthlyBudgetHistoryDrawer`,
+ *    `?historicoOrcamento=1`) — saiu; é detalhe de planejamento, não
+ *    leitura executiva (mesmo raciocínio do item 1 — fica em Metas).
  *
- * `/relatorio`, `/operation`, `/clients/[id]/demandas` e `/edit` continuam
- * existindo como rotas de APROFUNDAMENTO (seção 15 do pedido de correção:
- * "as rotas da Fase 1 não foram um erro") — só deixaram de competir como
- * abas iguais no header; a barra `role="tablist"` saiu de
- * `client-workspace-header.tsx`.
+ * `AccountFollowUpPanel` (o wrapper anterior que empilhava KPIs + ritmo +
+ * diagnóstico + canal como um bloco só) foi substituído por uma composição
+ * NOVA, direta nesta página: os mesmos componentes que ele orquestrava
+ * (`MonthlyKpiSummary`/`MonthlyGoalProgress`/`MonthInvestmentSummary`/
+ * `PerformanceDiagnosticCard`/`ResultsByChannel`) agora são renderizados em
+ * cards próprios dentro de um grid — "reutilizar não significa empilhar
+ * igual" (seção 19 do pedido). `account-follow-up-panel.tsx` continua no
+ * disco, só sem nenhum consumidor nesta rodada (G — redundante,
+ * documentado, não deletado).
  *
- * Nenhum cálculo de investimento/performance mudou nesta correção — só a
- * composição visual e a largura (`WorkspaceContainer`, ver doc-comment de
- * `workspace-container.tsx` pra a causa raiz do `max-w-5xl` estreito).
- *
- * ROLLBACK DE INCIDENTE (2026-09-29): a rodada seguinte ("Correção de
- * Direção do Workspace") tinha substituído os resumos abaixo pelo conteúdo
- * completo de Performance/Operação/Demandas/Funis na própria página — isso
- * causou uma quebra em produção (Não foi possível carregar esta página)
- * restrita a alguns gestores/clientes (padrão consistente com RLS/permissão
- * numa das tabelas novas — `client_funnels`/`campaign_funnel_assignments`
- * do bloco de Funis, ou algo em `operation-section-data.ts`, ambos agora
- * carregados sempre em vez de só sob demanda em `/relatorio`/`/operation`).
- * Nunca diagnosticado com certeza (sem acesso a logs/RLS de produção neste
- * ambiente) — restaurado este arquivo pro último estado confirmado
- * funcionando pra TODOS os usuários antes de reinvestigar com calma.
- * `operation-section-data.ts`/`operation-section.tsx` (extração usada por
- * `/operation`) e a Etapa de conclusão de Demandas continuam intactos —
- * só esta página voltou atrás.
+ * Operação e Demandas continuam como sínteses curtas com CTA (nunca a
+ * lista/sprint completos — isso é `/operation`/`/clients/[id]/demandas`).
+ * Nenhum cálculo de investimento/performance mudou nesta fase — só a
+ * composição visual e o que deixou de aparecer aqui.
  */
 export default async function ClientPage({
   params,
@@ -168,7 +183,6 @@ export default async function ClientPage({
     synced?: string;
     saved?: string;
     month?: string;
-    historicoOrcamento?: string;
     metricsChannel?: string;
     goal?: string;
   }>;
@@ -179,7 +193,6 @@ export default async function ClientPage({
     synced,
     saved,
     month: monthQueryParam,
-    historicoOrcamento,
     metricsChannel: metricsChannelParam,
     goal: goalParam,
   } = await searchParams;
@@ -342,21 +355,6 @@ export default async function ClientPage({
     primaryResultType,
   );
 
-  // Objetivos secundários — agora exclui o que está SELECIONADO (nunca mais
-  // só "não-principal"), pra nunca duplicar o mesmo objetivo no bloco
-  // principal E no card de "Outros objetivos" ao mesmo tempo (seção 8 do
-  // pedido). Quando o selecionado É o principal (caso comum, default), o
-  // resultado é idêntico ao de antes desta etapa.
-  const secondaryClientGoals = effectiveClientGoals.filter((g) => g.resultType !== performanceGoal);
-  const secondaryGoalTargets = await fetchGoalDisplaySummaries(supabase, id, secondaryClientGoals, firstDay);
-  const secondaryGoalsPerformance = await fetchSecondaryGoalsPerformance(
-    supabase,
-    id,
-    secondaryClientGoals,
-    { firstDay, lastDay },
-    new Map(Array.from(secondaryGoalTargets.entries()).map(([goal, summary]) => [goal, summary.targetResultCount])),
-  );
-
   // `performanceTargetHistoryRaw` agora vem SEM filtro de objetivo (busca
   // acima) — linha histórica com `result_type IS NULL` (de antes da Etapa
   // "Múltiplos Objetivos") é sempre do objetivo PRINCIPAL (única leitura
@@ -398,7 +396,6 @@ export default async function ClientPage({
   // desta etapa — zero mudança de comportamento no caminho comum.
   const primaryMonthPlanned = primaryGoalPlan.consolidated.investment ?? sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay });
   const primaryBudgetChanges = (budgetChangesRaw ?? []).filter((c) => (c.result_type ?? primaryResultType) === primaryResultType);
-  const selectedBudgetChanges = (budgetChangesRaw ?? []).filter((c) => (c.result_type ?? primaryResultType) === performanceGoal);
 
   await ensureClosedSprintSnapshots(supabase, {
     clientId: id,
@@ -468,15 +465,6 @@ export default async function ClientPage({
   const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate(planningHorizon, todayStr);
   const isFutureMonth = !isCurrentMonth && !isClosedMonth;
   const budgetSprints = sprints.map((sprint) => ({ sprintId: sprint.id, startDate: sprint.start_date, endDate: sprint.end_date }));
-  const lastBudgetChange = selectedBudgetChanges[0] ?? null;
-  const lastChange = lastBudgetChange
-    ? {
-        lastEffectiveDate: lastBudgetChange.effective_date,
-        lastPreviousAmount: lastBudgetChange.previous_amount,
-        lastNewAmount: lastBudgetChange.new_amount,
-        changeCountThisMonth: selectedBudgetChanges.length,
-      }
-    : null;
 
   // Demandas — resumo (Etapa "Correção de UX do Workspace", seção 10 do
   // pedido): contagem + até 3 itens mais urgentes, nunca a List View
@@ -532,8 +520,6 @@ export default async function ClientPage({
     saved && { tone: "green", text: "Dados do cliente atualizados." },
   ].filter((banner): banner is { tone: "red" | "green" | "amber"; text: string } => Boolean(banner));
 
-  const historyDrawerHref = withParam(returnTo, "historicoOrcamento=1");
-
   // Links externos (Dashboard/Saldo/Fechamento) — existiam na barra de
   // navegação da página antiga (auditoria via git show 402e0af), tinham
   // sumido sem substituto na Fase 1; restaurados aqui na correção de
@@ -547,6 +533,26 @@ export default async function ClientPage({
     client.balance_url && { label: "Saldo", href: client.balance_url },
     client.monthly_closing_sheet_url && { label: "Fechamento", href: client.monthly_closing_sheet_url },
   ].filter((link): link is { label: string; href: string } => Boolean(link));
+
+  // Resultado só tem leitura de ritmo (renderiza a barra) quando há meta de
+  // QUANTIDADE configurada pro mês — mesmo guard que `AccountFollowUpPanel`
+  // já aplicava antes de renderizar `MonthlyGoalProgress`, nenhuma condição
+  // nova.
+  const hasResultRitmo = Boolean(performanceGoal) && scopedTargetResultCount != null && scopedTargetResultCount > 0 && expectedResultsToDate != null;
+
+  // CTA do diagnóstico único (seção 6 do pedido) — "Ver Metas →" quando o
+  // eixo fora do esperado é Investimento, "Ver Performance →" quando é
+  // Custo por resultado; `null` sem desvio real, nenhuma CTA extra.
+  const diagnosticCtaTarget = resolveDashboardDiagnosticCtaTarget({
+    actualSpend: visaoGeralMonthActual,
+    expectedToDate: visaoGeralExpectedToDate,
+    costPerResult: visaoGeralPerformanceSummary?.costPerResult ?? null,
+    targetCostPerResult: scopedTargetCostPerResult,
+    resultCount: visaoGeralPerformanceSummary?.resultCount ?? 0,
+    hasPerformanceGoal: performanceGoal !== null,
+  });
+  const metasHref = buildMetasHref(client.id, { month: monthParam, goal: goalParam }, {});
+  const performanceHref = `/clients/${client.id}/relatorio`;
 
   return (
     <WorkspaceContainer>
@@ -572,16 +578,17 @@ export default async function ClientPage({
         </div>
       )}
 
-      {/* CONTEXTO — mês/objetivo/canal em exibição, compartilhados pelo bloco
-          de performance abaixo (Etapa "Primeira Rodada Visual — Contexto +
-          Performance", seção 3 do pedido: hierarquia Cliente, depois Mês,
-          depois Meta/Objetivo, depois Canal, depois o conteúdo de
-          performance em si — visualmente homogênea entre os 3 dropdowns —
-          `ClientContextSelect`,
-          `month-select.tsx`/`goal-select.tsx`/`visao-geral-channel-switch.tsx`).
-          Prev/next continuam como atalho discreto ao lado do mês (seção 4:
-          "pode manter"). */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-overview-border pb-3 text-sm">
+      {/* Etapa "MEGA FACELIFT — Fase 4: Dashboard" (seção 3 do pedido): o
+          nome/status/avatar do cliente e a navegação entre módulos já estão
+          no Client Context global (`ClientWorkspaceContext` acima) — aqui o
+          conteúdo começa simples, só o nome do próprio módulo. */}
+      <h1 className="mt-4 text-sm font-semibold uppercase tracking-wide text-overview-text-muted">Dashboard</h1>
+
+      {/* CONTEXTO — mês/objetivo/canal em exibição (mesmos 3 seletores já
+          auditados nas fases anteriores, nenhum filtro global novo). Editar
+          planejamento deixou de abrir inline aqui (seção 12 do pedido: sai
+          do Dashboard) — virou um link pra Metas, preservando mês/objetivo. */}
+      <div className="mt-2 flex flex-wrap items-center gap-2 border-b border-overview-border pb-3 text-sm">
         <div className="flex items-center gap-0.5">
           <IconButton href={prevMonthHref} aria-label="Mês anterior" variant="ghost" size="sm">
             &lsaquo;
@@ -597,27 +604,16 @@ export default async function ClientPage({
           active={metricsChannel}
           options={metricsChannelOptions}
         />
-        {/* Planejamento continua restrito ao objetivo PRINCIPAL nesta rodada
-            — editar o plano de um objetivo SECUNDÁRIO exigiria mexer em
-            `channel-plan-editor.tsx` (fora do escopo de arquivos desta
-            etapa) pra gravar o `result_type` certo; sem essa mudança,
-            arriscaria salvar no lugar errado. Ver relatório final, item M. */}
-        {isAdmin && !isClosedMonth && effectiveDate && performanceGoal === primaryResultType && (
-          <ChannelPlanEditor
-            clientId={client.id}
-            monthParam={monthParam}
-            monthLabel={monthLabel}
-            monthRange={{ firstDay, lastDay }}
-            currentPlanningEndDate={planningEndDate}
-            channels={AVAILABLE_TRAFFIC_CHANNELS}
-            byChannel={selectedGoalPlan.byChannel}
-            performanceGoal={performanceGoal}
-          />
-        )}
         <div className="ml-auto flex items-center gap-3">
-          <Link href={`/clients/${client.id}/relatorio`} className="text-xs font-medium text-overview-text-secondary hover:underline">
-            Relatório
-          </Link>
+          {/* Planejamento continua restrito ao objetivo PRINCIPAL nesta
+              rodada — mesma regra de gate que o editor inline já aplicava
+              (editar um objetivo SECUNDÁRIO exigiria mexer em
+              `channel-plan-editor.tsx`, fora do escopo desta fase). */}
+          {isAdmin && !isClosedMonth && effectiveDate && performanceGoal === primaryResultType && (
+            <Link href={metasHref} className="text-xs font-medium text-brand hover:underline">
+              Editar planejamento →
+            </Link>
+          )}
           {externalLinks.map((link) => (
             <a
               key={link.label}
@@ -632,32 +628,59 @@ export default async function ClientPage({
         </div>
       </div>
 
-      {/* PERFORMANCE — "o que está acontecendo?" (seção 7 do pedido de
-          correção): KPIs + ritmo do mês (já existia aqui) + metas
-          secundárias/conversão — rótulos "Performance do mês"/"Ritmo do mês"
-          e o CTA de relatório completo que ficava aqui embaixo foram
-          removidos (pedido explícito de simplificação); o link "Relatório"
-          na barra de contexto acima cobre o mesmo destino (`/relatorio`,
-          reaproveitado 100%, nenhum cálculo duplicado). */}
-      <div className="mt-6">
-        <AccountFollowUpPanel
+      {/* EXECUTIVE SNAPSHOT — primeira dobra (seção 4 do pedido): Resultado/
+          Investimento/Custo por resultado (+ Faturamento/ROAS quando
+          aplicável), com o Resultado em destaque (`accent`, ver
+          `monthly-kpi-summary.tsx`) — a mesma leitura "o que aconteceu no
+          mês?" de sempre, sem recalcular nada, só com peso visual diferente
+          do que ficava embaixo de `AccountFollowUpPanel`. */}
+      <div className="mt-5">
+        <MonthlyKpiSummary
           monthActual={visaoGeralMonthActual}
           performanceGoal={performanceGoal}
           performanceSummary={visaoGeralPerformanceSummary}
           targetCostPerResult={scopedTargetCostPerResult}
           targetResultCount={scopedTargetResultCount}
-          expectedResultsToDate={expectedResultsToDate}
-          channelBreakdown={monthPerformanceChannelBreakdown}
-          configureObjectiveHref={`/clients/${client.id}/edit`}
           investmentPlanned={visaoGeralPlanned}
-          investmentExpectedToDate={visaoGeralExpectedToDate}
-          investmentStatus={visaoGeralStatus}
-          investmentMonthLabel={monthLabel}
-          investmentMonthRange={planningHorizon}
-          isFutureMonth={isFutureMonth}
-          isClosedMonth={isClosedMonth}
-          currentPlanningEndDate={planningEndDate}
-          investmentPaceNote={
+          configureObjectiveHref={`/clients/${client.id}/edit`}
+        />
+      </div>
+
+      {/* RITMO + DIAGNÓSTICO — seções 5/6 do pedido: ritmo do mês (maior,
+          reaproveita `MonthlyGoalProgress`/`MonthInvestmentSummary`/
+          `MonthInvestmentPaceNote` exatamente como antes, só que agora num
+          card próprio com CTA pra Metas) ao lado de um único diagnóstico
+          (`PerformanceDiagnosticCard`, mesmo motor de sempre) com CTA
+          dinâmica pro módulo que o eixo fora do esperado aponta. */}
+      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="flex flex-col rounded-lg border border-overview-border bg-overview-surface p-4 lg:col-span-2">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Ritmo do mês</h2>
+            <Link href={metasHref} className="shrink-0 text-xs font-medium text-brand hover:underline">
+              Ver Metas →
+            </Link>
+          </div>
+          <div className="mt-3 flex flex-col gap-3.5">
+            {hasResultRitmo && (
+              <MonthlyGoalProgress
+                monthResultCount={visaoGeralPerformanceSummary?.resultCount ?? 0}
+                targetResultCount={scopedTargetResultCount as number}
+                expectedToDate={expectedResultsToDate as number}
+              />
+            )}
+            <MonthInvestmentSummary
+              planned={visaoGeralPlanned}
+              actual={visaoGeralMonthActual}
+              expectedToDate={visaoGeralExpectedToDate}
+              status={visaoGeralStatus}
+              monthLabel={monthLabel}
+              monthRange={planningHorizon}
+              isClosedMonth={isClosedMonth}
+              isFutureMonth={isFutureMonth}
+              currentPlanningEndDate={planningEndDate}
+            />
+          </div>
+          <div className="mt-2.5">
             <MonthInvestmentPaceNote
               planned={visaoGeralPlanned}
               actual={visaoGeralMonthActual}
@@ -668,99 +691,113 @@ export default async function ClientPage({
               isClosedMonth={isClosedMonth}
               isFutureMonth={isFutureMonth}
               isAdmin={isAdmin}
-              lastChange={lastChange}
-              historyHref={historyDrawerHref}
+              lastChange={null}
+              historyHref={returnTo}
             />
-          }
-        />
-      </div>
-
-      <SecondaryGoalsPerformance goals={secondaryGoalsPerformance} />
-
-      {/* OPERAÇÃO — "estamos executando corretamente?" (seção 9 do pedido de
-          correção): resumo leve (sprint atual, última otimização, saúde do
-          CPA) — MESMOS dados/funções de `/operation` e da fila global de
-          Operação, nunca tasks aqui (Demandas×Operação nunca se misturam —
-          correção da Fase 1 permanece intacta). */}
-      <div className="mt-6 border-t border-overview-border pt-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Operação</h2>
-          <Link href={`/clients/${client.id}/operation`} className="shrink-0 text-xs font-medium text-brand hover:underline">
-            Ver operação completa →
-          </Link>
+          </div>
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
-          <div>
-            <p className="text-[11px] text-overview-text-muted">Sprint atual</p>
-            <p className="mt-0.5 text-sm font-medium text-overview-text-primary">{currentSprintLabel ?? "—"}</p>
+
+        <div className="flex flex-col rounded-lg border border-overview-border bg-overview-surface p-4">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Diagnóstico</h2>
+          <div className="mt-3">
+            <PerformanceDiagnosticCard
+              performanceGoal={performanceGoal}
+              actualSpend={visaoGeralMonthActual}
+              expectedToDate={visaoGeralExpectedToDate}
+              costPerResult={visaoGeralPerformanceSummary?.costPerResult ?? null}
+              targetCostPerResult={scopedTargetCostPerResult}
+              resultCount={visaoGeralPerformanceSummary?.resultCount ?? 0}
+            />
           </div>
-          <div>
-            <p className="text-[11px] text-overview-text-muted">Última otimização</p>
-            <p className="mt-0.5 text-sm font-medium text-overview-text-primary">{lastOptimizationLabel}</p>
-          </div>
-          <div className="col-span-2">
-            <p className="text-[11px] text-overview-text-muted">Saúde</p>
-            {primaryReasonText ? (
-              <p className="mt-0.5 text-sm font-medium" title={primaryReasonText}>
-                {emphasizeDeviationText(primaryReasonText, primaryReasonTone)}
-              </p>
-            ) : (
-              <p className="mt-0.5 text-sm font-medium text-overview-text-primary">Sem sinais de atenção</p>
-            )}
-          </div>
+          {diagnosticCtaTarget && (
+            <Link
+              href={diagnosticCtaTarget === "metas" ? metasHref : performanceHref}
+              className="mt-3 text-xs font-medium text-brand hover:underline"
+            >
+              {diagnosticCtaTarget === "metas" ? "Ver Metas →" : "Ver Performance →"}
+            </Link>
+          )}
         </div>
       </div>
 
-      {/* DEMANDAS — "o que precisa ser feito?" (seção 10 do pedido de
-          correção): contagem + até 3 itens mais urgentes, nunca a List View
-          inteira. MESMA fonte/regra de `/clients/[id]/demandas` e da área
-          global (`origin='manual'`). */}
-      <div className="mt-6 border-t border-overview-border pt-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Demandas</h2>
-            <p className="mt-1 text-[13px] text-overview-text-secondary">
-              {demandasOpenCount} em aberto
-              {demandasOverdueCount > 0 && ` · ${demandasOverdueCount} atrasada${demandasOverdueCount !== 1 ? "s" : ""}`}
-            </p>
+      {/* RESULTADOS POR CANAL — seção 7 do pedido: só a distribuição
+          executiva (mesmo `ResultsByChannel` de sempre, só renderiza com
+          mais de 1 canal com dado), nunca a investigação por campanha/
+          público/criativo — isso é `/relatorio`. */}
+      {performanceGoal && monthPerformanceChannelBreakdown.length > 1 && (
+        <div className="mt-5 rounded-lg border border-overview-border bg-overview-surface p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Resultados por canal</h2>
+            <Link href={performanceHref} className="shrink-0 text-xs font-medium text-brand hover:underline">
+              Ver Performance →
+            </Link>
           </div>
-          <Link href={`/clients/${client.id}/demandas`} className="shrink-0 text-xs font-medium text-brand hover:underline">
-            Ver todas →
-          </Link>
+          <div className="mt-3">
+            <ResultsByChannel goal={performanceGoal} channelBreakdown={monthPerformanceChannelBreakdown} />
+          </div>
         </div>
-        {demandasPreview.length > 0 && (
-          <ul className="mt-3 flex flex-col gap-1.5">
-            {demandasPreview.map((item) => (
-              <li key={item.id} className="flex items-center gap-2 text-sm">
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TASK_PRIORITY_DOT_CLASS[item.priority]}`} aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate text-overview-text-primary">{item.title}</span>
-                <span className="shrink-0 text-xs text-overview-text-muted">{formatDueDate(item.dueDate)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {isAdmin && historicoOrcamento && (
-        <MonthlyBudgetHistoryDrawer
-          monthLabel={monthLabel}
-          changes={selectedBudgetChanges.map((change) => ({
-            id: change.id,
-            channel: change.channel as TrafficChannel,
-            effectiveDate: change.effective_date,
-            changedAt: change.changed_at,
-            changedByName: change.changed_by_profile?.name ?? null,
-            previousAmount: change.previous_amount,
-            newAmount: change.new_amount,
-            consolidatedAmount: change.consolidated_amount,
-            futureAmountDistributed: change.future_amount_distributed,
-            resultingTotal: change.resulting_total,
-            isBelowConsolidated: change.is_below_consolidated,
-            reason: change.reason,
-          }))}
-          closeHref={returnTo}
-        />
       )}
+
+      {/* OPERAÇÃO + DEMANDAS — seções 9/10 do pedido: só sínteses curtas com
+          CTA pro módulo completo, nunca sprint/tarefas detalhadas aqui
+          (mesmos dados/funções de `/operation`/`/clients/[id]/demandas`,
+          nenhum cálculo novo). */}
+      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="rounded-lg border border-overview-border bg-overview-surface p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Operação</h2>
+            <Link href={`/clients/${client.id}/operation`} className="shrink-0 text-xs font-medium text-brand hover:underline">
+              Ver Operação →
+            </Link>
+          </div>
+          <div className="mt-3 flex flex-col gap-2">
+            <div>
+              <p className="text-[11px] text-overview-text-muted">Sprint atual</p>
+              <p className="mt-0.5 text-sm font-medium text-overview-text-primary">{currentSprintLabel ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-overview-text-muted">Última otimização</p>
+              <p className="mt-0.5 text-sm font-medium text-overview-text-primary">{lastOptimizationLabel}</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-overview-text-muted">Saúde</p>
+              {primaryReasonText ? (
+                <p className="mt-0.5 text-sm font-medium" title={primaryReasonText}>
+                  {emphasizeDeviationText(primaryReasonText, primaryReasonTone)}
+                </p>
+              ) : (
+                <p className="mt-0.5 text-sm font-medium text-overview-text-primary">Sem sinais de atenção</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-overview-border bg-overview-surface p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Demandas</h2>
+              <p className="mt-1 text-[13px] text-overview-text-secondary">
+                {demandasOpenCount} em aberto
+                {demandasOverdueCount > 0 && ` · ${demandasOverdueCount} atrasada${demandasOverdueCount !== 1 ? "s" : ""}`}
+              </p>
+            </div>
+            <Link href={`/clients/${client.id}/demandas`} className="shrink-0 text-xs font-medium text-brand hover:underline">
+              Ver Demandas →
+            </Link>
+          </div>
+          {demandasPreview.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-1.5">
+              {demandasPreview.map((item) => (
+                <li key={item.id} className="flex items-center gap-2 text-sm">
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TASK_PRIORITY_DOT_CLASS[item.priority]}`} aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate text-overview-text-primary">{item.title}</span>
+                  <span className="shrink-0 text-xs text-overview-text-muted">{formatDueDate(item.dueDate)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </WorkspaceContainer>
   );
 }

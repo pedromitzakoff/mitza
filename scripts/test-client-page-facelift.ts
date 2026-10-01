@@ -53,6 +53,19 @@
  * pra todos os usuários antes daquela rodada (a seção 15 abaixo volta a
  * valer; a seção 16, que testava o painel completo, foi removida).
  *
+ * Rodada 7 ("MEGA FACELIFT — Fase 4: Dashboard"): `AccountFollowUpPanel`
+ * deixou de ser renderizado em page.tsx (seus filhos — `MonthlyKpiSummary`/
+ * `MonthlyGoalProgress`/`MonthInvestmentSummary`/`PerformanceDiagnosticCard`/
+ * `ResultsByChannel` — passaram a ser chamados DIRETO numa composição em
+ * cards/grid nova); `ChannelPlanEditor` saiu da toolbar de contexto por
+ * completo (virou CTA "Editar planejamento →" pra `/metas`, mesmo gate de
+ * sempre); o link "Relatório" da toolbar saiu (virou CTA "Ver Performance →"
+ * contextual, perto de Resultados por canal/Diagnóstico);
+ * `SecondaryGoalsPerformance` saiu do Painel por inteiro (cobertura
+ * detalhada da Fase 4 está em `test-mega-facelift-fase4-dashboard.ts` — as
+ * seções abaixo que testavam esses três pontos foram atualizadas pra
+ * refletir a nova composição, nunca deletadas).
+ *
  * Rodar: npx tsx scripts/test-client-page-facelift.ts
  */
 import assert from "node:assert/strict";
@@ -106,8 +119,12 @@ console.log("1 — Largura do conteúdo: mesmo WorkspaceContainer no Painel prin
 console.log("\n2 — Ritmo vertical: cadência consistente entre as grandes regiões (mt-6)\n");
 {
   // Rodada 2: o wrapper de Performance perdeu bg-cream (ver seção 10) — a
-  // margem mt-6 continua, só sem superfície nenhuma em volta.
-  ok("bloco Performance usa mt-6 antes dele (sem superfície própria, ver seção 10)", /mt-6">\s*<AccountFollowUpPanel/.test(pageCode));
+  // margem mt-6 continuou até a Fase 4 (seção 10), que substituiu o wrapper
+  // único de AccountFollowUpPanel por uma composição em cards (Executive
+  // Snapshot/Ritmo+Diagnóstico/Resultados por canal), cada um com sua
+  // própria margem (mt-5) — cadência igualmente consistente, só recalibrada
+  // pra o novo ritmo de cards (ver test-mega-facelift-fase4-dashboard.ts).
+  ok("Executive Snapshot (MonthlyKpiSummary) usa mt-5 antes dele, mesma cadência consistente de sempre", /mt-5">\s*<MonthlyKpiSummary/.test(pageCode));
   // Rodada 5: Tarefas (MonthTasksPanel) realocado pra Operação — mesma
   // cadência mt-6 preservada no arquivo novo, nunca perdida na mudança.
   // Rodada 6 ("Correção de Direção do Workspace"): o bloco em si mudou de
@@ -258,22 +275,30 @@ console.log("\n13 — Accordion removido, diferença/ritmo integrados, Planejame
   ok("texto da diferença/ritmo recomendado é neutro (nunca amber/red — só o diagnóstico acima carrega tom semântico forte)", !/text-amber-600|text-red-600/.test(monthInvestmentCode));
 
   ok("ChannelPlanEditor não é mais invocado dentro de Performance (só mencionado em comentário explicando a mudança)", !/<ChannelPlanEditor/.test(accountFollowUpCode));
-  ok('gatilho de ChannelPlanEditor usa o rótulo curto "Planejamento" (não mais "Editar planejamento")', /\n\s*Planejamento\n/.test(loadSource("src", "app", "clients", "channel-plan-editor.tsx")) && !/Editar planejamento/.test(channelPlanEditorCode));
+  ok('gatilho de ChannelPlanEditor usa o rótulo curto "Planejamento" (não mais "Editar planejamento") — válido onde o componente ainda é montado (Metas, Fase 4)', /\n\s*Planejamento\n/.test(loadSource("src", "app", "clients", "channel-plan-editor.tsx")) && !/Editar planejamento/.test(channelPlanEditorCode));
+  // Fase 4 ("MEGA FACELIFT — Fase 4: Dashboard", seção 12 do pedido):
+  // ChannelPlanEditor deixou de ser montado INLINE na toolbar de page.tsx —
+  // virou um link "Editar planejamento →" pra `/metas` (mesmo componente,
+  // mesmos dados, agora montado lá — ver test-mega-facelift-fase4-dashboard.ts
+  // seção 2). As 3 checagens abaixo foram atualizadas pra essa CTA, no
+  // mesmo grupo de CONTEXTO da toolbar (nunca uma navegação por abas).
   ok(
-    "Planejamento (ChannelPlanEditor) aparece no grupo de CONTEXTO da toolbar de page.tsx (mês/canal/planejamento — nunca mais posicionado contra uma navegação por abas, que não existe mais aqui)",
-    pageCode.indexOf("<ChannelPlanEditor") > pageCode.indexOf("prevMonthHref"),
+    "o CTA 'Editar planejamento →' (sucessor do ChannelPlanEditor inline) aparece no grupo de CONTEXTO da toolbar de page.tsx, depois de mês/canal",
+    pageCode.indexOf("Editar planejamento") > pageCode.indexOf("prevMonthHref"),
   );
   ok(
-    "Planejamento NÃO é condicional a nenhum 'activeArea' (esse conceito não existe mais — page.tsx É a Visão Geral inteira, Etapa 5)",
+    "o CTA de planejamento NÃO é condicional a nenhum 'activeArea' (esse conceito não existe mais — page.tsx É o Dashboard inteiro, Etapa 5)",
     !pageCode.includes("activeArea"),
   );
   ok(
-    "Planejamento preserva a mesma condição de disponibilidade de sempre (admin, mês não encerrado, effectiveDate resolvido) — mais uma condição nova (seção 18): só pro objetivo PRINCIPAL nesta rodada (ver seção 20 abaixo)",
-    /isAdmin && !isClosedMonth && effectiveDate && performanceGoal === primaryResultType &&\s*\(\s*<ChannelPlanEditor/.test(pageCode),
+    "o CTA de planejamento preserva a MESMA condição de disponibilidade de sempre (admin, mês não encerrado, effectiveDate resolvido, só objetivo PRINCIPAL) — mesmo gate que o ChannelPlanEditor inline já aplicava, agora controlando o Link em vez do componente",
+    /isAdmin && !isClosedMonth && effectiveDate && performanceGoal === primaryResultType && \(\s*<Link href=\{metasHref\}/.test(pageCode),
   );
   ok(
-    "Planejamento recebe os MESMOS dados de sempre (todos os canais, plano por canal, mês civil, horizonte, objetivo) — plano agora é o do objetivo selecionado (`selectedGoalPlan`), idêntico ao antigo `clientPlan` quando o selecionado é o principal",
-    /channels=\{AVAILABLE_TRAFFIC_CHANNELS\}[\s\S]{0,80}byChannel=\{selectedGoalPlan\.byChannel\}[\s\S]{0,80}performanceGoal=\{performanceGoal\}/.test(pageCode),
+    "o ChannelPlanEditor em si (agora montado em Metas) continua recebendo os MESMOS dados de sempre (todos os canais, plano por canal, mês civil, horizonte, objetivo) — plano do objetivo selecionado, idêntico ao antigo `clientPlan` quando o selecionado é o principal",
+    /channels=\{AVAILABLE_TRAFFIC_CHANNELS\}[\s\S]{0,80}byChannel=\{data\.selectedGoalPlan\.byChannel\}[\s\S]{0,80}performanceGoal=\{data\.selectedGoal\?\.resultType \?\? null\}/.test(
+      loadSource("src", "app", "clients", "[id]", "metas", "page.tsx"),
+    ),
   );
 
   ok("código órfão removido: isClosedByHorizonOnly não existe mais em page.tsx (só servia ao texto do accordion removido)", !pageCode.includes("isClosedByHorizonOnly"));
@@ -330,22 +355,19 @@ console.log("\n16 — Links externos (Dashboard/Saldo/Fechamento) restaurados ap
   ok("clients é consultado com dashboard_url/balance_url/monthly_closing_sheet_url", /dashboard_url, balance_url, monthly_closing_sheet_url/.test(pageCode));
   ok("externalLinks monta Dashboard/Saldo/Fechamento a partir das 3 colunas, cada um opcional", /client\.dashboard_url && \{ label: "Dashboard"/.test(pageCode) && /client\.balance_url && \{ label: "Saldo"/.test(pageCode) && /client\.monthly_closing_sheet_url && \{ label: "Fechamento"/.test(pageCode));
   ok("links externos abrem em nova aba (target=_blank + rel=noopener noreferrer)", /target="_blank"\s*\n\s*rel="noopener noreferrer"/.test(pageCode));
-  // "Relatório" (pedido explícito) é link INTERNO (Next <Link>, nunca nova
-  // aba) pro mesmo /relatorio que o CTA "Ver relatório completo →" cobria
-  // (esse CTA foi removido depois, seção 17 abaixo, por ser redundante com
-  // este link) — sempre visível (não depende de nenhuma coluna opcional de
-  // clients), na mesma barra de contexto, antes dos externos (Dashboard/
-  // Saldo/Fechamento) no grupo alinhado à direita.
+  // "Relatório" (pedido explícito) era um link INTERNO fixo na barra de
+  // contexto. Fase 4 ("MEGA FACELIFT — Fase 4: Dashboard", seção 7/15 do
+  // pedido) removeu esse link solto da toolbar — o mesmo destino
+  // (`/relatorio`) passou a ser uma CTA CONTEXTUAL ("Ver Performance →"),
+  // ao lado do Diagnóstico e de Resultados por canal, nunca mais um item
+  // genérico isolado perto de Dashboard/Saldo/Fechamento.
   ok(
-    "Relatório aparece como link interno sempre visível na barra de contexto, antes dos links externos",
-    /<Link href=\{`\/clients\/\$\{client\.id\}\/relatorio`\} className="text-xs font-medium text-overview-text-secondary hover:underline">\s*Relatório/.test(
-      pageCode,
-    ),
+    "'Ver Performance →' (sucessor contextual do link 'Relatório') aponta pro mesmo /relatorio de sempre",
+    /performanceHref = `\/clients\/\$\{client\.id\}\/relatorio`/.test(pageCode) && pageCode.includes("Ver Performance →"),
   );
   ok(
-    "grupo de links (Relatório + externos) fica na mesma barra de contexto (mês/canal/planejamento), nunca uma seção própria",
-    pageCode.indexOf('ml-auto flex items-center gap-3">\n          <Link href={`/clients/${client.id}/relatorio`}') > pageCode.indexOf("<ChannelPlanEditor") &&
-      pageCode.indexOf('ml-auto flex items-center gap-3">\n          <Link href={`/clients/${client.id}/relatorio`}') < pageCode.indexOf("PERFORMANCE"),
+    "o grupo de links EXTERNOS (Dashboard/Saldo/Fechamento) continua na mesma barra de contexto (mês/canal/planejamento), agora junto do CTA 'Editar planejamento →' — nunca uma seção própria",
+    pageCode.indexOf("Editar planejamento") > pageCode.indexOf("prevMonthHref") && pageCode.indexOf("externalLinks.map") > pageCode.indexOf("Editar planejamento"),
   );
 }
 
@@ -355,7 +377,12 @@ console.log("\n16 — Links externos (Dashboard/Saldo/Fechamento) restaurados ap
 console.log("\n17 — Simplificação: rótulos de seção removidos, CTA de relatório redundante removido\n");
 {
   ok('CTA "Ver relatório completo →" removido de page.tsx (redundante com o link "Relatório" no topo, seção 16)', !/Ver relatório completo/.test(pageCode));
-  ok("SecondaryGoalsPerformance continua renderizado sem alteração (só o que vinha depois dele saiu)", /<SecondaryGoalsPerformance/.test(pageCode));
+  // Fase 4 ("MEGA FACELIFT — Fase 4: Dashboard", seção 2 do pedido):
+  // SecondaryGoalsPerformance (metas secundárias por extenso) saiu do
+  // Dashboard por inteiro — já existia uma versão estruturalmente melhor em
+  // Metas (MetasSummaryTable, uma linha por objetivo, Fase 2). Órfão, não
+  // deletado (ver test-mega-facelift-fase4-dashboard.ts seção 3).
+  ok("SecondaryGoalsPerformance não é mais renderizado em page.tsx (saiu pro módulo Metas, Fase 4)", !/<SecondaryGoalsPerformance/.test(pageCode));
   // ConversionRateCard saiu de page.tsx por completo (pedido de
   // simplificação à parte — ver test-conversion-rate-card.ts pro detalhe
   // da remoção e confirmação de que a Taxa de conversão continua existindo

@@ -193,7 +193,14 @@ console.log("\n6 — Painel principal (/clients/[id]) integra Performance + Oper
 
   ok("Painel usa WorkspaceContainer (largura corrigida, mesma do resto do workspace)", pageSource.includes("<WorkspaceContainer>"));
 
-  ok("PERFORMANCE: AccountFollowUpPanel (KPIs + ritmo do mês) continua no Painel — nenhum cálculo novo", pageSource.includes("<AccountFollowUpPanel"));
+  // Etapa "MEGA FACELIFT — Fase 4: Dashboard": AccountFollowUpPanel deixou
+  // de ser o wrapper — seus filhos (MonthlyKpiSummary/MonthlyGoalProgress/
+  // MonthInvestmentSummary) passaram a ser chamados direto numa composição
+  // em cards nova, mesmos dados/cálculos (ver test-mega-facelift-fase4-dashboard.ts).
+  ok(
+    "PERFORMANCE: KPIs + ritmo do mês continuam no Painel via MonthlyKpiSummary/MonthlyGoalProgress/MonthInvestmentSummary — nenhum cálculo novo",
+    pageSource.includes("<MonthlyKpiSummary") && pageSource.includes("<MonthlyGoalProgress") && pageSource.includes("<MonthInvestmentSummary"),
+  );
   // CTA próprio "Ver relatório completo →" removido (pedido de
   // simplificação pós-rollback) — redundante com o link "Relatório" sempre
   // visível na barra de contexto do topo, que cobre o mesmo /relatorio.
@@ -212,7 +219,7 @@ console.log("\n6 — Painel principal (/clients/[id]) integra Performance + Oper
     "Painel NUNCA consulta `tasks` diretamente (bug de misturar Demandas×Operação não pode voltar por aqui) — Demandas via loadPendenciasRawData, Operação via sprint/otimização/saúde já carregados",
     !pageSource.includes('from("tasks")'),
   );
-  ok('OPERAÇÃO: CTA "Ver operação completa" pra `/operation`', /Ver operação completa/.test(pageSource) && pageSource.includes("${client.id}/operation"));
+  ok('OPERAÇÃO: CTA "Ver Operação →" pra `/operation` (rótulo atualizado na Fase 4, mesmo destino)', /Ver Operação →/.test(pageSource) && pageSource.includes("${client.id}/operation"));
 
   ok(
     "DEMANDAS: resumo reaproveita `loadPendenciasRawData` (MESMA fonte/regra de `/clients/[id]/demandas` e da área global — origin='manual'), nunca uma terceira implementação",
@@ -223,7 +230,7 @@ console.log("\n6 — Painel principal (/clients/[id]) integra Performance + Oper
     pageSource.includes("countOpenDemandas("),
   );
   ok("DEMANDAS: mostra até 3 itens mais urgentes (nunca a List View inteira)", pageSource.includes(".slice(0, 3)"));
-  ok('DEMANDAS: CTA "Ver todas" pra `/clients/[id]/demandas`', /Ver todas/.test(pageSource) && pageSource.includes("${client.id}/demandas"));
+  ok('DEMANDAS: CTA "Ver Demandas →" pra `/clients/[id]/demandas` (rótulo atualizado na Fase 4, mesmo destino)', /Ver Demandas →/.test(pageSource) && pageSource.includes("${client.id}/demandas"));
 }
 
 console.log("\n7 — Configurações deixou de competir no menu horizontal — acessível via ação secundária (Informações da conta)\n");

@@ -120,11 +120,15 @@ console.log("\n7 — Troca de cliente nunca gera objetivo inválido\n");
   );
 }
 
-console.log("\n8 — Objetivo selecionado nunca duplica em SecondaryGoalsPerformance\n");
+console.log("\n8 — Objetivo selecionado nunca duplica na tela (Etapa 'MEGA FACELIFT — Fase 4: Dashboard': SecondaryGoalsPerformance saiu do Painel por completo, concern foi resolvido estruturalmente em Metas)\n");
 {
   ok(
-    "secondaryClientGoals exclui o resultType SELECIONADO (nunca mais só '!isPrimary') — nunca mostra o mesmo objetivo 2x na tela",
-    /const secondaryClientGoals = effectiveClientGoals\.filter\(\(g\) => g\.resultType !== performanceGoal\);/.test(pageCode),
+    "[id]/page.tsx não renderiza mais SecondaryGoalsPerformance — a ideia de 'objetivo selecionado vs. outros objetivos' saiu do Dashboard inteira (ver test-mega-facelift-fase4-dashboard.ts)",
+    !/<SecondaryGoalsPerformance/.test(pageCode),
+  );
+  ok(
+    "a mesma preocupação (nunca mostrar o mesmo objetivo 2x) agora é estruturalmente impossível em Metas: MetasSummaryTable renderiza UMA linha por objetivo de `data.rows` — nunca um split primário/'outros' que precisaria excluir o selecionado",
+    /<MetasSummaryTable rows=\{data\.rows\} \/>/.test(loadSource("src", "app", "clients", "[id]", "metas", "page.tsx")),
   );
 }
 
@@ -181,7 +185,17 @@ console.log("\n16 — Ritmo mensal mantém os cálculos atuais (MonthlyGoalProgr
 {
   ok("MonthlyGoalProgress continua chamada com os MESMOS 3 props de sempre", /<MonthlyGoalProgress\n\s*monthResultCount=\{performanceSummary\?\.resultCount \?\? 0\}/.test(accountFollowUpCode));
   ok("MonthInvestmentSummary continua chamada com os MESMOS props de sempre", /<MonthInvestmentSummary\n\s*planned=\{investmentPlanned\}/.test(accountFollowUpCode));
-  ok("MonthInvestmentPaceNote continua montado em page.tsx com os MESMOS campos (planned/actual/expectedToDate/sprints/lastChange)", /<MonthInvestmentPaceNote/.test(pageCode) && /lastChange=\{lastChange\}/.test(pageCode));
+  // Etapa "MEGA FACELIFT — Fase 4: Dashboard": o histórico de orçamento
+  // (`?historicoOrcamento=1`, `lastChange`) saiu do Dashboard por inteiro —
+  // MonthInvestmentPaceNote continua montado com os MESMOS campos de
+  // ritmo (planned/actual/expectedToDate/sprints), agora com
+  // `lastChange={null}` explícito (suprime só o link de histórico, sem
+  // nenhuma edição em month-investment-summary.tsx — ver
+  // test-mega-facelift-fase4-dashboard.ts seção 7).
+  ok(
+    "MonthInvestmentPaceNote continua montado em page.tsx com os MESMOS campos de ritmo (planned/actual/expectedToDate/sprints), agora com lastChange={null} (histórico saiu pro módulo Metas)",
+    /<MonthInvestmentPaceNote/.test(pageCode) && /lastChange=\{null\}/.test(pageCode),
+  );
   ok(
     "PerformanceDiagnosticCard entra DEPOIS do bloco de Ritmo (investmentPaceNote), nunca substituindo nenhuma das barras",
     accountFollowUpCode.indexOf("investmentPaceNote && <div") < accountFollowUpCode.indexOf("<PerformanceDiagnosticCard"),
@@ -196,20 +210,29 @@ console.log("\n17/18 — Atalhos (Dashboard/Saldo/Fechamento/Relatório) continu
       /client\.balance_url && \{ label: "Saldo"/.test(pageCode) &&
       /client\.monthly_closing_sheet_url && \{ label: "Fechamento"/.test(pageCode),
   );
-  ok("link Relatório continua apontando pro MESMO /clients/[id]/relatorio", /href=\{`\/clients\/\$\{client\.id\}\/relatorio`\}/.test(pageCode));
+  // Fase 4: o link passou a vir de uma variável (`performanceHref`, CTA
+  // "Ver Performance →" contextual em vez do item solto "Relatório" da
+  // toolbar) — mesmo destino, nunca uma segunda URL.
+  ok(
+    "CTA de Performance continua apontando pro MESMO /clients/[id]/relatorio",
+    /const performanceHref = `\/clients\/\$\{client\.id\}\/relatorio`/.test(pageCode),
+  );
 }
 
 console.log("\n19 — Operação não sofre alteração nesta rodada (resumo + CTA, exatamente como estava)\n");
 {
   ok("bloco Operação continua resumo raso (Sprint atual/Última otimização/Saúde), nenhum Sprint/Tarefa/Histórico inline novo", /Sprint atual/.test(pageCode) && /Última otimização/.test(pageCode) && !pageCode.includes("<OperationSection"));
-  ok('CTA "Ver operação completa →" continua existindo, mesmo destino /operation', /Ver operação completa/.test(pageCode) && /href=\{`\/clients\/\$\{client\.id\}\/operation`\}/.test(pageCode));
+  // Fase 4: rótulo encurtado pra "Ver Operação →" (consistência com os
+  // demais CTAs entre módulos), mesmo destino /operation.
+  ok('CTA "Ver Operação →" continua existindo, mesmo destino /operation', /Ver Operação →/.test(pageCode) && pageCode.includes("${client.id}/operation"));
   ok("clientOperationalState/primaryReasonText (fonte da Saúde) continuam vindo do MESMO loadClientOperationalStates de sempre, sem relação com o objetivo selecionado", /loadClientOperationalStates\(supabase, currentMonthRange\(today\)\.firstDay, id\)/.test(pageCode));
 }
 
 console.log("\n20 — Demandas não sofrem alteração nesta rodada (contagem + top-3 + CTA, exatamente como estava)\n");
 {
   ok("Demandas continua usando loadPendenciasRawData/countOpenDemandas (MESMA fonte/regra de sempre)", /loadPendenciasRawData\(supabase, id\)/.test(pageCode) && /countOpenDemandas\(/.test(pageCode));
-  ok('preview continua limitado a 3 itens ("Ver todas →" pro resto)', /\.slice\(0, 3\)/.test(pageCode) && /Ver todas/.test(pageCode));
+  // Fase 4: rótulo encurtado pra "Ver Demandas →".
+  ok('preview continua limitado a 3 itens ("Ver Demandas →" pro resto)', /\.slice\(0, 3\)/.test(pageCode) && /Ver Demandas →/.test(pageCode));
 }
 
 // ---------------------------------------------------------------------------

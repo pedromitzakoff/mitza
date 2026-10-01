@@ -37,7 +37,11 @@ console.log("1 — Visão Geral do cliente (page.tsx): Taxa de conversão removi
   ok("page.tsx não importa mais ConversionRateCard (arquivo removido)", !pageSource.includes("conversion-rate-card"));
   ok("page.tsx não calcula mais cartsResultCount/salesResultCount/conversionRate (lógica órfã sem o card)", !/cartsResultCount|salesResultCount|conversionRate/.test(pageSource));
   ok("page.tsx não importa mais computeConversionRate (só o relatório usa, via report-data.ts)", !pageSource.includes("computeConversionRate"));
-  ok("SecondaryGoalsPerformance continua renderizado normalmente (só o que vinha depois dele saiu)", pageSource.includes("<SecondaryGoalsPerformance"));
+  // Etapa "MEGA FACELIFT — Fase 4: Dashboard": SecondaryGoalsPerformance
+  // (o que vinha depois da Taxa de conversão removida nesta rodada) saiu
+  // do Dashboard por inteiro numa etapa posterior — órfão, não deletado
+  // (ver test-mega-facelift-fase4-dashboard.ts seção 3).
+  ok("SecondaryGoalsPerformance não é mais renderizado em page.tsx (saiu pro módulo Metas, Fase 4)", !pageSource.includes("<SecondaryGoalsPerformance"));
 }
 
 // ---------------------------------------------------------------------------
