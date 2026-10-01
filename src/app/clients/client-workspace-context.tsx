@@ -1,6 +1,6 @@
 "use client";
 
-import { useWorkspaceContextLabel } from "@/components/workspace-drawer/workspace-provider";
+import { useActiveClientName, useWorkspaceContextLabel } from "@/components/workspace-drawer/workspace-provider";
 
 /**
  * MITZA 2.0 — Workspace Pessoal: registra o nome do cliente como o rótulo
@@ -12,5 +12,23 @@ import { useWorkspaceContextLabel } from "@/components/workspace-drawer/workspac
  */
 export function ClientWorkspaceContext({ name }: { name: string }) {
   useWorkspaceContextLabel(name);
+  return null;
+}
+
+/**
+ * Etapa "MEGA FACELIFT — Fase 4.5: Navegação da Carteira" (seção 10 do
+ * pedido) — registra o nome do cliente ativo pra Sidebar mostrar
+ * discretamente no bloco "Cliente", sem precisar de uma segunda consulta
+ * (dado já buscado por `clients/[id]/layout.tsx`, que monta este
+ * componente). Deliberadamente SEPARADO de `ClientWorkspaceContext` acima
+ * (campo próprio em `WorkspaceProvider`, `useActiveClientName`): aquele é
+ * tied a pathname exato (só sobrevive na MESMA rota que o registrou) — é
+ * pra rótulo de nota, não serviria pra persistir ao trocar de módulo do
+ * mesmo cliente (Dashboard -> Metas). Este fica montado em TODAS as
+ * sub-rotas do workspace (o `layout.tsx` que o renderiza nunca desmonta
+ * só por trocar de módulo), então sobrevive à troca.
+ */
+export function ActiveClientSidebarName({ name }: { name: string }) {
+  useActiveClientName(name);
   return null;
 }

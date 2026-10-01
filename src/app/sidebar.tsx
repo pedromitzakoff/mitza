@@ -6,6 +6,7 @@ import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "rea
 import { Tooltip } from "@/components/ui/tooltip";
 import {
   BarChart3,
+  Briefcase,
   ClipboardList,
   Clock,
   Database,
@@ -29,6 +30,7 @@ import { SubmitButton } from "@/app/submit-button";
 import { formatAgencyDateTime } from "@/lib/format";
 import type { UserRole } from "@/lib/supabase/database.types";
 import { buildWorkspaceHref, resolveActiveClientIdFromPathname, resolveCurrentSuffix } from "@/lib/client-workspace-nav";
+import { useWorkspace } from "@/components/workspace-drawer/workspace-provider";
 import {
   ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES,
   ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES,
@@ -171,9 +173,34 @@ interface NavItem {
  * trabalho do dia a dia, não só consultar). Constituição atual: Visão
  * Geral → Operação → Pendências → Timeline → Cliente (Relatórios/Clientes/
  * Sprints continuam cobertos por outros fluxos, mesmo raciocínio de
- * sempre). */
+ * sempre).
+ *
+ * Etapa "MEGA FACELIFT — Fase 4.5: Navegação da Carteira": "Clientes"
+ * volta pra navegação principal — não como o cadastro administrativo de
+ * antes (isso continua existindo via `/clients/new`/Configurações), mas
+ * como a NOVA casa pra localizar/abrir/organizar a carteira (busca +
+ * filtro por gestor/status + "Organizar carteira", ver `clients/page.tsx`),
+ * substituindo o papel que a árvore "Contas da Agência" cumpria sozinha
+ * dentro da própria Sidebar. A árvore em si (`AgencyAccountsTree`) não foi
+ * deletada — só passou a ser renderizada ali, dentro de `/clients`, nunca
+ * mais aqui (ver auditoria no relatório de entrega desta fase).
+ * "Timeline" permanece em Carteira: auditoria confirmou que tem função
+ * genuinamente distinta ("o que está acontecendo na agência inteira" —
+ * `lib/agency-timeline.ts`, todos os gestores/clientes) da Timeline por
+ * cliente (`/clients/[id]/timeline`, ainda um shell da Fase 1, sem
+ * conteúdo funcional nenhum ainda) — nunca redundante, por isso
+ * permanece, mesmo a estrutura sugerida no pedido não a listando
+ * explicitamente (seção 12 do pedido: "estrutura desejada, salvo
+ * descoberta importante na auditoria"). */
 const NAV_ITEMS: NavItem[] = [
   { label: "Visão Geral", href: "/", icon: LayoutGrid, isActive: (p) => p === "/", group: "principal" },
+  {
+    label: "Clientes",
+    href: "/clients",
+    icon: Briefcase,
+    isActive: (p) => p === "/clients" || p.startsWith("/clients/new"),
+    group: "principal",
+  },
   {
     label: "Operação",
     href: "/operation",
@@ -390,7 +417,6 @@ function useScrollEdges(): {
 
 function SidebarContent({
   profile,
-  agencyTree,
   pathname,
   mode,
   month,
@@ -398,7 +424,6 @@ function SidebarContent({
   toggleCollapsed,
 }: {
   profile: { name: string; role: UserRole };
-  agencyTree?: React.ReactNode;
   pathname: string;
   mode: string | null;
   month: string | null;
@@ -411,6 +436,11 @@ function SidebarContent({
   const flexivel = items.filter((item) => item.group === "flexivel");
   const initial = profile.name.trim().charAt(0).toUpperCase() || "?";
   const { scrollRef, contentRef, edges } = useScrollEdges();
+  // Etapa "MEGA FACELIFT — Fase 4.5" (seção 10 do pedido): nome do cliente
+  // ativo, registrado pelo `layout.tsx` do workspace via
+  // `useActiveClientName` — nenhuma busca/query nova aqui, só lê o
+  // contexto compartilhado (`WorkspaceProvider`, já envolve a Sidebar).
+  const { activeClientName } = useWorkspace();
 
   // Etapa "MEGA FACELIFT — Fase 1": "dentro de um cliente" é só a presença
   // de `/clients/[id]/...` no pathname (`resolveActiveClientIdFromPathname`,
@@ -474,16 +504,17 @@ function SidebarContent({
               </nav>
             </div>
 
-            {/* Recolhida (só desktop): não tenta mostrar a árvore no modo
-             * compacto, mesmo comportamento das demais seções da nav. Etapa
-             * "MEGA FACELIFT — Fase 1": a árvore "Contas da Agência" deixa
-             * de ser o mecanismo PRINCIPAL de entrar na Growth Infra de um
-             * cliente (isso passa a ser o bloco "Cliente" abaixo, uma vez
-             * dentro do workspace) — mas continua aqui, sem nenhuma mudança
-             * de comportamento, por ser a única forma hoje de ESCOLHER
-             * QUAL cliente abrir a partir da Carteira (busca + agrupamento
-             * por gestor + arrastar para reordenar `wallet_position`). */}
-            <div className={collapsed ? "md:hidden" : ""}>{agencyTree}</div>
+            {/* Etapa "MEGA FACELIFT — Fase 4.5: Navegação da Carteira"
+             * (seção 3 do pedido): a árvore "Contas da Agência" deixou de
+             * ocupar a Sidebar permanentemente — ESCOLHER qual cliente
+             * abrir (busca + agrupamento por gestor + status + arrastar
+             * para reordenar `wallet_position`) agora é papel da área
+             * "Clientes" (`/clients`, item da nav acima), onde a MESMA
+             * árvore/lógica de drag-and-drop continua vivendo, dentro de
+             * "Organizar carteira" — nunca reescrita, só realocada. A
+             * Sidebar volta a responder só "em qual nível do sistema estou
+             * e para onde posso ir?", nunca mais como seletor de dezenas
+             * de clientes. */}
 
             {/* Etapa "MEGA FACELIFT — Fase 1: Novo Shell da Growth Infra":
              * bloco "Cliente" — só existe enquanto a rota atual está
@@ -492,14 +523,25 @@ function SidebarContent({
              * `account-follow-up-panel.tsx`/`globals.css` — nunca uma cor
              * nova) é o único sinal de destaque necessário pra deixar
              * claro que tudo daqui pra baixo pertence ao cliente
-             * selecionado; o nome/avatar real continua só no
-             * `ClientWorkspaceHeader`, no topo do conteúdo. */}
+             * selecionado; avatar/status continuam só no
+             * `ClientWorkspaceHeader`, no topo do conteúdo (Fase 4.5,
+             * seção 10: o nome abaixo é só contexto visual discreto —
+             * nunca repete avatar/status/posição X de Y, e some no modo
+             * recolhido/mobile junto com o resto do texto da Sidebar). */}
             {activeClientId && (
               <div className="mt-3 border-t border-sidebar-border px-2.5 pt-3">
                 <div className="rounded-lg bg-sand-subtle/70 p-2">
                   <span className={`px-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
                     Cliente
                   </span>
+                  {activeClientName && (
+                    <p
+                      className={`truncate px-0.5 text-[13px] font-medium text-sidebar-foreground ${collapsed ? "md:hidden" : ""}`}
+                      title={activeClientName}
+                    >
+                      {activeClientName}
+                    </p>
+                  )}
 
                   <div className="mt-1.5 flex flex-col gap-0.5">
                     <span className={`px-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-subtle ${collapsed ? "md:hidden" : ""}`}>
@@ -687,13 +729,11 @@ function SidebarMode({ onMode }: { onMode: (mode: string | null, month: string |
  */
 export function Sidebar({
   profile,
-  agencyTree,
   mobileOpen,
   onOpen,
   onClose,
 }: {
   profile: { name: string; role: UserRole };
-  agencyTree?: React.ReactNode;
   mobileOpen: boolean;
   onOpen: () => void;
   onClose: () => void;
@@ -733,7 +773,6 @@ export function Sidebar({
           fallback={
             <SidebarContent
               profile={profile}
-              agencyTree={agencyTree}
               pathname={pathname}
               mode={null}
               month={null}
@@ -746,7 +785,6 @@ export function Sidebar({
             onMode={(mode, month) => (
               <SidebarContent
                 profile={profile}
-                agencyTree={agencyTree}
                 pathname={pathname}
                 mode={mode}
                 month={month}

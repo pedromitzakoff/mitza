@@ -15,6 +15,17 @@ interface WorkspaceContextValue {
    * `useWorkspaceContextLabel`. */
   contextLabel: string;
   setContextLabelOverride: (label: string | null) => void;
+  /** Nome do cliente ativo (Etapa "MEGA FACELIFT — Fase 4.5: Navegação da
+   * Carteira", seção 10 do pedido) — `null` fora de `/clients/[id]/**`.
+   * Deliberadamente um campo PRÓPRIO, nunca reaproveitando `contextLabel`
+   * acima: aquele é tied a pathname exato (só sobrevive enquanto a MESMA
+   * rota que o registrou está montada — pensado pra rótulo de nota, não
+   * pra persistir durante a navegação entre módulos do mesmo cliente).
+   * Este é registrado pelo `layout.tsx` do workspace (montado em TODAS as
+   * sub-rotas de `/clients/[id]/**`), então sobrevive à troca de módulo
+   * (Dashboard -> Metas) e só volta a `null` ao sair do workspace. */
+  activeClientName: string | null;
+  setActiveClientName: (name: string | null) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -36,6 +47,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   // nome do cliente da página anterior nunca vaza pra próxima sem precisar
   // de um efeito extra só pra "limpar" estado).
   const [override, setOverride] = useState<{ path: string; label: string } | null>(null);
+  const [activeClientName, setActiveClientName] = useState<string | null>(null);
 
   const setContextLabelOverride = useCallback(
     (label: string | null) => {
@@ -54,8 +66,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       contextPath: pathname,
       contextLabel,
       setContextLabelOverride,
+      activeClientName,
+      setActiveClientName,
     }),
-    [isOpen, pathname, contextLabel, setContextLabelOverride],
+    [isOpen, pathname, contextLabel, setContextLabelOverride, activeClientName],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
@@ -77,4 +91,20 @@ export function useWorkspaceContextLabel(label: string): void {
     setContextLabelOverride(label);
     return () => setContextLabelOverride(null);
   }, [label, setContextLabelOverride]);
+}
+
+/** Registra o nome do cliente ativo (Etapa "MEGA FACELIFT — Fase 4.5",
+ * seção 10 do pedido) — chamado pelo `layout.tsx` do workspace, que
+ * continua montado em QUALQUER módulo de `/clients/[id]/**` (Dashboard,
+ * Metas, Performance...), então o nome sobrevive à troca de módulo do
+ * mesmo cliente e só volta a `null` ao desmontar (saiu do workspace).
+ * Reage a `name` mudar sem desmontar (troca de cliente via seletor/
+ * anterior-próximo, que o Next.js pode resolver sem desmontar o layout). */
+export function useActiveClientName(name: string): void {
+  const { setActiveClientName } = useWorkspace();
+
+  useEffect(() => {
+    setActiveClientName(name);
+    return () => setActiveClientName(null);
+  }, [name, setActiveClientName]);
 }

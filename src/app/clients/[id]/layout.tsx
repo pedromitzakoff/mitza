@@ -3,6 +3,7 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { loadAgencyAccountsTree } from "@/lib/agency-accounts-tree-data";
 import { flattenAgencyTree, resolveWalletSequence } from "@/lib/agency-accounts-tree";
 import { ClientWorkspaceHeader } from "../client-workspace-header";
+import { ActiveClientSidebarName } from "../client-workspace-context";
 
 /**
  * Layout compartilhado do workspace do cliente (Etapa "MITZA —
@@ -46,6 +47,7 @@ export default async function ClientWorkspaceLayout({
 
   return (
     <div className="flex min-h-full flex-col">
+      <ActiveClientSidebarName name={client.name} />
       <ClientWorkspaceHeader
         client={{ id: client.id, name: client.name, avatarUrl: client.avatar_url, status: client.status }}
         prevId={sequence?.prevId ?? null}

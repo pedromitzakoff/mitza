@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { getCurrentProfile } from "@/lib/auth";
 import { AppShell } from "./app-shell";
-import { AgencyAccountsTree } from "./agency-accounts-tree";
 import { ToastProvider } from "./toast-provider";
 import { NavigationProgress } from "./navigation-progress";
 
@@ -38,9 +37,7 @@ export default async function RootLayout({
         <NavigationProgress />
         <ToastProvider>
           {profile ? (
-            <AppShell profile={profile} agencyTree={<AgencyAccountsTree />}>
-              {children}
-            </AppShell>
+            <AppShell profile={profile}>{children}</AppShell>
           ) : (
             children
           )}

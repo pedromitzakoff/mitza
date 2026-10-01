@@ -32,11 +32,9 @@ import { WorkspaceDrawer } from "@/components/workspace-drawer/workspace-drawer"
  */
 export function AppShell({
   profile,
-  agencyTree,
   children,
 }: {
   profile: { name: string; role: UserRole };
-  agencyTree?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -46,7 +44,6 @@ export function AppShell({
       <div className="flex min-h-dvh md:items-start">
         <Sidebar
           profile={profile}
-          agencyTree={agencyTree}
           mobileOpen={mobileOpen}
           onOpen={() => setMobileOpen(true)}
           onClose={() => setMobileOpen(false)}

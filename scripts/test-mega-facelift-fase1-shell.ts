@@ -77,9 +77,20 @@ console.log("\n3 — ClientModuleLink reaproveita o mecanismo existente (buildWo
   ok("estado ativo compara contra o SUFIXO resolvido (resolveCurrentSuffix), não contra pathname bruto", /const active = item\.suffix === currentSuffix/.test(sidebarSource));
 }
 
-console.log("\n4 — Árvore 'Contas da Agência': continua montada na Sidebar nesta fase (não removida silenciosamente)\n");
+console.log("\n4 — Árvore 'Contas da Agência': Fase 1 a mantinha montada na Sidebar; Fase 4.5 ('Navegação da Carteira') a realocou pra /clients — não removida silenciosamente, nunca deletada\n");
 {
-  ok("agencyTree continua renderizado na Sidebar, sem mudança de comportamento", sidebarSource.includes("<div className={collapsed ? \"md:hidden\" : \"\"}>{agencyTree}</div>"));
+  // Etapa "MEGA FACELIFT — Fase 4.5: Navegação da Carteira" (seção 3 do
+  // pedido): a árvore deixou de ocupar a Sidebar permanentemente — ver
+  // cobertura completa em test-mega-facelift-fase45-carteira.ts. Aqui só
+  // confirma que a Sidebar não tenta mais renderizá-la (nem a prop
+  // `agencyTree`, removida de Sidebar/SidebarContent/AppShell) e que o
+  // componente em si (`agency-accounts-tree.tsx`) continua existindo e
+  // sendo usado — agora como import de `/clients/page.tsx`.
+  ok("Sidebar não renderiza mais a árvore (linha antiga removida)", !sidebarSource.includes("{agencyTree}"));
+  ok("Sidebar não recebe mais a prop agencyTree (plumbing removido junto, só o que esta fase causou)", !sidebarSource.includes("agencyTree"));
+  const clientsPageSource = loadSource("src", "app", "clients", "page.tsx");
+  ok("a árvore continua existindo e agora é importada por /clients/page.tsx, nunca deletada", clientsPageSource.includes('import { AgencyAccountsTree } from "../agency-accounts-tree"') && clientsPageSource.includes("<AgencyAccountsTree />"));
+  ok("agency-accounts-tree.tsx continua no disco, intocado", loadSource("src", "app", "agency-accounts-tree.tsx").includes("export async function AgencyAccountsTree"));
 }
 
 console.log("\n5 — WORKSPACE_SECTION_SUFFIXES generalizado pra 7 módulos; '/edit' deixou de ser replicável (mudança de comportamento explícita, não uma remoção de funcionalidade)\n");

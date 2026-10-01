@@ -21,15 +21,40 @@ import type { TrafficChannel } from "@/lib/traffic-channels";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { filterRowsToPrimaryGoal } from "@/lib/client-plan";
 import { ClientsFilters } from "./clients-filters";
+import { AgencyAccountsTree } from "../agency-accounts-tree";
 
 /**
- * Listagem simples de clientes — nome, status contratual, tempo de
- * relacionamento, projeção do mês, gestor principal, com busca/filtro. Não
- * duplica as métricas completas da Visão Geral: é só um diretório pra achar
- * e abrir um cliente rápido. Saúde/atividade operacional continuam
- * calculadas (buildOperationClientCard) mas não aparecem aqui — só na
- * Sprints e na Visão Geral, pra não misturar status contratual com
- * operacional nesta tela.
+ * `/clients` — Etapa "MEGA FACELIFT — Fase 4.5: Navegação da Carteira":
+ * vira a casa oficial da pergunta "qual cliente quero abrir ou
+ * administrar?", substituindo o papel que a árvore "Contas da Agência"
+ * cumpria sozinha dentro da Sidebar (seção 4/5 do pedido). A listagem em
+ * si (nome, status contratual, tempo de relacionamento, projeção do mês,
+ * gestor principal, busca/filtro por gestor/status) já existia desde antes
+ * desta fase — auditoria confirmou que já cobria quase tudo pedido, só
+ * precisando de cabeçalho/contexto novos. Não duplica as métricas
+ * completas do Dashboard: é só um diretório pra achar e abrir um cliente
+ * rápido. Saúde/atividade operacional continuam calculadas
+ * (buildOperationClientCard) mas não aparecem aqui — só na Operação e no
+ * Dashboard, pra não misturar status contratual com operacional nesta
+ * tela.
+ *
+ * Agrupamento por gestor (seção 7 do pedido): mantido como LISTA ÚNICA +
+ * filtro "Gestor" (opção A do pedido, já existente) — nunca um
+ * agrupamento visual que obrigue navegar por pastas (era exatamente o
+ * problema da árvore antiga); a busca já funciona transversalmente, sem
+ * depender de abrir pasta nenhuma.
+ *
+ * "Organizar carteira" (seção 8 do pedido — wallet_position/drag-and-drop):
+ * a mesma árvore "Contas da Agência" de sempre (`AgencyAccountsTree`,
+ * busca + agrupamento por gestor + arrastar pra reordenar/transferir),
+ * agora realocada pra aqui — NENHUMA linha da lógica de persistência
+ * (`agency-accounts-tree-actions.ts`/`agency-wallet-position.ts`) foi
+ * reescrita, só o lugar onde o componente aparece. Fica dentro de um
+ * `<details>` recolhível (mesmo padrão já usado pra "Configurar funis" em
+ * Performance) — é organização, não o fluxo principal desta tela. Mantém
+ * a superfície `bg-sidebar-surface` original (o componente foi desenhado
+ * contra ela) num card próprio, em vez de herdar o fundo branco da
+ * página — nenhuma cor nova, só o token que ele já usava.
  */
 export default async function ClientsPage({
   searchParams,
@@ -312,7 +337,10 @@ export default async function ClientsPage({
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-foreground">Clientes</h1>
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Clientes</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">Localizar e abrir qualquer cliente da carteira.</p>
+        </div>
         {isAdmin && (
           <Link
             href="/clients/new"
@@ -391,6 +419,21 @@ export default async function ClientsPage({
           </EmptyState>
         )}
       </div>
+
+      {/* Etapa "MEGA FACELIFT — Fase 4.5": "Organizar carteira" — mesma
+          árvore "Contas da Agência" de sempre (busca + agrupamento por
+          gestor + arrastar pra reordenar/transferir `wallet_position`),
+          realocada da Sidebar pra aqui (seção 8 do pedido). Recolhida por
+          padrão (é organização, não o fluxo principal desta tela) — mesmo
+          padrão de "Configurar funis" em Performance. */}
+      <details className="mt-6 rounded-lg border border-border">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-foreground">Organizar carteira</summary>
+        <div className="border-t border-border p-3">
+          <div className="overflow-hidden rounded-lg bg-sidebar-surface">
+            <AgencyAccountsTree />
+          </div>
+        </div>
+      </details>
     </div>
   );
 }
