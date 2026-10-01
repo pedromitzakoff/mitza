@@ -381,6 +381,29 @@ export function getRemainingEligibleDaysIncludingToday(
   return getEligibleRedistributionDates(allDates, effectiveDate).eligibleDates.length;
 }
 
+/**
+ * "Ritmo necessário"/"meta diária necessária" pros dias restantes do mês —
+ * Etapa "MEGA FACELIFT — Fase 2: Metas". Mesma fórmula de
+ * `computeMonthlyBudgetPlan.recommendedDaily` (`remaining / dias elegíveis
+ * restantes`), generalizada: aquela função é sempre em dinheiro
+ * (`monthlyBudget`/`monthActual`); esta aceita qualquer métrica CUMULATIVA
+ * (dinheiro OU contagem de resultado) sem precisar fingir uma sprint pra
+ * satisfazer a assinatura dela. Nunca usada pra métricas de
+ * razão/eficiência (CPA/CPL/ROAS) — "ritmo necessário" só faz sentido
+ * matematicamente pra quantidade que se acumula ao longo do mês.
+ *
+ * `null` quando não há meta configurada (nada a perseguir) ou quando não
+ * restam dias elegíveis (mês encerrado) — nunca `0` fabricado nesses casos
+ * (0 ainda seria uma resposta real: "a meta já foi atingida, nenhum ritmo
+ * adicional necessário").
+ */
+export function computeNeededDailyRate(target: number | null, realized: number, eligibleDaysCount: number): number | null {
+  if (target === null) return null;
+  if (eligibleDaysCount <= 0) return null;
+  const remaining = Math.max(target - realized, 0);
+  return remaining / eligibleDaysCount;
+}
+
 export interface MonthlyBudgetPlanSprintInput {
   sprintId: string;
   startDate: string;
