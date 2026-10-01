@@ -32,6 +32,29 @@ import { ReportTableSection } from "./report-table-section";
 const CAMPAIGNS_TABLE_ID = "campanhas";
 
 /**
+ * Etapa "MEGA FACELIFT — Fase 3: Performance" — abas da investigação
+ * progressiva (seção 13/14 do pedido: "o usuário precisa saber em que
+ * nível está analisando", "clareza > quantidade simultânea de
+ * informação"). Só usadas quando `sectioned` é `true` (página interna) —
+ * `ids` são os MESMOS de `document.tables`/`table.id`, nenhuma segunda
+ * identidade. A ordem reproduz a descida pedida: Resultado (geral) →
+ * Resultado Diário → Campanha → Conjunto/Público → Criativo →
+ * Posicionamento.
+ */
+const SECTION_TABS: { id: string; label: string }[] = [
+  { id: "resumo", label: "Visão geral" },
+  { id: "resultado-diario", label: "Resultado diário" },
+  { id: "campanhas", label: "Campanhas" },
+  { id: "publicos", label: "Públicos" },
+  { id: "criativos", label: "Criativos" },
+  { id: "posicionamentos", label: "Posicionamentos" },
+];
+
+/** Mesmos 3 ids de `table.nameFilterable` (`report-document.ts`) — única
+ * lista, nunca duplicada por conta própria aqui. */
+const FILTERABLE_SECTION_IDS = new Set(["campanhas", "publicos", "criativos"]);
+
+/**
  * "Leitura do período" — movida de `report-body.tsx` pra cá (Etapa "Filtro
  * no topo afeta o dashboard inteiro") porque agora vive dentro do mesmo
  * componente que decide o Resumo real vs. filtrado. Comportamento e visual
@@ -150,12 +173,34 @@ function toFilterableRows(document: PerformanceReportDocument, dimensionId: stri
  * filtro ativo nas tabelas — não existe rótulo de objetivo pra construir
  * um Resumo com sentido nesse caso.
  */
-export function ReportFilterableTables({ document }: { document: PerformanceReportDocument }) {
+export function ReportFilterableTables({
+  document,
+  sectioned = false,
+}: {
+  document: PerformanceReportDocument;
+  /** Etapa "MEGA FACELIFT — Fase 3: Performance" — `false` (default)
+   * preserva o corpo de sempre (todas as tabelas empilhadas, usado pelo
+   * link público). `true` (só a página interna) mostra uma seção por vez,
+   * guiada pelas abas de `SECTION_TABS` — mesmos `effectiveTables`/
+   * `filteredSummary` computados abaixo, nunca uma segunda lógica de
+   * filtro/recálculo. */
+  sectioned?: boolean;
+}) {
   const filterableTables = useMemo(() => document.tables.filter((table) => table.nameFilterable), [document.tables]);
   const [mode, setMode] = useState<NameFilterMode>("contains");
   const [dimensionId, setDimensionId] = useState<string>(filterableTables[0]?.id ?? "");
   const [text, setText] = useState("");
+  const [activeSection, setActiveSection] = useState<string>("resumo");
   const formId = useId();
+
+  function handleSectionTabClick(tabId: string) {
+    setActiveSection(tabId);
+    if (FILTERABLE_SECTION_IDS.has(tabId)) setDimensionId(tabId);
+    // Cada aba começa sem filtro — levar um texto digitado numa aba pra
+    // outra dimensão silenciosamente seria confuso (seção 14: "em que
+    // nível estou analisando" precisa ser sempre inequívoco).
+    setText("");
+  }
 
   const normalizedText = text.trim().toLowerCase();
   const isFiltering = dimensionId !== "" && normalizedText !== "";
@@ -230,10 +275,32 @@ export function ReportFilterableTables({ document }: { document: PerformanceRepo
 
   const isSummaryFiltered = filteredSummary !== null;
 
+  // Etapa "MEGA FACELIFT — Fase 3: Performance": em modo `sectioned`, o
+  // controle de filtro só aparece dentro de uma aba filtrável — a aba JÁ
+  // decide a dimensão, nunca mais um segundo seletor pra mesma escolha
+  // (seção 4 do pedido: "não crie filtros redundantes").
+  const showFilterControls = filterableTables.length > 0 && (!sectioned || FILTERABLE_SECTION_IDS.has(activeSection));
+  const activeTable = sectioned ? effectiveTables.find((table) => table.id === activeSection) : undefined;
+
   return (
     <>
-      {filterableTables.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
+      {sectioned && (
+        <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-1 rounded-full border border-[#D9D3C9] bg-white p-1 text-xs font-semibold">
+          {SECTION_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => handleSectionTabClick(tab.id)}
+              className={`rounded-full px-3 py-1.5 ${activeSection === tab.id ? "bg-[#17171A] text-white" : "text-[#6F6B65] hover:text-[#17171A]"}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {showFilterControls && (
+        <div className={`flex flex-wrap items-center gap-2 ${sectioned ? "mt-3" : ""}`}>
           <select
             aria-label="Modo do filtro"
             value={mode}
@@ -243,18 +310,22 @@ export function ReportFilterableTables({ document }: { document: PerformanceRepo
             <option value="contains">contém</option>
             <option value="not_contains">não contém</option>
           </select>
-          <select
-            aria-label="Dimensão do filtro"
-            value={dimensionId}
-            onChange={(event) => setDimensionId(event.target.value)}
-            className="min-h-9 rounded-lg border border-[#D9D3C9] bg-white px-2 text-xs text-[#17171A]"
-          >
-            {filterableTables.map((table) => (
-              <option key={table.id} value={table.id}>
-                {table.nameColumnHeader}
-              </option>
-            ))}
-          </select>
+          {/* Em modo sectioned a aba ativa já É a dimensão — este seletor
+              desaparece pra nunca duplicar a mesma escolha de duas formas. */}
+          {!sectioned && (
+            <select
+              aria-label="Dimensão do filtro"
+              value={dimensionId}
+              onChange={(event) => setDimensionId(event.target.value)}
+              className="min-h-9 rounded-lg border border-[#D9D3C9] bg-white px-2 text-xs text-[#17171A]"
+            >
+              {filterableTables.map((table) => (
+                <option key={table.id} value={table.id}>
+                  {table.nameColumnHeader}
+                </option>
+              ))}
+            </select>
+          )}
           <input
             id={`${formId}-filter-text`}
             type="text"
@@ -282,27 +353,41 @@ export function ReportFilterableTables({ document }: { document: PerformanceRepo
         </p>
       )}
 
-      <section id="resumo" className={`pb-6 sm:pb-9 ${filterableTables.length > 0 ? "mt-6 border-t border-[#D9D3C9] pt-6" : ""}`}>
-        <h2 className="hidden text-2xl font-bold tracking-tight text-[#17171A] sm:block">
-          {isSummaryFiltered ? "Resumo filtrado" : "Resumo do período"}
-        </h2>
-        <div className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#6F6B65] sm:hidden">
-          {isSummaryFiltered ? "Resumo filtrado" : "Resumo do período"}
-        </div>
-        <div className="mt-2 sm:mt-5">
-          <ReportKpiGrid summary={summaryBlock} hero={hero} />
-        </div>
-        {!isFiltering && <ConversionRateNote conversionRate={document.conversionRate} />}
-        {/* "Leitura do período" é uma narrativa calculada pro período INTEIRO
-            (melhor campanha, variação vs. meta da carteira inteira) — some
-            enquanto o filtro está ativo pra nunca ficar contraditória com um
-            Resumo que já mudou de números. */}
-        {!isFiltering && <PeriodReading document={document} />}
-      </section>
+      {(!sectioned || activeSection === "resumo") && (
+        <section id="resumo" className={`pb-6 sm:pb-9 ${filterableTables.length > 0 || sectioned ? "mt-6 border-t border-[#D9D3C9] pt-6" : ""}`}>
+          <h2 className="hidden text-2xl font-bold tracking-tight text-[#17171A] sm:block">
+            {isSummaryFiltered ? "Resumo filtrado" : "Resumo do período"}
+          </h2>
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#6F6B65] sm:hidden">
+            {isSummaryFiltered ? "Resumo filtrado" : "Resumo do período"}
+          </div>
+          {sectioned && (
+            <p className="mt-1.5 text-xs text-[#6F6B65]">Como o resultado foi produzido no período — origem e eficiência, não ritmo (isso é Metas).</p>
+          )}
+          <div className="mt-2 sm:mt-5">
+            <ReportKpiGrid summary={summaryBlock} hero={hero} />
+          </div>
+          {!isFiltering && <ConversionRateNote conversionRate={document.conversionRate} />}
+          {/* "Leitura do período" é uma narrativa calculada pro período INTEIRO
+              (melhor campanha, variação vs. meta da carteira inteira) — some
+              enquanto o filtro está ativo pra nunca ficar contraditória com um
+              Resumo que já mudou de números. */}
+          {!isFiltering && <PeriodReading document={document} />}
+        </section>
+      )}
 
-      {effectiveTables.map((table) => (
-        <ReportTableSection key={table.id} table={table} />
-      ))}
+      {!sectioned && effectiveTables.map((table) => <ReportTableSection key={table.id} table={table} />)}
+
+      {sectioned && activeTable && (
+        <div className="mt-6 border-t border-[#D9D3C9] pt-6">
+          {activeSection === "posicionamentos" && (
+            <p className="mb-3 text-xs text-[#6F6B65]">
+              Visão agregada da conta no período inteiro — ainda sem quebra por campanha (limitação conhecida, documentada).
+            </p>
+          )}
+          <ReportTableSection table={activeTable} />
+        </div>
+      )}
     </>
   );
 }

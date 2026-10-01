@@ -36,6 +36,8 @@ export function ReportHeader({
   periodControl,
   copyLinkControl,
   clearsMobileMenuButton = false,
+  title = "Relatório de Performance",
+  subtitle,
 }: {
   clientName: string;
   /** Presente só na página interna — vira link "← Cliente" pra
@@ -57,6 +59,15 @@ export function ReportHeader({
    * acima). `/r/[token]` nunca é renderizada dentro do `AppShell`, então
    * nunca precisa desse respiro. */
   clearsMobileMenuButton?: boolean;
+  /** Etapa "MEGA FACELIFT — Fase 3: Performance": título do módulo —
+   * default preserva EXATAMENTE o texto de sempre ("Relatório de
+   * Performance"), usado intocado pelo link público (`/r/[token]`, que
+   * nunca passa esta prop). A página interna passa "Performance" — o
+   * módulo dentro da Growth Infra, não o documento. */
+  title?: string;
+  /** Linha curta sob o título — `undefined` (default) não renderiza nada,
+   * mesmo espaço de sempre. Só a página interna passa algo aqui. */
+  subtitle?: string;
 }) {
   return (
     <header className={clearsMobileMenuButton ? "pt-14 md:pt-0" : undefined}>
@@ -68,7 +79,8 @@ export function ReportHeader({
         <p className="text-sm font-semibold text-[#6F6B65]">{clientName}</p>
       )}
 
-      <h1 className="mt-0.5 text-xl font-bold tracking-tight text-[#17171A] sm:text-2xl">Relatório de Performance</h1>
+      <h1 className="mt-0.5 text-xl font-bold tracking-tight text-[#17171A] sm:text-2xl">{title}</h1>
+      {subtitle && <p className="mt-0.5 text-sm text-[#6F6B65]">{subtitle}</p>}
 
       <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
         <div className="min-w-0 flex-1 sm:flex-none">{periodControl}</div>

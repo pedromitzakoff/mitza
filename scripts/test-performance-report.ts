@@ -382,7 +382,10 @@ console.log("\n17 — Etapa 'Filtro no topo afeta o dashboard inteiro': UM contr
     "ReportTableSection não tem NENHUMA lógica de filtro própria — vive só em ReportFilterableTables",
     !/NameFilterControl|filterMode|filterText|matchesNameFilter/.test(tableSectionSource),
   );
-  ok("ReportBody delega pra ReportFilterableTables, passando o document inteiro (não só as tabelas)", /<ReportFilterableTables document=\{document\} \/>/.test(bodySource));
+  ok(
+    "ReportBody delega pra ReportFilterableTables, passando o document inteiro (não só as tabelas) — Etapa 'MEGA FACELIFT — Fase 3' adicionou 'sectioned' como prop extra opcional, mesma delegação",
+    /<ReportFilterableTables document=\{document\}/.test(bodySource),
+  );
   ok("ReportBody não monta mais o Resumo do período/KPI grid diretamente — isso virou parte de ReportFilterableTables", !/<ReportKpiGrid/.test(bodySource));
   ok("dimensão do filtro só lista tabelas com nameFilterable (Resultado Diário nunca aparece como opção)", /tables\.filter\(\(table\) => table\.nameFilterable\)/.test(filterableSource));
   ok("dois modos: contém / não contém", /contém<\/option>/.test(filterableSource) && /não contém<\/option>/.test(filterableSource));

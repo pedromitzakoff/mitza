@@ -11,7 +11,6 @@ import { defaultReportPeriod } from "@/lib/client-reports";
 import { fetchClientReportDetail } from "../../client-report-data";
 import { ClientReportWizard } from "../../client-report-wizard";
 import { FunnelsSection } from "../../funnels-section";
-import { Section } from "../../section";
 import { ReportPeriodControl } from "./report-period-control";
 import { buildReportPdfHref } from "./report-period-nav";
 import { ReportBody } from "./report-body";
@@ -140,6 +139,8 @@ export default async function ClientPerformanceReportPage({
         backHref={`/clients/${client.id}`}
         pdfHref={pdfHref}
         clearsMobileMenuButton
+        title="Performance"
+        subtitle="O que está produzindo ou prejudicando o resultado deste cliente."
         periodControl={
           <ReportPeriodControl basePath={basePath} activePreset={activePreset} customStart={period.start} customEnd={period.end} today={today} view={view} />
         }
@@ -148,6 +149,7 @@ export default async function ClientPerformanceReportPage({
 
       <ReportBody
         document={document}
+        sectioned
         topControls={
           document.activeFunnels.length > 0 ? (
             <ReportFunnelSelector basePath={basePath} activePreset={activePreset} period={period} view={view} funnels={document.activeFunnels} />
@@ -155,9 +157,18 @@ export default async function ClientPerformanceReportPage({
         }
       />
 
-      <Section title="Funis">
-        <FunnelsSection clientId={id} returnTo={returnTo} funnels={clientFunnels} campaigns={funnelClassificationCampaigns} isAdmin={isAdmin} />
-      </Section>
+      {/* Etapa "MEGA FACELIFT — Fase 3: Performance": CRUD de funis é
+          configuração, não investigação — fica recolhido por padrão pra não
+          competir visualmente com o fluxo principal (seção 14 do pedido),
+          mas continua sempre alcançável (nunca escondido por completo).
+          `FunnelsSection`/`client_funnels`/`campaign_funnel_assignments`
+          intocados. */}
+      <details className="mt-6 rounded-lg border border-overview-border">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-overview-text-primary">Configurar funis</summary>
+        <div className="border-t border-overview-border px-4 py-4">
+          <FunnelsSection clientId={id} returnTo={returnTo} funnels={clientFunnels} campaigns={funnelClassificationCampaigns} isAdmin={isAdmin} />
+        </div>
+      </details>
 
       {isNewClientReport && (
         <ClientReportWizard

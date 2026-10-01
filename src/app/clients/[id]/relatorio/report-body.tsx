@@ -77,7 +77,22 @@ function FunnelPanorama({
  * componente de corpo próprio por visão). O painorama de funis aparece só na
  * Visão geral, acima das tabelas.
  */
-export function ReportBody({ document, topControls }: { document: PerformanceReportDocument; topControls?: React.ReactNode }) {
+export function ReportBody({
+  document,
+  topControls,
+  sectioned = false,
+}: {
+  document: PerformanceReportDocument;
+  topControls?: React.ReactNode;
+  /** Etapa "MEGA FACELIFT — Fase 3: Performance" — `false` (default)
+   * preserva EXATAMENTE o comportamento de sempre (todas as tabelas
+   * empilhadas), usado intocado pelo link público (`/r/[token]`, que nunca
+   * passa esta prop). A página interna passa `true`: `ReportFilterableTables`
+   * passa a mostrar só UMA seção por vez (abas), nunca uma segunda
+   * implementação de corpo — mesmos dados/cálculos, só a apresentação
+   * progressiva (seção 14 do pedido: "clareza > quantidade simultânea"). */
+  sectioned?: boolean;
+}) {
   const methodologyNote = document.summary.status === "ok" ? document.summary.note : null;
 
   return (
@@ -96,7 +111,7 @@ export function ReportBody({ document, topControls }: { document: PerformanceRep
         </p>
       )}
 
-      <ReportFilterableTables document={document} />
+      <ReportFilterableTables document={document} sectioned={sectioned} />
 
       <div className="border-t border-[#D9D3C9] pt-4 sm:pt-5">
         {methodologyNote && <p className="text-xs text-[#6F6B65] sm:hidden">{methodologyNote}</p>}
