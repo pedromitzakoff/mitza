@@ -67,9 +67,12 @@ function withParam(url: string, param: string): string {
  * rota/loader/pipeline da Fase 1:
  *
  * 1. PERFORMANCE — `AccountFollowUpPanel` (KPIs + ritmo do mês, já existia
- *    aqui) + `SecondaryGoalsPerformance`/`ConversionRateCard`, com um CTA
- *    "Ver relatório completo →" pra `/relatorio` (que continua existindo
- *    intacto — mesma Camada 1/2, nenhum cálculo duplicado).
+ *    aqui) + `SecondaryGoalsPerformance`/`ConversionRateCard`. O CTA de
+ *    aprofundamento que ficava no fim deste bloco foi removido — pedido
+ *    explícito de simplificação, já que o link "Relatório" na barra de
+ *    contexto (topo, junto de Dashboard/Saldo/Fechamento) cobre o mesmo
+ *    destino (`/relatorio`, que continua existindo intacto — mesma Camada
+ *    1/2, nenhum cálculo duplicado).
  * 2. OPERAÇÃO — resumo leve (sprint atual, última otimização, saúde/motivo
  *    do CPA — os MESMOS dados/funções já usados por `/operation` e pela
  *    fila global de Operação, nunca uma segunda implementação) com CTA
@@ -482,7 +485,10 @@ export default async function ClientPage({
 
       {/* PERFORMANCE — "o que está acontecendo?" (seção 7 do pedido de
           correção): KPIs + ritmo do mês (já existia aqui) + metas
-          secundárias/conversão, com CTA pro Relatório completo (`/relatorio`,
+          secundárias/conversão — rótulos "Performance do mês"/"Ritmo do mês"
+          e o CTA de relatório completo que ficava aqui embaixo foram
+          removidos (pedido explícito de simplificação); o link "Relatório"
+          na barra de contexto acima cobre o mesmo destino (`/relatorio`,
           reaproveitado 100%, nenhum cálculo duplicado). */}
       <div className="mt-6">
         <AccountFollowUpPanel
@@ -523,12 +529,6 @@ export default async function ClientPage({
       <SecondaryGoalsPerformance goals={secondaryGoalsPerformance} />
 
       <ConversionRateCard conversionRate={conversionRate} />
-
-      <div className="mt-2 flex justify-end">
-        <Link href={`/clients/${client.id}/relatorio`} className="text-xs font-medium text-brand hover:underline">
-          Ver relatório completo →
-        </Link>
-      </div>
 
       {/* OPERAÇÃO — "estamos executando corretamente?" (seção 9 do pedido de
           correção): resumo leve (sprint atual, última otimização, saúde do

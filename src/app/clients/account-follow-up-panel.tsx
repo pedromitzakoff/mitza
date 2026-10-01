@@ -53,6 +53,12 @@ export interface LastOptimizationInfo {
  *    Pós-Facelift") DENTRO da mesma seção "Ritmo do mês", e "Resultados por
  *    canal" em largura total, fechando o bloco.
  *
+ * Pedido explícito de simplificação: os rótulos impressos "Performance do
+ * mês" (acima dos KPIs) e "Ritmo do mês" (acima das barras) foram
+ * removidos — a hierarquia de 3 camadas acima continua valendo
+ * estruturalmente (é como o layout se organiza), só não aparece mais como
+ * texto na tela.
+ *
  * Etapa "Remoção do Diagnóstico Textual": o diagnóstico único por extenso
  * (`RitmoDiagnostic` — "Resultados: Abaixo do ritmo esperado · Investimento:
  * ...", inclusive as variantes "Dentro do ritmo esperado"/só uma leitura)
@@ -132,35 +138,18 @@ export function AccountFollowUpPanel({
 
   return (
     <>
-      {/* Etapa "Facelift Visual 2.0 — Performance sem grande card": a
-          superfície areia grande que identificava este bloco (removida —
-          virou "card dentro de card" competindo com Tarefas) dá lugar a uma
-          assinatura pontual: barra vertical + label pequena, mesmo
-          tratamento tipográfico já usado no rótulo "Ritmo do mês" abaixo
-          (`text-[11px] font-semibold uppercase tracking-wide`), nunca um
-          retângulo colorido. Areia (`bg-sand`) reaparece só aqui, como
-          acento — não como superfície. */}
-      <div className="flex items-center gap-2">
-        <span aria-hidden="true" className="h-3.5 w-1 shrink-0 rounded-full bg-sand" />
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Performance do mês</p>
-      </div>
-
-      <div className="mt-3">
-        <MonthlyKpiSummary
-          monthActual={monthActual}
-          performanceGoal={performanceGoal}
-          performanceSummary={performanceSummary}
-          targetCostPerResult={targetCostPerResult}
-          targetResultCount={targetResultCount}
-          investmentPlanned={investmentPlanned}
-          configureObjectiveHref={configureObjectiveHref}
-        />
-      </div>
+      <MonthlyKpiSummary
+        monthActual={monthActual}
+        performanceGoal={performanceGoal}
+        performanceSummary={performanceSummary}
+        targetCostPerResult={targetCostPerResult}
+        targetResultCount={targetResultCount}
+        investmentPlanned={investmentPlanned}
+        configureObjectiveHref={configureObjectiveHref}
+      />
 
       <div className="mt-5 border-t border-overview-border pt-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Ritmo do mês</p>
-
-        <div className="mt-2.5 flex flex-col gap-3.5">
+        <div className="flex flex-col gap-3.5">
           {hasResultRitmo && (
             <MonthlyGoalProgress
               monthResultCount={performanceSummary?.resultCount ?? 0}

@@ -189,8 +189,13 @@ console.log("\n10 — Performance sem grande card: superfície removida, assinat
 {
   ok("wrapper de Performance em page.tsx não usa mais bg-cream/rounded/padding de card", !/<div className="mt-6 rounded-lg bg-cream/.test(pageCode));
   ok("AccountFollowUpPanel não introduz nenhuma superfície própria (sem bg-cream/bg-sand como fundo, sem rounded-2xl)", !/bg-cream|rounded-2xl/.test(accountFollowUpCode));
-  ok('título "Performance do mês" existe, com a mesma tipografia já usada em "Ritmo do mês" (uppercase, 11px, semibold)', /Performance do mês/.test(accountFollowUpCode) && /text-\[11px\] font-semibold uppercase tracking-wide text-overview-text-muted/.test(accountFollowUpCode));
-  ok("identidade areia é só um acento pontual (barra estreita, bg-sand), nunca um retângulo grande", /h-3\.5 w-1 shrink-0 rounded-full bg-sand/.test(accountFollowUpCode));
+  // Pedido explícito de simplificação (pós-rollback): os títulos "Performance
+  // do mês"/"Ritmo do mês" — e a barrinha areia que só servia de moldura pro
+  // primeiro — foram removidos. Os KPIs/barras que eles identificavam
+  // continuam exatamente os mesmos, só sem o rótulo acima.
+  ok('título "Performance do mês" foi removido (pedido explícito de simplificação)', !/Performance do mês/.test(accountFollowUpCode));
+  ok('título "Ritmo do mês" foi removido (pedido explícito de simplificação)', !/Ritmo do mês/.test(accountFollowUpCode));
+  ok("acento areia (barra estreita, bg-sand) que só enquadrava o título removido saiu junto — nenhum resíduo órfão", !/h-3\.5 w-1 shrink-0 rounded-full bg-sand/.test(accountFollowUpCode));
   ok("nenhuma sombra foi adicionada em Performance", !accountFollowUpCode.includes("shadow") && !pageCode.includes("shadow"));
   ok("KPIs continuam vindo de MonthlyKpiSummary (mesma lógica/props, nenhum KPI hardcoded)", /<MonthlyKpiSummary/.test(accountFollowUpCode));
   ok("Ritmo do mês continua com o mesmo divisor horizontal discreto (border-t) separando dos KPIs", /border-t border-overview-border pt-3/.test(accountFollowUpCode));
@@ -301,10 +306,11 @@ console.log("\n16 — Links externos (Dashboard/Saldo/Fechamento) restaurados ap
   ok("externalLinks monta Dashboard/Saldo/Fechamento a partir das 3 colunas, cada um opcional", /client\.dashboard_url && \{ label: "Dashboard"/.test(pageCode) && /client\.balance_url && \{ label: "Saldo"/.test(pageCode) && /client\.monthly_closing_sheet_url && \{ label: "Fechamento"/.test(pageCode));
   ok("links externos abrem em nova aba (target=_blank + rel=noopener noreferrer)", /target="_blank"\s*\n\s*rel="noopener noreferrer"/.test(pageCode));
   // "Relatório" (pedido explícito) é link INTERNO (Next <Link>, nunca nova
-  // aba) pro mesmo /relatorio do CTA "Ver relatório completo →" mais abaixo
-  // — sempre visível (não depende de nenhuma coluna opcional de clients),
-  // na mesma barra de contexto, antes dos externos (Dashboard/Saldo/
-  // Fechamento) no grupo alinhado à direita.
+  // aba) pro mesmo /relatorio que o CTA "Ver relatório completo →" cobria
+  // (esse CTA foi removido depois, seção 17 abaixo, por ser redundante com
+  // este link) — sempre visível (não depende de nenhuma coluna opcional de
+  // clients), na mesma barra de contexto, antes dos externos (Dashboard/
+  // Saldo/Fechamento) no grupo alinhado à direita.
   ok(
     "Relatório aparece como link interno sempre visível na barra de contexto, antes dos links externos",
     /<Link href=\{`\/clients\/\$\{client\.id\}\/relatorio`\} className="text-xs font-medium text-overview-text-secondary hover:underline">\s*Relatório/.test(
@@ -316,6 +322,18 @@ console.log("\n16 — Links externos (Dashboard/Saldo/Fechamento) restaurados ap
     pageCode.indexOf('ml-auto flex items-center gap-3">\n          <Link href={`/clients/${client.id}/relatorio`}') > pageCode.indexOf("<ChannelPlanEditor") &&
       pageCode.indexOf('ml-auto flex items-center gap-3">\n          <Link href={`/clients/${client.id}/relatorio`}') < pageCode.indexOf("PERFORMANCE"),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Pedido de simplificação (remoção de rótulos/CTA redundante)
+// ---------------------------------------------------------------------------
+console.log("\n17 — Simplificação: rótulos de seção removidos, CTA de relatório redundante removido\n");
+{
+  ok('CTA "Ver relatório completo →" removido de page.tsx (redundante com o link "Relatório" no topo, seção 16)', !/Ver relatório completo/.test(pageCode));
+  ok("SecondaryGoalsPerformance/ConversionRateCard continuam renderizados sem alteração (só o CTA entre eles e a Operação saiu)", /<SecondaryGoalsPerformance/.test(pageCode) && /<ConversionRateCard/.test(pageCode));
+  ok('título "Performance do mês" removido de account-follow-up-panel.tsx', !/Performance do mês/.test(accountFollowUpCode));
+  ok('título "Ritmo do mês" removido de account-follow-up-panel.tsx', !/Ritmo do mês/.test(accountFollowUpCode));
+  ok("MonthlyKpiSummary/MonthlyGoalProgress/MonthInvestmentSummary continuam chamados sem alteração de props (só os rótulos acima deles saíram)", /<MonthlyKpiSummary/.test(accountFollowUpCode) && /<MonthInvestmentSummary/.test(accountFollowUpCode));
 }
 
 console.log(`\n${passed} verificações passaram.`);

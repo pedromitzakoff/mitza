@@ -174,7 +174,11 @@ console.log("\n6 — Painel principal (/clients/[id]) integra Performance + Oper
   ok("Painel usa WorkspaceContainer (largura corrigida, mesma do resto do workspace)", pageSource.includes("<WorkspaceContainer>"));
 
   ok("PERFORMANCE: AccountFollowUpPanel (KPIs + ritmo do mês) continua no Painel — nenhum cálculo novo", pageSource.includes("<AccountFollowUpPanel"));
-  ok('PERFORMANCE: CTA "Ver relatório completo" pro Relatório completo (`/relatorio`), reaproveitado 100%', /Ver relatório completo/.test(pageSource) && pageSource.includes("${client.id}/relatorio"));
+  // CTA próprio "Ver relatório completo →" removido (pedido de
+  // simplificação pós-rollback) — redundante com o link "Relatório" sempre
+  // visível na barra de contexto do topo, que cobre o mesmo /relatorio.
+  ok('PERFORMANCE: CTA "Ver relatório completo" removido (redundante com o link "Relatório" do topo)', !/Ver relatório completo/.test(pageSource));
+  ok('link "Relatório" na barra de contexto do topo cobre o mesmo destino (`/relatorio`), reaproveitado 100%', pageSource.includes("${client.id}/relatorio"));
 
   ok(
     "OPERAÇÃO: resumo reaproveita `clientOperationalState`/`resolveOperationPriorityGroup` já carregados — nenhuma segunda fonte de saúde operacional",
