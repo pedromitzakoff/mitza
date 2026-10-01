@@ -29,6 +29,7 @@ import { buildAgencyAccountsTree, flattenAgencyTree, resolveWalletSequence, type
 import {
   WORKSPACE_SECTION_SUFFIXES,
   buildWorkspaceHref,
+  resolveActiveClientIdFromPathname,
   resolveCurrentSuffix,
   resolveReplicableSuffix,
 } from "../src/lib/client-workspace-nav";
@@ -90,29 +91,48 @@ console.log("\n1 — flattenAgencyTree/resolveWalletSequence: sequência global 
   );
 }
 
-console.log("\n2 — client-workspace-nav.ts: sufixo/seção/URL do workspace (sem conceito de 'aba ativa' — as 5 abas saíram do header)\n");
+console.log("\n2 — client-workspace-nav.ts: sufixo/seção/URL do workspace (Etapa 'MEGA FACELIFT — Fase 1': 7 módulos da Growth Infra, sem conceito de 'aba ativa' — isso saiu do header na etapa anterior)\n");
 {
-  check("resolveCurrentSuffix: raiz do cliente é o Painel principal (sufixo vazio)", resolveCurrentSuffix("/clients/c1", "c1"), "");
+  check("resolveCurrentSuffix: raiz do cliente é o Dashboard (sufixo vazio)", resolveCurrentSuffix("/clients/c1", "c1"), "");
   check("resolveCurrentSuffix: reconhece sufixo de Operação", resolveCurrentSuffix("/clients/c1/operation", "c1"), "/operation");
+  check("resolveCurrentSuffix: reconhece sufixo de Metas (novo nesta etapa)", resolveCurrentSuffix("/clients/c1/metas", "c1"), "/metas");
+  check("resolveCurrentSuffix: reconhece sufixo de Dados (novo nesta etapa)", resolveCurrentSuffix("/clients/c1/dados", "c1"), "/dados");
+  check("resolveCurrentSuffix: reconhece sufixo de Timeline (novo nesta etapa)", resolveCurrentSuffix("/clients/c1/timeline", "c1"), "/timeline");
 
-  check("WORKSPACE_SECTION_SUFFIXES: as 5 seções reconhecidas pra replicar ao trocar de cliente", WORKSPACE_SECTION_SUFFIXES, [
+  check("WORKSPACE_SECTION_SUFFIXES: os 7 módulos da Growth Infra reconhecidos pra replicar ao trocar de cliente", WORKSPACE_SECTION_SUFFIXES, [
     "",
+    "/metas",
     "/relatorio",
+    "/dados",
     "/operation",
     "/demandas",
-    "/edit",
+    "/timeline",
   ]);
 
-  check("resolveReplicableSuffix: sufixo reconhecido (uma das 5 seções) é replicado ao trocar de cliente", resolveReplicableSuffix("/operation"), "/operation");
+  check("resolveReplicableSuffix: sufixo reconhecido (um dos 7 módulos) é replicado ao trocar de cliente", resolveReplicableSuffix("/operation"), "/operation");
+  check("resolveReplicableSuffix: Metas (novo módulo) é replicado ao trocar de cliente", resolveReplicableSuffix("/metas"), "/metas");
+  check("resolveReplicableSuffix: Dados (novo módulo) é replicado ao trocar de cliente", resolveReplicableSuffix("/dados"), "/dados");
+  check("resolveReplicableSuffix: Timeline (novo módulo) é replicado ao trocar de cliente", resolveReplicableSuffix("/timeline"), "/timeline");
   check(
-    "resolveReplicableSuffix: sufixo de rota legada (fora das 5 seções) NUNCA é replicado — cai pro Painel principal do próximo cliente",
+    "resolveReplicableSuffix: sufixo de rota legada (fora dos 7 módulos) NUNCA é replicado — cai pro Dashboard do próximo cliente",
     resolveReplicableSuffix("/tasks/new"),
+    "",
+  );
+  check(
+    "resolveReplicableSuffix: '/edit' (Configurações do cliente) deixou de ser replicável nesta etapa — reclassificado como administrativo, não um módulo de Growth; cai pro Dashboard igual a qualquer rota fora da lista",
+    resolveReplicableSuffix("/edit"),
     "",
   );
 
   check("buildWorkspaceHref: sem mês", buildWorkspaceHref("c2", "/operation", null), "/clients/c2/operation");
   check("buildWorkspaceHref: preserva mês ao trocar de cliente/seção (decisão 1 do usuário)", buildWorkspaceHref("c2", "/operation", "2026-08"), "/clients/c2/operation?month=2026-08");
-  check("buildWorkspaceHref: Painel principal (sufixo vazio) nunca gera '/clients/c2/?month=...' com barra sobrando", buildWorkspaceHref("c2", "", "2026-08"), "/clients/c2?month=2026-08");
+  check("buildWorkspaceHref: Dashboard (sufixo vazio) nunca gera '/clients/c2/?month=...' com barra sobrando", buildWorkspaceHref("c2", "", "2026-08"), "/clients/c2?month=2026-08");
+
+  check("resolveActiveClientIdFromPathname: extrai o id de uma rota de módulo", resolveActiveClientIdFromPathname("/clients/c1/relatorio"), "c1");
+  check("resolveActiveClientIdFromPathname: extrai o id na raiz do workspace", resolveActiveClientIdFromPathname("/clients/c1"), "c1");
+  check("resolveActiveClientIdFromPathname: lista de clientes NUNCA conta como contexto de cliente", resolveActiveClientIdFromPathname("/clients"), null);
+  check("resolveActiveClientIdFromPathname: criação de cliente NUNCA conta como contexto de cliente", resolveActiveClientIdFromPathname("/clients/new"), null);
+  check("resolveActiveClientIdFromPathname: rota fora de /clients NUNCA conta como contexto de cliente", resolveActiveClientIdFromPathname("/operation"), null);
 }
 
 console.log("\n3 — Simulação de navegação: trocar de cliente preserva a SEÇÃO atual (decisão 1) — 'Aibou → Relatório' vira 'JudClass → Relatório'\n");

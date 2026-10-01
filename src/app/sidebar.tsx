@@ -5,9 +5,12 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
+  BarChart3,
   ClipboardList,
   Clock,
+  Database,
   History,
+  LayoutDashboard,
   LayoutGrid,
   ListChecks,
   LogOut,
@@ -16,6 +19,7 @@ import {
   PanelLeftOpen,
   RefreshCw,
   Settings,
+  Target,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -24,6 +28,7 @@ import { syncAllMetaAction } from "@/app/global-actions";
 import { SubmitButton } from "@/app/submit-button";
 import { formatAgencyDateTime } from "@/lib/format";
 import type { UserRole } from "@/lib/supabase/database.types";
+import { buildWorkspaceHref, resolveActiveClientIdFromPathname, resolveCurrentSuffix } from "@/lib/client-workspace-nav";
 import {
   ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES,
   ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES,
@@ -204,6 +209,39 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+interface ClientModuleItem {
+  label: string;
+  /** Sufixo relativo a `/clients/[id]` — mesmo vocabulário de
+   * `WORKSPACE_SECTION_SUFFIXES` (`lib/client-workspace-nav.ts`); os dois
+   * precisam ficar em sincronia manual (um módulo novo aqui sem entrada
+   * lá nunca é replicado ao trocar de cliente). */
+  suffix: string;
+  icon: LucideIcon;
+  group: "growth" | "execucao";
+}
+
+/**
+ * Etapa "MEGA FACELIFT — Fase 1: Novo Shell da Growth Infra": os 7 módulos
+ * da Growth Infra de UM cliente — só aparecem na Sidebar quando a rota
+ * atual está dentro de `/clients/[id]/**` (`activeClientId`,
+ * `SidebarContent`). Dashboard/Metas/Performance/Dados = GROWTH
+ * (diagnóstico/planejamento); Operação/Demandas/Timeline = EXECUÇÃO
+ * (ação) — mesma dualidade que já existe como itens GLOBAIS (grupo
+ * `principal`, acima): não é duplicação acidental, é a mesma distinção
+ * Carteira (transversal) / Cliente (um workspace) que o pedido define.
+ * `/relatorio` continua sendo o nome técnico da rota de Performance
+ * (nenhum link/PDF/`/r/[token]` muda) — só o rótulo aqui é novo.
+ */
+const CLIENT_MODULE_ITEMS: ClientModuleItem[] = [
+  { label: "Dashboard", suffix: "", icon: LayoutDashboard, group: "growth" },
+  { label: "Metas", suffix: "/metas", icon: Target, group: "growth" },
+  { label: "Performance", suffix: "/relatorio", icon: BarChart3, group: "growth" },
+  { label: "Dados", suffix: "/dados", icon: Database, group: "growth" },
+  { label: "Operação", suffix: "/operation", icon: ListChecks, group: "execucao" },
+  { label: "Demandas", suffix: "/demandas", icon: ClipboardList, group: "execucao" },
+  { label: "Timeline", suffix: "/timeline", icon: History, group: "execucao" },
+];
+
 /** Label some no desktop quando `collapsed` (só md+ — no drawer mobile o
  * texto sempre aparece, controlado pelas mesmas classes responsivas). Sem
  * espaço reservado: o span some do layout (`hidden`), não só fica invisível. */
@@ -248,6 +286,46 @@ function NavLink({
   return (
     <Link
       href={item.href}
+      title={item.label}
+      className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
+        active ? ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES : ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES
+      }`}
+    >
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <ItemLabel collapsed={collapsed}>{item.label}</ItemLabel>
+    </Link>
+  );
+}
+
+/**
+ * Item de módulo da Growth Infra do cliente — mesmo visual de `NavLink`
+ * (reaproveita as classes do "KOFF Active Indicator"), mas o destino é
+ * montado por `buildWorkspaceHref` (preserva `?month=`, mesmo mecanismo
+ * já usado por `ClientWorkspaceHeader`/anterior-próximo — nunca uma
+ * segunda forma de montar a URL do workspace) e o estado ativo compara
+ * contra `currentSuffix` (`resolveCurrentSuffix`), não contra `pathname`
+ * bruto.
+ */
+function ClientModuleLink({
+  item,
+  clientId,
+  currentSuffix,
+  month,
+  collapsed,
+}: {
+  item: ClientModuleItem;
+  clientId: string;
+  currentSuffix: string;
+  month: string | null;
+  collapsed: boolean;
+}) {
+  const active = item.suffix === currentSuffix;
+  const Icon = item.icon;
+  const href = buildWorkspaceHref(clientId, item.suffix, month);
+
+  return (
+    <Link
+      href={href}
       title={item.label}
       className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
         active ? ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES : ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES
@@ -315,6 +393,7 @@ function SidebarContent({
   agencyTree,
   pathname,
   mode,
+  month,
   collapsed,
   toggleCollapsed,
 }: {
@@ -322,6 +401,7 @@ function SidebarContent({
   agencyTree?: React.ReactNode;
   pathname: string;
   mode: string | null;
+  month: string | null;
   collapsed: boolean;
   toggleCollapsed: () => void;
 }) {
@@ -331,6 +411,17 @@ function SidebarContent({
   const flexivel = items.filter((item) => item.group === "flexivel");
   const initial = profile.name.trim().charAt(0).toUpperCase() || "?";
   const { scrollRef, contentRef, edges } = useScrollEdges();
+
+  // Etapa "MEGA FACELIFT — Fase 1": "dentro de um cliente" é só a presença
+  // de `/clients/[id]/...` no pathname (`resolveActiveClientIdFromPathname`,
+  // núcleo puro e testável em `lib/client-workspace-nav.ts`). Nenhuma
+  // busca aqui: o nome/avatar do cliente já aparece no
+  // `ClientWorkspaceHeader` (dado real, buscado no layout do workspace);
+  // repetir isso aqui exigiria uma segunda consulta só pra Sidebar.
+  const activeClientId = resolveActiveClientIdFromPathname(pathname);
+  const currentSuffix = activeClientId ? resolveCurrentSuffix(pathname, activeClientId) : "";
+  const growthItems = CLIENT_MODULE_ITEMS.filter((item) => item.group === "growth");
+  const execucaoItems = CLIENT_MODULE_ITEMS.filter((item) => item.group === "execucao");
 
   return (
     <div className="flex h-full flex-col">
@@ -372,15 +463,80 @@ function SidebarContent({
       <div className="relative min-h-0 flex-1">
         <div ref={scrollRef} className="mitza-scrollbar-hidden h-full overflow-y-auto">
           <div ref={contentRef} className="flex min-h-full flex-col">
-            <nav className="flex flex-col gap-0.5 px-2.5">
-              {principal.map((item) => (
-                <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
-              ))}
-            </nav>
+            <div className="flex flex-col gap-0.5 px-2.5">
+              <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
+                Carteira
+              </span>
+              <nav className="flex flex-col gap-0.5">
+                {principal.map((item) => (
+                  <NavLink key={item.label} item={item} pathname={pathname} mode={mode} collapsed={collapsed} />
+                ))}
+              </nav>
+            </div>
 
             {/* Recolhida (só desktop): não tenta mostrar a árvore no modo
-             * compacto, mesmo comportamento das demais seções da nav. */}
+             * compacto, mesmo comportamento das demais seções da nav. Etapa
+             * "MEGA FACELIFT — Fase 1": a árvore "Contas da Agência" deixa
+             * de ser o mecanismo PRINCIPAL de entrar na Growth Infra de um
+             * cliente (isso passa a ser o bloco "Cliente" abaixo, uma vez
+             * dentro do workspace) — mas continua aqui, sem nenhuma mudança
+             * de comportamento, por ser a única forma hoje de ESCOLHER
+             * QUAL cliente abrir a partir da Carteira (busca + agrupamento
+             * por gestor + arrastar para reordenar `wallet_position`). */}
             <div className={collapsed ? "md:hidden" : ""}>{agencyTree}</div>
+
+            {/* Etapa "MEGA FACELIFT — Fase 1: Novo Shell da Growth Infra":
+             * bloco "Cliente" — só existe enquanto a rota atual está
+             * dentro de `/clients/[id]/**`. Fundo `sand-subtle` (mesmo
+             * token já usado como "superfície selecionada" em
+             * `account-follow-up-panel.tsx`/`globals.css` — nunca uma cor
+             * nova) é o único sinal de destaque necessário pra deixar
+             * claro que tudo daqui pra baixo pertence ao cliente
+             * selecionado; o nome/avatar real continua só no
+             * `ClientWorkspaceHeader`, no topo do conteúdo. */}
+            {activeClientId && (
+              <div className="mt-3 border-t border-sidebar-border px-2.5 pt-3">
+                <div className="rounded-lg bg-sand-subtle/70 p-2">
+                  <span className={`px-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
+                    Cliente
+                  </span>
+
+                  <div className="mt-1.5 flex flex-col gap-0.5">
+                    <span className={`px-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-subtle ${collapsed ? "md:hidden" : ""}`}>
+                      Growth
+                    </span>
+                    <nav className="flex flex-col gap-0.5">
+                      {growthItems.map((item) => (
+                        <ClientModuleLink
+                          key={item.label}
+                          item={item}
+                          clientId={activeClientId}
+                          currentSuffix={currentSuffix}
+                          month={month}
+                          collapsed={collapsed}
+                        />
+                      ))}
+                    </nav>
+
+                    <span className={`px-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-subtle ${collapsed ? "md:hidden" : ""}`}>
+                      Execução
+                    </span>
+                    <nav className="flex flex-col gap-0.5">
+                      {execucaoItems.map((item) => (
+                        <ClientModuleLink
+                          key={item.label}
+                          item={item}
+                          clientId={activeClientId}
+                          currentSuffix={currentSuffix}
+                          month={month}
+                          collapsed={collapsed}
+                        />
+                      ))}
+                    </nav>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex-1" />
 
@@ -497,9 +653,9 @@ function SidebarContent({
   );
 }
 
-function SidebarMode({ onMode }: { onMode: (mode: string | null) => React.ReactNode }) {
+function SidebarMode({ onMode }: { onMode: (mode: string | null, month: string | null) => React.ReactNode }) {
   const searchParams = useSearchParams();
-  return <>{onMode(searchParams.get("mode"))}</>;
+  return <>{onMode(searchParams.get("mode"), searchParams.get("month"))}</>;
 }
 
 /**
@@ -580,18 +736,20 @@ export function Sidebar({
               agencyTree={agencyTree}
               pathname={pathname}
               mode={null}
+              month={null}
               collapsed={collapsed}
               toggleCollapsed={toggleCollapsed}
             />
           }
         >
           <SidebarMode
-            onMode={(mode) => (
+            onMode={(mode, month) => (
               <SidebarContent
                 profile={profile}
                 agencyTree={agencyTree}
                 pathname={pathname}
                 mode={mode}
+                month={month}
                 collapsed={collapsed}
                 toggleCollapsed={toggleCollapsed}
               />
