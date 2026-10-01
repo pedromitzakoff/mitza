@@ -841,6 +841,36 @@ export async function getLatestSyncRunStatusForSources(importSourceIds: string[]
   return data ? { status: data.status, startedAt: data.started_at } : null;
 }
 
+/** Igual a `getLatestSyncRunStatusForSources`, mas devolvendo o status mais
+ * recente de CADA fonte separadamente (Etapa "MEGA FACELIFT — Fase 5:
+ * Dados") — a tela Dados mostra um card por fonte, nunca um status único
+ * combinado. Mesma leitura admin-bypassando-RLS, mesmos dois campos (nunca
+ * `error_message`/contagens, que continuam exclusivos de
+ * `getRecentSyncRunsForClient`, visível só a admin). Sem agregação SQL por
+ * grupo (nenhuma função nova no banco) — lê um lote recente o bastante pra
+ * cobrir a última execução de cada fonte (até 20 por fonte, teto generoso
+ * pra uma lista que hoje nunca passa de poucas fontes por cliente) e reduz
+ * no próprio código, mantendo a mesma simplicidade de consulta de sempre. */
+export async function getLatestSyncRunStatusBySourceId(importSourceIds: string[]): Promise<Map<string, LatestSyncRunStatus>> {
+  const result = new Map<string, LatestSyncRunStatus>();
+  if (importSourceIds.length === 0) return result;
+
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("data_sync_runs")
+    .select("import_source_id, status, started_at")
+    .in("import_source_id", importSourceIds)
+    .order("started_at", { ascending: false })
+    .limit(importSourceIds.length * 20);
+
+  for (const row of data ?? []) {
+    if (!result.has(row.import_source_id)) {
+      result.set(row.import_source_id, { status: row.status, startedAt: row.started_at });
+    }
+  }
+  return result;
+}
+
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 async function finishRun(

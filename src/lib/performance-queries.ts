@@ -216,6 +216,13 @@ export async function getEnabledImportSourceIdsForClient(supabase: Supabase, cli
 
 export interface SyncRunSummary {
   id: string;
+  /** Qual fonte gerou esta execução — adicionado na Etapa "MEGA FACELIFT —
+   * Fase 5: Dados" (campo aditivo, consulta já lia a coluna implicitamente
+   * via `.in("import_source_id", ...)", só não devolvia no objeto) pra Dados
+   * poder agrupar o histórico por fonte sem uma segunda consulta a
+   * `data_sync_runs` — `account-info-drawer.tsx` continua ignorando este
+   * campo (mostra tudo junto, como sempre). */
+  importSourceId: string;
   startedAt: string;
   finishedAt: string | null;
   status: DataSyncRunStatusDb;
@@ -251,7 +258,7 @@ export async function getRecentSyncRunsForClient(
   const { data } = await supabase
     .from("data_sync_runs")
     .select(
-      "id, started_at, finished_at, status, rows_read, spend_rows_written, performance_rows_written, creative_rows_written, campaign_rows_written, ad_set_rows_written, placement_rows_written, error_message",
+      "id, import_source_id, started_at, finished_at, status, rows_read, spend_rows_written, performance_rows_written, creative_rows_written, campaign_rows_written, ad_set_rows_written, placement_rows_written, error_message",
     )
     .in("import_source_id", importSourceIds)
     .order("started_at", { ascending: false })
@@ -259,6 +266,7 @@ export async function getRecentSyncRunsForClient(
 
   return (data ?? []).map((row) => ({
     id: row.id,
+    importSourceId: row.import_source_id,
     startedAt: row.started_at,
     finishedAt: row.finished_at,
     status: row.status,

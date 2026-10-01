@@ -171,7 +171,7 @@ console.log("\n8 — Preservação de ?month= ao trocar de módulo/cliente (cont
   );
 }
 
-console.log("\n9 — Shells restantes (Dados/Timeline) seguem sem conteúdo funcional; Metas evoluiu na Fase 2 (ver test-mega-facelift-fase2-metas.ts)\n");
+console.log("\n9 — Shell restante (Timeline) segue sem conteúdo funcional; Metas evoluiu na Fase 2, Dados evoluiu na Fase 5 (ver suites próprias)\n");
 {
   const metasSource = loadSource("src", "app", "clients", "[id]", "metas", "page.tsx");
   const dadosSource = loadSource("src", "app", "clients", "[id]", "dados", "page.tsx");
@@ -183,15 +183,18 @@ console.log("\n9 — Shells restantes (Dados/Timeline) seguem sem conteúdo func
   ok("Metas usa WorkspaceContainer (mesma largura do resto do workspace, nenhum max-width solto novo)", metasSource.includes("<WorkspaceContainer>"));
   ok("Metas não é mais o placeholder da Fase 1 (evoluiu na Fase 2)", !metasSource.includes("Área de metas do cliente."));
 
-  ok("Dados usa WorkspaceContainer", dadosSource.includes("<WorkspaceContainer>"));
-  ok("Dados mostra o placeholder esperado nesta fase", dadosSource.includes("Infraestrutura de dados do cliente."));
+  // Etapa "MEGA FACELIFT — Fase 5: Dados": idem, shell vazio substituído por
+  // conteúdo funcional real (fontes/qualidade dos dados) — ver suite própria
+  // (test-mega-facelift-fase5-dados.ts).
+  ok("Dados usa WorkspaceContainer (mesma largura do resto do workspace, nenhum max-width solto novo)", dadosSource.includes("<WorkspaceContainer>"));
+  ok("Dados não é mais o placeholder da Fase 1 (evoluiu na Fase 5)", !dadosSource.includes("Infraestrutura de dados do cliente."));
 
   ok("Timeline usa WorkspaceContainer", timelineSource.includes("<WorkspaceContainer>"));
   ok("Timeline mostra o placeholder esperado nesta fase", timelineSource.includes("Histórico do Growth deste cliente."));
 
   ok(
-    "Dados/Timeline (ainda shells) não importam lógica de cálculo/diagnóstico/integração — grep negativo por imports de lib pesada",
-    !/from "@\/lib\/(client-goals|client-plan|metric-diagnostics|account-health-engine|stract-sync|import-sources)"/.test(dadosSource + timelineSource),
+    "Timeline (ainda shell) não importa lógica de cálculo/diagnóstico/integração — grep negativo por imports de lib pesada",
+    !/from "@\/lib\/(client-goals|client-plan|metric-diagnostics|account-health-engine|stract-sync|import-sources)"/.test(timelineSource),
   );
 }
 
