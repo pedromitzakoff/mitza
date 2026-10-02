@@ -309,4 +309,58 @@ console.log("\n13 — ChannelPlanEditor permanece restrito ao objetivo principal
   ok("edição só aparece para admin, mês não encerrado", pageSource.includes("!isAdmin || isClosedMonth || !effectiveDate"));
 }
 
+console.log("\n14 — BUGFIX (produção): scroll horizontal vazando por trás das colunas sticky de MetasSummaryTable\n");
+{
+  const tableSource = loadSource("src", "app", "clients", "metas-summary-table.tsx");
+
+  ok(
+    "table-layout:fixed (nunca auto) — colunas nunca mais são redimensionadas pelo conteúdo (rótulo longo como 'Custo por novo seguidor')",
+    /className="table-fixed/.test(tableSource),
+  );
+  ok(
+    "<colgroup> com <col> explícito pra cada coluna sticky E pra cada dia — header e body herdam a MESMA largura, nunca duas fontes de verdade",
+    /<colgroup>/.test(tableSource) && /days\.map\(\(day\) => \(\s*<col key=\{day\.date\} style=\{\{ width: DAY_COLUMN_WIDTH \}\} \/>/.test(tableSource),
+  );
+  ok(
+    "a <table> tem width explícito (soma de STICKY_COLUMN_WIDTH + dias × DAY_COLUMN_WIDTH) — sem isso, table-layout:fixed não respeita o <colgroup> pixel a pixel (achado real: 'Meta do mês' renderizava 114px em vez de 110px, dias 78px em vez de 64px, mesmo com colgroup correto)",
+    /const totalTableWidth = STICKY_COLUMN_WIDTH\.indicador \+ STICKY_COLUMN_WIDTH\.meta \+ STICKY_COLUMN_WIDTH\.realizado \+ days\.length \* DAY_COLUMN_WIDTH/.test(
+      tableSource,
+    ) && /style=\{\{ width: totalTableWidth \}\}/.test(tableSource),
+  );
+  ok(
+    "left de cada coluna sticky é DERIVADO por soma cumulativa de STICKY_COLUMN_WIDTH, nunca um valor solto escrito à mão (causa raiz original do bug)",
+    /realizado: STICKY_COLUMN_WIDTH\.indicador \+ STICKY_COLUMN_WIDTH\.meta/.test(tableSource),
+  );
+  ok(
+    "nenhuma classe Tailwind arbitrária left-[Npx]/w-[Npx] sobrevive no código real (fora de comentário) — só style inline derivado das constantes",
+    !tableSource
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("*") && !line.trim().startsWith("//"))
+      .some((line) => /left-\[\d+px\]|w-\[\d+px\]/.test(line)),
+  );
+  ok(
+    "nenhuma coluna sticky usa width ausente — o mesmo STICKY_COLUMN_WIDTH alimenta tanto <col> (colgroup) quanto o style inline de cada th/td sticky",
+    (tableSource.match(/style=\{\{ left: STICKY_LEFT\.\w+, width: STICKY_COLUMN_WIDTH\.\w+ \}\}/g) ?? []).length === 6,
+  );
+  ok("células sticky têm background opaco (bg-overview-surface/-subtle), nunca transparente", /STICKY_COL_CLASSES = "sticky z-10 box-border bg-overview-surface"/.test(tableSource));
+  ok("células sticky têm z-10 (> auto das células roláveis)", tableSource.includes("sticky z-10"));
+  ok("borda direita do bloco sticky (Realizado) permanece visualmente clara", /border-r border-overview-border/.test(tableSource));
+  ok(
+    "border-separate + border-spacing-0 (nunca border-collapse em código real) — evita o artefato de borda sticky 'roubada' pela célula rolável vizinha durante o scroll",
+    /border-separate border-spacing-0/.test(tableSource) &&
+      !tableSource
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("*") && !line.trim().startsWith("//"))
+        .some((line) => line.includes("border-collapse")),
+  );
+  ok(
+    "rótulo do Indicador trunca com ellipsis (nunca estoura a largura fixa da coluna) e preserva o texto completo via title",
+    /TRUNCATE_CLASSES = "overflow-hidden text-ellipsis whitespace-nowrap"/.test(tableSource) && /title=\{row\.label\}/.test(tableSource),
+  );
+  ok(
+    "o componente continua só lendo MetasRow/MetasRowUnit de lib/metas-table.ts — nenhum cálculo/projeção de dado novo, só apresentação",
+    tableSource.includes('import type { MetasRow, MetasRowUnit } from "@/lib/metas-table"'),
+  );
+}
+
 console.log(`\n${passed} verificações passaram.`);
