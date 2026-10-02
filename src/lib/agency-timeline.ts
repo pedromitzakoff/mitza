@@ -84,6 +84,14 @@ export type PerformanceTone = "positivo" | "atencao";
 
 export interface AgencyTimelineRow {
   id: string;
+  /** `operational_events.entity_id` — campo aditivo (Etapa "MEGA FACELIFT —
+   * Fase 6: Timeline"), a query já selecionava esta coluna pra uso interno
+   * (lookup de `account_optimizations`), só não a devolvia na linha. A
+   * Timeline do CLIENTE (`lib/client-timeline.ts`) precisa dele pra resolver
+   * `tasks.origin` em lote pra task_created/task_completed/task_reopened
+   * (nunca duplicar a query canônica só por isso). `/timeline` (agência)
+   * continua ignorando este campo, comportamento 100% preservado. */
+  entityId: string;
   eventType: OperationalEventType;
   family: AgencyTimelineEventFamily;
   occurredAt: string;
@@ -407,6 +415,7 @@ export async function fetchAgencyEvents(
       const family: AgencyTimelineEventFamily = eventType === EventType.ACHIEVEMENT_UNLOCKED ? "performance" : "acao";
       const base = {
         id: row.id,
+        entityId: row.entity_id,
         eventType,
         family,
         occurredAt: row.occurred_at,

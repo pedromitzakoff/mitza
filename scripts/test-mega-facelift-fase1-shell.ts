@@ -171,7 +171,7 @@ console.log("\n8 — Preservação de ?month= ao trocar de módulo/cliente (cont
   );
 }
 
-console.log("\n9 — Shell restante (Timeline) segue sem conteúdo funcional; Metas evoluiu na Fase 2, Dados evoluiu na Fase 5 (ver suites próprias)\n");
+console.log("\n9 — Todos os shells da Fase 1 evoluíram pra conteúdo funcional: Metas (Fase 2), Dados (Fase 5), Timeline (Fase 6) — ver suites próprias\n");
 {
   const metasSource = loadSource("src", "app", "clients", "[id]", "metas", "page.tsx");
   const dadosSource = loadSource("src", "app", "clients", "[id]", "dados", "page.tsx");
@@ -189,13 +189,11 @@ console.log("\n9 — Shell restante (Timeline) segue sem conteúdo funcional; Me
   ok("Dados usa WorkspaceContainer (mesma largura do resto do workspace, nenhum max-width solto novo)", dadosSource.includes("<WorkspaceContainer>"));
   ok("Dados não é mais o placeholder da Fase 1 (evoluiu na Fase 5)", !dadosSource.includes("Infraestrutura de dados do cliente."));
 
-  ok("Timeline usa WorkspaceContainer", timelineSource.includes("<WorkspaceContainer>"));
-  ok("Timeline mostra o placeholder esperado nesta fase", timelineSource.includes("Histórico do Growth deste cliente."));
-
-  ok(
-    "Timeline (ainda shell) não importa lógica de cálculo/diagnóstico/integração — grep negativo por imports de lib pesada",
-    !/from "@\/lib\/(client-goals|client-plan|metric-diagnostics|account-health-engine|stract-sync|import-sources)"/.test(timelineSource),
-  );
+  // Etapa "MEGA FACELIFT — Fase 6: Timeline": idem, shell vazio substituído
+  // por conteúdo funcional real (memória do Growth do cliente) — ver suite
+  // própria (test-mega-facelift-fase6-timeline.ts).
+  ok("Timeline usa WorkspaceContainer (mesma largura do resto do workspace, nenhum max-width solto novo)", timelineSource.includes("<WorkspaceContainer>"));
+  ok("Timeline não é mais o placeholder da Fase 1 (evoluiu na Fase 6)", !timelineSource.includes("Histórico do Growth deste cliente."));
 }
 
 console.log("\n10 — Rotas existentes (Performance/Operação/Demandas) permanecem tecnicamente intactas — só o RÓTULO muda na navegação\n");

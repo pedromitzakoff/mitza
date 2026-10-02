@@ -151,8 +151,14 @@ console.log("\n10 — Timeline global permanece em Carteira (auditoria: função
   // mecanismo consolidado.
   ok("Timeline continua definida como módulo (não removida da nav)", /\{ key: "timeline", label: "Timeline", icon: History, group: "execucao" \}/.test(sidebarSource));
   ok("contexto Todos + módulo Timeline continua resolvendo pra /timeline", loadSource("src", "lib", "client-workspace-nav.ts").includes('timeline: "/timeline"'));
+  // Etapa "MEGA FACELIFT — Fase 6: Timeline": o shell vazio desta fase foi
+  // substituído por conteúdo funcional real (memória do Growth do cliente,
+  // `lib/client-timeline.ts`) — continua NÃO redundante com a Timeline
+  // global: uma é o recorte de UM cliente, a outra agrega a agência inteira
+  // (ver suite própria, test-mega-facelift-fase6-timeline.ts).
   const clientTimelineSource = loadSource("src", "app", "clients", "[id]", "timeline", "page.tsx");
-  ok("Timeline por cliente ainda é só o shell da Fase 1 (sem conteúdo funcional) — confirma que NÃO é redundante com a Timeline global", clientTimelineSource.includes("sem nenhum conteúdo funcional ainda"));
+  ok("Timeline por cliente não é mais o placeholder da Fase 1 (evoluiu na Fase 6)", !clientTimelineSource.includes("sem nenhum conteúdo funcional ainda"));
+  ok("Timeline por cliente usa seu próprio núcleo (fetchClientTimelinePage), nunca uma segunda cópia de fetchAgencyTimeline", clientTimelineSource.includes("fetchClientTimelinePage"));
   ok("Timeline global (/timeline) continua agregando toda a agência (fetchAgencyTimeline), nunca um recorte por cliente só", loadSource("src", "app", "timeline", "page.tsx").includes("fetchAgencyTimeline("));
 }
 
