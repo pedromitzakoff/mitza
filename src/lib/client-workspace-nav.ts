@@ -169,6 +169,33 @@ export function buildModuleContextHref(module: ModuleKey, context: AppContext, m
   return MODULE_GLOBAL_HREF[module] ?? "/clients";
 }
 
+/**
+ * Módulos cujo link na SIDEBAR sempre abre em contexto Todos, mesmo
+ * estando dentro do workspace de um cliente específico (Etapa "Demandas
+ * sempre abre em Todos por padrão") — Demandas é a lista do que precisa
+ * ser feito NA AGÊNCIA TODA; abrir só a fração de um cliente por estar
+ * "de passagem" nele (ex.: Aibou -> Operação -> Demandas) escondia o
+ * resto do trabalho pendente, o oposto do propósito da tela.
+ *
+ * Isso é só sobre o DESTINO do clique na Sidebar (`resolveModuleLinkContext`
+ * abaixo) — nunca sobre o módulo em si: `/clients/[id]/demandas` continua
+ * existindo e funcionando normalmente (deep link, anterior/próximo, busca
+ * do header), e `moduleSupportsAllContext("demandas")` continua `true`
+ * (nada muda no seletor). Dashboard/Metas/Performance/Dados/Operação/
+ * Timeline continuam preservando o cliente atual, como sempre.
+ */
+const MODULES_DEFAULT_TO_ALL_CONTEXT_ON_SIDEBAR: readonly ModuleKey[] = ["demandas"];
+
+/** Resolve o contexto a usar pra montar o link de um módulo NA SIDEBAR —
+ * normalmente o contexto ambiente (preserva o cliente atual, mesma regra
+ * de sempre), exceto pros módulos em `MODULES_DEFAULT_TO_ALL_CONTEXT_ON_SIDEBAR`,
+ * que sempre abrem em Todos. Usado só por `ModuleLink` (`app/sidebar.tsx`)
+ * — `ClientWorkspaceHeader`/`GlobalScopeSelect` têm seus próprios
+ * mecanismos de troca de cliente/contexto, não passam por aqui. */
+export function resolveModuleLinkContext(module: ModuleKey, ambientContext: AppContext): AppContext {
+  return MODULES_DEFAULT_TO_ALL_CONTEXT_ON_SIDEBAR.includes(module) ? { type: "all" } : ambientContext;
+}
+
 /** Resolve módulo + contexto ATUAIS a partir do pathname — núcleo único
  * usado pela Sidebar (destaque do item ativo) e por `ClientWorkspaceHeader`
  * (pra saber qual módulo replicar ao sair pra "Todos"). `module: null`

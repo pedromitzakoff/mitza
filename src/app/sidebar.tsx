@@ -28,7 +28,7 @@ import { syncAllMetaAction } from "@/app/global-actions";
 import { SubmitButton } from "@/app/submit-button";
 import { formatAgencyDateTime } from "@/lib/format";
 import type { UserRole } from "@/lib/supabase/database.types";
-import { buildModuleContextHref, resolveCurrentModuleAndContext, type AppContext, type ModuleKey } from "@/lib/client-workspace-nav";
+import { buildModuleContextHref, resolveCurrentModuleAndContext, resolveModuleLinkContext, type AppContext, type ModuleKey } from "@/lib/client-workspace-nav";
 import {
   ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES,
   ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES,
@@ -235,7 +235,12 @@ function ModuleLink({
 }) {
   const active = item.key === currentModule;
   const Icon = item.icon;
-  const href = buildModuleContextHref(item.key, context, month);
+  // Etapa "Demandas sempre abre em Todos por padrão": Demandas ignora o
+  // contexto ambiente aqui (`resolveModuleLinkContext`) — é a lista do
+  // que precisa ser feito na agência toda, nunca só a fração de um
+  // cliente por estar "de passagem" nele. Os outros 6 módulos continuam
+  // preservando o cliente atual, como sempre.
+  const href = buildModuleContextHref(item.key, resolveModuleLinkContext(item.key, context), month);
 
   return (
     <Link

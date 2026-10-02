@@ -84,12 +84,14 @@ console.log("\n2 — Os 7 módulos da Growth Infra, agrupados Growth/Execução 
 console.log("\n3 — ModuleLink (sucessor de ClientModuleLink) reaproveita o núcleo único de módulo×contexto — não reconstrói nada\n");
 {
   ok(
-    "ModuleLink importa buildModuleContextHref/resolveCurrentModuleAndContext de lib/client-workspace-nav (núcleo único, Fase 4.6)",
-    sidebarSource.includes('import { buildModuleContextHref, resolveCurrentModuleAndContext, type AppContext, type ModuleKey } from "@/lib/client-workspace-nav"'),
+    "ModuleLink importa buildModuleContextHref/resolveCurrentModuleAndContext de lib/client-workspace-nav (núcleo único, Fase 4.6; resolveModuleLinkContext entrou na Etapa 'Demandas sempre abre em Todos por padrão', mesmo núcleo, sem segunda lógica)",
+    sidebarSource.includes(
+      'import { buildModuleContextHref, resolveCurrentModuleAndContext, resolveModuleLinkContext, type AppContext, type ModuleKey } from "@/lib/client-workspace-nav"',
+    ),
   );
   ok(
-    "ModuleLink monta o href com buildModuleContextHref (preserva ?month= só no contexto de cliente, nunca uma segunda forma de montar URL)",
-    /const href = buildModuleContextHref\(item\.key, context, month\)/.test(sidebarSource),
+    "ModuleLink monta o href com buildModuleContextHref (preserva ?month= só no contexto de cliente, nunca uma segunda forma de montar URL); o contexto passado vem de resolveModuleLinkContext (Etapa 'Demandas sempre abre em Todos por padrão' — só Demandas ignora o contexto ambiente, os outros 6 módulos continuam recebendo-o intocado)",
+    /const href = buildModuleContextHref\(item\.key, resolveModuleLinkContext\(item\.key, context\), month\)/.test(sidebarSource),
   );
   ok("estado ativo compara o MÓDULO resolvido (currentModule) contra a key do item, não contra pathname bruto", /const active = item\.key === currentModule/.test(sidebarSource));
 }
