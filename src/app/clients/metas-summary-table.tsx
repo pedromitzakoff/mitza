@@ -69,7 +69,17 @@ const STICKY_COLUMN_WIDTH = {
   realizado: 130,
 } as const;
 
-const DAY_COLUMN_WIDTH = 64;
+/** 104px — comporta o valor diário mais largo visto em produção (moeda, ex.:
+ * "R$ 4.643,02") com folga, sem vazar pra célula vizinha. 64px (valor
+ * original) só cabia o cabeçalho curto ("01/10"); sob `table-fixed` o
+ * conteúdo que não cabe NUNCA empurra a coluna (diferença chave do
+ * `table-layout: auto` de antes) — ele teria que vazar visualmente por cima
+ * da célula seguinte, que é exatamente o segundo bug reportado (achado em
+ * produção: "86", "R$ 4.643,02" etc. sobrepondo a coluna seguinte).
+ * `overflow-hidden`/ellipsis nas células de dia (abaixo) continuam como rede
+ * de segurança pra um valor futuro ainda maior, nunca a solução principal —
+ * a largura certa é sempre a primeira linha de defesa. */
+const DAY_COLUMN_WIDTH = 104;
 
 const STICKY_LEFT = {
   indicador: 0,
@@ -137,7 +147,7 @@ export function MetasSummaryTable({ rows }: { rows: MetasRow[] }) {
             {days.map((day) => (
               <th
                 key={day.date}
-                className={`border-b border-overview-border px-2 py-2 text-right text-[11px] font-medium tabular-nums ${
+                className={`${TRUNCATE_CLASSES} border-b border-overview-border px-2 py-2 text-right text-[11px] font-medium tabular-nums ${
                   day.isFuture ? "text-overview-text-muted" : "text-overview-text-secondary"
                 }`}
               >
@@ -161,28 +171,32 @@ export function MetasSummaryTable({ rows }: { rows: MetasRow[] }) {
                 </td>
                 <td
                   style={{ left: STICKY_LEFT.meta, width: STICKY_COLUMN_WIDTH.meta }}
-                  className={`${STICKY_COL_CLASSES} ${rowBorderClass} px-3 py-2 text-right tabular-nums text-overview-text-secondary`}
+                  className={`${STICKY_COL_CLASSES} ${rowBorderClass} ${TRUNCATE_CLASSES} px-3 py-2 text-right tabular-nums text-overview-text-secondary`}
+                  title={formatValue(row.targetMonth, row.unit)}
                 >
                   {formatValue(row.targetMonth, row.unit)}
                 </td>
                 <td
                   style={{ left: STICKY_LEFT.realizado, width: STICKY_COLUMN_WIDTH.realizado }}
-                  className={`${STICKY_COL_CLASSES} ${rowBorderClass} border-r border-overview-border px-3 py-2 text-right tabular-nums`}
+                  className={`${STICKY_COL_CLASSES} ${rowBorderClass} ${TRUNCATE_CLASSES} border-r border-overview-border px-3 py-2 text-right tabular-nums`}
+                  title={formatValue(row.realizedMonth, row.unit)}
                 >
                   <span className={`font-semibold ${TONE_TEXT_CLASSES[row.tone]}`}>{formatValue(row.realizedMonth, row.unit)}</span>
-                  {row.unavailableNote && <p className="mt-0.5 text-[10px] font-normal text-overview-text-muted">{row.unavailableNote}</p>}
+                  {row.unavailableNote && (
+                    <p className="mt-0.5 whitespace-normal text-[10px] font-normal text-overview-text-muted">{row.unavailableNote}</p>
+                  )}
                 </td>
                 {row.days.map((day) => (
                   <td
                     key={day.date}
-                    className={`${rowBorderClass} px-2 py-2 text-right tabular-nums ${
+                    className={`${rowBorderClass} ${TRUNCATE_CLASSES} px-2 py-2 text-right tabular-nums ${
                       day.isNeededRate
                         ? "bg-overview-surface-subtle text-overview-text-muted"
                         : day.isFuture
                           ? "text-overview-text-muted"
                           : "text-overview-text-secondary"
                     }`}
-                    title={day.isNeededRate ? "Ritmo necessário a partir de hoje" : undefined}
+                    title={day.isNeededRate ? "Ritmo necessário a partir de hoje" : formatValue(day.value, row.unit)}
                   >
                     {formatValue(day.value, row.unit)}
                   </td>

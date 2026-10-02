@@ -363,4 +363,33 @@ console.log("\n14 — BUGFIX (produção): scroll horizontal vazando por trás d
   );
 }
 
+console.log("\n15 — BUGFIX #2 (produção): valores diários (moeda) vazando por cima da célula vizinha — DAY_COLUMN_WIDTH estreito demais\n");
+{
+  const tableSource = loadSource("src", "app", "clients", "metas-summary-table.tsx");
+
+  ok(
+    "DAY_COLUMN_WIDTH alargado de 64px (só cabia o cabeçalho curto '01/10') pra 104px (comporta valor diário em moeda, ex.: 'R$ 4.643,02')",
+    /const DAY_COLUMN_WIDTH = 104;/.test(tableSource),
+  );
+  ok(
+    "células de dia (header E body) têm overflow-hidden/ellipsis como rede de segurança — mesmo um valor ainda mais largo no futuro nunca mais vaza pra célula vizinha, só trunca",
+    (tableSource.match(/\$\{TRUNCATE_CLASSES\}/g) ?? []).length === 5,
+  );
+  ok(
+    "células Meta do mês/Realizado (sticky) também ganharam a mesma rede de segurança — nenhuma categoria de célula ficou de fora",
+    /STICKY_COL_CLASSES\} \$\{rowBorderClass\} \$\{TRUNCATE_CLASSES\} px-3 py-2 text-right tabular-nums text-overview-text-secondary/.test(tableSource) &&
+      /STICKY_COL_CLASSES\} \$\{rowBorderClass\} \$\{TRUNCATE_CLASSES\} border-r border-overview-border px-3 py-2 text-right tabular-nums/.test(tableSource),
+  );
+  ok(
+    "título (tooltip) com o valor completo em toda célula numérica — mesmo se truncar visualmente, o valor real nunca fica inacessível",
+    /title=\{formatValue\(row\.targetMonth, row\.unit\)\}/.test(tableSource) &&
+      /title=\{formatValue\(row\.realizedMonth, row\.unit\)\}/.test(tableSource) &&
+      /title=\{day\.isNeededRate \? "Ritmo necessário a partir de hoje" : formatValue\(day\.value, row\.unit\)\}/.test(tableSource),
+  );
+  ok(
+    "nota de indisponibilidade (unavailableNote) ganhou whitespace-normal explícito — overflow-hidden/whitespace-nowrap da célula Realizado NUNCA deveria impedir essa nota de quebrar linha (herança de white-space corrigida)",
+    /whitespace-normal text-\[10px\] font-normal text-overview-text-muted/.test(tableSource),
+  );
+}
+
 console.log(`\n${passed} verificações passaram.`);
