@@ -61,13 +61,19 @@ console.log("\n1 — SIDEBAR: Growth/Execução/Gestão sempre visíveis; nenhum
 
 console.log("\n2 — CONTEXTO: 'Todos' no seletor, nunca tratado como cliente; status/X-Y/Informações da conta só com cliente específico\n");
 {
-  ok('"Todos os clientes" é o allLabel do seletor em ClientWorkspaceHeader (linha "limpar seleção" nativa do SearchableSelect, nunca um id/UUID fake)', headerSource.includes('allLabel="Todos os clientes"'));
+  // Etapa "Correção Conceitual da Fase 4.6: Dashboard é sempre Cliente":
+  // "Todos os clientes" deixou de ser um allLabel FIXO — vira condicional
+  // (`canOfferAllClients`, derivado de `moduleSupportsAllContext`) — ver
+  // suite própria da correção pra cobertura completa (Dashboard nunca
+  // oferece, Operação sempre oferece).
+  ok(
+    '"Todos os clientes" continua sendo a linha "limpar seleção" nativa do SearchableSelect (nunca um id/UUID fake) — só passou a ser condicional',
+    headerSource.includes('allLabel={canOfferAllClients ? "Todos os clientes" : undefined}'),
+  );
   ok("nenhum cliente fake é criado (nenhum literal de UUID/sentinela inventado pra 'Todos')", !headerSource.includes('"__all__"') && !headerSource.includes("ALL_CONTEXT"));
   ok(
     "selecionar 'Todos' (onSelect(null)) navega pro contexto global do MÓDULO ATUAL — nunca mexe em status/posição/Informações da conta (esses só existem enquanto `client` continua sendo um cliente real)",
-    /if \(!targetClientId\) \{\s*const \{ module \} = resolveCurrentModuleAndContext\(pathname\);\s*router\.push\(buildModuleContextHref\(module \?\? "dashboard", \{ type: "all" \}, null\)\);/.test(
-      headerSource,
-    ),
+    /if \(!targetClientId\) \{\s*router\.push\(buildModuleContextHref\(currentModule \?\? "dashboard", \{ type: "all" \}, null\)\);/.test(headerSource),
   );
   ok(
     "status/posição X·Y/anterior-próximo/Informações da conta continuam renderizados a partir de `client`/`position`/`total` reais (nunca condicionais a um estado 'Todos' dentro do header — ele só existe nesta rota quando HÁ um cliente)",
@@ -111,12 +117,15 @@ console.log("\n3 — resolveCurrentModuleAndContext: pathname -> módulo + conte
   });
 }
 
-console.log("\n4 — DASHBOARD: Todos -> visão global; cliente -> /clients/[id]; preservado nas duas direções\n");
+console.log("\n4 — DASHBOARD: CORRIGIDO na Etapa 'Correção Conceitual da Fase 4.6' — só Cliente, Todos cai em /clients (ver suite própria)\n");
 {
-  check("Dashboard + Todos -> /", buildModuleContextHref("dashboard", { type: "all" }, null), "/");
+  check("Dashboard + Todos -> /clients (nunca mais o dashboard consolidado global)", buildModuleContextHref("dashboard", { type: "all" }, null), "/clients");
   check("Dashboard + cliente -> /clients/[id]", buildModuleContextHref("dashboard", { type: "client", id: "leonardo" }, null), "/clients/leonardo");
   check("Dashboard + cliente + month -> preserva ?month=", buildModuleContextHref("dashboard", { type: "client", id: "leonardo" }, "2026-10"), "/clients/leonardo?month=2026-10");
-  ok("'/' (Visão Geral) NÃO foi reescrita nesta fase — GlobalScopeSelect só foi adicionado, nenhum cálculo tocado", homePageSource.includes("buildOperationClientCard") && homePageSource.includes("<GlobalScopeSelect module=\"dashboard\""));
+  ok(
+    "'/' (dashboard consolidado antigo) NÃO foi deletada — continua no disco como código órfão, só deixou de ser destino de navegação (ver suite da correção)",
+    homePageSource.includes("buildOperationClientCard") && homePageSource.includes("<GlobalScopeSelect module=\"dashboard\""),
+  );
 }
 
 console.log("\n5 — OPERAÇÃO: Todos -> /operation; cliente -> /clients/[id]/operation; preservado nas duas direções + entre clientes\n");
@@ -162,9 +171,14 @@ console.log("\n8 — METAS/PERFORMANCE/DADOS: sem rota global (decisão document
   check("Metas: clienteA -> clienteB preserva o módulo", buildModuleContextHref("metas", { type: "client", id: "b" }, null), "/clients/b/metas");
   check("Performance: clienteA -> clienteB preserva o módulo (rota técnica /relatorio)", buildModuleContextHref("performance", { type: "client", id: "b" }, null), "/clients/b/relatorio");
   check("Dados: clienteA -> clienteB preserva o módulo", buildModuleContextHref("dados", { type: "client", id: "b" }, null), "/clients/b/dados");
+  // Etapa "Correção Conceitual da Fase 4.6: Dashboard é sempre Cliente":
+  // dashboard SAIU de MODULE_GLOBAL_HREF (ver suite própria da correção) —
+  // o regex exato de antes não se aplica mais; a checagem completa dos 3
+  // módulos restantes (operation/demandas/timeline) vive na suite da
+  // correção, que também confirma a AUSÊNCIA de dashboard ali.
   ok(
-    "nenhum cálculo/agregação consolidada nova foi criada pra Metas/Performance/Dados (MODULE_GLOBAL_HREF só tem dashboard/operation/demandas/timeline)",
-    /MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = \{\s*dashboard: "\/",\s*operation: "\/operation",\s*demandas: "\/demandas",\s*timeline: "\/timeline",\s*\};/.test(
+    "nenhum cálculo/agregação consolidada nova foi criada pra Metas/Performance/Dados (MODULE_GLOBAL_HREF continua só com os módulos operacionais)",
+    /MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = \{\s*operation: "\/operation",\s*demandas: "\/demandas",\s*timeline: "\/timeline",\s*\};/.test(
       loadSource("src", "lib", "client-workspace-nav.ts"),
     ),
   );
@@ -182,7 +196,10 @@ console.log("\n9 — Preservação de módulo na troca de contexto (seção 9/10
     buildModuleContextHref("operation", { type: "all" }, null),
     "/operation",
   );
-  check("Helping Hand->Dashboard, seleciona Todos -> Dashboard global", buildModuleContextHref("dashboard", { type: "all" }, null), "/");
+  // Etapa "Correção Conceitual da Fase 4.6": Dashboard nunca mais oferece
+  // "Todos" (ver suite própria) — este cenário específico não se aplica
+  // mais a Dashboard; a troca TODOS->cliente dos módulos operacionais
+  // (verificada logo abaixo, Operação) continua intacta.
   check(
     "Todos->Operação, seleciona Helping Hand -> Helping Hand->Operação (mesma função, direção inversa)",
     buildModuleContextHref("operation", { type: "client", id: "helping-hand" }, null),

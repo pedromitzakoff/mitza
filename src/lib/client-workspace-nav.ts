@@ -114,18 +114,45 @@ const SUFFIX_TO_MODULE: Record<string, ModuleKey> = {
   "/timeline": "timeline",
 };
 
-/** Só os módulos que têm uma rota GLOBAL de verdade hoje (seção 8 do
- * pedido) — Metas/Performance/Dados nunca tiveram uma versão consolidada
- * da carteira inteira, e esta fase explicitamente NÃO cria uma (seção 7:
- * "não inventar dashboard/agregação consolidada"). Pra esses 3, contexto
- * "Todos" cai em `/clients` (escolher um cliente), decisão documentada —
- * nunca um redirect pra uma página que não existe. */
+/**
+ * Só os módulos que GENUINAMENTE suportam o contexto "Todos" (Etapa
+ * "MEGA FACELIFT — Correção Conceitual da Fase 4.6: Dashboard é sempre
+ * Cliente"). Dois grupos, derivados do uso real de cada módulo, nunca
+ * tratados como equivalentes:
+ *
+ * - MÓDULOS DE GROWTH DO CLIENTE (dashboard/metas/performance/dados):
+ *   respondem "como ESTE cliente está indo" — a pergunta não faz sentido
+ *   sem um cliente. `dashboard` saiu deste mapa nesta correção: o antigo
+ *   "Dashboard + Todos" (`/`, o dashboard consolidado da agência) era uma
+ *   experiência conceitualmente diferente de "Dashboard + Cliente" (visão
+ *   individual de Growth) disfarçada do mesmo módulo — a prática de uso
+ *   mostrou isso confuso. `/` continua existindo no disco (nunca deletada,
+ *   seção "não fazer cleanup agressivo" de sempre) como código órfão, só
+ *   deixou de ser o destino de qualquer navegação própria da plataforma.
+ * - MÓDULOS OPERACIONAIS (operation/demandas/timeline): sempre suportaram
+ *   "Todos" de verdade (Fase 4.5/4.6) — nenhuma mudança aqui.
+ *
+ * Metas/Performance/Dados nunca tiveram uma versão consolidada da carteira
+ * inteira (nunca inventar uma — seção 7 da Fase 4.6). Contexto "Todos" pra
+ * qualquer módulo fora deste mapa cai em `/clients` (escolher um cliente,
+ * mesma UX já existente) — nunca um redirect pra uma página que não
+ * existe, nunca uma segunda seleção de cliente inventada. */
 const MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = {
-  dashboard: "/",
   operation: "/operation",
   demandas: "/demandas",
   timeline: "/timeline",
 };
+
+/** Um módulo "suporta Todos" exatamente quando tem uma rota global real —
+ * MESMA fonte de verdade de `buildModuleContextHref`, nunca uma segunda
+ * lista mantida à mão (um módulo que ganhar/perder rota global nunca
+ * precisa de uma segunda edição em outro lugar). Usado por
+ * `ClientWorkspaceHeader` pra decidir se oferece "Todos os clientes" no
+ * seletor — módulos de Growth do cliente (dashboard/metas/performance/
+ * dados) nunca oferecem essa opção. */
+export function moduleSupportsAllContext(module: ModuleKey): boolean {
+  return module in MODULE_GLOBAL_HREF;
+}
 
 /** Resolve "módulo atual + contexto desejado" pra uma URL — único lugar
  * que sabe montar esse destino (seção 17 do pedido: "evitar lógica de

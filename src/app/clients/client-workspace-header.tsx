@@ -10,6 +10,7 @@ import type { ClientContractStatus } from "@/lib/supabase/database.types";
 import {
   buildModuleContextHref,
   buildWorkspaceHref,
+  moduleSupportsAllContext,
   resolveCurrentModuleAndContext,
   resolveCurrentSuffix,
   resolveReplicableSuffix,
@@ -75,6 +76,15 @@ export function ClientWorkspaceHeader({
   const currentSuffix = resolveCurrentSuffix(pathname, client.id);
   const replicableSuffix = resolveReplicableSuffix(currentSuffix);
   const isOnPanel = currentSuffix === "";
+  const { module: currentModule } = resolveCurrentModuleAndContext(pathname);
+  /** Etapa "Correção Conceitual da Fase 4.6: Dashboard é sempre Cliente" —
+   * módulos de Growth do cliente (Dashboard/Metas/Performance/Dados) nunca
+   * oferecem "Todos os clientes" aqui: não existe experiência "Todos" pra
+   * eles (removida pro Dashboard, nunca existiu pros outros 3 — seção 7 da
+   * Fase 4.6). `currentModule` só é `null` fora dos 7 módulos reconhecidos
+   * (nunca acontece dentro do workspace de cliente, mas o fallback pra
+   * `moduleSupportsAllContext(false)` continua seguro). */
+  const canOfferAllClients = currentModule !== null && moduleSupportsAllContext(currentModule);
 
   function hrefFor(targetClientId: string, suffix: string): string {
     return buildWorkspaceHref(targetClientId, suffix, month);
@@ -97,8 +107,7 @@ export function ClientWorkspaceHeader({
    */
   function handleSwitch(targetClientId: string | null) {
     if (!targetClientId) {
-      const { module } = resolveCurrentModuleAndContext(pathname);
-      router.push(buildModuleContextHref(module ?? "dashboard", { type: "all" }, null));
+      router.push(buildModuleContextHref(currentModule ?? "dashboard", { type: "all" }, null));
       return;
     }
     router.push(hrefFor(targetClientId, replicableSuffix));
@@ -130,7 +139,7 @@ export function ClientWorkspaceHeader({
             selectedId={client.id}
             onSelect={handleSwitch}
             placeholder={client.name}
-            allLabel="Todos os clientes"
+            allLabel={canOfferAllClients ? "Todos os clientes" : undefined}
             searchPlaceholder="Buscar cliente..."
             ariaLabel="Trocar de cliente"
           />
