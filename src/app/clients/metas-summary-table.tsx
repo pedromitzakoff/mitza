@@ -59,14 +59,24 @@ function formatValue(value: number | null, unit: MetasRowUnit): string {
 /** Única fonte de verdade das larguras — tanto o `<colgroup>` quanto o
  * `left` de cada coluna sticky (calculado abaixo por soma cumulativa) saem
  * destes 3 números. Nunca escrever um `left-[...]` à mão de novo: qualquer
- * mudança de largura aqui já propaga pro offset certo. 190px comporta o
- * rótulo mais longo hoje ("Custo por novo seguidor", objetivo Seguidores)
- * sem ellipsis; o truncamento continua como rede de segurança pra um rótulo
- * futuro ainda mais longo. */
+ * mudança de largura aqui já propaga pro offset certo.
+ *
+ * `indicador`: 190px comporta o rótulo mais longo hoje ("Custo por novo
+ * seguidor", objetivo Seguidores) sem ellipsis; o truncamento continua como
+ * rede de segurança pra um rótulo futuro ainda mais longo.
+ *
+ * `meta`/`realizado`: BUGFIX #3 (produção) — 110px/130px (valores originais)
+ * truncavam "Meta do mês" pra um orçamento mensal de 6 dígitos (ex.: "R$
+ * 135.000,00" virava "R$ 135.00…", informação real perdida de vista, nunca
+ * só esteticamente estreito). Igualadas em 140px (mesma largura pras duas)
+ * — comporta orçamento/realizado de até 6 dígitos inteiros sem truncar, e
+ * fica com o mesmo ritmo visual entre as duas colunas numéricas (antes
+ * 110×130, larguras diferentes sem motivo real — o pedido de correção
+ * aponta isso como "não tá tão alinhado"). */
 const STICKY_COLUMN_WIDTH = {
   indicador: 190,
-  meta: 110,
-  realizado: 130,
+  meta: 140,
+  realizado: 140,
 } as const;
 
 /** 104px — comporta o valor diário mais largo visto em produção (moeda, ex.:

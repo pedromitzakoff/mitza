@@ -392,4 +392,18 @@ console.log("\n15 — BUGFIX #2 (produção): valores diários (moeda) vazando p
   );
 }
 
+console.log("\n16 — BUGFIX #3 (produção): 'Meta do mês' truncando orçamento de 6 dígitos ('R$ 135.000,00' virava 'R$ 135.00…')\n");
+{
+  const tableSource = loadSource("src", "app", "clients", "metas-summary-table.tsx");
+
+  ok(
+    "meta/realizado alargadas de 110px/130px pra 140px/140px — comporta orçamento mensal de 6 dígitos inteiros sem truncar",
+    /meta: 140,\s*\n\s*realizado: 140,/.test(tableSource),
+  );
+  ok(
+    "as duas colunas numéricas (Meta do mês/Realizado) ficam com a MESMA largura — ritmo visual consistente, nunca duas larguras diferentes sem motivo",
+    /meta: 140/.test(tableSource) && /realizado: 140/.test(tableSource),
+  );
+}
+
 console.log(`\n${passed} verificações passaram.`);
