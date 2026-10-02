@@ -115,43 +115,47 @@ const SUFFIX_TO_MODULE: Record<string, ModuleKey> = {
 };
 
 /**
- * Só os módulos que GENUINAMENTE suportam o contexto "Todos" (Etapa
- * "MEGA FACELIFT — Correção Conceitual da Fase 4.6: Dashboard é sempre
- * Cliente"). Dois grupos, derivados do uso real de cada módulo, nunca
- * tratados como equivalentes:
+ * Destino de "módulo + contexto Todos" (Etapa "MEGA FACELIFT — Correção
+ * Conceitual da Fase 4.6" + revisada pela Etapa "Correção do fluxo final
+ * do Dashboard"). Dois grupos, derivados do uso real de cada módulo:
  *
  * - MÓDULOS DE GROWTH DO CLIENTE (dashboard/metas/performance/dados):
  *   respondem "como ESTE cliente está indo" — a pergunta não faz sentido
- *   sem um cliente. `dashboard` saiu deste mapa nesta correção: o antigo
- *   "Dashboard + Todos" (`/`, o dashboard consolidado da agência) era uma
- *   experiência conceitualmente diferente de "Dashboard + Cliente" (visão
- *   individual de Growth) disfarçada do mesmo módulo — a prática de uso
- *   mostrou isso confuso. `/` continua existindo no disco (nunca deletada,
- *   seção "não fazer cleanup agressivo" de sempre) como código órfão, só
- *   deixou de ser o destino de qualquer navegação própria da plataforma.
+ *   sem um cliente. Metas/Performance/Dados nunca tiveram uma versão
+ *   consolidada da carteira inteira (nunca inventar uma — seção 7 da Fase
+ *   4.6): ficam FORA deste mapa, então "Todos" pra eles cai no fallback
+ *   padrão de `buildModuleContextHref`, `/clients` (escolher um cliente).
+ *   `dashboard` é o único dos quatro que TEM uma entrada aqui — mas
+ *   `"/"` deixou de ser o dashboard consolidado da agência (aposentado,
+ *   `LegacyGlobalDashboard` em `app/page.tsx`) e passou a ser um
+ *   RESOLVER: abre direto o primeiro cliente da sequência oficial da
+ *   carteira (`resolveHomeRedirectHref`, `lib/agency-accounts-tree.ts`).
+ *   Isso existe só pra Sidebar/header nunca precisarem resolver "qual é o
+ *   primeiro cliente" no cliente (eles não têm a árvore da carteira em
+ *   mãos) — nunca pra oferecer "Todos" como opção real no seletor, por
+ *   isso NÃO entra em `MODULES_OFFERING_ALL_IN_SELECTOR` abaixo.
  * - MÓDULOS OPERACIONAIS (operation/demandas/timeline): sempre suportaram
  *   "Todos" de verdade (Fase 4.5/4.6) — nenhuma mudança aqui.
- *
- * Metas/Performance/Dados nunca tiveram uma versão consolidada da carteira
- * inteira (nunca inventar uma — seção 7 da Fase 4.6). Contexto "Todos" pra
- * qualquer módulo fora deste mapa cai em `/clients` (escolher um cliente,
- * mesma UX já existente) — nunca um redirect pra uma página que não
- * existe, nunca uma segunda seleção de cliente inventada. */
+ */
 const MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = {
+  dashboard: "/",
   operation: "/operation",
   demandas: "/demandas",
   timeline: "/timeline",
 };
 
-/** Um módulo "suporta Todos" exatamente quando tem uma rota global real —
- * MESMA fonte de verdade de `buildModuleContextHref`, nunca uma segunda
- * lista mantida à mão (um módulo que ganhar/perder rota global nunca
- * precisa de uma segunda edição em outro lugar). Usado por
- * `ClientWorkspaceHeader` pra decidir se oferece "Todos os clientes" no
- * seletor — módulos de Growth do cliente (dashboard/metas/performance/
- * dados) nunca oferecem essa opção. */
+/**
+ * Módulos cujo seletor do header pode genuinamente oferecer "Todos os
+ * clientes" como opção ESCOLHÍVEL (Etapa "Correção do fluxo final do
+ * Dashboard"). Deliberadamente NÃO derivado de `MODULE_GLOBAL_HREF`
+ * acima: Dashboard tem uma entrada ali (resolve pro primeiro cliente),
+ * mas isso é uma resolução interna de navegação, nunca uma opção real que
+ * o usuário escolhe — o seletor em Dashboard/Metas/Performance/Dados
+ * nunca mostra "Todos os clientes". Usado por `ClientWorkspaceHeader`. */
+const MODULES_OFFERING_ALL_IN_SELECTOR: readonly ModuleKey[] = ["operation", "demandas", "timeline"];
+
 export function moduleSupportsAllContext(module: ModuleKey): boolean {
-  return module in MODULE_GLOBAL_HREF;
+  return MODULES_OFFERING_ALL_IN_SELECTOR.includes(module);
 }
 
 /** Resolve "módulo atual + contexto desejado" pra uma URL — único lugar

@@ -14,7 +14,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { buildModuleContextHref, resolveCurrentModuleAndContext, type ModuleKey } from "../src/lib/client-workspace-nav";
+import { buildModuleContextHref, moduleSupportsAllContext, resolveCurrentModuleAndContext, type ModuleKey } from "../src/lib/client-workspace-nav";
 
 let passed = 0;
 function ok(name: string, condition: boolean) {
@@ -117,14 +117,21 @@ console.log("\n3 — resolveCurrentModuleAndContext: pathname -> módulo + conte
   });
 }
 
-console.log("\n4 — DASHBOARD: CORRIGIDO na Etapa 'Correção Conceitual da Fase 4.6' — só Cliente, Todos cai em /clients (ver suite própria)\n");
+console.log("\n4 — DASHBOARD: CORRIGIDO na Etapa 'Correção Conceitual da Fase 4.6' e revisado na Etapa 'Correção do fluxo final do Dashboard' — só Cliente; Todos resolve pro primeiro cliente via '/' (ver suites próprias)\n");
 {
-  check("Dashboard + Todos -> /clients (nunca mais o dashboard consolidado global)", buildModuleContextHref("dashboard", { type: "all" }, null), "/clients");
+  check("Dashboard + Todos -> '/' (resolver — nunca mais /clients, nunca mais o dashboard consolidado global)", buildModuleContextHref("dashboard", { type: "all" }, null), "/");
   check("Dashboard + cliente -> /clients/[id]", buildModuleContextHref("dashboard", { type: "client", id: "leonardo" }, null), "/clients/leonardo");
   check("Dashboard + cliente + month -> preserva ?month=", buildModuleContextHref("dashboard", { type: "client", id: "leonardo" }, "2026-10"), "/clients/leonardo?month=2026-10");
   ok(
-    "'/' (dashboard consolidado antigo) NÃO foi deletada — continua no disco como código órfão, só deixou de ser destino de navegação (ver suite da correção)",
-    homePageSource.includes("buildOperationClientCard") && homePageSource.includes("<GlobalScopeSelect module=\"dashboard\""),
+    "Dashboard nunca oferece 'Todos os clientes' no seletor, mesmo tendo entrada em MODULE_GLOBAL_HREF (moduleSupportsAllContext é uma lista própria, não derivada do mapa)",
+    !moduleSupportsAllContext("dashboard"),
+  );
+  ok(
+    "'LegacyGlobalDashboard' (dashboard consolidado antigo) NÃO foi deletado — continua no disco como código órfão, exportado só pra não dar aviso de não-usado, nunca mais é o export default de '/' (ver suite da correção)",
+    homePageSource.includes("buildOperationClientCard") &&
+      homePageSource.includes("<GlobalScopeSelect module=\"dashboard\"") &&
+      homePageSource.includes("export async function LegacyGlobalDashboard(") &&
+      !/export default async function Home\(\{\s*searchParams/.test(homePageSource),
   );
 }
 
@@ -171,14 +178,14 @@ console.log("\n8 — METAS/PERFORMANCE/DADOS: sem rota global (decisão document
   check("Metas: clienteA -> clienteB preserva o módulo", buildModuleContextHref("metas", { type: "client", id: "b" }, null), "/clients/b/metas");
   check("Performance: clienteA -> clienteB preserva o módulo (rota técnica /relatorio)", buildModuleContextHref("performance", { type: "client", id: "b" }, null), "/clients/b/relatorio");
   check("Dados: clienteA -> clienteB preserva o módulo", buildModuleContextHref("dados", { type: "client", id: "b" }, null), "/clients/b/dados");
-  // Etapa "Correção Conceitual da Fase 4.6: Dashboard é sempre Cliente":
-  // dashboard SAIU de MODULE_GLOBAL_HREF (ver suite própria da correção) —
-  // o regex exato de antes não se aplica mais; a checagem completa dos 3
-  // módulos restantes (operation/demandas/timeline) vive na suite da
-  // correção, que também confirma a AUSÊNCIA de dashboard ali.
+  // Etapa "Correção do fluxo final do Dashboard": dashboard VOLTOU a ter
+  // entrada em MODULE_GLOBAL_HREF ("/", o resolver pro primeiro cliente —
+  // nunca uma agregação consolidada nova), mas metas/performance/dados
+  // continuam de fora — a checagem completa dessa decisão vive na suite
+  // própria da correção.
   ok(
-    "nenhum cálculo/agregação consolidada nova foi criada pra Metas/Performance/Dados (MODULE_GLOBAL_HREF continua só com os módulos operacionais)",
-    /MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = \{\s*operation: "\/operation",\s*demandas: "\/demandas",\s*timeline: "\/timeline",\s*\};/.test(
+    "nenhum cálculo/agregação consolidada nova foi criada pra Metas/Performance/Dados (MODULE_GLOBAL_HREF só ganhou o resolver do Dashboard, nunca uma entrada pra Metas/Performance/Dados)",
+    /MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = \{\s*dashboard: "\/",\s*operation: "\/operation",\s*demandas: "\/demandas",\s*timeline: "\/timeline",\s*\};/.test(
       loadSource("src", "lib", "client-workspace-nav.ts"),
     ),
   );

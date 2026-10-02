@@ -1,5 +1,8 @@
+import { redirect } from "next/navigation";
 import { Inter } from "next/font/google";
 import { getCurrentProfile } from "@/lib/auth";
+import { loadAgencyAccountsTree } from "@/lib/agency-accounts-tree-data";
+import { flattenAgencyTree, resolveHomeRedirectHref } from "@/lib/agency-accounts-tree";
 import { perfNow, perfLog } from "@/lib/perf-log";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
@@ -80,7 +83,43 @@ type ResultTypeFilter = "todos" | PerformanceGoal;
  */
 type PlatformFilter = "consolidado" | "meta" | "google" | "tiktok";
 
-export default async function Home({
+/**
+ * Etapa "Correção do fluxo final do Dashboard" — "/" deixou de renderizar
+ * o dashboard consolidado da agência (implementação antiga preservada
+ * abaixo, em `LegacyGlobalDashboard` — não deletada, só deixou de ser o
+ * export default desta rota, então nunca mais é alcançada pela navegação
+ * normal). Dashboard SEMPRE é a experiência individual de
+ * `/clients/[id]` (decisão do usuário: "Isso adiciona uma etapa
+ * desnecessária" sobre o fluxo antigo "/ -> /clients -> escolher ->
+ * Dashboard"). "/" agora é só um RESOLVER server-side: entra na carteira
+ * pela MESMA sequência oficial já usada por anterior/próximo e pelo
+ * seletor do header (`loadAgencyAccountsTree` + `flattenAgencyTree`,
+ * `lib/agency-accounts-tree*` — nunca uma segunda ordenação) e redireciona
+ * pro Dashboard do primeiro cliente dessa sequência
+ * (`resolveHomeRedirectHref`, núcleo puro testável sem Supabase/redirect).
+ * Carteira vazia (nenhum cliente ativo) cai no único fallback seguro,
+ * `/clients` (Gestão) — que nunca redireciona de volta pra "/", então não
+ * há risco de loop.
+ */
+export default async function Home() {
+  const profile = await getCurrentProfile();
+  if (!profile) return null;
+
+  const tree = await loadAgencyAccountsTree();
+  redirect(resolveHomeRedirectHref(flattenAgencyTree(tree)));
+}
+
+/**
+ * Implementação antiga do dashboard consolidado da agência (Etapa "MEGA
+ * FACELIFT — Correção Conceitual da Fase 4.6" em diante) — aposentada
+ * pela Etapa "Correção do fluxo final do Dashboard" acima: deixou de ser
+ * o export default de `page.tsx`, então "/" nunca mais a renderiza.
+ * Preservada aqui intacta (não deletada agressivamente, por pedido
+ * explícito) só pra eventual reaproveitamento futuro de algum trecho —
+ * continua exportada (nunca importada por ninguém hoje) só pra não gerar
+ * aviso de "não usada" do linter/compilador.
+ */
+export async function LegacyGlobalDashboard({
   searchParams,
 }: {
   searchParams: Promise<{

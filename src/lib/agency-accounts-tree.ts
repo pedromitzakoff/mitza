@@ -129,3 +129,19 @@ export function resolveWalletSequence(tree: AgencyTree, currentClientId: string)
     nextId: index < flat.length - 1 ? flat[index + 1].id : null,
   };
 }
+
+/**
+ * Resolve o destino de "/" (Etapa "Correção do fluxo final do Dashboard")
+ * — Dashboard SEMPRE abre um cliente real, nunca uma escolha extra em
+ * `/clients`. Recebe a MESMA sequência oficial já usada por anterior/
+ * próximo e pelo seletor do header (`flattenAgencyTree`, nunca uma
+ * segunda ordenação inventada aqui) — o primeiro cliente dessa lista é o
+ * destino. Carteira vazia (nenhum cliente ativo) cai no único fallback
+ * seguro, `/clients` (Gestão) — que nunca redireciona de volta pra "/",
+ * então não há risco de loop. Núcleo puro (sem Supabase/`redirect`), só
+ * pra `app/page.tsx` poder ser testado sem mockar nenhum dos dois.
+ */
+export function resolveHomeRedirectHref(flatClients: AgencyTreeClient[]): string {
+  const [first] = flatClients;
+  return first ? `/clients/${first.id}` : "/clients";
+}
