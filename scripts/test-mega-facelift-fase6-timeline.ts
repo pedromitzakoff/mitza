@@ -144,10 +144,15 @@ console.log("\n12 — Contexto CLIENTE (rota /clients/[id]/timeline) e contexto 
   ok("/timeline (agência) nunca foi reescrita — mesma fetchAgencyTimeline/TimelineFilterBar de sempre", loadSource("src", "app", "timeline", "page.tsx").includes("fetchAgencyTimeline"));
 }
 
-console.log("\n13 — Sidebar: módulo Timeline continua presente e único (nenhuma duplicata introduzida nesta fase)\n");
+console.log("\n13 — Sidebar: MITZA ONE — Fase 2 manteve Timeline como link GLOBAL fixo na área Agência (nunca removida, só deixou de ter conceito de 'módulo' por cliente)\n");
 {
-  ok("Sidebar ainda define o módulo Timeline (grupo execução) — Fase 6 não tocou a navegação", /\{ key: "timeline", label: "Timeline"/.test(sidebarSource));
-  ok("Timeline aparece só UMA vez em MODULES", (sidebarSource.match(/key: "timeline"/g) ?? []).length === 1);
+  // MITZA ONE — Fase 2: Timeline (diferente de Metas/Performance/Dados,
+  // que migraram pro cockpit) continua com item PRÓPRIO na Sidebar — mas
+  // agora como link global fixo (área Agência), nunca mais "módulo que
+  // segue o cliente ativo" (esse conceito não existe mais na Sidebar).
+  // A Timeline POR CLIENTE (seções 1-12 acima) continua intacta, só
+  // alcançável agora via CTA dentro do cockpit (Fase 1) ou deep link.
+  ok("Sidebar ainda define Timeline — agora como link global fixo (área Agência), nunca duplicada", /label: "Timeline", href: "\/timeline"/.test(sidebarSource) && (sidebarSource.match(/label: "Timeline"/g) ?? []).length === 1);
 }
 
 console.log("\n14 — Permissões: mesmo modelo de acesso de /timeline (RLS por organização, nenhum gate novo) — gestor vê a história completa do cliente que já acessa\n");

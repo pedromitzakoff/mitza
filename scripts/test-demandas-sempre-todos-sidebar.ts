@@ -68,12 +68,23 @@ console.log("\n4 — Deep link /clients/[id]/demandas continua funcionando (só 
   check("buildModuleContextHref direto com contexto de cliente continua abrindo o workspace do cliente (usado por anterior/próximo, busca do header, GlobalScopeSelect)", buildModuleContextHref("demandas", { type: "client", id: "aibou" }, null), "/clients/aibou/demandas");
 }
 
-console.log("\n5 — Sidebar: ModuleLink usa resolveModuleLinkContext ao montar o href; demais mecanismos (header, GlobalScopeSelect) não são tocados\n");
+console.log("\n5 — Sidebar: MITZA ONE — Fase 2 (Sidebar = Carteira) substituiu ModuleLink/resolveModuleLinkContext por um link GLOBAL fixo — garantia ainda mais forte (nunca dependeu de contexto ambiente pra começar)\n");
 {
+  // A Sidebar deixou de ter 'módulo + contexto ambiente' (Fase 2 — não há
+  // mais navegação por módulo). O item "Demandas" da nova área "Agência"
+  // é simplesmente href: "/demandas", sem nenhuma lógica de contexto —
+  // nunca precisa de resolveModuleLinkContext pra "forçar" Todos, porque
+  // não existe outro destino possível. `resolveModuleLinkContext`/
+  // `buildModuleContextHref` continuam intocados em client-workspace-nav.ts
+  // (seções 1-4 acima) — só deixaram de ser chamados PELA SIDEBAR.
   const sidebarSource = loadSource("src", "app", "sidebar.tsx");
   ok(
-    "ModuleLink passa resolveModuleLinkContext(item.key, context) pro buildModuleContextHref, não o contexto ambiente puro",
-    /const href = buildModuleContextHref\(item\.key, resolveModuleLinkContext\(item\.key, context\), month\)/.test(sidebarSource),
+    "AGENCIA_ITEMS define Demandas com href fixo '/demandas' (sem contexto, sem resolveModuleLinkContext) — nunca abre a fração de um cliente",
+    /label: "Demandas", href: "\/demandas"/.test(sidebarSource),
+  );
+  ok(
+    "Sidebar não IMPORTA mais resolveModuleLinkContext/buildModuleContextHref (módulo + contexto deixou de existir como conceito na navegação — os nomes só sobrevivem numa doc-comment explicando o que saiu)",
+    !sidebarSource.includes("import {") || !/import \{[^}]*\b(resolveModuleLinkContext|buildModuleContextHref)\b[^}]*\} from "@\/lib\/client-workspace-nav"/.test(sidebarSource),
   );
   const headerSource = loadSource("src", "app", "clients", "client-workspace-header.tsx");
   ok("ClientWorkspaceHeader NÃO importa resolveModuleLinkContext — seu mecanismo de troca de cliente/contexto é outro, intocado por esta etapa", !headerSource.includes("resolveModuleLinkContext"));

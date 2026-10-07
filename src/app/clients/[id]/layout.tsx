@@ -1,24 +1,22 @@
 import { notFound } from "next/navigation";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { loadAgencyAccountsTree } from "@/lib/agency-accounts-tree-data";
-import { flattenAgencyTree, resolveWalletSequence } from "@/lib/agency-accounts-tree";
 import { ClientWorkspaceHeader } from "../client-workspace-header";
 import { ActiveClientSidebarName } from "../client-workspace-context";
 
 /**
- * Layout compartilhado do workspace do cliente (Etapa "MITZA —
- * Reformulação Estrutural") — envolve TODAS as sub-rotas de
- * `clients/[id]/**` (Visão geral, `/relatorio`, `/operation`, `/demandas`,
- * `/edit`, e as legadas `/tasks/new`/`/tasks/[taskId]/edit`) com o
- * cabeçalho persistente (nome do cliente + seletor rápido + anterior/
- * próximo + abas). Busca só o MÍNIMO pro cabeçalho (id/nome/avatar/status)
- * — os dados pesados de cada aba continuam 100% na própria página, nunca
- * centralizados aqui (Princípio "trocar contexto deve carregar só o
- * necessário", seção 22 do pedido).
+ * Layout compartilhado do workspace do cliente — envolve TODAS as
+ * sub-rotas de `clients/[id]/**` (cockpit, `/metas`, `/relatorio`,
+ * `/dados`, `/operation`, `/demandas`, `/timeline`, `/edit`, e as legadas
+ * `/tasks/new`/`/tasks/[taskId]/edit`) com o cabeçalho persistente.
  *
- * A árvore "Contas da Agência" (`loadAgencyAccountsTree`, `cache()` por
- * requisição) já é buscada pela Sidebar nesta MESMA navegação — aqui é
- * reaproveitada, não uma segunda consulta.
+ * MITZA ONE — Fase 2 (Sidebar = Carteira, Header Simplificado): este
+ * layout deixou de buscar a árvore "Contas da Agência"
+ * (`loadAgencyAccountsTree`/`resolveWalletSequence`/`flattenAgencyTree`)
+ * — essa busca só existia aqui pra alimentar o seletor rápido/anterior-
+ * próximo/posição do header antigo, todos removidos nesta fase (a Sidebar,
+ * no layout RAIZ, agora é quem busca e exibe a carteira). Busca só o
+ * MÍNIMO pro cabeçalho atual (id/nome/avatar/status) — os dados pesados
+ * de cada rota continuam 100% na própria página.
  */
 export default async function ClientWorkspaceLayout({
   children,
@@ -30,32 +28,15 @@ export default async function ClientWorkspaceLayout({
   const { id } = await params;
   const supabase = await createSupabaseClient();
 
-  const [{ data: client, error }, tree] = await Promise.all([
-    supabase.from("clients").select("id, name, avatar_url, status").eq("id", id).is("deleted_at", null).maybeSingle(),
-    loadAgencyAccountsTree(),
-  ]);
+  const { data: client, error } = await supabase.from("clients").select("id, name, avatar_url, status").eq("id", id).is("deleted_at", null).maybeSingle();
 
   if (error) console.error(`[ClientWorkspaceLayout] falha ao buscar cliente ${id}:`, error);
   if (!client) notFound();
 
-  // `null` pra cliente pausado/encerrado (a árvore só lista workspace-ativo)
-  // — anterior/próximo/posição somem nesse caso, mas o workspace continua
-  // acessível pra consulta (mesmo princípio de sempre: pausado/encerrado é
-  // modo leitura, nunca 404).
-  const sequence = resolveWalletSequence(tree, id);
-  const clientOptions = flattenAgencyTree(tree).map((c) => ({ id: c.id, name: c.name }));
-
   return (
     <div className="flex min-h-full flex-col">
       <ActiveClientSidebarName name={client.name} />
-      <ClientWorkspaceHeader
-        client={{ id: client.id, name: client.name, avatarUrl: client.avatar_url, status: client.status }}
-        prevId={sequence?.prevId ?? null}
-        nextId={sequence?.nextId ?? null}
-        position={sequence?.position ?? null}
-        total={sequence?.total ?? null}
-        clientOptions={clientOptions}
-      />
+      <ClientWorkspaceHeader client={{ id: client.id, name: client.name, avatarUrl: client.avatar_url, status: client.status }} />
       {children}
     </div>
   );

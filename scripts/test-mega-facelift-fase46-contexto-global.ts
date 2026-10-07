@@ -42,16 +42,21 @@ const demandasClientSource = loadSource("src", "app", "demandas", "pendencias-pa
 const timelinePageSource = loadSource("src", "app", "timeline", "page.tsx");
 const clientScopedDemandasSource = loadSource("src", "app", "clients", "[id]", "demandas", "page.tsx");
 
-console.log("\n1 — SIDEBAR: Growth/Execução/Gestão sempre visíveis; nenhum bloco Carteira/Cliente; nenhuma duplicidade; Clientes presente; collapsed OK\n");
+console.log("\n1 — SIDEBAR: MITZA ONE — Fase 2 substituiu Growth/Execução (módulos) por CARTEIRA + Agência/Gestão — histórico preservado, assertivas atualizadas\n");
 {
-  ok('eyebrow "Growth" sempre presente (não condicional)', !/\{activeClientId[\s\S]{0,50}Growth/.test(sidebarSource) && />\s*Growth\s*</.test(sidebarSource));
-  ok('eyebrow "Execução" sempre presente (não condicional)', />\s*Execução\s*</.test(sidebarSource));
+  // MITZA ONE — Fase 2 (Sidebar = Carteira de Clientes): os eyebrows
+  // "Growth"/"Execução" (Fase 4.6) saíram — a Sidebar não agrupa mais por
+  // módulo. "Agência" (ferramentas transversais) e "Gestão" (Clientes/
+  // Equipe/Configurações) são os 2 grupos fixos agora, abaixo da
+  // carteira. Cobertura completa em test-mitza-one-fase2-sidebar.ts.
+  ok('eyebrow "Growth"/"Execução" não existem mais (não há mais agrupamento por módulo)', !/>\s*Growth\s*</.test(sidebarSource) && !/>\s*Execução\s*</.test(sidebarSource));
+  ok('eyebrow "Agência" presente (Demandas/Operação/Timeline — ferramentas transversais)', />\s*Agência\s*</.test(sidebarSource));
   ok('eyebrow "Gestão" presente (Clientes/Equipe/Configurações)', />\s*Gestão\s*</.test(sidebarSource));
-  ok('eyebrow "Carteira" não existe mais', !/>\s*Carteira\s*</.test(sidebarSource));
-  ok('eyebrow "Cliente" (bloco antigo) não existe mais', !/>\s*Cliente\s*</.test(sidebarSource));
-  ok("Operação aparece só UMA vez em MODULES (nunca duplicada entre 'global' e 'do cliente')", (sidebarSource.match(/key: "operation"/g) ?? []).length === 1);
-  ok("Demandas aparece só UMA vez em MODULES", (sidebarSource.match(/key: "demandas"/g) ?? []).length === 1);
-  ok("Timeline aparece só UMA vez em MODULES", (sidebarSource.match(/key: "timeline"/g) ?? []).length === 1);
+  ok('eyebrow "Carteira" (rótulo próprio) não existe — a lista de clientes aparece direto, sem eyebrow "Carteira" acima dela', !/>\s*Carteira\s*</.test(sidebarSource));
+  ok('eyebrow "Cliente" (bloco antigo, Fase 4.5) não existe mais', !/>\s*Cliente\s*</.test(sidebarSource));
+  ok("Operação aparece só UMA vez na Sidebar (link global fixo, nunca duplicada entre 'global' e 'do cliente' — esse conceito não existe mais)", (sidebarSource.match(/label: "Operação"/g) ?? []).length === 1);
+  ok("Demandas aparece só UMA vez na Sidebar", (sidebarSource.match(/label: "Demandas"/g) ?? []).length === 1);
+  ok("Timeline aparece só UMA vez na Sidebar", (sidebarSource.match(/label: "Timeline"/g) ?? []).length === 1);
   ok('"Clientes" presente em GESTAO_ITEMS, aponta pra /clients', /\{ label: "Clientes", href: "\/clients"/.test(sidebarSource));
   ok(
     "collapsed continua controlado só por md:hidden (ItemLabel) — nenhuma dependência de cliente ativo pra funcionar",
@@ -59,25 +64,23 @@ console.log("\n1 — SIDEBAR: Growth/Execução/Gestão sempre visíveis; nenhum
   );
 }
 
-console.log("\n2 — CONTEXTO: 'Todos' no seletor, nunca tratado como cliente; status/X-Y/Informações da conta só com cliente específico\n");
+console.log("\n2 — CONTEXTO: MITZA ONE — Fase 2 removeu o seletor 'Todos os clientes' do header (a Sidebar é a única troca de cliente agora); status/Informações da conta continuam\n");
 {
-  // Etapa "Correção Conceitual da Fase 4.6: Dashboard é sempre Cliente":
-  // "Todos os clientes" deixou de ser um allLabel FIXO — vira condicional
-  // (`canOfferAllClients`, derivado de `moduleSupportsAllContext`) — ver
-  // suite própria da correção pra cobertura completa (Dashboard nunca
-  // oferece, Operação sempre oferece).
+  // MITZA ONE — Fase 2 (seção 3 do pedido): ClientWorkspaceHeader deixou
+  // de ter SearchableSelect/canOfferAllClients/moduleSupportsAllContext —
+  // a Sidebar (busca + lista completa) é a única forma de trocar de
+  // cliente ou "saír pra Todos" (clicando Demandas/Operação/Timeline na
+  // área Agência) agora. `GlobalScopeSelect` (entrada "Todos -> cliente"
+  // DENTRO das rotas globais) é um mecanismo DIFERENTE, intocado — ver
+  // seções 5-7 abaixo.
   ok(
-    '"Todos os clientes" continua sendo a linha "limpar seleção" nativa do SearchableSelect (nunca um id/UUID fake) — só passou a ser condicional',
-    headerSource.includes('allLabel={canOfferAllClients ? "Todos os clientes" : undefined}'),
+    "ClientWorkspaceHeader não tem mais o seletor 'Todos os clientes' nem moduleSupportsAllContext/canOfferAllClients (Fase 2 — a Sidebar é a única troca de cliente)",
+    !headerSource.includes("canOfferAllClients") && !headerSource.includes("moduleSupportsAllContext") && !headerSource.includes("Todos os clientes"),
   );
-  ok("nenhum cliente fake é criado (nenhum literal de UUID/sentinela inventado pra 'Todos')", !headerSource.includes('"__all__"') && !headerSource.includes("ALL_CONTEXT"));
+  ok("ClientWorkspaceHeader não importa mais buildModuleContextHref/resolveCurrentModuleAndContext (mecanismo de módulo×contexto não se aplica mais ao header)", !headerSource.includes("buildModuleContextHref") && !headerSource.includes("resolveCurrentModuleAndContext"));
   ok(
-    "selecionar 'Todos' (onSelect(null)) navega pro contexto global do MÓDULO ATUAL — nunca mexe em status/posição/Informações da conta (esses só existem enquanto `client` continua sendo um cliente real)",
-    /if \(!targetClientId\) \{\s*router\.push\(buildModuleContextHref\(currentModule \?\? "dashboard", \{ type: "all" \}, null\)\);/.test(headerSource),
-  );
-  ok(
-    "status/posição X·Y/anterior-próximo/Informações da conta continuam renderizados a partir de `client`/`position`/`total` reais (nunca condicionais a um estado 'Todos' dentro do header — ele só existe nesta rota quando HÁ um cliente)",
-    headerSource.includes("{position !== null && total !== null && (") && headerSource.includes("<AccountInfoDrawerLauncher"),
+    "status contratual real e Informações da conta continuam renderizados a partir de `client` real (nunca removidos) — posição X·Y/anterior-próximo saíram (Fase 2, seção 3 do pedido)",
+    headerSource.includes("CLIENT_STATUS_LABEL[client.status]") && headerSource.includes("<AccountInfoDrawerLauncher") && !headerSource.includes("{position"),
   );
   ok(
     "GlobalScopeSelect (entrada 'Todos -> cliente' nas rotas globais) nunca tem selectedId diferente de null — a rota global É sempre 'Todos', nunca finge ter um cliente selecionado",

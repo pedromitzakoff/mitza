@@ -1,164 +1,80 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
 import type { ClientContractStatus } from "@/lib/supabase/database.types";
-import {
-  buildModuleContextHref,
-  buildWorkspaceHref,
-  moduleSupportsAllContext,
-  resolveCurrentModuleAndContext,
-  resolveCurrentSuffix,
-  resolveReplicableSuffix,
-} from "@/lib/client-workspace-nav";
+import { resolveCurrentSuffix } from "@/lib/client-workspace-nav";
 import { WORKSPACE_CONTENT_MAX_WIDTH_CLASS } from "./workspace-container";
 import { AccountInfoDrawerLauncher } from "./account-info-drawer-launcher";
 
-export interface WorkspaceClientOption {
-  id: string;
-  name: string;
-}
-
-const TRIGGER_CLASSES =
-  "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-overview-text-secondary transition-colors hover:bg-overview-surface-hover hover:text-overview-text-primary disabled:cursor-not-allowed disabled:opacity-30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
-
 /**
- * Cabeçalho persistente do workspace do cliente — vive no `layout.tsx` de
- * `clients/[id]/**`, então continua montado em toda navegação entre o
- * Painel principal e as rotas de aprofundamento (Relatório/Operação/
- * Demandas/Configurações).
+ * Cabeçalho do workspace do cliente — vive no `layout.tsx` de
+ * `clients/[id]/**`, montado em toda navegação entre o cockpit
+ * (`/clients/[id]`, MITZA ONE — Fase 1) e as rotas de aprofundamento
+ * ainda preservadas (`/metas`, `/relatorio`, `/dados`, `/operation`,
+ * `/demandas`, `/timeline`, `/edit`).
  *
- * Etapa "Correção de UX do Workspace" (corrige a Fase 1, não a desfaz —
- * ver doc-comment de `workspace-container.tsx`): a barra de abas (antes
- * um `nav` com role de lista de abas) foi REMOVIDA daqui — o header
- * voltou a ser só CONTEXTO
- * (identidade do cliente, troca rápida, anterior/próximo, posição,
- * status, Informações da conta), nunca uma segunda navegação principal
- * competindo com a Sidebar. O avatar agora é o link de volta pro Painel
- * (`/clients/[id]`) — a única affordance de "voltar" que precisa viver
- * aqui, já que ela precisa funcionar de QUALQUER rota de aprofundamento.
+ * MITZA ONE — Fase 2 (Sidebar = Carteira, Header Simplificado): a Sidebar
+ * virou a fonte principal de seleção/troca de cliente (busca + lista
+ * rolável, carrega qualquer cliente visível) — por isso este header
+ * deixou de duplicar essa função. Removidos nesta fase (auditoria da
+ * Fase 2, seção 3 do pedido):
  *
- * Preserva `month` (único parâmetro verdadeiramente compartilhado entre
- * seções — cada rota mantém seus PRÓPRIOS filtros/período além disso) em
- * toda navegação: anterior/próximo, seletor de cliente.
+ * - Seletor/busca de cliente (`SearchableSelect`) — redundante com a
+ *   busca da Sidebar, que agora é a única fonte de troca de cliente.
+ * - Anterior/próximo — dependiam da MESMA sequência ativo-only de
+ *   `resolveWalletSequence`; a Sidebar agora lista também clientes
+ *   pausados/encerrados (seção 1 do pedido: "não assumir exclusão"), o
+ *   que tornaria anterior/próximo inconsistentes com a ordenação visível
+ *   na carteira sempre que o cliente atual não fosse "ativo" — a
+ *   instrução da Fase 2 autoriza explicitamente remover quando não há
+ *   "comportamento consistente com a ordenação oficial da sidebar"
+ *   garantido.
+ * - Posição X/Y — consequência direta de anterior/próximo saírem; sem a
+ *   sequência, a posição também perde sentido.
  *
- * Ao trocar de cliente (seletor OU anterior/próximo), preserva a SEÇÃO
- * atual — decisão 1 do usuário: "Aibou → Performance, ao avançar cai em
- * JudClass → Performance, nunca o Painel". Pra rotas que não são uma das
- * 5 seções reconhecidas (ex.: `/clients/[id]/tasks/new`, legado), cai pro
- * Painel do próximo cliente — replicar uma URL de formulário legado pro
- * cliente seguinte não faz sentido.
+ * Preservados (seção 3 do pedido): nome/identidade do cliente (agora como
+ * TEXTO visível — antes só existia como placeholder dentro do seletor
+ * removido), status CONTRATUAL real (nunca confundido com saúde de
+ * performance — `CLIENT_STATUS_LABEL`/`CLIENT_STATUS_BADGE_CLASSES`
+ * continuam a única fonte, mesma de sempre) e o drawer "Informações da
+ * conta" com todas as suas ações reais (sincronização, compartilhamento,
+ * histórico, configuração) — `AccountInfoDrawerLauncher` intocado.
+ *
+ * O avatar continua sendo o link de volta pro cockpit (`/clients/[id]`)
+ * quando a rota atual é uma sub-rota de aprofundamento — única affordance
+ * de "voltar" que precisa funcionar de QUALQUER rota, já que clicar no
+ * próprio cliente destacado na Sidebar exige achar a linha certa (pode
+ * estar fora da área visível com ~100 clientes), enquanto o avatar está
+ * sempre à mão.
  */
 export function ClientWorkspaceHeader({
   client,
-  prevId,
-  nextId,
-  position,
-  total,
-  clientOptions,
 }: {
   client: { id: string; name: string; avatarUrl: string | null; status: ClientContractStatus };
-  prevId: string | null;
-  nextId: string | null;
-  position: number | null;
-  total: number | null;
-  clientOptions: WorkspaceClientOption[];
 }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const month = searchParams.get("month");
-
-  const currentSuffix = resolveCurrentSuffix(pathname, client.id);
-  const replicableSuffix = resolveReplicableSuffix(currentSuffix);
-  const isOnPanel = currentSuffix === "";
-  const { module: currentModule } = resolveCurrentModuleAndContext(pathname);
-  /** Etapa "Correção Conceitual da Fase 4.6: Dashboard é sempre Cliente" —
-   * módulos de Growth do cliente (Dashboard/Metas/Performance/Dados) nunca
-   * oferecem "Todos os clientes" aqui: não existe experiência "Todos" pra
-   * eles (removida pro Dashboard, nunca existiu pros outros 3 — seção 7 da
-   * Fase 4.6). `currentModule` só é `null` fora dos 7 módulos reconhecidos
-   * (nunca acontece dentro do workspace de cliente, mas o fallback pra
-   * `moduleSupportsAllContext(false)` continua seguro). */
-  const canOfferAllClients = currentModule !== null && moduleSupportsAllContext(currentModule);
-
-  function hrefFor(targetClientId: string, suffix: string): string {
-    return buildWorkspaceHref(targetClientId, suffix, month);
-  }
-
-  /**
-   * Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente como
-   * Contexto Global" (seção 6/9 do pedido) — `allLabel="Todos os
-   * clientes"` (abaixo) faz `SearchableSelect` chamar `onSelect(null)`
-   * quando essa linha é escolhida; aqui isso vira "sair pro contexto
-   * global do MESMO módulo atual" (`resolveCurrentModuleAndContext` +
-   * `buildModuleContextHref`, o núcleo único de resolução de módulo×
-   * contexto — nunca uma segunda lógica de URL). `month` não é propagado
-   * pra fora do contexto de cliente (seção 16: filtros locais continuam
-   * locais — a rota global, quando existe, tem seu próprio `?month=`
-   * independente). Metas/Performance/Dados não têm rota global (seção 7/8
-   * — "não inventar agregação consolidada"): `buildModuleContextHref` cai
-   * em `/clients` pra esses 3, decisão documentada no relatório desta
-   * fase.
-   */
-  function handleSwitch(targetClientId: string | null) {
-    if (!targetClientId) {
-      router.push(buildModuleContextHref(currentModule ?? "dashboard", { type: "all" }, null));
-      return;
-    }
-    router.push(hrefFor(targetClientId, replicableSuffix));
-  }
+  const isOnCockpit = resolveCurrentSuffix(pathname, client.id) === "";
 
   return (
     <div className="border-b border-overview-border bg-overview-surface">
-      <div className={`mx-auto flex w-full ${WORKSPACE_CONTENT_MAX_WIDTH_CLASS} flex-wrap items-center gap-2 px-6 py-3 sm:px-8 lg:px-10`}>
-        {isOnPanel ? (
+      <div className={`mx-auto flex w-full ${WORKSPACE_CONTENT_MAX_WIDTH_CLASS} flex-wrap items-center gap-2.5 px-6 py-3 sm:px-8 lg:px-10`}>
+        {isOnCockpit ? (
           <ClientAvatar name={client.name} imageUrl={client.avatarUrl} size="sm" />
         ) : (
-          <Link href={`/clients/${client.id}`} aria-label={`Voltar para o painel de ${client.name}`} className="shrink-0 rounded-full">
+          <Link href={`/clients/${client.id}`} aria-label={`Voltar para o cockpit de ${client.name}`} className="shrink-0 rounded-full">
             <ClientAvatar name={client.name} imageUrl={client.avatarUrl} size="sm" />
           </Link>
         )}
 
         <Link
-          href={prevId ? hrefFor(prevId, replicableSuffix) : "#"}
-          aria-label="Cliente anterior"
-          aria-disabled={!prevId}
-          className={`${TRIGGER_CLASSES} ${!prevId ? "pointer-events-none opacity-30" : ""}`}
+          href={`/clients/${client.id}`}
+          className="min-w-0 truncate text-sm font-semibold text-overview-text-primary hover:underline"
         >
-          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          {client.name}
         </Link>
-
-        <div className="w-48">
-          <SearchableSelect
-            options={clientOptions.map((c) => ({ id: c.id, label: c.name }))}
-            selectedId={client.id}
-            onSelect={handleSwitch}
-            placeholder={client.name}
-            allLabel={canOfferAllClients ? "Todos os clientes" : undefined}
-            searchPlaceholder="Buscar cliente..."
-            ariaLabel="Trocar de cliente"
-          />
-        </div>
-
-        <Link
-          href={nextId ? hrefFor(nextId, replicableSuffix) : "#"}
-          aria-label="Próximo cliente"
-          aria-disabled={!nextId}
-          className={`${TRIGGER_CLASSES} ${!nextId ? "pointer-events-none opacity-30" : ""}`}
-        >
-          <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        </Link>
-
-        {position !== null && total !== null && (
-          <span className="shrink-0 text-xs tabular-nums text-overview-text-muted">
-            {position} / {total}
-          </span>
-        )}
 
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${CLIENT_STATUS_BADGE_CLASSES[client.status]}`}>
           {CLIENT_STATUS_LABEL[client.status]}

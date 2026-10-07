@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { UserRole } from "@/lib/supabase/database.types";
+import type { AgencyTreeClient } from "@/lib/agency-accounts-tree";
 import { Sidebar } from "./sidebar";
 import { WorkspaceProvider } from "@/components/workspace-drawer/workspace-provider";
 import { WorkspaceTrigger } from "@/components/workspace-drawer/workspace-trigger";
@@ -32,9 +33,14 @@ import { WorkspaceDrawer } from "@/components/workspace-drawer/workspace-drawer"
  */
 export function AppShell({
   profile,
+  walletClients,
   children,
 }: {
   profile: { name: string; role: UserRole };
+  /** MITZA ONE — Fase 2: carteira já buscada/ordenada pelo layout raiz
+   * (`loadAgencyAccountsTree({ includeAllStatuses: true })` + `flattenAgencyTree`)
+   * — `AppShell` só repassa, nenhum dado novo nem segunda consulta aqui. */
+  walletClients: AgencyTreeClient[];
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -44,6 +50,7 @@ export function AppShell({
       <div className="flex min-h-dvh md:items-start">
         <Sidebar
           profile={profile}
+          walletClients={walletClients}
           mobileOpen={mobileOpen}
           onOpen={() => setMobileOpen(true)}
           onClose={() => setMobileOpen(false)}

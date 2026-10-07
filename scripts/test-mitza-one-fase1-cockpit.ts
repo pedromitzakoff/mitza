@@ -287,8 +287,12 @@ console.log("\nG — Regressão (rotas antigas continuam intactas; sem redirects
   ok("/demandas GLOBAL continua intocada", loadSource("src", "app", "demandas", "page.tsx").length > 0);
   ok("/timeline GLOBAL continua intocada", loadSource("src", "app", "timeline", "page.tsx").length > 0);
   ok("/clients (Gestão/carteira) continua intocada", loadSource("src", "app", "clients", "page.tsx").includes("AgencyAccountsTree") || loadSource("src", "app", "clients", "page.tsx").length > 0);
-  ok("Sidebar NÃO foi alterada nesta fase (os 7 módulos fixos continuam, nenhum item removido/adicionado)", loadSource("src", "app", "sidebar.tsx").includes('{ key: "dashboard", label: "Dashboard"') && (loadSource("src", "app", "sidebar.tsx").match(/key: "/g) ?? []).length >= 7);
-  ok("ClientWorkspaceHeader NÃO foi alterado nesta fase (troca de cliente/anterior-próximo/Informações da conta/status preservados)", loadSource("src", "app", "clients", "client-workspace-header.tsx").includes("AccountInfoDrawerLauncher") && loadSource("src", "app", "clients", "client-workspace-header.tsx").includes("ChevronLeft"));
+  // Nota (MITZA ONE — Fase 2, posterior a este arquivo): Sidebar e
+  // ClientWorkspaceHeader foram DELIBERADAMENTE alterados na Fase 2
+  // (Sidebar = Carteira de Clientes + Header Simplificado) — correto pra
+  // ESTA fase (Fase 1) ter continuado intocados até então; a cobertura
+  // dessa mudança passou a viver em test-mitza-one-fase2-sidebar.ts, não
+  // duplicada/corrigida aqui pra não reescrever a história desta suite.
   ok("nenhum redirect novo em [id]/page.tsx", !/redirect\(/.test(pageSource));
   ok("ensureClosedSprintSnapshots continua chamado com primaryBudgetChanges (congelamento nunca depende de qual objetivo o cockpit está destacando)", /ensureClosedSprintSnapshots\(supabase, \{[\s\S]{0,200}primaryBudgetChanges/.test(pageSource));
 }

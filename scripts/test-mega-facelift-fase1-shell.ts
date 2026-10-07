@@ -37,63 +37,45 @@ function loadSource(...segments: string[]): string {
 
 const sidebarSource = loadSource("src", "app", "sidebar.tsx");
 
-console.log("\n1 — Carteira/Cliente (Fase 1) foram substituídos por módulos fixos (Fase 4.6) — histórico preservado, assertivas atualizadas\n");
+console.log("\n1 — MITZA ONE — Fase 2 (Sidebar = Carteira de Clientes) substitui os 7 módulos fixos (Fase 4.6) por navegação por CLIENTE — histórico preservado, assertivas atualizadas\n");
 {
-  // Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente como
-  // Contexto Global": a dualidade "Carteira" (4 itens globais) ×
-  // "Cliente" (7 módulos condicionais a activeClientId) desta Fase 1 foi
-  // substituída por UMA lista única de 7 módulos SEMPRE visíveis
-  // (MODULES, sidebar.tsx) — cobertura completa em
-  // test-mega-facelift-fase46-contexto-global.ts. Aqui só confirma que a
-  // intenção original da Fase 1 ("Visão Geral/Operação/Demandas/Timeline
-  // acessíveis globalmente" + "Dashboard/Metas/Performance/Dados/Operação/
-  // Demandas/Timeline acessíveis dentro do cliente") continua coberta,
-  // agora por um mecanismo único.
-  ok("Visão Geral virou Dashboard + contexto Todos (MODULES[0], mapeia pra / via buildModuleContextHref)", /\{ key: "dashboard", label: "Dashboard"/.test(sidebarSource));
-  ok("Operação continua acessível global (/operation) e por cliente, mesmo módulo único", /\{ key: "operation", label: "Operação"/.test(sidebarSource));
-  ok("Demandas continua acessível global (/demandas) e por cliente, mesmo módulo único", /\{ key: "demandas", label: "Demandas"/.test(sidebarSource));
-  ok("Timeline continua acessível global (/timeline) e por cliente, mesmo módulo único", /\{ key: "timeline", label: "Timeline"/.test(sidebarSource));
-  ok('eyebrow "Carteira" não existe mais (módulos não são mais "globais" separados de "do cliente")', !/>\s*Carteira\s*</.test(sidebarSource));
-  ok('eyebrow "Gestão" (antes "Administração") continua — Equipe/Configurações, agora com Clientes junto', />\s*Gestão\s*</.test(sidebarSource));
+  // MITZA ONE — Fase 2: a lista única de 7 módulos (Fase 4.6, substituta
+  // da dualidade Carteira×Cliente desta Fase 1) foi substituída por
+  // navegação por CLIENTE — a Sidebar virou a carteira (busca + lista),
+  // seguida de uma área "Agência" (ferramentas transversais: Demandas/
+  // Operação/Timeline globais) e "Gestão" (Clientes/Equipe/
+  // Configurações). Cobertura completa em test-mitza-one-fase2-sidebar.ts;
+  // aqui só confirma que os 7 módulos deixaram de existir como conceito
+  // na Sidebar — nenhum deles some do produto (rotas preservadas,
+  // seção 8 do pedido da Fase 2), só deixam de ter item próprio aqui.
+  ok("Sidebar não define mais MODULES (dashboard/metas/performance/dados como itens de navegação)", !/\{ key: "dashboard", label: "Dashboard"/.test(sidebarSource) && !/\{ key: "metas", label: "Metas"/.test(sidebarSource));
+  ok("Operação continua acessível — agora um link GLOBAL fixo na área Agência (nunca por cliente, ver Fase 2)", /label: "Operação", href: "\/operation"/.test(sidebarSource));
+  ok("Demandas continua acessível — mesmo padrão (link global fixo)", /label: "Demandas", href: "\/demandas"/.test(sidebarSource));
+  ok("Timeline continua acessível — mesmo padrão (link global fixo)", /label: "Timeline", href: "\/timeline"/.test(sidebarSource));
+  ok('eyebrow "Carteira" não existe mais como label — a carteira agora é a lista de clientes diretamente, sem rótulo "Carteira" acima', !/>\s*Carteira\s*</.test(sidebarSource));
+  ok('eyebrow "Gestão" continua — Clientes/Equipe/Configurações, agora dentro da área "Agência"', />\s*Gestão\s*</.test(sidebarSource));
 }
 
-console.log("\n2 — Os 7 módulos da Growth Infra, agrupados Growth/Execução — SEMPRE visíveis (Fase 4.6), não mais condicionais a um cliente ativo\n");
+console.log("\n2 — Carteira de clientes (MITZA ONE — Fase 2): busca + lista rolável substituem os antigos grupos Growth/Execução\n");
 {
-  ok("MODULES define Dashboard (módulo growth)", /\{ key: "dashboard", label: "Dashboard", icon: LayoutDashboard, group: "growth" \}/.test(sidebarSource));
-  ok("MODULES define Metas (módulo growth)", /\{ key: "metas", label: "Metas", icon: Target, group: "growth" \}/.test(sidebarSource));
-  ok(
-    "MODULES define Performance (rota técnica /relatorio intacta, só o RÓTULO é novo, módulo growth)",
-    /\{ key: "performance", label: "Performance", icon: BarChart3, group: "growth" \}/.test(sidebarSource),
-  );
-  ok("MODULES define Dados (módulo growth)", /\{ key: "dados", label: "Dados", icon: Database, group: "growth" \}/.test(sidebarSource));
-  ok("MODULES define Operação (módulo execucao)", /\{ key: "operation", label: "Operação", icon: ListChecks, group: "execucao" \}/.test(sidebarSource));
-  ok("MODULES define Demandas (módulo execucao)", /\{ key: "demandas", label: "Demandas", icon: ClipboardList, group: "execucao" \}/.test(sidebarSource));
-  ok("MODULES define Timeline (módulo execucao)", /\{ key: "timeline", label: "Timeline", icon: History, group: "execucao" \}/.test(sidebarSource));
-
-  // Fase 4.6 (seção 18 do pedido): "não criar bloco destacado de
-  // CLIENTE", "não mostrar nome do cliente dentro da sidebar" — o bloco
-  // condicional/eyebrow "Cliente"/superfície sand-subtle da Fase 1 saiu
-  // por completo; Growth/Execução ficam direto no corpo da nav.
-  ok("bloco condicional 'Cliente' (activeClientId && (...)) não existe mais — módulos sempre renderizam", !sidebarSource.includes("{activeClientId &&"));
-  ok('eyebrow "Cliente" não existe mais dentro da Sidebar', !/>\s*Cliente\s*</.test(sidebarSource));
-  ok('eyebrow "Growth" continua, agora no corpo principal (não mais dentro de um bloco condicional)', />\s*Growth\s*</.test(sidebarSource));
-  ok('eyebrow "Execução" continua, agora no corpo principal (não mais dentro de um bloco condicional)', />\s*Execução\s*</.test(sidebarSource));
-  ok("superfície sand-subtle do antigo bloco 'Cliente' saiu junto — nenhuma cor nova em seu lugar", !sidebarSource.includes("bg-sand-subtle"));
+  ok('eyebrow "Growth"/"Execução" não existem mais (não há mais agrupamento por módulo)', !/>\s*Growth\s*</.test(sidebarSource) && !/>\s*Execução\s*</.test(sidebarSource));
+  ok('eyebrow "Agência" existe (ferramentas transversais)', />\s*Agência\s*</.test(sidebarSource));
+  ok("Sidebar renderiza um campo de busca de cliente (input controlado, filtro local)", sidebarSource.includes('placeholder="Buscar cliente...') && sidebarSource.includes("onChange={(e) => setSearch(e.target.value)}"));
+  ok("ClientRow usa ClientAvatar (mesmo componente já usado na Operação/árvore de contas) — nenhum avatar novo", sidebarSource.includes("<ClientAvatar name={client.name} imageUrl={client.avatarUrl}"));
+  ok("Sidebar recolhida nunca lista todos os clientes como ícones (seção 5 do pedido) — versão compacta só mostra o cliente atual + gatilho de busca", sidebarSource.includes('collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"'));
 }
 
-console.log("\n3 — ModuleLink (sucessor de ClientModuleLink) reaproveita o núcleo único de módulo×contexto — não reconstrói nada\n");
+console.log("\n3 — ClientRow reaproveita o núcleo único de navegação do workspace — não reconstrói nada\n");
 {
   ok(
-    "ModuleLink importa buildModuleContextHref/resolveCurrentModuleAndContext de lib/client-workspace-nav (núcleo único, Fase 4.6; resolveModuleLinkContext entrou na Etapa 'Demandas sempre abre em Todos por padrão', mesmo núcleo, sem segunda lógica)",
-    sidebarSource.includes(
-      'import { buildModuleContextHref, resolveCurrentModuleAndContext, resolveModuleLinkContext, type AppContext, type ModuleKey } from "@/lib/client-workspace-nav"',
-    ),
+    "ClientRow importa buildWorkspaceHref/resolveActiveClientIdFromPathname de lib/client-workspace-nav (núcleo único, intocado — mesmas funções já usadas por anterior/próximo/GlobalScopeSelect antes desta fase)",
+    sidebarSource.includes('import { buildWorkspaceHref, resolveActiveClientIdFromPathname } from "@/lib/client-workspace-nav"'),
   );
   ok(
-    "ModuleLink monta o href com buildModuleContextHref (preserva ?month= só no contexto de cliente, nunca uma segunda forma de montar URL); o contexto passado vem de resolveModuleLinkContext (Etapa 'Demandas sempre abre em Todos por padrão' — só Demandas ignora o contexto ambiente, os outros 6 módulos continuam recebendo-o intocado)",
-    /const href = buildModuleContextHref\(item\.key, resolveModuleLinkContext\(item\.key, context\), month\)/.test(sidebarSource),
+    "ClientRow monta o href SEMPRE com suffix '' (cockpit, nunca replica sub-rota legada) + month preservado — nenhuma segunda forma de montar URL",
+    /const href = buildWorkspaceHref\(client\.id, "", month\)/.test(sidebarSource),
   );
-  ok("estado ativo compara o MÓDULO resolvido (currentModule) contra a key do item, não contra pathname bruto", /const active = item\.key === currentModule/.test(sidebarSource));
+  ok("estado ativo compara o ID do cliente (resolveActiveClientIdFromPathname) contra client.id, nunca contra pathname bruto nem contra o NOME (seguro mesmo com nomes repetidos)", /const active = client\.id === activeClientId/.test(sidebarSource));
 }
 
 console.log("\n4 — Árvore 'Contas da Agência': Fase 1 a mantinha montada na Sidebar; Fase 4.5 ('Navegação da Carteira') a realocou pra /clients — não removida silenciosamente, nunca deletada\n");

@@ -52,7 +52,14 @@ console.log("\n1 — /clients abre a nova Carteira de Clientes, alcançável pel
     /\{\s*label: "Clientes",\s*href: "\/clients",\s*icon: Briefcase,/.test(sidebarSource),
   );
   ok("item 'Clientes' marca ativo em /clients e /clients/new, nunca em /clients/[id] (workspace de um cliente é outro lugar)", /isActive: \(p\) => p === "\/clients" \|\| p\.startsWith\("\/clients\/new"\)/.test(sidebarSource));
-  ok("'Clientes' continua antes de Operação/Demandas, depois de Visão Geral (mesma ordem pedida)", sidebarSource.indexOf('label: "Visão Geral"') < sidebarSource.indexOf('label: "Clientes"') && sidebarSource.indexOf('label: "Clientes"') < sidebarSource.indexOf('label: "Operação"'));
+  // MITZA ONE — Fase 2 (Sidebar = Carteira de Clientes): a ordem antiga
+  // ("Visão Geral" -> "Clientes" -> "Operação") não existe mais — a
+  // Sidebar agora é CARTEIRA (lista de clientes) primeiro, "Agência"
+  // (Demandas/Operação/Timeline) depois, "Gestão" (Clientes/Equipe/
+  // Configurações) por último. "Clientes" continua existindo, só mudou
+  // de posição relativa — ver test-mitza-one-fase2-sidebar.ts pra
+  // cobertura completa da nova ordem.
+  ok("'Clientes' continua existindo em GESTAO_ITEMS, agora depois de Operação/Demandas/Timeline (área Agência)", sidebarSource.indexOf('label: "Operação", href: "/operation"') < sidebarSource.indexOf('label: "Clientes"'));
   ok("rota /clients continua existindo (arquivo no lugar de sempre, nenhuma rota nova criada)", existsSync(join(__dirname, "..", "src", "app", "clients", "page.tsx")));
   ok("heading 'Clientes' presente na página", /<h1[^>]*>Clientes<\/h1>/.test(clientsPageSource));
 }
@@ -87,36 +94,41 @@ console.log("\n5 — wallet_position/drag-and-drop ('Organizar carteira'): mesma
   ok("drag-and-drop (@dnd-kit) continua implementado no mesmo arquivo cliente de sempre, nenhuma segunda implementação", /DndContext/.test(agencyTreeClientSource) && /moveClientAction/.test(agencyTreeClientSource));
 }
 
-console.log("\n6 — ClientWorkspaceHeader: busca/anterior/próximo/posição/status/preservação de módulo — intocado, zero regressão\n");
+console.log("\n6 — ClientWorkspaceHeader: MITZA ONE — Fase 2 simplificou o header (busca/anterior/próximo/posição saíram — ver test-mitza-one-fase2-sidebar.ts); nome/status/Informações da conta preservados\n");
 {
-  ok("ClientWorkspaceHeader não foi tocado nesta fase (continua com SearchableSelect + anterior/próximo + posição + status + Informações da conta)", clientWorkspaceHeaderSource.includes("<SearchableSelect") && clientWorkspaceHeaderSource.includes('aria-label="Cliente anterior"') && clientWorkspaceHeaderSource.includes('aria-label="Próximo cliente"') && clientWorkspaceHeaderSource.includes("{position} / {total}") && clientWorkspaceHeaderSource.includes("<AccountInfoDrawerLauncher"));
-  ok("troca de cliente preserva a SEÇÃO atual (replicableSuffix), exatamente como antes", clientWorkspaceHeaderSource.includes("resolveReplicableSuffix(currentSuffix)") && clientWorkspaceHeaderSource.includes("hrefFor(targetClientId, replicableSuffix)"));
-  ok("clients/[id]/layout.tsx continua resolvendo a sequência global pela MESMA árvore (loadAgencyAccountsTree/resolveWalletSequence), nunca uma segunda fonte — Sidebar renderizar ou não a árvore nunca afetou isso", clientWorkspaceLayoutSource.includes("loadAgencyAccountsTree()") && clientWorkspaceLayoutSource.includes("resolveWalletSequence(tree, id)"));
-}
-
-console.log("\n7 — Bloco 'Cliente' na Sidebar (Fase 4.5): substituído por módulos fixos SEMPRE visíveis na Fase 4.6 — histórico preservado, assertivas atualizadas\n");
-{
-  // Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente como
-  // Contexto Global": o bloco condicional "Cliente" (só visível dentro de
-  // `/clients/[id]/**`) saiu por completo — Dashboard/Metas/Performance/
-  // Dados (Growth) e Operação/Demandas/Timeline (Execução) agora são
-  // SEMPRE visíveis (MODULES, sidebar.tsx), com o destino resolvido pelo
-  // CONTEXTO atual (Todos ou um cliente), não mais pela presença de
-  // `activeClientId`. Cobertura completa em
-  // test-mega-facelift-fase46-contexto-global.ts.
-  ok('bloco condicional "Cliente" não existe mais — módulos renderizam sempre (Fase 4.6)', !sidebarSource.includes("{activeClientId &&"));
+  // Fase 2 removeu deliberadamente o seletor/busca de cliente (redundante
+  // com a busca da Sidebar) e anterior/próximo/posição (dependiam da
+  // sequência ativo-only, inconsistente com a carteira agora exibindo
+  // também pausado/encerrado). clients/[id]/layout.tsx deixou de buscar
+  // a árvore pra isso — a Sidebar (layout RAIZ) é quem busca agora.
   ok(
-    "Growth: Dashboard/Metas/Performance/Dados continuam os 4 itens, agora sempre visíveis",
-    /\{ key: "dashboard", label: "Dashboard", icon: LayoutDashboard, group: "growth" \}/.test(sidebarSource) &&
-      /\{ key: "metas", label: "Metas", icon: Target, group: "growth" \}/.test(sidebarSource) &&
-      /\{ key: "performance", label: "Performance", icon: BarChart3, group: "growth" \}/.test(sidebarSource) &&
-      /\{ key: "dados", label: "Dados", icon: Database, group: "growth" \}/.test(sidebarSource),
+    "ClientWorkspaceHeader não tem mais SearchableSelect/anterior/próximo/posição (Fase 2) — mantém nome/status/Informações da conta",
+    !clientWorkspaceHeaderSource.includes("<SearchableSelect") &&
+      !clientWorkspaceHeaderSource.includes('aria-label="Cliente anterior"') &&
+      !clientWorkspaceHeaderSource.includes('aria-label="Próximo cliente"') &&
+      clientWorkspaceHeaderSource.includes("<AccountInfoDrawerLauncher") &&
+      clientWorkspaceHeaderSource.includes("CLIENT_STATUS_LABEL[client.status]"),
   );
   ok(
-    "Execução: Operação/Demandas/Timeline continuam os 3 itens, agora sempre visíveis",
-    /\{ key: "operation", label: "Operação", icon: ListChecks, group: "execucao" \}/.test(sidebarSource) &&
-      /\{ key: "demandas", label: "Demandas", icon: ClipboardList, group: "execucao" \}/.test(sidebarSource) &&
-      /\{ key: "timeline", label: "Timeline", icon: History, group: "execucao" \}/.test(sidebarSource),
+    "clients/[id]/layout.tsx não CHAMA mais a busca da árvore da carteira (Fase 2 moveu essa busca pro layout raiz, pra Sidebar — o nome da função só sobrevive numa doc-comment explicando o que saiu)",
+    !clientWorkspaceLayoutSource.includes("await loadAgencyAccountsTree") && !clientWorkspaceLayoutSource.includes("resolveWalletSequence("),
+  );
+  ok("layout raiz (src/app/layout.tsx) agora busca a carteira UMA vez (includeAllStatuses: true) pra Sidebar", rootLayoutSource.includes("loadAgencyAccountsTree({ includeAllStatuses: true })"));
+}
+
+console.log("\n7 — Módulos fixos (Fase 4.6): substituídos por navegação por cliente na MITZA ONE — Fase 2 — histórico preservado, assertivas atualizadas\n");
+{
+  // MITZA ONE — Fase 2: Dashboard/Metas/Performance/Dados deixaram de ser
+  // itens de navegação (viraram seções DENTRO do cockpit único,
+  // `/clients/[id]`, Fase 1) — nunca removidos do produto, só não têm
+  // mais item próprio na Sidebar. Operação/Demandas/Timeline continuam
+  // como links globais fixos na área "Agência".
+  ok("Sidebar não define mais um item de navegação 'Metas'/'Dados' (migraram pra dentro do cockpit, Fase 1)", !/\{ key: "metas"/.test(sidebarSource) && !/\{ key: "dados"/.test(sidebarSource));
+  ok(
+    "Agência: Operação/Demandas/Timeline continuam os 3 links globais, agora sempre visíveis fora de qualquer contexto de cliente",
+    /label: "Operação", href: "\/operation"/.test(sidebarSource) &&
+      /label: "Demandas", href: "\/demandas"/.test(sidebarSource) &&
+      /label: "Timeline", href: "\/timeline"/.test(sidebarSource),
   );
 }
 
@@ -130,15 +142,28 @@ console.log("\n8 — Nome do cliente ativo na Sidebar (Fase 4.5): removido na Fa
   ok("WorkspaceProvider continua com o campo activeClientName/setActiveClientName (infraestrutura preservada, não deletada)", /activeClientName: string \| null;/.test(workspaceProviderSource) && /setActiveClientName: \(name: string \| null\) => void;/.test(workspaceProviderSource));
   ok("useActiveClientName continua exportado (órfão, documentado — não deletado)", /export function useActiveClientName\(name: string\): void/.test(workspaceProviderSource));
   ok("ActiveClientSidebarName continua montado em clients/[id]/layout.tsx (órfão, não deletado)", clientWorkspaceContextSource.includes("export function ActiveClientSidebarName") && clientWorkspaceLayoutSource.includes("<ActiveClientSidebarName name={client.name} />"));
-  ok("Sidebar NÃO lê mais activeClientName (Fase 4.6, seção 18) — nenhum useWorkspace() nela", !sidebarSource.includes("useWorkspace"));
-  ok("nenhum nome de cliente é renderizado dentro de sidebar.tsx", !sidebarSource.includes("activeClientName"));
+  // MITZA ONE — Fase 2: a Sidebar passa a mostrar nomes de cliente de
+  // propósito (a carteira inteira, seção 1 do pedido) — mas NUNCA através
+  // do mecanismo `activeClientName`/`useWorkspace()` (que continua órfão,
+  // sem leitor em lugar nenhum). A Sidebar recebe a lista completa via
+  // prop `walletClients` (buscada no layout raiz) e decide qual é a ATIVA
+  // via `resolveActiveClientIdFromPathname` — mecanismo novo e distinto,
+  // nunca o antigo context de workspace.
+  ok("Sidebar continua sem usar o mecanismo activeClientName/useWorkspace() (nenhum useWorkspace() nela) — a carteira vem por prop, não por contexto", !sidebarSource.includes("useWorkspace"));
+  ok("Sidebar agora renderiza nomes de cliente de propósito (carteira, Fase 2) — via walletClients, nunca via activeClientName", sidebarSource.includes("walletClients") && !sidebarSource.includes("activeClientName"));
 }
 
 console.log("\n9 — Árvore 'Contas da Agência' não é mais renderizada na Sidebar (nem como prop) — removida da navegação permanente, nunca deletada do codebase\n");
 {
-  ok("Sidebar não importa/recebe/renderiza agencyTree em lugar nenhum", !sidebarSource.includes("agencyTree"));
-  ok("AppShell não repassa mais agencyTree pro Sidebar", !appShellSource.includes("agencyTree"));
-  ok("layout.tsx raiz não monta mais <AgencyAccountsTree /> pra injetar na Sidebar", !rootLayoutSource.includes("AgencyAccountsTree"));
+  ok("Sidebar não importa/recebe/renderiza agencyTree em lugar nenhum (recebe walletClients, uma lista já achatada — nunca a árvore/estrutura por gestor)", !sidebarSource.includes("agencyTree"));
+  ok("AppShell não repassa mais agencyTree pro Sidebar (repassa walletClients)", !appShellSource.includes("agencyTree"));
+  // MITZA ONE — Fase 2: o layout raiz passou a chamar `loadAgencyAccountsTree`
+  // (a FUNÇÃO de dados) pra alimentar a Sidebar com `walletClients` — nunca
+  // o COMPONENTE `<AgencyAccountsTree />` (a árvore visual de Gestão, que
+  // continua só em `/clients`). Checagem por tag JSX, não por substring
+  // solta (`"loadAgencyAccountsTree".includes("AgencyAccountsTree")` seria
+  // um falso positivo).
+  ok("layout.tsx raiz não monta o COMPONENTE <AgencyAccountsTree /> (só chama a função de dados loadAgencyAccountsTree, pra Sidebar)", !rootLayoutSource.includes("<AgencyAccountsTree") && rootLayoutSource.includes("loadAgencyAccountsTree("));
   ok("agency-accounts-tree.tsx/agency-accounts-tree-client.tsx/agency-accounts-tree-actions.ts continuam intactos no disco (nenhum deletado)", existsSync(join(__dirname, "..", "src", "app", "agency-accounts-tree.tsx")) && existsSync(join(__dirname, "..", "src", "app", "agency-accounts-tree-client.tsx")) && existsSync(join(__dirname, "..", "src", "app", "agency-accounts-tree-actions.ts")));
 }
 
@@ -149,8 +174,8 @@ console.log("\n10 — Timeline global permanece em Carteira (auditoria: função
   // cujo destino em contexto "Todos" continua sendo /timeline
   // (MODULE_GLOBAL_HREF, lib/client-workspace-nav.ts) — mesmo resultado,
   // mecanismo consolidado.
-  ok("Timeline continua definida como módulo (não removida da nav)", /\{ key: "timeline", label: "Timeline", icon: History, group: "execucao" \}/.test(sidebarSource));
-  ok("contexto Todos + módulo Timeline continua resolvendo pra /timeline", loadSource("src", "lib", "client-workspace-nav.ts").includes('timeline: "/timeline"'));
+  ok("Timeline continua definida na Sidebar — agora como link global fixo na área Agência (Fase 2), não removida da nav", /label: "Timeline", href: "\/timeline"/.test(sidebarSource));
+  ok("contexto Todos + módulo Timeline continua resolvendo pra /timeline em lib/client-workspace-nav.ts (intocado, ainda usado por GlobalScopeSelect)", loadSource("src", "lib", "client-workspace-nav.ts").includes('timeline: "/timeline"'));
   // Etapa "MEGA FACELIFT — Fase 6: Timeline": o shell vazio desta fase foi
   // substituído por conteúdo funcional real (memória do Growth do cliente,
   // `lib/client-timeline.ts`) — continua NÃO redundante com a Timeline

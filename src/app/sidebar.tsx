@@ -2,24 +2,21 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
-  BarChart3,
   Briefcase,
   ClipboardList,
   Clock,
-  Database,
   History,
-  LayoutDashboard,
   ListChecks,
   LogOut,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
+  Search,
   Settings,
-  Target,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -28,7 +25,9 @@ import { syncAllMetaAction } from "@/app/global-actions";
 import { SubmitButton } from "@/app/submit-button";
 import { formatAgencyDateTime } from "@/lib/format";
 import type { UserRole } from "@/lib/supabase/database.types";
-import { buildModuleContextHref, resolveCurrentModuleAndContext, resolveModuleLinkContext, type AppContext, type ModuleKey } from "@/lib/client-workspace-nav";
+import { filterAgencyTreeClients, type AgencyTreeClient } from "@/lib/agency-accounts-tree";
+import { buildWorkspaceHref, resolveActiveClientIdFromPathname } from "@/lib/client-workspace-nav";
+import { ClientAvatar } from "@/components/workspace/client-avatar";
 import {
   ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES,
   ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES,
@@ -37,14 +36,25 @@ import {
 import { SIDEBAR_COLLAPSED_WIDTH_CLASS, SIDEBAR_EXPANDED_WIDTH_CLASS, SIDEBAR_HEIGHT_CLASS } from "./app-shell-dimensions";
 
 /**
- * Preferência de sidebar recolhida (só desktop) — fica salva no navegador,
- * não por conta de usuário, é só uma preferência de tela. Lida via
- * useSyncExternalStore (em vez de useState + useEffect) pra não cair no
- * anti-padrão de setState dentro de efeito e pra não gerar mismatch de
- * hydration: o servidor não tem acesso a localStorage, então a snapshot do
- * servidor é sempre "expandida", e o valor real do cliente só substitui
- * depois da hydration — igual ao relógio do rodapé. Só afeta telas
- * desktop (md+) — o drawer mobile sempre mostra o conteúdo completo.
+ * MITZA ONE — Fase 2: Sidebar = Carteira de Clientes + Header Simplificado.
+ * Substitui a navegação por MÓDULO (Fase "MEGA FACELIFT — Fase 4.6": 7
+ * itens fixos Growth/Execução) por navegação por CLIENTE: a Sidebar agora
+ * é a carteira (busca + lista rolável de clientes reais, já ordenada pela
+ * MESMA fonte oficial de sempre — `loadAgencyAccountsTree`/
+ * `flattenAgencyTree`, buscada uma vez no layout raiz e repassada via
+ * `AppShell`, nenhuma segunda fonte da carteira), seguida de uma área
+ * "Agência" compacta com as ferramentas transversais (Demandas/Operação/
+ * Timeline globais) e "Gestão" (Clientes/Equipe/Configurações — mesmo
+ * grupo de sempre, só realocado).
+ *
+ * O cockpit único (`/clients/[id]`, MITZA ONE — Fase 1) passa a ser o
+ * único destino de clique na carteira — nunca mais um módulo escolhido
+ * separadamente. `buildWorkspaceHref(clientId, "", month)` preserva o mês
+ * (único parâmetro realmente compartilhado entre clientes) mas NUNCA
+ * replica um sufixo de sub-rota — trocar de cliente pela Sidebar sempre
+ * abre o cockpit dele, nunca a mesma sub-rota legada que você estava
+ * vendo no cliente anterior (seção 4 do pedido: "não vazar... estado que
+ * não pertençam ao destino").
  */
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "mitza:sidebar-collapsed";
 const SIDEBAR_COLLAPSED_EVENT = "mitza:sidebar-collapsed-changed";
@@ -70,7 +80,7 @@ function setSidebarCollapsedPreference(value: boolean) {
 /** Relógio da agência — migrado da Top Bar (removida na Etapa Global UX
  * Refinement 1.0) para o rodapé da Sidebar. `useSyncExternalStore` pelo
  * mesmo motivo do estado de collapsed acima: o servidor não tem hora real,
- * então a snapshot do servidor é `null` (evita mismatch de hydration) e o
+ * então a snapshot do servidor é `null` (evita mismatch de hidratação) e o
  * valor de verdade só aparece depois, no cliente. */
 function subscribeToClock(callback: () => void) {
   const interval = setInterval(callback, 30_000);
@@ -83,13 +93,6 @@ function getServerNow() {
   return null;
 }
 
-/** Expandida: texto discreto "Ter • 14 Jul • 16:42" (baixo contraste, nunca
- * compete com a navegação). Recolhida (só md+, via `md:hidden` no texto):
- * some o texto, fica só o ícone — com o dia/data/hora completos no
- * `title`, que os navegadores mostram como tooltip nativo ao passar o
- * mouse. Mobile não tem hover, mas nunca fica recolhido (o `collapsed`
- * salvo é uma preferência só de desktop, e as classes que o escondem levam
- * o prefixo `md:`), então o texto aparece sempre que o drawer está aberto. */
 function SidebarClock({ collapsed }: { collapsed: boolean }) {
   const nowMs = useSyncExternalStore(subscribeToClock, getClientNow, getServerNow);
 
@@ -125,52 +128,30 @@ interface NavItem {
   isActive: (pathname: string) => boolean;
 }
 
-/**
- * Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente como Contexto
- * Global": GESTÃO — administração/infraestrutura, nunca um nível
- * operacional (mesmo raciocínio da antiga "Administração", Etapa "MITZA
- * 2.0 — Fase H"). "Clientes" entrou aqui nesta fase (antes vivia junto
- * dos módulos operacionais, Fase 4.5) — não é mais necessária pra
- * simplesmente TROCAR de contexto durante o uso normal (isso agora é o
- * seletor do header/`GlobalScopeSelect`), só pra localizar/organizar a
- * carteira (busca, filtros, wallet_position) — tarefa de gestão, não de
- * navegação do dia a dia (seção 11 do pedido). */
+/** Ferramentas transversais da agência (seção 2 do pedido) — nunca módulos
+ * do cliente: destinos GLOBAIS fixos, sempre o mesmo href, independente de
+ * qual cliente está ativo. Demandas/Operação/Timeline já suportavam
+ * "Todos" desde a Fase 4.5/4.6 — aqui são simplesmente os links diretos,
+ * sem nenhuma lógica de contexto (essa lógica — `buildModuleContextHref`/
+ * `resolveModuleLinkContext` — continua existindo em
+ * `lib/client-workspace-nav.ts` pra quem ainda precisa dela, ex.:
+ * `GlobalScopeSelect` nas próprias páginas globais; a Sidebar não usa
+ * mais). */
+const AGENCIA_ITEMS: NavItem[] = [
+  { label: "Demandas", href: "/demandas", icon: ClipboardList, isActive: (p) => p.startsWith("/demandas") || p.startsWith("/pendencias") },
+  { label: "Operação", href: "/operation", icon: ListChecks, isActive: (p) => p.startsWith("/operation") },
+  { label: "Timeline", href: "/timeline", icon: History, isActive: (p) => p.startsWith("/timeline") || p.startsWith("/achievements") },
+];
+
+/** "Gestão" — administração/infraestrutura da carteira (busca/filtros/
+ * `wallet_position`), nunca navegação do dia a dia (mesmo raciocínio da
+ * antiga "Administração"/"Gestão" das fases anteriores — só realocada pra
+ * dentro da nova área "Agência" nesta fase, seção 2 do pedido: "pode
+ * agrupar Clientes, Equipe e Configurações sob Gestão"). */
 const GESTAO_ITEMS: NavItem[] = [
   { label: "Clientes", href: "/clients", icon: Briefcase, isActive: (p) => p === "/clients" || p.startsWith("/clients/new") },
   { label: "Equipe", href: "/team", icon: Users, isActive: (p) => p.startsWith("/team") },
   { label: "Configurações", href: "/settings", icon: Settings, adminOnly: true, isActive: (p) => p.startsWith("/settings") },
-];
-
-interface ModuleItem {
-  key: ModuleKey;
-  label: string;
-  icon: LucideIcon;
-  group: "growth" | "execucao";
-}
-
-/**
- * Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente como Contexto
- * Global" — substitui a dualidade anterior ("Carteira" com Visão Geral/
- * Operação/Demandas/Timeline GLOBAIS + "Cliente" com os mesmos nomes
- * duplicados dentro do workspace) por UMA lista única de 7 módulos,
- * SEMPRE visíveis, SEMPRE no mesmo lugar — "Visão Geral" deixou de
- * existir como item próprio (virou "Dashboard" + contexto "Todos", seção
- * 4 do pedido). MÓDULO é fixo; CLIENTE é só o CONTEXTO que decide o
- * escopo (`AppContext`, `lib/client-workspace-nav.ts`) — cada item
- * resolve seu próprio destino via `buildModuleContextHref(key, context,
- * month)`, o único lugar que sabe montar essa URL (nunca uma segunda
- * lógica de pathname aqui). `/relatorio` continua o nome técnico da rota
- * de Performance (nenhum link/PDF/`/r/[token]` muda) — só o rótulo aqui é
- * "Performance".
- */
-const MODULES: ModuleItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, group: "growth" },
-  { key: "metas", label: "Metas", icon: Target, group: "growth" },
-  { key: "performance", label: "Performance", icon: BarChart3, group: "growth" },
-  { key: "dados", label: "Dados", icon: Database, group: "growth" },
-  { key: "operation", label: "Operação", icon: ListChecks, group: "execucao" },
-  { key: "demandas", label: "Demandas", icon: ClipboardList, group: "execucao" },
-  { key: "timeline", label: "Timeline", icon: History, group: "execucao" },
 ];
 
 /** Label some no desktop quando `collapsed` (só md+ — no drawer mobile o
@@ -192,15 +173,11 @@ function NavLink({
   const active = item.isActive(pathname);
   const Icon = item.icon;
 
-  // Etapa "KOFF Sidebar Polish": estado ativo formalizado como o "KOFF
-  // Active Indicator" (`components/ui/active-indicator.ts`) — mesmas
-  // classes agora nomeadas/centralizadas, nenhuma mudança visual além do
-  // ajuste de espessura da barra (2px -> ~3px, alinhado à especificação
-  // do padrão).
   return (
     <Link
       href={item.href}
       title={item.label}
+      aria-current={active ? "page" : undefined}
       className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
         active ? ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES : ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES
       }`}
@@ -212,46 +189,42 @@ function NavLink({
 }
 
 /**
- * Item de módulo (Etapa "MEGA FACELIFT — Fase 4.6") — mesmo visual de
- * `NavLink` (reaproveita as classes do "KOFF Active Indicator"), mas o
- * destino é montado por `buildModuleContextHref` (preserva `?month=` só
- * no contexto de cliente, mesmo mecanismo já usado por
- * `ClientWorkspaceHeader`/anterior-próximo — nunca uma segunda forma de
- * montar a URL) e o estado ativo compara contra `currentModule`
- * (`resolveCurrentModuleAndContext`), não contra `pathname` bruto.
+ * Uma linha da carteira — mesmo visual de `NavLink` (reaproveita as
+ * classes do "KOFF Active Indicator"), mas o destino é sempre o cockpit
+ * (`/clients/[id]`, suffix `""`) e o estado ativo compara contra o ID do
+ * cliente extraído do pathname (`resolveActiveClientIdFromPathname`,
+ * `lib/client-workspace-nav.ts` — já existia, testado, pensado pra
+ * reconhecer o cliente certo mesmo em sub-rotas legadas, seção 4 do
+ * pedido: "se o usuário abrir diretamente uma rota antiga do cliente, a
+ * sidebar ainda deve destacar o cliente correto").
  */
-function ModuleLink({
-  item,
-  context,
-  currentModule,
+function ClientRow({
+  client,
+  activeClientId,
   month,
   collapsed,
 }: {
-  item: ModuleItem;
-  context: AppContext;
-  currentModule: ModuleKey | null;
+  client: AgencyTreeClient;
+  activeClientId: string | null;
   month: string | null;
   collapsed: boolean;
 }) {
-  const active = item.key === currentModule;
-  const Icon = item.icon;
-  // Etapa "Demandas sempre abre em Todos por padrão": Demandas ignora o
-  // contexto ambiente aqui (`resolveModuleLinkContext`) — é a lista do
-  // que precisa ser feito na agência toda, nunca só a fração de um
-  // cliente por estar "de passagem" nele. Os outros 6 módulos continuam
-  // preservando o cliente atual, como sempre.
-  const href = buildModuleContextHref(item.key, resolveModuleLinkContext(item.key, context), month);
+  const active = client.id === activeClientId;
+  const href = buildWorkspaceHref(client.id, "", month);
 
   return (
     <Link
       href={href}
-      title={item.label}
+      title={client.name}
+      aria-current={active ? "page" : undefined}
       className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
         active ? ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES : ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES
       }`}
     >
-      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <ItemLabel collapsed={collapsed}>{item.label}</ItemLabel>
+      <ClientAvatar name={client.name} imageUrl={client.avatarUrl} size="xs" />
+      <ItemLabel collapsed={collapsed}>
+        <span className="truncate">{client.name}</span>
+      </ItemLabel>
     </Link>
   );
 }
@@ -260,15 +233,9 @@ function ModuleLink({
  * Etapa "Revisão da Sidebar — indicador de overflow": detecta se a região
  * de navegação tem mais conteúdo além do que está visível, em cada borda
  * (topo/rodapé) — hoje a scrollbar fica escondida (`mitza-scrollbar-hidden`)
- * sem nenhum outro indício de que dá pra rolar, o que pode esconder pastas
- * de gestor numa agência com muitos gestores.
- *
- * `contentRef` (altura natural, cresce com o conteúdo) é observado via
- * `ResizeObserver` — necessário porque `scrollRef` (o container com
- * `overflow-y-auto`) tem altura FIXA (via flex), então abrir/fechar uma
- * pasta de gestor nunca redimensiona `scrollRef` em si, só o conteúdo
- * dentro dele. Sem essa distinção, o indicador nunca reagiria a pastas
- * abrindo/fechando, só a scroll manual.
+ * sem nenhum outro indício de que dá pra rolar. Reaproveitado nesta fase
+ * pra região rolável da CARTEIRA (seção 7 do pedido: "a área da carteira
+ * deve rolar independentemente da área de Agência").
  */
 function useScrollEdges(): {
   scrollRef: React.RefObject<HTMLDivElement | null>;
@@ -311,12 +278,14 @@ function SidebarContent({
   profile,
   pathname,
   month,
+  walletClients,
   collapsed,
   toggleCollapsed,
 }: {
   profile: { name: string; role: UserRole };
   pathname: string;
   month: string | null;
+  walletClients: AgencyTreeClient[];
   collapsed: boolean;
   toggleCollapsed: () => void;
 }) {
@@ -324,33 +293,26 @@ function SidebarContent({
   const gestaoItems = GESTAO_ITEMS.filter((item) => !item.adminOnly || isAdmin);
   const initial = profile.name.trim().charAt(0).toUpperCase() || "?";
   const { scrollRef, contentRef, edges } = useScrollEdges();
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [search, setSearch] = useState("");
 
-  // Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente como
-  // Contexto Global" — núcleo único que resolve módulo ATIVO (pra
-  // destacar o item certo) e contexto ATIVO (Todos ou um cliente) a
-  // partir do pathname, nunca uma segunda lógica de pathname aqui (seção
-  // 17 do pedido). Substitui `activeClientId`/`currentSuffix` da Fase 1 —
-  // mesma fonte (`resolveActiveClientIdFromPathname`/`resolveCurrentSuffix`
-  // internamente), só consolidada num resultado único.
-  const { module: currentModule, context } = resolveCurrentModuleAndContext(pathname);
-  const growthItems = MODULES.filter((item) => item.group === "growth");
-  const execucaoItems = MODULES.filter((item) => item.group === "execucao");
+  const activeClientId = resolveActiveClientIdFromPathname(pathname);
+
+  // Busca local (seção 6 do pedido: "sem chamada Supabase por tecla") —
+  // `walletClients` já veio pronta/ordenada do layout raiz; filtrar um
+  // array de até ~100 itens em memória é instantâneo, nenhum debounce
+  // necessário.
+  const filteredClients = useMemo(() => filterAgencyTreeClients(walletClients, search), [walletClients, search]);
+
+  const activeClient = activeClientId ? walletClients.find((c) => c.id === activeClientId) ?? null : null;
+
+  function expandAndFocusSearch() {
+    toggleCollapsed();
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  }
 
   return (
     <div className="flex h-full flex-col">
-      {/* Etapa "Identidade Visual KOFF — Sidebar": "Novo cliente" saiu
-       * daqui — cadastrar cliente é ação rara, não deveria abrir a
-       * Sidebar inteira com um CTA de largura total competindo com a
-       * navegação. Vira um "+" discreto ao lado do rótulo "Contas da
-       * Agência" (ver agency-accounts-tree-client.tsx), disponível sem
-       * roubar atenção. Este topo agora é só o controle de
-       * recolher/expandir (estrutural, não é destino de navegação).
-       *
-       * Etapa "KOFF Sidebar Polish": padding vertical enxuto de propósito
-       * — sem o CTA de antes, a mesma altura generosa virava vazio puro
-       * entre o botão e "Visão Geral". Ainda sobra um respiro pequeno
-       * (não gruda o botão na borda nem no primeiro item), só não é mais
-       * uma linha inteira ociosa. */}
       <div className="flex shrink-0 items-center justify-end px-2 pb-1 pt-1.5">
         <button
           type="button"
@@ -359,119 +321,118 @@ function SidebarContent({
           title={collapsed ? "Expandir menu" : "Recolher menu"}
           className="hidden shrink-0 rounded-md p-1 text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand md:block"
         >
-          {collapsed ? (
-            <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
-          )}
+          {collapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
         </button>
       </div>
 
-      {/* Região com scroll próprio: só a navegação rola se não couber —
-       * rodapé (usuário/sair) fica sempre visível, fora desta região.
-       * Etapa "Revisão da Sidebar": envolvida num wrapper `relative` pra
-       * caber os fades de overflow abaixo, sem mudar nada do scroll/drag-
-       * and-drop já existente — os fades são só `pointer-events-none`,
-       * nunca interceptam clique nem toque. */}
-      <div className="relative min-h-0 flex-1">
-        <div ref={scrollRef} className="mitza-scrollbar-hidden h-full overflow-y-auto">
-          <div ref={contentRef} className="flex min-h-full flex-col">
-            {/* Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente
-             * como Contexto Global" (seções 2/3/18 do pedido): MÓDULO é
-             * fixo — Growth/Execução SEMPRE visíveis, no MESMO lugar,
-             * independente de contexto (Todos ou um cliente específico).
-             * Deixou de existir "Carteira" com 4 itens globais + "Cliente"
-             * com os mesmos 7 duplicados dentro do workspace — cada
-             * `ModuleLink` resolve seu PRÓPRIO destino (`buildModuleContextHref`)
-             * a partir do contexto atual, nunca mais uma lista condicional
-             * a `activeClientId`. O nome do cliente ativo (quando houver)
-             * agora vive só no HEADER (`ClientWorkspaceHeader`/escopo
-             * global) — a Sidebar nunca repete avatar/status/posição nem
-             * nome de cliente (seção 18: "não mostrar nome do cliente
-             * dentro da sidebar"). */}
-            <div className="flex flex-col gap-0.5 px-2.5">
-              <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
-                Growth
-              </span>
-              <nav className="flex flex-col gap-0.5">
-                {growthItems.map((item) => (
-                  <ModuleLink key={item.key} item={item} context={context} currentModule={currentModule} month={month} collapsed={collapsed} />
-                ))}
-              </nav>
-            </div>
-
-            <div className="mt-3 flex flex-col gap-0.5 px-2.5">
-              <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
-                Execução
-              </span>
-              <nav className="flex flex-col gap-0.5">
-                {execucaoItems.map((item) => (
-                  <ModuleLink key={item.key} item={item} context={context} currentModule={currentModule} month={month} collapsed={collapsed} />
-                ))}
-              </nav>
-            </div>
-
-            <div className="flex-1" />
-
-            {gestaoItems.length > 0 && (
-              <div className="flex flex-col gap-0.5 px-2.5 pb-2">
-                {/* Etapa "MITZA 2.0 — Fase H" (renomeada "Gestão" na Fase
-                 * 4.6): rótulo visual só pra deixar explícito que Clientes/
-                 * Equipe/Configurações são administração — infraestrutura
-                 * fora da hierarquia operacional, nunca um terceiro nível
-                 * ao lado de Growth/Execução. "Atualizar Meta (todos)" não
-                 * é uma rota, é uma ação técnica; vive no rodapé, junto do
-                 * relógio, com peso visual secundário. */}
-                <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
-                  Gestão
-                </span>
-                <nav className="flex flex-col gap-0.5">
-                  {gestaoItems.map((item) => (
-                    <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
-                  ))}
-                </nav>
-              </div>
-            )}
-          </div>
+      {/* CARTEIRA — seção 1 do pedido. Busca + lista ficam JUNTAS numa
+          região com scroll PRÓPRIO (`flex-1 min-h-0 overflow-y-auto`),
+          separada da área "Agência"/"Gestão"/rodapé abaixo (`shrink-0`,
+          nunca rola com a carteira). `md:hidden` quando `collapsed`: some
+          só no desktop recolhido (mobile sempre mostra tudo, mesmo padrão
+          de sempre — ver `ItemLabel`); o bloco compacto equivalente
+          (abaixo) faz o inverso (`hidden md:flex` quando `collapsed`). */}
+      <div className={`flex min-h-0 flex-1 flex-col px-2.5 ${collapsed ? "md:hidden" : ""}`}>
+        <label className="sr-only" htmlFor="sidebar-client-search">
+          Buscar cliente
+        </label>
+        <div className="relative shrink-0">
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground-subtle" aria-hidden="true" />
+          <input
+            ref={searchInputRef}
+            id="sidebar-client-search"
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar cliente..."
+            className="w-full rounded-md bg-sidebar-search-surface py-1.5 pl-7 pr-2 text-[13px] text-sidebar-foreground placeholder:text-sidebar-foreground-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+          />
         </div>
 
-        {/* Etapa "Revisão da Sidebar — indicador de overflow": fade sutil
-         * no topo/rodapé da região de navegação quando há mais conteúdo pra
-         * rolar além do visível (`edges`, `useScrollEdges` acima) — nunca
-         * aparece se o conteúdo já couber inteiro. */}
-        <div
-          aria-hidden="true"
-          className={`pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-sidebar-surface to-transparent transition-opacity duration-150 ${edges.top ? "opacity-100" : "opacity-0"}`}
-        />
-        <div
-          aria-hidden="true"
-          className={`pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-sidebar-surface to-transparent transition-opacity duration-150 ${edges.bottom ? "opacity-100" : "opacity-0"}`}
-        />
+        <div className="relative mt-2 min-h-0 flex-1">
+          <div ref={scrollRef} className="mitza-scrollbar-hidden h-full overflow-y-auto">
+            <div ref={contentRef}>
+              <nav aria-label="Carteira de clientes" className="flex flex-col gap-0.5 pb-1">
+                {filteredClients.map((client) => (
+                  <ClientRow key={client.id} client={client} activeClientId={activeClientId} month={month} collapsed={collapsed} />
+                ))}
+              </nav>
+              {walletClients.length === 0 && <p className="px-0.5 py-2 text-xs text-sidebar-foreground-subtle">Nenhum cliente na carteira ainda.</p>}
+              {walletClients.length > 0 && filteredClients.length === 0 && (
+                <p className="px-0.5 py-2 text-xs text-sidebar-foreground-subtle">Nenhum cliente encontrado.</p>
+              )}
+            </div>
+          </div>
+          <div
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-sidebar-surface to-transparent transition-opacity duration-150 ${edges.top ? "opacity-100" : "opacity-0"}`}
+          />
+          <div
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-sidebar-surface to-transparent transition-opacity duration-150 ${edges.bottom ? "opacity-100" : "opacity-0"}`}
+          />
+        </div>
       </div>
 
-      {/* RODAPÉ — sempre visível, uma borda sutil separando do resto.
-       * Relógio da agência (data/hora globais, migrados da Top Bar) fica
-       * aqui, acima da identidade do usuário — discreto, nunca competindo
-       * com a navegação (Etapa Global UX Refinement 1.0). */}
+      {/* Versão compacta pro desktop recolhido (seção 5 do pedido: "sem
+          lista de dezenas de ícones indistinguíveis") — só o cliente ATUAL
+          (se houver) + um gatilho que expande a Sidebar e foca a busca.
+          `hidden md:flex`: nunca aparece no mobile (a carteira completa
+          acima já cobre esse caso) nem no desktop expandido. */}
+      <div className={collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"}>
+        {activeClient && (
+          <div title={activeClient.name} aria-current="page" className="rounded-full ring-2 ring-sand">
+            <ClientAvatar name={activeClient.name} imageUrl={activeClient.avatarUrl} size="xs" />
+          </div>
+        )}
+        <Tooltip label="Buscar cliente">
+          <button
+            type="button"
+            onClick={expandAndFocusSearch}
+            aria-label="Buscar cliente"
+            className="mitza-pressable flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground-muted hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+          >
+            <Search className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </Tooltip>
+      </div>
+
+      {/* AGÊNCIA + GESTÃO — seção 2 do pedido: ferramentas transversais,
+          nunca módulos do cliente. Fixo abaixo da carteira, nunca rola
+          junto com ela (`shrink-0`). */}
+      <div className="mt-3 shrink-0 space-y-3 px-2.5">
+        <div className="flex flex-col gap-0.5">
+          <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
+            Agência
+          </span>
+          <nav aria-label="Ferramentas da agência" className="flex flex-col gap-0.5">
+            {AGENCIA_ITEMS.map((item) => (
+              <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
+            ))}
+          </nav>
+        </div>
+
+        {gestaoItems.length > 0 && (
+          <div className="flex flex-col gap-0.5 pb-2">
+            <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
+              Gestão
+            </span>
+            <nav aria-label="Gestão da agência" className="flex flex-col gap-0.5">
+              {gestaoItems.map((item) => (
+                <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
+              ))}
+            </nav>
+          </div>
+        )}
+      </div>
+
+      {/* RODAPÉ — sempre visível, uma borda sutil separando do resto. */}
       <div className="shrink-0 space-y-1.5 border-t border-sidebar-border p-2.5">
         <SidebarClock collapsed={collapsed} />
 
-        {/* Etapa "Revisão da Sidebar": movido do grupo "Administração" pra
-         * cá — não é uma rota, é uma ação técnica (dispara sync manual do
-         * Meta), então recebe o mesmo peso visual discreto do relógio
-         * acima (11px), nunca competindo com Equipe/Configurações. Mesmo
-         * tom `--sidebar-foreground-subtle` do relógio — reforça que isto é
-         * rodapé técnico, não mais um item de navegação. */}
         {isAdmin && (
           <form action={syncAllMetaAction}>
             <Tooltip label="Atualizar Meta (todos)">
-              {/* Etapa "Padronização Global de Feedback": ação GLOBAL (roda
-                  pra todos os clientes) — antes sem nenhum sinal de "em
-                  andamento" nem proteção contra clique duplo. `SubmitButton`
-                  cobre os dois de graça (mesmo padrão do resto da
-                  plataforma), sem mudar a Server Action nem o peso visual
-                  discreto já deliberado pra esta ação (ver comentário da
-                  Etapa "Revisão da Sidebar" logo acima). */}
               <SubmitButton
                 pendingChildren={
                   <>
@@ -492,17 +453,9 @@ function SidebarContent({
           className={`flex items-center gap-2 pt-0.5 ${collapsed ? "md:justify-center" : ""}`}
           title={`${profile.name} · ${profile.role === "admin" ? "Admin" : "Gestor"}`}
         >
-          {/* Grafite de baixa intensidade (`-search-surface`, mesmo tom
-           * recortado do campo de busca) em vez do bloco 100% grafite do
-           * item ativo — um círculo grafite pesado no rodapé competiria com
-           * a navegação; e um overlay simples de hover ficaria fraco demais
-           * pra dar definição própria ao círculo sobre o off-white. */}
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sidebar-search-surface text-xs font-semibold text-sidebar-foreground">
             {initial}
           </span>
-          {/* Etapa "Identidade Visual KOFF — Sidebar": nome + papel numa
-           * linha só (era 2 linhas) — rodapé mais compacto, papel como
-           * sufixo discreto em vez de linha própria. */}
           <span className={`min-w-0 ${collapsed ? "md:hidden" : ""}`}>
             <p className="truncate text-sm font-medium text-sidebar-foreground">
               {profile.name}{" "}
@@ -526,10 +479,7 @@ function SidebarContent({
   );
 }
 
-/** Lê `?month=` via `useSearchParams()` (precisa de `Suspense`, ver uso
- * abaixo) — `?mode=` (Etapa anterior a esta fase) nunca foi consumido por
- * nenhum item de navegação; removido junto da consolidação dos módulos
- * fixos (Fase 4.6), nenhuma funcionalidade real perdida. */
+/** Lê `?month=` via `useSearchParams()` (precisa de `Suspense`). */
 function SidebarMonthParam({ onMonth }: { onMonth: (month: string | null) => React.ReactNode }) {
   const searchParams = useSearchParams();
   return <>{onMonth(searchParams.get("month"))}</>;
@@ -538,37 +488,22 @@ function SidebarMonthParam({ onMonth }: { onMonth: (month: string | null) => Rea
 /**
  * A Sidebar é o único elemento estrutural fixo da plataforma (Decisão 012 —
  * a Top Bar global foi removida): superfície off-white quente permanente
- * (Etapa "Sidebar Off-White + Grafite + Areia Assinatura — v4" — não
- * acompanha o tema claro/escuro do resto da aplicação, por isso as cores
- * aqui usam os tokens fixos `sidebar-*` — ver bloco dedicado em
- * `globals.css` — em vez dos tokens de tema `foreground`/`border`/`card`,
- * que trocam de valor no dark mode). 3 rodadas anteriores já tentaram
- * carregar a identidade através da SUPERFÍCIE (areia clara, grafite quente,
- * taupe médio) — todas ou perderam legibilidade ou viraram uma massa
- * vertical de cor grande demais, competindo com o conteúdo. Esta inverte a
- * hipótese: a Sidebar fica quase na mesma família clara do conteúdo
- * (separada só por um `border-right` sutil, não por contraste de fundo),
- * texto/ícone voltam a grafite, e areia (`--sand`, direto) vira
- * estritamente assinatura PONTUAL — rail do ativo, focus ring, indicador de
- * drop-target, hover do "+" — nunca mais uma superfície. Grafite entra
- * também como o bloco sólido do item ativo, agora o elemento de maior
- * contraste da tela por uma margem ainda maior (bloco escuro sobre
- * superfície clara). A Sidebar
- * ocupa exatamente 100% da altura da viewport em qualquer breakpoint
- * (`SIDEBAR_HEIGHT_CLASS`) e é o principal elemento de navegação da
- * plataforma. No mobile ela continua sendo um drawer (abrir tudo o tempo
- * todo tomaria a área operacional inteira — Cap. 17 dos Princípios de
- * Arquitetura); como não existe mais Top Bar cujo botão "Menu" a acionava,
- * o próprio componente expõe um gatilho flutuante (`onOpen`) — só visível
- * no mobile e só quando o drawer está fechado.
+ * ("Sidebar Off-White + Grafite + Areia Assinatura — v4" — não acompanha o
+ * tema claro/escuro do resto da aplicação). A Sidebar ocupa exatamente 100%
+ * da altura da viewport em qualquer breakpoint (`SIDEBAR_HEIGHT_CLASS`) e é
+ * o principal elemento de navegação da plataforma. No mobile ela continua
+ * sendo um drawer; o próprio componente expõe um gatilho flutuante
+ * (`onOpen`) — só visível no mobile e só quando o drawer está fechado.
  */
 export function Sidebar({
   profile,
+  walletClients,
   mobileOpen,
   onOpen,
   onClose,
 }: {
   profile: { name: string; role: UserRole };
+  walletClients: AgencyTreeClient[];
   mobileOpen: boolean;
   onOpen: () => void;
   onClose: () => void;
@@ -606,12 +541,12 @@ export function Sidebar({
       >
         <Suspense
           fallback={
-            <SidebarContent profile={profile} pathname={pathname} month={null} collapsed={collapsed} toggleCollapsed={toggleCollapsed} />
+            <SidebarContent profile={profile} pathname={pathname} month={null} walletClients={walletClients} collapsed={collapsed} toggleCollapsed={toggleCollapsed} />
           }
         >
           <SidebarMonthParam
             onMonth={(month) => (
-              <SidebarContent profile={profile} pathname={pathname} month={month} collapsed={collapsed} toggleCollapsed={toggleCollapsed} />
+              <SidebarContent profile={profile} pathname={pathname} month={month} walletClients={walletClients} collapsed={collapsed} toggleCollapsed={toggleCollapsed} />
             )}
           />
         </Suspense>

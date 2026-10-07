@@ -218,10 +218,15 @@ console.log("\n13 — Contexto CLIENTE (rota /clients/[id]/dados) e contexto TOD
   ok("página usa WorkspaceContainer (mesma largura/identidade visual do resto do workspace do cliente)", dadosPageSource.includes("<WorkspaceContainer>"));
 }
 
-console.log("\n14 — Sidebar: módulo Dados continua presente e único (nenhuma duplicata introduzida nesta fase)\n");
+console.log("\n14 — Sidebar: MITZA ONE — Fase 2 moveu Dados pra dentro do cockpit (Fase 1) — não é mais item de navegação próprio, mas a rota/módulo continuam intactos\n");
 {
-  ok("Sidebar ainda define o módulo Dados (grupo growth) — Fase 5 não tocou a navegação", /\{ key: "dados", label: "Dados", icon: Database, group: "growth" \}/.test(sidebarSource));
-  ok("Dados aparece só UMA vez em MODULES", (sidebarSource.match(/key: "dados"/g) ?? []).length === 1);
+  // MITZA ONE — Fase 2 (Sidebar = Carteira de Clientes): Dashboard/Metas/
+  // Performance/Dados deixaram de ter item próprio na Sidebar (viraram
+  // seções do cockpit único, Fase 1) — isso NÃO é regressão da Fase 5
+  // (a rota /clients/[id]/dados, data-trust.ts, dados-data.ts continuam
+  // 100% intactos, cobertos nas seções acima) — só a navegação mudou.
+  ok("Sidebar não define mais um item de navegação 'Dados' (nenhum 'key: \"dados\"' — módulo migrou pro cockpit, Fase 1)", !sidebarSource.includes('key: "dados"'));
+  ok("rota /clients/[id]/dados continua existindo e intocada (seções 1-13 acima)", dadosPageSource.includes("<WorkspaceContainer>"));
 }
 
 console.log("\n15 — Isolamento: Dados não importa os núcleos de CÁLCULO de Metas/Performance (zero acoplamento novo nos cálculos, zero risco de regressão)\n");

@@ -26,6 +26,8 @@
  * drag and drop entre pastas/dentro da pasta agora vive inteiramente no
  * componente cliente (via `@dnd-kit`), não mais nesta função pura.
  */
+import type { ClientContractStatus } from "@/lib/supabase/database.types";
+
 export interface AgencyTreeClient {
   id: string;
   name: string;
@@ -33,6 +35,14 @@ export interface AgencyTreeClient {
    * reconhecimento visual também na árvore, mesmo componente
    * `ClientAvatar` já usado na Operação. */
   avatarUrl: string | null;
+  /** MITZA ONE — Fase 2 (Sidebar = Carteira): só populado quando quem
+   * busca pediu `includeAllStatuses` (`loadAgencyAccountsTree`,
+   * `agency-accounts-tree-data.ts`) — `undefined` nas chamadas que
+   * continuam ativo-only (árvore de Gestão, anterior/próximo de antes
+   * desta fase), nunca inferido. Nunca usado pra decidir exclusão aqui —
+   * só acompanha o cliente pra quem exibe a lista (ex.: `aria-label`),
+   * já que "não assumir exclusão de pausado/inativo" é regra desta fase. */
+  status?: ClientContractStatus;
 }
 
 export interface AgencyTreeManager {
@@ -51,6 +61,7 @@ interface RawAgencyTreeClient {
   name: string;
   wallet_position: number | null;
   avatar_url: string | null;
+  status?: ClientContractStatus;
   primary_manager: { id: string; name: string } | null;
 }
 
@@ -62,7 +73,7 @@ function sortByWalletPosition(clients: RawAgencyTreeClient[]): AgencyTreeClient[
       if (b.wallet_position !== null) return 1;
       return a.name.localeCompare(b.name);
     })
-    .map((client) => ({ id: client.id, name: client.name, avatarUrl: client.avatar_url }));
+    .map((client) => ({ id: client.id, name: client.name, avatarUrl: client.avatar_url, status: client.status }));
 }
 
 export function buildAgencyAccountsTree(
@@ -104,6 +115,23 @@ export function buildAgencyAccountsTree(
  */
 export function flattenAgencyTree(tree: AgencyTree): AgencyTreeClient[] {
   return [...tree.managers.flatMap((manager) => manager.clients), ...tree.unassigned];
+}
+
+/**
+ * MITZA ONE — Fase 2 (Sidebar = Carteira de Clientes, seção 6 do pedido:
+ * "busca local quando o volume for compatível; não gerar uma chamada
+ * Supabase por tecla"). Núcleo puro extraído de dentro do componente
+ * (`sidebar.tsx`) pra ser testável sem DOM/React — substring
+ * case-insensitive sobre `name`, nunca normaliza acentos/nenhuma outra
+ * heurística (mesmo critério simples já usado em `/clients/page.tsx`:
+ * `clientName.toLowerCase().includes(search)`). Query vazia/só espaços
+ * devolve a lista inteira, sem filtrar (nenhum "0 resultados" por engano
+ * antes de digitar).
+ */
+export function filterAgencyTreeClients(clients: AgencyTreeClient[], query: string): AgencyTreeClient[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return clients;
+  return clients.filter((client) => client.name.toLowerCase().includes(normalized));
 }
 
 export interface WalletSequencePosition {
