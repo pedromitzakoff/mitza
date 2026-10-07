@@ -17,7 +17,7 @@ import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus } from "@/lib/spend-status";
 import { resolveBudgetEffectiveDate, computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { resolveClientMonthlyGoals, resolveTargetCostPerResult, type ClientPlanChangeRow } from "@/lib/client-plan";
-import type { ChannelMetrics } from "@/lib/channel-metrics";
+import { consolidateAdditive, type ChannelMetrics } from "@/lib/channel-metrics";
 import { getClientMonthHorizon } from "@/lib/client-month-horizons";
 import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { sumChannelEffectiveSpend, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
@@ -401,39 +401,6 @@ export default async function ClientPage({
     currentMonthlyBudget: primaryMonthPlanned,
   });
 
-  // Etapa "Evolução do Dashboard — Visão Simultânea de Canais" (seção 1 do
-  // pedido): Ritmo/KPIs/Diagnóstico do Dashboard são SEMPRE o consolidado
-  // do objetivo PRINCIPAL agora — não existe mais um canal/objetivo "em
-  // exibição" escolhido num seletor. Mesmo valor que `primaryMonthPlanned`
-  // acima (já o consolidado do objetivo principal) — reaproveitado, nunca
-  // recalculado uma segunda vez.
-  const monthPlanned = primaryMonthPlanned;
-  const monthExpectedToDate = computeMonthlyExpectedToDateByCalendar(monthPlanned, planningHorizon, todayStr).expectedToDate;
-  const monthStatus = classifySpendStatus(monthActual, monthExpectedToDate, monthPlanned);
-
-  // `legacyFallback` (coluna antiga `clients.target_cost_per_result`)
-  // sempre se aplica agora — o objetivo em exibição é sempre o PRINCIPAL
-  // (nunca mais um objetivo secundário "em exibição" via seletor).
-  const consolidatedTargetCostPerResult = resolveTargetCostPerResult({
-    channel: "consolidated",
-    plan: primaryGoalPlan,
-    legacyFallback: client.target_cost_per_result,
-  });
-  const consolidatedPerformanceSummary = performanceGoal
-    ? computePerformanceSummary({
-        scope: "consolidated",
-        records: performanceRecords,
-        resultType: performanceGoal,
-        consolidatedActualSpend: monthActual,
-        targetCostPerResult: consolidatedTargetCostPerResult,
-      })
-    : null;
-  const consolidatedTargetResultCount = primaryGoalPlan.consolidated.resultCount;
-  const expectedResultsToDate =
-    consolidatedTargetResultCount !== null
-      ? computeMonthlyExpectedToDateByCalendar(consolidatedTargetResultCount, planningHorizon, todayStr).expectedToDate
-      : null;
-
   // Etapa "Evolução do Dashboard — Visão Simultânea de Canais" (seções 9/
   // 10/12/14/15 do pedido): um bloco por canal que o cliente REALMENTE usa
   // (`clientChannels`, já resolvido acima), cada um com o PRÓPRIO objetivo
@@ -443,7 +410,10 @@ export default async function ClientPage({
   // antes desta etapa pro canal selecionado — nunca um novo cálculo,
   // chamada uma vez por canal real em vez de uma vez pro canal escolhido
   // num dropdown). Investimento planejado por canal vem de
-  // `clientGoalsPlan` (seção 15: nunca estimado/dividido do total).
+  // `clientGoalsPlan` (seção 15: nunca estimado/dividido do total) — este
+  // É o valor por canal correto mesmo quando Meta e Google pertencem a
+  // OBJETIVOS DIFERENTES (`channelGoal` resolvido por canal, nunca o
+  // objetivo PRINCIPAL "vazando" pra um canal que não é dele).
   const dashboardChannels = clientChannels.map((channel) => {
     const channelGoal = resolveChannelGoal(effectiveClientGoals, channel);
     const goalPlan = channelGoal ? clientGoalsPlan.goals.find((g) => g.resultType === channelGoal.resultType) ?? EMPTY_GOAL_PLAN : EMPTY_GOAL_PLAN;
@@ -475,6 +445,74 @@ export default async function ClientPage({
 
     return { channel, goal: channelGoal, actualSpend, planned, performanceSummary, targetCostPerResult, targetResultCount };
   });
+
+  // Etapa "Correção de Semântica — Orçamento do Mês Multicanal": o
+  // "Orçamento do mês" é a SOMA dos planejamentos REAIS de cada canal que
+  // o cliente usa (`dashboardChannels[i].planned`, já resolvido pelo
+  // PRÓPRIO objetivo de cada canal acima) — nunca mais
+  // `primaryGoalPlan.consolidated.investment`, que só somava os canais
+  // do objetivo PRINCIPAL e ficava errado sempre que Meta/Google
+  // pertencem a objetivos DIFERENTES (ex.: Meta=Vendas, Google=Leads: o
+  // antigo total mostrava só o investimento de Vendas, ignorando o de
+  // Leads por completo). `consolidateAdditive` (lib/channel-metrics.ts,
+  // MESMO combinador aditivo central de sempre) nunca fabrica `0`: só
+  // soma os canais com plano real, `null` quando NENHUM canal tem plano
+  // ainda — só nesse caso cai no fallback legado `sumPlannedForMonth`
+  // (cliente que nunca passou pelo editor de planejamento, idêntico ao
+  // comportamento de sempre).
+  //
+  // Esta é a MESMA definição que a página já usava no caso comum (um
+  // objetivo só, sem restrição de canal): nesse caso
+  // `primaryGoalPlan.consolidated.investment` e esta soma são
+  // numericamente idênticos (ambos somam os mesmos canais) — a correção
+  // só muda o resultado quando canais pertencem a objetivos diferentes,
+  // nunca no caminho comum.
+  const totalPlannedAcrossChannels =
+    consolidateAdditive(clientChannels, (channel) => dashboardChannels.find((c) => c.channel === channel)?.planned ?? null) ??
+    sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay });
+
+  // Ritmo/KPIs/Diagnóstico do Dashboard são SEMPRE o consolidado REAL do
+  // mês (soma de todos os canais, `totalPlannedAcrossChannels` acima) —
+  // não existe mais um canal/objetivo "em exibição" escolhido num
+  // seletor. `monthActual` (abaixo) já era o investimento realizado
+  // TOTAL do cliente (todos os canais, nunca restrito por objetivo) —
+  // compará-lo contra `totalPlannedAcrossChannels` (agora também o total
+  // real) é a única combinação semanticamente consistente; comparar o
+  // realizado total contra um planejado restrito ao objetivo principal
+  // (como a etapa anterior fazia) sub-contava o planejado sempre que
+  // havia mais de um objetivo com canais próprios.
+  const monthPlanned = totalPlannedAcrossChannels;
+  const monthExpectedToDate = computeMonthlyExpectedToDateByCalendar(monthPlanned, planningHorizon, todayStr).expectedToDate;
+  const monthStatus = classifySpendStatus(monthActual, monthExpectedToDate, monthPlanned);
+
+  // `legacyFallback` (coluna antiga `clients.target_cost_per_result`)
+  // sempre se aplica agora — o objetivo em exibição é sempre o PRINCIPAL
+  // (nunca mais um objetivo secundário "em exibição" via seletor). Custo
+  // por resultado consolidado continua escopado ao objetivo PRINCIPAL
+  // (`primaryGoalPlan`) — resultado nunca agrega objetivos incompatíveis
+  // (Vendas de Meta + Leads de Google nunca somam "resultado total");
+  // essa é uma pergunta diferente da do orçamento (dinheiro sempre soma
+  // entre canais, resultado só soma dentro do MESMO objetivo) e não foi
+  // alterada por esta correção.
+  const consolidatedTargetCostPerResult = resolveTargetCostPerResult({
+    channel: "consolidated",
+    plan: primaryGoalPlan,
+    legacyFallback: client.target_cost_per_result,
+  });
+  const consolidatedPerformanceSummary = performanceGoal
+    ? computePerformanceSummary({
+        scope: "consolidated",
+        records: performanceRecords,
+        resultType: performanceGoal,
+        consolidatedActualSpend: monthActual,
+        targetCostPerResult: consolidatedTargetCostPerResult,
+      })
+    : null;
+  const consolidatedTargetResultCount = primaryGoalPlan.consolidated.resultCount;
+  const expectedResultsToDate =
+    consolidatedTargetResultCount !== null
+      ? computeMonthlyExpectedToDateByCalendar(consolidatedTargetResultCount, planningHorizon, todayStr).expectedToDate
+      : null;
 
   const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate(planningHorizon, todayStr);
   const isFutureMonth = !isCurrentMonth && !isClosedMonth;
@@ -655,7 +693,6 @@ export default async function ClientPage({
             channel={c.channel}
             goal={c.goal}
             actualSpend={c.actualSpend}
-            planned={c.planned}
             performanceSummary={c.performanceSummary}
             targetCostPerResult={c.targetCostPerResult}
             targetResultCount={c.targetResultCount}

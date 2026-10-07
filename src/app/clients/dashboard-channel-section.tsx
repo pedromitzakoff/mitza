@@ -21,12 +21,19 @@ import { Kpi } from "./monthly-kpi-summary";
  * só Investimento + um link "Configurar objetivo", mesmo estado que
  * `MonthlyKpiSummary` já trata pra `performanceGoal: null` — nunca um
  * card vazio sem explicação.
+ *
+ * Etapa "Correção de Semântica — Orçamento do Mês Multicanal": o KPI de
+ * Investimento deixou de mostrar "Planejado R$X" como auxiliar — esse
+ * valor já aparece imediatamente acima, na composição por canal do
+ * `DashboardBudget` ("Meta Ads R$160.000,00"), repeti-lo aqui era
+ * redundância pura (auditoria visual confirmou). `planned` saiu da
+ * assinatura deste componente — nunca precisou de outro cálculo, só
+ * parou de ser exibido duas vezes.
  */
 export function DashboardChannelSection({
   channel,
   goal,
   actualSpend,
-  planned,
   performanceSummary,
   targetCostPerResult,
   targetResultCount,
@@ -38,10 +45,6 @@ export function DashboardChannelSection({
    * cliente (seção 10: "não usar resultado agregado do cliente dentro do
    * card Google"). */
   actualSpend: number;
-  /** Investimento PLANEJADO vigente deste canal — `null` quando o canal
-   * ainda não tem plano próprio definido (nunca estimado/dividido do total,
-   * seção 15 do pedido). */
-  planned: number | null;
   performanceSummary: PerformanceSummary | null;
   targetCostPerResult: number | null;
   targetResultCount?: number | null;
@@ -53,14 +56,13 @@ export function DashboardChannelSection({
   const resultLabel = performanceGoal ? PERFORMANCE_GOALS[performanceGoal].resultMetricLabel : "Resultado";
   const resultAuxiliary = resultsAuxiliary ?? (targetResultCount != null && targetResultCount > 0 ? `Meta ${targetResultCount}` : null);
 
-  const investmentAuxiliary = planned != null && planned > 0 ? `Planejado ${formatCurrency(planned)}` : "Sem plano por canal";
   const costAuxiliary = targetCostPerResult !== null ? `Meta ${formatCurrency(targetCostPerResult)}` : null;
 
   return (
     <div className="rounded-lg border border-overview-border bg-overview-surface p-4">
       <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">{TRAFFIC_CHANNELS[channel].label}</h2>
       <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
-        <Kpi label="Investimento" value={formatCurrency(actualSpend)} auxiliary={investmentAuxiliary} />
+        <Kpi label="Investimento" value={formatCurrency(actualSpend)} />
         <Kpi label={resultLabel} value={resultsValue} auxiliary={resultAuxiliary} />
         <Kpi label="Custo por resultado" value={costValue} auxiliary={costAuxiliary} />
       </div>

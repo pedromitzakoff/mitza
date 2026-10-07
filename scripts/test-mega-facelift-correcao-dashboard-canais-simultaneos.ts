@@ -103,15 +103,15 @@ console.log("\n6 — Canal inexistente nunca aparece: Dashboard mapeia só sobre
   ok("DashboardBudget/DashboardChannelSection recebem channels/dashboardChannels (derivados de clientChannels), nunca a lista fixa de canais", pageSource.includes("channels={dashboardChannels.map((c) => ({ channel: c.channel, planned: c.planned }))}"));
 }
 
-console.log("\n7 — Orçamento do mês: fonte EXATAMENTE oficial, nunca um cálculo alternativo\n");
+console.log("\n7 — Orçamento do mês: fonte EXATAMENTE oficial, nunca um cálculo alternativo. REVISADO pela Etapa 'Correção de Semântica — Orçamento do Mês Multicanal': monthPlanned deixou de ser primaryMonthPlanned (restrito aos canais do objetivo PRINCIPAL) e passou a ser totalPlannedAcrossChannels (soma de TODOS os canais reais) — ver test-mega-facelift-correcao-orcamento-multicanal.ts pra cobertura completa desta correção\n");
 {
   ok(
-    "monthPlanned reaproveita primaryMonthPlanned (primaryGoalPlan.consolidated.investment, com o MESMO fallback legado sumPlannedForMonth) — nenhum segundo cálculo",
-    /const monthPlanned = primaryMonthPlanned;/.test(pageSource),
+    "monthPlanned agora reaproveita totalPlannedAcrossChannels (soma de todos os canais) — nunca mais primaryMonthPlanned (que ficava errado quando canais pertencem a objetivos diferentes)",
+    /const monthPlanned = totalPlannedAcrossChannels;/.test(pageSource),
   );
   ok(
-    "primaryMonthPlanned vem de primaryGoalPlan.consolidated.investment (resolveClientMonthlyGoals -> consolidateChannelMetrics) — a mesma soma de sempre, nunca dividida/estimada",
-    /const primaryMonthPlanned = primaryGoalPlan\.consolidated\.investment \?\? sumPlannedForMonth/.test(pageSource),
+    "primaryMonthPlanned continua existindo, mas só pra ensureClosedSprintSnapshots (congelamento de sprint sempre usa o orçamento do objetivo PRINCIPAL, decisão deliberada e documentada, nunca a exibição)",
+    /const primaryMonthPlanned = primaryGoalPlan\.consolidated\.investment \?\? sumPlannedForMonth/.test(pageSource) && /currentMonthlyBudget: primaryMonthPlanned/.test(pageSource),
   );
 }
 
@@ -136,8 +136,8 @@ console.log("\n9 — Histórico preservado (seção 8 do pedido): mesma tabela/R
     loadSource("supabase", "monthly-channel-plan.sql").includes("insert into monthly_budget_changes"),
   );
   ok(
-    "targetResultCount é sempre enviado como o valor vigente do canal (nunca null forçado) — a RPC já carrega adiante quando recebe null, mas o comentário documenta a intenção de nunca apagar meta configurada",
-    /targetResultCountByChannel/.test(budgetSource),
+    "targetResultCount é sempre enviado como null — a RPC/Server Action já carregam adiante a meta de quantidade vigente quando recebem null, nunca apagando uma meta já configurada (mesmo contrato de sempre)",
+    /applyMonthlyChannelPlanChangeAction\(clientId, monthParam, channel, newInvestment, null, null\)/.test(budgetSource),
   );
 }
 
@@ -163,15 +163,20 @@ console.log("\n11 — Meta/Google isolados: investimento/resultado de um canal n
     "performanceSummary de cada canal usa scope: channel + channelActualSpend: { [channel]: actualSpend } — nunca consolidatedActualSpend como o investimento do canal",
     /scope: channel,[\s\S]{0,300}channelActualSpend: \{ \[channel\]: actualSpend \}/.test(pageSource),
   );
-  ok("DashboardChannelSection nunca recebe um prop 'consolidated' — só actualSpend/planned/performanceSummary do PRÓPRIO canal", !channelSectionSource.includes("consolidated"));
+  ok("DashboardChannelSection nunca recebe um prop 'consolidated' — só actualSpend/performanceSummary do PRÓPRIO canal", !channelSectionSource.includes("consolidated"));
 }
 
 console.log("\n12 — Ausência de meta/resultado e canal com zero resultado: mesmos estados de sempre, nunca um valor fabricado\n");
 {
   ok("goal: null -> card mostra 'Configurar objetivo' (mesmo estado que MonthlyKpiSummary já tratava pra performanceGoal: null)", /\{!performanceGoal && \([\s\S]{0,200}Configurar objetivo/.test(channelSectionSource));
+  // Etapa "Correção de Semântica — Orçamento do Mês Multicanal": a
+  // distinção null (sem plano) vs 0 (plano explicitamente zerado) saiu
+  // de DashboardChannelSection (que não mostra mais "Planejado" — ver
+  // seção 19 abaixo) e passou a viver só em DashboardBudget
+  // (renderPlannedValue), onde o valor por canal realmente é exibido.
   ok(
-    "planned null -> auxiliar 'Sem plano por canal' (nunca 0/estimado) — distinto de 'Nenhum planejamento configurado' (cliente sem NENHUM plano), mesma convenção de nunca fabricar número",
-    /planned != null && planned > 0 \? `Planejado \$\{formatCurrency\(planned\)\}` : "Sem plano por canal"/.test(channelSectionSource),
+    "renderPlannedValue (dashboard-budget.tsx) distingue null (sem plano) de 0 (plano explicitamente zerado) — nunca a mesma mensagem pros dois estados",
+    /function renderPlannedValue\(planned: number \| null\): string \{\s*return planned != null \? formatCurrency\(planned\) : "Sem planejamento";/.test(budgetSource),
   );
 }
 
