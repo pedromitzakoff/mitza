@@ -162,14 +162,17 @@ console.log("\n1 — resolveDashboardDiagnosticCtaTarget: núcleo puro, mesmo mo
   );
 }
 
-console.log("\n2 — Planejamento detalhado saiu do Dashboard (seção 12 do pedido): ChannelPlanEditor não é mais renderizado aqui, só um CTA pra Metas\n");
+console.log("\n2 — Planejamento detalhado saiu do Dashboard (seção 12 do pedido): ChannelPlanEditor não é mais renderizado aqui. Revisado pela Etapa 'Evolução do Dashboard — Visão Simultânea de Canais' (seção 18): o CTA 'Editar planejamento →' que apontava pra Metas também saiu — edição cotidiana de orçamento agora é inline (DashboardBudget), reutilizando a mesma Server Action oficial; ver test-mega-facelift-correcao-dashboard-canais-simultaneos.ts\n");
 {
   ok("ChannelPlanEditor não é mais importado em [id]/page.tsx", !pageSource.includes('import { ChannelPlanEditor }'));
   ok("ChannelPlanEditor não é mais renderizado em [id]/page.tsx", !/<ChannelPlanEditor/.test(pageSource));
-  ok('"Editar planejamento →" aponta pra Metas (buildMetasHref), nunca abre inline', pageSource.includes("Editar planejamento →") && pageSource.includes("buildMetasHref"));
   ok(
-    "mesmo gate de antes (admin, mês não fechado, objetivo PRINCIPAL) continua controlando o CTA",
-    /isAdmin && !isClosedMonth && effectiveDate && performanceGoal === primaryResultType && \(\s*<Link href=\{metasHref\}/.test(pageSource),
+    "'Editar planejamento →' não existe mais como JSX renderizado em [id]/page.tsx (só sobrevive em comentários históricos) — edição inline substituiu o link pra Metas",
+    !/>\s*Editar planejamento/.test(pageSource),
+  );
+  ok(
+    "mesmo gate de antes (admin, mês não fechado) agora controla a edição inline (canEditBudgetInline)",
+    /const canEditBudgetInline = isAdmin && !isClosedMonth && Boolean\(effectiveDate\)/.test(pageSource),
   );
   ok("ChannelPlanEditor continua existindo e sendo renderizado de verdade em Metas (nunca deletado, só mudou de lugar)", /<ChannelPlanEditor/.test(metasPageSource));
 }
@@ -218,10 +221,13 @@ console.log("\n7 — Ritmo do mês + Diagnóstico (seções 5/6 do pedido): mesm
   ok('"Ver Metas →" aparece no card de Ritmo', /Ritmo do mês<\/h2>\s*<Link href=\{metasHref\}[^>]*>\s*Ver Metas →/.test(pageSource));
 }
 
-console.log("\n8 — Resultados por canal (seção 7 do pedido): continua ResultsByChannel de sempre, sem virar análise profunda, com CTA pra Performance\n");
+console.log("\n8 — Resultados por canal (seção 7 do pedido, ORIGINAL): ResultsByChannel foi substituído pela Etapa 'Evolução do Dashboard — Visão Simultânea de Canais' — Meta Ads/Google Ads aparecem simultaneamente (DashboardChannelSection), tornando o bloco consolidado redundante; ver test-mega-facelift-correcao-dashboard-canais-simultaneos.ts pra cobertura completa\n");
 {
-  ok("ResultsByChannel continua reaproveitado sem reimplementação", pageSource.includes("<ResultsByChannel goal={performanceGoal} channelBreakdown={monthPerformanceChannelBreakdown} />"));
-  ok('"Ver Performance →" acompanha o bloco de canal', /Resultados por canal<\/h2>\s*<Link href=\{performanceHref\}[^>]*>\s*Ver Performance →/.test(pageSource));
+  ok(
+    "ResultsByChannel não é mais importado/renderizado em [id]/page.tsx (só sobrevive numa doc-comment histórica) — superseded pelos cards de canal simultâneos",
+    !pageSource.includes('from "../results-by-channel"') && !/<ResultsByChannel/.test(pageSource),
+  );
+  ok("results-by-channel.tsx continua existindo no disco (não deletado — ainda usado por account-follow-up-panel.tsx, órfão documentado)", existsSync(join(__dirname, "..", "src", "app", "clients", "results-by-channel.tsx")));
   ok("link do Relatório não é mais um item solto da barra de contexto — virou CTA contextual (nenhum <Link> com texto 'Relatório' sozinho)", !/>\s*Relatório\s*<\/Link>/.test(pageSource));
 }
 

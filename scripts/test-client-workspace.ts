@@ -197,9 +197,17 @@ console.log("\n6 — Painel principal (/clients/[id]) integra Performance + Oper
   // de ser o wrapper — seus filhos (MonthlyKpiSummary/MonthlyGoalProgress/
   // MonthInvestmentSummary) passaram a ser chamados direto numa composição
   // em cards nova, mesmos dados/cálculos (ver test-mega-facelift-fase4-dashboard.ts).
+  // Etapa "Evolução do Dashboard — Visão Simultânea de Canais": o
+  // Executive Snapshot (MonthlyKpiSummary) foi substituído por Orçamento +
+  // Meta Ads/Google Ads simultâneos (DashboardBudget/DashboardChannelSection)
+  // — Ritmo do mês (MonthlyGoalProgress/MonthInvestmentSummary) continua
+  // intocado.
   ok(
-    "PERFORMANCE: KPIs + ritmo do mês continuam no Painel via MonthlyKpiSummary/MonthlyGoalProgress/MonthInvestmentSummary — nenhum cálculo novo",
-    pageSource.includes("<MonthlyKpiSummary") && pageSource.includes("<MonthlyGoalProgress") && pageSource.includes("<MonthInvestmentSummary"),
+    "PERFORMANCE: Orçamento + canais simultâneos (DashboardBudget/DashboardChannelSection) + ritmo do mês continuam no Painel via MonthlyGoalProgress/MonthInvestmentSummary — nenhum cálculo novo",
+    pageSource.includes("<DashboardBudget") &&
+      pageSource.includes("<DashboardChannelSection") &&
+      pageSource.includes("<MonthlyGoalProgress") &&
+      pageSource.includes("<MonthInvestmentSummary"),
   );
   // CTA próprio "Ver relatório completo →" removido (pedido de
   // simplificação pós-rollback) — redundante com o link "Relatório" sempre

@@ -75,8 +75,9 @@ console.log("\n5 — Refresh preserva o objetivo (derivado só da URL, nunca de 
   const second = resolveSelectedGoal("sales", ["leads", "sales"], "leads");
   check("duas resoluções com o mesmo ?goal= (simulando refresh) dão o MESMO objetivo", [first, second], ["sales", "sales"]);
   ok(
-    "performanceGoal em page.tsx vem de resolveSelectedGoal(goalParam, ...) — nunca de useState/sessionStorage (Server Component, só a URL decide)",
-    /const performanceGoal = resolveSelectedGoal\(/.test(pageCode),
+    "resolveSelectedGoal continua pura/determinística e usada por metas-data.ts (ver test-mega-facelift-fase2-metas.ts) — Etapa 'Evolução do Dashboard — Visão Simultânea de Canais' aposentou só o SELETOR no Dashboard (?goal= deixou de existir nesta página: performanceGoal lá virou sempre o objetivo PRINCIPAL, sem seletor pra 'refresh' preservar)",
+    /import \{ resolveSelectedGoal \} from "\.\/\[id\]\/page"/.test(loadSource("src", "app", "clients", "metas-data.ts")) &&
+      /const performanceGoal = primaryResultType;/.test(pageCode),
   );
 }
 
@@ -141,11 +142,11 @@ console.log("\n9 — Labels mudam corretamente Leads/Vendas/Seguidores (sempre P
   ok('GoalSelect não inventa nomenclatura de funil ("Captação" etc.) — rótulo vem só de PERFORMANCE_GOALS', !/Captação|Distribuição de Conteúdo/.test(goalSelectCode));
 }
 
-console.log("\n10/11/12/13 — Canal: Consolidado/Meta/Google continuam filtrando corretamente, mesma regra de disponibilidade\n");
+console.log("\n10/11/12/13 — Canal: Consolidado/Meta/Google continuam filtrando corretamente, mesma regra de disponibilidade (VisaoGeralChannelSwitch continua existindo — Metas/outras telas — só saiu do Dashboard, ver test-mega-facelift-correcao-dashboard-canais-simultaneos.ts)\n");
 {
   ok(
-    "VisaoGeralChannelSwitch continua recebendo EXATAMENTE as mesmas options/active de resolveClientChannelScopeOptions/resolveSelectedChannelScope — nenhuma lógica de disponibilidade nova",
-    /resolveClientChannelScopeOptions\(client\.media_channels\)/.test(pageCode) && /resolveSelectedChannelScope\(metricsChannelParam, client\.media_channels\)/.test(pageCode),
+    "Dashboard não importa mais VisaoGeralChannelSwitch/resolveClientChannelScopeOptions/resolveSelectedChannelScope — canais aparecem simultaneamente agora (resolveClientMediaChannels), nunca um seletor",
+    !pageCode.includes("VisaoGeralChannelSwitch") && !/resolveClientChannelScopeOptions\(client\.media_channels\)/.test(pageCode) && !/resolveSelectedChannelScope\(/.test(pageCode),
   );
   ok(
     "com 1 única opção de canal, vira rótulo estático (mesmo critério de sempre — Consolidado só aparece com >1 canal ativo)",

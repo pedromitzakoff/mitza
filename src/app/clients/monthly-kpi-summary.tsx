@@ -4,7 +4,14 @@ import { deriveMonthlyKpiTexts } from "@/lib/performance";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { formatCurrency, formatCount } from "@/lib/format";
 
-function Kpi({
+/**
+ * Etapa "Evolução do Dashboard — Visão Simultânea de Canais": exportado
+ * (era local) pra `DashboardChannelSection` (`dashboard-channel-section.tsx`)
+ * reaproveitar exatamente a mesma apresentação — Meta Ads e Google Ads
+ * precisam usar o MESMO componente visual (seção 23 do pedido), a diferença
+ * vem só dos dados, nunca de um segundo componente de tile duplicado.
+ */
+export function Kpi({
   label,
   value,
   auxiliary,

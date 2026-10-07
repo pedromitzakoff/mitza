@@ -141,3 +141,33 @@ export async function fetchGoalDisplaySummaries(
 export function resolvePrimaryGoal(goals: ClientGoal[]): ClientGoal | null {
   return goals.find((g) => g.isPrimary) ?? null;
 }
+
+/**
+ * Direção INVERSA de `ClientGoal.channels` (Etapa "Evolução do Dashboard —
+ * Visão Simultânea de Canais"): dado um canal, qual objetivo pertence a
+ * ele? Até agora todo consumidor só perguntava "quais canais pertencem a
+ * ESTE objetivo" (`goal.channels`, lido direto nos 6 lugares que já
+ * existem); esta é a primeira vez que a pergunta precisa ser respondida ao
+ * contrário — os cards Meta Ads/Google Ads do Dashboard mostram os DOIS
+ * canais ao mesmo tempo, então cada um precisa saber o PRÓPRIO objetivo,
+ * nunca um objetivo escolhido manualmente num seletor único.
+ *
+ * `channels: []` (sem restrição) sempre conta como "pertence a este
+ * canal" — mesma convenção de `resolveClientMonthlyGoals`
+ * (`lib/client-plan.ts`). Quando MAIS DE UM objetivo configurado reivindica
+ * o mesmo canal (não impedido hoje pela UI de "Objetivos da conta" —
+ * `client-goals-section.tsx` deixa marcar o mesmo canal em dois objetivos
+ * diferentes), a regra de desempate é determinística, nunca uma escolha
+ * silenciosa: o PRINCIPAL vence se ele reivindicar o canal; senão, o
+ * primeiro da lista já recebida (que `listClientGoals`/
+ * `listClientGoalsForClients` sempre devolvem ordenada com o principal
+ * primeiro, depois por `result_type` — nunca uma segunda ordenação aqui).
+ * `null` quando NENHUM objetivo reivindica o canal — o card mostra só
+ * Investimento, sem Resultado/Custo por resultado (mesmo estado "Configurar
+ * objetivo" que `MonthlyKpiSummary` já trata pra `performanceGoal: null`).
+ */
+export function resolveChannelGoal(goals: ClientGoal[], channel: TrafficChannel): ClientGoal | null {
+  const matches = goals.filter((g) => g.channels.length === 0 || g.channels.includes(channel));
+  if (matches.length === 0) return null;
+  return matches.find((g) => g.isPrimary) ?? matches[0];
+}

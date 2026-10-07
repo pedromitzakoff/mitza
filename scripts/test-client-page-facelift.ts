@@ -124,7 +124,12 @@ console.log("\n2 — Ritmo vertical: cadência consistente entre as grandes regi
   // Snapshot/Ritmo+Diagnóstico/Resultados por canal), cada um com sua
   // própria margem (mt-5) — cadência igualmente consistente, só recalibrada
   // pra o novo ritmo de cards (ver test-mega-facelift-fase4-dashboard.ts).
-  ok("Executive Snapshot (MonthlyKpiSummary) usa mt-5 antes dele, mesma cadência consistente de sempre", /mt-5">\s*<MonthlyKpiSummary/.test(pageCode));
+  // Etapa "Evolução do Dashboard — Visão Simultânea de Canais": o Executive
+  // Snapshot (MonthlyKpiSummary) foi substituído por Orçamento +
+  // Meta Ads/Google Ads simultâneos (DashboardBudget/DashboardChannelSection)
+  // — mesma cadência mt-5, só o conteúdo do bloco mudou (ver
+  // test-mega-facelift-correcao-dashboard-canais-simultaneos.ts).
+  ok("Orçamento + canais simultâneos (sucessor do Executive Snapshot) usa mt-5 antes dele, mesma cadência consistente de sempre", /mt-5 flex flex-col gap-4">\s*<DashboardBudget/.test(pageCode));
   // Rodada 5: Tarefas (MonthTasksPanel) realocado pra Operação — mesma
   // cadência mt-6 preservada no arquivo novo, nunca perdida na mudança.
   // Rodada 6 ("Correção de Direção do Workspace"): o bloco em si mudou de
@@ -225,28 +230,26 @@ console.log("\n10 — Performance sem grande card: superfície removida, assinat
   ok("Ritmo do mês continua com o mesmo divisor horizontal discreto (border-t) separando dos KPIs", /border-t border-overview-border pt-3/.test(accountFollowUpCode));
 }
 
-console.log("\n11 — Toolbar de contexto: Mês + Objetivo + Canal + Planejamento, sem navegação própria (abas viraram rotas irmãs, Etapa 5)\n");
+console.log("\n11 — Toolbar de contexto: só Mês agora (Etapa 'Evolução do Dashboard — Visão Simultânea de Canais' aposentou Objetivo/Canal/Planejamento do topo), sem navegação própria (abas viraram rotas irmãs, Etapa 5)\n");
 {
   // Rodada 5: a navegação por abas (`role="tablist"`) saiu de page.tsx —
   // mora agora em `client-workspace-header.tsx` (layout compartilhado,
-  // rotas irmãs de verdade). page.tsx manteve só a toolbar de CONTEXTO
-  // (mês/objetivo/canal/planejamento), que nunca foi navegação.
+  // rotas irmãs de verdade). page.tsx manteve só a toolbar de CONTEXTO.
   ok("page.tsx não declara mais role=\"tablist\" (navegação virou responsabilidade do layout compartilhado)", !pageCode.includes('role="tablist"'));
-  // Etapa "Primeira Rodada Visual — Contexto + Performance": mês/objetivo/
-  // canal viraram 3 dropdowns (`MonthSelect`/`GoalSelect`/
-  // `VisaoGeralChannelSwitch`) na MESMA linha — mesmo container flex de
-  // antes, só com o 3º controle novo no meio.
+  // Etapa "Evolução do Dashboard — Visão Simultânea de Canais" (seções 3/4
+  // do pedido): Objetivo (GoalSelect) e Canal (VisaoGeralChannelSwitch)
+  // saíram da toolbar — Meta Ads/Google Ads aparecem simultaneamente
+  // abaixo, nunca mais escolhidos num dropdown; "Editar planejamento →"
+  // saiu junto (edição de orçamento agora é inline). Só Mês continua
+  // sendo contexto selecionável no topo.
   ok(
-    "mês, objetivo e canal continuam na MESMA linha (uma única div flex)",
-    /flex flex-wrap items-center gap-2 border-b border-overview-border[\s\S]{0,40}text-sm">[\s\S]*?MonthSelect[\s\S]*?GoalSelect[\s\S]*?VisaoGeralChannelSwitch/.test(
-      pageCode,
-    ),
+    "toolbar de contexto não renderiza mais GoalSelect/VisaoGeralChannelSwitch/'Editar planejamento' — só MonthSelect",
+    /flex flex-wrap items-center gap-2 border-b border-overview-border[\s\S]{0,40}text-sm">[\s\S]*?MonthSelect/.test(pageCode) &&
+      !pageCode.includes("<GoalSelect") &&
+      !pageCode.includes("<VisaoGeralChannelSwitch") &&
+      !pageCode.includes("Editar planejamento"),
   );
-  ok(
-    "Canal (VisaoGeralChannelSwitch) sempre visível — não é mais condicional a 'activeArea', já que esta página É a Visão Geral inteira agora",
-    /<VisaoGeralChannelSwitch\s*\n\s*buildHref=/.test(pageCode) && !pageCode.includes('activeArea === "visao-geral"'),
-  );
-  ok("Operação também tem sua própria navegação de mês (mesmos hrefs prevMonthHref/nextMonthHref, independente da Visão Geral)", /prevMonthHref/.test(operationCode) && /nextMonthHref/.test(operationCode));
+  ok("Operação também tem sua própria navegação de mês (mesmos hrefs prevMonthHref/nextMonthHref, independente do Dashboard)", /prevMonthHref/.test(operationCode) && /nextMonthHref/.test(operationCode));
 }
 
 console.log("\n12 — Regressão: decisões da rodada 1 continuam de pé\n");
@@ -278,21 +281,24 @@ console.log("\n13 — Accordion removido, diferença/ritmo integrados, Planejame
   ok('gatilho de ChannelPlanEditor usa o rótulo curto "Planejamento" (não mais "Editar planejamento") — válido onde o componente ainda é montado (Metas, Fase 4)', /\n\s*Planejamento\n/.test(loadSource("src", "app", "clients", "channel-plan-editor.tsx")) && !/Editar planejamento/.test(channelPlanEditorCode));
   // Fase 4 ("MEGA FACELIFT — Fase 4: Dashboard", seção 12 do pedido):
   // ChannelPlanEditor deixou de ser montado INLINE na toolbar de page.tsx —
-  // virou um link "Editar planejamento →" pra `/metas` (mesmo componente,
-  // mesmos dados, agora montado lá — ver test-mega-facelift-fase4-dashboard.ts
-  // seção 2). As 3 checagens abaixo foram atualizadas pra essa CTA, no
-  // mesmo grupo de CONTEXTO da toolbar (nunca uma navegação por abas).
-  ok(
-    "o CTA 'Editar planejamento →' (sucessor do ChannelPlanEditor inline) aparece no grupo de CONTEXTO da toolbar de page.tsx, depois de mês/canal",
-    pageCode.indexOf("Editar planejamento") > pageCode.indexOf("prevMonthHref"),
-  );
+  // virou um link "Editar planejamento →" pra `/metas`. Etapa "Evolução do
+  // Dashboard — Visão Simultânea de Canais" (seção 18 do pedido) removeu
+  // esse CTA de novo: a edição cotidiana de orçamento agora é inline
+  // (`DashboardBudget`), reutilizando a mesma Server Action oficial — ver
+  // test-mega-facelift-correcao-dashboard-canais-simultaneos.ts.
+  ok("'Editar planejamento →' não existe mais em page.tsx (edição inline substituiu o link pra Metas)", !pageCode.includes("Editar planejamento"));
   ok(
     "o CTA de planejamento NÃO é condicional a nenhum 'activeArea' (esse conceito não existe mais — page.tsx É o Dashboard inteiro, Etapa 5)",
     !pageCode.includes("activeArea"),
   );
+  // Etapa "Evolução do Dashboard — Visão Simultânea de Canais": o link
+  // condicional (admin/mês não encerrado/effectiveDate) virou
+  // `canEditBudgetInline`, passado pro DashboardBudget — mesmo gate,
+  // agora controlando se o lápis de edição inline aparece, em vez de um
+  // Link condicional na toolbar.
   ok(
-    "o CTA de planejamento preserva a MESMA condição de disponibilidade de sempre (admin, mês não encerrado, effectiveDate resolvido, só objetivo PRINCIPAL) — mesmo gate que o ChannelPlanEditor inline já aplicava, agora controlando o Link em vez do componente",
-    /isAdmin && !isClosedMonth && effectiveDate && performanceGoal === primaryResultType && \(\s*<Link href=\{metasHref\}/.test(pageCode),
+    "canEditBudgetInline preserva a MESMA condição de disponibilidade de sempre (admin, mês não encerrado, effectiveDate resolvido)",
+    /const canEditBudgetInline = isAdmin && !isClosedMonth && Boolean\(effectiveDate\)/.test(pageCode),
   );
   ok(
     "o ChannelPlanEditor em si (agora montado em Metas) continua recebendo os MESMOS dados de sempre (todos os canais, plano por canal, mês civil, horizonte, objetivo) — plano do objetivo selecionado, idêntico ao antigo `clientPlan` quando o selecionado é o principal",
@@ -302,7 +308,10 @@ console.log("\n13 — Accordion removido, diferença/ritmo integrados, Planejame
   );
 
   ok("código órfão removido: isClosedByHorizonOnly não existe mais em page.tsx (só servia ao texto do accordion removido)", !pageCode.includes("isClosedByHorizonOnly"));
-  ok("mês/canal continuam preservados (mesmos hrefs/estado da rodada 2, nenhuma regressão)", /prevMonthHref/.test(pageCode) && /VisaoGeralChannelSwitch/.test(pageCode));
+  // Canal deixou de ser um seletor nesta página (Etapa "Evolução do
+  // Dashboard — Visão Simultânea de Canais") — mês continua preservado
+  // (mesmos hrefs de sempre).
+  ok("mês continua preservado (mesmos hrefs/estado da rodada 2, nenhuma regressão)", /prevMonthHref/.test(pageCode));
 }
 
 // ---------------------------------------------------------------------------
@@ -366,8 +375,8 @@ console.log("\n16 — Links externos (Dashboard/Saldo/Fechamento) restaurados ap
     /performanceHref = `\/clients\/\$\{client\.id\}\/relatorio`/.test(pageCode) && pageCode.includes("Ver Performance →"),
   );
   ok(
-    "o grupo de links EXTERNOS (Dashboard/Saldo/Fechamento) continua na mesma barra de contexto (mês/canal/planejamento), agora junto do CTA 'Editar planejamento →' — nunca uma seção própria",
-    pageCode.indexOf("Editar planejamento") > pageCode.indexOf("prevMonthHref") && pageCode.indexOf("externalLinks.map") > pageCode.indexOf("Editar planejamento"),
+    "o grupo de links EXTERNOS (Dashboard/Saldo/Fechamento) continua na mesma barra de contexto (mês), depois do mês — nunca uma seção própria (Etapa 'Evolução do Dashboard': o CTA de planejamento que antes ficava junto saiu, edição de orçamento virou inline)",
+    pageCode.indexOf("externalLinks.map") > pageCode.indexOf("prevMonthHref"),
   );
 }
 
