@@ -30,6 +30,20 @@ import { Kpi } from "./monthly-kpi-summary";
  * assinatura deste componente — nunca precisou de outro cálculo, só
  * parou de ser exibido duas vezes.
  */
+/**
+ * MITZA ONE — Fase 1 (Cockpit Único do Cliente, seção 16 do pedido:
+ * "canal sem dados" precisa se diferenciar de "canal com zero resultados"
+ * e de "erro de sincronização", nunca todos tratados como "—"). `dataIssue`
+ * é opcional e vem já resolvido de `loadDadosPageData`/`lib/data-trust.ts`
+ * (a MESMA lista de atenções que `/clients/[id]/dados` exibe) — este
+ * componente só anota um selo discreto ao lado do nome do canal quando
+ * existe uma atenção real; `undefined` preserva exatamente o
+ * comportamento de antes desta fase. */
+export interface DashboardChannelDataIssue {
+  severity: "error" | "warning";
+  label: string;
+}
+
 export function DashboardChannelSection({
   channel,
   goal,
@@ -38,6 +52,7 @@ export function DashboardChannelSection({
   targetCostPerResult,
   targetResultCount,
   configureObjectiveHref,
+  dataIssue,
 }: {
   channel: TrafficChannel;
   goal: ClientGoal | null;
@@ -49,6 +64,7 @@ export function DashboardChannelSection({
   targetCostPerResult: number | null;
   targetResultCount?: number | null;
   configureObjectiveHref: string;
+  dataIssue?: DashboardChannelDataIssue | null;
 }) {
   const performanceGoal = goal?.resultType ?? null;
   const { resultsValue, resultsAuxiliary, costValue } = deriveMonthlyKpiTexts(performanceGoal, performanceSummary, formatCurrency);
@@ -60,7 +76,20 @@ export function DashboardChannelSection({
 
   return (
     <div className="rounded-lg border border-overview-border bg-overview-surface p-4">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">{TRAFFIC_CHANNELS[channel].label}</h2>
+      <div className="flex items-center gap-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">{TRAFFIC_CHANNELS[channel].label}</h2>
+        {dataIssue && (
+          <span
+            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+              dataIssue.severity === "error"
+                ? "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
+                : "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+            }`}
+          >
+            {dataIssue.label}
+          </span>
+        )}
+      </div>
       <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
         <Kpi label="Investimento" value={formatCurrency(actualSpend)} />
         <Kpi label={resultLabel} value={resultsValue} auxiliary={resultAuxiliary} />

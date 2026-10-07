@@ -224,17 +224,31 @@ console.log("\n14 — Sidebar: módulo Dados continua presente e único (nenhuma
   ok("Dados aparece só UMA vez em MODULES", (sidebarSource.match(/key: "dados"/g) ?? []).length === 1);
 }
 
-console.log("\n15 — Isolamento: Dados não importa/é importado pelos núcleos de Dashboard/Metas/Performance (zero acoplamento novo, zero risco de regressão)\n");
+console.log("\n15 — Isolamento: Dados não importa os núcleos de CÁLCULO de Metas/Performance (zero acoplamento novo nos cálculos, zero risco de regressão)\n");
 {
   ok(
     "data-trust.ts/dados-data.ts nunca importam lib/performance.ts (cálculo de Performance) nem lib/client-plan.ts (planejamento de Metas)",
     !/from "@\/lib\/performance"/.test(dataTrustSource + dadosDataSource) && !/from "@\/lib\/client-plan"/.test(dataTrustSource + dadosDataSource),
   );
+  // MITZA ONE — Fase 1 (Cockpit Único do Cliente) mudou esta regra
+  // DELIBERADAMENTE pro Dashboard, por pedido explícito ("Dados vira
+  // alerta" — seção 13: "se existir atenção real, mostrar dentro/próximo
+  // do Diagnóstico"): `[id]/page.tsx` agora importa `loadDadosPageData`
+  // (dados-data.ts) pra alimentar a seção Diagnóstico — mesma função que
+  // `/clients/[id]/dados` já usa, nenhuma segunda leitura de
+  // `import_sources`/`metric_mappings`. O isolamento que de fato continua
+  // intacto (e é o que importa pra "zero risco de regressão de cálculo"):
+  // os núcleos de CÁLCULO (`metas-data.ts`, `lib/performance.ts`) nunca
+  // importaram e continuam sem importar `dados-data.ts`/`data-trust.ts` —
+  // só a camada de COMPOSIÇÃO do cockpit (não um motor de cálculo) ganhou
+  // essa leitura extra.
   ok(
-    "nenhum arquivo de Dashboard/Metas/Performance passou a importar dados-data.ts/data-trust.ts (grep nos 3 núcleos de cálculo)",
-    !loadSource("src", "app", "clients", "[id]", "page.tsx").includes("dados-data") &&
-      !loadSource("src", "app", "clients", "metas-data.ts").includes("dados-data") &&
-      !loadSource("src", "lib", "performance.ts").includes("data-trust"),
+    "metas-data.ts e lib/performance.ts (núcleos de CÁLCULO) continuam sem importar dados-data.ts/data-trust.ts — só a composição do cockpit (Fase 1) passou a ler atenções de Dados, nunca um motor de cálculo",
+    !loadSource("src", "app", "clients", "metas-data.ts").includes("dados-data") && !loadSource("src", "lib", "performance.ts").includes("data-trust"),
+  );
+  ok(
+    "[id]/page.tsx importa loadDadosPageData (MITZA ONE — Fase 1, seção 13: 'Dados vira alerta') — mesma função oficial de /clients/[id]/dados, nenhuma segunda leitura de import_sources/metric_mappings",
+    loadSource("src", "app", "clients", "[id]", "page.tsx").includes('import { loadDadosPageData } from "../dados-data"'),
   );
 }
 

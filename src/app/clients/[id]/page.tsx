@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
@@ -14,8 +15,15 @@ import {
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
 import { formatSprintPeriodLabel } from "@/lib/sprint-week";
-import { classifySpendStatus } from "@/lib/spend-status";
-import { resolveBudgetEffectiveDate, computeMonthlyExpectedToDateByCalendar, resolvePlanningHorizon } from "@/lib/monthly-budget";
+import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
+import {
+  resolveBudgetEffectiveDate,
+  computeMonthlyExpectedToDateByCalendar,
+  resolvePlanningHorizon,
+  computeMonthlyBudgetPlan,
+  computeNeededDailyRate,
+  getRemainingEligibleDaysIncludingToday,
+} from "@/lib/monthly-budget";
 import { resolveClientMonthlyGoals, resolveTargetCostPerResult, type ClientPlanChangeRow } from "@/lib/client-plan";
 import { consolidateAdditive, type ChannelMetrics } from "@/lib/channel-metrics";
 import { getClientMonthHorizon } from "@/lib/client-month-horizons";
@@ -23,33 +31,38 @@ import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { sumChannelEffectiveSpend, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatMonthLabel, formatRelativeDateTime, formatDueDate } from "@/lib/format";
+import { formatRelativeDateTime } from "@/lib/format";
 import { contractStatusBannerText } from "@/lib/client-fields";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
-import { resolveOperationPriorityGroup } from "@/lib/operation-triage";
-import { PRIORITY_GROUP_TONE } from "@/app/operation/operation-client-card";
-import { emphasizeDeviationText } from "@/components/workspace/status-dot";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
 import { ClientWorkspaceContext } from "../client-workspace-context";
-import { MonthInvestmentPaceNote, MonthInvestmentSummary } from "../month-investment-summary";
-import { MonthlyGoalProgress } from "../monthly-goal-progress";
-import { PerformanceDiagnosticCard } from "../performance-diagnostic";
-import { evaluateInvestmentDiagnostic, evaluateCpaDiagnostic, metricToneSeverityRank, type MetricTone } from "@/lib/metric-diagnostics";
+import { evaluateCpaDiagnostic } from "@/lib/metric-diagnostics";
 import { listClientGoals, resolvePrimaryGoal, resolveChannelGoal, type ClientGoal } from "@/lib/client-goals";
 import { computePerformanceSummary } from "@/lib/performance";
 import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
-import type { PerformanceGoal } from "@/lib/performance-goals";
-import { AVAILABLE_TRAFFIC_CHANNELS, resolveClientMediaChannels, type TrafficChannel } from "@/lib/traffic-channels";
+import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
+import { AVAILABLE_TRAFFIC_CHANNELS, resolveClientMediaChannels, TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { MonthSelect } from "../month-select";
-import { DashboardBudget } from "../dashboard-budget";
-import { DashboardChannelSection } from "../dashboard-channel-section";
+import { DashboardChannelSection, type DashboardChannelDataIssue } from "../dashboard-channel-section";
 import { countOpenDemandas } from "@/lib/pendencias";
 import { loadPendenciasRawData } from "@/app/demandas/pendencias-data";
-import { TASK_PRIORITY_DOT_CLASS } from "../task-labels";
 import { ACCOUNT_REVIEW_OUTCOME_LABEL } from "@/lib/account-reviews";
 import { WorkspaceContainer } from "../workspace-container";
 import { IconButton } from "@/components/workspace/button";
 import { buildMetasHref } from "./metas/page";
+import { groupChannelsByResultType } from "@/lib/cockpit-result-groups";
+import { buildCockpitInsights } from "@/lib/cockpit-diagnostics";
+import type { DataAttention } from "@/lib/data-trust";
+import { loadDadosPageData } from "../dados-data";
+import { fetchClientTimelinePage } from "@/lib/client-timeline";
+import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
+import { buildPeriodReading } from "@/lib/performance-report/report-derivatives";
+import { CockpitResultCard, CockpitCostCard, CockpitBudgetCard, type CockpitResultCardView, type CockpitCostCardView } from "../cockpit-meta-ritmo-section";
+import { CockpitDiagnosticsCard } from "../cockpit-diagnostics-card";
+import { CockpitExecutionSection } from "../cockpit-execution-section";
+import { CockpitPerformanceSection, type CockpitPerformanceView } from "../cockpit-performance-section";
+import { CockpitHistorySection } from "../cockpit-history-section";
+import { RecordAccountReviewDrawer } from "../record-account-review-drawer";
 
 /**
  * Objetivo em exibição na Performance (`?goal=`) — núcleo puro extraído de
@@ -61,7 +74,9 @@ import { buildMetasHref } from "./metas/page";
  * Performance sempre mostra EXATAMENTE um objetivo por vez), e "válido"
  * significa literalmente "está entre os objetivos que ESTE cliente tem
  * configurado" — nunca um objetivo de outro cliente sobrevivendo a uma
- * troca (seção 6: "compatível com troca de cliente").
+ * troca (seção 6: "compatível com troca de cliente"). Continua exportada e
+ * testada (`metas-data.ts` segue usando) mesmo não sendo mais chamada por
+ * esta página.
  */
 export function resolveSelectedGoal(
   goalParam: string | undefined,
@@ -97,79 +112,32 @@ export function buildClientContextHref(
   return `/clients/${clientId}${qs ? `?${qs}` : ""}`;
 }
 
-/**
- * Resolve pra ONDE a CTA do diagnóstico único do Dashboard deve apontar —
- * "Ver Metas →" quando o eixo fora do esperado é Investimento (ritmo de
- * planejamento, módulo Metas) ou "Ver Performance →" quando é Custo por
- * resultado (eficiência, módulo Performance). Etapa "MEGA FACELIFT — Fase
- * 4: Dashboard" (seção 6 do pedido: "nunca inventar causalidade") — núcleo
- * puro que REAPLICA os mesmos dois avaliadores e o mesmo desempate que
- * `PerformanceDiagnosticCard` já usa internamente (`metric-diagnostics.ts`,
- * Investimento primeiro em caso de empate de severidade), nunca um motor
- * novo. `null` quando não há nenhum eixo com base real de comparação, ou
- * quando o eixo escolhido está dentro do esperado (`tone === "normal"` —
- * sem desvio, não há "o que mais merece atenção" pra apontar).
- */
-export function resolveDashboardDiagnosticCtaTarget(input: {
-  actualSpend: number;
-  expectedToDate: number | null;
-  costPerResult: number | null;
-  targetCostPerResult: number | null;
-  resultCount: number;
-  hasPerformanceGoal: boolean;
-}): "metas" | "performance" | null {
-  const investmentDiag = evaluateInvestmentDiagnostic(input.actualSpend, input.expectedToDate);
-  const costDiag = input.hasPerformanceGoal ? evaluateCpaDiagnostic(input.costPerResult, input.targetCostPerResult, input.resultCount) : null;
-
-  const candidates: { target: "metas" | "performance"; tone: MetricTone }[] = [];
-  if (investmentDiag.expected !== null) candidates.push({ target: "metas", tone: investmentDiag.tone });
-  if (costDiag && costDiag.expected !== null) candidates.push({ target: "performance", tone: costDiag.tone });
-  if (candidates.length === 0) return null;
-
-  const chosen = candidates.reduce((worst, candidate) => (metricToneSeverityRank(candidate.tone) < metricToneSeverityRank(worst.tone) ? candidate : worst));
-  return chosen.tone === "normal" ? null : chosen.target;
+/** Anota um canal com a atenção de Dados que o afeta (seção 16 do pedido:
+ * "diferenciar canal sem dados / erro de sincronização / zero resultados —
+ * nunca tratar todos como '—'") — reaproveita literalmente a mesma lista
+ * de atenções que `/clients/[id]/dados` já exibe (`DataAttention.message`
+ * sempre carrega "{Provedor} · {Canal}: ..."), nenhuma segunda checagem de
+ * fonte/sincronização. `null` quando nenhuma atenção menciona este canal. */
+export function findChannelDataIssue(attentions: DataAttention[], channelLabel: string): DashboardChannelDataIssue | null {
+  const match = attentions.find((a) => a.message.includes(channelLabel));
+  if (!match) return null;
+  return { severity: match.severity, label: match.severity === "error" ? "Erro de sincronização" : "Sem dados recebidos" };
 }
 
 /**
- * `/clients/[id]` — DASHBOARD do cliente (Etapa "MEGA FACELIFT — Fase 4").
- * A pergunta que esta página responde, e SÓ esta: "como está o growth
- * deste cliente agora?" — um cockpit executivo, não mais um painel que
- * tenta ser relatório/planejamento/operação/demandas/histórico/config ao
- * mesmo tempo (esses agora são módulos próprios, ver abaixo).
+ * `/clients/[id]` — MITZA ONE, Fase 1: Cockpit Único do Cliente. A pergunta
+ * que esta página responde, e SÓ esta: "como está o growth deste cliente
+ * agora, e o que precisa da minha atenção?" — uma NOVA COMPOSIÇÃO em torno
+ * da infraestrutura oficial já existente (Dashboard/Metas/Performance/
+ * Dados/Operação/Demandas/Timeline), nunca as 7 páginas antigas empilhadas
+ * (ver relatório de entrega desta fase — estrutura final, fontes por
+ * seção, divergências encontradas).
  *
- * Fases 1-3 ("MEGA FACELIFT") já tinham extraído Metas (`/metas`) e
- * recontextualizado Performance (`/relatorio`). Esta fase 4 termina a
- * extração do que sobrou aqui dentro, deixando SÓ o que é genuinamente
- * executivo — "o que saiu e para onde foi" (auditoria completa no
- * relatório de entrega desta etapa, não repetida aqui pra não duplicar):
- *
- * 1. PLANEJAMENTO DETALHADO (`ChannelPlanEditor`) — saiu por completo da
- *    experiência principal. Vira só um CTA "Editar planejamento →" pra
- *    `/clients/[id]/metas` (mesmo componente/dado, nunca deletado — só
- *    parou de competir pelo espaço principal do Dashboard).
- * 2. ANÁLISE PROFUNDA (campanhas/públicos/criativos/posicionamentos,
- *    `SecondaryGoalsPerformance`) — já vivia em `/relatorio`
- *    (Performance); o Dashboard mantém só uma síntese executiva
- *    (KPIs + ritmo + 1 diagnóstico + canal), nunca a investigação
- *    completa.
- * 3. HISTÓRICO DE ORÇAMENTO (`MonthlyBudgetHistoryDrawer`,
- *    `?historicoOrcamento=1`) — saiu; é detalhe de planejamento, não
- *    leitura executiva (mesmo raciocínio do item 1 — fica em Metas).
- *
- * `AccountFollowUpPanel` (o wrapper anterior que empilhava KPIs + ritmo +
- * diagnóstico + canal como um bloco só) foi substituído por uma composição
- * NOVA, direta nesta página: os mesmos componentes que ele orquestrava
- * (`MonthlyKpiSummary`/`MonthlyGoalProgress`/`MonthInvestmentSummary`/
- * `PerformanceDiagnosticCard`/`ResultsByChannel`) agora são renderizados em
- * cards próprios dentro de um grid — "reutilizar não significa empilhar
- * igual" (seção 19 do pedido). `account-follow-up-panel.tsx` continua no
- * disco, só sem nenhum consumidor nesta rodada (G — redundante,
- * documentado, não deletado).
- *
- * Operação e Demandas continuam como sínteses curtas com CTA (nunca a
- * lista/sprint completos — isso é `/operation`/`/clients/[id]/demandas`).
- * Nenhum cálculo de investimento/performance mudou nesta fase — só a
- * composição visual e o que deixou de aparecer aqui.
+ * As 7 rotas de aprofundamento (`/metas`, `/relatorio`, `/dados`,
+ * `/operation`, `/demandas`, `/timeline`, `/edit`) continuam existindo
+ * integralmente — esta página só deixa de ser a soma delas, virando o
+ * ponto de partida que aponta pra cada uma quando for preciso investigar
+ * mais a fundo.
  */
 export default async function ClientPage({
   params,
@@ -181,10 +149,12 @@ export default async function ClientPage({
     synced?: string;
     saved?: string;
     month?: string;
+    review?: string;
+    reviewError?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, synced, saved, month: monthQueryParam } = await searchParams;
+  const { error, synced, saved, month: monthQueryParam, review, reviewError } = await searchParams;
 
   function buildContextHref(overrides: { month?: string }): string {
     return buildClientContextHref(id, { month: monthQueryParam }, overrides);
@@ -205,12 +175,13 @@ export default async function ClientPage({
   if (clientQueryError) console.error(`[ClientPage] falha ao buscar cliente ${id}:`, clientQueryError);
   if (!client) notFound();
 
+  const canOperate = client.status === "ativo";
+
   // Etapa "Evolução do Dashboard — Visão Simultânea de Canais" (seção 12
   // do pedido): a MESMA fonte de sempre pra "quais canais este cliente
   // realmente usa" (`clients.media_channels`, lib/traffic-channels.ts) —
   // nunca uma segunda checagem de presença de dado. Ordenado por
-  // `AVAILABLE_TRAFFIC_CHANNELS` (Meta antes de Google, mesma convenção já
-  // usada pelo seletor de canal aposentado nesta etapa) — nunca a ordem
+  // `AVAILABLE_TRAFFIC_CHANNELS` (Meta antes de Google) — nunca a ordem
   // crua de `media_channels` no banco.
   const clientChannels = AVAILABLE_TRAFFIC_CHANNELS.filter((c) => resolveClientMediaChannels(client.media_channels).includes(c));
 
@@ -220,19 +191,14 @@ export default async function ClientPage({
   const isCurrentMonth = firstDay === currentMonthRange(today).firstDay;
 
   const [clientOperationalState] = await loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, id);
-  const primaryReasonText = clientOperationalState?.evaluation.primaryDimension ? clientOperationalState.evaluation.primaryReason : null;
-  const primaryReasonTone = clientOperationalState ? PRIORITY_GROUP_TONE[resolveOperationPriorityGroup(clientOperationalState.evaluation)] : "neutral";
 
   const monthParam = firstDay.slice(0, 7);
-  const monthLabel = formatMonthLabel(firstDay);
   const prevMonthHref = buildContextHref({ month: shiftMonthParam({ firstDay }, -1) });
   const nextMonthHref = buildContextHref({ month: shiftMonthParam({ firstDay }, 1) });
-  // Preserva mês + canal + objetivo juntos (antes só preservava mês) — mesma
-  // URL usada pro fechamento de drawers (histórico de orçamento,
-  // Planejamento) e por qualquer CTA que precise "voltar pro estado atual".
   const returnTo = buildContextHref({});
+  const registerReviewHref = `${returnTo}${returnTo.includes("?") ? "&" : "?"}review=new`;
 
-  const [sprintsRaw, dailySpend, plannedAllocations, budgetChangesRaw, performanceTargetHistoryRaw, channelSpendRows, planningEndDate, allClientGoals] =
+  const [sprintsRaw, dailySpend, plannedAllocations, budgetChangesRaw, performanceTargetHistoryRaw, channelSpendRows, planningEndDate, allClientGoals, dadosData] =
     await Promise.all([
       requireQuery(
         supabase
@@ -254,12 +220,6 @@ export default async function ClientPage({
         supabase.from("sprint_planned_allocations").select("sprint_id, date, planned_amount").eq("client_id", id).gte("date", firstDay).lte("date", lastDay),
         "sprint_planned_allocations",
       ),
-      // Etapa "Primeira Rodada Visual — Contexto + Performance" (seção 5 do
-      // pedido): busca TODOS os objetivos do mês (não mais só o principal
-      // via `.or(primaryGoalResultTypeFilter(...))`) — `result_type` agora
-      // selecionado explicitamente, a separação por objetivo acontece em
-      // JS logo abaixo (`primaryBudgetChanges`/`selectedBudgetChanges`),
-      // nunca duas queries por objetivo.
       requireQuery(
         supabase
           .from("monthly_budget_changes")
@@ -287,6 +247,13 @@ export default async function ClientPage({
       ),
       getClientMonthHorizon(supabase, id, firstDay),
       listClientGoals(supabase, id),
+      // MITZA ONE — Fase 1, Seção "Dados vira alerta" (seção 13 do pedido):
+      // MESMA função que `/clients/[id]/dados` já usa (`loadDadosPageData`)
+      // — nenhuma segunda leitura de `import_sources`/`metric_mappings`.
+      // Só os `attentions` entram no Diagnóstico; o resto do retorno (fontes/
+      // objetivos/health) não é usado aqui (a tela Dados completa continua
+      // existindo pra quem precisar do detalhe).
+      loadDadosPageData(supabase, id, isAdmin),
     ]);
 
   const planningHorizon = resolvePlanningHorizon({ firstDay, lastDay }, planningEndDate);
@@ -321,16 +288,12 @@ export default async function ClientPage({
     sourceUpdatedAt: r.source_updated_at,
   }));
 
-  // Múltiplos Objetivos (Etapa "Primeira Rodada Visual — Contexto +
-  // Performance", seção 5 do pedido): ZERO migration — reaproveita
+  // Múltiplos Objetivos: ZERO migration — reaproveita
   // `client_goals`/`monthly_budget_changes.result_type`/
-  // `resolveClientMonthlyGoals`, exatamente a estrutura que a auditoria
-  // confirmou já existir. Cliente legado sem nenhuma linha em
-  // `client_goals` (não deveria acontecer — todo `performance_goal`
-  // configurado foi backfilled na Etapa "Múltiplos Objetivos" — mas sem
-  // depender dessa garantia aqui) cai num objetivo "virtual" só com o
-  // `performance_goal` legado, pra `resolveClientMonthlyGoals` continuar
-  // funcionando sem um caso especial espalhado pela página inteira.
+  // `resolveClientMonthlyGoals`. Cliente legado sem nenhuma linha em
+  // `client_goals` cai num objetivo "virtual" só com o `performance_goal`
+  // legado, pra `resolveClientMonthlyGoals` continuar funcionando sem um
+  // caso especial espalhado pela página inteira.
   const effectiveClientGoals: ClientGoal[] =
     allClientGoals.length > 0
       ? allClientGoals
@@ -339,23 +302,6 @@ export default async function ClientPage({
         : [];
   const primaryResultType = resolvePrimaryGoal(effectiveClientGoals)?.resultType ?? null;
 
-  // Etapa "Evolução do Dashboard — Visão Simultânea de Canais" (seção 3 do
-  // pedido): o seletor "Meta/Planejamento" saiu do Dashboard — Ritmo/
-  // Diagnóstico/KPIs consolidados agora são SEMPRE do objetivo PRINCIPAL
-  // (nunca mais um objetivo secundário "em exibição" escolhido num
-  // dropdown). `resolveSelectedGoal` continua existindo e testada
-  // (`metas-data.ts`/`test-client-context-performance.ts` seguem usando) —
-  // só deixou de ser chamada AQUI, porque não há mais `?goal=` nesta
-  // página pra resolver.
-  const performanceGoal = primaryResultType;
-
-  // `performanceTargetHistoryRaw` agora vem SEM filtro de objetivo (busca
-  // acima) — linha histórica com `result_type IS NULL` (de antes da Etapa
-  // "Múltiplos Objetivos") é sempre do objetivo PRINCIPAL (única leitura
-  // possível: só existia um objetivo por cliente nessa época), nunca do
-  // secundário — mesma regra que `primaryGoalResultTypeFilter` já
-  // codificava, só que resolvida aqui em JS pra poder atender QUALQUER
-  // objetivo selecionado na mesma passada, não só o principal.
   const performanceTargetHistoryRows: ClientPlanChangeRow[] = (performanceTargetHistoryRaw ?? []).map((row) => ({
     channel: row.channel as TrafficChannel,
     month: row.month,
@@ -379,14 +325,6 @@ export default async function ClientPage({
   const monthPlannedAllocationRows = (plannedAllocations ?? []).map((a) => ({ date: a.date, sprintId: a.sprint_id, amount: a.planned_amount }));
   const monthActual = sumActualSpendForMonth(sprints ?? [], { firstDay, lastDay }, dailySpend ?? []);
 
-  // Congelamento de sprint (`ensureClosedSprintSnapshots`) SEMPRE usa o
-  // orçamento do objetivo PRINCIPAL, nunca o que está em exibição no
-  // momento — é uma escrita permanente (`sprints.original_planned_amount`/
-  // `final_recommended_amount`), não pode depender de qual objetivo um
-  // gestor específico escolheu olhar quando uma sprint fechou. Quando o
-  // objetivo selecionado É o principal (default), `primaryMonthPlanned`/
-  // `primaryBudgetChanges` são idênticos ao que a página já usava antes
-  // desta etapa — zero mudança de comportamento no caminho comum.
   const primaryMonthPlanned = primaryGoalPlan.consolidated.investment ?? sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay });
   const primaryBudgetChanges = (budgetChangesRaw ?? []).filter((c) => (c.result_type ?? primaryResultType) === primaryResultType);
 
@@ -401,19 +339,11 @@ export default async function ClientPage({
     currentMonthlyBudget: primaryMonthPlanned,
   });
 
-  // Etapa "Evolução do Dashboard — Visão Simultânea de Canais" (seções 9/
-  // 10/12/14/15 do pedido): um bloco por canal que o cliente REALMENTE usa
-  // (`clientChannels`, já resolvido acima), cada um com o PRÓPRIO objetivo
-  // (`resolveChannelGoal`, `lib/client-goals.ts` — nunca o objetivo de
-  // outro canal nem um seletor manual) e o PRÓPRIO investimento realizado
-  // (`sumChannelEffectiveSpend`, mesma função já usada por esta página
-  // antes desta etapa pro canal selecionado — nunca um novo cálculo,
-  // chamada uma vez por canal real em vez de uma vez pro canal escolhido
-  // num dropdown). Investimento planejado por canal vem de
-  // `clientGoalsPlan` (seção 15: nunca estimado/dividido do total) — este
-  // É o valor por canal correto mesmo quando Meta e Google pertencem a
-  // OBJETIVOS DIFERENTES (`channelGoal` resolvido por canal, nunca o
-  // objetivo PRINCIPAL "vazando" pra um canal que não é dele).
+  // Etapa "Evolução do Dashboard — Visão Simultânea de Canais": um bloco
+  // por canal que o cliente REALMENTE usa, cada um com o PRÓPRIO objetivo
+  // (`resolveChannelGoal`) e o PRÓPRIO investimento realizado
+  // (`sumChannelEffectiveSpend`). Investimento planejado por canal vem de
+  // `clientGoalsPlan` (nunca estimado/dividido do total).
   const dashboardChannels = clientChannels.map((channel) => {
     const channelGoal = resolveChannelGoal(effectiveClientGoals, channel);
     const goalPlan = channelGoal ? clientGoalsPlan.goals.find((g) => g.resultType === channelGoal.resultType) ?? EMPTY_GOAL_PLAN : EMPTY_GOAL_PLAN;
@@ -447,82 +377,112 @@ export default async function ClientPage({
   });
 
   // Etapa "Correção de Semântica — Orçamento do Mês Multicanal": o
-  // "Orçamento do mês" é a SOMA dos planejamentos REAIS de cada canal que
-  // o cliente usa (`dashboardChannels[i].planned`, já resolvido pelo
-  // PRÓPRIO objetivo de cada canal acima) — nunca mais
-  // `primaryGoalPlan.consolidated.investment`, que só somava os canais
-  // do objetivo PRINCIPAL e ficava errado sempre que Meta/Google
-  // pertencem a objetivos DIFERENTES (ex.: Meta=Vendas, Google=Leads: o
-  // antigo total mostrava só o investimento de Vendas, ignorando o de
-  // Leads por completo). `consolidateAdditive` (lib/channel-metrics.ts,
-  // MESMO combinador aditivo central de sempre) nunca fabrica `0`: só
-  // soma os canais com plano real, `null` quando NENHUM canal tem plano
-  // ainda — só nesse caso cai no fallback legado `sumPlannedForMonth`
-  // (cliente que nunca passou pelo editor de planejamento, idêntico ao
-  // comportamento de sempre).
-  //
-  // Esta é a MESMA definição que a página já usava no caso comum (um
-  // objetivo só, sem restrição de canal): nesse caso
-  // `primaryGoalPlan.consolidated.investment` e esta soma são
-  // numericamente idênticos (ambos somam os mesmos canais) — a correção
-  // só muda o resultado quando canais pertencem a objetivos diferentes,
-  // nunca no caminho comum.
+  // "Orçamento do mês" é a SOMA dos planejamentos REAIS de cada canal que o
+  // cliente usa — dinheiro sempre soma entre canais, independente de
+  // objetivo (nunca confundir com a regra de Resultado, abaixo, que NUNCA
+  // soma entre objetivos diferentes).
   const totalPlannedAcrossChannels =
     consolidateAdditive(clientChannels, (channel) => dashboardChannels.find((c) => c.channel === channel)?.planned ?? null) ??
     sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay });
 
-  // Ritmo/KPIs/Diagnóstico do Dashboard são SEMPRE o consolidado REAL do
-  // mês (soma de todos os canais, `totalPlannedAcrossChannels` acima) —
-  // não existe mais um canal/objetivo "em exibição" escolhido num
-  // seletor. `monthActual` (abaixo) já era o investimento realizado
-  // TOTAL do cliente (todos os canais, nunca restrito por objetivo) —
-  // compará-lo contra `totalPlannedAcrossChannels` (agora também o total
-  // real) é a única combinação semanticamente consistente; comparar o
-  // realizado total contra um planejado restrito ao objetivo principal
-  // (como a etapa anterior fazia) sub-contava o planejado sempre que
-  // havia mais de um objetivo com canais próprios.
   const monthPlanned = totalPlannedAcrossChannels;
   const monthExpectedToDate = computeMonthlyExpectedToDateByCalendar(monthPlanned, planningHorizon, todayStr).expectedToDate;
   const monthStatus = classifySpendStatus(monthActual, monthExpectedToDate, monthPlanned);
 
-  // `legacyFallback` (coluna antiga `clients.target_cost_per_result`)
-  // sempre se aplica agora — o objetivo em exibição é sempre o PRINCIPAL
-  // (nunca mais um objetivo secundário "em exibição" via seletor). Custo
-  // por resultado consolidado continua escopado ao objetivo PRINCIPAL
-  // (`primaryGoalPlan`) — resultado nunca agrega objetivos incompatíveis
-  // (Vendas de Meta + Leads de Google nunca somam "resultado total");
-  // essa é uma pergunta diferente da do orçamento (dinheiro sempre soma
-  // entre canais, resultado só soma dentro do MESMO objetivo) e não foi
-  // alterada por esta correção.
-  const consolidatedTargetCostPerResult = resolveTargetCostPerResult({
-    channel: "consolidated",
-    plan: primaryGoalPlan,
-    legacyFallback: client.target_cost_per_result,
-  });
-  const consolidatedPerformanceSummary = performanceGoal
-    ? computePerformanceSummary({
+  const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate(planningHorizon, todayStr);
+  const canEditBudgetInline = isAdmin && !isClosedMonth && Boolean(effectiveDate);
+
+  // MITZA ONE — Fase 1, card "ORÇAMENTO": "Necessário R$Z/dia" é
+  // `computeMonthlyBudgetPlan(...).recommendedDaily` — MESMA função
+  // central que `MonthInvestmentPaceNote` já usava antes desta fase, nunca
+  // uma segunda fórmula de ritmo recomendado. `null` fora do mês corrente
+  // (mês futuro/encerrado não tem "dias restantes" — mesmo guard de
+  // `hasPace` em `month-investment-summary.tsx`).
+  const hasBudgetPace = monthPlanned > 0 && !isClosedMonth && isCurrentMonth && Boolean(effectiveDate);
+  const budgetNeededDailyRate = hasBudgetPace
+    ? computeMonthlyBudgetPlan({
+        monthlyBudget: monthPlanned,
+        monthActual,
+        monthRange: planningHorizon,
+        effectiveDate: effectiveDate as string,
+        sprints: sprints.map((s) => ({ sprintId: s.id, startDate: s.start_date, endDate: s.end_date })),
+      }).recommendedDaily
+    : null;
+
+  // MITZA ONE — Fase 1, Seção "Meta & Ritmo" (seção 9 do pedido: "não somar
+  // resultados incompatíveis"). Agrupa os canais pelo PRÓPRIO objetivo
+  // (`groupChannelsByResultType`, núcleo puro) — caso comum (1 objetivo só)
+  // gera 1 grupo, idêntico ao que a página já calculava antes desta fase;
+  // mais de um objetivo gera 1 grupo por objetivo, nunca um consolidado
+  // fabricado entre eles.
+  const resultGroups = groupChannelsByResultType(
+    dashboardChannels.map((c) => ({ channel: c.channel, resultType: c.goal?.resultType ?? null })),
+    primaryResultType,
+  );
+  const eligibleDaysCount = getRemainingEligibleDaysIncludingToday(planningHorizon, effectiveDate);
+
+  const resultCards: { result: CockpitResultCardView; status: SpendStatus | null; cost: CockpitCostCardView }[] = resultGroups.map((group) => {
+      const groupActualSpend = group.channels.reduce((sum, channel) => sum + (dashboardChannels.find((c) => c.channel === channel)?.actualSpend ?? 0), 0);
+      const goalPlan = clientGoalsPlan.goals.find((g) => g.resultType === group.resultType) ?? EMPTY_GOAL_PLAN;
+      const targetCostPerResult = resolveTargetCostPerResult({
+        channel: "consolidated",
+        plan: goalPlan,
+        legacyFallback: group.isPrimary ? client.target_cost_per_result : null,
+      });
+      const performanceSummary = computePerformanceSummary({
         scope: "consolidated",
         records: performanceRecords,
-        resultType: performanceGoal,
-        consolidatedActualSpend: monthActual,
-        targetCostPerResult: consolidatedTargetCostPerResult,
+        resultType: group.resultType,
+        consolidatedActualSpend: groupActualSpend,
+        targetCostPerResult,
+      });
+      const targetResultCount = goalPlan.consolidated.resultCount;
+      const expectedResultsToDate =
+        targetResultCount !== null ? computeMonthlyExpectedToDateByCalendar(targetResultCount, planningHorizon, todayStr).expectedToDate : null;
+      const neededDailyRate = computeNeededDailyRate(targetResultCount, performanceSummary.resultCount, eligibleDaysCount);
+      const status =
+        targetResultCount !== null && targetResultCount > 0 && expectedResultsToDate !== null
+          ? classifySpendStatus(performanceSummary.resultCount, expectedResultsToDate, targetResultCount)
+          : null;
+      const costDiagnostic = evaluateCpaDiagnostic(performanceSummary.costPerResult, targetCostPerResult, performanceSummary.resultCount);
+
+      return {
+        result: {
+          resultType: group.resultType,
+          channelsLabel: resultGroups.length > 1 ? group.channels.map((c) => TRAFFIC_CHANNELS[c].label).join(" + ") : null,
+          resultCount: performanceSummary.resultCount,
+          targetResultCount,
+          expectedResultsToDate,
+          neededDailyRate,
+        },
+        status,
+        cost: {
+          resultType: group.resultType,
+          costPerResult: performanceSummary.costPerResult,
+          targetCostPerResult,
+          deviationPct: costDiagnostic?.deviationPct ?? null,
+          tone: costDiagnostic?.tone ?? "normal",
+        },
+      };
+    });
+
+  // MITZA ONE — Fase 1, Seção "Diagnóstico" (seções 11-13 do pedido):
+  // reaproveita o `ClientDiagnostics` que `loadClientOperationalStates` já
+  // calcula (escopado ao objetivo PRINCIPAL, mesma convenção de sempre —
+  // generalizar por objetivo é um escopo maior, documentado como
+  // divergência conhecida no relatório desta fase) + as atenções de Dados
+  // já carregadas acima.
+  const insights = clientOperationalState
+    ? buildCockpitInsights({
+        diagnostics: clientOperationalState.diagnostics,
+        costLabel: primaryResultType ? PERFORMANCE_GOALS[primaryResultType].costMetricShortLabel : "Custo por resultado",
+        dataAttentions: dadosData?.attentions ?? [],
       })
-    : null;
-  const consolidatedTargetResultCount = primaryGoalPlan.consolidated.resultCount;
-  const expectedResultsToDate =
-    consolidatedTargetResultCount !== null
-      ? computeMonthlyExpectedToDateByCalendar(consolidatedTargetResultCount, planningHorizon, todayStr).expectedToDate
-      : null;
+    : [];
 
-  const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate(planningHorizon, todayStr);
-  const isFutureMonth = !isCurrentMonth && !isClosedMonth;
-  const budgetSprints = sprints.map((sprint) => ({ sprintId: sprint.id, startDate: sprint.start_date, endDate: sprint.end_date }));
-
-  // Demandas — resumo (Etapa "Correção de UX do Workspace", seção 10 do
-  // pedido): contagem + até 3 itens mais urgentes, nunca a List View
-  // inteira. Reaproveita `loadPendenciasRawData` (MESMA fonte/regra de
-  // `/clients/[id]/demandas` e da área global — `origin='manual'`), nunca
-  // uma terceira implementação da regra nem uma query paralela.
+  // Demandas — resumo: contagem + até 3 itens mais urgentes, nunca a List
+  // View inteira. Reaproveita `loadPendenciasRawData` (MESMA fonte/regra de
+  // `/clients/[id]/demandas` e da área global — `origin='manual'`).
   const { items: demandaItems } = await loadPendenciasRawData(supabase, id);
   const { openCount: demandasOpenCount, overdueCount: demandasOverdueCount } = countOpenDemandas(
     demandaItems.map((item) => ({ origin: "manual" as const, client_id: id, status: item.rawStatus, due_date: item.dueDate })),
@@ -534,14 +494,8 @@ export default async function ClientPage({
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
     .slice(0, 3);
 
-  // Operação — resumo (seção 9 do pedido): sprint atual, última otimização,
-  // saúde/motivo do CPA. MESMOS dados/funções já usados por `/operation` e
-  // pela fila global de Operação — nenhum cálculo novo, nunca tasks (isso
-  // é Demandas×Operação de novo — ver bug corrigido na Fase 1). Sprint
-  // atual só quando a Performance está no mês corrente (`isCurrentMonth`)
-  // — fora dele o resumo operacional não reaproveitaria o `sprints` já
-  // buscado pro mês em exibição, e buscar um segundo conjunto só pra isso
-  // violaria "não duplicar dados" (seção 19).
+  // Operação — resumo: sprint atual, última otimização. MESMOS dados/
+  // funções já usados por `/operation` e pela fila global de Operação.
   const currentSprint = isCurrentMonth ? findSprintForDate(sprints, todayStr) : null;
   const currentSprintLabel = currentSprint
     ? `${formatSprintPeriodLabel(currentSprint.start_date, currentSprint.end_date)} · ${
@@ -556,61 +510,61 @@ export default async function ClientPage({
       .eq("client_id", id)
       .order("reviewed_at", { ascending: false })
       .limit(1),
-    "account_reviews:painel-operacao-resumo",
+    "account_reviews:cockpit-resumo",
   );
   const lastOptimizationLabel = lastReviewRow
     ? `${ACCOUNT_REVIEW_OUTCOME_LABEL[lastReviewRow.outcome]} · ${formatRelativeDateTime(lastReviewRow.reviewed_at, new Date())}${lastReviewRow.team_member?.name ? ` · ${lastReviewRow.team_member.name}` : ""}`
     : "Nenhuma otimização registrada";
 
-  // Sinal de sincronização com problema real agora vive só em "Informações
-  // da conta" (drawer global do workspace) — nunca mais duplicado aqui.
+  // MITZA ONE — Fase 1, Seção "Histórico": MESMA fonte da Timeline do
+  // cliente (`fetchClientTimelinePage`), só as linhas mais recentes.
+  const { rows: historyRows } = profile
+    ? await fetchClientTimelinePage(supabase, profile.organizationId, id, "todos", 0, 6)
+    : { rows: [] };
+
+  // MITZA ONE — Fase 1, Seção "Performance essencial" (seções 18-20 do
+  // pedido): reaproveita 100% a Camada 1 do Relatório de Performance
+  // (`buildPerformanceReportData`) e a "Leitura do período"
+  // (`buildPeriodReading`) — nenhum cálculo novo, nenhuma segunda
+  // agregação de campanhas. Sempre "Visão geral" (nunca um funil
+  // específico nesta primeira camada).
+  const performanceReportData = await buildPerformanceReportData(supabase, id, { start: firstDay, end: lastDay });
+  const performanceView: CockpitPerformanceView =
+    performanceReportData.summary.status === "no_goal"
+      ? { kind: "no_goal" }
+      : performanceReportData.summary.status === "no_data"
+        ? { kind: "no_data" }
+        : performanceReportData.summary.status === "investment_only"
+          ? { kind: "investment_only", totalSpend: performanceReportData.summary.totalSpend }
+          : {
+              kind: "ok",
+              reading: buildPeriodReading({
+                performanceGoal: performanceReportData.performanceGoal as PerformanceGoal,
+                performanceSummary: performanceReportData.summary.performanceSummary,
+                campaigns: performanceReportData.campaigns,
+              }),
+            };
+
   const contractBannerText = contractStatusBannerText(client.status);
   const banners = [
     contractBannerText && { tone: "amber", text: `${contractBannerText} A página continua acessível apenas para consulta de histórico.` },
     error && { tone: "red", text: error },
+    reviewError && { tone: "red", text: reviewError },
     synced && { tone: "green", text: `${synced} dia(s) de spend sincronizado(s) com o Meta.` },
     saved && { tone: "green", text: "Dados do cliente atualizados." },
   ].filter((banner): banner is { tone: "red" | "green" | "amber"; text: string } => Boolean(banner));
 
-  // Links externos (Dashboard/Saldo/Fechamento) — existiam na barra de
-  // navegação da página antiga (auditoria via git show 402e0af), tinham
-  // sumido sem substituto na Fase 1; restaurados aqui na correção de
-  // direção (c707395) e removidos por engano no rollback de incidente
-  // (a252f78, que revertia só a composição de Performance/Operação/
-  // Demandas). Nunca tiveram relação com o bug real do incidente
-  // (`formatDueDate` chamada do server, corrigido em 54f451d) — seguros
-  // pra restaurar de volta.
   const externalLinks = [
     client.dashboard_url && { label: "Dashboard", href: client.dashboard_url },
     client.balance_url && { label: "Saldo", href: client.balance_url },
     client.monthly_closing_sheet_url && { label: "Fechamento", href: client.monthly_closing_sheet_url },
   ].filter((link): link is { label: string; href: string } => Boolean(link));
 
-  // Resultado só tem leitura de ritmo (renderiza a barra) quando há meta de
-  // QUANTIDADE configurada pro mês — mesmo guard que `AccountFollowUpPanel`
-  // já aplicava antes de renderizar `MonthlyGoalProgress`, nenhuma condição
-  // nova.
-  const hasResultRitmo = Boolean(performanceGoal) && consolidatedTargetResultCount != null && consolidatedTargetResultCount > 0 && expectedResultsToDate != null;
-
-  // CTA do diagnóstico único (seção 6 do pedido) — "Ver Metas →" quando o
-  // eixo fora do esperado é Investimento, "Ver Performance →" quando é
-  // Custo por resultado; `null` sem desvio real, nenhuma CTA extra.
-  const diagnosticCtaTarget = resolveDashboardDiagnosticCtaTarget({
-    actualSpend: monthActual,
-    expectedToDate: monthExpectedToDate,
-    costPerResult: consolidatedPerformanceSummary?.costPerResult ?? null,
-    targetCostPerResult: consolidatedTargetCostPerResult,
-    resultCount: consolidatedPerformanceSummary?.resultCount ?? 0,
-    hasPerformanceGoal: performanceGoal !== null,
-  });
-  // Etapa "Evolução do Dashboard — Visão Simultânea de Canais" (seção 18 do
-  // pedido): "Editar planejamento →" saiu do Dashboard (edição de
-  // orçamento agora é inline, `DashboardBudget`) — `metasHref` continua
-  // existindo só pros CTAs "Ver Metas →" (Ritmo/Diagnóstico), sem `goal`
-  // (não há mais objetivo "em exibição" nesta página pra propagar).
   const metasHref = buildMetasHref(client.id, { month: monthParam }, {});
   const performanceHref = `/clients/${client.id}/relatorio`;
-  const canEditBudgetInline = isAdmin && !isClosedMonth && Boolean(effectiveDate);
+  const operationHref = `/clients/${client.id}/operation`;
+  const demandasHref = `/clients/${client.id}/demandas`;
+  const timelineHref = `/clients/${client.id}/timeline`;
 
   return (
     <WorkspaceContainer>
@@ -636,17 +590,11 @@ export default async function ClientPage({
         </div>
       )}
 
-      {/* Etapa "MEGA FACELIFT — Fase 4: Dashboard" (seção 3 do pedido): o
-          nome/status/avatar do cliente e a navegação entre módulos já estão
-          no Client Context global (`ClientWorkspaceContext` acima) — aqui o
-          conteúdo começa simples, só o nome do próprio módulo. */}
+      {/* CONTEXTO — seção 4 do pedido: "DASHBOARD / [Mês]". Mês continua
+          sendo o único seletor de contexto no topo (nunca mais canal/
+          objetivo — Meta Ads e Google Ads sempre simultâneos abaixo). */}
       <h1 className="mt-4 text-sm font-semibold uppercase tracking-wide text-overview-text-muted">Dashboard</h1>
 
-      {/* CONTEXTO — só o mês continua sendo um seletor (seção 4 do pedido:
-          "Mês continua sendo contexto"). Objetivo e canal saíram daqui —
-          Etapa "Evolução do Dashboard — Visão Simultânea de Canais", seção
-          3: Meta Ads e Google Ads aparecem simultaneamente abaixo, nunca
-          mais escolhidos num seletor pra "enxergar outro canal". */}
       <div className="mt-2 flex flex-wrap items-center gap-2 border-b border-overview-border pb-3 text-sm">
         <div className="flex items-center gap-0.5">
           <IconButton href={prevMonthHref} aria-label="Mês anterior" variant="ghost" size="sm">
@@ -672,21 +620,44 @@ export default async function ClientPage({
         </div>
       </div>
 
-      {/* ORÇAMENTO + CANAIS SIMULTÂNEOS — seções 5/6/9/10/11 do pedido:
-          "abri o cliente → vejo o mês inteiro", sem precisar alternar
-          Meta/Google pra entender a situação. Orçamento do mês (edição
-          inline, mesma Server Action/RPC oficiais) seguido de um bloco por
-          canal que o cliente realmente usa, cada um com o PRÓPRIO
-          objetivo — nunca um `MonthlyKpiSummary` único de um canal/
-          objetivo escolhido num seletor. */}
-      <div className="mt-5 flex flex-col gap-4">
-        <DashboardBudget
+      {/* SEÇÃO 1 — META & RITMO (pedido, seções 5-10): "Estamos no caminho
+          certo?". Um par Resultado/Custo por objetivo realmente em jogo +
+          1 card de Orçamento (sempre multicanal). "Ver Metas →" aponta pro
+          planejamento completo por canal (`ChannelPlanEditor`), mesma
+          simetria que as outras seções já têm com seu módulo completo. */}
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Meta &amp; Ritmo</h2>
+        <Link href={metasHref} className="shrink-0 text-xs font-medium text-brand hover:underline">
+          Ver Metas →
+        </Link>
+      </div>
+      <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {resultCards.map(({ result, status, cost }) => (
+          <Fragment key={`group-${result.resultType}-${result.channelsLabel ?? "all"}`}>
+            <CockpitResultCard view={result} status={status} />
+            <CockpitCostCard view={cost} />
+          </Fragment>
+        ))}
+        <CockpitBudgetCard
+          headline={{ monthActual, monthPlanned, monthExpectedToDate, monthStatus, neededDailyRate: budgetNeededDailyRate }}
           clientId={client.id}
           monthParam={monthParam}
-          total={monthPlanned}
           channels={dashboardChannels.map((c) => ({ channel: c.channel, planned: c.planned }))}
           canEdit={canEditBudgetInline}
         />
+      </div>
+
+      {/* SEÇÃO 2 — DIAGNÓSTICO (pedido, seções 11-13): "Onde preciso
+          prestar atenção?". */}
+      <div className="mt-5">
+        <CockpitDiagnosticsCard insights={insights} />
+      </div>
+
+      {/* SEÇÃO 3 — CANAIS (pedido, seções 14-17): "Como cada canal está
+          performando?". Empilhado verticalmente, sem dropdown/tabs/
+          carousel — mesmos componentes de sempre (`DashboardChannelSection`),
+          só com o selo de atenção de Dados quando existe (seção 16). */}
+      <div className="mt-5 flex flex-col gap-4">
         {dashboardChannels.map((c) => (
           <DashboardChannelSection
             key={c.channel}
@@ -697,144 +668,43 @@ export default async function ClientPage({
             targetCostPerResult={c.targetCostPerResult}
             targetResultCount={c.targetResultCount}
             configureObjectiveHref={`/clients/${client.id}/edit`}
+            dataIssue={findChannelDataIssue(dadosData?.attentions ?? [], TRAFFIC_CHANNELS[c.channel].label)}
           />
         ))}
       </div>
 
-      {/* RITMO + DIAGNÓSTICO — seções 5/6 do pedido: ritmo do mês (maior,
-          reaproveita `MonthlyGoalProgress`/`MonthInvestmentSummary`/
-          `MonthInvestmentPaceNote` exatamente como antes, só que agora num
-          card próprio com CTA pra Metas) ao lado de um único diagnóstico
-          (`PerformanceDiagnosticCard`, mesmo motor de sempre) com CTA
-          dinâmica pro módulo que o eixo fora do esperado aponta. */}
-      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="flex flex-col rounded-lg border border-overview-border bg-overview-surface p-4 lg:col-span-2">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Ritmo do mês</h2>
-            <Link href={metasHref} className="shrink-0 text-xs font-medium text-brand hover:underline">
-              Ver Metas →
-            </Link>
-          </div>
-          <div className="mt-3 flex flex-col gap-3.5">
-            {hasResultRitmo && (
-              <MonthlyGoalProgress
-                monthResultCount={consolidatedPerformanceSummary?.resultCount ?? 0}
-                targetResultCount={consolidatedTargetResultCount as number}
-                expectedToDate={expectedResultsToDate as number}
-              />
-            )}
-            <MonthInvestmentSummary
-              planned={monthPlanned}
-              actual={monthActual}
-              expectedToDate={monthExpectedToDate}
-              status={monthStatus}
-              monthLabel={monthLabel}
-              monthRange={planningHorizon}
-              isClosedMonth={isClosedMonth}
-              isFutureMonth={isFutureMonth}
-              currentPlanningEndDate={planningEndDate}
-            />
-          </div>
-          <div className="mt-2.5">
-            <MonthInvestmentPaceNote
-              planned={monthPlanned}
-              actual={monthActual}
-              expectedToDate={monthExpectedToDate}
-              sprints={budgetSprints}
-              monthRange={planningHorizon}
-              effectiveDate={effectiveDate}
-              isClosedMonth={isClosedMonth}
-              isFutureMonth={isFutureMonth}
-              isAdmin={isAdmin}
-              lastChange={null}
-              historyHref={returnTo}
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col rounded-lg border border-overview-border bg-overview-surface p-4">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Diagnóstico</h2>
-          <div className="mt-3">
-            <PerformanceDiagnosticCard
-              performanceGoal={performanceGoal}
-              actualSpend={monthActual}
-              expectedToDate={monthExpectedToDate}
-              costPerResult={consolidatedPerformanceSummary?.costPerResult ?? null}
-              targetCostPerResult={consolidatedTargetCostPerResult}
-              resultCount={consolidatedPerformanceSummary?.resultCount ?? 0}
-            />
-          </div>
-          {diagnosticCtaTarget && (
-            <Link
-              href={diagnosticCtaTarget === "metas" ? metasHref : performanceHref}
-              className="mt-3 text-xs font-medium text-brand hover:underline"
-            >
-              {diagnosticCtaTarget === "metas" ? "Ver Metas →" : "Ver Performance →"}
-            </Link>
-          )}
-        </div>
+      {/* SEÇÃO 4 — PERFORMANCE ESSENCIAL (pedido, seções 18-20): "Onde está
+          o problema ou oportunidade?". */}
+      <div className="mt-5">
+        <CockpitPerformanceSection view={performanceView} campaignsHref={performanceHref} fullReportHref={performanceHref} />
       </div>
 
-      {/* OPERAÇÃO + DEMANDAS — seções 9/10 do pedido: só sínteses curtas com
-          CTA pro módulo completo, nunca sprint/tarefas detalhadas aqui
-          (mesmos dados/funções de `/operation`/`/clients/[id]/demandas`,
-          nenhum cálculo novo). */}
-      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-lg border border-overview-border bg-overview-surface p-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Operação</h2>
-            <Link href={`/clients/${client.id}/operation`} className="shrink-0 text-xs font-medium text-brand hover:underline">
-              Ver Operação →
-            </Link>
-          </div>
-          <div className="mt-3 flex flex-col gap-2">
-            <div>
-              <p className="text-[11px] text-overview-text-muted">Sprint atual</p>
-              <p className="mt-0.5 text-sm font-medium text-overview-text-primary">{currentSprintLabel ?? "—"}</p>
-            </div>
-            <div>
-              <p className="text-[11px] text-overview-text-muted">Última otimização</p>
-              <p className="mt-0.5 text-sm font-medium text-overview-text-primary">{lastOptimizationLabel}</p>
-            </div>
-            <div>
-              <p className="text-[11px] text-overview-text-muted">Saúde</p>
-              {primaryReasonText ? (
-                <p className="mt-0.5 text-sm font-medium" title={primaryReasonText}>
-                  {emphasizeDeviationText(primaryReasonText, primaryReasonTone)}
-                </p>
-              ) : (
-                <p className="mt-0.5 text-sm font-medium text-overview-text-primary">Sem sinais de atenção</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-overview-border bg-overview-surface p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Demandas</h2>
-              <p className="mt-1 text-[13px] text-overview-text-secondary">
-                {demandasOpenCount} em aberto
-                {demandasOverdueCount > 0 && ` · ${demandasOverdueCount} atrasada${demandasOverdueCount !== 1 ? "s" : ""}`}
-              </p>
-            </div>
-            <Link href={`/clients/${client.id}/demandas`} className="shrink-0 text-xs font-medium text-brand hover:underline">
-              Ver Demandas →
-            </Link>
-          </div>
-          {demandasPreview.length > 0 && (
-            <ul className="mt-3 flex flex-col gap-1.5">
-              {demandasPreview.map((item) => (
-                <li key={item.id} className="flex items-center gap-2 text-sm">
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TASK_PRIORITY_DOT_CLASS[item.priority]}`} aria-hidden="true" />
-                  <span className="min-w-0 flex-1 truncate text-overview-text-primary">{item.title}</span>
-                  <span className="shrink-0 text-xs text-overview-text-muted">{formatDueDate(item.dueDate)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      {/* SEÇÃO 5 — EXECUÇÃO (pedido, seções 21-25): "O que estamos fazendo
+          nessa conta?" / "O que está pendente?". */}
+      <div className="mt-5">
+        <CockpitExecutionSection
+          clientId={client.id}
+          currentSprintLabel={currentSprintLabel}
+          lastOptimizationLabel={lastOptimizationLabel}
+          registerReviewHref={registerReviewHref}
+          operationHref={operationHref}
+          demandasOpenCount={demandasOpenCount}
+          demandasOverdueCount={demandasOverdueCount}
+          demandasPreview={demandasPreview}
+          demandasHref={demandasHref}
+          canOperate={canOperate}
+        />
       </div>
+
+      {/* SEÇÃO 6 — HISTÓRICO (pedido, seções 26-28): "O que aconteceu
+          recentemente?". */}
+      <div className="mt-5">
+        <CockpitHistorySection rows={historyRows} fullHistoryHref={timelineHref} />
+      </div>
+
+      {review === "new" && (
+        <RecordAccountReviewDrawer clientId={client.id} closeHref={returnTo} managers={[]} error={reviewError} />
+      )}
     </WorkspaceContainer>
   );
 }
