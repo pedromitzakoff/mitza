@@ -58,10 +58,84 @@ check(
         isPrimary: true,
         byChannel: { meta: { investment: 6000, resultCount: 300, cpa: 20 }, google: { investment: 2000, resultCount: 100, cpa: 20 } },
         consolidated: { investment: 8000, resultCount: 400, revenue: undefined, cpa: 20, roas: undefined },
+        // MITZA ONE — Refinamento do Cockpit (aditivo, "Meta herdada"): os
+        // dois canais foram tocados no PRÓPRIO mês selecionado -> nunca
+        // herdada, mesmo resultado de sempre pros 8+ consumidores legados.
+        inheritedFromMonth: null,
       },
     ],
   },
 );
+
+// ---------------------------------------------------------------------------
+console.log('\nA.1 — "Meta herdada" (MITZA ONE, Refinamento do Cockpit): aditivo, nunca muda o valor retornado, só identifica a origem\n');
+{
+  const carriedForwardChanges: ClientPlanChangeRow[] = [
+    { channel: "meta", month: "2026-07-01", changedAt: "2026-07-10T10:00:00Z", investment: 6000, targetResultCount: 300, resultType: "leads" },
+  ];
+  const carriedPlan = resolveClientMonthlyGoals({
+    channels: ["meta"],
+    changes: carriedForwardChanges,
+    selectedMonth: "2026-08-01",
+    clientGoals: [legacyGoal],
+  });
+  check(
+    "mês sem alteração própria -> inheritedFromMonth aponta pro mês de origem (carry-forward), mas o VALOR é idêntico ao de sempre",
+    carriedPlan.goals[0],
+    {
+      resultType: "leads",
+      isPrimary: true,
+      byChannel: { meta: { investment: 6000, resultCount: 300, cpa: 20 } },
+      consolidated: { investment: 6000, resultCount: 300, revenue: undefined, cpa: 20, roas: undefined },
+      inheritedFromMonth: "2026-07-01",
+    },
+  );
+
+  const touchedThisMonthChanges: ClientPlanChangeRow[] = [
+    ...carriedForwardChanges,
+    { channel: "meta", month: "2026-08-01", changedAt: "2026-08-02T10:00:00Z", investment: 9000, targetResultCount: 450, resultType: "leads" },
+  ];
+  const touchedPlan = resolveClientMonthlyGoals({
+    channels: ["meta"],
+    changes: touchedThisMonthChanges,
+    selectedMonth: "2026-08-01",
+    clientGoals: [legacyGoal],
+  });
+  check(
+    "canal tocado NESTE mês -> inheritedFromMonth null (configurado agora, nunca rotulado como herdado só porque existe histórico mais antigo)",
+    touchedPlan.goals[0].inheritedFromMonth,
+    null,
+  );
+
+  const mixedChannelsChanges: ClientPlanChangeRow[] = [
+    { channel: "meta", month: "2026-07-01", changedAt: "2026-07-10T10:00:00Z", investment: 6000, targetResultCount: 300, resultType: "leads" },
+    { channel: "google", month: "2026-08-01", changedAt: "2026-08-02T10:00:00Z", investment: 2000, targetResultCount: 100, resultType: "leads" },
+  ];
+  const mixedGoalDef: ClientGoal = { ...legacyGoal, channels: ["meta", "google"] };
+  const mixedPlan = resolveClientMonthlyGoals({
+    channels: ["meta", "google"],
+    changes: mixedChannelsChanges,
+    selectedMonth: "2026-08-01",
+    clientGoals: [mixedGoalDef],
+  });
+  check(
+    "um canal herdado (Meta, julho) + outro tocado agora (Google, agosto) -> inheritedFromMonth null (nunca rotula o objetivo inteiro como herdado por uma mistura ambígua entre canais)",
+    mixedPlan.goals[0].inheritedFromMonth,
+    null,
+  );
+
+  const neverConfiguredPlan = resolveClientMonthlyGoals({
+    channels: ["meta"],
+    changes: [],
+    selectedMonth: "2026-08-01",
+    clientGoals: [legacyGoal],
+  });
+  check(
+    "objetivo nunca configurado -> inheritedFromMonth null (distinto de 'herdado': aqui não há nenhuma meta, herdada ou não)",
+    neverConfiguredPlan.goals[0].inheritedFromMonth,
+    null,
+  );
+}
 
 // ---------------------------------------------------------------------------
 console.log("\nB — Dois objetivos coexistem sem colisão\n");

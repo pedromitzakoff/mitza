@@ -1,41 +1,34 @@
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
-import { resolveMonthPeriodSummary, type FinancialPeriodSummary } from "@/lib/financial-period";
+import { resolveMonthPeriodSummary } from "@/lib/financial-period";
 import type { SpendStatus } from "@/lib/spend-status";
 import type { MetricTone } from "@/lib/metric-diagnostics";
-import { formatCurrency, formatCount } from "@/lib/format";
-import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
+import { formatCurrency } from "@/lib/format";
+import type { PerformanceGoal } from "@/lib/performance-goals";
 import type { ChannelMetrics } from "@/lib/channel-metrics";
 import type { TrafficChannel } from "@/lib/traffic-channels";
-import {
-  PACE_VERDICT_LABEL,
-  PACE_VERDICT_TONE,
-  costVerdictLabel,
-  COST_VERDICT_TONE,
-  COCKPIT_TONE_CARD_CLASSES,
-  COCKPIT_TONE_BADGE_CLASSES,
-} from "@/lib/cockpit-pace";
+import { PACE_VERDICT_LABEL, PACE_VERDICT_TONE, COCKPIT_TONE_CARD_CLASSES, COCKPIT_TONE_BADGE_CLASSES } from "@/lib/cockpit-pace";
 import { DashboardBudget, type DashboardBudgetChannel } from "./dashboard-budget";
-import { GoalEditTrigger } from "./cockpit-goal-edit-trigger";
 
 /**
  * MITZA ONE — Refinamento do Cockpit (seção 2 do pedido): dados pra abrir o
- * fluxo OFICIAL de edição de meta direto do Cockpit, atrás de um lápis
- * discreto — nunca uma segunda Server Action/RPC. `kind` decide qual editor
- * já existente é reaproveitado: "primary" → `ChannelPlanEditor` (mesmo de
- * `/metas` pro objetivo principal, único com Investimento/Custo por
- * resultado editáveis); "secondary" → `CockpitSecondaryGoalEditor`
- * (envolve `MetasSecondaryTargetForm`, só Meta de quantidade — objetivo
- * secundário nunca tem Investimento/Custo planejados manualmente, mesma
- * trava de `set_goal_monthly_target`). `null` em qualquer card = sem
+ * fluxo OFICIAL de edição de meta direto do Cockpit. `kind` decide qual
+ * editor já existente é reaproveitado: "primary" → calculadora de
+ * Investimento/Resultado/Custo (mesma de `/metas` pro objetivo principal);
+ * "secondary" → `MetasSecondaryTargetForm` (só Meta de quantidade —
+ * objetivo secundário nunca tem Investimento/Custo planejados manualmente,
+ * mesma trava de `set_goal_monthly_target`). `null` em qualquer card = sem
  * permissão de edição aqui (não-admin ou mês encerrado) — nenhum lápis
  * aparece.
  *
- * CORREÇÃO DE PRODUÇÃO: `GoalEditTrigger` (que efetivamente monta o lápis +
- * o editor) mora em `cockpit-goal-edit-trigger.tsx` ("use client") — este
- * arquivo (`cockpit-meta-ritmo-section.tsx`) continua Server Component e só
- * passa dados serializáveis (`edit`/`label`) pra baixo, nunca mais uma
- * função como prop cruzando a fronteira Server->Client (isso derrubava toda
- * página de cliente pra admins em mês aberto — ver nota no outro arquivo).
+ * MITZA ONE — pedido do usuário ("nao quero mais essa tela [drawer]. Quero
+ * q seja tudo feito ali no painel central mesmo"): `CockpitResultCard`/
+ * `CockpitCostCard` (que efetivamente montam o lápis + o editor inline)
+ * moraram pra `cockpit-goal-card.tsx` ("use client", precisam de estado
+ * `isEditing` próprio) — este arquivo (`cockpit-meta-ritmo-section.tsx`)
+ * continua Server Component e só define os dados/views serializáveis
+ * (`CockpitGoalEditAffordance`/`CockpitResultCardView`/
+ * `CockpitCostCardView`) consumidos lá, nunca uma função cruzando a
+ * fronteira Server->Client.
  */
 export interface CockpitGoalEditAffordance {
   kind: "primary" | "secondary";
@@ -81,11 +74,6 @@ function PaceVerdictBadge({ status }: { status: SpendStatus }) {
   return <p className={`text-[11px] font-semibold uppercase tracking-wide ${COCKPIT_TONE_BADGE_CLASSES[tone]}`}>{PACE_VERDICT_LABEL[status]}</p>;
 }
 
-function CostVerdictBadge({ tone }: { tone: MetricTone }) {
-  const cockpitTone = COST_VERDICT_TONE[tone];
-  return <p className={`text-[11px] font-semibold uppercase tracking-wide ${COCKPIT_TONE_BADGE_CLASSES[cockpitTone]}`}>{costVerdictLabel(tone)}</p>;
-}
-
 export interface CockpitResultCardView {
   resultType: PerformanceGoal;
   /** "Meta + Google", "Google" — rótulo dos canais deste objetivo, só
@@ -102,66 +90,17 @@ export interface CockpitResultCardView {
    * de edição aqui (não-admin ou mês encerrado, mesmo gate de
    * `canEditBudgetInline`) — nenhum lápis aparece. */
   edit: CockpitGoalEditAffordance | null;
-}
-
-/** Card "RESULTADO" — status de ritmo (`classifySpendStatus`, mesma régua
- * de sempre) + valor + meta + necessário/dia + barra. Sem meta de
- * quantidade configurada: mostra só o valor realizado, sem veredito/barra
- * fabricados (seção 6 do pedido: "não inventar thresholds arbitrários").
- * Compactado (Refinamento do Cockpit, seção 1): paddings/gaps reduzidos,
- * mesmos dados exibidos, nenhum corte de conteúdo. */
-export function CockpitResultCard({ view, status }: { view: CockpitResultCardView; status: SpendStatus | null }) {
-  const config = PERFORMANCE_GOALS[view.resultType];
-  const hasTarget = view.targetResultCount !== null && view.targetResultCount > 0 && view.expectedResultsToDate !== null && status !== null;
-
-  const summary: FinancialPeriodSummary | null = hasTarget
-    ? resolveMonthPeriodSummary(
-        {
-          monthPlanned: view.targetResultCount as number,
-          monthActual: view.resultCount,
-          monthExpectedToDate: view.expectedResultsToDate as number,
-          monthStatus: status as SpendStatus,
-        },
-        "",
-        { firstDay: "", lastDay: "" },
-      )
-    : null;
-
-  const tone = status ? PACE_VERDICT_TONE[status] : "neutral";
-
-  return (
-    <div className={`rounded-lg border p-3 ${COCKPIT_TONE_CARD_CLASSES[tone]}`}>
-      {status ? <PaceVerdictBadge status={status} /> : <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-secondary">RESULTADO</p>}
-      <p className="mt-0.5 text-xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{formatCount(view.resultCount)}</p>
-      <p className="text-xs text-overview-text-secondary">
-        {config.resultMetricLabel}
-        {view.channelsLabel ? ` · ${view.channelsLabel}` : ""}
-      </p>
-      {view.targetResultCount !== null && view.targetResultCount > 0 ? (
-        <div className="mt-1.5 flex flex-col gap-1 text-xs text-overview-text-secondary">
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-1">
-              Meta
-              {view.edit && <GoalEditTrigger edit={view.edit} label={`Editar meta de ${config.resultMetricLabel.toLowerCase()}`} />}
-            </span>
-            <span className="tabular-nums font-medium text-overview-text-primary">{formatCount(view.targetResultCount)}</span>
-          </div>
-          {view.neededDailyRate !== null && (
-            <div className="flex items-center justify-between gap-3">
-              <span>Necessário</span>
-              <span className="tabular-nums font-medium text-overview-text-primary">{formatCount(Math.ceil(view.neededDailyRate))} / dia</span>
-            </div>
-          )}
-          {summary && <AgencyInvestmentBar summary={summary} showLegend={false} formatValue={formatCount} overflowIsPositive />}
-        </div>
-      ) : (
-        <div className="mt-1.5 flex items-center gap-1 text-xs text-overview-text-secondary">
-          <p>Sem meta de {config.resultMetricLabel.toLowerCase()} configurada para o mês.</p>
-          {view.edit && <GoalEditTrigger edit={view.edit} label={`Configurar meta de ${config.resultMetricLabel.toLowerCase()}`} />}
-        </div>
-      )}
-    </div>
-  );
+  /** MITZA ONE — Refinamento do Cockpit (pedido do usuário: "quando mexer
+   * nas metas de um mes o mes seguinte nao muda, o mes seguinte é sempre
+   * tudo zero" — decisão explícita via `AskUserQuestion`: "Só no Cockpit,
+   * só visual"). Rótulo já formatado ("Julho de 2026") do mês de origem da
+   * meta vigente (`ClientGoalPlan.inheritedFromMonth`/`formatMonthLabel`),
+   * `null` = configurada neste mês ou nunca configurada — nenhum aviso
+   * aparece. PURAMENTE informativo: o VALOR em `targetResultCount` já é o
+   * mesmo de sempre (carry-forward intocado em todo o resto da
+   * plataforma), este campo só decide se o aviso "Meta herdada de..."
+   * aparece abaixo dele. */
+  inheritedFromMonthLabel: string | null;
 }
 
 export interface CockpitCostCardView {
@@ -173,54 +112,10 @@ export interface CockpitCostCardView {
   /** Só pro objetivo PRINCIPAL — ver nota no componente abaixo. `null`
    * também cobre "sem permissão de edição aqui". */
   edit: CockpitGoalEditAffordance | null;
-}
-
-/** Card "CUSTO POR RESULTADO" — nome dinâmico (CPL/CPA/"Custo por novo
- * seguidor", `PERFORMANCE_GOALS`, nunca hardcoded). Sem meta de custo
- * configurada: mostra o valor realizado sem comparação (`costPerResult`
- * pode ser `null` também, quando não há nenhum resultado no mês ainda).
- * `view.edit` só existe pro objetivo PRINCIPAL (seção 2 do pedido): Custo
- * por resultado nunca é um valor gravado por si — é sempre derivado de
- * Investimento/Resultado (`resolveClientMonthlyPlan`, `cpa: safeDivide(...)`,
- * `lib/client-plan.ts`), e só o fluxo do objetivo principal
- * (`ChannelPlanEditor`) tem essa calculadora; objetivo secundário nunca tem
- * investimento planejado manualmente, logo nunca tem custo-meta editável. */
-export function CockpitCostCard({ view }: { view: CockpitCostCardView }) {
-  const config = PERFORMANCE_GOALS[view.resultType];
-  const hasTarget = view.targetCostPerResult !== null && view.deviationPct !== null;
-
-  return (
-    <div className={`rounded-lg border p-3 ${COCKPIT_TONE_CARD_CLASSES[hasTarget ? COST_VERDICT_TONE[view.tone] : "neutral"]}`}>
-      {hasTarget ? (
-        <CostVerdictBadge tone={view.tone} />
-      ) : (
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-secondary">{config.costMetricShortLabel.toUpperCase()}</p>
-      )}
-      <p className="mt-0.5 text-xl font-semibold tracking-tight text-overview-text-primary tabular-nums">
-        {view.costPerResult !== null ? formatCurrency(view.costPerResult) : "—"}
-      </p>
-      <p className="text-xs text-overview-text-secondary">{config.costMetricShortLabel}</p>
-      {view.targetCostPerResult !== null ? (
-        <div className="mt-1.5 flex flex-col gap-0.5 text-xs text-overview-text-secondary">
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-1">
-              Meta
-              {view.edit && <GoalEditTrigger edit={view.edit} label={`Editar meta de ${config.costMetricShortLabel.toLowerCase()}`} />}
-            </span>
-            <span className="tabular-nums font-medium text-overview-text-primary">{formatCurrency(view.targetCostPerResult)}</span>
-          </div>
-          {view.deviationPct !== null && view.deviationPct > 0 && (
-            <p className="text-overview-text-secondary">{Math.round(view.deviationPct * 100)}% acima</p>
-          )}
-        </div>
-      ) : (
-        <div className="mt-1.5 flex items-center gap-1 text-xs text-overview-text-secondary">
-          <p>Meta de custo não configurada.</p>
-          {view.edit && <GoalEditTrigger edit={view.edit} label={`Configurar meta de ${config.costMetricShortLabel.toLowerCase()}`} />}
-        </div>
-      )}
-    </div>
-  );
+  /** Mesma nota de `CockpitResultCardView.inheritedFromMonthLabel` — o
+   * custo-meta vem da MESMA versão vigente (Investimento/Resultado), então
+   * o mês de origem é o mesmo informativo, nunca um segundo cálculo. */
+  inheritedFromMonthLabel: string | null;
 }
 
 export interface CockpitBudgetHeadlineView {

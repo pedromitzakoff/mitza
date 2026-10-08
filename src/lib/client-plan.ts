@@ -84,6 +84,19 @@ export interface ClientPlanChangeRow {
  * chamador, via a lista `channels` — normalmente `AVAILABLE_TRAFFIC_CHANNELS`
  * pra sempre mostrar Meta e Google, mesmo sem plano ainda).
  */
+/** Regra de elegibilidade/recência única: entre as versões com `month <=
+ * selectedMonth`, a vigente é a mais recente por `month`, e entre as do
+ * mesmo `month`, a mais recente por `changedAt`. Extraída de dentro de
+ * `resolveClientMonthlyPlan` (Etapa "Refinamento do Cockpit") só pra
+ * `resolveSourceMonthByChannel` (abaixo) poder aplicar a MESMA regra sem
+ * duplicá-la — comportamento de `resolveClientMonthlyPlan` inalterado. */
+function findLatestEligibleChange<T extends { month: string; changedAt: string }>(eligible: T[]): T {
+  return eligible.reduce((best, change) => {
+    if (change.month !== best.month) return change.month > best.month ? change : best;
+    return change.changedAt > best.changedAt ? change : best;
+  });
+}
+
 export function resolveClientMonthlyPlan(input: {
   channels: TrafficChannel[];
   changes: ClientPlanChangeRow[];
@@ -99,10 +112,7 @@ export function resolveClientMonthlyPlan(input: {
       continue;
     }
 
-    const latest = eligible.reduce((best, change) => {
-      if (change.month !== best.month) return change.month > best.month ? change : best;
-      return change.changedAt > best.changedAt ? change : best;
-    });
+    const latest = findLatestEligibleChange(eligible);
 
     byChannel[channel] = {
       investment: latest.investment,
@@ -115,6 +125,45 @@ export function resolveClientMonthlyPlan(input: {
     byChannel,
     consolidated: consolidateChannelMetrics(channels, byChannel),
   };
+}
+
+/** Por canal, de QUAL MÊS veio a versão vigente que `resolveClientMonthlyPlan`
+ * usou pros MESMOS `channels`/`changes`/`selectedMonth` — reaproveita
+ * `findLatestEligibleChange` (mesma regra, nunca uma segunda). `null` =
+ * canal sem nenhuma versão elegível (nunca configurado até este mês).
+ *
+ * MITZA ONE — Refinamento do Cockpit (pedido do usuário "quando mexer nas
+ * metas de um mes o mes seguinte nao muda, o mes seguinte é sempre tudo
+ * zero"; decisão explícita do usuário via `AskUserQuestion`: "Só no
+ * Cockpit, só visual (Recomendado)"): usada SÓ pra exibir o aviso
+ * informativo "Meta herdada de [mês]" no Cockpit — NUNCA é usada por
+ * `resolveClientMonthlyPlan`/`resolveClientMonthlyGoals` nem muda o valor
+ * que eles retornam; o carry-forward (vigência) continua idêntico pros 8+
+ * consumidores da plataforma. */
+function resolveSourceMonthByChannel(
+  channels: TrafficChannel[],
+  changes: { channel: TrafficChannel; month: string; changedAt: string }[],
+  selectedMonth: string,
+): Partial<Record<TrafficChannel, string | null>> {
+  const sourceMonthByChannel: Partial<Record<TrafficChannel, string | null>> = {};
+  for (const channel of channels) {
+    const eligible = changes.filter((change) => change.channel === channel && change.month <= selectedMonth);
+    sourceMonthByChannel[channel] = eligible.length === 0 ? null : findLatestEligibleChange(eligible).month;
+  }
+  return sourceMonthByChannel;
+}
+
+/** "De qual mês veio a meta exibida hoje", resumido pro objetivo inteiro
+ * (todos os canais) — `null` quando o objetivo nunca foi configurado OU
+ * quando pelo menos um canal já foi tocado neste mês (uma mistura "canal A
+ * configurado agora, canal B herdado" nunca é rotulada como "herdada" —
+ * evita um aviso ambíguo/errado). Quando não-nulo, é o mês mais recente
+ * entre os canais do objetivo (o "último toque" relevante pro aviso). */
+function resolveGoalSourceMonth(sourceMonthByChannel: Partial<Record<TrafficChannel, string | null>>, selectedMonth: string): string | null {
+  const months = Object.values(sourceMonthByChannel).filter((m): m is string => m != null);
+  if (months.length === 0) return null;
+  const mostRecent = months.reduce((a, b) => (b > a ? b : a));
+  return mostRecent < selectedMonth ? mostRecent : null;
 }
 
 /**
@@ -164,6 +213,13 @@ export interface ClientGoalPlan {
   isPrimary: boolean;
   byChannel: Partial<Record<TrafficChannel, ChannelMetrics>>;
   consolidated: ChannelMetrics;
+  /** MITZA ONE — Refinamento do Cockpit: mês de origem da meta vigente
+   * (`resolveGoalSourceMonth`), `null` = configurada neste mês ou nunca
+   * configurada. Opcional/aditivo de propósito — só `resolveClientMonthlyGoals`
+   * preenche; literais de fallback (`EMPTY_GOAL_PLAN` em `metas-data.ts`/
+   * `[id]/page.tsx`) continuam válidos sem essa chave. Só o Cockpit lê isso;
+   * nenhum cálculo em nenhum outro lugar depende dela. */
+  inheritedFromMonth?: string | null;
 }
 
 export interface ClientMonthlyGoalsPlan {
@@ -198,7 +254,14 @@ export function resolveClientMonthlyGoals(input: {
     const goalChannels = goal.channels.length > 0 ? goal.channels.filter((c) => channels.includes(c)) : channels;
     const goalChanges = changes.filter((c) => c.resultType === goal.resultType);
     const plan = resolveClientMonthlyPlan({ channels: goalChannels, changes: goalChanges, selectedMonth });
-    return { resultType: goal.resultType, isPrimary: goal.isPrimary, byChannel: plan.byChannel, consolidated: plan.consolidated };
+    const sourceMonthByChannel = resolveSourceMonthByChannel(goalChannels, goalChanges, selectedMonth);
+    return {
+      resultType: goal.resultType,
+      isPrimary: goal.isPrimary,
+      byChannel: plan.byChannel,
+      consolidated: plan.consolidated,
+      inheritedFromMonth: resolveGoalSourceMonth(sourceMonthByChannel, selectedMonth),
+    };
   });
 
   return { goals };

@@ -33,26 +33,36 @@ function loadSource(...segments: string[]): string {
 console.log("\nA — Cards compactos (seção 1 do pedido): paddings/gaps reduzidos, nenhum dado removido, caixa dupla do Orçamento eliminada\n");
 {
   const cardsSource = loadSource("src", "app", "clients", "cockpit-meta-ritmo-section.tsx");
+  const goalCardSource = loadSource("src", "app", "clients", "cockpit-goal-card.tsx");
 
   // Ajuste de proporção posterior (p-3.5 -> p-3): a checagem real desta
   // etapa é "os 3 cards continuam com a MESMA moldura/padding entre si"
   // (compactação consistente), não um valor de padding travado no tempo.
+  // MITZA ONE — Refinamento do Cockpit (redesenho de edição): RESULTADO/
+  // CUSTO moraram pra cockpit-goal-card.tsx (precisam de `isEditing`
+  // próprio); ORÇAMENTO continua em cockpit-meta-ritmo-section.tsx — a
+  // checagem soma as classes das DUAS fontes, nunca uma só.
+  const paddingClasses = [
+    ...(cardsSource.match(/rounded-lg border p-\S+ \$\{COCKPIT_TONE_CARD_CLASSES/g) ?? []),
+    ...(goalCardSource.match(/rounded-lg border p-\S+ \$\{COCKPIT_TONE_CARD_CLASSES/g) ?? []),
+  ];
   ok(
     "os 3 cards de Meta & Ritmo continuam com a MESMA classe de moldura/padding entre si (compactação consistente, sem corte de conteúdo)",
-    new Set((cardsSource.match(/rounded-lg border p-\S+ \$\{COCKPIT_TONE_CARD_CLASSES/g) ?? []).map((m) => m.split(" ")[2])).size === 1 &&
-      (cardsSource.match(/rounded-lg border p-\S+ \$\{COCKPIT_TONE_CARD_CLASSES/g) ?? []).length === 3,
+    new Set(paddingClasses.map((m) => m.split(" ")[2])).size === 1 && paddingClasses.length === 3,
   );
   ok(
     "card RESULTADO continua com todos os dados exigidos: status de ritmo, valor, meta, necessário/dia, barra",
-    cardsSource.includes("status ? <PaceVerdictBadge") &&
-      cardsSource.includes("formatCount(view.resultCount)") &&
-      cardsSource.includes("formatCount(view.targetResultCount)") &&
-      cardsSource.includes("Necessário") &&
-      cardsSource.includes("<AgencyInvestmentBar"),
+    goalCardSource.includes("status ? <PaceVerdictBadge") &&
+      goalCardSource.includes("formatCount(view.resultCount)") &&
+      goalCardSource.includes("formatCount(view.targetResultCount)") &&
+      goalCardSource.includes("Necessário") &&
+      goalCardSource.includes("<AgencyInvestmentBar"),
   );
   ok(
     "card CUSTO POR RESULTADO continua com valor, meta e comparação com a meta — NUNCA barra de progresso (ratio, não cumulativo)",
-    cardsSource.includes("formatCurrency(view.costPerResult)") && cardsSource.includes("% acima") && !/CockpitCostCard[\s\S]{0,2000}<AgencyInvestmentBar/.test(cardsSource),
+    goalCardSource.includes("formatCurrency(view.costPerResult)") &&
+      goalCardSource.includes("% acima") &&
+      !/CockpitCostCard[\s\S]{0,2500}<AgencyInvestmentBar/.test(goalCardSource),
   );
   ok(
     "card ORÇAMENTO continua com investido/orçamento planejado/necessário-dia/barra",
@@ -82,33 +92,64 @@ console.log("\nA — Cards compactos (seção 1 do pedido): paddings/gaps reduzi
   );
 }
 
-console.log("\nB — Edição direta das três metas (seção 2 do pedido): lápis reaproveitando o fluxo oficial, nenhuma segunda Server Action/RPC\n");
+console.log(
+  "\nB — Edição das três metas direto no painel central (pedido do usuário: \"nao quero mais essa tela [drawer]. Quero q seja tudo feito ali no painel central mesmo e qua tenha uma calculdodra ja integrada\")\n",
+);
 {
-  const cardsSource = loadSource("src", "app", "clients", "cockpit-meta-ritmo-section.tsx");
+  const goalCardSource = loadSource("src", "app", "clients", "cockpit-goal-card.tsx");
+  const inlineEditorSource = loadSource("src", "app", "clients", "cockpit-inline-goal-editor.tsx");
   const editorSource = loadSource("src", "app", "clients", "channel-plan-editor.tsx");
-  const secondarySource = loadSource("src", "app", "clients", "cockpit-secondary-goal-editor.tsx");
   const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
 
   ok(
-    "ChannelPlanEditor ganhou `trigger` opcional — backward-compatible (comportamento padrão de /metas preservado quando omitido)",
-    editorSource.includes("trigger?: (open: () => void) => ReactNode") && editorSource.includes('if (trigger) return <>{trigger(() => setIsOpen(true))}</>;'),
+    "o antigo drawer lateral (ChannelPlanEditor com trigger/gatilho) NUNCA MAIS é usado no Cockpit — os arquivos que abriam esse drawer atrás de um lápis (cockpit-goal-edit-trigger.tsx, cockpit-secondary-goal-editor.tsx) foram removidos",
+    (() => {
+      try {
+        loadSource("src", "app", "clients", "cockpit-goal-edit-trigger.tsx");
+        return false;
+      } catch {
+        try {
+          loadSource("src", "app", "clients", "cockpit-secondary-goal-editor.tsx");
+          return false;
+        } catch {
+          return true;
+        }
+      }
+    })(),
   );
   ok(
-    "/metas (ChannelPlanEditor sem trigger) continua com o gatilho textual 'Planejamento' de sempre — nenhuma regressão pro fluxo já aprovado",
-    editorSource.includes(">\n        Planejamento\n      </button>"),
+    "ChannelPlanEditor (usado por /metas) continua existindo e intocado pro fluxo completo (data final de campanha/evento) — trigger/gatilho/drawer preservados, nenhuma regressão pro fluxo já aprovado",
+    editorSource.includes("trigger?: (open: () => void) => ReactNode") &&
+      editorSource.includes('if (trigger) return <>{trigger(() => setIsOpen(true))}</>;') &&
+      editorSource.includes(">\n        Planejamento\n      </button>") &&
+      editorSource.includes("fixed inset-y-0 right-0"),
   );
   ok(
-    "CockpitSecondaryGoalEditor envolve MetasSecondaryTargetForm (objetivo SECUNDÁRIO) só com abrir/fechar — zero alteração na Server Action/validação (setGoalMonthlyTargetAction intocada)",
-    secondarySource.includes('import { MetasSecondaryTargetForm } from "./metas-secondary-target-form";') && secondarySource.includes("useState(false)"),
-  );
-  const triggerSource = loadSource("src", "app", "clients", "cockpit-goal-edit-trigger.tsx");
-  ok(
-    "o lápis de Resultado e o lápis de Custo (objetivo PRINCIPAL) abrem o MESMO ChannelPlanEditor oficial — nunca dois editores/fluxos diferentes pro mesmo objetivo",
-    /GoalEditTrigger[\s\S]{0,400}edit\.kind === "primary"[\s\S]{0,300}<ChannelPlanEditor/.test(triggerSource),
+    "ChannelPlanCard/initialCardState (a MESMA calculadora Investimento↔Resultado↔Custo, regra de três) foram exportados de channel-plan-editor.tsx pra serem reaproveitados — nenhuma segunda implementação da calculadora",
+    editorSource.includes("export interface ChannelCardState") &&
+      editorSource.includes("export function initialCardState") &&
+      editorSource.includes("export function ChannelPlanCard"),
   );
   ok(
-    "CORREÇÃO DE PRODUÇÃO: GoalEditTrigger mora num arquivo 'use client' separado — cockpit-meta-ritmo-section.tsx (Server Component) nunca mais passa uma função (trigger) como prop pra um Client Component, o crash que derrubava toda página de cliente pra admin em mês aberto",
-    triggerSource.startsWith('"use client"') && !cardsSource.includes("trigger={(open)") && cardsSource.includes('import { GoalEditTrigger } from "./cockpit-goal-edit-trigger";'),
+    "InlineGoalPlanEditor (editor do objetivo PRINCIPAL dentro do próprio card) importa ChannelPlanCard/initialCardState do arquivo oficial — nunca reimplementa a calculadora de regra de três",
+    inlineEditorSource.includes('import { ChannelPlanCard, initialCardState, type ChannelCardState } from "./channel-plan-editor";') &&
+      !inlineEditorSource.includes("function deriveOnFieldChange") &&
+      inlineEditorSource.includes("applyMonthlyChannelPlanChangeAction"),
+  );
+  ok(
+    "o editor inline NUNCA é um overlay/drawer fixo — nenhum `fixed inset-0`/backdrop, é só um bloco dentro do fluxo normal do card (pedido: 'tudo feito ali no painel central mesmo')",
+    !inlineEditorSource.includes("fixed inset-0") && !inlineEditorSource.includes("fixed inset-y-0"),
+  );
+  ok(
+    "cockpit-goal-card.tsx é 'use client' com `isEditing` próprio por card — o lápis abre o editor como um bloco a mais dentro do MESMO card, nunca uma segunda tela",
+    goalCardSource.startsWith('"use client"') &&
+      (goalCardSource.match(/useState\(false\)/g) ?? []).length === 2 &&
+      goalCardSource.includes("isEditing && view.edit"),
+  );
+  ok(
+    "o painel de edição (GoalInlineEditorPanel) decide entre a calculadora do objetivo PRINCIPAL (InlineGoalPlanEditor) e o formulário oficial do objetivo SECUNDÁRIO (MetasSecondaryTargetForm) — mesmo par oficial por objetivo de sempre, nenhum editor novo inventado",
+    /GoalInlineEditorPanel[\s\S]{0,300}edit\.kind === "primary"[\s\S]{0,200}<InlineGoalPlanEditor/.test(goalCardSource) &&
+      goalCardSource.includes("<MetasSecondaryTargetForm"),
   );
   ok(
     "objetivo SECUNDÁRIO nunca tem lápis de Custo por resultado (nunca existiu meta de custo gravável pra ele) — page.tsx só passa `edit` no card de custo quando group.isPrimary",
@@ -124,7 +165,7 @@ console.log("\nB — Edição direta das três metas (seção 2 do pedido): láp
   );
   ok(
     "nenhuma tabela/RPC/Server Action nova foi criada — só os já existentes (apply_monthly_channel_plan_change via applyMonthlyChannelPlanChangeAction, set_goal_monthly_target via setGoalMonthlyTargetAction) foram reaproveitados",
-    !pageSource.includes("CREATE TABLE") && editorSource.includes("applyMonthlyChannelPlanChangeAction") && secondarySource.includes("MetasSecondaryTargetForm"),
+    !pageSource.includes("CREATE TABLE") && inlineEditorSource.includes("applyMonthlyChannelPlanChangeAction") && goalCardSource.includes("MetasSecondaryTargetForm"),
   );
 }
 
@@ -150,15 +191,16 @@ console.log("\nC — Planejamento mensal sem herança automática (seção 3 do 
 console.log("\nD — Alerta de planejamento pendente (seção 4 do pedido): DELIBERADAMENTE interrompido (depende da distinção da seção 3, não implementada)\n");
 {
   const cardsSource = loadSource("src", "app", "clients", "cockpit-meta-ritmo-section.tsx");
+  const goalCardSource = loadSource("src", "app", "clients", "cockpit-goal-card.tsx");
   const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
 
   ok(
     "nenhum banner/alerta novo de 'Planejamento pendente' foi adicionado ao Cockpit — a distinção 'não configurado vs. configurado com zero' que ele dependeria não existe ainda",
-    !cardsSource.includes("Planejamento pendente") && !pageSource.includes("Planejamento pendente"),
+    !cardsSource.includes("Planejamento pendente") && !goalCardSource.includes("Planejamento pendente") && !pageSource.includes("Planejamento pendente"),
   );
   ok(
     "o texto 'Sem meta configurada'/'Sem planejamento configurado' (estado JÁ existente, sem herança) continua sendo o único aviso de ausência — nenhum segundo mecanismo paralelo inventado",
-    cardsSource.includes("Sem meta de") && cardsSource.includes("Sem planejamento configurado para o mês."),
+    goalCardSource.includes("Sem meta de") && cardsSource.includes("Sem planejamento configurado para o mês."),
   );
 }
 

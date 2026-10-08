@@ -55,13 +55,12 @@ import { fetchClientTimelinePage } from "@/lib/client-timeline";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
 import { buildPeriodReading } from "@/lib/performance-report/report-derivatives";
 import {
-  CockpitResultCard,
-  CockpitCostCard,
   CockpitBudgetCard,
   type CockpitResultCardView,
   type CockpitCostCardView,
   type CockpitGoalEditAffordance,
 } from "../cockpit-meta-ritmo-section";
+import { CockpitResultCard, CockpitCostCard } from "../cockpit-goal-card";
 import { CockpitDiagnosticsCard } from "../cockpit-diagnostics-card";
 import { CockpitDemandasSection } from "../cockpit-demandas-section";
 import { CockpitPerformanceSection, type CockpitPerformanceView } from "../cockpit-performance-section";
@@ -365,9 +364,10 @@ export default async function ClientPage({
     selectedMonth: firstDay,
     clientGoals: effectiveClientGoals,
   });
-  const EMPTY_GOAL_PLAN: { byChannel: Partial<Record<TrafficChannel, ChannelMetrics>>; consolidated: ChannelMetrics } = {
+  const EMPTY_GOAL_PLAN: { byChannel: Partial<Record<TrafficChannel, ChannelMetrics>>; consolidated: ChannelMetrics; inheritedFromMonth: string | null } = {
     byChannel: {},
     consolidated: { investment: null, resultCount: null, cpa: null },
+    inheritedFromMonth: null,
   };
   const primaryGoalPlan = clientGoalsPlan.goals.find((g) => g.resultType === primaryResultType) ?? EMPTY_GOAL_PLAN;
 
@@ -516,6 +516,12 @@ export default async function ClientPage({
           ? classifySpendStatus(performanceSummary.resultCount, expectedResultsToDate, targetResultCount)
           : null;
       const costDiagnostic = evaluateCpaDiagnostic(performanceSummary.costPerResult, targetCostPerResult, performanceSummary.resultCount);
+      // MITZA ONE — Refinamento do Cockpit (pedido do usuário, decisão
+      // explícita via AskUserQuestion: "Só no Cockpit, só visual"): aviso
+      // PURAMENTE informativo — `targetResultCount`/`targetCostPerResult`
+      // acima já são o carry-forward de sempre, intocado; isso só decide se
+      // o rótulo "Meta herdada de..." aparece, nunca afeta nenhum valor.
+      const inheritedFromMonthLabel = goalPlan.inheritedFromMonth != null ? formatMonthLabel(goalPlan.inheritedFromMonth) : null;
 
       return {
         result: {
@@ -526,6 +532,7 @@ export default async function ClientPage({
           expectedResultsToDate,
           neededDailyRate,
           edit: goalEdit,
+          inheritedFromMonthLabel,
         },
         status,
         cost: {
@@ -538,6 +545,7 @@ export default async function ClientPage({
           // (sempre derivado de Investimento/Resultado, nunca gravado por
           // si — ver nota em `cockpit-meta-ritmo-section.tsx`).
           edit: group.isPrimary ? goalEdit : null,
+          inheritedFromMonthLabel,
         },
       };
     });

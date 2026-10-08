@@ -10,7 +10,11 @@ import { deriveOnFieldChange, DEFAULT_FIELD_ORDER, type CalculatorField } from "
 import { applyMonthlyChannelPlanChangeAction, setClientMonthHorizonAction } from "./monthly-budget-actions";
 import { useToast } from "@/app/toast-provider";
 
-interface ChannelCardState {
+/** Exportado — MITZA ONE — Refinamento do Cockpit: o editor inline
+ * (`cockpit-inline-goal-editor.tsx`) reaproveita a MESMA calculadora/estado
+ * por canal, nunca uma segunda implementação da regra de três
+ * Investimento/Resultado/Custo. */
+export interface ChannelCardState {
   investmentDisplay: string;
   resultCountDisplay: string;
   cpaDisplay: string;
@@ -19,7 +23,7 @@ interface ChannelCardState {
   fieldOrder: CalculatorField[];
 }
 
-function initialCardState(current: ChannelMetrics | undefined): ChannelCardState {
+export function initialCardState(current: ChannelMetrics | undefined): ChannelCardState {
   return {
     investmentDisplay: current?.investment != null ? formatMoneyDisplay(current.investment) : "",
     resultCountDisplay: current?.resultCount != null ? String(current.resultCount) : "",
@@ -28,7 +32,10 @@ function initialCardState(current: ChannelMetrics | undefined): ChannelCardState
   };
 }
 
-function ChannelPlanCard({
+/** Exportado — MITZA ONE — Refinamento do Cockpit: mesmo card de canal
+ * (Investimento/Resultado/Custo, calculadora de regra de três) reaproveitado
+ * pelo editor inline do Cockpit, nunca uma segunda UI de edição. */
+export function ChannelPlanCard({
   channel,
   current,
   performanceGoal,

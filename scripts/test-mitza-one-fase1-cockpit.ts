@@ -52,6 +52,10 @@ function loadSource(...segments: string[]): string {
 
 const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
 const metaRitmoSource = loadSource("src", "app", "clients", "cockpit-meta-ritmo-section.tsx");
+// MITZA ONE — Refinamento do Cockpit (redesenho de edição): RESULTADO/CUSTO
+// moraram pra cockpit-goal-card.tsx ("use client", `isEditing` próprio) —
+// as checagens de conteúdo desses dois cards abaixo leem esta fonte.
+const goalCardSource = loadSource("src", "app", "clients", "cockpit-goal-card.tsx");
 const diagnosticsCardSource = loadSource("src", "app", "clients", "cockpit-diagnostics-card.tsx");
 // Etapa "Simplificação da Operação": cockpit-execution-section.tsx (Operação
 // + Demandas no mesmo componente) foi substituído por cockpit-demandas-section.tsx
@@ -90,11 +94,11 @@ console.log("\nA — Meta & Ritmo\n");
   // nunca fabricam veredito sem base real (status: null / targetCostPerResult: null).
   ok(
     "CockpitResultCard só mostra veredito/barra quando há meta de quantidade > 0 (nunca threshold inventado)",
-    /view\.targetResultCount !== null && view\.targetResultCount > 0/.test(metaRitmoSource),
+    /view\.targetResultCount !== null && view\.targetResultCount > 0/.test(goalCardSource),
   );
   ok(
     "CockpitCostCard sem meta de custo mostra estado neutro explícito ('Meta de custo não configurada'), nunca comparação fabricada",
-    metaRitmoSource.includes("Meta de custo não configurada."),
+    goalCardSource.includes("Meta de custo não configurada."),
   );
 
   // ritmo / necessário-por-dia: computeNeededDailyRate (mesma função
