@@ -13,6 +13,7 @@ import {
   buildSourceAttentions,
   buildGoalAttentions,
   resolveLatestImportedDate,
+  resolveLatestSuccessAt,
   type DataAttention,
 } from "@/lib/data-trust";
 
@@ -97,6 +98,17 @@ export interface DadosHealthSummary {
   enabledSourceCount: number;
   activeSourceCount: number;
   latestImportedDateLabel: string | null;
+  /** "Dados até DD/MM" em formato ISO (`YYYY-MM-DD`), mesma fonte de
+   * `latestImportedDateLabel` (`resolveLatestImportedDate`) — usado pela
+   * Evolução Diária do Cockpit (MITZA ONE), que precisa do valor bruto, não
+   * só do rótulo formatado. `null` nos mesmos casos que o rótulo. */
+  latestImportedDate: string | null;
+  /** "Última sincronização bem-sucedida" agregada (MESMO campo que cada
+   * fonte já expõe em `DadosSourceView.lastSuccessAtLabel`, só o mais
+   * recente entre as fontes HABILITADAS) — sempre distinto do campo acima
+   * (ver `lib/data-trust.ts`). `null` = nenhuma fonte habilitada sincronizou
+   * com sucesso ainda. */
+  latestSuccessAtLabel: string | null;
   attentionCount: number;
 }
 
@@ -244,11 +256,16 @@ export async function loadDadosPageData(supabase: Supabase, clientId: string, is
   const latestImportedRaw = resolveLatestImportedDate(
     importSourceRows.map((row) => ({ enabled: row.enabled, lastImportedDate: row.last_imported_date })),
   );
+  const latestSuccessRaw = resolveLatestSuccessAt(
+    importSourceRows.map((row) => ({ enabled: row.enabled, lastSuccessAt: row.last_success_at })),
+  );
 
   const health: DadosHealthSummary = {
     enabledSourceCount: importSourceRows.filter((row) => row.enabled).length,
     activeSourceCount: importSourceRows.filter((row) => row.enabled && row.status === "active").length,
     latestImportedDateLabel: latestImportedRaw ? formatShortDate(latestImportedRaw) : null,
+    latestImportedDate: latestImportedRaw,
+    latestSuccessAtLabel: latestSuccessRaw ? formatRelativeDateTime(latestSuccessRaw, now) : null,
     attentionCount: attentions.length,
   };
 

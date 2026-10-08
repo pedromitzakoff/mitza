@@ -23,6 +23,8 @@ import {
   computeMonthlyBudgetPlan,
   computeNeededDailyRate,
   getRemainingEligibleDaysIncludingToday,
+  listDatesInclusive,
+  resolveDaysElapsedInRange,
 } from "@/lib/monthly-budget";
 import { resolveClientMonthlyGoals, resolveTargetCostPerResult, type ClientPlanChangeRow } from "@/lib/client-plan";
 import { consolidateAdditive, type ChannelMetrics } from "@/lib/channel-metrics";
@@ -31,7 +33,7 @@ import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { sumChannelEffectiveSpend, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatRelativeDateTime } from "@/lib/format";
+import { formatRelativeDateTime, formatShortDate } from "@/lib/format";
 import { contractStatusBannerText } from "@/lib/client-fields";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
@@ -39,7 +41,7 @@ import { ClientWorkspaceContext } from "../client-workspace-context";
 import { evaluateCpaDiagnostic } from "@/lib/metric-diagnostics";
 import { listClientGoals, resolvePrimaryGoal, resolveChannelGoal, type ClientGoal } from "@/lib/client-goals";
 import { computePerformanceSummary } from "@/lib/performance";
-import { resolvePerformanceRowsForSprints } from "@/lib/performance-queries";
+import { resolvePerformanceRowsForSprints, getDailyPerformanceRowsForPeriod } from "@/lib/performance-queries";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { AVAILABLE_TRAFFIC_CHANNELS, resolveClientMediaChannels, TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { MonthSelect } from "../month-select";
@@ -63,6 +65,12 @@ import { CockpitExecutionSection } from "../cockpit-execution-section";
 import { CockpitPerformanceSection, type CockpitPerformanceView } from "../cockpit-performance-section";
 import { CockpitHistorySection } from "../cockpit-history-section";
 import { RecordAccountReviewDrawer } from "../record-account-review-drawer";
+import { buildCockpitDailyEvolutionPoints, resolveDailyTargetResultCount } from "@/lib/cockpit-daily-evolution";
+import {
+  CockpitDailyEvolutionSection,
+  type CockpitDailyEvolutionView,
+  type CockpitDailyEvolutionSeriesView,
+} from "../cockpit-daily-evolution-section";
 
 /**
  * Objetivo em exibição na Performance (`?goal=`) — núcleo puro extraído de
@@ -198,8 +206,18 @@ export default async function ClientPage({
   const returnTo = buildContextHref({});
   const registerReviewHref = `${returnTo}${returnTo.includes("?") ? "&" : "?"}review=new`;
 
-  const [sprintsRaw, dailySpend, plannedAllocations, budgetChangesRaw, performanceTargetHistoryRaw, channelSpendRows, planningEndDate, allClientGoals, dadosData] =
-    await Promise.all([
+  const [
+    sprintsRaw,
+    dailySpend,
+    plannedAllocations,
+    budgetChangesRaw,
+    performanceTargetHistoryRaw,
+    channelSpendRows,
+    planningEndDate,
+    allClientGoals,
+    dadosData,
+    dailyPerformanceRowsForEvolution,
+  ] = await Promise.all([
       requireQuery(
         supabase
           .from("sprints")
@@ -254,6 +272,14 @@ export default async function ClientPage({
       // objetivos/health) não é usado aqui (a tela Dados completa continua
       // existindo pra quem precisar do detalhe).
       loadDadosPageData(supabase, id, isAdmin),
+      // MITZA ONE — Evolução Diária no Cockpit (seção 6 do pedido: "verificar
+      // se a camada oficial já fornece séries diárias... reutilizar").
+      // MESMA consulta já usada por Analytics/Relatório de Performance
+      // (`lib/performance-queries.ts`), nenhuma segunda tabela/consulta —
+      // `dailySpend` (acima) já cobre o investimento diário, mesma forma de
+      // `getDailySpendRowsForPeriod` (`date, spend, channel`), reaproveitado
+      // sem uma segunda busca.
+      getDailyPerformanceRowsForPeriod(supabase, id, { firstDay, lastDay }),
     ]);
 
   const planningHorizon = resolvePlanningHorizon({ firstDay, lastDay }, planningEndDate);
@@ -466,6 +492,60 @@ export default async function ClientPage({
       };
     });
 
+  // MITZA ONE — Evolução Diária no Cockpit. Reaproveita INTEGRALMENTE os
+  // mesmos dados já resolvidos acima pra "Meta & Ritmo" — `resultGroups`
+  // (nunca soma leads com vendas, seção 4/9 do pedido), `clientGoalsPlan`
+  // (meta mensal oficial por objetivo) e `planningHorizon`/`todayStr` (base
+  // de calendário já usada por `expectedResultsToDate`). Granularidade
+  // diária só existe com integração habilitada (seção 6: "Granularidade
+  // diária de RESULTADO só existe pra cliente com Stract ativo" — mesma
+  // limitação já documentada em `lib/daily-results.ts`); `dadosData.sources`
+  // já tem esse flag (`import_sources.enabled`), nenhuma segunda consulta.
+  const hasDailyIntegration = Boolean(dadosData?.sources.some((s) => s.enabled));
+  const evolutionWindowDates = listDatesInclusive(firstDay, lastDay);
+  const evolutionDailyPerformanceRows = dailyPerformanceRowsForEvolution.map((row) => ({
+    date: row.date,
+    channel: row.channel as TrafficChannel,
+    resultType: row.resultType as PerformanceGoal,
+    resultCount: row.resultCount,
+  }));
+  const evolutionDailySpendRows = (dailySpend ?? []).map((row) => ({ date: row.date, channel: row.channel as TrafficChannel, spend: row.spend }));
+  const { daysInMonth: evolutionDaysInMonth } = resolveDaysElapsedInRange(planningHorizon, todayStr);
+
+  const dailyEvolutionSeries: CockpitDailyEvolutionSeriesView[] = hasDailyIntegration
+    ? resultGroups.map((group) => {
+        const goalPlan = clientGoalsPlan.goals.find((g) => g.resultType === group.resultType) ?? EMPTY_GOAL_PLAN;
+        return {
+          resultType: group.resultType,
+          resultLabel: PERFORMANCE_GOALS[group.resultType].resultMetricLabel,
+          costLabel: PERFORMANCE_GOALS[group.resultType].costMetricShortLabel,
+          channelsLabel: resultGroups.length > 1 ? group.channels.map((c) => TRAFFIC_CHANNELS[c].label).join(" + ") : null,
+          points: buildCockpitDailyEvolutionPoints({
+            windowDates: evolutionWindowDates,
+            todayStr,
+            resultType: group.resultType,
+            channels: group.channels,
+            performanceRows: evolutionDailyPerformanceRows,
+            spendRows: evolutionDailySpendRows,
+          }),
+          dailyTarget: resolveDailyTargetResultCount(goalPlan.consolidated.resultCount, evolutionDaysInMonth),
+        };
+      })
+    : [];
+
+  const dailyEvolutionView: CockpitDailyEvolutionView = !hasDailyIntegration
+    ? { kind: "unavailable" }
+    : resultGroups.length === 0
+      ? { kind: "no_goal" }
+      : {
+          kind: "available",
+          series: dailyEvolutionSeries,
+          freshness: {
+            latestDataLabel: dadosData?.health.latestImportedDate ? formatShortDate(dadosData.health.latestImportedDate) : null,
+            latestSyncLabel: dadosData?.health.latestSuccessAtLabel ?? null,
+          },
+        };
+
   // MITZA ONE — Fase 1, Seção "Diagnóstico" (seções 11-13 do pedido):
   // reaproveita o `ClientDiagnostics` que `loadClientOperationalStates` já
   // calcula (escopado ao objetivo PRINCIPAL, mesma convenção de sempre —
@@ -651,6 +731,12 @@ export default async function ClientPage({
           prestar atenção?". */}
       <div className="mt-5">
         <CockpitDiagnosticsCard insights={insights} />
+      </div>
+
+      {/* EVOLUÇÃO DIÁRIA — MITZA ONE: acompanhamento dia a dia + frescor
+          dos dados, entre Diagnóstico e Canais (seção 1 do pedido). */}
+      <div className="mt-5">
+        <CockpitDailyEvolutionSection view={dailyEvolutionView} />
       </div>
 
       {/* SEÇÃO 3 — CANAIS (pedido, seções 14-17): "Como cada canal está

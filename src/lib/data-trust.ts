@@ -198,3 +198,18 @@ export function resolveLatestImportedDate(sources: { enabled: boolean; lastImpor
   }
   return latest;
 }
+
+/** Instante mais recente entre `last_success_at` das fontes HABILITADAS —
+ * mesma regra/formato de `resolveLatestImportedDate`, só sobre o OUTRO dos
+ * 3 campos que este módulo reflete (ver doc-comment do arquivo): "quando a
+ * sincronização rodou com sucesso", sempre distinto de "até quando o dado é
+ * real". `null` = nenhuma fonte habilitada sincronizou com sucesso ainda
+ * (nunca inferido de nenhum outro campo). */
+export function resolveLatestSuccessAt(sources: { enabled: boolean; lastSuccessAt: string | null }[]): string | null {
+  let latest: string | null = null;
+  for (const source of sources) {
+    if (!source.enabled || !source.lastSuccessAt) continue;
+    if (!latest || source.lastSuccessAt > latest) latest = source.lastSuccessAt;
+  }
+  return latest;
+}
