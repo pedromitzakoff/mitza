@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
 import { resolveMonthPeriodSummary, type FinancialPeriodSummary } from "@/lib/financial-period";
 import type { SpendStatus } from "@/lib/spend-status";
@@ -16,8 +15,7 @@ import {
   COCKPIT_TONE_BADGE_CLASSES,
 } from "@/lib/cockpit-pace";
 import { DashboardBudget, type DashboardBudgetChannel } from "./dashboard-budget";
-import { ChannelPlanEditor } from "./channel-plan-editor";
-import { CockpitSecondaryGoalEditor } from "./cockpit-secondary-goal-editor";
+import { GoalEditTrigger } from "./cockpit-goal-edit-trigger";
 
 /**
  * MITZA ONE — Refinamento do Cockpit (seção 2 do pedido): dados pra abrir o
@@ -31,6 +29,13 @@ import { CockpitSecondaryGoalEditor } from "./cockpit-secondary-goal-editor";
  * trava de `set_goal_monthly_target`). `null` em qualquer card = sem
  * permissão de edição aqui (não-admin ou mês encerrado) — nenhum lápis
  * aparece.
+ *
+ * CORREÇÃO DE PRODUÇÃO: `GoalEditTrigger` (que efetivamente monta o lápis +
+ * o editor) mora em `cockpit-goal-edit-trigger.tsx` ("use client") — este
+ * arquivo (`cockpit-meta-ritmo-section.tsx`) continua Server Component e só
+ * passa dados serializáveis (`edit`/`label`) pra baixo, nunca mais uma
+ * função como prop cruzando a fronteira Server->Client (isso derrubava toda
+ * página de cliente pra admins em mês aberto — ver nota no outro arquivo).
  */
 export interface CockpitGoalEditAffordance {
   kind: "primary" | "secondary";
@@ -43,55 +48,6 @@ export interface CockpitGoalEditAffordance {
   byChannel: Partial<Record<TrafficChannel, ChannelMetrics>>;
   performanceGoal: PerformanceGoal;
   returnTo: string;
-}
-
-function GoalPencilButton({ onClick, label }: { onClick: () => void; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className="mitza-pressable rounded-md p-0.5 text-overview-text-secondary hover:bg-overview-surface-hover hover:text-overview-text-primary"
-    >
-      ✎
-    </button>
-  );
-}
-
-/** Um lápis, um editor — sempre o mesmo par oficial por objetivo (seção 2
- * do pedido: "reaproveitar ações/validações/estruturas de dados
- * existentes"). Usado tanto pelo card RESULTADO quanto pelo card CUSTO POR
- * RESULTADO do objetivo PRINCIPAL (o mesmo `ChannelPlanEditor` cobre
- * Investimento + Resultado + Custo numa só calculadora — dois lápis, dois
- * pontos de entrada, nunca dois editores/dados diferentes). */
-function GoalEditTrigger({ edit, label }: { edit: CockpitGoalEditAffordance; label: string }) {
-  if (edit.kind === "primary") {
-    return (
-      <ChannelPlanEditor
-        clientId={edit.clientId}
-        monthParam={edit.monthParam}
-        monthLabel={edit.monthLabel}
-        monthRange={edit.monthRange}
-        currentPlanningEndDate={edit.currentPlanningEndDate}
-        channels={edit.channels}
-        byChannel={edit.byChannel}
-        performanceGoal={edit.performanceGoal}
-        trigger={(open) => <GoalPencilButton onClick={open} label={label} />}
-      />
-    );
-  }
-
-  return (
-    <CockpitSecondaryGoalEditor
-      trigger={(open: () => void): ReactNode => <GoalPencilButton onClick={open} label={label} />}
-      clientId={edit.clientId}
-      returnTo={edit.returnTo}
-      resultType={edit.performanceGoal}
-      monthFirstDay={edit.monthRange.firstDay}
-      channels={edit.channels}
-      currentTargetByChannel={edit.byChannel}
-    />
-  );
 }
 
 /**
