@@ -5,7 +5,12 @@ import { createPortal } from "react-dom";
 import { formatCurrency, formatCount, formatShortDate } from "@/lib/format";
 import { formatCostMetric } from "@/lib/performance";
 import type { PerformanceGoal } from "@/lib/performance-goals";
-import { describeCockpitDailyPointState, type CockpitDailyEvolutionPoint } from "@/lib/cockpit-daily-evolution";
+import {
+  buildNormalizedLineSegments,
+  describeCockpitDailyPointState,
+  type CockpitDailyEvolutionPoint,
+  type NormalizedLinePoint,
+} from "@/lib/cockpit-daily-evolution";
 
 export interface CockpitDailyEvolutionSeriesView {
   resultType: PerformanceGoal;
@@ -34,11 +39,44 @@ export type CockpitDailyEvolutionView =
   | { kind: "unavailable" }
   | { kind: "available"; series: CockpitDailyEvolutionSeriesView[]; freshness: CockpitDailyEvolutionFreshnessView };
 
-const BAR_AREA_HEIGHT_PX = 108;
+/**
+ * MITZA ONE — Refinamento visual e analítico da Evolução Diária. Layout em
+ * colunas de LARGURA FIXA (em vez do `flex-1` elástico de antes) — condição
+ * necessária pra desenhar as linhas de Investimento/Custo por resultado
+ * (SVG) alinhadas pixel a pixel com as barras, sem depender de medir o DOM
+ * em runtime. A altura do gráfico (`CHART_AREA_HEIGHT_PX`) continua a
+ * mesma de antes (seção 6 do pedido: "manter... aproximadamente na altura
+ * atual") — só a largura deixou de se esticar pra preencher o contêiner em
+ * telas largas.
+ */
+const CHART_AREA_HEIGHT_PX = 108;
+const LABEL_ROW_HEIGHT_PX = 16;
 const BAR_MIN_HEIGHT_PX = 3;
+const DAY_COLUMN_WIDTH_PX = 20;
+const BAR_RECT_WIDTH_PX = 14;
+const LINE_STROKE_WIDTH_PX = 1.5;
+const LINE_MARKER_RADIUS_PX = 1.5;
+
+/** Visibilidade de cada série — controlada pela legenda interativa (seção 3
+ * do pedido), nunca exige reload (estado local do componente). Padrão
+ * segue a sugestão explícita do pedido (seção 2): "priorizar barras de
+ * resultado + linha de custo por resultado e disponibilizar investimento
+ * por alternância" — as 3 escalas simultâneas por padrão comprometeriam a
+ * leitura num espaço compacto; investimento continua disponível, só não
+ * começa marcado. */
+interface SeriesVisibility {
+  result: boolean;
+  investment: boolean;
+  cpl: boolean;
+}
+const DEFAULT_SERIES_VISIBILITY: SeriesVisibility = { result: true, investment: false, cpl: true };
 
 function formatDayLabel(date: string): string {
   return date.slice(8, 10);
+}
+
+function linePointsToPathD(points: NormalizedLinePoint[]): string {
+  return points.map((p, index) => `${index === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
 }
 
 /** Último ponto com `state === "result"` dentre os últimos `count`
@@ -66,33 +104,15 @@ const TOOLTIP_ANCHOR_GAP_PX = 6;
  * definir `overflow-x` como algo diferente de `visible` força o
  * `overflow-y` (que ficava `visible` na prática) a virar `auto` também —
  * o contêiner passa a cortar QUALQUER conteúdo que estoure sua altura,
- * inclusive um tooltip que sobe acima da barra. Era exatamente esse corte
- * visto no topo do tooltip (nunca `z-index`: o tooltip já vencia a pilha,
- * só não tinha como aparecer fora da CAIXA que o cortava).
+ * inclusive um tooltip que sobe acima da barra.
  *
  * Correção: `createPortal` pro `document.body` (mesma técnica já usada
  * pelo `Tooltip` oficial da plataforma, `components/ui/tooltip.tsx`) +
  * posicionamento calculado via `getBoundingClientRect` do próprio gatilho,
- * nunca CSS relativo a um ancestral que pode cortar. Como o tooltip some
- * da árvore de layout da barra (só existe em `document.body`, com
- * `position: fixed`), ele nunca altera a altura/largura do gráfico nem
- * provoca rolagem nova — só se sobrepõe visualmente ao conteúdo da página.
- *
- * Posicionamento "inteligente": prefere ACIMA do gatilho; se não houver
- * espaço (barra do dia 01 bem no topo da viewport, por exemplo — raro,
- * mas a regra é geométrica, não por índice do dia), abre ABAIXO. Na
- * horizontal, centra no gatilho mas sempre dentro da viewport (`clamp`
- * entre `TOOLTIP_VIEWPORT_MARGIN_PX` e a borda direita) — cobre as barras
- * das EXTREMIDADES do gráfico (dia 01 e dia 31), que antes empurravam o
- * tooltip pra fora da área visível/rolável.
- *
- * Mede o próprio tooltip (`tooltipRef`) em vez de estimar altura/largura —
- * funciona igual pra qualquer barra (seção 2 do pedido de correção:
- * "independentemente da altura da barra selecionada") e pra qualquer
- * conteúdo (tooltip de `no_data`/`future`, com só 2 linhas, é mais baixo
- * que o de `result`, com até 6). `useLayoutEffect` mede e reposiciona ANTES
- * do navegador pintar a tela — o tooltip só fica `visible` depois de já
- * estar na posição certa, nunca aparece "pulando" de um canto pro outro.
+ * nunca CSS relativo a um ancestral que pode cortar. Funciona
+ * independente de qual série esteja visível (seção 4 do pedido) — o
+ * gatilho (o `<button>` de cada dia) nunca some, só o CONTEÚDO visual da
+ * barra dentro dele depende da visibilidade.
  */
 function SmartTooltip({
   anchorRef,
@@ -124,8 +144,6 @@ function SmartTooltip({
       let top = fitsAbove
         ? anchorRect.top - tooltipHeight - TOOLTIP_ANCHOR_GAP_PX
         : anchorRect.bottom + TOOLTIP_ANCHOR_GAP_PX;
-      // Mesmo abrindo abaixo, nunca deixa estourar o rodapé da viewport
-      // (ex.: gráfico perto do fim da página numa tela baixa).
       top = Math.min(top, window.innerHeight - tooltipHeight - TOOLTIP_VIEWPORT_MARGIN_PX);
       top = Math.max(top, TOOLTIP_VIEWPORT_MARGIN_PX);
 
@@ -154,12 +172,57 @@ function SmartTooltip({
   );
 }
 
+/**
+ * Legenda interativa (seção 3 do pedido) — 3 botões (um por série), cada um
+ * com um selo que já indica o TIPO de série (quadrado = barra, traço =
+ * linha), nunca só a cor. `aria-pressed` reflete o estado ligado/desligado
+ * pra leitor de tela; alternar é estado local (`useState` no componente
+ * pai), nunca um reload.
+ */
+function SeriesLegend({
+  resultLabel,
+  costLabel,
+  visibility,
+  onToggle,
+}: {
+  resultLabel: string;
+  costLabel: string;
+  visibility: SeriesVisibility;
+  onToggle: (key: keyof SeriesVisibility) => void;
+}) {
+  const items: { key: keyof SeriesVisibility; label: string; swatch: ReactNode }[] = [
+    { key: "result", label: resultLabel, swatch: <span aria-hidden="true" className="h-2 w-2 rounded-sm bg-green-500 dark:bg-green-400" /> },
+    { key: "investment", label: "Investimento", swatch: <span aria-hidden="true" className="h-0.5 w-3 rounded-full bg-blue-500 dark:bg-blue-400" /> },
+    { key: "cpl", label: costLabel, swatch: <span aria-hidden="true" className="h-0.5 w-3 rounded-full bg-orange-500 dark:bg-orange-400" /> },
+  ];
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Séries exibidas no gráfico">
+      {items.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          aria-pressed={visibility[item.key]}
+          onClick={() => onToggle(item.key)}
+          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-opacity ${
+            visibility[item.key] ? "bg-overview-surface-subtle text-overview-text-primary" : "text-overview-text-muted opacity-50"
+          }`}
+        >
+          {item.swatch}
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function DailyEvolutionBar({
   point,
   heightPx,
   resultLabel,
   costLabel,
   dailyTarget,
+  showResult,
   isOpen,
   onOpen,
   onCloseIfOpen,
@@ -170,6 +233,11 @@ function DailyEvolutionBar({
   resultLabel: string;
   costLabel: string;
   dailyTarget: number | null;
+  /** Visibilidade da série "Resultado" (legenda) — o `<button>` (área de
+   * toque/tooltip) NUNCA desaparece quando desligada (seção 4 do pedido:
+   * "o tooltip deve funcionar independentemente de qual série esteja
+   * visível"); só o retângulo/ponto visual da barra some. */
+  showResult: boolean;
   isOpen: boolean;
   /** Abre SEMPRE este dia (nunca um toggle) — hover/foco/toque entrando
    * aqui simplesmente afirmam "este é o tooltip ativo agora"; trocar de
@@ -185,8 +253,11 @@ function DailyEvolutionBar({
   const anchorRef = useRef<HTMLButtonElement | null>(null);
 
   return (
-    <div className="flex min-w-[18px] flex-1 flex-col items-center gap-1" style={{ height: BAR_AREA_HEIGHT_PX + 16 }}>
-      <div className="flex w-full flex-1 items-end justify-center">
+    <div
+      className="flex shrink-0 flex-col items-center gap-1"
+      style={{ width: DAY_COLUMN_WIDTH_PX, height: CHART_AREA_HEIGHT_PX + LABEL_ROW_HEIGHT_PX }}
+    >
+      <div className="relative flex w-full items-end justify-center" style={{ height: CHART_AREA_HEIGHT_PX }}>
         <button
           ref={anchorRef}
           type="button"
@@ -199,14 +270,18 @@ function DailyEvolutionBar({
             if (event.key === "Escape") onCloseAll();
           }}
           aria-label={`${formatShortDate(point.date)}: ${describeCockpitDailyPointState(point)}`}
-          className={
-            point.state === "result"
-              ? `w-full rounded-sm transition-colors ${point.resultCount === 0 ? "bg-overview-border" : "bg-overview-brand-subtle hover:bg-brand"}`
-              : "flex h-full w-full items-end justify-center"
-          }
-          style={point.state === "result" ? { height: `${heightPx}px` } : undefined}
+          className="group flex h-full w-full items-end justify-center"
         >
-          {point.state === "no_data" && <span className="mb-0.5 h-1 w-1 rounded-full bg-overview-text-muted/50" />}
+          {point.state === "result" && showResult && (
+            <span
+              aria-hidden="true"
+              className={`rounded-sm transition-colors ${
+                point.resultCount === 0 ? "bg-overview-border" : "bg-green-500 group-hover:bg-green-600 dark:bg-green-400 dark:group-hover:bg-green-300"
+              }`}
+              style={{ width: BAR_RECT_WIDTH_PX, height: `${heightPx}px` }}
+            />
+          )}
+          {point.state === "no_data" && showResult && <span aria-hidden="true" className="mb-0.5 h-1 w-1 rounded-full bg-overview-text-muted/50" />}
         </button>
       </div>
       <span className="text-[9px] text-overview-text-muted">{formatDayLabel(point.date)}</span>
@@ -231,42 +306,133 @@ function DailyEvolutionBar({
   );
 }
 
+/**
+ * MITZA ONE — Refinamento visual e analítico da Evolução Diária: gráfico
+ * combinado — barras de Resultado + linhas de Investimento e Custo por
+ * resultado, cada série com cor própria (verde/azul/laranja, seção 1 do
+ * pedido) e visibilidade controlada pela legenda (seção 3).
+ *
+ * Escalas (seção 2 do pedido): as 3 métricas têm unidades diferentes
+ * (contagem, R$, R$/resultado) — NUNCA desenhadas sobre a mesma régua. As
+ * barras/meta diária continuam na escala REAL de resultado (igual a
+ * antes); as duas linhas são normalizadas (0–1 do PRÓPRIO máximo na
+ * janela, nunca a escala do resultado) e identificadas como tal pela nota
+ * abaixo do gráfico — nunca uma normalização silenciosa. Os valores REAIS
+ * de todas as séries continuam só no tooltip (seção 4), nunca lidos a
+ * partir da altura normalizada da linha.
+ */
 function DailyEvolutionChart({ series }: { series: CockpitDailyEvolutionSeriesView }) {
   const { points, dailyTarget, resultLabel, costLabel } = series;
   // Só UM tooltip ativo por vez (mutuamente exclusivo entre as ~31 barras) —
   // trocar de barra fecha a anterior automaticamente, nunca dois tooltips
   // abertos ao mesmo tempo.
   const [activeDate, setActiveDate] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<SeriesVisibility>(DEFAULT_SERIES_VISIBILITY);
 
   const maxValue = Math.max(...points.map((p) => p.resultCount ?? 0), dailyTarget ?? 0, 1);
-  const targetLinePct = dailyTarget !== null ? Math.min(100, (dailyTarget / maxValue) * 100) : null;
+  const targetTopPx =
+    dailyTarget !== null ? CHART_AREA_HEIGHT_PX - Math.min(CHART_AREA_HEIGHT_PX, (dailyTarget / maxValue) * CHART_AREA_HEIGHT_PX) : null;
   const stats = resolveStatsFromPoints(points);
+
+  const maxSpend = Math.max(...points.map((p) => p.spend ?? 0), 1);
+  const maxCpl = Math.max(...points.map((p) => p.costPerResult ?? 0), 1);
+  const investmentLine = buildNormalizedLineSegments({
+    values: points.map((p) => p.spend),
+    maxValue: maxSpend,
+    columnWidthPx: DAY_COLUMN_WIDTH_PX,
+    areaHeightPx: CHART_AREA_HEIGHT_PX,
+  });
+  const cplLine = buildNormalizedLineSegments({
+    values: points.map((p) => p.costPerResult),
+    maxValue: maxCpl,
+    columnWidthPx: DAY_COLUMN_WIDTH_PX,
+    areaHeightPx: CHART_AREA_HEIGHT_PX,
+  });
+
+  const totalWidthPx = points.length * DAY_COLUMN_WIDTH_PX;
 
   return (
     <div>
-      <div className="relative mt-2 flex items-end gap-1 overflow-x-auto pb-1" style={{ height: BAR_AREA_HEIGHT_PX + 28 }}>
-        {targetLinePct !== null && (
-          <div
+      <SeriesLegend
+        resultLabel={resultLabel}
+        costLabel={costLabel}
+        visibility={visibility}
+        onToggle={(key) => setVisibility((prev) => ({ ...prev, [key]: !prev[key] }))}
+      />
+
+      <div className="relative mt-2 overflow-x-auto pb-1">
+        <div className="relative flex items-start" style={{ width: totalWidthPx }}>
+          {targetTopPx !== null && visibility.result && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute left-0 border-t border-dashed border-overview-border"
+              style={{ top: `${targetTopPx}px`, width: totalWidthPx }}
+            />
+          )}
+
+          <svg
             aria-hidden="true"
-            className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-overview-border"
-            style={{ bottom: `${targetLinePct}%`, height: BAR_AREA_HEIGHT_PX }}
-          />
-        )}
-        {points.map((point) => (
-          <DailyEvolutionBar
-            key={point.date}
-            point={point}
-            heightPx={point.state === "result" ? Math.max(((point.resultCount ?? 0) / maxValue) * BAR_AREA_HEIGHT_PX, BAR_MIN_HEIGHT_PX) : 0}
-            resultLabel={resultLabel}
-            costLabel={costLabel}
-            dailyTarget={dailyTarget}
-            isOpen={activeDate === point.date}
-            onOpen={() => setActiveDate(point.date)}
-            onCloseIfOpen={() => setActiveDate((prev) => (prev === point.date ? null : prev))}
-            onCloseAll={() => setActiveDate(null)}
-          />
-        ))}
+            className="pointer-events-none absolute left-0 top-0"
+            width={totalWidthPx}
+            height={CHART_AREA_HEIGHT_PX}
+            viewBox={`0 0 ${totalWidthPx} ${CHART_AREA_HEIGHT_PX}`}
+            preserveAspectRatio="none"
+          >
+            {visibility.investment &&
+              investmentLine.segments.map((segment, index) => (
+                <path
+                  key={`investment-${index}`}
+                  d={linePointsToPathD(segment)}
+                  fill="none"
+                  className="stroke-blue-500 dark:stroke-blue-400"
+                  strokeWidth={LINE_STROKE_WIDTH_PX}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ))}
+            {visibility.investment &&
+              investmentLine.markers.map((marker, index) => (
+                <circle key={`investment-marker-${index}`} cx={marker.x} cy={marker.y} r={LINE_MARKER_RADIUS_PX} className="fill-blue-500 dark:fill-blue-400" />
+              ))}
+            {visibility.cpl &&
+              cplLine.segments.map((segment, index) => (
+                <path
+                  key={`cpl-${index}`}
+                  d={linePointsToPathD(segment)}
+                  fill="none"
+                  className="stroke-orange-500 dark:stroke-orange-400"
+                  strokeWidth={LINE_STROKE_WIDTH_PX}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ))}
+            {visibility.cpl &&
+              cplLine.markers.map((marker, index) => (
+                <circle key={`cpl-marker-${index}`} cx={marker.x} cy={marker.y} r={LINE_MARKER_RADIUS_PX} className="fill-orange-500 dark:fill-orange-400" />
+              ))}
+          </svg>
+
+          {points.map((point) => (
+            <DailyEvolutionBar
+              key={point.date}
+              point={point}
+              heightPx={point.state === "result" ? Math.max(((point.resultCount ?? 0) / maxValue) * CHART_AREA_HEIGHT_PX, BAR_MIN_HEIGHT_PX) : 0}
+              resultLabel={resultLabel}
+              costLabel={costLabel}
+              dailyTarget={dailyTarget}
+              showResult={visibility.result}
+              isOpen={activeDate === point.date}
+              onOpen={() => setActiveDate(point.date)}
+              onCloseIfOpen={() => setActiveDate((prev) => (prev === point.date ? null : prev))}
+              onCloseAll={() => setActiveDate(null)}
+            />
+          ))}
+        </div>
       </div>
+
+      {(visibility.investment || visibility.cpl) && (
+        <p className="mt-1 text-[10px] text-overview-text-muted">Linhas em escala relativa (própria de cada série) — valores reais no tooltip.</p>
+      )}
 
       <p className="mt-1 text-xs text-overview-text-secondary">
         Hoje {stats.today ? formatCount(stats.today.resultCount ?? 0) : "—"} · Ontem {stats.yesterday ? formatCount(stats.yesterday.resultCount ?? 0) : "—"} · Média 7d{" "}
@@ -278,20 +444,11 @@ function DailyEvolutionChart({ series }: { series: CockpitDailyEvolutionSeriesVi
 
 /**
  * MITZA ONE — Evolução Diária no Cockpit: posicionada depois de Meta & Ritmo
- * e Diagnóstico, antes dos Canais (seção 1 do pedido). Combina barras
- * (resultado realizado por dia) + referência de meta diária, quando
- * disponível — nunca investimento/CPL/CPA no próprio gráfico (seção 2 do
- * pedido deixa a linha de custo OPCIONAL, "somente se melhorar a leitura";
- * num espaço de ~280px com 28-31 barras, uma segunda linha com eixo próprio
- * prejudicaria a legibilidade mais do que ajudaria — decisão documentada no
- * relatório de entrega). Investimento/CPL/CPA ficam só no tooltip, onde o
- * pedido já os exige de qualquer forma.
- *
- * Múltiplos objetivos (seção 4 do pedido): um botão compacto por objetivo
- * quando o cliente tem mais de um configurado — nunca soma leads com
- * vendas, nunca um seletor de CANAL (isso continua proibido; aqui é só
- * objetivo, já resolvido por `groupChannelsByResultType`, nenhuma segunda
- * regra de agrupamento).
+ * e Diagnóstico, antes dos Canais (seção 1 do pedido original). Múltiplos
+ * objetivos: um botão compacto por objetivo quando o cliente tem mais de um
+ * configurado — nunca soma leads com vendas, nunca um seletor de CANAL
+ * (isso continua proibido; aqui é só objetivo, já resolvido por
+ * `groupChannelsByResultType`, nenhuma segunda regra de agrupamento).
  */
 export function CockpitDailyEvolutionSection({ view }: { view: CockpitDailyEvolutionView }) {
   const [selectedGoal, setSelectedGoal] = useState<PerformanceGoal | null>(

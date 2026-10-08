@@ -122,6 +122,65 @@ export function resolveDailyTargetResultCount(targetResultCount: number | null, 
   return targetResultCount / daysInMonth;
 }
 
+export interface NormalizedLinePoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * MITZA ONE — Refinamento visual e analítico da Evolução Diária (seção 2 do
+ * pedido: "investigar a melhor solução de visualização... normalização
+ * claramente identificada"). Núcleo puro de GEOMETRIA — converte uma série
+ * (investimento ou custo por resultado) em segmentos de linha SVG, cada um
+ * já normalizado pra escala PRÓPRIA da série (0–1 do próprio máximo, nunca
+ * a mesma escala do resultado/barras — três métricas, três escalas,
+ * nenhuma desenhada sobre a mesma régua). Isto NUNCA calcula/transforma o
+ * dado em si (investimento/CPL continuam saindo de `buildCockpitDailyEvolutionPoints`,
+ * sem nenhuma segunda fórmula aqui) — só decide ONDE desenhar o ponto já
+ * calculado.
+ *
+ * Nunca conecta através de um "gap" (seção 5 do pedido: "não ligar linhas
+ * através de períodos sem dados como se houvesse continuidade comprovada")
+ * — cada segmento devolvido é uma sequência MÁXIMA de dias consecutivos com
+ * valor válido (`null` quebra a sequência, nunca é interpolado/pulado). Um
+ * dia isolado entre dois gaps ainda aparece como marcador (`markers`), só
+ * não gera uma linha (um segmento de 1 ponto não desenha nada visível).
+ */
+export function buildNormalizedLineSegments(input: {
+  /** Um valor por dia, alinhado 1:1 com `windowDates` — `null` = sem valor
+   * válido pra essa série nesse dia (vira gap, nunca um `0` fabricado). */
+  values: (number | null)[];
+  /** Máximo da PRÓPRIA série na janela — `<= 0` significa "nada pra
+   * desenhar" (nenhum segmento/marcador, nunca uma divisão por zero). */
+  maxValue: number;
+  columnWidthPx: number;
+  areaHeightPx: number;
+}): { segments: NormalizedLinePoint[][]; markers: NormalizedLinePoint[] } {
+  const { values, maxValue, columnWidthPx, areaHeightPx } = input;
+  const segments: NormalizedLinePoint[][] = [];
+  const markers: NormalizedLinePoint[] = [];
+  if (maxValue <= 0) return { segments, markers };
+
+  let current: NormalizedLinePoint[] = [];
+  for (let index = 0; index < values.length; index++) {
+    const value = values[index];
+    if (value === null) {
+      if (current.length > 0) segments.push(current);
+      current = [];
+      continue;
+    }
+    const point: NormalizedLinePoint = {
+      x: index * columnWidthPx + columnWidthPx / 2,
+      y: areaHeightPx - (value / maxValue) * areaHeightPx,
+    };
+    current.push(point);
+    markers.push(point);
+  }
+  if (current.length > 0) segments.push(current);
+
+  return { segments, markers };
+}
+
 /**
  * "Estado de disponibilidade dos dados" do tooltip (seção 3 do pedido) —
  * núcleo puro extraído do componente pra ser testável sem DOM. Os 4 textos

@@ -318,8 +318,8 @@ console.log("\nJ.2 — Correção do tooltip (Etapa 'Correção do tooltip da Ev
     /import \{[^}]*\buseLayoutEffect\b[^}]*\} from "react"/.test(sectionSource),
   );
   ok(
-    "o tooltip nunca é filho do contêiner rolável (overflow-x-auto) — a linha de barras continua existindo, mas o tooltip sai da árvore de layout via Portal, nunca altera largura/altura do gráfico nem provoca rolagem nova",
-    sectionSource.includes('overflow-x-auto pb-1" style={{ height: BAR_AREA_HEIGHT_PX + 28 }}'),
+    "o contêiner rolável (overflow-x-auto) continua existindo pra linha de barras — o tooltip sai da árvore de layout via Portal (document.body, já confirmado acima), nunca altera largura/altura do gráfico nem provoca rolagem nova",
+    sectionSource.includes('className="relative mt-2 overflow-x-auto pb-1"'),
   );
   ok(
     "só um tooltip ativo por vez entre as barras (activeDate, mutuamente exclusivo) — trocar de barra fecha a anterior sozinho, nunca dois abertos ao mesmo tempo",
