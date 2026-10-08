@@ -37,7 +37,17 @@ console.log("\nA — Sidebar (seção 1 do pedido): Operação removida da área
   ok("'Timeline' continua na área Agência", /label: "Timeline", href: "\/timeline"/.test(sidebarSource));
   ok("AGENCIA_ITEMS tem exatamente 2 itens agora (Demandas, Timeline)", /const AGENCIA_ITEMS: NavItem\[\] = \[\s*\{ label: "Demandas"[\s\S]*?\},\s*\{ label: "Timeline"[\s\S]*?\},\s*\];/.test(sidebarSource));
   ok("Gestão (Clientes/Equipe/Configurações) continua intocada", /label: "Clientes", href: "\/clients"/.test(sidebarSource) && /label: "Equipe", href: "\/team"/.test(sidebarSource) && /label: "Configurações", href: "\/settings", icon: Settings, adminOnly: true/.test(sidebarSource));
-  ok("ícone ListChecks (usado só pelo item Operação removido) não ficou importado sem uso", !/\bListChecks\b/.test(sidebarSource));
+  // MITZA ONE — Minha Rotina: ListChecks voltou a ser importado, agora pro
+  // item "Minha Rotina" (ícone de checklist, seção 1 daquele pedido) —
+  // reaproveitado de propósito, nunca um import morto. A checagem real
+  // desta etapa (Simplificação da Operação) é que o import não sobrevivia
+  // SEM USO depois de remover "Operação"; com um consumidor legítimo novo,
+  // a invariante correta é "todo ListChecks importado é usado", não mais
+  // "ListChecks nunca aparece".
+  ok(
+    "ícone ListChecks, quando presente, está de fato em uso (import morto nunca sobrevive) — hoje é o item 'Minha Rotina', não mais 'Operação'",
+    !/\bListChecks\b/.test(sidebarSource) || (sidebarSource.includes("ListChecks,") && sidebarSource.includes("icon: ListChecks")),
+  );
   ok("rota /operation NÃO foi excluída do disco", fileExists("src", "app", "operation", "page.tsx") && fileExists("src", "app", "clients", "[id]", "operation", "page.tsx"));
 }
 

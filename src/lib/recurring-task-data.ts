@@ -32,6 +32,21 @@ export interface RecurringTaskListItem {
    * `today` está disponível), pra a linha não precisar de mais uma prop só
    * pra isso. */
   nextExecutionLabel: string;
+  /** Data (YYYY-MM-DD) por trás de `nextExecutionLabel` — `null` quando não
+   * há próxima execução a mostrar (sem meta configurada ou meta já batida).
+   * MITZA ONE — Minha Rotina: é o que permite decidir balde (hoje/semana)
+   * sem re-formatar `nextExecutionLabel`. Consumidores existentes
+   * (`/sprints`) continuam usando só o label, este campo é aditivo. */
+  nextExecutionDate: string | null;
+  /** MITZA ONE — Minha Rotina (seção 2 do pedido): decide se a execução é
+   * registrável em UM clique (`registerRecurringExecutionAction` sem
+   * nenhum campo extra) ou precisa abrir o fluxo oficial (checklist/
+   * diagnóstico/Report) — nunca inferido, sempre os mesmos 3 campos que já
+   * existem em `recurring_tasks`. Aditivo: `RecurringTaskRow` (`/sprints`)
+   * não lê estes campos, comportamento existente intocado. */
+  hasChecklist: boolean;
+  usesAccountReview: boolean;
+  usesReport: boolean;
 }
 
 /**
@@ -62,7 +77,10 @@ export async function fetchRecurringTaskListsForSprints(
 
   const [activeTasks, clientScopeRows] = await Promise.all([
     requireQuery(
-      supabase.from("recurring_tasks").select("id, title, icon, color, applies_to_all, cadence_mode, fixed_weekdays").eq("is_active", true),
+      supabase
+        .from("recurring_tasks")
+        .select("id, title, icon, color, applies_to_all, cadence_mode, fixed_weekdays, has_checklist, uses_account_review, uses_report")
+        .eq("is_active", true),
       "recurring_tasks",
     ),
     requireQuery(supabase.from("recurring_task_clients").select("recurring_task_id, client_id"), "recurring_task_clients"),
@@ -118,7 +136,18 @@ export async function fetchRecurringTaskListsForSprints(
         const nextExecution = computeNextExecutionDate(sprint, goal, progress.done, today, toCadence(task));
         const nextExecutionLabel = formatNextExecutionLabel(nextExecution, today);
 
-        return { id: task.id, title: task.title, icon: task.icon, color: task.color, progress, nextExecutionLabel };
+        return {
+          id: task.id,
+          title: task.title,
+          icon: task.icon,
+          color: task.color,
+          progress,
+          nextExecutionLabel,
+          nextExecutionDate: nextExecution.date,
+          hasChecklist: task.has_checklist,
+          usesAccountReview: task.uses_account_review,
+          usesReport: task.uses_report,
+        };
       })
       .sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
 

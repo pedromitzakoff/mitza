@@ -491,6 +491,7 @@ export async function completeTaskAction(taskId: string, clientId: string | null
   revalidatePath("/sprints");
   revalidatePath("/clients");
   revalidatePath("/demandas");
+  revalidatePath("/minha-rotina");
   revalidatePath("/");
 
   return {};

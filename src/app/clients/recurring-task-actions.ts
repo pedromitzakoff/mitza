@@ -146,5 +146,6 @@ export async function registerRecurringExecutionAction(
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/sprints");
+  revalidatePath("/minha-rotina");
   redirect(returnTo);
 }
