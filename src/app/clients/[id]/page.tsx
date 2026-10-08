@@ -7,14 +7,11 @@ import { requireQuery } from "@/lib/require-query";
 import {
   assertSingleCurrentSprint,
   currentMonthRange,
-  findSprintForDate,
-  getSprintTemporalStatus,
   monthRangeFromParam,
   shiftMonthParam,
   sumActualSpendForMonth,
   sumPlannedForMonth,
 } from "@/lib/sprint-financials";
-import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
 import {
   resolveBudgetEffectiveDate,
@@ -33,7 +30,7 @@ import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { sumChannelEffectiveSpend, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatRelativeDateTime, formatShortDate } from "@/lib/format";
+import { formatShortDate } from "@/lib/format";
 import { contractStatusBannerText } from "@/lib/client-fields";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
@@ -48,7 +45,6 @@ import { MonthSelect } from "../month-select";
 import { DashboardChannelSection, type DashboardChannelDataIssue } from "../dashboard-channel-section";
 import { countOpenDemandas } from "@/lib/pendencias";
 import { loadPendenciasRawData } from "@/app/demandas/pendencias-data";
-import { ACCOUNT_REVIEW_OUTCOME_LABEL } from "@/lib/account-reviews";
 import { WorkspaceContainer } from "../workspace-container";
 import { IconButton } from "@/components/workspace/button";
 import { buildMetasHref } from "./metas/page";
@@ -61,10 +57,9 @@ import { buildPerformanceReportData } from "@/lib/performance-report/report-data
 import { buildPeriodReading } from "@/lib/performance-report/report-derivatives";
 import { CockpitResultCard, CockpitCostCard, CockpitBudgetCard, type CockpitResultCardView, type CockpitCostCardView } from "../cockpit-meta-ritmo-section";
 import { CockpitDiagnosticsCard } from "../cockpit-diagnostics-card";
-import { CockpitExecutionSection } from "../cockpit-execution-section";
+import { CockpitDemandasSection } from "../cockpit-demandas-section";
 import { CockpitPerformanceSection, type CockpitPerformanceView } from "../cockpit-performance-section";
 import { CockpitHistorySection } from "../cockpit-history-section";
-import { RecordAccountReviewDrawer } from "../record-account-review-drawer";
 import { buildCockpitDailyEvolutionPoints, resolveDailyTargetResultCount } from "@/lib/cockpit-daily-evolution";
 import {
   CockpitDailyEvolutionSection,
@@ -157,12 +152,10 @@ export default async function ClientPage({
     synced?: string;
     saved?: string;
     month?: string;
-    review?: string;
-    reviewError?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, synced, saved, month: monthQueryParam, review, reviewError } = await searchParams;
+  const { error, synced, saved, month: monthQueryParam } = await searchParams;
 
   function buildContextHref(overrides: { month?: string }): string {
     return buildClientContextHref(id, { month: monthQueryParam }, overrides);
@@ -201,8 +194,6 @@ export default async function ClientPage({
   const monthParam = firstDay.slice(0, 7);
   const prevMonthHref = buildContextHref({ month: shiftMonthParam({ firstDay }, -1) });
   const nextMonthHref = buildContextHref({ month: shiftMonthParam({ firstDay }, 1) });
-  const returnTo = buildContextHref({});
-  const registerReviewHref = `${returnTo}${returnTo.includes("?") ? "&" : "?"}review=new`;
 
   const [
     sprintsRaw,
@@ -217,7 +208,6 @@ export default async function ClientPage({
     dailyPerformanceRowsForEvolution,
     [clientOperationalState],
     pendenciasRawData,
-    accountReviewRows,
     timelinePageResult,
     performanceReportData,
   ] = await Promise.all([
@@ -283,7 +273,7 @@ export default async function ClientPage({
       // `getDailySpendRowsForPeriod` (`date, spend, channel`), reaproveitado
       // sem uma segunda busca.
       getDailyPerformanceRowsForPeriod(supabase, id, { firstDay, lastDay }),
-      // Etapa "Otimização de carregamento — Item 1 (Cockpit)": as 5 consultas
+      // Etapa "Otimização de carregamento — Item 1 (Cockpit)": as consultas
       // abaixo não dependem de NENHUM resultado do batch acima (só de
       // `id`/`firstDay`/`lastDay`/`today`/`profile`, já resolvidos antes
       // deste Promise.all) — antes rodavam em sequência, cada uma depois da
@@ -294,17 +284,17 @@ export default async function ClientPage({
       // deste Promise.all e só roda depois de `sprints`/`dailySpend`/
       // `primaryBudgetChanges` estarem calculados — nunca em paralelo com
       // uma leitura que dependa dela.
+      //
+      // Etapa "Simplificação da Operação" (seção 3 do pedido: "evitar
+      // consultas... exclusivamente destinadas a componentes que não serão
+      // mais renderizados"): a query de `account_reviews` pra "Última
+      // otimização" saiu de aqui — era usada SÓ pela seção visual de
+      // Operação removida do Cockpit (ver `cockpit-demandas-section.tsx`).
+      // A tabela `account_reviews`, o motor de revisões e `/operation`
+      // continuam intocados — só esta leitura PARTICULAR, feita só pra
+      // exibir aqui, deixou de ser disparada.
       loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, id),
       loadPendenciasRawData(supabase, id),
-      requireQuery(
-        supabase
-          .from("account_reviews")
-          .select("reviewed_at, outcome, team_member:team_members!account_reviews_team_member_id_fkey(name)")
-          .eq("client_id", id)
-          .order("reviewed_at", { ascending: false })
-          .limit(1),
-        "account_reviews:cockpit-resumo",
-      ),
       profile ? fetchClientTimelinePage(supabase, profile.organizationId, id, "todos", 0, 6) : Promise.resolve({ rows: [] }),
       buildPerformanceReportData(supabase, id, { start: firstDay, end: lastDay }),
     ]);
@@ -602,21 +592,6 @@ export default async function ClientPage({
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
     .slice(0, 3);
 
-  // Operação — resumo: sprint atual, última otimização. MESMOS dados/
-  // funções já usados por `/operation` e pela fila global de Operação.
-  const currentSprint = isCurrentMonth ? findSprintForDate(sprints, todayStr) : null;
-  const currentSprintLabel = currentSprint
-    ? `${formatSprintPeriodLabel(currentSprint.start_date, currentSprint.end_date)} · ${
-        getSprintTemporalStatus(currentSprint, today) === "atual" ? "em andamento" : "concluída"
-      }`
-    : null;
-
-  // Busca já resolvida em paralelo no Promise.all principal, acima.
-  const [lastReviewRow] = accountReviewRows;
-  const lastOptimizationLabel = lastReviewRow
-    ? `${ACCOUNT_REVIEW_OUTCOME_LABEL[lastReviewRow.outcome]} · ${formatRelativeDateTime(lastReviewRow.reviewed_at, new Date())}${lastReviewRow.team_member?.name ? ` · ${lastReviewRow.team_member.name}` : ""}`
-    : "Nenhuma otimização registrada";
-
   // MITZA ONE — Fase 1, Seção "Histórico": MESMA fonte da Timeline do
   // cliente (`fetchClientTimelinePage`), só as linhas mais recentes. Busca
   // já resolvida em paralelo no Promise.all principal, acima.
@@ -649,7 +624,6 @@ export default async function ClientPage({
   const banners = [
     contractBannerText && { tone: "amber", text: `${contractBannerText} A página continua acessível apenas para consulta de histórico.` },
     error && { tone: "red", text: error },
-    reviewError && { tone: "red", text: reviewError },
     synced && { tone: "green", text: `${synced} dia(s) de spend sincronizado(s) com o Meta.` },
     saved && { tone: "green", text: "Dados do cliente atualizados." },
   ].filter((banner): banner is { tone: "red" | "green" | "amber"; text: string } => Boolean(banner));
@@ -662,7 +636,6 @@ export default async function ClientPage({
 
   const metasHref = buildMetasHref(client.id, { month: monthParam }, {});
   const performanceHref = `/clients/${client.id}/relatorio`;
-  const operationHref = `/clients/${client.id}/operation`;
   const demandasHref = `/clients/${client.id}/demandas`;
   const timelineHref = `/clients/${client.id}/timeline`;
 
@@ -785,15 +758,14 @@ export default async function ClientPage({
         <CockpitPerformanceSection view={performanceView} campaignsHref={performanceHref} fullReportHref={performanceHref} />
       </div>
 
-      {/* SEÇÃO 5 — EXECUÇÃO (pedido, seções 21-25): "O que estamos fazendo
-          nessa conta?" / "O que está pendente?". */}
+      {/* SEÇÃO 5 — DEMANDAS (pedido original, seções 21-25; Etapa
+          "Simplificação da Operação": a seção visual de Operação — sprint
+          atual, última otimização, Registrar revisão — saiu do Cockpit,
+          nunca do sistema (continua intacta em `/operation`). Demandas
+          preservada integralmente, só sem o card vizinho). */}
       <div className="mt-5">
-        <CockpitExecutionSection
+        <CockpitDemandasSection
           clientId={client.id}
-          currentSprintLabel={currentSprintLabel}
-          lastOptimizationLabel={lastOptimizationLabel}
-          registerReviewHref={registerReviewHref}
-          operationHref={operationHref}
           demandasOpenCount={demandasOpenCount}
           demandasOverdueCount={demandasOverdueCount}
           demandasPreview={demandasPreview}
@@ -807,10 +779,6 @@ export default async function ClientPage({
       <div className="mt-5">
         <CockpitHistorySection rows={historyRows} fullHistoryHref={timelineHref} />
       </div>
-
-      {review === "new" && (
-        <RecordAccountReviewDrawer clientId={client.id} closeHref={returnTo} managers={[]} error={reviewError} />
-      )}
     </WorkspaceContainer>
   );
 }

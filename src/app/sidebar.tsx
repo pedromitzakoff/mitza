@@ -10,7 +10,6 @@ import {
   ClipboardList,
   Clock,
   History,
-  ListChecks,
   LogOut,
   Menu,
   PanelLeftClose,
@@ -131,16 +130,22 @@ interface NavItem {
 
 /** Ferramentas transversais da agência (seção 2 do pedido) — nunca módulos
  * do cliente: destinos GLOBAIS fixos, sempre o mesmo href, independente de
- * qual cliente está ativo. Demandas/Operação/Timeline já suportavam
- * "Todos" desde a Fase 4.5/4.6 — aqui são simplesmente os links diretos,
- * sem nenhuma lógica de contexto (essa lógica — `buildModuleContextHref`/
+ * qual cliente está ativo. Demandas/Timeline já suportavam "Todos" desde a
+ * Fase 4.5/4.6 — aqui são simplesmente os links diretos, sem nenhuma
+ * lógica de contexto (essa lógica — `buildModuleContextHref`/
  * `resolveModuleLinkContext` — continua existindo em
  * `lib/client-workspace-nav.ts` pra quem ainda precisa dela, ex.:
  * `GlobalScopeSelect` nas próprias páginas globais; a Sidebar não usa
- * mais). */
+ * mais).
+ *
+ * Etapa "Simplificação da Operação": o item "Operação" (`/operation`) saiu
+ * da navegação principal — o Cockpit já cobre orçamento/investimento/
+ * ritmo/resultados/projeção, tornando a experiência de sprints redundante
+ * como ferramenta de acompanhamento do dia a dia. A ROTA `/operation`
+ * continua existindo e acessível por link direto (nunca excluída) — só
+ * deixou de ter item próprio aqui. */
 const AGENCIA_ITEMS: NavItem[] = [
   { label: "Demandas", href: "/demandas", icon: ClipboardList, isActive: (p) => p.startsWith("/demandas") || p.startsWith("/pendencias") },
-  { label: "Operação", href: "/operation", icon: ListChecks, isActive: (p) => p.startsWith("/operation") },
   { label: "Timeline", href: "/timeline", icon: History, isActive: (p) => p.startsWith("/timeline") || p.startsWith("/achievements") },
 ];
 

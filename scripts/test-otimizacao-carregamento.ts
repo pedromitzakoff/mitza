@@ -9,6 +9,13 @@
  * Item 2 (autenticação) foi explicitamente NÃO implementado nesta etapa —
  * sem checagem aqui.
  *
+ * Nota (Etapa "Simplificação da Operação", posterior a esta): a query de
+ * `account_reviews` pra "última otimização" — uma das operações
+ * paralelizadas aqui — foi removida do Cockpit nessa etapa seguinte (a
+ * seção visual que a consumia saiu da interface). As checagens que a
+ * citavam foram adaptadas; a cobertura de paralelização das operações
+ * REMANESCENTES continua válida.
+ *
  * Rodar: npx tsx scripts/test-otimizacao-carregamento.ts
  */
 import assert from "node:assert/strict";
@@ -40,12 +47,6 @@ console.log("\nA — Item 1 (Cockpit): as 5 operações independentes entraram n
     pageSource.includes("pendenciasRawData,") && pageSource.includes("loadPendenciasRawData(supabase, id),") && !pageSource.includes("await loadPendenciasRawData("),
   );
   ok(
-    "a query de account_reviews (última revisão) entra no mesmo Promise.all — MESMA select/eq/order/limit de antes, nenhum campo novo/removido",
-    pageSource.includes(
-      'requireQuery(\n        supabase\n          .from("account_reviews")\n          .select("reviewed_at, outcome, team_member:team_members!account_reviews_team_member_id_fkey(name)")\n          .eq("client_id", id)\n          .order("reviewed_at", { ascending: false })\n          .limit(1),\n        "account_reviews:cockpit-resumo",\n      ),',
-    ),
-  );
-  ok(
     "fetchClientTimelinePage entra no mesmo Promise.all, preservando o MESMO condicional 'profile ? ... : { rows: [] }' de antes (nunca chamada pra profile null)",
     pageSource.includes('profile ? fetchClientTimelinePage(supabase, profile.organizationId, id, "todos", 0, 6) : Promise.resolve({ rows: [] }),'),
   );
@@ -54,10 +55,8 @@ console.log("\nA — Item 1 (Cockpit): as 5 operações independentes entraram n
     pageSource.includes("buildPerformanceReportData(supabase, id, { start: firstDay, end: lastDay }),") && !pageSource.includes("await buildPerformanceReportData("),
   );
   ok(
-    "os 4 pontos de USO continuam lendo os valores já resolvidos pelo Promise.all (desestruturação), nenhum novo await disperso pelo corpo da função",
-    pageSource.includes("const { items: demandaItems } = pendenciasRawData;") &&
-      pageSource.includes("const [lastReviewRow] = accountReviewRows;") &&
-      pageSource.includes("const { rows: historyRows } = timelinePageResult;"),
+    "os pontos de USO continuam lendo os valores já resolvidos pelo Promise.all (desestruturação), nenhum novo await disperso pelo corpo da função",
+    pageSource.includes("const { items: demandaItems } = pendenciasRawData;") && pageSource.includes("const { rows: historyRows } = timelinePageResult;"),
   );
 }
 

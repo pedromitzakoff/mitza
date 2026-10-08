@@ -60,7 +60,10 @@ console.log("\n1 — SIDEBAR: MITZA ONE — Fase 2 substituiu Growth/Execução 
   );
   ok('eyebrow "Carteira" (rótulo próprio) não existe — a lista de clientes aparece direto, sem eyebrow "Carteira" acima dela', !/>\s*Carteira\s*</.test(sidebarSource));
   ok('eyebrow "Cliente" (bloco antigo, Fase 4.5) não existe mais', !/>\s*Cliente\s*</.test(sidebarSource));
-  ok("Operação aparece só UMA vez na Sidebar (link global fixo, nunca duplicada entre 'global' e 'do cliente' — esse conceito não existe mais)", (sidebarSource.match(/label: "Operação"/g) ?? []).length === 1);
+  ok(
+    "Operação NÃO tem mais item na Sidebar (Etapa 'Simplificação da Operação' — ver test-mega-facelift-fase1-shell.ts); a rota /operation em si não foi excluída",
+    !sidebarSource.includes('label: "Operação"'),
+  );
   ok("Demandas aparece só UMA vez na Sidebar", (sidebarSource.match(/label: "Demandas"/g) ?? []).length === 1);
   ok("Timeline aparece só UMA vez na Sidebar", (sidebarSource.match(/label: "Timeline"/g) ?? []).length === 1);
   ok('"Clientes" presente em GESTAO_ITEMS, aponta pra /clients', /\{ label: "Clientes", href: "\/clients"/.test(sidebarSource));

@@ -49,7 +49,10 @@ console.log("\n1 — MITZA ONE — Fase 2 (Sidebar = Carteira de Clientes) subst
   // na Sidebar — nenhum deles some do produto (rotas preservadas,
   // seção 8 do pedido da Fase 2), só deixam de ter item próprio aqui.
   ok("Sidebar não define mais MODULES (dashboard/metas/performance/dados como itens de navegação)", !/\{ key: "dashboard", label: "Dashboard"/.test(sidebarSource) && !/\{ key: "metas", label: "Metas"/.test(sidebarSource));
-  ok("Operação continua acessível — agora um link GLOBAL fixo na área Agência (nunca por cliente, ver Fase 2)", /label: "Operação", href: "\/operation"/.test(sidebarSource));
+  ok(
+    "Operação NÃO tem mais item fixo na área Agência (Etapa 'Simplificação da Operação': o Cockpit já cobre orçamento/ritmo/resultados, sprints deixou de ser a ferramenta principal) — a ROTA /operation continua existindo, só sem link na Sidebar",
+    !/label: "Operação", href: "\/operation"/.test(sidebarSource) && loadSource("src", "app", "operation", "page.tsx").length > 0,
+  );
   ok("Demandas continua acessível — mesmo padrão (link global fixo)", /label: "Demandas", href: "\/demandas"/.test(sidebarSource));
   ok("Timeline continua acessível — mesmo padrão (link global fixo)", /label: "Timeline", href: "\/timeline"/.test(sidebarSource));
   ok('eyebrow "Carteira" não existe mais como label — a carteira agora é a lista de clientes diretamente, sem rótulo "Carteira" acima', !/>\s*Carteira\s*</.test(sidebarSource));

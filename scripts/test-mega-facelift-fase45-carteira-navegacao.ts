@@ -124,12 +124,14 @@ console.log("\n7 — Módulos fixos (Fase 4.6): substituídos por navegação po
   // MITZA ONE — Fase 2: Dashboard/Metas/Performance/Dados deixaram de ser
   // itens de navegação (viraram seções DENTRO do cockpit único,
   // `/clients/[id]`, Fase 1) — nunca removidos do produto, só não têm
-  // mais item próprio na Sidebar. Operação/Demandas/Timeline continuam
-  // como links globais fixos na área "Agência".
+  // mais item próprio na Sidebar. Demandas/Timeline continuam como links
+  // globais fixos na área "Agência" — Operação saiu dessa área na Etapa
+  // "Simplificação da Operação" (a ROTA /operation continua existindo,
+  // só sem item na Sidebar).
   ok("Sidebar não define mais um item de navegação 'Metas'/'Dados' (migraram pra dentro do cockpit, Fase 1)", !/\{ key: "metas"/.test(sidebarSource) && !/\{ key: "dados"/.test(sidebarSource));
   ok(
-    "Agência: Operação/Demandas/Timeline continuam os 3 links globais, agora sempre visíveis fora de qualquer contexto de cliente",
-    /label: "Operação", href: "\/operation"/.test(sidebarSource) &&
+    "Agência: Demandas/Timeline continuam os links globais (Operação removido da Sidebar, Etapa 'Simplificação da Operação')",
+    !/label: "Operação", href: "\/operation"/.test(sidebarSource) &&
       /label: "Demandas", href: "\/demandas"/.test(sidebarSource) &&
       /label: "Timeline", href: "\/timeline"/.test(sidebarSource),
   );

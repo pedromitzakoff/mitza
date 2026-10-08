@@ -52,7 +52,10 @@ console.log("\nA — Arquitetura final da Sidebar (seção 1/2/7 do pedido): car
   ok("Sidebar importa AgencyTreeClient (tipo oficial da carteira) e recebe walletClients por prop", sidebarSource.includes("walletClients: AgencyTreeClient[]"));
   ok("Sidebar importa buildWorkspaceHref/resolveActiveClientIdFromPathname de lib/client-workspace-nav (núcleo único, nenhuma segunda lógica de pathname)", sidebarSource.includes('import { buildWorkspaceHref, resolveActiveClientIdFromPathname } from "@/lib/client-workspace-nav"'));
   ok("Sidebar importa filterAgencyTreeClients de lib/agency-accounts-tree (núcleo puro, nenhuma segunda implementação de busca)", sidebarSource.includes("filterAgencyTreeClients"));
-  ok("AGENCIA_ITEMS define exatamente Demandas/Operação/Timeline, hrefs globais fixos", /label: "Demandas", href: "\/demandas"/.test(sidebarSource) && /label: "Operação", href: "\/operation"/.test(sidebarSource) && /label: "Timeline", href: "\/timeline"/.test(sidebarSource));
+  ok(
+    "AGENCIA_ITEMS define Demandas/Timeline, hrefs globais fixos (Operação removido na Etapa 'Simplificação da Operação' — ver test-mega-facelift-fase1-shell.ts)",
+    /label: "Demandas", href: "\/demandas"/.test(sidebarSource) && !sidebarSource.includes('label: "Operação"') && /label: "Timeline", href: "\/timeline"/.test(sidebarSource),
+  );
   ok("GESTAO_ITEMS define Clientes/Equipe/Configurações (Configurações admin-only), mesmo grupo de sempre", /label: "Clientes", href: "\/clients"/.test(sidebarSource) && /label: "Equipe", href: "\/team"/.test(sidebarSource) && /label: "Configurações", href: "\/settings", icon: Settings, adminOnly: true/.test(sidebarSource));
   ok("nenhum componente/ícone decorativo novo (sem lib de ícone nova, sem gráfico/badge novo) — só lucide-react, já em uso", !sidebarSource.includes("from \"recharts\"") && !sidebarSource.includes("Badge"));
 }

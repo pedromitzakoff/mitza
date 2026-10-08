@@ -53,7 +53,10 @@ function loadSource(...segments: string[]): string {
 const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
 const metaRitmoSource = loadSource("src", "app", "clients", "cockpit-meta-ritmo-section.tsx");
 const diagnosticsCardSource = loadSource("src", "app", "clients", "cockpit-diagnostics-card.tsx");
-const executionSource = loadSource("src", "app", "clients", "cockpit-execution-section.tsx");
+// Etapa "Simplificação da Operação": cockpit-execution-section.tsx (Operação
+// + Demandas no mesmo componente) foi substituído por cockpit-demandas-section.tsx
+// (Demandas isolada, mesma lógica) — ver seção E abaixo.
+const demandasSectionSource = loadSource("src", "app", "clients", "cockpit-demandas-section.tsx");
 const performanceSectionSource = loadSource("src", "app", "clients", "cockpit-performance-section.tsx");
 const historySource = loadSource("src", "app", "clients", "cockpit-history-section.tsx");
 const channelSectionSource = loadSource("src", "app", "clients", "dashboard-channel-section.tsx");
@@ -246,18 +249,33 @@ console.log("\nD — Performance (essencial + completa)\n");
 }
 
 // ---------------------------------------------------------------------------
-console.log("\nE — Execução (Operação + Demandas)\n");
+console.log("\nE — Demandas (histórico: Fase 1 chamava esta seção 'Execução' e reunia Operação + Demandas; Etapa 'Simplificação da Operação' removeu a parte de Operação do Cockpit)\n");
 {
-  ok("Sprint atual continua vindo de findSprintForDate (MESMA fonte de sempre)", pageSource.includes("findSprintForDate(sprints, todayStr)"));
-  ok("sem sprint no mês -> currentSprintLabel null, CockpitExecutionSection mostra '—' (nunca um erro)", executionSource.includes('currentSprintLabel ?? "—"'));
-  ok("Última revisão continua vindo da MESMA query account_reviews de sempre (divergência Dashboard×Timeline documentada, não resolvida nesta fase — seção 22 do pedido)", pageSource.includes("account_reviews:cockpit-resumo"));
-  ok("Registrar revisão reaproveita RecordAccountReviewDrawer/record_account_review oficiais via ?review=new, nenhum formulário novo", pageSource.includes("<RecordAccountReviewDrawer") && pageSource.includes('review === "new"'));
-  ok("Demandas: contagem + preview continuam vindo de loadPendenciasRawData/countOpenDemandas (MESMA fonte/regra de sempre)", pageSource.includes("loadPendenciasRawData(supabase, id)") && pageSource.includes("countOpenDemandas("));
+  ok(
+    "a seção visual de Operação (sprint atual/última otimização/Registrar revisão) NÃO existe mais no Cockpit — nenhuma referência a findSprintForDate/getSprintTemporalStatus/ACCOUNT_REVIEW_OUTCOME_LABEL/RecordAccountReviewDrawer em page.tsx",
+    !pageSource.includes("findSprintForDate(") &&
+      !pageSource.includes("getSprintTemporalStatus(") &&
+      !pageSource.includes("ACCOUNT_REVIEW_OUTCOME_LABEL") &&
+      !pageSource.includes("RecordAccountReviewDrawer"),
+  );
+  ok(
+    "a query de account_reviews feita SÓ pra exibir 'última otimização' no Cockpit foi removida — nenhuma consulta exclusiva a um componente que não renderiza mais",
+    !pageSource.includes("account_reviews:cockpit-resumo") && !pageSource.includes('.from("account_reviews")'),
+  );
+  ok("cockpit-execution-section.tsx (Operação + Demandas no mesmo componente) foi removido — nenhum arquivo órfão", (() => {
+    try {
+      loadSource("src", "app", "clients", "cockpit-execution-section.tsx");
+      return false;
+    } catch {
+      return true;
+    }
+  })());
+  ok("Demandas: contagem + preview continuam vindo de loadPendenciasRawData/countOpenDemandas (MESMA fonte/regra de sempre, nenhuma lógica reescrita)", pageSource.includes("loadPendenciasRawData(supabase, id)") && pageSource.includes("countOpenDemandas("));
   ok("preview de demandas continua limitado a 3 itens", pageSource.includes(".slice(0, 3)"));
-  ok("sem demandas abertas -> estado compacto explícito 'Nenhuma demanda aberta.' (nunca lista vazia silenciosa)", executionSource.includes("Nenhuma demanda aberta."));
+  ok("sem demandas abertas -> estado compacto explícito 'Nenhuma demanda aberta.' (nunca lista vazia silenciosa)", demandasSectionSource.includes("Nenhuma demanda aberta."));
   ok("Concluir reaproveita completeTaskAction (MESMA Server Action da Demandas completa, nenhuma segunda implementação)", loadSource("src", "app", "clients", "cockpit-complete-task-button.tsx").includes('import { completeTaskAction } from "./tasks-actions"'));
-  ok("ações de escrita (Concluir/Registrar revisão) só aparecem com canOperate=true (client.status === 'ativo', mesmo guard de /operation)", executionSource.includes("canOperate &&") && pageSource.includes('const canOperate = client.status === "ativo"'));
-  ok("NENHUM bulk delete/bulk duplicate/CRUD completo trazido pro cockpit (seção 24 do pedido) — sem duplicateTasksAction/bulkDeleteTasksAction aqui", !executionSource.includes("duplicateTasksAction") && !executionSource.includes("bulkDeleteTasksAction"));
+  ok("ação de escrita (Concluir) só aparece com canOperate=true (client.status === 'ativo', mesmo guard de /operation, preservado)", demandasSectionSource.includes("canOperate &&") && pageSource.includes('const canOperate = client.status === "ativo"'));
+  ok("NENHUM bulk delete/bulk duplicate/CRUD completo trazido pro cockpit (seção 24 do pedido original) — sem duplicateTasksAction/bulkDeleteTasksAction aqui", !demandasSectionSource.includes("duplicateTasksAction") && !demandasSectionSource.includes("bulkDeleteTasksAction"));
 }
 
 // ---------------------------------------------------------------------------
