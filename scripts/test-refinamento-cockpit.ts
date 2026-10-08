@@ -94,9 +94,14 @@ console.log("\nB — Edição direta das três metas (seção 2 do pedido): láp
     "CockpitSecondaryGoalEditor envolve MetasSecondaryTargetForm (objetivo SECUNDÁRIO) só com abrir/fechar — zero alteração na Server Action/validação (setGoalMonthlyTargetAction intocada)",
     secondarySource.includes('import { MetasSecondaryTargetForm } from "./metas-secondary-target-form";') && secondarySource.includes("useState(false)"),
   );
+  const triggerSource = loadSource("src", "app", "clients", "cockpit-goal-edit-trigger.tsx");
   ok(
     "o lápis de Resultado e o lápis de Custo (objetivo PRINCIPAL) abrem o MESMO ChannelPlanEditor oficial — nunca dois editores/fluxos diferentes pro mesmo objetivo",
-    /GoalEditTrigger[\s\S]{0,400}edit\.kind === "primary"[\s\S]{0,300}<ChannelPlanEditor/.test(cardsSource),
+    /GoalEditTrigger[\s\S]{0,400}edit\.kind === "primary"[\s\S]{0,300}<ChannelPlanEditor/.test(triggerSource),
+  );
+  ok(
+    "CORREÇÃO DE PRODUÇÃO: GoalEditTrigger mora num arquivo 'use client' separado — cockpit-meta-ritmo-section.tsx (Server Component) nunca mais passa uma função (trigger) como prop pra um Client Component, o crash que derrubava toda página de cliente pra admin em mês aberto",
+    triggerSource.startsWith('"use client"') && !cardsSource.includes("trigger={(open)") && cardsSource.includes('import { GoalEditTrigger } from "./cockpit-goal-edit-trigger";'),
   );
   ok(
     "objetivo SECUNDÁRIO nunca tem lápis de Custo por resultado (nunca existiu meta de custo gravável pra ele) — page.tsx só passa `edit` no card de custo quando group.isPrimary",
