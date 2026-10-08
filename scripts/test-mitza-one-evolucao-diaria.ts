@@ -270,7 +270,10 @@ console.log("\nJ — Estados e UI (estrutural): tooltip, múltiplos objetivos, f
   ok("tooltip mostra Data/Resultado/Meta diária/Investimento/Custo (seção 3 do pedido)", sectionSource.includes("Investimento:") && sectionSource.includes("Meta diária:") && /\{costLabel\}:/.test(sectionSource));
   ok("tooltip usa describeCockpitDailyPointState pro estado de disponibilidade — nenhuma segunda lógica de rótulo", sectionSource.includes("describeCockpitDailyPointState(point)"));
   ok("tooltip reaproveita formatCostMetric oficial (lib/performance.ts) — nunca formata CPL/CPA manualmente, nunca mostra 'R$0' por divisão por zero", sectionSource.includes("formatCostMetric(point.costPerResult, formatCurrency)"));
-  ok("bars são <button> (clique/toque funciona de graça, sem listener de touch separado — seção 3: 'permitir interação por toque')", /<button\s[\s\S]{0,120}onClick={\(\) => setActiveIndex/.test(sectionSource));
+  ok(
+    "bars são <button> com onClick/onFocus/onMouseEnter (clique/toque/teclado funcionam de graça, seção 3: 'permitir interação por toque')",
+    /<button\s[\s\S]{0,300}onClick={onOpen}/.test(sectionSource) && sectionSource.includes("onFocus={onOpen}") && sectionSource.includes("onMouseEnter={onOpen}"),
+  );
   ok("múltiplos objetivos: um botão por série, nunca soma entre objetivos (seção 4 do pedido)", sectionSource.includes("view.series.length > 1") && sectionSource.includes("setSelectedGoal(s.resultType)"));
   ok("nenhum seletor de CANAL (Meta/Google) foi introduzido — só objetivo (resultType)", !sectionSource.includes("ChannelScope") && !/selectedChannel|setSelectedChannel/.test(sectionSource));
   ok("frescor dos dados mostra 'Dados até' distinto de 'Última sincronização' (seção 5 do pedido, nunca a mesma frase)", sectionSource.includes("Dados até") && sectionSource.includes("Última sincronização:"));
@@ -280,6 +283,57 @@ console.log("\nJ — Estados e UI (estrutural): tooltip, múltiplos objetivos, f
 
   const packageJson = loadSource("package.json");
   ok("package.json não ganhou nenhuma dependência de gráfico nova", !/"(recharts|chart\.js|victory|visx|d3|nivo)"\s*:/.test(packageJson));
+}
+
+console.log("\nJ.2 — Correção do tooltip (Etapa 'Correção do tooltip da Evolução Diária'): nunca cortado, Portal + posicionamento inteligente\n");
+{
+  const sectionSource = loadSource("src", "app", "clients", "cockpit-daily-evolution-section.tsx");
+
+  ok(
+    "tooltip é renderizado via createPortal pro document.body — nunca mais um <div> absoluto DENTRO da linha de barras (que tinha overflow-x-auto cortando o eixo Y)",
+    sectionSource.includes("createPortal(") && sectionSource.includes("document.body"),
+  );
+  ok(
+    "posição é calculada via getBoundingClientRect do próprio gatilho (nunca CSS relativo a um ancestral que pode cortar)",
+    sectionSource.includes("anchor.getBoundingClientRect()"),
+  );
+  ok(
+    "mede a ALTURA REAL do próprio tooltip (tooltipRef) em vez de estimar — funciona igual pra qualquer conteúdo/barra (seção 2 da correção: 'independentemente da altura da barra selecionada')",
+    sectionSource.includes("tooltip?.offsetHeight"),
+  );
+  ok(
+    "prefere abrir ACIMA do gatilho e só abre ABAIXO quando não há espaço (seção 3 da correção: 'preferencialmente acima... abrir abaixo ou lateralmente quando não houver espaço')",
+    sectionSource.includes("fitsAbove") && sectionSource.includes("anchorRect.bottom + TOOLTIP_ANCHOR_GAP_PX"),
+  );
+  ok(
+    "posição horizontal é sempre recortada (clamp) dentro da viewport — cobre as barras das EXTREMIDADES do gráfico (dia 01/dia 31) sem estourar a tela",
+    /left = Math\.min\(left, window\.innerWidth/.test(sectionSource) && /left = Math\.max\(left, TOOLTIP_VIEWPORT_MARGIN_PX\)/.test(sectionSource),
+  );
+  ok(
+    "posição vertical também é recortada dentro da viewport (nunca estoura topo/rodapé da tela)",
+    /top = Math\.min\(top, window\.innerHeight/.test(sectionSource) && /top = Math\.max\(top, TOOLTIP_VIEWPORT_MARGIN_PX\)/.test(sectionSource),
+  );
+  ok(
+    "usa useLayoutEffect (mede/posiciona ANTES do navegador pintar — nunca um tooltip 'pulando' de posição visível ao usuário)",
+    /import \{[^}]*\buseLayoutEffect\b[^}]*\} from "react"/.test(sectionSource),
+  );
+  ok(
+    "o tooltip nunca é filho do contêiner rolável (overflow-x-auto) — a linha de barras continua existindo, mas o tooltip sai da árvore de layout via Portal, nunca altera largura/altura do gráfico nem provoca rolagem nova",
+    sectionSource.includes('overflow-x-auto pb-1" style={{ height: BAR_AREA_HEIGHT_PX + 28 }}'),
+  );
+  ok(
+    "só um tooltip ativo por vez entre as barras (activeDate, mutuamente exclusivo) — trocar de barra fecha a anterior sozinho, nunca dois abertos ao mesmo tempo",
+    sectionSource.includes("const [activeDate, setActiveDate] = useState<string | null>(null)") && sectionSource.includes("isOpen={activeDate === point.date}"),
+  );
+  ok("Esc fecha o tooltip (navegação por teclado, seção 6 da correção)", sectionSource.includes('event.key === "Escape"') && sectionSource.includes("onCloseAll"));
+  ok("tooltip escuro preservado (zinc-900/zinc-100, mesma paleta de antes)", sectionSource.includes("bg-zinc-900") && sectionSource.includes("text-zinc-100"));
+  ok(
+    "tooltip continua mostrando Data/Resultado/Meta diária/Investimento/Custo/estado — a correção foi só de posicionamento, nenhum dado removido",
+    sectionSource.includes("formatShortDate(point.date)") &&
+      sectionSource.includes("describeCockpitDailyPointState(point)") &&
+      sectionSource.includes("Investimento:") &&
+      sectionSource.includes("Meta diária:"),
+  );
 }
 
 console.log("\nK — Restrições (seção 9 do pedido): nenhuma rota/componente legado removido, nenhuma migration/schema nova\n");

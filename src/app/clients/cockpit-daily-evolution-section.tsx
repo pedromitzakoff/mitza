@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { formatCurrency, formatCount, formatShortDate } from "@/lib/format";
 import { formatCostMetric } from "@/lib/performance";
 import type { PerformanceGoal } from "@/lib/performance-goals";
@@ -53,9 +54,189 @@ function resolveStatsFromPoints(points: CockpitDailyEvolutionPoint[]) {
   return { today, yesterday, average7d };
 }
 
+const TOOLTIP_WIDTH_PX = 160;
+const TOOLTIP_VIEWPORT_MARGIN_PX = 8;
+const TOOLTIP_ANCHOR_GAP_PX = 6;
+
+/**
+ * Etapa "Correção do tooltip da Evolução Diária": o tooltip antigo era um
+ * `<div>` posicionado `absolute bottom-full` DENTRO da própria barra — a
+ * linha de barras usa `overflow-x-auto` (rolagem horizontal pras ~31
+ * barras do mês), e por regra do próprio CSS (não um bug do Tailwind):
+ * definir `overflow-x` como algo diferente de `visible` força o
+ * `overflow-y` (que ficava `visible` na prática) a virar `auto` também —
+ * o contêiner passa a cortar QUALQUER conteúdo que estoure sua altura,
+ * inclusive um tooltip que sobe acima da barra. Era exatamente esse corte
+ * visto no topo do tooltip (nunca `z-index`: o tooltip já vencia a pilha,
+ * só não tinha como aparecer fora da CAIXA que o cortava).
+ *
+ * Correção: `createPortal` pro `document.body` (mesma técnica já usada
+ * pelo `Tooltip` oficial da plataforma, `components/ui/tooltip.tsx`) +
+ * posicionamento calculado via `getBoundingClientRect` do próprio gatilho,
+ * nunca CSS relativo a um ancestral que pode cortar. Como o tooltip some
+ * da árvore de layout da barra (só existe em `document.body`, com
+ * `position: fixed`), ele nunca altera a altura/largura do gráfico nem
+ * provoca rolagem nova — só se sobrepõe visualmente ao conteúdo da página.
+ *
+ * Posicionamento "inteligente": prefere ACIMA do gatilho; se não houver
+ * espaço (barra do dia 01 bem no topo da viewport, por exemplo — raro,
+ * mas a regra é geométrica, não por índice do dia), abre ABAIXO. Na
+ * horizontal, centra no gatilho mas sempre dentro da viewport (`clamp`
+ * entre `TOOLTIP_VIEWPORT_MARGIN_PX` e a borda direita) — cobre as barras
+ * das EXTREMIDADES do gráfico (dia 01 e dia 31), que antes empurravam o
+ * tooltip pra fora da área visível/rolável.
+ *
+ * Mede o próprio tooltip (`tooltipRef`) em vez de estimar altura/largura —
+ * funciona igual pra qualquer barra (seção 2 do pedido de correção:
+ * "independentemente da altura da barra selecionada") e pra qualquer
+ * conteúdo (tooltip de `no_data`/`future`, com só 2 linhas, é mais baixo
+ * que o de `result`, com até 6). `useLayoutEffect` mede e reposiciona ANTES
+ * do navegador pintar a tela — o tooltip só fica `visible` depois de já
+ * estar na posição certa, nunca aparece "pulando" de um canto pro outro.
+ */
+function SmartTooltip({
+  anchorRef,
+  open,
+  children,
+}: {
+  anchorRef: React.RefObject<HTMLElement | null>;
+  open: boolean;
+  children: ReactNode;
+}) {
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    function measure() {
+      if (!open) {
+        setPosition(null);
+        return;
+      }
+      const anchor = anchorRef.current;
+      const tooltip = tooltipRef.current;
+      if (!anchor) return;
+
+      const anchorRect = anchor.getBoundingClientRect();
+      const tooltipWidth = tooltip?.offsetWidth ?? TOOLTIP_WIDTH_PX;
+      const tooltipHeight = tooltip?.offsetHeight ?? 0;
+
+      const fitsAbove = anchorRect.top - tooltipHeight - TOOLTIP_ANCHOR_GAP_PX >= TOOLTIP_VIEWPORT_MARGIN_PX;
+      let top = fitsAbove
+        ? anchorRect.top - tooltipHeight - TOOLTIP_ANCHOR_GAP_PX
+        : anchorRect.bottom + TOOLTIP_ANCHOR_GAP_PX;
+      // Mesmo abrindo abaixo, nunca deixa estourar o rodapé da viewport
+      // (ex.: gráfico perto do fim da página numa tela baixa).
+      top = Math.min(top, window.innerHeight - tooltipHeight - TOOLTIP_VIEWPORT_MARGIN_PX);
+      top = Math.max(top, TOOLTIP_VIEWPORT_MARGIN_PX);
+
+      let left = anchorRect.left + anchorRect.width / 2 - tooltipWidth / 2;
+      left = Math.min(left, window.innerWidth - tooltipWidth - TOOLTIP_VIEWPORT_MARGIN_PX);
+      left = Math.max(left, TOOLTIP_VIEWPORT_MARGIN_PX);
+
+      setPosition({ top, left });
+    }
+
+    measure();
+  }, [open, anchorRef]);
+
+  if (!open) return null;
+
+  return createPortal(
+    <div
+      ref={tooltipRef}
+      role="tooltip"
+      className="pointer-events-none fixed z-50 w-40 rounded-md bg-zinc-900 p-2 text-[11px] text-zinc-100 shadow-[var(--shadow-float)] dark:bg-zinc-100 dark:text-zinc-900"
+      style={position ? { top: position.top, left: position.left, visibility: "visible" } : { top: 0, left: 0, visibility: "hidden" }}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+function DailyEvolutionBar({
+  point,
+  heightPx,
+  resultLabel,
+  costLabel,
+  dailyTarget,
+  isOpen,
+  onOpen,
+  onCloseIfOpen,
+  onCloseAll,
+}: {
+  point: CockpitDailyEvolutionPoint;
+  heightPx: number;
+  resultLabel: string;
+  costLabel: string;
+  dailyTarget: number | null;
+  isOpen: boolean;
+  /** Abre SEMPRE este dia (nunca um toggle) — hover/foco/toque entrando
+   * aqui simplesmente afirmam "este é o tooltip ativo agora"; trocar de
+   * barra fecha a anterior sozinho (só uma pode estar ativa por vez). */
+  onOpen: () => void;
+  /** Fecha só se ESTE dia ainda for o ativo — evita que um `mouseleave`/
+   * `blur` tardio de uma barra feche o tooltip de OUTRA que já abriu
+   * depois (ex.: mouse saindo da barra A exatamente quando o foco já
+   * passou pra barra B). */
+  onCloseIfOpen: () => void;
+  onCloseAll: () => void;
+}) {
+  const anchorRef = useRef<HTMLButtonElement | null>(null);
+
+  return (
+    <div className="flex min-w-[18px] flex-1 flex-col items-center gap-1" style={{ height: BAR_AREA_HEIGHT_PX + 16 }}>
+      <div className="flex w-full flex-1 items-end justify-center">
+        <button
+          ref={anchorRef}
+          type="button"
+          onMouseEnter={onOpen}
+          onMouseLeave={onCloseIfOpen}
+          onFocus={onOpen}
+          onBlur={onCloseIfOpen}
+          onClick={onOpen}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") onCloseAll();
+          }}
+          aria-label={`${formatShortDate(point.date)}: ${describeCockpitDailyPointState(point)}`}
+          className={
+            point.state === "result"
+              ? `w-full rounded-sm transition-colors ${point.resultCount === 0 ? "bg-overview-border" : "bg-overview-brand-subtle hover:bg-brand"}`
+              : "flex h-full w-full items-end justify-center"
+          }
+          style={point.state === "result" ? { height: `${heightPx}px` } : undefined}
+        >
+          {point.state === "no_data" && <span className="mb-0.5 h-1 w-1 rounded-full bg-overview-text-muted/50" />}
+        </button>
+      </div>
+      <span className="text-[9px] text-overview-text-muted">{formatDayLabel(point.date)}</span>
+
+      <SmartTooltip anchorRef={anchorRef} open={isOpen}>
+        <p className="font-semibold">{formatShortDate(point.date)}</p>
+        <p className="mt-0.5">{describeCockpitDailyPointState(point)}</p>
+        {point.state === "result" && (
+          <>
+            <p className="mt-1">
+              {resultLabel}: <span className="font-medium">{formatCount(point.resultCount ?? 0)}</span>
+            </p>
+            {dailyTarget !== null && <p>Meta diária: {formatCount(dailyTarget)}</p>}
+            <p>Investimento: {point.spend !== null ? formatCurrency(point.spend) : "—"}</p>
+            <p>
+              {costLabel}: {formatCostMetric(point.costPerResult, formatCurrency)}
+            </p>
+          </>
+        )}
+      </SmartTooltip>
+    </div>
+  );
+}
+
 function DailyEvolutionChart({ series }: { series: CockpitDailyEvolutionSeriesView }) {
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const { points, dailyTarget, resultLabel, costLabel } = series;
+  // Só UM tooltip ativo por vez (mutuamente exclusivo entre as ~31 barras) —
+  // trocar de barra fecha a anterior automaticamente, nunca dois tooltips
+  // abertos ao mesmo tempo.
+  const [activeDate, setActiveDate] = useState<string | null>(null);
 
   const maxValue = Math.max(...points.map((p) => p.resultCount ?? 0), dailyTarget ?? 0, 1);
   const targetLinePct = dailyTarget !== null ? Math.min(100, (dailyTarget / maxValue) * 100) : null;
@@ -71,58 +252,20 @@ function DailyEvolutionChart({ series }: { series: CockpitDailyEvolutionSeriesVi
             style={{ bottom: `${targetLinePct}%`, height: BAR_AREA_HEIGHT_PX }}
           />
         )}
-        {points.map((point, index) => {
-          const isActive = activeIndex === index;
-          const heightPx = point.state === "result" ? Math.max(((point.resultCount ?? 0) / maxValue) * BAR_AREA_HEIGHT_PX, BAR_MIN_HEIGHT_PX) : 0;
-
-          return (
-            <div key={point.date} className="group relative flex min-w-[18px] flex-1 flex-col items-center gap-1" style={{ height: BAR_AREA_HEIGHT_PX + 16 }}>
-              <div className="flex w-full flex-1 items-end justify-center">
-                {point.state === "result" ? (
-                  <button
-                    type="button"
-                    onClick={() => setActiveIndex((prev) => (prev === index ? null : index))}
-                    aria-label={`${formatShortDate(point.date)}: ${describeCockpitDailyPointState(point)}`}
-                    className={`w-full rounded-sm transition-colors ${point.resultCount === 0 ? "bg-overview-border" : "bg-overview-brand-subtle group-hover:bg-brand"}`}
-                    style={{ height: `${heightPx}px` }}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setActiveIndex((prev) => (prev === index ? null : index))}
-                    aria-label={`${formatShortDate(point.date)}: ${describeCockpitDailyPointState(point)}`}
-                    className="flex h-full w-full items-end justify-center"
-                  >
-                    {point.state === "no_data" && <span className="mb-0.5 h-1 w-1 rounded-full bg-overview-text-muted/50" />}
-                  </button>
-                )}
-              </div>
-              <span className="text-[9px] text-overview-text-muted">{formatDayLabel(point.date)}</span>
-
-              <div
-                role="tooltip"
-                className={`pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 w-40 -translate-x-1/2 rounded-md bg-zinc-900 p-2 text-[11px] text-zinc-100 shadow-[var(--shadow-float)] dark:bg-zinc-100 dark:text-zinc-900 ${
-                  isActive ? "visible opacity-100" : "invisible opacity-0 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
-                } transition-opacity`}
-              >
-                <p className="font-semibold">{formatShortDate(point.date)}</p>
-                <p className="mt-0.5">{describeCockpitDailyPointState(point)}</p>
-                {point.state === "result" && (
-                  <>
-                    <p className="mt-1">
-                      {resultLabel}: <span className="font-medium">{formatCount(point.resultCount ?? 0)}</span>
-                    </p>
-                    {dailyTarget !== null && <p>Meta diária: {formatCount(dailyTarget)}</p>}
-                    <p>Investimento: {point.spend !== null ? formatCurrency(point.spend) : "—"}</p>
-                    <p>
-                      {costLabel}: {formatCostMetric(point.costPerResult, formatCurrency)}
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        {points.map((point) => (
+          <DailyEvolutionBar
+            key={point.date}
+            point={point}
+            heightPx={point.state === "result" ? Math.max(((point.resultCount ?? 0) / maxValue) * BAR_AREA_HEIGHT_PX, BAR_MIN_HEIGHT_PX) : 0}
+            resultLabel={resultLabel}
+            costLabel={costLabel}
+            dailyTarget={dailyTarget}
+            isOpen={activeDate === point.date}
+            onOpen={() => setActiveDate(point.date)}
+            onCloseIfOpen={() => setActiveDate((prev) => (prev === point.date ? null : prev))}
+            onCloseAll={() => setActiveDate(null)}
+          />
+        ))}
       </div>
 
       <p className="mt-1 text-xs text-overview-text-secondary">
