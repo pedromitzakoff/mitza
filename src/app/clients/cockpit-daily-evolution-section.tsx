@@ -58,7 +58,12 @@ export type CockpitDailyEvolutionView =
  * contra (Resultado agora é normalizado), e normalizar a meta só pra manter
  * a linha introduziria uma aproximação visual que o pedido não pediu.
  */
-const CHART_AREA_HEIGHT_PX = 108;
+// MITZA ONE — Ajuste de proporção do Cockpit: cards de Meta & Ritmo e
+// Diagnóstico compactados (ver cockpit-meta-ritmo-section.tsx/
+// cockpit-diagnostics-card.tsx) abriram espaço vertical na tela — o
+// gráfico ganha parte dele (108px -> 150px), continua proporcional
+// (barras/linhas/legenda/tooltip inalterados, só a régua vertical cresce).
+const CHART_AREA_HEIGHT_PX = 150;
 const LABEL_ROW_HEIGHT_PX = 16;
 const BAR_MIN_HEIGHT_PX = 3;
 const DAY_COLUMN_WIDTH_PX = 20;

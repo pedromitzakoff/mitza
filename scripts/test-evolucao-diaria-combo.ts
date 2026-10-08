@@ -197,7 +197,14 @@ console.log("\nJ — Layout (seção 6 do pedido): altura aproximada preservada,
 {
   const sectionSource = loadSource("src", "app", "clients", "cockpit-daily-evolution-section.tsx");
 
-  ok("altura do gráfico (CHART_AREA_HEIGHT_PX) continua 108 — MESMO valor de antes do refinamento (seção 6: 'aproximadamente na altura atual')", sectionSource.includes("const CHART_AREA_HEIGHT_PX = 108;"));
+  // Ajuste de proporção do Cockpit (posterior a este combo): cards/
+  // Diagnóstico compactados liberaram espaço vertical, repassado ao
+  // gráfico (108 -> 150) — já não é mais "o mesmo valor de antes", de
+  // propósito; a checagem agora é só "o valor está declarado e é > 108".
+  ok(
+    "altura do gráfico (CHART_AREA_HEIGHT_PX) aumentou em relação ao valor original do refinamento — espaço cedido pelos cards compactados",
+    /const CHART_AREA_HEIGHT_PX = (\d+);/.test(sectionSource) && Number(sectionSource.match(/const CHART_AREA_HEIGHT_PX = (\d+);/)![1]) > 108,
+  );
   ok("indicador 'Dados até DD/MM' preservado", sectionSource.includes("Dados até ${view.freshness.latestDataLabel}"));
   ok("'Última sincronização' preservada, distinta do indicador acima", sectionSource.includes("Última sincronização: {view.freshness.latestSyncLabel}"));
   ok("resumo inferior ('Hoje/Ontem/Média 7d') preservado", sectionSource.includes("Hoje {stats.today") && sectionSource.includes("Média 7d"));

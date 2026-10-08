@@ -172,9 +172,9 @@ export function DashboardBudget({
       {!compact && <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Orçamento do mês</h2>}
 
       {!isEditing ? (
-        <div className="mt-1 flex flex-col gap-2">
+        <div className={compact ? "flex flex-col gap-1.5" : "mt-1 flex flex-col gap-2"}>
           <div className="flex items-center gap-2">
-            <p className="text-2xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{formatCurrency(total)}</p>
+            <p className={`${compact ? "text-xl" : "text-2xl"} font-semibold tracking-tight text-overview-text-primary tabular-nums`}>{formatCurrency(total)}</p>
             {canEdit && (
               <button
                 type="button"

@@ -130,15 +130,15 @@ export function CockpitResultCard({ view, status }: { view: CockpitResultCardVie
   const tone = status ? PACE_VERDICT_TONE[status] : "neutral";
 
   return (
-    <div className={`rounded-lg border p-3.5 ${COCKPIT_TONE_CARD_CLASSES[tone]}`}>
+    <div className={`rounded-lg border p-3 ${COCKPIT_TONE_CARD_CLASSES[tone]}`}>
       {status ? <PaceVerdictBadge status={status} /> : <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-secondary">RESULTADO</p>}
-      <p className="mt-1 text-2xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{formatCount(view.resultCount)}</p>
+      <p className="mt-0.5 text-xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{formatCount(view.resultCount)}</p>
       <p className="text-xs text-overview-text-secondary">
         {config.resultMetricLabel}
         {view.channelsLabel ? ` · ${view.channelsLabel}` : ""}
       </p>
       {view.targetResultCount !== null && view.targetResultCount > 0 ? (
-        <div className="mt-2 flex flex-col gap-1.5 text-xs text-overview-text-secondary">
+        <div className="mt-1.5 flex flex-col gap-1 text-xs text-overview-text-secondary">
           <div className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-1">
               Meta
@@ -155,7 +155,7 @@ export function CockpitResultCard({ view, status }: { view: CockpitResultCardVie
           {summary && <AgencyInvestmentBar summary={summary} showLegend={false} formatValue={formatCount} overflowIsPositive />}
         </div>
       ) : (
-        <div className="mt-2 flex items-center gap-1 text-xs text-overview-text-secondary">
+        <div className="mt-1.5 flex items-center gap-1 text-xs text-overview-text-secondary">
           <p>Sem meta de {config.resultMetricLabel.toLowerCase()} configurada para o mês.</p>
           {view.edit && <GoalEditTrigger edit={view.edit} label={`Configurar meta de ${config.resultMetricLabel.toLowerCase()}`} />}
         </div>
@@ -190,18 +190,18 @@ export function CockpitCostCard({ view }: { view: CockpitCostCardView }) {
   const hasTarget = view.targetCostPerResult !== null && view.deviationPct !== null;
 
   return (
-    <div className={`rounded-lg border p-3.5 ${COCKPIT_TONE_CARD_CLASSES[hasTarget ? COST_VERDICT_TONE[view.tone] : "neutral"]}`}>
+    <div className={`rounded-lg border p-3 ${COCKPIT_TONE_CARD_CLASSES[hasTarget ? COST_VERDICT_TONE[view.tone] : "neutral"]}`}>
       {hasTarget ? (
         <CostVerdictBadge tone={view.tone} />
       ) : (
         <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-secondary">{config.costMetricShortLabel.toUpperCase()}</p>
       )}
-      <p className="mt-1 text-2xl font-semibold tracking-tight text-overview-text-primary tabular-nums">
+      <p className="mt-0.5 text-xl font-semibold tracking-tight text-overview-text-primary tabular-nums">
         {view.costPerResult !== null ? formatCurrency(view.costPerResult) : "—"}
       </p>
       <p className="text-xs text-overview-text-secondary">{config.costMetricShortLabel}</p>
       {view.targetCostPerResult !== null ? (
-        <div className="mt-2 flex flex-col gap-1 text-xs text-overview-text-secondary">
+        <div className="mt-1.5 flex flex-col gap-0.5 text-xs text-overview-text-secondary">
           <div className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-1">
               Meta
@@ -214,7 +214,7 @@ export function CockpitCostCard({ view }: { view: CockpitCostCardView }) {
           )}
         </div>
       ) : (
-        <div className="mt-2 flex items-center gap-1 text-xs text-overview-text-secondary">
+        <div className="mt-1.5 flex items-center gap-1 text-xs text-overview-text-secondary">
           <p>Meta de custo não configurada.</p>
           {view.edit && <GoalEditTrigger edit={view.edit} label={`Configurar meta de ${config.costMetricShortLabel.toLowerCase()}`} />}
         </div>
@@ -266,12 +266,12 @@ export function CockpitBudgetCard({
   const tone = PACE_VERDICT_TONE[headline.monthStatus];
 
   return (
-    <div className={`rounded-lg border p-3.5 ${COCKPIT_TONE_CARD_CLASSES[tone]}`}>
+    <div className={`rounded-lg border p-3 ${COCKPIT_TONE_CARD_CLASSES[tone]}`}>
       <PaceVerdictBadge status={headline.monthStatus} />
-      <p className="mt-1 text-2xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{formatCurrency(headline.monthActual)}</p>
+      <p className="mt-0.5 text-xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{formatCurrency(headline.monthActual)}</p>
       <p className="text-xs text-overview-text-secondary">investido no mês</p>
       {headline.monthPlanned > 0 ? (
-        <div className="mt-2 flex flex-col gap-1.5 text-xs text-overview-text-secondary">
+        <div className="mt-1.5 flex flex-col gap-1 text-xs text-overview-text-secondary">
           {headline.neededDailyRate !== null && (
             <div className="flex items-center justify-between gap-3">
               <span>Necessário</span>
@@ -281,7 +281,7 @@ export function CockpitBudgetCard({
           <AgencyInvestmentBar summary={summary} showLegend={false} />
         </div>
       ) : (
-        <p className="mt-2 text-xs text-overview-text-secondary">Sem planejamento configurado para o mês.</p>
+        <p className="mt-1.5 text-xs text-overview-text-secondary">Sem planejamento configurado para o mês.</p>
       )}
 
       {/* `compact`: `DashboardBudget` mostra "Planejado" (pencil + composição
@@ -289,7 +289,7 @@ export function CockpitBudgetCard({
           deste card já estabelece o contexto "ORÇAMENTO" acima (seção 1 do
           pedido: eliminar a caixa dupla, mantendo edição/multicanal
           intactos). Único lugar onde o valor planejado aparece agora. */}
-      <div className="mt-3 border-t border-overview-border/60 pt-2.5">
+      <div className="mt-2 border-t border-overview-border/60 pt-2">
         <DashboardBudget clientId={clientId} monthParam={monthParam} total={headline.monthPlanned} channels={channels} canEdit={canEdit} compact />
       </div>
     </div>

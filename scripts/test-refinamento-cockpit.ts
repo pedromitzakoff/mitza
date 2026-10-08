@@ -34,7 +34,14 @@ console.log("\nA — Cards compactos (seção 1 do pedido): paddings/gaps reduzi
 {
   const cardsSource = loadSource("src", "app", "clients", "cockpit-meta-ritmo-section.tsx");
 
-  ok("os 3 cards usam p-3.5 (reduzido de p-4) — compactação sem corte de conteúdo", (cardsSource.match(/rounded-lg border p-3\.5/g) ?? []).length === 3);
+  // Ajuste de proporção posterior (p-3.5 -> p-3): a checagem real desta
+  // etapa é "os 3 cards continuam com a MESMA moldura/padding entre si"
+  // (compactação consistente), não um valor de padding travado no tempo.
+  ok(
+    "os 3 cards de Meta & Ritmo continuam com a MESMA classe de moldura/padding entre si (compactação consistente, sem corte de conteúdo)",
+    new Set((cardsSource.match(/rounded-lg border p-\S+ \$\{COCKPIT_TONE_CARD_CLASSES/g) ?? []).map((m) => m.split(" ")[2])).size === 1 &&
+      (cardsSource.match(/rounded-lg border p-\S+ \$\{COCKPIT_TONE_CARD_CLASSES/g) ?? []).length === 3,
+  );
   ok(
     "card RESULTADO continua com todos os dados exigidos: status de ritmo, valor, meta, necessário/dia, barra",
     cardsSource.includes("status ? <PaceVerdictBadge") &&
