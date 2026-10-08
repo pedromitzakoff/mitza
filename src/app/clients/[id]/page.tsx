@@ -198,8 +198,6 @@ export default async function ClientPage({
   const { firstDay, lastDay } = monthRangeFromParam(monthQueryParam, today);
   const isCurrentMonth = firstDay === currentMonthRange(today).firstDay;
 
-  const [clientOperationalState] = await loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, id);
-
   const monthParam = firstDay.slice(0, 7);
   const prevMonthHref = buildContextHref({ month: shiftMonthParam({ firstDay }, -1) });
   const nextMonthHref = buildContextHref({ month: shiftMonthParam({ firstDay }, 1) });
@@ -217,6 +215,11 @@ export default async function ClientPage({
     allClientGoals,
     dadosData,
     dailyPerformanceRowsForEvolution,
+    [clientOperationalState],
+    pendenciasRawData,
+    accountReviewRows,
+    timelinePageResult,
+    performanceReportData,
   ] = await Promise.all([
       requireQuery(
         supabase
@@ -280,6 +283,30 @@ export default async function ClientPage({
       // `getDailySpendRowsForPeriod` (`date, spend, channel`), reaproveitado
       // sem uma segunda busca.
       getDailyPerformanceRowsForPeriod(supabase, id, { firstDay, lastDay }),
+      // Etapa "Otimização de carregamento — Item 1 (Cockpit)": as 5 consultas
+      // abaixo não dependem de NENHUM resultado do batch acima (só de
+      // `id`/`firstDay`/`lastDay`/`today`/`profile`, já resolvidos antes
+      // deste Promise.all) — antes rodavam em sequência, cada uma depois da
+      // outra, só por estarem escritas mais abaixo no arquivo, sem nenhuma
+      // dependência real entre elas. Mesmas consultas, mesmos parâmetros,
+      // mesmos resultados — só passam a rodar em paralelo com o resto.
+      // `ensureClosedSprintSnapshots` (escrita, mais abaixo) continua FORA
+      // deste Promise.all e só roda depois de `sprints`/`dailySpend`/
+      // `primaryBudgetChanges` estarem calculados — nunca em paralelo com
+      // uma leitura que dependa dela.
+      loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, id),
+      loadPendenciasRawData(supabase, id),
+      requireQuery(
+        supabase
+          .from("account_reviews")
+          .select("reviewed_at, outcome, team_member:team_members!account_reviews_team_member_id_fkey(name)")
+          .eq("client_id", id)
+          .order("reviewed_at", { ascending: false })
+          .limit(1),
+        "account_reviews:cockpit-resumo",
+      ),
+      profile ? fetchClientTimelinePage(supabase, profile.organizationId, id, "todos", 0, 6) : Promise.resolve({ rows: [] }),
+      buildPerformanceReportData(supabase, id, { start: firstDay, end: lastDay }),
     ]);
 
   const planningHorizon = resolvePlanningHorizon({ firstDay, lastDay }, planningEndDate);
@@ -562,8 +589,9 @@ export default async function ClientPage({
 
   // Demandas — resumo: contagem + até 3 itens mais urgentes, nunca a List
   // View inteira. Reaproveita `loadPendenciasRawData` (MESMA fonte/regra de
-  // `/clients/[id]/demandas` e da área global — `origin='manual'`).
-  const { items: demandaItems } = await loadPendenciasRawData(supabase, id);
+  // `/clients/[id]/demandas` e da área global — `origin='manual'`); busca
+  // já resolvida em paralelo no Promise.all principal, acima.
+  const { items: demandaItems } = pendenciasRawData;
   const { openCount: demandasOpenCount, overdueCount: demandasOverdueCount } = countOpenDemandas(
     demandaItems.map((item) => ({ origin: "manual" as const, client_id: id, status: item.rawStatus, due_date: item.dueDate })),
     () => true,
@@ -583,32 +611,24 @@ export default async function ClientPage({
       }`
     : null;
 
-  const [lastReviewRow] = await requireQuery(
-    supabase
-      .from("account_reviews")
-      .select("reviewed_at, outcome, team_member:team_members!account_reviews_team_member_id_fkey(name)")
-      .eq("client_id", id)
-      .order("reviewed_at", { ascending: false })
-      .limit(1),
-    "account_reviews:cockpit-resumo",
-  );
+  // Busca já resolvida em paralelo no Promise.all principal, acima.
+  const [lastReviewRow] = accountReviewRows;
   const lastOptimizationLabel = lastReviewRow
     ? `${ACCOUNT_REVIEW_OUTCOME_LABEL[lastReviewRow.outcome]} · ${formatRelativeDateTime(lastReviewRow.reviewed_at, new Date())}${lastReviewRow.team_member?.name ? ` · ${lastReviewRow.team_member.name}` : ""}`
     : "Nenhuma otimização registrada";
 
   // MITZA ONE — Fase 1, Seção "Histórico": MESMA fonte da Timeline do
-  // cliente (`fetchClientTimelinePage`), só as linhas mais recentes.
-  const { rows: historyRows } = profile
-    ? await fetchClientTimelinePage(supabase, profile.organizationId, id, "todos", 0, 6)
-    : { rows: [] };
+  // cliente (`fetchClientTimelinePage`), só as linhas mais recentes. Busca
+  // já resolvida em paralelo no Promise.all principal, acima.
+  const { rows: historyRows } = timelinePageResult;
 
   // MITZA ONE — Fase 1, Seção "Performance essencial" (seções 18-20 do
   // pedido): reaproveita 100% a Camada 1 do Relatório de Performance
   // (`buildPerformanceReportData`) e a "Leitura do período"
   // (`buildPeriodReading`) — nenhum cálculo novo, nenhuma segunda
   // agregação de campanhas. Sempre "Visão geral" (nunca um funil
-  // específico nesta primeira camada).
-  const performanceReportData = await buildPerformanceReportData(supabase, id, { start: firstDay, end: lastDay });
+  // específico nesta primeira camada). Busca já resolvida em paralelo no
+  // Promise.all principal, acima.
   const performanceView: CockpitPerformanceView =
     performanceReportData.summary.status === "no_goal"
       ? { kind: "no_goal" }

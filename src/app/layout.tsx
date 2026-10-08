@@ -28,21 +28,35 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const profile = await getCurrentProfile();
-
+  // Etapa "Otimização de carregamento — Item 3 (Layout raiz)":
+  // `getCurrentProfile()` e `loadAgencyAccountsTree()` não trocam dados
+  // entre si (a árvore nunca recebe nada derivado do profile) — antes
+  // rodavam em sequência só porque o uso da árvore era condicional ao
+  // profile existir. Verificado contra as policies de RLS reais
+  // (`supabase/operation-collaboration-rls.sql`: `clients_select`/
+  // `team_members_select` exigem `auth.uid() is not null`/
+  // `current_organization_id()`, que são `null` sem sessão — SEM policy
+  // que erre pra usuário anônimo, só filtra pra 0 linhas): numa rota
+  // pública (`/login`, `/r/[token]` sem sessão), chamar a árvore em
+  // paralelo nunca lança erro nem devolve dado de outra organização — só
+  // soma 2 idas ao banco que voltam vazias, do mesmo jeito que o `[]`
+  // que `walletClients` já usava quando `profile` era `null`. Resultado
+  // final idêntico em todos os casos (o `?` abaixo continua decidindo se
+  // a árvore é usada), só a espera passa a ser em paralelo.
+  //
   // MITZA ONE — Fase 2.1 (Refinamento da Sidebar: mostrar só clientes
-  // ativos): busca a carteira UMA vez aqui no layout raiz (toda rota
-  // autenticada passa por aqui) — SEM `includeAllStatuses`, ou seja, com o
-  // filtro padrão de `loadAgencyAccountsTree` (`status = ativo`), o mesmo
-  // já usado por `/` e `/clients` antes da Fase 2. Cliente pausado/
-  // encerrado continua existindo e acessível por link direto/`/clients`
-  // (ver `clients/[id]/layout.tsx`, que busca o cliente direto por ID,
-  // sem depender desta árvore) — só deixa de aparecer NA LISTA da
-  // carteira. `flattenAgencyTree` é a MESMA ordenação oficial já usada por
+  // ativos): SEM `includeAllStatuses`, ou seja, com o filtro padrão de
+  // `loadAgencyAccountsTree` (`status = ativo`), o mesmo já usado por `/`
+  // e `/clients` antes da Fase 2. Cliente pausado/encerrado continua
+  // existindo e acessível por link direto/`/clients` (ver
+  // `clients/[id]/layout.tsx`, que busca o cliente direto por ID, sem
+  // depender desta árvore) — só deixa de aparecer NA LISTA da carteira.
+  // `flattenAgencyTree` é a MESMA ordenação oficial já usada por
   // anterior/próximo/seletor de antes desta fase (gestor, depois
   // `wallet_position`, "Sem responsável" por último) — nenhuma segunda
   // ordenação inventada.
-  const walletClients = profile ? flattenAgencyTree(await loadAgencyAccountsTree()) : [];
+  const [profile, agencyTree] = await Promise.all([getCurrentProfile(), loadAgencyAccountsTree()]);
+  const walletClients = profile ? flattenAgencyTree(agencyTree) : [];
 
   return (
     <html

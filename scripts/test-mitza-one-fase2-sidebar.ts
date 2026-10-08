@@ -62,7 +62,9 @@ console.log("\nB — Origem e ordenação dos clientes (seção 1/6 do pedido; F
 {
   ok(
     "layout raiz busca a carteira SEM includeAllStatuses (Fase 2.1, seção 1: 'mostrar somente clientes ativos na carteira' — reutiliza o filtro padrão já existente, nenhuma segunda regra) + flattenAgencyTree (MESMA ordenação oficial de sempre — gestor, depois wallet_position)",
-    /flattenAgencyTree\(await loadAgencyAccountsTree\(\)\)/.test(rootLayoutSource) && !rootLayoutSource.includes("loadAgencyAccountsTree({ includeAllStatuses: true })"),
+    rootLayoutSource.includes("loadAgencyAccountsTree()") &&
+      !rootLayoutSource.includes("loadAgencyAccountsTree({ includeAllStatuses: true })") &&
+      rootLayoutSource.includes("flattenAgencyTree(agencyTree)"),
   );
   ok("AppShell só repassa walletClients pra Sidebar — nenhum dado novo, nenhuma segunda consulta aqui", appShellSource.includes("walletClients: AgencyTreeClient[]") && appShellSource.includes("walletClients={walletClients}"));
   ok(

@@ -249,8 +249,8 @@ console.log("\nI — Integração no Cockpit (estrutural): posicionamento, reapr
     pageSource.includes("const evolutionDailySpendRows = (dailySpend ?? []).map("),
   );
   ok(
-    "a nova consulta diária entra no MESMO Promise.all de sempre (seção 7: 'não bloquear desnecessariamente o resto do cockpit') — nenhum await solto fora do Promise.all pra granularidade diária",
-    /getDailyPerformanceRowsForPeriod\(supabase, id, \{ firstDay, lastDay \}\),\s*\n\s*\]\);/.test(pageSource),
+    "a nova consulta diária entra no MESMO Promise.all de sempre (seção 7: 'não bloquear desnecessariamente o resto do cockpit') — nenhum await solto fora do Promise.all pra granularidade diária (continua um elemento puro do array, nunca um 'await getDailyPerformanceRowsForPeriod' isolado — Otimização de carregamento Item 1 só acrescentou MAIS elementos independentes ao mesmo array, nunca tirou este dali)",
+    pageSource.includes("getDailyPerformanceRowsForPeriod(supabase, id, { firstDay, lastDay }),") && !pageSource.includes("await getDailyPerformanceRowsForPeriod("),
   );
   ok(
     "gate de disponibilidade usa dadosData.sources (import_sources.enabled) já carregado — nenhuma segunda consulta pra decidir se a granularidade diária existe",
