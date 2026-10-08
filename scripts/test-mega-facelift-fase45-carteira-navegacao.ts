@@ -113,7 +113,10 @@ console.log("\n6 — ClientWorkspaceHeader: MITZA ONE — Fase 2 simplificou o h
     "clients/[id]/layout.tsx não CHAMA mais a busca da árvore da carteira (Fase 2 moveu essa busca pro layout raiz, pra Sidebar — o nome da função só sobrevive numa doc-comment explicando o que saiu)",
     !clientWorkspaceLayoutSource.includes("await loadAgencyAccountsTree") && !clientWorkspaceLayoutSource.includes("resolveWalletSequence("),
   );
-  ok("layout raiz (src/app/layout.tsx) agora busca a carteira UMA vez (includeAllStatuses: true) pra Sidebar", rootLayoutSource.includes("loadAgencyAccountsTree({ includeAllStatuses: true })"));
+  ok(
+    "layout raiz (src/app/layout.tsx) agora busca a carteira UMA vez pra Sidebar (MITZA ONE — Fase 2.1 reverteu pra ativo-only: loadAgencyAccountsTree() sem includeAllStatuses, ver test-mitza-one-fase2-sidebar.ts)",
+    /flattenAgencyTree\(await loadAgencyAccountsTree\(\)\)/.test(rootLayoutSource),
+  );
 }
 
 console.log("\n7 — Módulos fixos (Fase 4.6): substituídos por navegação por cliente na MITZA ONE — Fase 2 — histórico preservado, assertivas atualizadas\n");

@@ -13,18 +13,16 @@ import { buildAgencyAccountsTree, type AgencyTree } from "./agency-accounts-tree
  * a árvore com os MESMOS argumentos na MESMA requisição reaproveita a
  * mesma consulta, nunca uma segunda ida ao Supabase.
  *
- * MITZA ONE — Fase 2 (Sidebar = Carteira de Clientes): `includeAllStatuses`
- * é a ÚNICA diferença entre as duas populações possíveis — por padrão
- * (`undefined`/`false`, todo chamador de antes desta fase: `app/page.tsx`
- * resolvendo "/", `agency-accounts-tree.tsx` na árvore de Gestão de
- * `/clients`) continua "Workspace = só cliente ativo", regra de negócio
- * INTOCADA. A Sidebar (seção 1 do pedido: "clientes inativos/pausados
- * devem seguir as regras existentes de visibilidade; não assumir
- * exclusão") passa `includeAllStatuses: true` — mesma função, mesmo
- * agrupamento por gestor/`wallet_position`, só sem o filtro de contrato;
- * RLS continua sendo o único filtro de PERMISSÃO real (este `.eq`/sua
- * ausência nunca decidiu quem pode ver o quê, só qual RECORTE de contrato
- * entra na árvore). Argumentos diferentes = chamadas de `cache()`
+ * `includeAllStatuses` é a ÚNICA diferença entre as duas populações
+ * possíveis — por padrão (`undefined`/`false`, todo chamador, incluindo a
+ * Sidebar desde a Fase 2.1: "mostrar somente clientes ativos na carteira")
+ * continua "Workspace = só cliente ativo", regra de negócio INTOCADA.
+ * `includeAllStatuses: true` fica disponível como capacidade reaproveitável
+ * pra quem precisar da árvore completa (hoje sem nenhum chamador) — mesma
+ * função, mesmo agrupamento por gestor/`wallet_position`, só sem o filtro
+ * de contrato; RLS continua sendo o único filtro de PERMISSÃO real (este
+ * `.eq`/sua ausência nunca decidiu quem pode ver o quê, só qual RECORTE de
+ * contrato entra na árvore). Argumentos diferentes = chamadas de `cache()`
  * diferentes (nunca reaproveitadas uma pela outra, de propósito — são
  * populações genuinamente distintas).
  */

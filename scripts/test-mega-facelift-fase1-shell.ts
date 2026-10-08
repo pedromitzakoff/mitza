@@ -53,13 +53,19 @@ console.log("\n1 — MITZA ONE — Fase 2 (Sidebar = Carteira de Clientes) subst
   ok("Demandas continua acessível — mesmo padrão (link global fixo)", /label: "Demandas", href: "\/demandas"/.test(sidebarSource));
   ok("Timeline continua acessível — mesmo padrão (link global fixo)", /label: "Timeline", href: "\/timeline"/.test(sidebarSource));
   ok('eyebrow "Carteira" não existe mais como label — a carteira agora é a lista de clientes diretamente, sem rótulo "Carteira" acima', !/>\s*Carteira\s*</.test(sidebarSource));
-  ok('eyebrow "Gestão" continua — Clientes/Equipe/Configurações, agora dentro da área "Agência"', />\s*Gestão\s*</.test(sidebarSource));
+  ok(
+    'eyebrow "Gestão" continua — Clientes/Equipe/Configurações, agora dentro da área "Agência" (MITZA ONE — Fase 2.1: virou o título de um grupo expansível, rótulo passado por prop — "Gestão" sobrevive como label="Gestão", não mais como texto JSX literal)',
+    sidebarSource.includes('label="Gestão"'),
+  );
 }
 
 console.log("\n2 — Carteira de clientes (MITZA ONE — Fase 2): busca + lista rolável substituem os antigos grupos Growth/Execução\n");
 {
   ok('eyebrow "Growth"/"Execução" não existem mais (não há mais agrupamento por módulo)', !/>\s*Growth\s*</.test(sidebarSource) && !/>\s*Execução\s*</.test(sidebarSource));
-  ok('eyebrow "Agência" existe (ferramentas transversais)', />\s*Agência\s*</.test(sidebarSource));
+  ok(
+    'eyebrow "Agência" existe (ferramentas transversais; MITZA ONE — Fase 2.1: agora o título do grupo expansível, label="Agência")',
+    sidebarSource.includes('label="Agência"'),
+  );
   ok("Sidebar renderiza um campo de busca de cliente (input controlado, filtro local)", sidebarSource.includes('placeholder="Buscar cliente...') && sidebarSource.includes("onChange={(e) => setSearch(e.target.value)}"));
   ok("ClientRow usa ClientAvatar (mesmo componente já usado na Operação/árvore de contas) — nenhum avatar novo", sidebarSource.includes("<ClientAvatar name={client.name} imageUrl={client.avatarUrl}"));
   ok("Sidebar recolhida nunca lista todos os clientes como ícones (seção 5 do pedido) — versão compacta só mostra o cliente atual + gatilho de busca", sidebarSource.includes('collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"'));

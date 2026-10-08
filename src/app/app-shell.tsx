@@ -37,9 +37,10 @@ export function AppShell({
   children,
 }: {
   profile: { name: string; role: UserRole };
-  /** MITZA ONE — Fase 2: carteira já buscada/ordenada pelo layout raiz
-   * (`loadAgencyAccountsTree({ includeAllStatuses: true })` + `flattenAgencyTree`)
-   * — `AppShell` só repassa, nenhum dado novo nem segunda consulta aqui. */
+  /** MITZA ONE — Fase 2 (Fase 2.1: ativo-only): carteira já buscada/
+   * ordenada pelo layout raiz (`loadAgencyAccountsTree()` +
+   * `flattenAgencyTree`) — `AppShell` só repassa, nenhum dado novo nem
+   * segunda consulta aqui. */
   walletClients: AgencyTreeClient[];
   children: React.ReactNode;
 }) {

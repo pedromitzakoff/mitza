@@ -6,6 +6,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } 
 import { Tooltip } from "@/components/ui/tooltip";
 import {
   Briefcase,
+  ChevronRight,
   ClipboardList,
   Clock,
   History,
@@ -189,6 +190,61 @@ function NavLink({
 }
 
 /**
+ * MITZA ONE — Fase 2.1 (Refinamento da Sidebar, seção 2 do pedido): grupo
+ * expansível/colapsável — fechado por padrão, abre ao clicar no título OU
+ * automaticamente quando a rota atual pertence ao grupo (estado controlado
+ * pelo pai, `SidebarContent`, pra poder fazer esse auto-open sem fechar um
+ * grupo que o usuário já abriu manualmente). `<button>` nativo cobre
+ * teclado (Enter/Espaço) de graça; `aria-expanded`/`aria-controls` ligam o
+ * cabeçalho ao painel (`id` só existe quando aberto, já que o painel nem
+ * monta quando fechado — sem animação de altura, mount/unmount simples,
+ * "discreta ou nenhuma" por escolha). Chevron rotaciona 90° quando aberto.
+ */
+function AccordionGroup({
+  groupId,
+  label,
+  navLabel,
+  items,
+  pathname,
+  collapsed,
+  open,
+  onToggle,
+}: {
+  groupId: string;
+  label: string;
+  navLabel: string;
+  items: NavItem[];
+  pathname: string;
+  collapsed: boolean;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const panelId = `sidebar-group-panel-${groupId}`;
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={panelId}
+        className="flex items-center justify-between rounded-md px-0.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-sidebar-foreground-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+      >
+        <span>{label}</span>
+        <ChevronRight className={`h-3 w-3 shrink-0 transition-transform duration-150 ${open ? "rotate-90" : ""}`} aria-hidden="true" />
+      </button>
+      {open && (
+        <nav id={panelId} aria-label={navLabel} className="flex flex-col gap-0.5">
+          {items.map((item) => (
+            <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
+          ))}
+        </nav>
+      )}
+    </div>
+  );
+}
+
+/**
  * Uma linha da carteira — mesmo visual de `NavLink` (reaproveita as
  * classes do "KOFF Active Indicator"), mas o destino é sempre o cockpit
  * (`/clients/[id]`, suffix `""`) e o estado ativo compara contra o ID do
@@ -296,6 +352,32 @@ function SidebarContent({
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [search, setSearch] = useState("");
 
+  // MITZA ONE — Fase 2.1 (seção 2 do pedido): Agência/Gestão fechados por
+  // padrão; abrem automaticamente quando a rota atual já pertence ao
+  // grupo (landing direto numa rota global, ex.: recarregar `/team`) e
+  // continuam abrindo (nunca fechando) a cada navegação cuja rota passe a
+  // pertencer ao grupo — "OR" com o estado anterior, nunca sobrescreve um
+  // grupo que o usuário já abriu manualmente. Ajuste feito DURANTE o
+  // render (padrão oficial do React pra "adjusting state when a prop
+  // changes": guardar a última pathname vista em ESTADO — nunca em ref,
+  // que o React proíbe ler/escrever durante o render — e chamar
+  // `setState` direto no corpo quando ela mudou, nunca dentro de
+  // `useEffect`), não só por estilo — chamar `setState` de forma
+  // síncrona dentro de um efeito aqui causaria um render em cascata
+  // extra a cada navegação.
+  const [openGroups, setOpenGroups] = useState(() => ({
+    agencia: AGENCIA_ITEMS.some((item) => item.isActive(pathname)),
+    gestao: gestaoItems.some((item) => item.isActive(pathname)),
+  }));
+  const [lastAutoOpenPathname, setLastAutoOpenPathname] = useState(pathname);
+  if (lastAutoOpenPathname !== pathname) {
+    setLastAutoOpenPathname(pathname);
+    setOpenGroups((prev) => ({
+      agencia: prev.agencia || AGENCIA_ITEMS.some((item) => item.isActive(pathname)),
+      gestao: prev.gestao || gestaoItems.some((item) => item.isActive(pathname)),
+    }));
+  }
+
   const activeClientId = resolveActiveClientIdFromPathname(pathname);
 
   // Busca local (seção 6 do pedido: "sem chamada Supabase por tecla") —
@@ -313,7 +395,7 @@ function SidebarContent({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center justify-end px-2 pb-1 pt-1.5">
+      <div className="hidden shrink-0 items-center justify-end px-2 pb-1 pt-1.5 md:flex">
         <button
           type="button"
           onClick={toggleCollapsed}
@@ -399,31 +481,52 @@ function SidebarContent({
 
       {/* AGÊNCIA + GESTÃO — seção 2 do pedido: ferramentas transversais,
           nunca módulos do cliente. Fixo abaixo da carteira, nunca rola
-          junto com ela (`shrink-0`). */}
-      <div className="mt-3 shrink-0 space-y-3 px-2.5">
-        <div className="flex flex-col gap-0.5">
-          <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
-            Agência
-          </span>
-          <nav aria-label="Ferramentas da agência" className="flex flex-col gap-0.5">
-            {AGENCIA_ITEMS.map((item) => (
-              <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
-            ))}
-          </nav>
-        </div>
+          junto com ela (`shrink-0`). Fase 2.1: dois grupos expansíveis
+          (fechados por padrão, abrem no clique ou automaticamente pra
+          revelar a rota atual — ver `openGroups` acima) — só na
+          apresentação com rótulos (mobile sempre; desktop expandido).
+          `md:hidden` quando `collapsed`: some só no desktop recolhido,
+          mesma convenção da carteira (ver comentário acima). */}
+      <div className={`mt-2 shrink-0 space-y-1.5 px-2.5 pb-2 ${collapsed ? "md:hidden" : ""}`}>
+        <AccordionGroup
+          groupId="agencia"
+          label="Agência"
+          navLabel="Ferramentas da agência"
+          items={AGENCIA_ITEMS}
+          pathname={pathname}
+          collapsed={collapsed}
+          open={openGroups.agencia}
+          onToggle={() => setOpenGroups((prev) => ({ ...prev, agencia: !prev.agencia }))}
+        />
 
         {gestaoItems.length > 0 && (
-          <div className="flex flex-col gap-0.5 pb-2">
-            <span className={`px-0.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted ${collapsed ? "md:hidden" : ""}`}>
-              Gestão
-            </span>
-            <nav aria-label="Gestão da agência" className="flex flex-col gap-0.5">
-              {gestaoItems.map((item) => (
-                <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
-              ))}
-            </nav>
-          </div>
+          <AccordionGroup
+            groupId="gestao"
+            label="Gestão"
+            navLabel="Gestão da agência"
+            items={gestaoItems}
+            pathname={pathname}
+            collapsed={collapsed}
+            open={openGroups.gestao}
+            onToggle={() => setOpenGroups((prev) => ({ ...prev, gestao: !prev.gestao }))}
+          />
         )}
+      </div>
+
+      {/* Tira de ícones plana pro desktop recolhido (seção 5 da Fase 2:
+          "sem lista de dezenas de ícones indistinguíveis" — aqui só 6
+          ícones fixos, não a carteira). O acordeão da Fase 2.1 só existe
+          na apresentação com rótulos; recolhida continua sem cabeçalho
+          clicável nem estado de aberto/fechado, comportamento idêntico ao
+          de antes desta fase. `hidden md:flex`: nunca aparece no mobile
+          (o bloco com rótulos acima já cobre esse caso). */}
+      <div className={collapsed ? "hidden shrink-0 flex-col gap-0.5 px-2.5 pb-2 md:flex" : "hidden"}>
+        {AGENCIA_ITEMS.map((item) => (
+          <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
+        ))}
+        {gestaoItems.map((item) => (
+          <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
+        ))}
       </div>
 
       {/* RODAPÉ — sempre visível, uma borda sutil separando do resto. */}

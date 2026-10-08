@@ -50,8 +50,14 @@ console.log("\n1 — SIDEBAR: MITZA ONE — Fase 2 substituiu Growth/Execução 
   // Equipe/Configurações) são os 2 grupos fixos agora, abaixo da
   // carteira. Cobertura completa em test-mitza-one-fase2-sidebar.ts.
   ok('eyebrow "Growth"/"Execução" não existem mais (não há mais agrupamento por módulo)', !/>\s*Growth\s*</.test(sidebarSource) && !/>\s*Execução\s*</.test(sidebarSource));
-  ok('eyebrow "Agência" presente (Demandas/Operação/Timeline — ferramentas transversais)', />\s*Agência\s*</.test(sidebarSource));
-  ok('eyebrow "Gestão" presente (Clientes/Equipe/Configurações)', />\s*Gestão\s*</.test(sidebarSource));
+  ok(
+    'eyebrow "Agência" presente (Demandas/Operação/Timeline — ferramentas transversais; MITZA ONE — Fase 2.1: agora título do grupo expansível, label="Agência")',
+    sidebarSource.includes('label="Agência"'),
+  );
+  ok(
+    'eyebrow "Gestão" presente (Clientes/Equipe/Configurações; MITZA ONE — Fase 2.1: agora título do grupo expansível, label="Gestão")',
+    sidebarSource.includes('label="Gestão"'),
+  );
   ok('eyebrow "Carteira" (rótulo próprio) não existe — a lista de clientes aparece direto, sem eyebrow "Carteira" acima dela', !/>\s*Carteira\s*</.test(sidebarSource));
   ok('eyebrow "Cliente" (bloco antigo, Fase 4.5) não existe mais', !/>\s*Cliente\s*</.test(sidebarSource));
   ok("Operação aparece só UMA vez na Sidebar (link global fixo, nunca duplicada entre 'global' e 'do cliente' — esse conceito não existe mais)", (sidebarSource.match(/label: "Operação"/g) ?? []).length === 1);

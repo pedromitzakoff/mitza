@@ -58,11 +58,11 @@ console.log("\nA — Arquitetura final da Sidebar (seção 1/2/7 do pedido): car
 }
 
 // ---------------------------------------------------------------------------
-console.log("\nB — Origem e ordenação dos clientes (seção 1/6 do pedido)\n");
+console.log("\nB — Origem e ordenação dos clientes (seção 1/6 do pedido; Fase 2.1: revertido pra ativo-only)\n");
 {
   ok(
-    "layout raiz busca a carteira com includeAllStatuses:true (não assumir exclusão de pausado/encerrado) + flattenAgencyTree (MESMA ordenação oficial de sempre — gestor, depois wallet_position)",
-    rootLayoutSource.includes("loadAgencyAccountsTree({ includeAllStatuses: true })") && rootLayoutSource.includes("flattenAgencyTree("),
+    "layout raiz busca a carteira SEM includeAllStatuses (Fase 2.1, seção 1: 'mostrar somente clientes ativos na carteira' — reutiliza o filtro padrão já existente, nenhuma segunda regra) + flattenAgencyTree (MESMA ordenação oficial de sempre — gestor, depois wallet_position)",
+    /flattenAgencyTree\(await loadAgencyAccountsTree\(\)\)/.test(rootLayoutSource) && !rootLayoutSource.includes("loadAgencyAccountsTree({ includeAllStatuses: true })"),
   );
   ok("AppShell só repassa walletClients pra Sidebar — nenhum dado novo, nenhuma segunda consulta aqui", appShellSource.includes("walletClients: AgencyTreeClient[]") && appShellSource.includes("walletClients={walletClients}"));
   ok(
@@ -193,6 +193,76 @@ console.log("\nI — Rotas preservadas (seção 8 do pedido): nenhuma removida/r
   ok("/operation, /demandas, /timeline, /clients, /team, /settings continuam existindo", loadSource("src", "app", "operation", "page.tsx").length > 0 && loadSource("src", "app", "demandas", "page.tsx").length > 0 && loadSource("src", "app", "timeline", "page.tsx").length > 0 && loadSource("src", "app", "clients", "page.tsx").length > 0 && loadSource("src", "app", "team", "page.tsx").length > 0 && loadSource("src", "app", "settings", "page.tsx").length > 0);
   ok("/sprints, /reports, /achievements não foram tocados", loadSource("src", "app", "sprints", "page.tsx").length > 0 && loadSource("src", "app", "reports", "page.tsx").length > 0 && loadSource("src", "app", "achievements", "page.tsx").length > 0);
   ok("reminders/LegacyGlobalDashboard não foram alterados nesta fase (nenhum arquivo de reminders tocado; LegacyGlobalDashboard continua export órfão em app/page.tsx)", loadSource("src", "app", "page.tsx").includes("export async function LegacyGlobalDashboard("));
+}
+
+// ---------------------------------------------------------------------------
+console.log("\nJ — MITZA ONE — Fase 2.1 (Refinamento da Sidebar): só clientes ativos na carteira\n");
+{
+  ok(
+    "clients/[id]/layout.tsx continua buscando o cliente DIRETO por ID (sem depender da árvore ativo-only) — acesso direto a cliente pausado/encerrado nunca regride, nunca força redirect",
+    clientLayoutSource.includes('.from("clients")') && !clientLayoutSource.includes("redirect("),
+  );
+  ok(
+    "loadAgencyAccountsTree(options?) continua existindo como capacidade reaproveitável (includeAllStatuses), só deixou de ser chamada com true pela Sidebar — nenhuma segunda regra de status criada, nenhuma função nova",
+    treeDataSource.includes("options?: { includeAllStatuses?: boolean }") && treeDataSource.includes('clientsQuery.eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS)'),
+  );
+
+  // Simula exatamente o que a Sidebar recebe agora (walletClients já
+  // vem ativo-only do layout raiz) — busca local nunca reintroduz
+  // pausado/encerrado porque eles nunca estão no array de entrada.
+  const activeOnlyWallet: AgencyTreeClient[] = [
+    { id: "ativo-1", name: "Conta Ativa Um", avatarUrl: null, status: "ativo" },
+    { id: "ativo-2", name: "Conta Ativa Dois", avatarUrl: null, status: "ativo" },
+  ];
+  check(
+    "busca 'conta' sobre carteira já ativo-only -> só as 2 contas ativas (pausado/encerrado nem chegam a existir no array, então nunca aparecem)",
+    filterAgencyTreeClients(activeOnlyWallet, "conta").map((c) => c.id),
+    ["ativo-1", "ativo-2"],
+  );
+  check("busca vazia sobre carteira ativo-only -> os mesmos 2, nenhum a mais", filterAgencyTreeClients(activeOnlyWallet, "").map((c) => c.id), ["ativo-1", "ativo-2"]);
+}
+
+console.log("\nK — MITZA ONE — Fase 2.1: Agência e Gestão como menus expansíveis\n");
+{
+  ok("Sidebar importa ChevronRight (ícone do acordeão)", /import \{[^}]*\bChevronRight\b[^}]*\} from "lucide-react"/.test(sidebarSource));
+  ok("AccordionGroup existe como componente dedicado (fechado/aberto controlado pelo pai)", /function AccordionGroup\(/.test(sidebarSource));
+  ok("Cabeçalho do grupo é um <button> real (cobre teclado de graça) com aria-expanded/aria-controls", sidebarSource.includes("aria-expanded={open}") && sidebarSource.includes("aria-controls={panelId}"));
+  ok("Chevron rotaciona 90° quando aberto (indicador visual de estado)", sidebarSource.includes('open ? "rotate-90" : ""'));
+  ok(
+    "fechados por padrão: o estado inicial de cada grupo vem de isActive(pathname) na pathname atual, nunca hardcoded 'true' (closed-by-default salvo quando a rota já pertence ao grupo)",
+    /useState\(\(\) => \(\{\s*agencia: AGENCIA_ITEMS\.some/.test(sidebarSource),
+  );
+  ok(
+    "auto-open nunca FECHA um grupo já aberto manualmente — sempre 'prev.X || isActive(...)' (OR, nunca sobrescreve com false)",
+    sidebarSource.includes("agencia: prev.agencia || AGENCIA_ITEMS.some((item) => item.isActive(pathname))") &&
+      sidebarSource.includes("gestao: prev.gestao || gestaoItems.some((item) => item.isActive(pathname))"),
+  );
+  ok(
+    "auto-open reavalia a cada navegação via comparação de pathname DURANTE o render (estado, nunca ref — React proíbe ler/escrever ref durante o render; nunca setState síncrono dentro de useEffect, que causaria um render em cascata extra)",
+    sidebarSource.includes("lastAutoOpenPathname !== pathname"),
+  );
+  ok("Agência e Gestão continuam os MESMOS itens/links/permissões de antes (nenhuma rota nova, Configurações continua adminOnly)", sidebarSource.includes("items={AGENCIA_ITEMS}") && sidebarSource.includes("items={gestaoItems}"));
+  ok(
+    "desktop recolhido preserva o comportamento ANTERIOR (tira de ícones plana, sem cabeçalho clicável/acordeão) — Fase 2.1 não altera a apresentação recolhida",
+    sidebarSource.includes('collapsed ? "hidden shrink-0 flex-col gap-0.5 px-2.5 pb-2 md:flex" : "hidden"'),
+  );
+}
+
+console.log("\nL — MITZA ONE — Fase 2.1: altura da carteira priorizada (seção 3 do pedido)\n");
+{
+  ok(
+    "botão de recolher/expandir (linha do topo) some no mobile — reclama espaço vertical que antes ficava vazio (botão já era 'hidden md:block' por dentro; o wrapper agora acompanha)",
+    sidebarSource.includes('className="hidden shrink-0 items-center justify-end px-2 pb-1 pt-1.5 md:flex"'),
+  );
+  ok(
+    "margem/espaçamento de Agência+Gestão foi reduzido (mt-3/space-y-3 -> mt-2/space-y-1.5) sem tocar no padding das linhas (NavLink/ClientRow continuam py-1) nem no tamanho do avatar (ClientAvatar continua size=\"xs\")",
+    sidebarSource.includes('mt-2 shrink-0 space-y-1.5 px-2.5 pb-2') && sidebarSource.includes('py-1 pl-2 pr-2.5') && sidebarSource.includes('size="xs"'),
+  );
+  ok(
+    "a região da carteira continua 'flex-1 min-h-0' (ocupa toda altura disponível, scroll próprio) — nenhuma mudança nessa mecânica, só menos espaço perdido ao redor dela",
+    sidebarSource.includes("flex min-h-0 flex-1 flex-col px-2.5"),
+  );
+  ok("rodapé (relógio/Atualizar Meta/identidade/sair) continua intocado, mesma estrutura", sidebarSource.includes('border-t border-sidebar-border p-2.5'));
 }
 
 console.log(`\n${passed} verificações passaram.`);

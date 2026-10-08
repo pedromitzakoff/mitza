@@ -30,18 +30,19 @@ export default async function RootLayout({
 }>) {
   const profile = await getCurrentProfile();
 
-  // MITZA ONE — Fase 2 (Sidebar = Carteira de Clientes): busca a carteira
-  // UMA vez aqui no layout raiz (toda rota autenticada passa por aqui) —
-  // `includeAllStatuses: true` porque a Sidebar nunca deve assumir exclusão
-  // de cliente pausado/encerrado (seção 1 do pedido); `flattenAgencyTree`
-  // é a MESMA ordenação oficial já usada por anterior/próximo/seletor de
-  // antes desta fase (gestor, depois `wallet_position`, "Sem responsável"
-  // por último) — nenhuma segunda ordenação inventada. `loadAgencyAccountsTree`
-  // é `cache()`'d por request: se outra parte da árvore de renderização
-  // também pedir a árvore ativo-only (`/clients`, `/`), é uma chamada
-  // DIFERENTE (argumento diferente), não uma segunda consulta da MESMA
-  // população.
-  const walletClients = profile ? flattenAgencyTree(await loadAgencyAccountsTree({ includeAllStatuses: true })) : [];
+  // MITZA ONE — Fase 2.1 (Refinamento da Sidebar: mostrar só clientes
+  // ativos): busca a carteira UMA vez aqui no layout raiz (toda rota
+  // autenticada passa por aqui) — SEM `includeAllStatuses`, ou seja, com o
+  // filtro padrão de `loadAgencyAccountsTree` (`status = ativo`), o mesmo
+  // já usado por `/` e `/clients` antes da Fase 2. Cliente pausado/
+  // encerrado continua existindo e acessível por link direto/`/clients`
+  // (ver `clients/[id]/layout.tsx`, que busca o cliente direto por ID,
+  // sem depender desta árvore) — só deixa de aparecer NA LISTA da
+  // carteira. `flattenAgencyTree` é a MESMA ordenação oficial já usada por
+  // anterior/próximo/seletor de antes desta fase (gestor, depois
+  // `wallet_position`, "Sem responsável" por último) — nenhuma segunda
+  // ordenação inventada.
+  const walletClients = profile ? flattenAgencyTree(await loadAgencyAccountsTree()) : [];
 
   return (
     <html
