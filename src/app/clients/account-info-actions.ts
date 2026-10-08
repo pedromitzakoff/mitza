@@ -18,7 +18,28 @@ import type { AccountInfoSyncRun } from "./account-info-drawer";
 export interface AccountInfoDrawerData {
   lastPerformanceUpdateValue: string;
   latestDataDateLabel: string | null;
-  hasStractSource: boolean;
+  /** `true` quando existe PELO MENOS UMA fonte automática ativa (Stract ou
+   * busca direta na Meta, `provider in ('stract','meta_api')`) — decide se
+   * o bloco "Sincronização" aparece. Nome genérico de propósito (MITZA
+   * ONE — Busca direta na Meta): antes só existia o caminho Stract, então
+   * esta chave chamava `hasStractSource`; corrigido porque um cliente com
+   * SÓ `meta_api` ativo (nunca Stract) estava caindo nesse `true` do mesmo
+   * jeito (bug real: `getEnabledImportSourceIdsForClient` sempre foi
+   * genérico, nunca filtrou por provider) e o rótulo "Stract" aparecia
+   * mesmo sem nenhuma fonte Stract — ver `syncProviderLabel` abaixo. */
+  hasAutomaticSyncSource: boolean;
+  /** Rótulo da fonte automática ativa ("Stract" / "Meta (busca direta)") —
+   * só usado quando `hasAutomaticSyncSource` é `true`. Se as duas
+   * coexistirem (estado transitório, nunca o estado-alvo — ver
+   * `lib/meta-sync.ts`), `meta_api` tem prioridade no rótulo por ser o
+   * caminho mais novo, mas o status/histórico abaixo sempre reflete a
+   * execução mais recente entre as duas de qualquer forma. */
+  syncProviderLabel: string | null;
+  /** `true` quando a fonte automática ativa é `meta_api` — decide se o
+   * botão "Sincronizar agora" aciona `syncClientMetaApiSourcesAction` em
+   * vez de `syncClientStractSourcesAction` (`runImportForSource` é
+   * Stract-only, chamá-la contra uma fonte `meta_api` falha). */
+  isMetaApiSyncProvider: boolean;
   syncStatusLabel: string;
   syncStatusBadgeClassName: string;
   syncStartedAtLabel: string | null;
@@ -59,11 +80,33 @@ export async function getAccountInfoDrawerDataAction(clientId: string): Promise<
   if (!client) return { error: "Cliente não encontrado." };
   const canOperate = client.status === "ativo";
 
-  const stractImportSourceIds = await getEnabledImportSourceIdsForClient(supabase, clientId);
+  // MITZA ONE — Busca direta na Meta: `getEnabledImportSourceIdsForClient`
+  // sempre foi genérico (`enabled = true`, qualquer provider) — correto
+  // pra resolver o HISTÓRICO de execuções (`data_sync_runs` não distingue
+  // provider pra fins de exibição aqui), mas o antigo `hasStractSource`
+  // tratava "existe alguma fonte automática habilitada" como sinônimo de
+  // "é Stract", o que ficou errado assim que um cliente passou a ter só
+  // `meta_api` habilitado (bug real: rótulo "Stract" aparecendo pra uma
+  // fonte que não é Stract). Busca o provider de cada fonte habilitada pra
+  // nunca mais confundir os dois.
+  const [enabledSourceIds, { data: enabledSourceProviderRows }] = await Promise.all([
+    getEnabledImportSourceIdsForClient(supabase, clientId),
+    supabase.from("import_sources").select("provider").eq("client_id", clientId).eq("enabled", true),
+  ]);
+  const enabledProviders = new Set((enabledSourceProviderRows ?? []).map((r) => r.provider));
+  const hasStractSource = enabledProviders.has("stract");
+  const hasMetaApiSource = enabledProviders.has("meta_api");
+  const hasAutomaticSyncSource = hasStractSource || hasMetaApiSource;
+  // Prioridade de rótulo quando as duas coexistem (estado transitório, ver
+  // `lib/meta-sync.ts`): `meta_api` é o caminho mais novo, nunca ambíguo
+  // pro gestor qual fonte está realmente alimentando o dado.
+  const isMetaApiSyncProvider = hasMetaApiSource;
+  const syncProviderLabel = hasAutomaticSyncSource ? (isMetaApiSyncProvider ? "Meta (busca direta)" : "Stract") : null;
+
   const [latestSyncStatus, latestSpendDate, recentSyncRuns, reportShareLinkStatus, [clientOperationalState], reviewRows] = await Promise.all([
-    stractImportSourceIds.length > 0 ? getLatestSyncRunStatusForSources(stractImportSourceIds) : Promise.resolve(null),
-    stractImportSourceIds.length > 0 ? getLatestDailySpendDate(supabase, clientId) : Promise.resolve(null),
-    isAdmin && stractImportSourceIds.length > 0 ? getRecentSyncRunsForClient(supabase, stractImportSourceIds) : Promise.resolve([]),
+    enabledSourceIds.length > 0 ? getLatestSyncRunStatusForSources(enabledSourceIds) : Promise.resolve(null),
+    enabledSourceIds.length > 0 ? getLatestDailySpendDate(supabase, clientId) : Promise.resolve(null),
+    isAdmin && enabledSourceIds.length > 0 ? getRecentSyncRunsForClient(supabase, enabledSourceIds) : Promise.resolve([]),
     isAdmin ? getReportShareLinkStatus(clientId) : Promise.resolve({ active: false, createdAt: null, url: null }),
     loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, clientId),
     // "Última otimização" — sempre a mais recente de VERDADE (nunca mais
@@ -103,7 +146,9 @@ export async function getAccountInfoDrawerDataAction(clientId: string): Promise<
       ? formatRelativeDateTime(clientOperationalState.lastDataSyncAt, nowInstant)
       : "Sem sincronização registrada",
     latestDataDateLabel: latestSpendDate ? formatShortDate(latestSpendDate) : null,
-    hasStractSource: stractImportSourceIds.length > 0,
+    hasAutomaticSyncSource,
+    syncProviderLabel,
+    isMetaApiSyncProvider,
     syncStatusLabel: latestSyncStatus ? SYNC_RUN_STATUS_LABEL[latestSyncStatus.status] : "Nunca sincronizado",
     syncStatusBadgeClassName: latestSyncStatus
       ? SYNC_RUN_STATUS_BADGE_CLASSES[latestSyncStatus.status]

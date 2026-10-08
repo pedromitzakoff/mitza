@@ -109,6 +109,12 @@ export interface DadosHealthSummary {
    * (ver `lib/data-trust.ts`). `null` = nenhuma fonte habilitada sincronizou
    * com sucesso ainda. */
   latestSuccessAtLabel: string | null;
+  /** Mesmo instante de `latestSuccessAtLabel`, em ISO bruto — usado pelo
+   * timer ao vivo "Dados atualizados há..." do Cockpit
+   * (`data-freshness-timer.tsx`), que precisa recalcular o rótulo no
+   * cliente a cada ~30s (o rótulo formatado acima é fixo no momento do
+   * render do servidor, nunca muda sozinho). */
+  latestSuccessAt: string | null;
   attentionCount: number;
 }
 
@@ -284,6 +290,7 @@ export async function loadDadosPageData(supabase: Supabase, clientId: string, is
     latestImportedDateLabel: latestImportedRaw ? formatShortDate(latestImportedRaw) : null,
     latestImportedDate: latestImportedRaw,
     latestSuccessAtLabel: latestSuccessRaw ? formatRelativeDateTime(latestSuccessRaw, now) : null,
+    latestSuccessAt: latestSuccessRaw,
     attentionCount: attentions.length,
   };
 

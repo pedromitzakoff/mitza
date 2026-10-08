@@ -206,6 +206,26 @@ export function formatRelativeDateTime(value: string, today: Date): string {
   return `${formatDateTime(value)}`;
 }
 
+/** "agora mesmo" / "há 1 minuto" / "há 23 minutos" / "há 1 hora" / "há 5
+ * horas" — granularidade de MINUTO, distinta de `formatRelativeDateTime`
+ * (que só desce a "Hoje, HH:MM"). Única consumidora até agora: o indicador
+ * "Dados atualizados há..." do Cockpit (`data-freshness-timer.tsx`), que
+ * re-renderiza a cada ~30s no cliente — uma fonte sincronizando a cada 5
+ * minutos (busca direta na Meta) precisa de um rótulo que realmente mude
+ * minuto a minuto, nunca travado em "Hoje, 14:03" o dia inteiro. A partir
+ * de 24h, cai pra `formatRelativeDateTime` (reaproveitado, nunca uma
+ * segunda régua de dias). `now` sempre um instante real (`new Date()`,
+ * nunca `todayUTC()` — mesmo cuidado já documentado acima). */
+export function formatMinuteRelativeTime(value: string, now: Date): string {
+  const diffMs = now.getTime() - new Date(value).getTime();
+  const diffMinutes = Math.floor(diffMs / 60_000);
+  if (diffMinutes < 1) return "agora mesmo";
+  if (diffMinutes < 60) return `há ${diffMinutes} minuto${diffMinutes === 1 ? "" : "s"}`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `há ${diffHours} hora${diffHours === 1 ? "" : "s"}`;
+  return formatRelativeDateTime(value, now).toLowerCase();
+}
+
 /** "Hoje, 14:03" / "Ontem, 09:10" / "12/07 às 09:10" — mesma regra de dia
  * relativo de `formatRelativeDateTime`, mas SEM o estágio intermediário
  * "Há N dias": a partir de anteontem já mostra a data real (Etapa "Ajuste

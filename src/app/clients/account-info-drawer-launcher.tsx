@@ -4,11 +4,14 @@ import { useState } from "react";
 import { AccountInfoDrawer, type AccountInfoSyncRun } from "./account-info-drawer";
 import { getAccountInfoDrawerDataAction } from "./account-info-actions";
 import { syncClientStractSourcesAction } from "./stract-sync-actions";
+import { syncClientMetaApiSourcesAction } from "./meta-api-sync-actions";
 
 interface DrawerData {
   lastPerformanceUpdateValue: string;
   latestDataDateLabel: string | null;
-  hasStractSource: boolean;
+  hasAutomaticSyncSource: boolean;
+  syncProviderLabel: string | null;
+  isMetaApiSyncProvider: boolean;
   syncStatusLabel: string;
   syncStatusBadgeClassName: string;
   syncStartedAtLabel: string | null;
@@ -59,7 +62,8 @@ export function AccountInfoDrawerLauncher({ clientId, triggerClassName }: { clie
             onClose={() => setOpen(false)}
             lastPerformanceUpdateValue={data.lastPerformanceUpdateValue}
             latestDataDateLabel={data.latestDataDateLabel}
-            hasStractSource={data.hasStractSource}
+            hasAutomaticSyncSource={data.hasAutomaticSyncSource}
+            syncProviderLabel={data.syncProviderLabel}
             syncStatusLabel={data.syncStatusLabel}
             syncStatusBadgeClassName={data.syncStatusBadgeClassName}
             syncStartedAtLabel={data.syncStartedAtLabel}
@@ -67,7 +71,11 @@ export function AccountInfoDrawerLauncher({ clientId, triggerClassName }: { clie
             lastOptimizationValue={data.lastOptimizationValue}
             lastOptimizationTooltip={data.lastOptimizationTooltip}
             canOperate={data.canOperate}
-            syncAction={syncClientStractSourcesAction.bind(null, clientId)}
+            syncAction={
+              data.isMetaApiSyncProvider
+                ? syncClientMetaApiSourcesAction.bind(null, clientId)
+                : syncClientStractSourcesAction.bind(null, clientId)
+            }
             recentSyncRuns={data.recentSyncRuns}
             reviewsHistoryHref={data.reviewsHistoryHref}
             clientId={clientId}

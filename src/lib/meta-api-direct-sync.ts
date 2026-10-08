@@ -27,12 +27,38 @@ export interface DirectSyncResult {
 }
 
 /**
- * Busca e grava, pra TODAS as contas registradas como fonte `meta_api`
- * ativa, os insights da janela curta (`resolveSyncWindow`) — equivalente
- * direto ao que `POST /api/n8n/meta-insights` faz por conta, só que
- * disparado por cron em vez de por um workflow externo. Reaproveita
+ * Busca e grava, pra UMA conta, os insights da janela curta
+ * (`resolveSyncWindow`) — equivalente direto a um POST de
+ * `/api/n8n/meta-insights` pra essa conta, só que disparado pelo próprio
+ * servidor da MITZA em vez de um workflow externo. Reaproveita
  * INTEGRALMENTE `ingestMetaApiPayload` (mesma validação/agregação/gravação
  * que o caminho n8n já usa) — nenhuma segunda implementação de gravação.
+ * Nunca lança — erro vira `{ outcome: "error" }`, pro chamador (cron ou
+ * ação manual) decidir o que fazer, nunca travar quem chama.
+ */
+export async function syncOneMetaApiAccount(accountId: string): Promise<DirectSyncResult> {
+  const { since, until } = resolveSyncWindow(todayDateString());
+  try {
+    const rows = await fetchMetaApiInsightsForAccount(accountId, since, until);
+    const outcome = await ingestMetaApiPayload({ accountId, rows });
+
+    if (outcome.kind === "ok") {
+      return { accountId, outcome: "ok", rowsRead: outcome.result.rowsRead };
+    }
+    return { accountId, outcome: outcome.kind };
+  } catch (err) {
+    console.error(`[meta-api-direct-sync] Falha ao sincronizar ${accountId}:`, err);
+    return { accountId, outcome: "error", errorMessage: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Busca e grava, pra TODAS as contas registradas como fonte `meta_api`
+ * ativa, os insights da janela curta — mesma função (`syncOneMetaApiAccount`)
+ * aplicada por conta, nunca uma segunda implementação. Usada pelo cron
+ * (`/api/cron/sync-meta-api`); `syncClientMetaApiSourcesAction`
+ * (`meta-api-sync-actions.ts`) usa `syncOneMetaApiAccount` diretamente pro
+ * botão "Sincronizar agora" de UM cliente.
  *
  * Nunca para no primeiro erro (mesma convenção de `syncAllClientsMetaSpend`,
  * `lib/meta-sync.ts`) — uma conta com problema (token expirado, rate limit,
@@ -51,24 +77,9 @@ export async function syncAllMetaApiAccounts(): Promise<DirectSyncResult[]> {
   }
 
   const accountIds = Array.from(new Set((sources ?? []).map((s) => s.external_account_id)));
-  const { since, until } = resolveSyncWindow(todayDateString());
-
   const results: DirectSyncResult[] = [];
   for (const accountId of accountIds) {
-    try {
-      const rows = await fetchMetaApiInsightsForAccount(accountId, since, until);
-      const outcome = await ingestMetaApiPayload({ accountId, rows });
-
-      if (outcome.kind === "ok") {
-        results.push({ accountId, outcome: "ok", rowsRead: outcome.result.rowsRead });
-      } else {
-        results.push({ accountId, outcome: outcome.kind });
-      }
-    } catch (err) {
-      console.error(`[meta-api-direct-sync] Falha ao sincronizar ${accountId}:`, err);
-      results.push({ accountId, outcome: "error", errorMessage: err instanceof Error ? err.message : String(err) });
-    }
+    results.push(await syncOneMetaApiAccount(accountId));
   }
-
   return results;
 }

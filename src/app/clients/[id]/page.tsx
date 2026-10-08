@@ -51,6 +51,7 @@ import { groupChannelsByResultType } from "@/lib/cockpit-result-groups";
 import { buildCockpitInsights } from "@/lib/cockpit-diagnostics";
 import type { DataAttention } from "@/lib/data-trust";
 import { loadDadosPageData } from "../dados-data";
+import { DataFreshnessTimer } from "../data-freshness-timer";
 import { fetchClientTimelinePage } from "@/lib/client-timeline";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
 import { buildPeriodReading } from "@/lib/performance-report/report-derivatives";
@@ -727,6 +728,7 @@ export default async function ClientPage({
           </IconButton>
         </div>
         <div className="ml-auto flex items-center gap-3">
+          <DataFreshnessTimer lastSuccessAt={dadosData?.health.latestSuccessAt ?? null} />
           {externalLinks.map((link) => (
             <a
               key={link.label}

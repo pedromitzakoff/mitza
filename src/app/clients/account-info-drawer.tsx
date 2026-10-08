@@ -58,7 +58,8 @@ export function AccountInfoDrawer({
   onClose,
   lastPerformanceUpdateValue,
   latestDataDateLabel,
-  hasStractSource,
+  hasAutomaticSyncSource,
+  syncProviderLabel,
   syncStatusLabel,
   syncStatusBadgeClassName,
   syncStartedAtLabel,
@@ -77,9 +78,17 @@ export function AccountInfoDrawer({
 }: {
   onClose: () => void;
   lastPerformanceUpdateValue: string;
-  /** `dados até DD/MM` — `null` quando o cliente não tem fonte Stract. */
+  /** `dados até DD/MM` — `null` quando o cliente não tem fonte automática
+   * (Stract ou busca direta na Meta). */
   latestDataDateLabel: string | null;
-  hasStractSource: boolean;
+  /** `true` = existe pelo menos uma fonte automática habilitada (Stract OU
+   * busca direta na Meta) — decide se o bloco "Sincronização" aparece. */
+  hasAutomaticSyncSource: boolean;
+  /** "Stract" / "Meta (busca direta)" — só usado quando
+   * `hasAutomaticSyncSource` é `true`, nunca hardcoded (bug real corrigido:
+   * o rótulo "Stract" aparecia mesmo pra clientes só com busca direta na
+   * Meta ativa). */
+  syncProviderLabel: string | null;
   syncStatusLabel: string;
   syncStatusBadgeClassName: string;
   syncStartedAtLabel: string | null;
@@ -136,12 +145,12 @@ export function AccountInfoDrawer({
             {latestDataDateLabel && <Row label="Dados disponíveis até" value={latestDataDateLabel} />}
           </Section>
 
-              {(hasStractSource || metaOnlyLastSyncLabel) && (
+              {(hasAutomaticSyncSource || metaOnlyLastSyncLabel) && (
                 <Section title="Sincronização">
-                  {hasStractSource ? (
+                  {hasAutomaticSyncSource ? (
                     <>
                       <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-[11px] text-overview-text-muted">Stract</span>
+                        <span className="text-[11px] text-overview-text-muted">{syncProviderLabel}</span>
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${syncStatusBadgeClassName}`}>{syncStatusLabel}</span>
                       </div>
                       {syncStartedAtLabel && <Row label="Última sincronização" value={syncStartedAtLabel} />}
