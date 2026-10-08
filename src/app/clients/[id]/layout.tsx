@@ -3,6 +3,15 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { ClientWorkspaceHeader } from "../client-workspace-header";
 import { ActiveClientSidebarName } from "../client-workspace-context";
 
+// `maxDuration` de um route segment vale pras Server Actions disparadas de
+// dentro dele (ver Next.js docs) — o header persistente deste layout é quem
+// renderiza `AccountInfoDrawerLauncher`, cujo botão "Sincronizar agora" pode
+// chamar `syncClientMetaApiSourcesAction` (busca direta na Meta). Sem isso,
+// essa Server Action roda no limite padrão (bem mais curto) da Vercel, que
+// corta a chamada à Graph API no meio pra uma conta grande — o botão fica
+// preso em "Sincronizando..." pra sempre em vez de terminar ou errar.
+export const maxDuration = 300;
+
 /**
  * Layout compartilhado do workspace do cliente — envolve TODAS as
  * sub-rotas de `clients/[id]/**` (cockpit, `/metas`, `/relatorio`,
