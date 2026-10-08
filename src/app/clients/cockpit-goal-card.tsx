@@ -135,7 +135,6 @@ export function CockpitResultCard({ view, status }: { view: CockpitResultCardVie
             </span>
             <span className="tabular-nums font-medium text-overview-text-primary">{formatCount(view.targetResultCount)}</span>
           </div>
-          {view.inheritedFromMonthLabel && <p className="text-[10px] text-overview-text-muted">Meta herdada de {view.inheritedFromMonthLabel}</p>}
           {view.neededDailyRate !== null && (
             <div className="flex items-center justify-between gap-3">
               <span>Necessário</span>
@@ -193,7 +192,6 @@ export function CockpitCostCard({ view }: { view: CockpitCostCardView }) {
             </span>
             <span className="tabular-nums font-medium text-overview-text-primary">{formatCurrency(view.targetCostPerResult)}</span>
           </div>
-          {view.inheritedFromMonthLabel && <p className="text-[10px] text-overview-text-muted">Meta herdada de {view.inheritedFromMonthLabel}</p>}
           {view.deviationPct !== null && view.deviationPct > 0 && (
             <p className="text-overview-text-secondary">{Math.round(view.deviationPct * 100)}% acima</p>
           )}

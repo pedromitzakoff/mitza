@@ -169,13 +169,15 @@ console.log(
   );
 }
 
-console.log("\nC — Planejamento mensal sem herança automática (seção 3 do pedido): DELIBERADAMENTE interrompido — auditoria apresentada, nenhuma semântica de vigência alterada\n");
+console.log(
+  "\nC — Planejamento mensal sem herança automática (seção 3 do pedido): a regra COMPARTILHADA (resolveClientMonthlyPlan/resolveMonthlyPerformanceTargets) continua com carry-forward intocado — só o Cockpit passou a tratar como zerado (ver seção C.1)\n",
+);
 {
   const clientPlanSource = loadSource("src", "lib", "client-plan.ts");
   const monthlyBudgetSource = loadSource("src", "lib", "monthly-budget.ts");
 
   ok(
-    "resolveClientMonthlyPlan continua com a regra de vigência (mês <= selectedMonth, carry-forward) — a regra 'cada mês exige configuração explícita' NÃO foi implementada (decisão de parar, per instrução do usuário)",
+    "resolveClientMonthlyPlan continua com a regra de vigência (mês <= selectedMonth, carry-forward) — os 8+ consumidores fora do Cockpit (Dashboard, Operação, Saúde da Conta, Relatórios, Conquistas, Painel Mensal, Lista de Clientes) continuam recebendo o valor herdado normalmente",
     clientPlanSource.includes("c.month <= selectedMonth") || clientPlanSource.includes("<= selectedMonth"),
   );
   ok(
@@ -183,8 +185,37 @@ console.log("\nC — Planejamento mensal sem herança automática (seção 3 do 
     monthlyBudgetSource.includes('nunca "sem meta" só porque ninguém tocou'),
   );
   ok(
-    "nenhuma migration/coluna nova de 'configuração explícita por mês' foi introduzida nesta etapa",
+    "nenhuma migration/coluna nova de 'configuração explícita por mês' foi introduzida — a distinção 'herdado vs. configurado neste mês' é inteiramente derivada em memória (resolveGoalSourceMonth), nunca persistida",
     !clientPlanSource.includes("is_explicit_for_month") && !monthlyBudgetSource.includes("is_explicit_for_month"),
+  );
+}
+
+console.log(
+  '\nC.1 — CORREÇÃO/REFINAMENTO: pedido do usuário "quando mexer nas metas de um mes o mes seguinte nao muda, o mes seguinte é sempre tudo zero" — decisão via AskUserQuestion: "Só no Cockpit" + "Tudo zera junto"\n',
+);
+{
+  const clientPlanSource = loadSource("src", "lib", "client-plan.ts");
+  const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
+
+  ok(
+    "client-plan.ts expõe resolveGoalSourceMonth/resolveSourceMonthByChannel e ClientGoalPlan.inheritedFromMonth — infraestrutura ADITIVA (campo opcional), nunca muda o que resolveClientMonthlyPlan/resolveClientMonthlyGoals já retornavam",
+    clientPlanSource.includes("function resolveSourceMonthByChannel") &&
+      clientPlanSource.includes("function resolveGoalSourceMonth") &&
+      clientPlanSource.includes("inheritedFromMonth?:"),
+  );
+  ok(
+    "[id]/page.tsx usa goalPlan.inheritedFromMonth pra decidir isGoalConfiguredThisMonth — mês herdado de um mês anterior trata targetResultCount/targetCostPerResult como null, igual a um cliente que nunca configurou nada",
+    pageSource.includes("const isGoalConfiguredThisMonth = goalPlan.inheritedFromMonth == null;") &&
+      /isGoalConfiguredThisMonth\s*\?\s*resolveTargetCostPerResult/.test(pageSource) &&
+      /isGoalConfiguredThisMonth\s*\?\s*goalPlan\.consolidated\.resultCount\s*:\s*null/.test(pageSource),
+  );
+  ok(
+    "zerar o mês não configurado é SÓ exibição do Cockpit — reaproveita o mesmo estado 'Sem meta configurada' que já existia pra cliente nunca configurado, nenhum componente/mensagem nova criada só pra isso",
+    !pageSource.includes("Meta herdada") && !loadSource("src", "app", "clients", "cockpit-goal-card.tsx").includes("Meta herdada"),
+  );
+  ok(
+    "o restante da composição da página (clientGoalsPlan, usado por Evolução Diária/Diagnóstico de investimento) não foi alterado — só o bloco local de cada card de Meta & Ritmo decide isGoalConfiguredThisMonth, nenhuma segunda resolução de clientGoalsPlan inteira",
+    pageSource.includes("const clientGoalsPlan = resolveClientMonthlyGoals({"),
   );
 }
 

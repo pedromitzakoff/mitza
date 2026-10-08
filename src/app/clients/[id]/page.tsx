@@ -495,11 +495,29 @@ export default async function ClientPage({
             returnTo: cockpitReturnTo,
           }
         : null;
-      const targetCostPerResult = resolveTargetCostPerResult({
-        channel: "consolidated",
-        plan: goalPlan,
-        legacyFallback: group.isPrimary ? client.target_cost_per_result : null,
-      });
+      // MITZA ONE — Refinamento do Cockpit (pedido do usuário: "quando mexer
+      // nas metas de um mes o mes seguinte nao muda, o mes seguinte é sempre
+      // tudo zero" — decisão explícita via `AskUserQuestion`: "Só no
+      // Cockpit" + "Tudo zera junto"). `goalPlan.inheritedFromMonth` não-nulo
+      // = a meta vigente veio de um mês ANTERIOR (nunca configurada neste
+      // mês) — o Cockpit trata como se não houvesse NENHUMA meta pro mês
+      // (mesmo estado "Sem meta configurada" de um cliente que nunca
+      // configurou nada: sem veredito, sem barra, sem necessário/dia, sem
+      // Diagnóstico de desvio de custo), nunca uma mistura "sem meta"
+      // visualmente com números calculados em cima do valor herdado.
+      // PURAMENTE de exibição: `goalPlan`/`clientGoalsPlan` em si (usados
+      // por Evolução Diária e por outras seções desta mesma página) NÃO
+      // mudam — e o resto da plataforma (Dashboard, Operação, Saúde da
+      // Conta, Relatórios, Conquistas, Painel Mensal, Lista de Clientes)
+      // continua com o carry-forward de sempre, intocado.
+      const isGoalConfiguredThisMonth = goalPlan.inheritedFromMonth == null;
+      const targetCostPerResult = isGoalConfiguredThisMonth
+        ? resolveTargetCostPerResult({
+            channel: "consolidated",
+            plan: goalPlan,
+            legacyFallback: group.isPrimary ? client.target_cost_per_result : null,
+          })
+        : null;
       const performanceSummary = computePerformanceSummary({
         scope: "consolidated",
         records: performanceRecords,
@@ -507,7 +525,7 @@ export default async function ClientPage({
         consolidatedActualSpend: groupActualSpend,
         targetCostPerResult,
       });
-      const targetResultCount = goalPlan.consolidated.resultCount;
+      const targetResultCount = isGoalConfiguredThisMonth ? goalPlan.consolidated.resultCount : null;
       const expectedResultsToDate =
         targetResultCount !== null ? computeMonthlyExpectedToDateByCalendar(targetResultCount, planningHorizon, todayStr).expectedToDate : null;
       const neededDailyRate = computeNeededDailyRate(targetResultCount, performanceSummary.resultCount, eligibleDaysCount);
@@ -516,12 +534,6 @@ export default async function ClientPage({
           ? classifySpendStatus(performanceSummary.resultCount, expectedResultsToDate, targetResultCount)
           : null;
       const costDiagnostic = evaluateCpaDiagnostic(performanceSummary.costPerResult, targetCostPerResult, performanceSummary.resultCount);
-      // MITZA ONE — Refinamento do Cockpit (pedido do usuário, decisão
-      // explícita via AskUserQuestion: "Só no Cockpit, só visual"): aviso
-      // PURAMENTE informativo — `targetResultCount`/`targetCostPerResult`
-      // acima já são o carry-forward de sempre, intocado; isso só decide se
-      // o rótulo "Meta herdada de..." aparece, nunca afeta nenhum valor.
-      const inheritedFromMonthLabel = goalPlan.inheritedFromMonth != null ? formatMonthLabel(goalPlan.inheritedFromMonth) : null;
 
       return {
         result: {
@@ -532,7 +544,6 @@ export default async function ClientPage({
           expectedResultsToDate,
           neededDailyRate,
           edit: goalEdit,
-          inheritedFromMonthLabel,
         },
         status,
         cost: {
@@ -545,7 +556,6 @@ export default async function ClientPage({
           // (sempre derivado de Investimento/Resultado, nunca gravado por
           // si — ver nota em `cockpit-meta-ritmo-section.tsx`).
           edit: group.isPrimary ? goalEdit : null,
-          inheritedFromMonthLabel,
         },
       };
     });

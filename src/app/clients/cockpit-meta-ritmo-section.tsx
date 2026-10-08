@@ -90,17 +90,6 @@ export interface CockpitResultCardView {
    * de edição aqui (não-admin ou mês encerrado, mesmo gate de
    * `canEditBudgetInline`) — nenhum lápis aparece. */
   edit: CockpitGoalEditAffordance | null;
-  /** MITZA ONE — Refinamento do Cockpit (pedido do usuário: "quando mexer
-   * nas metas de um mes o mes seguinte nao muda, o mes seguinte é sempre
-   * tudo zero" — decisão explícita via `AskUserQuestion`: "Só no Cockpit,
-   * só visual"). Rótulo já formatado ("Julho de 2026") do mês de origem da
-   * meta vigente (`ClientGoalPlan.inheritedFromMonth`/`formatMonthLabel`),
-   * `null` = configurada neste mês ou nunca configurada — nenhum aviso
-   * aparece. PURAMENTE informativo: o VALOR em `targetResultCount` já é o
-   * mesmo de sempre (carry-forward intocado em todo o resto da
-   * plataforma), este campo só decide se o aviso "Meta herdada de..."
-   * aparece abaixo dele. */
-  inheritedFromMonthLabel: string | null;
 }
 
 export interface CockpitCostCardView {
@@ -112,10 +101,6 @@ export interface CockpitCostCardView {
   /** Só pro objetivo PRINCIPAL — ver nota no componente abaixo. `null`
    * também cobre "sem permissão de edição aqui". */
   edit: CockpitGoalEditAffordance | null;
-  /** Mesma nota de `CockpitResultCardView.inheritedFromMonthLabel` — o
-   * custo-meta vem da MESMA versão vigente (Investimento/Resultado), então
-   * o mês de origem é o mesmo informativo, nunca um segundo cálculo. */
-  inheritedFromMonthLabel: string | null;
 }
 
 export interface CockpitBudgetHeadlineView {
