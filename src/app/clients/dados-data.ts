@@ -158,13 +158,31 @@ export async function loadDadosPageData(supabase: Supabase, clientId: string, is
   const mappingViewsBySourceId = new Map<string, DadosMappingView[]>();
   for (const mapping of mappingRows) {
     if (!mapping.active) continue;
+
+    const viewList = mappingViewsBySourceId.get(mapping.import_source_id) ?? [];
+
+    // "Carrinhos" (`supabase/secondary-cart-metric.sql`) é uma métrica
+    // SECUNDÁRIA — nunca um `performance_goal` — então nunca entra em
+    // `activeMappingGoalsBySourceId` (que só serve pra cruzar com os
+    // OBJETIVOS reais do cliente em `buildGoalAttentions`) nem é indexada em
+    // `PERFORMANCE_GOALS` (que só cobre leads/sales/followers — indexar com
+    // 'carts' ali derrubava a tela de Dados pro cliente que tem essa coluna
+    // mapeada). `database.types.ts` ainda tipa `metric_mappings.goal` como
+    // só leads/sales/followers (desatualizado em relação à constraint real
+    // do banco, mesmo caso já tratado com `as string` em
+    // `performance-report/report-data.ts` pra `daily_performance.result_type`).
+    if ((mapping.goal as string) === "carts") {
+      viewList.push({ goalLabel: "Carrinhos", resultColumn: mapping.result_column, valueColumn: mapping.value_column });
+      mappingViewsBySourceId.set(mapping.import_source_id, viewList);
+      continue;
+    }
+
     const goal = mapping.goal as PerformanceGoal;
 
     const goalList = activeMappingGoalsBySourceId.get(mapping.import_source_id) ?? [];
     goalList.push(goal);
     activeMappingGoalsBySourceId.set(mapping.import_source_id, goalList);
 
-    const viewList = mappingViewsBySourceId.get(mapping.import_source_id) ?? [];
     viewList.push({ goalLabel: PERFORMANCE_GOALS[goal].label, resultColumn: mapping.result_column, valueColumn: mapping.value_column });
     mappingViewsBySourceId.set(mapping.import_source_id, viewList);
   }

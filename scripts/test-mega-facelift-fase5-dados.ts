@@ -257,4 +257,32 @@ console.log("\n15 — Isolamento: Dados não importa os núcleos de CÁLCULO de 
   );
 }
 
+console.log(
+  '\n16 — CORREÇÃO DE PRODUÇÃO: mapeamento "Carrinhos" (metric_mappings.goal = \'carts\', supabase/secondary-cart-metric.sql) nunca derruba a tela de Dados\n',
+);
+{
+  // `database.types.ts` ainda tipa `metric_mappings.goal` como só
+  // leads/sales/followers (desatualizado em relação à constraint real do
+  // banco, que a migration de carrinhos ampliou) — indexar
+  // `PERFORMANCE_GOALS[goal]` direto com 'carts' (sem essa guarda) derrubava
+  // a página INTEIRA do cliente ("Cannot read properties of undefined
+  // (reading 'label')", TypeError 500 renderizado como página de erro
+  // genérica) pra qualquer cliente com uma coluna de carrinho mapeada —
+  // reproduzido em produção pro cliente que motivou a feature (Leonardo
+  // Darcadia, fonte "Nonnina").
+  ok(
+    "dados-data.ts trata mapping.goal === 'carts' ANTES de indexar PERFORMANCE_GOALS — nunca assume que todo metric_mappings.goal é um PerformanceGoal",
+    /\(mapping\.goal as string\) === "carts"/.test(dadosDataSource) &&
+      /mapping\.goal as string\) === "carts"\) \{[\s\S]{0,300}continue;/.test(dadosDataSource),
+  );
+  ok(
+    "mapeamento de Carrinhos nunca entra em activeMappingGoalsBySourceId (que só serve pra cruzar com os OBJETIVOS reais do cliente em buildGoalAttentions — 'carts' nunca é um client_goals.result_type)",
+    /"carts"\) \{[\s\S]{0,400}continue;[\s\S]{0,50}\}\n\n\s*const goal = mapping\.goal as PerformanceGoal;/.test(dadosDataSource),
+  );
+  ok(
+    "mapeamento de Carrinhos ainda aparece na lista de mapeamentos da tela (goalLabel 'Carrinhos', nunca escondido — é um dado real que o admin configurou)",
+    dadosDataSource.includes('goalLabel: "Carrinhos"'),
+  );
+}
+
 console.log(`\n${passed} verificações passaram.`);
