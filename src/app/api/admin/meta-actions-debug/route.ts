@@ -15,7 +15,7 @@ import { fetchMetaApiInsightsForAccount } from "@/lib/meta-api-fetch";
  * Uso: GET /api/admin/meta-actions-debug?accountId=act_...&since=2026-10-07&until=2026-10-07
  * Admin-only (sessão), nunca gravação — só leitura da Graph API.
  */
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function GET(request: Request) {
   await requireAdmin();
