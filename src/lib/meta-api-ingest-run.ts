@@ -340,6 +340,24 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload): Promi
   }
 
   const isEmpty = rows.length === 0;
+
+  // Antes esse UPDATE rodava DEPOIS do finishRun e descartava o erro em
+  // silêncio — uma falha aqui (ex.: `last_success_at` não gravado) não
+  // aparecia em lugar nenhum, nem no `data_sync_runs` nem nos logs. Agora
+  // roda ANTES, e o erro (se houver) entra em `partialReasons` como
+  // qualquer outra falha de gravação — fica registrado na própria execução
+  // e visível em "Ver últimas sincronizações" no drawer da conta.
+  if (!isEmpty) {
+    const { error: importSourceUpdateError } = await supabase
+      .from("import_sources")
+      .update({ status: "active", last_imported_date: maxDate, last_success_at: nowIso })
+      .eq("id", importSourceId);
+    if (importSourceUpdateError) {
+      partialReasons.push(`status da fonte não atualizado: ${importSourceUpdateError.message}`);
+      console.error(`[meta-api-ingest-run] Falha ao atualizar import_sources ${importSourceId}:`, importSourceUpdateError);
+    }
+  }
+
   const status: MetaApiIngestRunResult["status"] = partialReasons.length > 0 ? "partial" : hadInvalidRows ? "partial" : isEmpty ? "empty" : "success";
   const finalErrorMessage = partialReasons.length > 0
     ? partialReasons.join(" | ")
@@ -360,13 +378,6 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload): Promi
     placementRowsWritten,
     errorMessage: finalErrorMessage,
   });
-
-  if (!isEmpty) {
-    await supabase
-      .from("import_sources")
-      .update({ status: "active", last_imported_date: maxDate, last_success_at: nowIso })
-      .eq("id", importSourceId);
-  }
 
   return {
     kind: "ok",
