@@ -15,11 +15,14 @@ import { guardCronRequest } from "@/lib/cron-auth";
  * seção 5 do guia n8n).
  *
  * Cron em `vercel.json` (path "/api/cron/sync-meta-api", schedule a cada 5
- * minutos, UTC) — exige plano Vercel com suporte a cron sub-diário (Hobby só
- * roda 1x/dia); se o deploy rejeitar esse schedule, é o sinal de que o
- * plano precisa de upgrade antes de continuar, nunca reduzir silenciosamente
- * pra um schedule mais raro sem avisar (mesma régua já documentada em
- * `sync-meta/route.ts`).
+ * minutos, UTC). Achado real em produção (2026-10-08): o plano Vercel deste
+ * projeto era Hobby quando essa entrada foi adicionada pela primeira vez —
+ * Hobby só dispara Cron Jobs nativos 1x/dia, e declarar um schedule
+ * sub-diário travava TODO o pipeline de deploy (nenhum build novo era
+ * sequer tentado). A entrada só volta a funcionar de verdade depois do
+ * projeto estar no plano Pro (ou superior) — se o deploy voltar a travar
+ * sem nenhum build novo aparecendo, confira o plano antes de mexer em
+ * qualquer outra coisa.
  */
 export const runtime = "nodejs";
 export const maxDuration = 60;
