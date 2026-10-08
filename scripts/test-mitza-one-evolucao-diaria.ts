@@ -257,8 +257,8 @@ console.log("\nI — Integração no Cockpit (estrutural): posicionamento, reapr
     pageSource.includes("const hasDailyIntegration = Boolean(dadosData?.sources.some((s) => s.enabled));"),
   );
   ok(
-    "meta diária por grupo usa clientGoalsPlan.goals (MESMA meta mensal oficial do card Resultado) + planningHorizon — nenhuma segunda fonte de meta",
-    pageSource.includes("resolveDailyTargetResultCount(goalPlan.consolidated.resultCount, evolutionDaysInMonth)"),
+    "MITZA ONE — Refinamento do Cockpit (seção 6): 'Meta diária' foi deliberadamente removida da série/tooltip — a chamada a resolveDailyTargetResultCount saiu do wiring deste gráfico (a função pura continua existindo/testada em lib/cockpit-daily-evolution.ts, só este consumidor específico parou de usá-la)",
+    !pageSource.includes("resolveDailyTargetResultCount(goalPlan.consolidated.resultCount, evolutionDaysInMonth)") && !pageSource.includes("resolveDailyTargetResultCount"),
   );
 }
 
@@ -267,7 +267,10 @@ console.log("\nJ — Estados e UI (estrutural): tooltip, múltiplos objetivos, f
   const sectionSource = loadSource("src", "app", "clients", "cockpit-daily-evolution-section.tsx");
 
   ok("componente é client component (precisa de hover/toque pro tooltip)", sectionSource.startsWith('"use client"'));
-  ok("tooltip mostra Data/Resultado/Meta diária/Investimento/Custo (seção 3 do pedido)", sectionSource.includes("Investimento:") && sectionSource.includes("Meta diária:") && /\{costLabel\}:/.test(sectionSource));
+  ok(
+    "tooltip mostra Data/Investimento/Resultado/Custo (seção 3 do pedido original) — 'Meta diária' removida pelo Refinamento do Cockpit (seção 6), nunca reintroduzida por engano",
+    sectionSource.includes("Investimento:") && !sectionSource.includes("Meta diária:") && /\{costLabel\}:/.test(sectionSource),
+  );
   ok("tooltip usa describeCockpitDailyPointState pro estado de disponibilidade — nenhuma segunda lógica de rótulo", sectionSource.includes("describeCockpitDailyPointState(point)"));
   ok("tooltip reaproveita formatCostMetric oficial (lib/performance.ts) — nunca formata CPL/CPA manualmente, nunca mostra 'R$0' por divisão por zero", sectionSource.includes("formatCostMetric(point.costPerResult, formatCurrency)"));
   ok(
@@ -328,11 +331,10 @@ console.log("\nJ.2 — Correção do tooltip (Etapa 'Correção do tooltip da Ev
   ok("Esc fecha o tooltip (navegação por teclado, seção 6 da correção)", sectionSource.includes('event.key === "Escape"') && sectionSource.includes("onCloseAll"));
   ok("tooltip escuro preservado (zinc-900/zinc-100, mesma paleta de antes)", sectionSource.includes("bg-zinc-900") && sectionSource.includes("text-zinc-100"));
   ok(
-    "tooltip continua mostrando Data/Resultado/Meta diária/Investimento/Custo/estado — a correção foi só de posicionamento, nenhum dado removido",
+    "tooltip continua mostrando Data/estado/Investimento/Resultado/Custo — a correção de posicionamento desta etapa não foi desfeita; 'Meta diária' foi removida por decisão posterior (Refinamento do Cockpit, seção 6), não por esta correção",
     sectionSource.includes("formatShortDate(point.date)") &&
       sectionSource.includes("describeCockpitDailyPointState(point)") &&
-      sectionSource.includes("Investimento:") &&
-      sectionSource.includes("Meta diária:"),
+      sectionSource.includes("Investimento:"),
   );
 }
 

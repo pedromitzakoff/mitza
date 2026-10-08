@@ -21,7 +21,6 @@ import {
   computeNeededDailyRate,
   getRemainingEligibleDaysIncludingToday,
   listDatesInclusive,
-  resolveDaysElapsedInRange,
 } from "@/lib/monthly-budget";
 import { resolveClientMonthlyGoals, resolveTargetCostPerResult, type ClientPlanChangeRow } from "@/lib/client-plan";
 import { consolidateAdditive, type ChannelMetrics } from "@/lib/channel-metrics";
@@ -30,7 +29,7 @@ import { ensureClosedSprintSnapshots } from "@/lib/sprint-snapshot";
 import { sumChannelEffectiveSpend, type SprintChannelSpendOverrideRow } from "@/lib/channel-spend";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
 import { todayDateString, todayUTC } from "@/lib/today";
-import { formatShortDate } from "@/lib/format";
+import { formatShortDate, formatMonthLabel } from "@/lib/format";
 import { contractStatusBannerText } from "@/lib/client-fields";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
 import { ScrollRestoreOnMount } from "@/lib/scroll-restore";
@@ -55,12 +54,19 @@ import { loadDadosPageData } from "../dados-data";
 import { fetchClientTimelinePage } from "@/lib/client-timeline";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
 import { buildPeriodReading } from "@/lib/performance-report/report-derivatives";
-import { CockpitResultCard, CockpitCostCard, CockpitBudgetCard, type CockpitResultCardView, type CockpitCostCardView } from "../cockpit-meta-ritmo-section";
+import {
+  CockpitResultCard,
+  CockpitCostCard,
+  CockpitBudgetCard,
+  type CockpitResultCardView,
+  type CockpitCostCardView,
+  type CockpitGoalEditAffordance,
+} from "../cockpit-meta-ritmo-section";
 import { CockpitDiagnosticsCard } from "../cockpit-diagnostics-card";
 import { CockpitDemandasSection } from "../cockpit-demandas-section";
 import { CockpitPerformanceSection, type CockpitPerformanceView } from "../cockpit-performance-section";
 import { CockpitHistorySection } from "../cockpit-history-section";
-import { buildCockpitDailyEvolutionPoints, resolveDailyTargetResultCount } from "@/lib/cockpit-daily-evolution";
+import { buildCockpitDailyEvolutionPoints } from "@/lib/cockpit-daily-evolution";
 import {
   CockpitDailyEvolutionSection,
   type CockpitDailyEvolutionView,
@@ -464,9 +470,31 @@ export default async function ClientPage({
   );
   const eligibleDaysCount = getRemainingEligibleDaysIncludingToday(planningHorizon, effectiveDate);
 
+  // MITZA ONE — Refinamento do Cockpit (seção 2 do pedido): lápis discreto
+  // nos cards de Meta & Ritmo abrindo o fluxo OFICIAL de edição de cada
+  // objetivo, direto do Cockpit — mesmo gate de permissão/mês encerrado já
+  // usado pro orçamento (`canEditBudgetInline`), nunca uma segunda regra de
+  // quem pode editar o quê.
+  const monthLabel = formatMonthLabel(firstDay);
+  const cockpitReturnTo = buildContextHref({});
+
   const resultCards: { result: CockpitResultCardView; status: SpendStatus | null; cost: CockpitCostCardView }[] = resultGroups.map((group) => {
       const groupActualSpend = group.channels.reduce((sum, channel) => sum + (dashboardChannels.find((c) => c.channel === channel)?.actualSpend ?? 0), 0);
       const goalPlan = clientGoalsPlan.goals.find((g) => g.resultType === group.resultType) ?? EMPTY_GOAL_PLAN;
+      const goalEdit: CockpitGoalEditAffordance | null = canEditBudgetInline
+        ? {
+            kind: group.isPrimary ? "primary" : "secondary",
+            clientId: client.id,
+            monthParam,
+            monthLabel,
+            monthRange: { firstDay, lastDay },
+            currentPlanningEndDate: planningEndDate,
+            channels: group.isPrimary ? AVAILABLE_TRAFFIC_CHANNELS : group.channels,
+            byChannel: goalPlan.byChannel,
+            performanceGoal: group.resultType,
+            returnTo: cockpitReturnTo,
+          }
+        : null;
       const targetCostPerResult = resolveTargetCostPerResult({
         channel: "consolidated",
         plan: goalPlan,
@@ -497,6 +525,7 @@ export default async function ClientPage({
           targetResultCount,
           expectedResultsToDate,
           neededDailyRate,
+          edit: goalEdit,
         },
         status,
         cost: {
@@ -505,6 +534,10 @@ export default async function ClientPage({
           targetCostPerResult,
           deviationPct: costDiagnostic?.deviationPct ?? null,
           tone: costDiagnostic?.tone ?? "normal",
+          // Custo por resultado nunca é editável pra objetivo secundário
+          // (sempre derivado de Investimento/Resultado, nunca gravado por
+          // si — ver nota em `cockpit-meta-ritmo-section.tsx`).
+          edit: group.isPrimary ? goalEdit : null,
         },
       };
     });
@@ -527,11 +560,9 @@ export default async function ClientPage({
     resultCount: row.resultCount,
   }));
   const evolutionDailySpendRows = (dailySpend ?? []).map((row) => ({ date: row.date, channel: row.channel as TrafficChannel, spend: row.spend }));
-  const { daysInMonth: evolutionDaysInMonth } = resolveDaysElapsedInRange(planningHorizon, todayStr);
 
   const dailyEvolutionSeries: CockpitDailyEvolutionSeriesView[] = hasDailyIntegration
     ? resultGroups.map((group) => {
-        const goalPlan = clientGoalsPlan.goals.find((g) => g.resultType === group.resultType) ?? EMPTY_GOAL_PLAN;
         return {
           resultType: group.resultType,
           resultLabel: PERFORMANCE_GOALS[group.resultType].resultMetricLabel,
@@ -545,7 +576,6 @@ export default async function ClientPage({
             performanceRows: evolutionDailyPerformanceRows,
             spendRows: evolutionDailySpendRows,
           }),
-          dailyTarget: resolveDailyTargetResultCount(goalPlan.consolidated.resultCount, evolutionDaysInMonth),
         };
       })
     : [];

@@ -21,7 +21,6 @@ export interface CockpitDailyEvolutionSeriesView {
    * (`cockpit-meta-ritmo-section.tsx`), nunca uma segunda regra. */
   channelsLabel: string | null;
   points: CockpitDailyEvolutionPoint[];
-  dailyTarget: number | null;
 }
 
 export interface CockpitDailyEvolutionFreshnessView {
@@ -42,12 +41,22 @@ export type CockpitDailyEvolutionView =
 /**
  * MITZA ONE — Refinamento visual e analítico da Evolução Diária. Layout em
  * colunas de LARGURA FIXA (em vez do `flex-1` elástico de antes) — condição
- * necessária pra desenhar as linhas de Investimento/Custo por resultado
+ * necessária pra desenhar as linhas de Resultado/Custo por resultado
  * (SVG) alinhadas pixel a pixel com as barras, sem depender de medir o DOM
  * em runtime. A altura do gráfico (`CHART_AREA_HEIGHT_PX`) continua a
  * mesma de antes (seção 6 do pedido: "manter... aproximadamente na altura
  * atual") — só a largura deixou de se esticar pra preencher o contêiner em
  * telas largas.
+ *
+ * MITZA ONE — Refinamento do Cockpit (seção 5 do pedido): composição
+ * invertida da fase anterior — agora só Investimento diário é barra (escala
+ * REAL, R$), e Resultado diário / Custo por resultado diário passam a ser
+ * LINHAS (normalizadas, 0–1 do próprio máximo na janela — mesma função pura
+ * `buildNormalizedLineSegments`, nenhuma fórmula nova). A linha de "meta
+ * diária" (dashed) que existia na escala real das barras de Resultado foi
+ * removida junto — não existe mais régua real de Resultado pra desenhá-la
+ * contra (Resultado agora é normalizado), e normalizar a meta só pra manter
+ * a linha introduziria uma aproximação visual que o pedido não pediu.
  */
 const CHART_AREA_HEIGHT_PX = 108;
 const LABEL_ROW_HEIGHT_PX = 16;
@@ -59,17 +68,17 @@ const LINE_MARKER_RADIUS_PX = 1.5;
 
 /** Visibilidade de cada série — controlada pela legenda interativa (seção 3
  * do pedido), nunca exige reload (estado local do componente). Padrão
- * segue a sugestão explícita do pedido (seção 2): "priorizar barras de
- * resultado + linha de custo por resultado e disponibilizar investimento
- * por alternância" — as 3 escalas simultâneas por padrão comprometeriam a
- * leitura num espaço compacto; investimento continua disponível, só não
- * começa marcado. */
+ * (Refinamento do Cockpit, seção 5): Investimento (barra) + Resultado
+ * (linha) visíveis — a dupla "quanto foi investido / quanto voltou" é a
+ * leitura mais imediata; Custo por resultado (linha) disponível via
+ * alternância pra não competir visualmente com Resultado no mesmo espaço
+ * normalizado por padrão. */
 interface SeriesVisibility {
   result: boolean;
   investment: boolean;
   cpl: boolean;
 }
-const DEFAULT_SERIES_VISIBILITY: SeriesVisibility = { result: true, investment: false, cpl: true };
+const DEFAULT_SERIES_VISIBILITY: SeriesVisibility = { result: true, investment: true, cpl: false };
 
 function formatDayLabel(date: string): string {
   return date.slice(8, 10);
@@ -191,8 +200,8 @@ function SeriesLegend({
   onToggle: (key: keyof SeriesVisibility) => void;
 }) {
   const items: { key: keyof SeriesVisibility; label: string; swatch: ReactNode }[] = [
-    { key: "result", label: resultLabel, swatch: <span aria-hidden="true" className="h-2 w-2 rounded-sm bg-green-500 dark:bg-green-400" /> },
-    { key: "investment", label: "Investimento", swatch: <span aria-hidden="true" className="h-0.5 w-3 rounded-full bg-blue-500 dark:bg-blue-400" /> },
+    { key: "investment", label: "Investimento", swatch: <span aria-hidden="true" className="h-2 w-2 rounded-sm bg-blue-500 dark:bg-blue-400" /> },
+    { key: "result", label: resultLabel, swatch: <span aria-hidden="true" className="h-0.5 w-3 rounded-full bg-green-500 dark:bg-green-400" /> },
     { key: "cpl", label: costLabel, swatch: <span aria-hidden="true" className="h-0.5 w-3 rounded-full bg-orange-500 dark:bg-orange-400" /> },
   ];
 
@@ -221,8 +230,7 @@ function DailyEvolutionBar({
   heightPx,
   resultLabel,
   costLabel,
-  dailyTarget,
-  showResult,
+  showInvestment,
   isOpen,
   onOpen,
   onCloseIfOpen,
@@ -232,12 +240,11 @@ function DailyEvolutionBar({
   heightPx: number;
   resultLabel: string;
   costLabel: string;
-  dailyTarget: number | null;
-  /** Visibilidade da série "Resultado" (legenda) — o `<button>` (área de
-   * toque/tooltip) NUNCA desaparece quando desligada (seção 4 do pedido:
-   * "o tooltip deve funcionar independentemente de qual série esteja
-   * visível"); só o retângulo/ponto visual da barra some. */
-  showResult: boolean;
+  /** Visibilidade da série "Investimento" (legenda, agora a única barra) —
+   * o `<button>` (área de toque/tooltip) NUNCA desaparece quando desligada
+   * (seção 4 do pedido: "o tooltip deve funcionar independentemente de qual
+   * série esteja visível"); só o retângulo visual da barra some. */
+  showInvestment: boolean;
   isOpen: boolean;
   /** Abre SEMPRE este dia (nunca um toggle) — hover/foco/toque entrando
    * aqui simplesmente afirmam "este é o tooltip ativo agora"; trocar de
@@ -272,16 +279,16 @@ function DailyEvolutionBar({
           aria-label={`${formatShortDate(point.date)}: ${describeCockpitDailyPointState(point)}`}
           className="group flex h-full w-full items-end justify-center"
         >
-          {point.state === "result" && showResult && (
+          {point.spend !== null && showInvestment && (
             <span
               aria-hidden="true"
               className={`rounded-sm transition-colors ${
-                point.resultCount === 0 ? "bg-overview-border" : "bg-green-500 group-hover:bg-green-600 dark:bg-green-400 dark:group-hover:bg-green-300"
+                point.spend === 0 ? "bg-overview-border" : "bg-blue-500 group-hover:bg-blue-600 dark:bg-blue-400 dark:group-hover:bg-blue-300"
               }`}
               style={{ width: BAR_RECT_WIDTH_PX, height: `${heightPx}px` }}
             />
           )}
-          {point.state === "no_data" && showResult && <span aria-hidden="true" className="mb-0.5 h-1 w-1 rounded-full bg-overview-text-muted/50" />}
+          {point.state === "no_data" && showInvestment && <span aria-hidden="true" className="mb-0.5 h-1 w-1 rounded-full bg-overview-text-muted/50" />}
         </button>
       </div>
       <span className="text-[9px] text-overview-text-muted">{formatDayLabel(point.date)}</span>
@@ -291,12 +298,11 @@ function DailyEvolutionBar({
         <p className="mt-0.5">{describeCockpitDailyPointState(point)}</p>
         {point.state === "result" && (
           <>
-            <p className="mt-1">
+            <p className="mt-1 text-blue-300 dark:text-blue-700">Investimento: {point.spend !== null ? formatCurrency(point.spend) : "—"}</p>
+            <p className="text-green-300 dark:text-green-700">
               {resultLabel}: <span className="font-medium">{formatCount(point.resultCount ?? 0)}</span>
             </p>
-            {dailyTarget !== null && <p>Meta diária: {formatCount(dailyTarget)}</p>}
-            <p>Investimento: {point.spend !== null ? formatCurrency(point.spend) : "—"}</p>
-            <p>
+            <p className="text-orange-300 dark:text-orange-700">
               {costLabel}: {formatCostMetric(point.costPerResult, formatCurrency)}
             </p>
           </>
@@ -312,33 +318,32 @@ function DailyEvolutionBar({
  * resultado, cada série com cor própria (verde/azul/laranja, seção 1 do
  * pedido) e visibilidade controlada pela legenda (seção 3).
  *
- * Escalas (seção 2 do pedido): as 3 métricas têm unidades diferentes
- * (contagem, R$, R$/resultado) — NUNCA desenhadas sobre a mesma régua. As
- * barras/meta diária continuam na escala REAL de resultado (igual a
- * antes); as duas linhas são normalizadas (0–1 do PRÓPRIO máximo na
- * janela, nunca a escala do resultado) e identificadas como tal pela nota
- * abaixo do gráfico — nunca uma normalização silenciosa. Os valores REAIS
- * de todas as séries continuam só no tooltip (seção 4), nunca lidos a
- * partir da altura normalizada da linha.
+ * Escalas (seção 2 do pedido original; seção 5 do Refinamento do Cockpit):
+ * as 3 métricas têm unidades diferentes (R$, contagem, R$/resultado) —
+ * NUNCA desenhadas sobre a mesma régua. A barra de Investimento continua na
+ * escala REAL (R$, igual a antes, só a métrica mudou); as duas linhas
+ * (Resultado, Custo por resultado) são normalizadas (0–1 do PRÓPRIO máximo
+ * na janela, nunca a escala real de Investimento) e identificadas como tal
+ * pela nota abaixo do gráfico — nunca uma normalização silenciosa. Os
+ * valores REAIS de todas as séries continuam só no tooltip (seção 6),
+ * nunca lidos a partir da altura normalizada da linha.
  */
 function DailyEvolutionChart({ series }: { series: CockpitDailyEvolutionSeriesView }) {
-  const { points, dailyTarget, resultLabel, costLabel } = series;
+  const { points, resultLabel, costLabel } = series;
   // Só UM tooltip ativo por vez (mutuamente exclusivo entre as ~31 barras) —
   // trocar de barra fecha a anterior automaticamente, nunca dois tooltips
   // abertos ao mesmo tempo.
   const [activeDate, setActiveDate] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<SeriesVisibility>(DEFAULT_SERIES_VISIBILITY);
 
-  const maxValue = Math.max(...points.map((p) => p.resultCount ?? 0), dailyTarget ?? 0, 1);
-  const targetTopPx =
-    dailyTarget !== null ? CHART_AREA_HEIGHT_PX - Math.min(CHART_AREA_HEIGHT_PX, (dailyTarget / maxValue) * CHART_AREA_HEIGHT_PX) : null;
+  const maxSpend = Math.max(...points.map((p) => p.spend ?? 0), 1);
   const stats = resolveStatsFromPoints(points);
 
-  const maxSpend = Math.max(...points.map((p) => p.spend ?? 0), 1);
+  const maxResult = Math.max(...points.map((p) => p.resultCount ?? 0), 1);
   const maxCpl = Math.max(...points.map((p) => p.costPerResult ?? 0), 1);
-  const investmentLine = buildNormalizedLineSegments({
-    values: points.map((p) => p.spend),
-    maxValue: maxSpend,
+  const resultLine = buildNormalizedLineSegments({
+    values: points.map((p) => p.resultCount),
+    maxValue: maxResult,
     columnWidthPx: DAY_COLUMN_WIDTH_PX,
     areaHeightPx: CHART_AREA_HEIGHT_PX,
   });
@@ -362,14 +367,6 @@ function DailyEvolutionChart({ series }: { series: CockpitDailyEvolutionSeriesVi
 
       <div className="relative mt-2 overflow-x-auto pb-1">
         <div className="relative flex items-start" style={{ width: totalWidthPx }}>
-          {targetTopPx !== null && visibility.result && (
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute left-0 border-t border-dashed border-overview-border"
-              style={{ top: `${targetTopPx}px`, width: totalWidthPx }}
-            />
-          )}
-
           <svg
             aria-hidden="true"
             className="pointer-events-none absolute left-0 top-0"
@@ -378,21 +375,21 @@ function DailyEvolutionChart({ series }: { series: CockpitDailyEvolutionSeriesVi
             viewBox={`0 0 ${totalWidthPx} ${CHART_AREA_HEIGHT_PX}`}
             preserveAspectRatio="none"
           >
-            {visibility.investment &&
-              investmentLine.segments.map((segment, index) => (
+            {visibility.result &&
+              resultLine.segments.map((segment, index) => (
                 <path
-                  key={`investment-${index}`}
+                  key={`result-${index}`}
                   d={linePointsToPathD(segment)}
                   fill="none"
-                  className="stroke-blue-500 dark:stroke-blue-400"
+                  className="stroke-green-500 dark:stroke-green-400"
                   strokeWidth={LINE_STROKE_WIDTH_PX}
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
               ))}
-            {visibility.investment &&
-              investmentLine.markers.map((marker, index) => (
-                <circle key={`investment-marker-${index}`} cx={marker.x} cy={marker.y} r={LINE_MARKER_RADIUS_PX} className="fill-blue-500 dark:fill-blue-400" />
+            {visibility.result &&
+              resultLine.markers.map((marker, index) => (
+                <circle key={`result-marker-${index}`} cx={marker.x} cy={marker.y} r={LINE_MARKER_RADIUS_PX} className="fill-green-500 dark:fill-green-400" />
               ))}
             {visibility.cpl &&
               cplLine.segments.map((segment, index) => (
@@ -416,11 +413,10 @@ function DailyEvolutionChart({ series }: { series: CockpitDailyEvolutionSeriesVi
             <DailyEvolutionBar
               key={point.date}
               point={point}
-              heightPx={point.state === "result" ? Math.max(((point.resultCount ?? 0) / maxValue) * CHART_AREA_HEIGHT_PX, BAR_MIN_HEIGHT_PX) : 0}
+              heightPx={point.spend !== null ? Math.max((point.spend / maxSpend) * CHART_AREA_HEIGHT_PX, BAR_MIN_HEIGHT_PX) : 0}
               resultLabel={resultLabel}
               costLabel={costLabel}
-              dailyTarget={dailyTarget}
-              showResult={visibility.result}
+              showInvestment={visibility.investment}
               isOpen={activeDate === point.date}
               onOpen={() => setActiveDate(point.date)}
               onCloseIfOpen={() => setActiveDate((prev) => (prev === point.date ? null : prev))}
@@ -430,7 +426,7 @@ function DailyEvolutionChart({ series }: { series: CockpitDailyEvolutionSeriesVi
         </div>
       </div>
 
-      {(visibility.investment || visibility.cpl) && (
+      {(visibility.result || visibility.cpl) && (
         <p className="mt-1 text-[10px] text-overview-text-muted">Linhas em escala relativa (própria de cada série) — valores reais no tooltip.</p>
       )}
 

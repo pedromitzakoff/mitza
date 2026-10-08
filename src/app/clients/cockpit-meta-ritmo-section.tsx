@@ -1,9 +1,12 @@
+import type { ReactNode } from "react";
 import { AgencyInvestmentBar } from "@/app/agency-investment-bar";
 import { resolveMonthPeriodSummary, type FinancialPeriodSummary } from "@/lib/financial-period";
 import type { SpendStatus } from "@/lib/spend-status";
 import type { MetricTone } from "@/lib/metric-diagnostics";
 import { formatCurrency, formatCount } from "@/lib/format";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
+import type { ChannelMetrics } from "@/lib/channel-metrics";
+import type { TrafficChannel } from "@/lib/traffic-channels";
 import {
   PACE_VERDICT_LABEL,
   PACE_VERDICT_TONE,
@@ -13,6 +16,83 @@ import {
   COCKPIT_TONE_BADGE_CLASSES,
 } from "@/lib/cockpit-pace";
 import { DashboardBudget, type DashboardBudgetChannel } from "./dashboard-budget";
+import { ChannelPlanEditor } from "./channel-plan-editor";
+import { CockpitSecondaryGoalEditor } from "./cockpit-secondary-goal-editor";
+
+/**
+ * MITZA ONE — Refinamento do Cockpit (seção 2 do pedido): dados pra abrir o
+ * fluxo OFICIAL de edição de meta direto do Cockpit, atrás de um lápis
+ * discreto — nunca uma segunda Server Action/RPC. `kind` decide qual editor
+ * já existente é reaproveitado: "primary" → `ChannelPlanEditor` (mesmo de
+ * `/metas` pro objetivo principal, único com Investimento/Custo por
+ * resultado editáveis); "secondary" → `CockpitSecondaryGoalEditor`
+ * (envolve `MetasSecondaryTargetForm`, só Meta de quantidade — objetivo
+ * secundário nunca tem Investimento/Custo planejados manualmente, mesma
+ * trava de `set_goal_monthly_target`). `null` em qualquer card = sem
+ * permissão de edição aqui (não-admin ou mês encerrado) — nenhum lápis
+ * aparece.
+ */
+export interface CockpitGoalEditAffordance {
+  kind: "primary" | "secondary";
+  clientId: string;
+  monthParam: string;
+  monthLabel: string;
+  monthRange: { firstDay: string; lastDay: string };
+  currentPlanningEndDate: string | null;
+  channels: TrafficChannel[];
+  byChannel: Partial<Record<TrafficChannel, ChannelMetrics>>;
+  performanceGoal: PerformanceGoal;
+  returnTo: string;
+}
+
+function GoalPencilButton({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="mitza-pressable rounded-md p-0.5 text-overview-text-secondary hover:bg-overview-surface-hover hover:text-overview-text-primary"
+    >
+      ✎
+    </button>
+  );
+}
+
+/** Um lápis, um editor — sempre o mesmo par oficial por objetivo (seção 2
+ * do pedido: "reaproveitar ações/validações/estruturas de dados
+ * existentes"). Usado tanto pelo card RESULTADO quanto pelo card CUSTO POR
+ * RESULTADO do objetivo PRINCIPAL (o mesmo `ChannelPlanEditor` cobre
+ * Investimento + Resultado + Custo numa só calculadora — dois lápis, dois
+ * pontos de entrada, nunca dois editores/dados diferentes). */
+function GoalEditTrigger({ edit, label }: { edit: CockpitGoalEditAffordance; label: string }) {
+  if (edit.kind === "primary") {
+    return (
+      <ChannelPlanEditor
+        clientId={edit.clientId}
+        monthParam={edit.monthParam}
+        monthLabel={edit.monthLabel}
+        monthRange={edit.monthRange}
+        currentPlanningEndDate={edit.currentPlanningEndDate}
+        channels={edit.channels}
+        byChannel={edit.byChannel}
+        performanceGoal={edit.performanceGoal}
+        trigger={(open) => <GoalPencilButton onClick={open} label={label} />}
+      />
+    );
+  }
+
+  return (
+    <CockpitSecondaryGoalEditor
+      trigger={(open: () => void): ReactNode => <GoalPencilButton onClick={open} label={label} />}
+      clientId={edit.clientId}
+      returnTo={edit.returnTo}
+      resultType={edit.performanceGoal}
+      monthFirstDay={edit.monthRange.firstDay}
+      channels={edit.channels}
+      currentTargetByChannel={edit.byChannel}
+    />
+  );
+}
 
 /**
  * MITZA ONE — Fase 1 (Cockpit Único do Cliente), Seção "Meta & Ritmo"
@@ -62,12 +142,18 @@ export interface CockpitResultCardView {
   /** `computeNeededDailyRate` — `null` sem meta configurada ou sem dias
    * elegíveis restantes (nunca 0 fabricado). */
   neededDailyRate: number | null;
+  /** MITZA ONE — Refinamento do Cockpit (seção 2): `null` = sem permissão
+   * de edição aqui (não-admin ou mês encerrado, mesmo gate de
+   * `canEditBudgetInline`) — nenhum lápis aparece. */
+  edit: CockpitGoalEditAffordance | null;
 }
 
 /** Card "RESULTADO" — status de ritmo (`classifySpendStatus`, mesma régua
  * de sempre) + valor + meta + necessário/dia + barra. Sem meta de
  * quantidade configurada: mostra só o valor realizado, sem veredito/barra
- * fabricados (seção 6 do pedido: "não inventar thresholds arbitrários"). */
+ * fabricados (seção 6 do pedido: "não inventar thresholds arbitrários").
+ * Compactado (Refinamento do Cockpit, seção 1): paddings/gaps reduzidos,
+ * mesmos dados exibidos, nenhum corte de conteúdo. */
 export function CockpitResultCard({ view, status }: { view: CockpitResultCardView; status: SpendStatus | null }) {
   const config = PERFORMANCE_GOALS[view.resultType];
   const hasTarget = view.targetResultCount !== null && view.targetResultCount > 0 && view.expectedResultsToDate !== null && status !== null;
@@ -88,17 +174,20 @@ export function CockpitResultCard({ view, status }: { view: CockpitResultCardVie
   const tone = status ? PACE_VERDICT_TONE[status] : "neutral";
 
   return (
-    <div className={`rounded-lg border p-4 ${COCKPIT_TONE_CARD_CLASSES[tone]}`}>
+    <div className={`rounded-lg border p-3.5 ${COCKPIT_TONE_CARD_CLASSES[tone]}`}>
       {status ? <PaceVerdictBadge status={status} /> : <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-secondary">RESULTADO</p>}
-      <p className="mt-1.5 text-2xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{formatCount(view.resultCount)}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{formatCount(view.resultCount)}</p>
       <p className="text-xs text-overview-text-secondary">
         {config.resultMetricLabel}
         {view.channelsLabel ? ` · ${view.channelsLabel}` : ""}
       </p>
       {view.targetResultCount !== null && view.targetResultCount > 0 ? (
-        <div className="mt-3 flex flex-col gap-2 text-xs text-overview-text-secondary">
+        <div className="mt-2 flex flex-col gap-1.5 text-xs text-overview-text-secondary">
           <div className="flex items-center justify-between gap-3">
-            <span>Meta</span>
+            <span className="flex items-center gap-1">
+              Meta
+              {view.edit && <GoalEditTrigger edit={view.edit} label={`Editar meta de ${config.resultMetricLabel.toLowerCase()}`} />}
+            </span>
             <span className="tabular-nums font-medium text-overview-text-primary">{formatCount(view.targetResultCount)}</span>
           </div>
           {view.neededDailyRate !== null && (
@@ -110,7 +199,10 @@ export function CockpitResultCard({ view, status }: { view: CockpitResultCardVie
           {summary && <AgencyInvestmentBar summary={summary} showLegend={false} formatValue={formatCount} overflowIsPositive />}
         </div>
       ) : (
-        <p className="mt-3 text-xs text-overview-text-secondary">Sem meta de {config.resultMetricLabel.toLowerCase()} configurada para o mês.</p>
+        <div className="mt-2 flex items-center gap-1 text-xs text-overview-text-secondary">
+          <p>Sem meta de {config.resultMetricLabel.toLowerCase()} configurada para o mês.</p>
+          {view.edit && <GoalEditTrigger edit={view.edit} label={`Configurar meta de ${config.resultMetricLabel.toLowerCase()}`} />}
+        </div>
       )}
     </div>
   );
@@ -122,31 +214,43 @@ export interface CockpitCostCardView {
   targetCostPerResult: number | null;
   deviationPct: number | null;
   tone: MetricTone;
+  /** Só pro objetivo PRINCIPAL — ver nota no componente abaixo. `null`
+   * também cobre "sem permissão de edição aqui". */
+  edit: CockpitGoalEditAffordance | null;
 }
 
 /** Card "CUSTO POR RESULTADO" — nome dinâmico (CPL/CPA/"Custo por novo
  * seguidor", `PERFORMANCE_GOALS`, nunca hardcoded). Sem meta de custo
  * configurada: mostra o valor realizado sem comparação (`costPerResult`
- * pode ser `null` também, quando não há nenhum resultado no mês ainda). */
+ * pode ser `null` também, quando não há nenhum resultado no mês ainda).
+ * `view.edit` só existe pro objetivo PRINCIPAL (seção 2 do pedido): Custo
+ * por resultado nunca é um valor gravado por si — é sempre derivado de
+ * Investimento/Resultado (`resolveClientMonthlyPlan`, `cpa: safeDivide(...)`,
+ * `lib/client-plan.ts`), e só o fluxo do objetivo principal
+ * (`ChannelPlanEditor`) tem essa calculadora; objetivo secundário nunca tem
+ * investimento planejado manualmente, logo nunca tem custo-meta editável. */
 export function CockpitCostCard({ view }: { view: CockpitCostCardView }) {
   const config = PERFORMANCE_GOALS[view.resultType];
   const hasTarget = view.targetCostPerResult !== null && view.deviationPct !== null;
 
   return (
-    <div className={`rounded-lg border p-4 ${COCKPIT_TONE_CARD_CLASSES[hasTarget ? COST_VERDICT_TONE[view.tone] : "neutral"]}`}>
+    <div className={`rounded-lg border p-3.5 ${COCKPIT_TONE_CARD_CLASSES[hasTarget ? COST_VERDICT_TONE[view.tone] : "neutral"]}`}>
       {hasTarget ? (
         <CostVerdictBadge tone={view.tone} />
       ) : (
         <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-secondary">{config.costMetricShortLabel.toUpperCase()}</p>
       )}
-      <p className="mt-1.5 text-2xl font-semibold tracking-tight text-overview-text-primary tabular-nums">
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-overview-text-primary tabular-nums">
         {view.costPerResult !== null ? formatCurrency(view.costPerResult) : "—"}
       </p>
       <p className="text-xs text-overview-text-secondary">{config.costMetricShortLabel}</p>
       {view.targetCostPerResult !== null ? (
-        <div className="mt-3 flex flex-col gap-1 text-xs text-overview-text-secondary">
+        <div className="mt-2 flex flex-col gap-1 text-xs text-overview-text-secondary">
           <div className="flex items-center justify-between gap-3">
-            <span>Meta</span>
+            <span className="flex items-center gap-1">
+              Meta
+              {view.edit && <GoalEditTrigger edit={view.edit} label={`Editar meta de ${config.costMetricShortLabel.toLowerCase()}`} />}
+            </span>
             <span className="tabular-nums font-medium text-overview-text-primary">{formatCurrency(view.targetCostPerResult)}</span>
           </div>
           {view.deviationPct !== null && view.deviationPct > 0 && (
@@ -154,7 +258,10 @@ export function CockpitCostCard({ view }: { view: CockpitCostCardView }) {
           )}
         </div>
       ) : (
-        <p className="mt-3 text-xs text-overview-text-secondary">Meta de custo não configurada.</p>
+        <div className="mt-2 flex items-center gap-1 text-xs text-overview-text-secondary">
+          <p>Meta de custo não configurada.</p>
+          {view.edit && <GoalEditTrigger edit={view.edit} label={`Configurar meta de ${config.costMetricShortLabel.toLowerCase()}`} />}
+        </div>
       )}
     </div>
   );
@@ -203,16 +310,12 @@ export function CockpitBudgetCard({
   const tone = PACE_VERDICT_TONE[headline.monthStatus];
 
   return (
-    <div className={`rounded-lg border p-4 ${COCKPIT_TONE_CARD_CLASSES[tone]}`}>
+    <div className={`rounded-lg border p-3.5 ${COCKPIT_TONE_CARD_CLASSES[tone]}`}>
       <PaceVerdictBadge status={headline.monthStatus} />
-      <p className="mt-1.5 text-2xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{formatCurrency(headline.monthActual)}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{formatCurrency(headline.monthActual)}</p>
       <p className="text-xs text-overview-text-secondary">investido no mês</p>
       {headline.monthPlanned > 0 ? (
-        <div className="mt-3 flex flex-col gap-2 text-xs text-overview-text-secondary">
-          <div className="flex items-center justify-between gap-3">
-            <span>Planejado</span>
-            <span className="tabular-nums font-medium text-overview-text-primary">{formatCurrency(headline.monthPlanned)}</span>
-          </div>
+        <div className="mt-2 flex flex-col gap-1.5 text-xs text-overview-text-secondary">
           {headline.neededDailyRate !== null && (
             <div className="flex items-center justify-between gap-3">
               <span>Necessário</span>
@@ -222,11 +325,16 @@ export function CockpitBudgetCard({
           <AgencyInvestmentBar summary={summary} showLegend={false} />
         </div>
       ) : (
-        <p className="mt-3 text-xs text-overview-text-secondary">Sem planejamento configurado para o mês.</p>
+        <p className="mt-2 text-xs text-overview-text-secondary">Sem planejamento configurado para o mês.</p>
       )}
 
-      <div className="mt-4 border-t border-overview-border/60 pt-3">
-        <DashboardBudget clientId={clientId} monthParam={monthParam} total={headline.monthPlanned} channels={channels} canEdit={canEdit} />
+      {/* `compact`: `DashboardBudget` mostra "Planejado" (pencil + composição
+          por canal) sem repetir sua própria moldura/título — a caixa única
+          deste card já estabelece o contexto "ORÇAMENTO" acima (seção 1 do
+          pedido: eliminar a caixa dupla, mantendo edição/multicanal
+          intactos). Único lugar onde o valor planejado aparece agora. */}
+      <div className="mt-3 border-t border-overview-border/60 pt-2.5">
+        <DashboardBudget clientId={clientId} monthParam={monthParam} total={headline.monthPlanned} channels={channels} canEdit={canEdit} compact />
       </div>
     </div>
   );

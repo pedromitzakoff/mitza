@@ -78,78 +78,95 @@ console.log("\nD — buildNormalizedLineSegments: ponto isolado entre dois gaps 
 }
 
 // ---------------------------------------------------------------------------
-console.log("\nE — Estrutura (seção 1 do pedido): barras de Resultado + 2 linhas (Investimento/Custo por resultado), cores distintas\n");
+// Etapa "MITZA ONE — Refinamento do Cockpit" (posterior a este combo):
+// inverteu a composição — Investimento passou a ser a ÚNICA barra (azul,
+// escala real) e Resultado/Custo por resultado passaram a ser as duas
+// LINHAS normalizadas (verde/laranja). As seções E-H abaixo foram
+// atualizadas pra refletir essa composição atual — a geometria pura
+// (A-D, acima) não mudou, só QUEM é barra e QUEM é linha.
+console.log("\nE — Estrutura (Refinamento do Cockpit, seção 5): barra de Investimento + 2 linhas (Resultado/Custo por resultado), cores distintas\n");
 {
   const sectionSource = loadSource("src", "app", "clients", "cockpit-daily-evolution-section.tsx");
 
-  ok("barras de Resultado continuam existindo (span com altura calculada)", sectionSource.includes('style={{ width: BAR_RECT_WIDTH_PX, height: `${heightPx}px` }}'));
-  ok("linha de Investimento é desenhada via <path> SVG, cor azul (distinta das outras duas)", sectionSource.includes("investmentLine.segments.map") && sectionSource.includes("stroke-blue-500"));
+  ok("barra de Investimento continua existindo (span com altura calculada)", sectionSource.includes('style={{ width: BAR_RECT_WIDTH_PX, height: `${heightPx}px` }}'));
+  ok("Investimento é a ÚNICA barra, cor azul", sectionSource.includes("point.spend !== null && showInvestment") && sectionSource.includes("bg-blue-500"));
+  ok("linha de Resultado é desenhada via <path> SVG, cor verde (distinta das outras duas)", sectionSource.includes("resultLine.segments.map") && sectionSource.includes("stroke-green-500"));
   ok("linha de Custo por resultado é desenhada via <path> SVG, cor laranja (distinta das outras duas)", sectionSource.includes("cplLine.segments.map") && sectionSource.includes("stroke-orange-500"));
-  ok("Resultado usa verde (3ª cor distinta, sugestão do pedido)", sectionSource.includes("bg-green-500"));
-  ok("as 3 cores nunca se repetem entre si (verde/azul/laranja, nenhuma reaproveitada)", new Set(["green-500", "blue-500", "orange-500"]).size === 3);
-  ok("paleta usada é a MESMA já disponível no projeto (Tailwind stock, mesma família já usada em data-trust.ts/sync-run-status.ts) — nenhum token CSS novo definido", !sectionSource.includes(":root") && !sectionSource.includes("--color-"));
+  ok("as 3 cores nunca se repetem entre si (azul/verde/laranja, nenhuma reaproveitada)", new Set(["blue-500", "green-500", "orange-500"]).size === 3);
+  ok("paleta usada é a MESMA já disponível no projeto (Tailwind stock) — nenhum token CSS novo definido", !sectionSource.includes(":root") && !sectionSource.includes("--color-"));
 }
 
-console.log("\nF — Escalas (seção 2 do pedido): nunca a mesma régua, normalização claramente identificada, valores reais só no tooltip\n");
+console.log("\nF — Escalas (Refinamento do Cockpit, seção 5): nunca a mesma régua, normalização claramente identificada, valores reais só no tooltip\n");
 {
   const sectionSource = loadSource("src", "app", "clients", "cockpit-daily-evolution-section.tsx");
 
   ok(
-    "barras/meta diária usam a escala REAL de resultado (maxValue = máximo de resultCount/meta) — nunca normalizada",
-    sectionSource.includes("const maxValue = Math.max(...points.map((p) => p.resultCount ?? 0), dailyTarget ?? 0, 1);"),
+    "barra de Investimento usa escala REAL (maxSpend = máximo de spend na janela) — nunca normalizada",
+    sectionSource.includes("const maxSpend = Math.max(...points.map((p) => p.spend ?? 0), 1);"),
   );
   ok(
-    "linha de Investimento usa sua PRÓPRIA escala (maxSpend, nunca maxValue de resultado)",
-    sectionSource.includes("const maxSpend = Math.max(...points.map((p) => p.spend ?? 0), 1);") && sectionSource.includes("maxValue: maxSpend,"),
+    "linha de Resultado usa sua PRÓPRIA escala normalizada (maxResult, nunca a escala real de Investimento)",
+    sectionSource.includes("const maxResult = Math.max(...points.map((p) => p.resultCount ?? 0), 1);") && sectionSource.includes("maxValue: maxResult,"),
   );
   ok(
-    "linha de Custo por resultado usa sua PRÓPRIA escala (maxCpl, nunca maxValue de resultado nem maxSpend)",
+    "linha de Custo por resultado usa sua PRÓPRIA escala (maxCpl, nunca a escala de Investimento nem de Resultado)",
     sectionSource.includes("const maxCpl = Math.max(...points.map((p) => p.costPerResult ?? 0), 1);") && sectionSource.includes("maxValue: maxCpl,"),
   );
   ok(
-    "normalização é EXPLICITAMENTE identificada (nota visível, nunca silenciosa) — só aparece quando uma linha normalizada está visível",
-    sectionSource.includes("Linhas em escala relativa") && sectionSource.includes("visibility.investment || visibility.cpl"),
+    "a linha de 'meta diária' que existia na régua real de Resultado foi removida (Resultado não é mais barra em escala real) — nunca mantida como aproximação",
+    !sectionSource.includes("targetTopPx") && !sectionSource.includes("dailyTarget"),
   );
   ok(
-    "valores REAIS continuam só no tooltip (Investimento/Custo por resultado no tooltip vêm de point.spend/point.costPerResult, nunca de um x/y normalizado)",
+    "normalização é EXPLICITAMENTE identificada (nota visível, nunca silenciosa) — só aparece quando uma linha normalizada está visível",
+    sectionSource.includes("Linhas em escala relativa") && sectionSource.includes("visibility.result || visibility.cpl"),
+  );
+  ok(
+    "valores REAIS continuam só no tooltip (Investimento/Resultado/Custo por resultado vêm de point.spend/point.resultCount/point.costPerResult, nunca de um x/y normalizado)",
     sectionSource.includes("Investimento: {point.spend !== null ? formatCurrency(point.spend) : "),
   );
   ok(
-    "fallback do pedido (seção 2: 'priorizar barras + CPL, investimento por alternância') é o padrão inicial — Investimento começa desligado, Resultado e CPL começam ligados",
-    sectionSource.includes("const DEFAULT_SERIES_VISIBILITY: SeriesVisibility = { result: true, investment: false, cpl: true };"),
+    "padrão inicial (Refinamento do Cockpit, seção 5): Investimento (barra) + Resultado (linha) visíveis, Custo por resultado disponível via alternância",
+    sectionSource.includes("const DEFAULT_SERIES_VISIBILITY: SeriesVisibility = { result: true, investment: true, cpl: false };"),
   );
 }
 
-console.log("\nG — Legenda interativa (seção 3 do pedido): mostrar/ocultar sem reload, identifica cor e tipo de série\n");
+console.log("\nG — Legenda interativa (seção 3 do pedido original): mostrar/ocultar sem reload, identifica cor e tipo de série\n");
 {
   const sectionSource = loadSource("src", "app", "clients", "cockpit-daily-evolution-section.tsx");
 
-  ok("legenda tem 3 itens clicáveis (Resultado/Investimento/Custo por resultado)", sectionSource.includes("function SeriesLegend("));
+  ok("legenda tem 3 itens clicáveis (Investimento/Resultado/Custo por resultado)", sectionSource.includes("function SeriesLegend("));
   ok("alternar é SEMPRE estado local (useState), nunca navegação/reload de página", sectionSource.includes("const [visibility, setVisibility] = useState<SeriesVisibility>(DEFAULT_SERIES_VISIBILITY);") && !sectionSource.includes("router.push") && !sectionSource.includes("location.reload"));
   ok("legenda usa aria-pressed (acessibilidade do estado ligado/desligado)", sectionSource.includes("aria-pressed={visibility[item.key]}"));
   ok(
-    "legenda distingue visualmente TIPO de série — quadrado (barra) pra Resultado, traço (linha) pra Investimento/Custo por resultado — nunca só a cor",
-    sectionSource.includes('rounded-sm bg-green-500') && sectionSource.includes('rounded-full bg-blue-500') && sectionSource.includes('rounded-full bg-orange-500'),
+    "legenda distingue visualmente TIPO de série — quadrado (barra) pra Investimento, traço (linha) pra Resultado/Custo por resultado — nunca só a cor",
+    sectionSource.includes('rounded-sm bg-blue-500') && sectionSource.includes('rounded-full bg-green-500') && sectionSource.includes('rounded-full bg-orange-500'),
   );
   ok("toggle via onClick simples (sem debounce/chamada de rede) — instantâneo", sectionSource.includes("onClick={() => onToggle(item.key)}"));
 }
 
-console.log("\nH — Tooltip (seção 4 do pedido): funciona independente de qual série está visível, mesmos 6 campos de sempre\n");
+console.log("\nH — Tooltip (Refinamento do Cockpit, seção 6): funciona independente de qual série está visível, sem 'Meta diária', cores correspondentes\n");
 {
   const sectionSource = loadSource("src", "app", "clients", "cockpit-daily-evolution-section.tsx");
 
   ok(
-    "o <button> (gatilho do tooltip) NUNCA depende de showResult/visibility — sempre renderizado, só o CONTEÚDO visual da barra (span interno) é condicional",
-    /<button[\s\S]{0,40}ref={anchorRef}/.test(sectionSource) && !/showResult &&[\s\S]{0,10}<button/.test(sectionSource),
+    "o <button> (gatilho do tooltip) NUNCA depende de showInvestment/visibility — sempre renderizado, só o CONTEÚDO visual da barra (span interno) é condicional",
+    /<button[\s\S]{0,40}ref={anchorRef}/.test(sectionSource) && !/showInvestment &&[\s\S]{0,10}<button/.test(sectionSource),
   );
-  ok("conteúdo visual da barra (span) é condicional a showResult — mas o botão/tooltip continuam de pé", sectionSource.includes("point.state === \"result\" && showResult && ("));
-  ok("tooltip continua com os 6 campos: data, resultado, meta diária, investimento, custo por resultado, estado",
+  ok("conteúdo visual da barra (span) é condicional a showInvestment — mas o botão/tooltip continuam de pé", sectionSource.includes('point.spend !== null && showInvestment && ('));
+  ok(
+    "tooltip mostra Data/estado/Investimento/Resultado/Custo — 'Meta diária' foi removida (seção 6 do pedido)",
     sectionSource.includes("formatShortDate(point.date)") &&
-    sectionSource.includes("describeCockpitDailyPointState(point)") &&
-    sectionSource.includes("{resultLabel}:") &&
-    sectionSource.includes("Meta diária:") &&
-    sectionSource.includes("Investimento:") &&
-    sectionSource.includes("{costLabel}:"),
+      sectionSource.includes("describeCockpitDailyPointState(point)") &&
+      sectionSource.includes("Investimento:") &&
+      sectionSource.includes("{resultLabel}:") &&
+      sectionSource.includes("{costLabel}:") &&
+      !sectionSource.includes("Meta diária:"),
+  );
+  ok(
+    "cada métrica do tooltip usa a MESMA cor da sua série no gráfico (seção 6: 'texto deve usar a mesma cor da série correspondente')",
+    sectionSource.includes("text-blue-300 dark:text-blue-700") &&
+      sectionSource.includes("text-green-300 dark:text-green-700") &&
+      sectionSource.includes("text-orange-300 dark:text-orange-700"),
   );
   ok("Portal (document.body) preservado — correção anterior não foi desfeita por este refinamento", sectionSource.includes("createPortal(") && sectionSource.includes("document.body"));
 }
@@ -160,7 +177,10 @@ console.log("\nI — Dados e integridade (seção 5 do pedido): reaproveita 100%
   const libSource = loadSource("src", "lib", "cockpit-daily-evolution.ts");
 
   ok("buildNormalizedLineSegments é só GEOMETRIA (converte valor->pixel) — nunca recalcula investimento/CPL, sempre recebe o valor já oficial via `values`", libSource.includes("Núcleo puro de GEOMETRIA"));
-  ok("componente consome point.spend/point.costPerResult DIRETO — nenhuma segunda fórmula de custo/investimento no componente", sectionSource.includes("values: points.map((p) => p.spend)") && sectionSource.includes("values: points.map((p) => p.costPerResult)"));
+  ok(
+    "componente consome point.spend/point.resultCount/point.costPerResult DIRETO — nenhuma segunda fórmula de investimento/resultado/custo no componente",
+    sectionSource.includes("point.spend / maxSpend") && sectionSource.includes("values: points.map((p) => p.resultCount)") && sectionSource.includes("values: points.map((p) => p.costPerResult)"),
+  );
   ok("buildCockpitDailyEvolutionPoints (fonte oficial dos valores) não foi alterado por este refinamento", libSource.includes("export function buildCockpitDailyEvolutionPoints(input: {"));
   ok(
     "CPL indefinido (resultCount 0 ou sem dado) nunca aparece como linha — buildNormalizedLineSegments recebe point.costPerResult (já null nesses casos) e null sempre quebra o segmento, nunca desenha um ponto fabricado",

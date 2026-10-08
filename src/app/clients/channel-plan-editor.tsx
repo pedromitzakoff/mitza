@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { formatCurrency, formatDayShortMonth } from "@/lib/format";
 import { formatMoneyDisplay, parseMoneyInput } from "@/lib/money-format";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
@@ -148,6 +148,7 @@ export function ChannelPlanEditor({
   channels,
   byChannel,
   performanceGoal,
+  trigger,
 }: {
   clientId: string;
   monthParam: string;
@@ -161,6 +162,13 @@ export function ChannelPlanEditor({
   channels: TrafficChannel[];
   byChannel: Partial<Record<TrafficChannel, ChannelMetrics>>;
   performanceGoal: PerformanceGoal | null;
+  /** MITZA ONE — Refinamento do Cockpit (seção 2 do pedido): permite que um
+   * chamador (ex.: lápis discreto nos cards de Meta & Ritmo) substitua o
+   * gatilho padrão ("Planejamento") por outro elemento, sem duplicar
+   * nenhuma lógica/validação/Server Action — só QUEM abre o mesmo editor
+   * oficial muda, nunca o que ele faz. `undefined` preserva o gatilho de
+   * sempre (ex.: `/metas`), comportamento intocado. */
+  trigger?: (open: () => void) => ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -183,6 +191,8 @@ export function ChannelPlanEditor({
   }, [isOpen]);
 
   if (!isOpen) {
+    if (trigger) return <>{trigger(() => setIsOpen(true))}</>;
+
     // Etapa "Simplificação Pós-Facelift": rótulo curto ("Planejamento", era
     // "Editar planejamento") — agora vive na toolbar de contexto
     // (`[id]/page.tsx`, junto de Mês/Canal), não mais no rodapé de

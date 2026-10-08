@@ -70,6 +70,7 @@ export function DashboardBudget({
   total,
   channels,
   canEdit,
+  compact,
 }: {
   clientId: string;
   monthParam: string;
@@ -79,6 +80,14 @@ export function DashboardBudget({
   total: number;
   channels: DashboardBudgetChannel[];
   canEdit: boolean;
+  /** MITZA ONE — Refinamento do Cockpit (seção 1 do pedido): quando este
+   * componente já é renderizado DENTRO de outro card com chrome próprio
+   * (`CockpitBudgetCard`), omite a própria moldura (borda/fundo/padding) e
+   * o título "Orçamento do mês" — evita a caixa dupla que deixava o card
+   * de Orçamento alto demais. Mecanismo/estado/Server Action idênticos;
+   * só a moldura externa muda. `undefined`/`false` preserva o uso
+   * standalone de sempre (`dashboard-channel-section.tsx`). */
+  compact?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [drafts, setDrafts] = useState<Partial<Record<TrafficChannel, string>>>({});
@@ -159,8 +168,8 @@ export function DashboardBudget({
   }
 
   return (
-    <div className="rounded-lg border border-overview-border bg-overview-surface p-4">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Orçamento do mês</h2>
+    <div className={compact ? undefined : "rounded-lg border border-overview-border bg-overview-surface p-4"}>
+      {!compact && <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Orçamento do mês</h2>}
 
       {!isEditing ? (
         <div className="mt-1 flex flex-col gap-2">
