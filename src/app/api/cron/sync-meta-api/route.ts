@@ -25,7 +25,11 @@ import { guardCronRequest } from "@/lib/cron-auth";
  * qualquer outra coisa.
  */
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// MITZA ONE — rollout pra 23 clientes (2026-10-08): busca sequencial, uma
+// conta de cada vez (de propósito, pra não estourar limite de taxa da Meta)
+// — 60s não é suficiente com esse volume; contas no fim da fila corriam o
+// risco de nunca serem sincronizadas em nenhuma execução antes do corte.
+export const maxDuration = 300;
 
 export async function GET(request: Request) {
   const rejection = await guardCronRequest(request, "sync-meta-api");
