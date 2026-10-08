@@ -2,6 +2,8 @@
 
 Guia de referência pra quem está construindo o workflow n8n (você + seu mentor). Cobre exatamente o que o n8n precisa buscar na Meta, em que formato enviar, pra onde, como autenticar, e como confirmar que a sincronização funcionou. A implementação do lado MITZA (validação, gravação, funis, Relatório) já está pronta e testada localmente — falta só registrar a conta e apontar o workflow n8n pra cá.
 
+> **MITZA ONE — Busca direta (sem n8n)**: existe um segundo caminho pro MESMO destino (`ingestMetaApiPayload`, nenhuma segunda gravação) — o cron `/api/cron/sync-meta-api` (`lib/meta-api-fetch.ts`/`lib/meta-api-direct-sync.ts`) busca os insights direto na Graph API a cada 5 minutos, usando um app/token próprios da MITZA (`META_API_ACCESS_TOKEN`), sem depender do n8n estar no ar. O registro da conta (seção 5 abaixo) é IDÊNTICO pros dois caminhos — a mesma linha em `import_sources`/`metric_mappings` alimenta ambos; a diferença é só quem busca o dado bruto na Meta (o workflow n8n, ou o próprio servidor da MITZA). Os dois caminhos continuam coexistindo — nenhum foi removido.
+
 ## Divisão de responsabilidade
 
 | | n8n | MITZA |
