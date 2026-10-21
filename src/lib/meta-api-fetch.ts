@@ -186,11 +186,20 @@ interface MetaPeriodReachResponse {
  * pra este fim. `level` decide a granularidade (conta/campanha/conjunto/
  * anúncio) — mesma convenção de `fetchMetaApiInsightsForAccount`.
  *
- * Ainda não conectada a nenhuma tela (Fundação do Dashboard Meta Ads,
- * Etapa 2.1) — `buildMetaAdsDashboardData` ainda devolve `reach: null`;
- * entra em uso a partir da etapa que exibir alcance/frequência nos
- * KPIs/gráficos.
+ * KOFF Analytics Fase 2, Etapa 2.2: conectada ao Dashboard Meta Ads
+ * (`lib/meta-ads-dashboard/dashboard-data.ts`, `fetchAccountPeriodReachSnapshot`)
+ * — essa camada trata indisponibilidade/timeout/token ausente como estado
+ * explícito, nunca deixa o erro subir pra quebrar a tela. `signal` com
+ * timeout (pedido do usuário: "prever... limites da Graph API, falhas,
+ * carregamento") evita que uma chamada presa trave o render da página
+ * inteira; `next.revalidate` (mesma janela de 5 minutos já usada pelo sync
+ * direto, `meta-api-direct-sync.ts`) evita refazer a MESMA consulta de
+ * período a cada reload (pedido do usuário: "evitar consultas
+ * desnecessárias à API").
  */
+const PERIOD_REACH_FETCH_TIMEOUT_MS = 8000;
+const PERIOD_REACH_CACHE_SECONDS = 300;
+
 export async function fetchMetaApiPeriodReach(
   accountId: string,
   level: "account" | "campaign" | "adset" | "ad",
@@ -212,7 +221,10 @@ export async function fetchMetaApiPeriodReach(
   let nextUrl: string | undefined = url.toString();
 
   while (nextUrl) {
-    const response: Response = await fetch(nextUrl);
+    const response: Response = await fetch(nextUrl, {
+      signal: AbortSignal.timeout(PERIOD_REACH_FETCH_TIMEOUT_MS),
+      next: { revalidate: PERIOD_REACH_CACHE_SECONDS },
+    });
     const json: MetaPeriodReachResponse = await response.json();
 
     if (!response.ok) {
