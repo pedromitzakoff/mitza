@@ -12,11 +12,10 @@
  *    "gestor de apoio" (`client_managers`, que nem participa da decisão) e
  *    nunca "precisa ser o gestor principal" (regra anterior, revertida).
  *    Cobre app (`lib/auth.ts`) e RLS (SQL).
- * 3. `DIMENSION_PRIORITY_ORDER`/`buildAttentionAlerts` sem influência de
- *    revisão (comportamental, direto — complementa
- *    `test-account-health-engine.ts`/`test-review-compliance.ts`, já
- *    atualizados nesta etapa pra refletir a regra nova).
- * 4. Operação por Canal (CPA-only) continua intocada por essas mudanças.
+ * 3. `DIMENSION_PRIORITY_ORDER` sem influência de revisão (comportamental,
+ *    direto — complementa `test-account-health-engine.ts`/
+ *    `test-review-compliance.ts`, já atualizados nesta etapa pra refletir
+ *    a regra nova).
  *
  * `createClientAction`/`updateClientAction`/`readStructuralFields`/
  * `validateMetaAccountRequirement` vivem num arquivo `"use server"`
@@ -37,8 +36,6 @@ import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { evaluateAccountHealth, DIMENSION_PRIORITY_ORDER, type AccountHealthInput } from "../src/lib/account-health-engine";
-import { buildAttentionAlerts } from "../src/lib/attention-alerts";
-import { resolveOperationCpaPriorityGroup } from "../src/lib/operation-triage";
 
 let passed = 0;
 function ok(name: string, condition: boolean) {
@@ -192,43 +189,10 @@ console.log("\n3 — Cadência de Revisões sem influência em saúde/prioridade
   const neverReviewed = evaluateAccountHealth(baseInput());
   check("conta saudável em tudo, nunca revisada -> dimensions.review ainda 'grave' (matemática preservada)", neverReviewed.dimensions.review.status, "grave");
   check("...mas healthStatus continua 'saudavel'", neverReviewed.healthStatus, "saudavel");
-  check("...e resolveOperationCpaPriorityGroup (Operação) continua 'saudavel'", resolveOperationCpaPriorityGroup(neverReviewed), "saudavel");
-
-  const alertsWithOverdueReview = buildAttentionAlerts({
-    monthStatus: "dentro",
-    isPeriodClosed: false,
-    overdueTasksCount: 0,
-    optimizationRecentlyDone: false,
-    lastSyncedAt: new Date().toISOString(),
-    currentSprintPlannedSpend: null,
-    currentSprintTaskCount: 0,
-    currentSprintUnassignedCount: 0,
-    clientInactivityBusinessDays: 0,
-  });
-  ok(
-    "buildAttentionAlerts nunca mais gera alerta 'otimizacao', mesmo com optimizationRecentlyDone=false",
-    !alertsWithOverdueReview.some((a) => a.kind === "otimizacao"),
-  );
-}
-
-console.log("\n4 — Operação por Canal (CPA-only) permanece intocada\n");
-{
-  const operationTriageSource = stripComments(loadSource("src", "lib", "operation-triage.ts"));
-  const cpaFnSource = operationTriageSource.slice(
-    operationTriageSource.indexOf("export function resolveOperationCpaPriorityGroup"),
-    operationTriageSource.indexOf("export function describeOperationCpaReason"),
-  );
-  ok(
-    "resolveOperationCpaPriorityGroup nunca leu dimensions.review — já era CPA-only antes desta etapa, continua sendo",
-    !/dimensions\.review/.test(cpaFnSource),
-  );
-  ok(
-    "lib/operation-channel-state-data.ts não foi tocado por esta etapa (sem client_managers, que nunca fez parte do pipeline de canal)",
-    !/client_managers/.test(loadSource("src", "lib", "operation-channel-state-data.ts")),
-  );
-  // Suíte completa de regressão da Operação por Canal já roda à parte
-  // (scripts/test-operation-channel-scoping.ts, 25 verificações) — aqui só
-  // confirmamos que esta etapa não introduziu nenhuma referência nova.
+  // KOFF Analytics — Etapa 1.8: `buildAttentionAlerts`/`resolveOperationCpaPriorityGroup`
+  // (lib/attention-alerts.ts, lib/operation-triage.ts) e a Operação por
+  // Canal em si foram removidos do produto — as checagens que dependiam
+  // deles saíram daqui.
 }
 
 console.log("\n5 — correção: duplo-submit de \"Criar cliente\" (duplicata por duplo-clique antes da hidratação)\n");

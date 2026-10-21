@@ -1,7 +1,6 @@
 import type { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { todayUTC, todayDateString } from "@/lib/today";
-import { effectiveTaskStatus } from "@/lib/task-status";
 import { aggregatePerformanceResults, computeCostPerResult, type PerformanceRecordRow } from "@/lib/performance";
 import { channelToPerformanceSource } from "@/lib/performance-queries";
 import { resolveManualActualSpend, sumEffectiveSpendForMonth, type SprintSpendSource, type DailySpendRow } from "@/lib/effective-spend";
@@ -104,17 +103,6 @@ export async function loadClientOperationalStates(
   let lastActivityQuery = supabase.from("client_last_operational_activity").select("client_id, last_activity_at");
   if (clientId) lastActivityQuery = lastActivityQuery.eq("client_id", clientId);
 
-  // Etapa "Pendências": "aberta" agora inclui os 3 status intermediários
-  // novos (em_andamento/aguardando/bloqueado) — são tão "não resolvida"
-  // quanto "pendente" pra fins de contagem operacional, nunca só o valor
-  // antigo. "atrasado" nunca é gravado (é sempre derivado), mas continua no
-  // filtro por segurança histórica.
-  let openTasksQuery = supabase
-    .from("tasks")
-    .select("client_id, status, due_date")
-    .in("status", ["pendente", "em_andamento", "aguardando", "bloqueado", "atrasado"]);
-  if (clientId) openTasksQuery = openTasksQuery.eq("client_id", clientId);
-
   // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
   // mais só `channel = 'meta'`) — `resolveClientMonthlyPlan` resolve o
   // investimento/meta de resultado vigente POR CANAL, consolidado é a soma
@@ -151,7 +139,6 @@ export async function loadClientOperationalStates(
     dailySpendRows,
     latestReviews,
     lastActivityRows,
-    openTasks,
     planChanges,
     reviewCadences,
     activeImportSources,
@@ -163,7 +150,6 @@ export async function loadClientOperationalStates(
       requireQuery(dailySpendQuery, "daily_spend"),
       requireQuery(latestReviewsQuery, "account_reviews"),
       requireQuery(lastActivityQuery, "client_last_operational_activity"),
-      requireQuery(openTasksQuery, "tasks"),
       requireQuery(planChangesQuery, "monthly_budget_changes:plan-history"),
       requireQuery(reviewCadencesQuery, "account_review_cadences"),
       requireQuery(activeImportSourcesQuery, "import_sources:active"),
@@ -270,24 +256,6 @@ export async function loadClientOperationalStates(
   const lastTaskActivityByClient = new Map<string, string>();
   for (const row of lastActivityRows ?? []) {
     if (row.client_id && row.last_activity_at) lastTaskActivityByClient.set(row.client_id, row.last_activity_at);
-  }
-
-  const overdueCountByClient = new Map<string, number>();
-  // Etapa "Novo Conceito de Monitoramento Operacional": Pendências conta
-  // qualquer tarefa ABERTA (pendente OU atrasada), não só a atrasada — a
-  // query já filtra pra `status in ('pendente', 'atrasado')`, então basta
-  // contar cada linha, sem o filtro extra de `effectiveTaskStatus` (esse
-  // continua existindo só pra `overdueCountByClient`, usado por telas que
-  // ainda não migraram pro novo motor de diagnóstico).
-  const openCountByClient = new Map<string, number>();
-  for (const task of openTasks ?? []) {
-    // Etapa "Pendências": pendência interna (client_id null) nunca conta
-    // pro estado operacional de um cliente — este mapa é sempre por
-    // cliente, uma tarefa sem cliente simplesmente não participa dele.
-    if (!task.client_id) continue;
-    openCountByClient.set(task.client_id, (openCountByClient.get(task.client_id) ?? 0) + 1);
-    if (effectiveTaskStatus(task, today) !== "atrasado") continue;
-    overdueCountByClient.set(task.client_id, (overdueCountByClient.get(task.client_id) ?? 0) + 1);
   }
 
   // Etapa "Múltiplos Objetivos": Saúde/Operação só conhecem o objetivo
@@ -491,7 +459,6 @@ export async function loadClientOperationalStates(
       },
       cpa: { costPerResult: costActual, targetCostPerResult: plan.targetCostPerResult, resultCount: performanceResult.resultCount },
       investment: { actualSpend: spend.actual, expectedToDate: investmentExpectedToDate },
-      pendencias: { openTasksCount: openCountByClient.get(client.id) ?? 0 },
       atividade: { lastActivityAt, hoursSinceLastActivity },
     });
 
@@ -503,8 +470,6 @@ export async function loadClientOperationalStates(
       avatarUrl: client.avatar_url,
       performanceGoal: client.performance_goal,
       evaluation: evaluateAccountHealth(input),
-      overdueTasksCount: overdueCountByClient.get(client.id) ?? 0,
-      openTasksCount: openCountByClient.get(client.id) ?? 0,
       lastDataSyncAt,
       performanceLatestSource: performanceResult.latestSource,
       performanceLastUpdatedAt: performanceResult.latestUpdatedAt,

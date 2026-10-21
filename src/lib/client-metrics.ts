@@ -1,8 +1,6 @@
 import { todayUTC } from "@/lib/today";
 import { classifySpendStatus, type SpendStatus } from "@/lib/spend-status";
-import { effectiveTaskStatus } from "@/lib/task-status";
 import { resolveDaysElapsedInRange } from "@/lib/monthly-budget";
-import type { TaskStatus } from "@/lib/supabase/database.types";
 
 export interface MonthProjection {
   /** Projeção de gasto ao final do mês, pelo ritmo (run-rate) até agora. */
@@ -44,28 +42,3 @@ export function computeMonthProjectionForRange(
   return { projectedSpend, projectedPct, status };
 }
 
-export interface TaskCounts {
-  total: number;
-  done: number;
-  pending: number;
-  overdue: number;
-}
-
-/** Conta tarefas por status efetivo (feito / atrasado / pendente). */
-export function computeTaskCounts(
-  tasks: { status: TaskStatus; due_date: string }[],
-  today: Date = todayUTC(),
-): TaskCounts {
-  let done = 0;
-  let pending = 0;
-  let overdue = 0;
-
-  for (const task of tasks) {
-    const effective = effectiveTaskStatus(task, today);
-    if (effective === "feito") done++;
-    else if (effective === "atrasado") overdue++;
-    else pending++;
-  }
-
-  return { total: tasks.length, done, pending, overdue };
-}

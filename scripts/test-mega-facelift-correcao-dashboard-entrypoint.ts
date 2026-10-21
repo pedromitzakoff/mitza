@@ -5,14 +5,20 @@
  * /clients -> escolher -> Dashboard"), e "/" virou um RESOLVER
  * server-side que entra na carteira pela MESMA sequência oficial de
  * anterior/próximo (`flattenAgencyTree`) e redireciona pro primeiro
- * cliente — nunca o dashboard consolidado antigo (`LegacyGlobalDashboard`,
- * preservado mas aposentado em `src/app/page.tsx`).
+ * cliente.
  *
- * Cobre os 15 cenários pedidos pelo usuário. Os testes de matriz
- * módulo×contexto (Dashboard/Metas/Performance/Dados exigem cliente)
- * continuam em `test-mega-facelift-correcao-dashboard-cliente.ts`; os
- * estruturais da Fase 4.6 em si, em
- * `test-mega-facelift-fase46-contexto-global.ts` — não duplicados aqui.
+ * KOFF Analytics — Etapa 1.8: `LegacyGlobalDashboard` (o dashboard
+ * consolidado antigo, confirmado 100% inalcançável desde a Etapa "Correção
+ * do fluxo final do Dashboard") foi removido por completo de
+ * `src/app/page.tsx` — a maior parte do que restava dele era exatamente a
+ * camada operacional (Operação, account_reviews, atividade operacional)
+ * que esta etapa elimina. Os testes que dependiam dele continuar no disco,
+ * e os testes de `buildModuleContextHref`/`moduleSupportsAllContext`/
+ * `resolveCurrentModuleAndContext` (`client-workspace-nav.ts` — sistema de
+ * "módulos" removido nesta mesma etapa, já sem nenhum consumidor real
+ * desde que `GlobalScopeSelect` saiu do produto), foram retirados. O que
+ * resta aqui é só o núcleo que continua valendo: o próprio resolver "/" e
+ * a sequência oficial da carteira que ele usa.
  *
  * Rodar: npx tsx scripts/test-mega-facelift-correcao-dashboard-entrypoint.ts
  */
@@ -26,7 +32,6 @@ import {
   resolveWalletSequence,
   type AgencyTree,
 } from "../src/lib/agency-accounts-tree";
-import { buildModuleContextHref, moduleSupportsAllContext, resolveCurrentModuleAndContext } from "../src/lib/client-workspace-nav";
 
 let passed = 0;
 function ok(name: string, condition: boolean) {
@@ -44,7 +49,6 @@ function loadSource(...segments: string[]): string {
 }
 
 const pageSource = loadSource("src", "app", "page.tsx");
-const sidebarSource = loadSource("src", "app", "sidebar.tsx");
 
 /** Mesma forma de `RawAgencyTreeClient` (privado do módulo) — monta uma
  * árvore sintética sem precisar do Supabase, mesmo padrão já usado por
@@ -83,48 +87,24 @@ console.log("\n2 — '/' sem clientes -> fallback seguro /clients (nunca um redi
   check("carteira vazia (nenhum cliente ativo) -> /clients", resolveHomeRedirectHref(flattenAgencyTree(emptyTree)), "/clients");
 }
 
-console.log("\n3 — Dashboard nunca renderiza o consolidado global: '/' deixou de ser 'export default' do dashboard antigo\n");
+console.log("\n3 — '/' é só o resolver: Home() é o único export default, nunca renderiza dashboard consolidado algum\n");
 {
-  const homeFnStart = pageSource.indexOf("export default async function Home()");
-  const legacyFnStart = pageSource.indexOf("export async function LegacyGlobalDashboard(");
-  ok("'export default async function Home()' existe e vem ANTES de LegacyGlobalDashboard no arquivo", homeFnStart !== -1 && legacyFnStart !== -1 && homeFnStart < legacyFnStart);
-  const homeFnBody = pageSource.slice(homeFnStart, legacyFnStart);
-  ok("Home() chama loadAgencyAccountsTree + flattenAgencyTree + resolveHomeRedirectHref (mesmo núcleo da sequência oficial, nenhuma query/ordenação própria)", /loadAgencyAccountsTree\(\)/.test(homeFnBody) && /flattenAgencyTree\(tree\)/.test(homeFnBody) && /resolveHomeRedirectHref\(/.test(homeFnBody));
-  ok("Home() chama redirect(...) — nunca retorna JSX", /redirect\(resolveHomeRedirectHref/.test(homeFnBody));
-  ok("Home() NUNCA monta <GlobalScopeSelect module=\"dashboard\"> nem qualquer JSX do dashboard consolidado antigo", !homeFnBody.includes("<GlobalScopeSelect") && !homeFnBody.includes("return (\n    <div"));
-  ok("LegacyGlobalDashboard (implementação antiga) continua no disco, intacta — não deletada agressivamente", pageSource.includes("buildOperationClientCard") && pageSource.includes('<GlobalScopeSelect module="dashboard"'));
+  ok("'export default async function Home()' existe em page.tsx", pageSource.includes("export default async function Home()"));
+  ok("Home() chama loadAgencyAccountsTree + flattenAgencyTree + resolveHomeRedirectHref (mesmo núcleo da sequência oficial, nenhuma query/ordenação própria)", /loadAgencyAccountsTree\(\)/.test(pageSource) && /flattenAgencyTree\(tree\)/.test(pageSource) && /resolveHomeRedirectHref\(/.test(pageSource));
+  ok("Home() chama redirect(...) — nunca retorna JSX", /redirect\(resolveHomeRedirectHref/.test(pageSource));
+  ok(
+    "LegacyGlobalDashboard (implementação antiga, confirmada 100% inalcançável) foi removida por completo — nenhum export/JSX dela resta em page.tsx (menção em comentário histórico é esperada)",
+    !pageSource.includes("export async function LegacyGlobalDashboard") && !pageSource.includes("buildOperationClientCard") && !pageSource.includes("GlobalScopeSelect"),
+  );
 }
 
-console.log("\n4 — Dashboard nunca exige passar por /clients quando existem clientes (buildModuleContextHref + resolver combinados)\n");
+console.log("\n4 — '/' com pelo menos 1 cliente sempre resolve direto pro Dashboard de um cliente, nunca /clients\n");
 {
-  check("Dashboard + Todos -> '/' (nunca /clients — a escolha manual desapareceu do fluxo)", buildModuleContextHref("dashboard", { type: "all" }, null), "/");
   const tree = buildTree([{ id: "aibou", name: "Aibou", wallet_position: 1, managerId: null }], []);
   check("'/' com pelo menos 1 cliente SEMPRE resolve direto pro Dashboard de um cliente, nunca /clients", resolveHomeRedirectHref(flattenAgencyTree(tree)), "/clients/aibou");
 }
 
-console.log("\n5/6/7/8 — Aibou em Metas/Performance/Dados/Operação -> clicar Dashboard preserva Aibou\n");
-{
-  for (const fromModule of ["metas", "performance", "dados", "operation"] as const) {
-    check(`Aibou/${fromModule} -> Dashboard mantém Aibou`, buildModuleContextHref("dashboard", { type: "client", id: "aibou" }, null), "/clients/aibou");
-  }
-}
-
-console.log("\n9 — Todos + Operação -> Dashboard: nunca manda pra /clients; resolve pro primeiro cliente oficial via '/'\n");
-{
-  const currentContext = resolveCurrentModuleAndContext("/operation");
-  check("contexto atual lido de '/operation' é Todos", currentContext.context, { type: "all" });
-  check("clicar Dashboard nesse contexto cai em '/' (resolver), nunca em /clients", buildModuleContextHref("dashboard", currentContext.context, null), "/");
-  const tree = buildTree(
-    [
-      { id: "z", name: "Zeta", wallet_position: 1, managerId: "m1" },
-      { id: "y", name: "Ypsilon", wallet_position: 2, managerId: "m1" },
-    ],
-    [{ id: "m1", name: "Gestor 1" }],
-  );
-  check("'/' resolve então pro primeiro cliente da sequência oficial (Zeta, não Ypsilon)", resolveHomeRedirectHref(flattenAgencyTree(tree)), "/clients/z");
-}
-
-console.log("\n10 — anterior/próximo usa a MESMA sequência usada pra decidir o primeiro cliente de '/' — nunca duas definições de 'primeiro'\n");
+console.log("\n5 — anterior/próximo usa a MESMA sequência usada pra decidir o primeiro cliente de '/' — nunca duas definições de 'primeiro'\n");
 {
   const tree = buildTree(
     [
@@ -141,27 +121,7 @@ console.log("\n10 — anterior/próximo usa a MESMA sequência usada pra decidir
   ok("resolveWalletSequence (anterior/próximo) concorda: Alpha é a posição 1, sem anterior — MESMA fonte (flattenAgencyTree), nunca duas ordenações", sequenceFromAlpha !== null && sequenceFromAlpha.position === 1 && sequenceFromAlpha.prevId === null && sequenceFromAlpha.nextId === "b");
 }
 
-console.log("\n11 — busca/seletor do header troca cliente preservando o módulo Dashboard (mesmo mecanismo de sempre, intocado)\n");
-{
-  check("trocar pra outro cliente a partir de Dashboard preserva o módulo (sufixo '' replicado)", buildModuleContextHref("dashboard", { type: "client", id: "outro-cliente" }, null), "/clients/outro-cliente");
-}
-
-console.log("\n12 — Dashboard NUNCA oferece 'Todos os clientes' no seletor do header\n");
-{
-  ok("moduleSupportsAllContext('dashboard') === false", !moduleSupportsAllContext("dashboard"));
-}
-
-console.log("\n13 — Deep link /clients/[id] continua funcionando normalmente (layout do workspace intocado)\n");
-{
-  check("'/clients/aibou' resolve como dashboard + cliente aibou", resolveCurrentModuleAndContext("/clients/aibou"), { module: "dashboard", context: { type: "client", id: "aibou" } });
-}
-
-console.log("\n14 — /clients continua existindo como GESTÃO (busca/filtros/organizar carteira/gestor/wallet_position) — nunca removida, nunca parte do fluxo normal de troca de cliente\n");
-{
-  ok("Sidebar continua com 'Clientes' em GESTÃO, href fixo /clients", /\{ label: "Clientes", href: "\/clients"/.test(sidebarSource));
-}
-
-console.log("\n15 — Sem redirect loop: /clients nunca redireciona de volta pra '/', e o resolver nunca aponta pra '/'\n");
+console.log("\n6 — Sem redirect loop: /clients nunca redireciona de volta pra '/', e o resolver nunca aponta pra '/'\n");
 {
   const clientsPageSource = loadSource("src", "app", "clients", "page.tsx");
   ok("/clients (app/clients/page.tsx) não contém nenhum redirect(\"/\") pra '/' — não existe risco de ida e volta", !/redirect\(\s*"\/"\s*\)/.test(clientsPageSource));

@@ -3,23 +3,18 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { getCurrentProfile } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
-import { todayUTC, todayDateString } from "@/lib/today";
-import { currentMonthRange, findSprintForDate, isDateWithinPeriod } from "@/lib/sprint-financials";
+import { todayUTC } from "@/lib/today";
+import { currentMonthRange, sumActualSpendForMonth, sumPlannedForMonth } from "@/lib/sprint-financials";
 import { computeMonthProjectionForRange } from "@/lib/client-metrics";
 import { resolvePlanningHorizon } from "@/lib/monthly-budget";
-import { getClientMonthHorizons } from "@/lib/client-month-horizons";
 import { formatCurrency, formatRelationshipDuration } from "@/lib/format";
+import { getClientMonthHorizons } from "@/lib/client-month-horizons";
 import { CLIENT_STATUS_BADGE_CLASSES, CLIENT_STATUS_LABEL } from "@/lib/client-fields";
 import type { ClientContractStatus } from "@/lib/supabase/database.types";
-import {
-  buildOperationClientCard,
-  type OperationClientRawData,
-} from "@/app/operation/operation-data";
-import { resolveReviewComplianceStatus } from "@/lib/account-health-engine";
 import { groupChannelSpendBySprintId } from "@/lib/channel-spend";
-import type { TrafficChannel } from "@/lib/traffic-channels";
+import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { resolveManualActualSpend } from "@/lib/effective-spend";
-import { filterRowsToPrimaryGoal } from "@/lib/client-plan";
+import { filterRowsToPrimaryGoal, resolveConsolidatedMonthlyPlanned } from "@/lib/client-plan";
 import { ClientsFilters } from "./clients-filters";
 import { AgencyAccountsTree } from "../agency-accounts-tree";
 
@@ -33,10 +28,9 @@ import { AgencyAccountsTree } from "../agency-accounts-tree";
  * desta fase — auditoria confirmou que já cobria quase tudo pedido, só
  * precisando de cabeçalho/contexto novos. Não duplica as métricas
  * completas do Dashboard: é só um diretório pra achar e abrir um cliente
- * rápido. Saúde/atividade operacional continuam calculadas
- * (buildOperationClientCard) mas não aparecem aqui — só na Operação e no
- * Dashboard, pra não misturar status contratual com operacional nesta
- * tela.
+ * rápido — a projeção do mês usa só `monthPlanned`/`monthActual`
+ * (`resolveConsolidatedMonthlyPlanned`/`sumActualSpendForMonth`, as mesmas
+ * funções analíticas do Cockpit).
  *
  * Agrupamento por gestor (seção 7 do pedido): mantido como LISTA ÚNICA +
  * filtro "Gestor" (opção A do pedido, já existente) — nunca um
@@ -71,12 +65,11 @@ export default async function ClientsPage({
   const statusFilter = (params.status ?? "todos") as ClientContractStatus | "todos";
 
   const today = todayUTC();
-  const todayStr = todayDateString();
   const { firstDay, lastDay } = currentMonthRange(today);
 
   const supabase = await createSupabaseClient();
 
-  const [clients, gestores, sprints, dailySpend, tasks, plannedAllocations, budgetChanges, channelSpendRows] = await Promise.all([
+  const [clients, gestores, sprints, dailySpend, plannedAllocations, budgetChanges, channelSpendRows] = await Promise.all([
     requireQuery(
       supabase
         .from("clients")
@@ -108,14 +101,6 @@ export default async function ClientsPage({
     ),
     requireQuery(
       supabase
-        .from("tasks")
-        .select(
-          "id, client_id, sprint_id, title, type, due_date, status, notes, assignee:team_members!tasks_assignee_id_fkey(name, status)",
-        ),
-      "tasks",
-    ),
-    requireQuery(
-      supabase
         .from("sprint_planned_allocations")
         .select("client_id, sprint_id, date, planned_amount")
         .gte("date", firstDay)
@@ -124,11 +109,11 @@ export default async function ClientsPage({
     ),
     // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
     // mais só `channel = 'meta'`) — `resolveConsolidatedMonthlyPlanned`
-    // (dentro de `buildOperationClientCard`) soma os canais com plano.
-    // Fase 1 "Confiabilidade dos Dados" — bug confirmado: `.eq` excluía
-    // clientes cujo orçamento vigente foi definido num mês anterior (sem
-    // mudança neste mês) — `.lte` traz o histórico completo,
-    // `resolveConsolidatedMonthlyPlanned` reduz à versão vigente por canal.
+    // soma os canais com plano. Fase 1 "Confiabilidade dos Dados" — bug
+    // confirmado: `.eq` excluía clientes cujo orçamento vigente foi
+    // definido num mês anterior (sem mudança neste mês) — `.lte` traz o
+    // histórico completo, `resolveConsolidatedMonthlyPlanned` reduz à
+    // versão vigente por canal.
     requireQuery(
       supabase.from("monthly_budget_changes").select("client_id, channel, month, new_amount, changed_at, result_type").lte("month", firstDay),
       "monthly_budget_changes",
@@ -141,68 +126,10 @@ export default async function ClientsPage({
     ),
   ]);
 
-  const clientIds = clients.map((c) => c.id);
-  const currentSprintIds = sprints
-    .filter((s) => isDateWithinPeriod(todayStr, s.start_date, s.end_date))
-    .map((s) => s.id);
-
-  const [clientActivity, sprintActivity, lastReviews, monthHorizonsByClient] = await Promise.all([
-    clientIds.length > 0
-      ? requireQuery(
-          supabase.from("client_last_operational_activity").select("client_id, last_activity_at").in("client_id", clientIds),
-          "client_last_operational_activity",
-        )
-      : Promise.resolve([]),
-    currentSprintIds.length > 0
-      ? requireQuery(
-          supabase
-            .from("sprint_last_operational_activity")
-            .select("sprint_id, last_activity_at")
-            .in("sprint_id", currentSprintIds),
-          "sprint_last_operational_activity",
-        )
-      : Promise.resolve([]),
-    // Etapa 74 — última otimização (account_reviews) por cliente, alimenta
-    // o alerta "Nenhuma otimização registrada recentemente" por baixo de
-    // buildOperationClientCard (accountHealth não é exibido nesta tela, mas
-    // é calculado — precisa do dado real, nunca de um valor fictício).
-    clientIds.length > 0
-      ? requireQuery(
-          supabase
-            .from("account_reviews")
-            .select("client_id, reviewed_at")
-            .in("client_id", clientIds)
-            .order("reviewed_at", { ascending: false }),
-          "account_reviews",
-        )
-      : Promise.resolve([]),
-    // Etapa "Horizonte de Planejamento": clientes de evento (campanha que
-    // termina antes do fim do mês) — mapa vazio pra quem não tem nenhum,
-    // comportamento idêntico a antes desta etapa.
-    getClientMonthHorizons(supabase, clientIds, currentMonthRange(today).firstDay),
-  ]);
-  const lastReviewAtByClient = new Map<string, string>();
-  for (const row of lastReviews) {
-    if (!lastReviewAtByClient.has(row.client_id)) lastReviewAtByClient.set(row.client_id, row.reviewed_at);
-  }
-
-  // Convergência da Regra de Revisão de Conta: mesma decisão oficial que
-  // Operação/Dashboard/Sprints já usam (`resolveReviewComplianceStatus`,
-  // account-health-engine.ts) — nenhuma matemática de cadência nova aqui,
-  // só a busca de `account_review_cadences` que faltava nesta tela.
-  const reviewCadences = clientIds.length > 0
-    ? await requireQuery(
-        supabase.from("account_review_cadences").select("client_id, max_business_days_without_review, is_active").in("client_id", clientIds),
-        "account_review_cadences",
-      )
-    : [];
-  const reviewCadenceByClient = new Map(reviewCadences.map((row) => [row.client_id, row]));
-  const reviewIsOverdueByClient = new Map(
-    clientIds.map((clientId) => [
-      clientId,
-      resolveReviewComplianceStatus(lastReviewAtByClient.get(clientId) ?? null, reviewCadenceByClient.get(clientId) ?? null, today).isOverdue,
-    ]),
-  );
+  // Etapa "Horizonte de Planejamento": clientes de evento (campanha que
+  // termina antes do fim do mês) — mapa vazio pra quem não tem nenhum,
+  // comportamento idêntico a antes desta etapa.
+  const monthHorizonsByClient = await getClientMonthHorizons(supabase, clients.map((c) => c.id), currentMonthRange(today).firstDay);
 
   type SprintRow = {
     id: string;
@@ -236,27 +163,13 @@ export default async function ClientsPage({
   }
 
   const dailySpendByClient = new Map<string, { date: string; spend: number }[]>();
-  const lastSyncedByClient = new Map<string, string>();
   for (const d of dailySpend ?? []) {
     const list = dailySpendByClient.get(d.client_id) ?? [];
     list.push({ date: d.date, spend: d.spend });
     dailySpendByClient.set(d.client_id, list);
-
-    const current = lastSyncedByClient.get(d.client_id);
-    if (!current || d.synced_at > current) {
-      lastSyncedByClient.set(d.client_id, d.synced_at);
-    }
   }
 
-  const tasksByClient = new Map<string, OperationClientRawData["tasks"]>();
-  for (const t of tasks ?? []) {
-    if (!t.client_id) continue;
-    const list = tasksByClient.get(t.client_id) ?? [];
-    list.push(t);
-    tasksByClient.set(t.client_id, list);
-  }
-
-  const plannedAllocationsByClient = new Map<string, OperationClientRawData["plannedAllocations"]>();
+  const plannedAllocationsByClient = new Map<string, { date: string; sprintId: string; amount: number }[]>();
   for (const a of plannedAllocations ?? []) {
     const list = plannedAllocationsByClient.get(a.client_id) ?? [];
     list.push({ date: a.date, sprintId: a.sprint_id, amount: a.planned_amount });
@@ -266,55 +179,52 @@ export default async function ClientsPage({
   // Etapa "Múltiplos Objetivos": só o objetivo PRINCIPAL — nunca deixa a
   // linha de um objetivo secundário virar investimento aqui.
   const primaryGoalByClientId = new Map(clients.map((c) => [c.id, c.performance_goal]));
-  const budgetChangesByClient = new Map<string, OperationClientRawData["monthlyBudgetChanges"]>();
+  const budgetChangesByClient = new Map<string, { channel: TrafficChannel; month: string; investment: number; changedAt: string }[]>();
   for (const c of filterRowsToPrimaryGoal(budgetChanges ?? [], primaryGoalByClientId)) {
     const list = budgetChangesByClient.get(c.client_id) ?? [];
-    list.push({ channel: c.channel as TrafficChannel, month: c.month, newAmount: c.new_amount, changedAt: c.changed_at });
+    list.push({ channel: c.channel as TrafficChannel, month: c.month, investment: c.new_amount, changedAt: c.changed_at });
     budgetChangesByClient.set(c.client_id, list);
   }
 
-  const clientActivityById = new Map((clientActivity ?? []).map((r) => [r.client_id, r.last_activity_at]));
-  const sprintActivityById = new Map((sprintActivity ?? []).map((r) => [r.sprint_id, r.last_activity_at]));
+  const currentRange = currentMonthRange(today);
 
-  const rawClients: OperationClientRawData[] = (clients ?? []).map((client) => {
+  /**
+   * KOFF Analytics — Etapa 1.8: esta listagem usava `buildOperationClientCard`
+   * (`app/operation/operation-data.ts`, removido junto com Operação) só por
+   * conveniência — o card inteiro (tarefas, alertas, saúde, atividade
+   * operacional) nunca foi exibido aqui (ver doc-comment do componente),
+   * só `monthPlanned`/`monthActual` eram realmente lidos. Substituído por
+   * este cálculo mínimo, com as mesmas funções analíticas centrais de
+   * sempre (`resolveConsolidatedMonthlyPlanned`/`sumPlannedForMonth`/
+   * `sumActualSpendForMonth`, as mesmas que o Cockpit usa) — mesmo
+   * resultado numérico, sem nenhuma dependência de tarefas/atividade
+   * operacional/account_reviews.
+   */
+  let cards = clients.map((client) => {
     const clientSprints = sprintsByClient.get(client.id) ?? [];
-    const currentSprint = findSprintForDate(clientSprints, todayStr);
-
+    const monthPlanned = resolveConsolidatedMonthlyPlanned(
+      AVAILABLE_TRAFFIC_CHANNELS,
+      budgetChangesByClient.get(client.id) ?? [],
+      firstDay,
+      sumPlannedForMonth(plannedAllocationsByClient.get(client.id) ?? [], currentRange),
+    );
+    const monthActual = sumActualSpendForMonth(clientSprints, currentRange, dailySpendByClient.get(client.id) ?? []);
     return {
-      id: client.id,
-      name: client.name,
-      metaAdAccountId: client.meta_ad_account_id,
-      // Etapa 62: fonte única do gestor atribuído — clients.primary_manager_id.
-      managerNames: client.primary_manager ? [client.primary_manager.name] : [],
+      clientId: client.id,
+      clientName: client.name,
       managerIds: client.primary_manager ? [client.primary_manager.id] : [],
-      sprints: clientSprints,
-      dailySpend: dailySpendByClient.get(client.id) ?? [],
-      plannedAllocations: plannedAllocationsByClient.get(client.id) ?? [],
-      monthlyBudgetChanges: budgetChangesByClient.get(client.id) ?? [],
-      tasks: tasksByClient.get(client.id) ?? [],
-      clientLastActivityAt: clientActivityById.get(client.id) ?? null,
-      sprintLastActivityAt: currentSprint ? sprintActivityById.get(currentSprint.id) ?? null : null,
-      lastSyncedAt: lastSyncedByClient.get(client.id) ?? null,
-      lastReviewAt: lastReviewAtByClient.get(client.id) ?? null,
-      // `?? false` só cobre a impossibilidade estática do Map.get() (todo
-      // client.id vem do mesmo `clientIds` que populou o mapa) — nunca um
-      // fallback de comportamento de verdade.
-      reviewIsOverdue: reviewIsOverdueByClient.get(client.id) ?? false,
+      monthPlanned,
+      monthActual,
     };
   });
-
-  const currentRange = currentMonthRange(today);
-  let cards = rawClients.map((client) =>
-    buildOperationClientCard(client, today, currentRange, resolvePlanningHorizon(currentRange, monthHorizonsByClient.get(client.id) ?? null)),
-  );
   // Auditoria de Estados Vazios: distingue "não existe cliente nenhum" de
   // "os filtros não encontraram nada" — capturado ANTES de search/manager/
   // status filtrarem `cards` abaixo, nunca recalculado depois.
   const hasAnyClients = cards.length > 0;
 
   // Dados estruturais (Etapa 27) — status contratual, início de contrato e
-  // gestor principal não fazem parte de buildOperationClientCard (que é só
-  // operacional), então ficam num map à parte, indexado pelo mesmo clientId.
+  // nome do gestor principal não fazem parte do cálculo de orçamento acima,
+  // então ficam num map à parte, indexado pelo mesmo clientId.
   const clientMetaById = new Map(
     (clients ?? []).map((c) => [
       c.id,

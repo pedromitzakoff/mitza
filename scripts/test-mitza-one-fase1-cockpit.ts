@@ -25,7 +25,7 @@
  * Rodar: npx tsx scripts/test-mitza-one-fase1-cockpit.ts
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { resolveSelectedGoal, buildClientContextHref, findChannelDataIssue } from "../src/app/clients/[id]/page";
 import { evaluateInvestmentDiagnostic, evaluateCpaDiagnostic } from "../src/lib/metric-diagnostics";
@@ -48,6 +48,9 @@ function check(name: string, actual: unknown, expected: unknown) {
 }
 function loadSource(...segments: string[]): string {
   return readFileSync(join(__dirname, "..", ...segments), "utf8");
+}
+function fileExists(...segments: string[]): boolean {
+  return existsSync(join(__dirname, "..", ...segments));
 }
 
 const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
@@ -181,7 +184,6 @@ console.log("\nC — Diagnóstico\n");
     planejamento: { items: [], isIncomplete: false },
     cpa: null,
     investment: { value: 1000, expected: 1000, deviationPct: 0, direction: "flat", tone: "normal", isOutOfRange: false },
-    pendencias: { count: 0, items: [], hasPendencias: false },
     atividade: { lastActivityAt: null, hoursSinceLastActivity: null, isOverdue: false },
   };
 
@@ -278,12 +280,13 @@ console.log("\nG — Regressão (rotas antigas continuam intactas; sem redirects
     ["clients", "[id]", "metas", "page.tsx"],
     ["clients", "[id]", "relatorio", "page.tsx"],
     ["clients", "[id]", "dados", "page.tsx"],
-    ["clients", "[id]", "operation", "page.tsx"],
     ["clients", "[id]", "edit", "page.tsx"],
   ]) {
     ok(`/${route.slice(0, -1).join("/")} continua existindo no disco, intocada`, loadSource("src", "app", ...route).length > 0);
   }
-  ok("/operation GLOBAL continua intocada (nenhuma incorporação à tela do cliente)", loadSource("src", "app", "operation", "page.tsx").length > 0);
+  // KOFF Analytics — Etapa 1.8: /operation (global e por cliente) foi
+  // removida do produto — checagem de regressão atualizada abaixo.
+  ok("/operation (global e por cliente) foi removida por completo", !fileExists("src", "app", "operation", "page.tsx") && !fileExists("src", "app", "clients", "[id]", "operation", "page.tsx"));
   ok("/clients (Gestão/carteira) continua intocada", loadSource("src", "app", "clients", "page.tsx").includes("AgencyAccountsTree") || loadSource("src", "app", "clients", "page.tsx").length > 0);
   // Nota (MITZA ONE — Fase 2, posterior a este arquivo): Sidebar e
   // ClientWorkspaceHeader foram DELIBERADAMENTE alterados na Fase 2

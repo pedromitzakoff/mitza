@@ -1,56 +1,25 @@
 /**
- * Núcleo puro da navegação do workspace do cliente (Etapa "MITZA —
- * Reformulação Estrutural"; revisado na Etapa "Correção de UX do
- * Workspace" — as 5 abas viraram 5 ROTAS DE APROFUNDAMENTO, não mais
- * abas equivalentes competindo no header; revisado novamente na Etapa
- * "MEGA FACELIFT — Fase 1: Novo Shell da Growth Infra" — as seções
- * reconhecidas eram os módulos da Growth Infra do cliente, navegáveis
- * diretamente pela Sidebar, não só pelo header; Demandas e Timeline foram
- * removidas do produto nas Etapas 1.6/1.3 da reestruturação KOFF
- * Analytics, restando Dashboard/Metas/Performance/Dados/Operação. Este
- * módulo só resolve "qual sufixo replicar ao trocar de cliente" e "qual
- * URL montar" — extraído de `client-workspace-header.tsx` pra ser
- * testável sem DOM/router.
+ * Núcleo puro da navegação do workspace do cliente — extraído de
+ * `client-workspace-header.tsx`/`sidebar.tsx` pra ser testável sem DOM/
+ * router.
  *
- * `resolveActiveTab`/`WORKSPACE_TABS` (com `label`) existiram só pra
- * destacar a aba ativa na antiga barra `role="tablist"` — removidos junto
- * com ela (Etapa "Correção de UX do Workspace"); as rotas continuam
- * existindo (seção 15 do pedido de correção: "as rotas da Fase 1 não
- * foram um erro"), só deixaram de ter uma barra de abas dedicada — a
- * navegação entre elas agora vive na Sidebar.
- *
- * `/edit` (Configurações do cliente) saiu da lista replicável nesta
- * etapa: a auditoria da mudança estrutural (seção V) reclassificou
- * Edição como administrativo, não um módulo de Growth — trocar de
- * cliente estando em `/edit` agora cai pro Dashboard, mesmo
- * comportamento já aplicado a qualquer rota legada fora da lista (ex.:
- * `/clients/[id]/tasks/new`). A rota `/edit` em si continua existindo e
- * funcionando exatamente como antes — só deixou de ser replicada.
+ * KOFF Analytics — Etapa 1.8: toda a camada de "módulos" (`ModuleKey`,
+ * `AppContext`, `MODULE_CLIENT_SUFFIX`, `SUFFIX_TO_MODULE`,
+ * `MODULE_GLOBAL_HREF`, `MODULES_OFFERING_ALL_IN_SELECTOR`,
+ * `moduleSupportsAllContext`, `buildModuleContextHref`,
+ * `resolveModuleLinkContext`, `resolveCurrentModuleAndContext`) foi removida
+ * — existia só pra sustentar `GlobalScopeSelect` (removido junto com
+ * Operação) e `resolveModuleLinkContext`/`resolveCurrentModuleAndContext`
+ * já estavam sem nenhum consumidor real desde a Etapa 1.3 da
+ * reestruturação KOFF Analytics. Restam só as três funções com consumidor
+ * analítico real: `resolveCurrentSuffix` (`client-workspace-header.tsx`),
+ * `buildWorkspaceHref`/`resolveActiveClientIdFromPathname` (`sidebar.tsx`).
  */
-
-/** Sufixos relativos a `/clients/[id]` reconhecidos como "módulo da
- * Growth Infra" — os únicos que são replicados ao trocar de cliente
- * (seletor ou anterior/próximo) e os únicos navegáveis pelo bloco
- * "Cliente" da Sidebar. "" é o Dashboard (Painel). `/relatorio` continua
- * com este nome técnico de rota (nenhum link/PDF/`/r/[token]` quebra) —
- * "Performance" é só o rótulo exibido na navegação. */
-export const WORKSPACE_SECTION_SUFFIXES: string[] = ["", "/metas", "/relatorio", "/dados", "/operation"];
 
 /** Sufixo da rota atual relativo a `/clients/[id]` — "" na raiz. */
 export function resolveCurrentSuffix(pathname: string, clientId: string): string {
   const basePath = `/clients/${clientId}`;
   return pathname === basePath ? "" : pathname.slice(basePath.length);
-}
-
-/** Sufixo a replicar ao trocar de cliente (seletor ou anterior/próximo) —
- * decisão 1 do usuário: preservar a SEÇÃO atual, nunca voltar pro Painel
- * principal à toa (ex.: "Helping Hand / relatório completo → próximo
- * cliente → Kaizen / relatório completo"). Só um dos sufixos reconhecidos
- * é replicado; qualquer outra rota (legada, fora das 5 seções — ex.:
- * `/clients/[id]/tasks/new`) cai pra "" (Painel principal) — replicar uma
- * URL de formulário legado pro próximo cliente não faz sentido. */
-export function resolveReplicableSuffix(currentSuffix: string): string {
-  return WORKSPACE_SECTION_SUFFIXES.includes(currentSuffix) ? currentSuffix : "";
 }
 
 /** Monta a URL final do workspace pra um cliente + sufixo de seção + mês
@@ -61,145 +30,13 @@ export function buildWorkspaceHref(clientId: string, suffix: string, month: stri
 }
 
 /**
- * Etapa "MEGA FACELIFT — Fase 1": extrai o id do cliente de um pathname,
- * só pra decidir se a Sidebar está "dentro" de um workspace de cliente
- * (mostra o bloco "Cliente") — extraído de `sidebar.tsx` pra ser
- * testável sem DOM/router, mesmo padrão das demais funções deste módulo.
- * `/clients` (lista) e `/clients/new` (criação) nunca contam como
- * contexto de cliente.
+ * Extrai o id do cliente de um pathname, só pra decidir se a Sidebar está
+ * "dentro" de um workspace de cliente (mostra o bloco "Cliente") — testável
+ * sem DOM/router. `/clients` (lista) e `/clients/new` (criação) nunca contam
+ * como contexto de cliente.
  */
 export function resolveActiveClientIdFromPathname(pathname: string): string | null {
   const match = pathname.match(/^\/clients\/([^/]+)/);
   if (!match) return null;
   return match[1] === "new" ? null : match[1];
-}
-
-/**
- * Etapa "MEGA FACELIFT — Fase 4.6: Módulos Fixos + Cliente como Contexto
- * Global" — MÓDULO é fixo (os 7 da Growth Infra), CLIENTE é contexto. A
- * Sidebar deixa de ter "Navegação da Carteira" e "Navegação do Cliente"
- * como dois menus — vira UMA navegação (`ModuleKey`), e o CONTEXTO
- * (`AppContext`: "Todos" ou um cliente específico) decide o escopo.
- * `buildModuleContextHref`/`resolveCurrentModuleAndContext` são o núcleo
- * puro ÚNICO que resolve "módulo atual + contexto desejado -> URL" —
- * usado pela Sidebar, por `ClientWorkspaceHeader` (saída pra "Todos") e
- * por `GlobalScopeSelect` (entrada de "Todos" pra um cliente), nunca
- * duplicado/reimplementado em cada componente (seção 17 do pedido).
- */
-export type ModuleKey = "dashboard" | "metas" | "performance" | "dados" | "operation";
-
-export type AppContext = { type: "all" } | { type: "client"; id: string };
-
-/** Mesmo vocabulário de sufixo de `WORKSPACE_SECTION_SUFFIXES` acima, só
- * reindexado por módulo (chave estável, nunca o sufixo bruto) — os dois
- * precisam ficar em sincronia manual (um módulo novo aqui sem entrada lá
- * nunca é reconhecido ao trocar de cliente). */
-const MODULE_CLIENT_SUFFIX: Record<ModuleKey, string> = {
-  dashboard: "",
-  metas: "/metas",
-  performance: "/relatorio",
-  dados: "/dados",
-  operation: "/operation",
-};
-
-const SUFFIX_TO_MODULE: Record<string, ModuleKey> = {
-  "": "dashboard",
-  "/metas": "metas",
-  "/relatorio": "performance",
-  "/dados": "dados",
-  "/operation": "operation",
-};
-
-/**
- * Destino de "módulo + contexto Todos" (Etapa "MEGA FACELIFT — Correção
- * Conceitual da Fase 4.6" + revisada pela Etapa "Correção do fluxo final
- * do Dashboard"). Dois grupos, derivados do uso real de cada módulo:
- *
- * - MÓDULOS DE GROWTH DO CLIENTE (dashboard/metas/performance/dados):
- *   respondem "como ESTE cliente está indo" — a pergunta não faz sentido
- *   sem um cliente. Metas/Performance/Dados nunca tiveram uma versão
- *   consolidada da carteira inteira (nunca inventar uma — seção 7 da Fase
- *   4.6): ficam FORA deste mapa, então "Todos" pra eles cai no fallback
- *   padrão de `buildModuleContextHref`, `/clients` (escolher um cliente).
- *   `dashboard` é o único dos quatro que TEM uma entrada aqui — mas
- *   `"/"` deixou de ser o dashboard consolidado da agência (aposentado,
- *   `LegacyGlobalDashboard` em `app/page.tsx`) e passou a ser um
- *   RESOLVER: abre direto o primeiro cliente da sequência oficial da
- *   carteira (`resolveHomeRedirectHref`, `lib/agency-accounts-tree.ts`).
- *   Isso existe só pra Sidebar/header nunca precisarem resolver "qual é o
- *   primeiro cliente" no cliente (eles não têm a árvore da carteira em
- *   mãos) — nunca pra oferecer "Todos" como opção real no seletor, por
- *   isso NÃO entra em `MODULES_OFFERING_ALL_IN_SELECTOR` abaixo.
- * - MÓDULOS OPERACIONAIS (operation): sempre suportaram "Todos" de verdade
- *   (Fase 4.5/4.6) — nenhuma mudança aqui. (demandas/timeline ofereciam o
- *   mesmo antes de serem removidas do produto nas Etapas 1.6/1.3 da
- *   reestruturação KOFF Analytics.)
- */
-const MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = {
-  dashboard: "/",
-  operation: "/operation",
-};
-
-/**
- * Módulos cujo seletor do header pode genuinamente oferecer "Todos os
- * clientes" como opção ESCOLHÍVEL (Etapa "Correção do fluxo final do
- * Dashboard"). Deliberadamente NÃO derivado de `MODULE_GLOBAL_HREF`
- * acima: Dashboard tem uma entrada ali (resolve pro primeiro cliente),
- * mas isso é uma resolução interna de navegação, nunca uma opção real que
- * o usuário escolhe — o seletor em Dashboard/Metas/Performance/Dados
- * nunca mostra "Todos os clientes". Usado por `ClientWorkspaceHeader`. */
-const MODULES_OFFERING_ALL_IN_SELECTOR: readonly ModuleKey[] = ["operation"];
-
-export function moduleSupportsAllContext(module: ModuleKey): boolean {
-  return MODULES_OFFERING_ALL_IN_SELECTOR.includes(module);
-}
-
-/** Resolve "módulo atual + contexto desejado" pra uma URL — único lugar
- * que sabe montar esse destino (seção 17 do pedido: "evitar lógica de
- * pathname duplicada"). `month` só se aplica ao contexto de CLIENTE
- * (mesmo `buildWorkspaceHref` de sempre) — nunca propagado pra uma rota
- * global, cujo próprio `?month=` (quando existe) tem semântica e formato
- * independentes (seção 16: filtros locais continuam locais). */
-export function buildModuleContextHref(module: ModuleKey, context: AppContext, month: string | null): string {
-  if (context.type === "client") return buildWorkspaceHref(context.id, MODULE_CLIENT_SUFFIX[module], month);
-  return MODULE_GLOBAL_HREF[module] ?? "/clients";
-}
-
-/**
- * Módulos cujo link na SIDEBAR sempre abre em contexto Todos, mesmo
- * estando dentro do workspace de um cliente específico (Etapa "Demandas
- * sempre abre em Todos por padrão") — regra específica de Demandas, que
- * saiu do produto na Etapa 1.6 da reestruturação KOFF Analytics. Vazio
- * desde então; Dashboard/Metas/Performance/Dados/Operação sempre
- * preservaram o cliente atual.
- */
-const MODULES_DEFAULT_TO_ALL_CONTEXT_ON_SIDEBAR: readonly ModuleKey[] = [];
-
-/** Resolve o contexto a usar pra montar o link de um módulo NA SIDEBAR —
- * normalmente o contexto ambiente (preserva o cliente atual, mesma regra
- * de sempre), exceto pros módulos em `MODULES_DEFAULT_TO_ALL_CONTEXT_ON_SIDEBAR`,
- * que sempre abrem em Todos. Usado só por `ModuleLink` (`app/sidebar.tsx`)
- * — `ClientWorkspaceHeader`/`GlobalScopeSelect` têm seus próprios
- * mecanismos de troca de cliente/contexto, não passam por aqui. */
-export function resolveModuleLinkContext(module: ModuleKey, ambientContext: AppContext): AppContext {
-  return MODULES_DEFAULT_TO_ALL_CONTEXT_ON_SIDEBAR.includes(module) ? { type: "all" } : ambientContext;
-}
-
-/** Resolve módulo + contexto ATUAIS a partir do pathname — núcleo único
- * usado pela Sidebar (destaque do item ativo) e por `ClientWorkspaceHeader`
- * (pra saber qual módulo replicar ao sair pra "Todos"). `module: null`
- * cobre rotas que não são nenhum dos 7 módulos (`/clients`, `/team`,
- * `/settings` — área "Gestão", sem conceito de módulo/contexto). Dentro
- * de um cliente, reaproveita `resolveReplicableSuffix` — a MESMA regra
- * de sempre pra rotas legadas fora dos 7 módulos (`/edit`,
- * `/tasks/new`) cair no Dashboard, nunca uma segunda regra. */
-export function resolveCurrentModuleAndContext(pathname: string): { module: ModuleKey | null; context: AppContext } {
-  const clientId = resolveActiveClientIdFromPathname(pathname);
-  if (clientId) {
-    const suffix = resolveReplicableSuffix(resolveCurrentSuffix(pathname, clientId));
-    return { module: SUFFIX_TO_MODULE[suffix] ?? "dashboard", context: { type: "client", id: clientId } };
-  }
-  if (pathname === "/") return { module: "dashboard", context: { type: "all" } };
-  if (pathname.startsWith("/operation")) return { module: "operation", context: { type: "all" } };
-  return { module: null, context: { type: "all" } };
 }

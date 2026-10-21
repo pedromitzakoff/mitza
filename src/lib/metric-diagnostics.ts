@@ -120,20 +120,19 @@ export function evaluateInvestmentDiagnostic(actualSpend: number, expectedToDate
 }
 
 // ---------------------------------------------------------------------------
-// Planejamento — não é um problema OPERACIONAL (CPA, Investimento,
-// Pendências, Atividade), é um problema ESTRUTURAL: a conta ainda não tem
-// as configurações mínimas pro motor conseguir diagnosticá-la de verdade.
-// Deliberadamente separado dos outros eixos: sem meta de custo ou sem
-// plano mensal de investimento, `evaluateCpaDiagnostic`/
-// `evaluateInvestmentDiagnostic` voltam `tone: "normal"` (nenhuma base de
-// comparação, nunca um "0 esperado" fabricado) — o que tornaria o
-// silêncio da interface ENGANOSO sem este eixo avisando que aquela conta
-// simplesmente não foi avaliada, não que foi avaliada e aprovada.
-// "Nenhum alerta = nenhuma ação necessária" só é verdade quando
-// Planejamento também está limpo — por isso ele nunca fica silencioso: se
-// incompleto, sempre entra no filtro, mesmo que os outros quatro eixos
-// não tenham nada a dizer (porque, tecnicamente, não conseguiram dizer
-// nada).
+// Planejamento — não é um problema de ritmo (CPA, Investimento, Atividade),
+// é um problema ESTRUTURAL: a conta ainda não tem as configurações mínimas
+// pro motor conseguir diagnosticá-la de verdade. Deliberadamente separado
+// dos outros eixos: sem meta de custo ou sem plano mensal de investimento,
+// `evaluateCpaDiagnostic`/`evaluateInvestmentDiagnostic` voltam
+// `tone: "normal"` (nenhuma base de comparação, nunca um "0 esperado"
+// fabricado) — o que tornaria o silêncio da interface ENGANOSO sem este
+// eixo avisando que aquela conta simplesmente não foi avaliada, não que foi
+// avaliada e aprovada. "Nenhum alerta = nenhuma ação necessária" só é
+// verdade quando Planejamento também está limpo — por isso ele nunca fica
+// silencioso: se incompleto, sempre entra no filtro, mesmo que os outros
+// eixos não tenham nada a dizer (porque, tecnicamente, não conseguiram
+// dizer nada).
 // ---------------------------------------------------------------------------
 
 export type PlanejamentoIssueType = "meta_custo_nao_configurada" | "plano_investimento_nao_configurado";
@@ -175,58 +174,14 @@ export function evaluatePlanejamento(input: {
 }
 
 // ---------------------------------------------------------------------------
-// Pendências — não é um desvio (não tem "valor atual vs. esperado"), é uma
-// contagem de obrigações operacionais em aberto (tarefas como checar
-// saldo, enviar report etc.). Deliberadamente NÃO inclui atividade —
-// essa é uma dimensão independente (ver Atividade, abaixo): uma conta pode
-// não ter nenhuma pendência e ainda estar dias sem nenhuma atividade
-// registrada, e vice-versa. O hook (`PendenciaType`) existe pra caber
-// qualquer obrigação futura além de tarefa sem precisar reabrir este
-// arquivo.
-// ---------------------------------------------------------------------------
-
-export type PendenciaType = "tarefas_abertas";
-
-export interface PendenciaItem {
-  type: PendenciaType;
-  label: string;
-}
-
-export interface PendenciasDiagnostic {
-  /** Nº de obrigações em aberto (cada tarefa aberta conta 1). */
-  count: number;
-  items: PendenciaItem[];
-  hasPendencias: boolean;
-}
-
-export function evaluatePendencias(input: { openTasksCount: number }): PendenciasDiagnostic {
-  const items: PendenciaItem[] = [];
-
-  if (input.openTasksCount > 0) {
-    items.push({
-      type: "tarefas_abertas",
-      label: `${input.openTasksCount} tarefa${input.openTasksCount === 1 ? "" : "s"} em aberto`,
-    });
-  }
-
-  return {
-    count: input.openTasksCount,
-    items,
-    hasPendencias: items.length > 0,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Atividade — eixo independente de Pendências: não é "o que falta fazer",
-// é "há quanto tempo alguém age de fato nesta conta" (otimização, tarefa
-// concluída, ou qualquer outra ação registrada como atividade
-// operacional). Performance (CPA/Investimento), Pendências e Atividade são
-// três eixos independentes entre si — uma conta pode estar sem atividade
-// recente sem ter nenhuma Pendência aberta, e o inverso também é possível.
+// Atividade — não é "o que falta fazer", é "há quanto tempo alguém age de
+// fato nesta conta" (otimização registrada, ou qualquer outra ação
+// registrada como atividade operacional real) — eixo independente de
+// Performance (CPA/Investimento).
 //
-// Diferente de Pendências/Performance, aqui só existe UM estado de alerta
-// (sem gradiente atenção/crítico): abaixo de 48h sem atividade a conta
-// fica visualmente limpa (nenhuma mensagem); a partir de 48h aparece em
+// Diferente de Performance, aqui só existe UM estado de alerta (sem
+// gradiente atenção/crítico): abaixo de 48h sem atividade a conta fica
+// visualmente limpa (nenhuma mensagem); a partir de 48h aparece em
 // vermelho. O objetivo é que só a exceção chame atenção — contas com
 // atividade recente não precisam de nenhum selo "tudo bem".
 // ---------------------------------------------------------------------------
@@ -271,9 +226,11 @@ export function formatAtividadeLabel(diagnostic: AtividadeDiagnostic): string | 
 }
 
 // ---------------------------------------------------------------------------
-// Agregado por cliente — o formato único que qualquer tela (Operação,
-// Dashboard, Prontuário) deve consumir desde agora em diante, em vez de
-// montar sua própria combinação de CPA/Investimento/Pendências/Atividade.
+// Agregado por cliente — o formato único que qualquer tela deve consumir,
+// em vez de montar sua própria combinação de CPA/Investimento/Atividade.
+// KOFF Analytics — Etapa 1.8: o eixo Pendências (contagem de tarefas em
+// aberto) foi removido por completo — a plataforma não usa mais quantidade
+// de tarefas como indicador de saúde ou performance.
 // ---------------------------------------------------------------------------
 
 export interface ClientDiagnosticsInput {
@@ -283,7 +240,6 @@ export interface ClientDiagnosticsInput {
    * segunda fonte, ver `evaluateCpaDiagnostic`. */
   cpa: { costPerResult: number | null; targetCostPerResult: number | null; resultCount: number };
   investment: { actualSpend: number; expectedToDate: number | null };
-  pendencias: { openTasksCount: number };
   atividade: { lastActivityAt: string | null; hoursSinceLastActivity: number | null };
 }
 
@@ -291,7 +247,6 @@ export interface ClientDiagnostics {
   planejamento: PlanejamentoDiagnostic;
   cpa: MetricDiagnostic | null;
   investment: MetricDiagnostic;
-  pendencias: PendenciasDiagnostic;
   atividade: AtividadeDiagnostic;
 }
 
@@ -300,29 +255,8 @@ export function evaluateClientDiagnostics(input: ClientDiagnosticsInput): Client
     planejamento: evaluatePlanejamento(input.planejamento),
     cpa: evaluateCpaDiagnostic(input.cpa.costPerResult, input.cpa.targetCostPerResult, input.cpa.resultCount),
     investment: evaluateInvestmentDiagnostic(input.investment.actualSpend, input.investment.expectedToDate),
-    pendencias: evaluatePendencias(input.pendencias),
     atividade: evaluateAtividade(input.atividade),
   };
-}
-
-/** Os motivos de atenção da Operação (Etapa "Novo Conceito de
- * Monitoramento Operacional") — nunca "Saudável"/"Atenção"/"Crítico"
- * genéricos: cada filtro responde por um fato objetivo específico.
- * `planejamento` é conceitualmente diferente dos outros quatro: não é um
- * problema operacional, é um problema estrutural (a conta ainda não pode
- * ser avaliada) — por isso vem primeiro na ordem de prioridade/leitura.
- * Uma tela de filtro consome só isto, nunca reimplementa os limites
- * acima. */
-export type ClientDiagnosticFilter = "planejamento" | "cpa" | "investimento" | "pendencias" | "atividade";
-
-export function getActiveDiagnosticFilters(diagnostics: ClientDiagnostics): ClientDiagnosticFilter[] {
-  const active: ClientDiagnosticFilter[] = [];
-  if (diagnostics.planejamento.isIncomplete) active.push("planejamento");
-  if (diagnostics.cpa?.isOutOfRange) active.push("cpa");
-  if (diagnostics.investment.isOutOfRange) active.push("investimento");
-  if (diagnostics.pendencias.hasPendencias) active.push("pendencias");
-  if (diagnostics.atividade.isOverdue) active.push("atividade");
-  return active;
 }
 
 /** Severidade de um `MetricTone` isolado — crítico é sempre mais severo que
@@ -333,33 +267,3 @@ export function metricToneSeverityRank(tone: MetricTone): number {
   return tone === "critical" ? 0 : tone === "attention" ? 1 : 2;
 }
 
-/**
- * Prioridade de leitura ÚNICA entre diagnósticos ativos de um cliente —
- * fonte central de qual eixo "vence" quando mais de um está fora do
- * esperado ao mesmo tempo. Direção: Planejamento primeiro (problema
- * ESTRUTURAL, a conta nem pôde ser avaliada de verdade — mesma prioridade
- * já usada em `operation-filter-bar.tsx`), depois o mais severo entre
- * Investimento/CPA (crítico antes de atenção, pela régua de magnitude
- * acima), por último Pendências sozinha. `4` (nenhum diagnóstico ativo)
- * nunca deveria ser comparado — quem chama já filtrou por
- * `getActiveDiagnosticFilters(...).length > 0`.
- *
- * Qualquer tela que precise resumir múltiplos diagnósticos num só motivo/
- * numa fila ordenada (hoje: "Prioridades de hoje" da Visão Geral) usa esta
- * função — nunca reimplementa a ordem por conta própria. Mudar a prioridade
- * de negócio (ex.: inverter CPA e Investimento, ou mover Pendências antes
- * de CPA) é sempre uma mudança AQUI, nunca replicada em outro arquivo.
- */
-export function getDiagnosticPriorityRank(diagnostics: ClientDiagnostics): number {
-  if (diagnostics.planejamento.isIncomplete) return 0;
-
-  const activeMetricTones = [
-    diagnostics.investment.isOutOfRange ? diagnostics.investment.tone : null,
-    diagnostics.cpa?.isOutOfRange ? diagnostics.cpa.tone : null,
-  ].filter((tone): tone is MetricTone => tone !== null);
-
-  if (activeMetricTones.some((tone) => tone === "critical")) return 1;
-  if (activeMetricTones.length > 0) return 2;
-  if (diagnostics.pendencias.hasPendencias) return 3;
-  return 4;
-}

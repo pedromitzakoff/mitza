@@ -16,11 +16,8 @@ interface DrawerData {
   syncStatusBadgeClassName: string;
   syncStartedAtLabel: string | null;
   metaOnlyLastSyncLabel: string | null;
-  lastOptimizationValue: string;
-  lastOptimizationTooltip: string | null;
   canOperate: boolean;
   recentSyncRuns: AccountInfoSyncRun[];
-  reviewsHistoryHref: string;
   isAdmin: boolean;
   hasActiveReportShareLink: boolean;
   reportShareLinkCreatedAtLabel: string | null;
@@ -68,8 +65,6 @@ export function AccountInfoDrawerLauncher({ clientId, triggerClassName }: { clie
             syncStatusBadgeClassName={data.syncStatusBadgeClassName}
             syncStartedAtLabel={data.syncStartedAtLabel}
             metaOnlyLastSyncLabel={data.metaOnlyLastSyncLabel}
-            lastOptimizationValue={data.lastOptimizationValue}
-            lastOptimizationTooltip={data.lastOptimizationTooltip}
             canOperate={data.canOperate}
             syncAction={
               data.isMetaApiSyncProvider
@@ -77,7 +72,6 @@ export function AccountInfoDrawerLauncher({ clientId, triggerClassName }: { clie
                 : syncClientStractSourcesAction.bind(null, clientId)
             }
             recentSyncRuns={data.recentSyncRuns}
-            reviewsHistoryHref={data.reviewsHistoryHref}
             clientId={clientId}
             isAdmin={data.isAdmin}
             hasActiveReportShareLink={data.hasActiveReportShareLink}

@@ -38,21 +38,24 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 /**
  * "Informações da conta" — drawer GLOBAL do workspace do cliente (Etapa
  * "MITZA — Reformulação Estrutural", decisão 4): acessível de qualquer área
- * (Visão geral/Performance/Operação/Demandas/Configurações), renderizado no
- * header persistente (`client-workspace-header.tsx`), nunca mais dentro de
- * uma aba específica. Componente CONTROLADO — quem chama (`AccountInfoDrawerLauncher`)
- * decide quando montar/desmontar via `onClose`; este componente não tem
- * mais trigger nem estado de `open` próprio, pra evitar um segundo botão
+ * do workspace, renderizado no header persistente
+ * (`client-workspace-header.tsx`), nunca mais dentro de uma aba específica.
+ * Componente CONTROLADO — quem chama (`AccountInfoDrawerLauncher`) decide
+ * quando montar/desmontar via `onClose`; este componente não tem mais
+ * trigger nem estado de `open` próprio, pra evitar um segundo botão
  * "Informações da conta" quando embrulhado pelo launcher (que já renderiza
  * o seu).
  *
  * Todo valor chega pronto de `getAccountInfoDrawerDataAction`
- * (`account-info-actions.ts`) — a Server Action que substituiu o antigo
- * "recebe já calculado por `[id]/page.tsx`" (mesmos 3 grupos conceituais:
- * Dados / Sincronização / Operação + Histórico). Sempre o estado ATUAL da
- * conta agora, nunca mais escopado ao mês que uma aba específica estava
- * exibindo — mais correto pra um painel que precisa fazer sentido em
- * qualquer lugar do workspace.
+ * (`account-info-actions.ts`). Sempre o estado ATUAL da conta agora, nunca
+ * mais escopado ao mês que uma aba específica estava exibindo — mais
+ * correto pra um painel que precisa fazer sentido em qualquer lugar do
+ * workspace.
+ *
+ * KOFF Analytics — Etapa 1.8: as seções "Operação" (última otimização
+ * registrada) e "Histórico" (link pro histórico operacional completo) foram
+ * removidas — tracking operacional sem utilidade analítica, apontavam pra
+ * uma rota (`/operation`) que não existe mais.
  */
 export function AccountInfoDrawer({
   onClose,
@@ -64,12 +67,9 @@ export function AccountInfoDrawer({
   syncStatusBadgeClassName,
   syncStartedAtLabel,
   metaOnlyLastSyncLabel,
-  lastOptimizationValue,
-  lastOptimizationTooltip,
   canOperate,
   syncAction,
   recentSyncRuns,
-  reviewsHistoryHref,
   clientId,
   isAdmin,
   hasActiveReportShareLink,
@@ -96,8 +96,6 @@ export function AccountInfoDrawer({
    * de status, mesma decisão de sempre (não existe "success/partial/failed"
    * pro Meta). */
   metaOnlyLastSyncLabel: string | null;
-  lastOptimizationValue: string;
-  lastOptimizationTooltip: string | null;
   canOperate: boolean;
   /** Server Action já vinculada ao cliente (`syncClientStractSourcesAction.bind(null, clientId)`)
    * — este componente só a invoca via `<form action>`, nunca reimplementa a
@@ -106,7 +104,6 @@ export function AccountInfoDrawer({
   /** Já filtrado pra admin (`isAdmin && recentSyncRuns.length > 0`) por quem
    * chama — vazio pra qualquer outro perfil. */
   recentSyncRuns: AccountInfoSyncRun[];
-  reviewsHistoryHref: string;
   clientId: string;
   /** Etapa "Link Externo V1": gerar/revogar o link é admin-only — a seção
    * "Compartilhamento" nem aparece pra gestor. */
@@ -198,20 +195,6 @@ export function AccountInfoDrawer({
                   />
                 </Section>
               )}
-
-              <Section title="Operação">
-                <Row label="Última otimização" value={lastOptimizationValue} />
-                {lastOptimizationTooltip && <p className="text-xs text-overview-text-muted">{lastOptimizationTooltip}</p>}
-              </Section>
-
-              <Section title="Histórico">
-                {/* Fecha este drawer ao navegar — leva pra Operação
-                    (histórico operacional completo mora lá desde a Etapa
-                    "MITZA — Reformulação Estrutural"). */}
-                <Link href={reviewsHistoryHref} onClick={onClose} className="text-sm font-medium text-brand hover:underline">
-                  Ver histórico completo →
-                </Link>
-              </Section>
 
               <Section title="Configurações">
                 {/* Etapa "Correção de UX do Workspace" (seção 12 do pedido):

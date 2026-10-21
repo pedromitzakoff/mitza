@@ -2,12 +2,9 @@ import type {
   ClientContractStatus,
   MonthlyReportStatus,
   ReportActionItemStatus,
-  TaskPriority,
-  TaskStatus,
   TeamInvitationStatus,
   TeamMemberStatus,
 } from "@/lib/supabase/database.types";
-import type { OperationalActivityStatus } from "@/lib/operational-activity";
 import type { SpendStatus } from "@/lib/spend-status";
 import type { KpiTargetStatus } from "@/lib/monthly-reports";
 
@@ -22,13 +19,12 @@ import type { KpiTargetStatus } from "@/lib/monthly-reports";
  * ordem — que hoje estava espalhada em 8 mapas `_BADGE_CLASSES` e ~10
  * mapas `_LABEL` independentes (ver Platform Integrity Audit 1.0).
  *
- * Cada chave é qualificada por domínio (`"task.pendente"`, nunca
- * `"pendente"` sozinho) — isso resolve a ambiguidade real encontrada na
- * auditoria: `"atencao"` significava coisas diferentes em
- * `AccountHealth`/`OperationalActivityStatus`, e `"em_andamento"`
- * significava coisas diferentes em `SpendStatus`/`MonthlyReportStatus`/
- * `ReportActionItemStatus`. O domínio no nome da chave garante que dois
- * eixos nunca colidam, mesmo reaproveitando o mesmo valor de enum.
+ * Cada chave é qualificada por domínio (`"client_contract.ativo"`, nunca
+ * `"ativo"` sozinho) — isso resolve a ambiguidade real encontrada na
+ * auditoria: `"em_andamento"` significava coisas diferentes em
+ * `SpendStatus`/`MonthlyReportStatus`/`ReportActionItemStatus`. O domínio
+ * no nome da chave garante que dois eixos nunca colidam, mesmo
+ * reaproveitando o mesmo valor de enum.
  *
  * Os domínios que colidiam em texto (`atencao`, `em_andamento`) recebem
  * aqui um label QUALIFICADO ("Conta em atenção" vs. "Operação em
@@ -67,58 +63,6 @@ const BRAND_SOFT = "bg-brand/10 text-brand";
 // identidade.
 const INFO = BRAND_SOFT;
 
-export const TASK_STATUS_REGISTRY: Record<`task.${TaskStatus}`, StatusEntry> = {
-  "task.pendente": { label: "A fazer", badgeClassName: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300", tone: "neutral", order: 0 },
-  // Etapa "Pendências": 3 status intermediários novos — nunca substituem
-  // "pendente" (A fazer), somam pra dar mais granularidade ao fluxo
-  // operacional (ver docs/PENDENCIAS_ARCHITECTURE.md).
-  "task.em_andamento": { label: "Em andamento", badgeClassName: INFO, tone: "brand", order: 1 },
-  "task.aguardando": { label: "Aguardando", badgeClassName: WARNING, tone: "warning", order: 2 },
-  "task.bloqueado": { label: "Bloqueado", badgeClassName: DANGER, tone: "danger", order: 3 },
-  "task.feito": { label: "Concluído", badgeClassName: SUCCESS, tone: "success", order: 4 },
-  // "Atrasado" nunca é gravado (sempre derivado de due_date em tempo de
-  // leitura, ver lib/task-status.ts) — a entrada aqui existe só pra exibir
-  // o badge quando `effectiveTaskStatus` devolve esse valor computado.
-  "task.atrasado": { label: "Atrasado", badgeClassName: DANGER, tone: "danger", order: 5 },
-  "task.nao_realizado": { label: "Não realizado", badgeClassName: NEUTRAL_MUTED, tone: "neutral", order: 6 },
-};
-
-/** Prioridade operacional (Etapa "Pendências") — dimensão nova, nunca
- * existiu antes em `tasks`. Mesmo padrão de `StatusEntry` (label/badge/
- * ordem), mas como eixo PRÓPRIO — prioridade nunca é um status (uma tarefa
- * "Bloqueada" pode ser "Urgente" ao mesmo tempo, as duas coexistem).
- *
- * Etapa "Pendências — Segunda Rodada": "Baixa" saiu de um zinc quase
- * idêntico ao de "Normal" (pouco diferenciável, achado do pedido) pro
- * mesmo tom suave da marca já usado como "quarta cor discreta" em outro
- * lugar do produto (`INFO`/`BRAND_SOFT`, ver Etapa "Identidade Visual
- * KOFF" — não introduz azul, que foi deliberadamente removido do código).
- * "Urgente"/"Alta"/"Normal" mantidos (já eram vermelho/âmbar/cinza,
- * exatamente a progressão pedida). */
-export const TASK_PRIORITY_REGISTRY: Record<`task_priority.${TaskPriority}`, StatusEntry> = {
-  "task_priority.urgente": { label: "Urgente", badgeClassName: DANGER, tone: "danger", order: 0 },
-  "task_priority.alta": { label: "Alta", badgeClassName: WARNING, tone: "warning", order: 1 },
-  "task_priority.normal": { label: "Normal", badgeClassName: NEUTRAL_MUTED, tone: "neutral", order: 2 },
-  "task_priority.baixa": { label: "Baixa", badgeClassName: INFO, tone: "info", order: 3 },
-};
-
-/** Cor do "pequeno indicador/ponto" de prioridade/status (seção 4 do
- * pedido) — deriva do MESMO `tone` já definido em cada `StatusEntry`,
- * nunca uma segunda paleta: onde já existe cor semântica (badge), o ponto
- * só repete essa cor de forma mais compacta. */
-const TONE_DOT_CLASS: Record<StatusTone, string> = {
-  success: "bg-green-500",
-  warning: "bg-amber-500",
-  danger: "bg-red-500",
-  neutral: "bg-zinc-400 dark:bg-zinc-500",
-  info: "bg-brand",
-  brand: "bg-brand",
-};
-
-export function toneDotClassName(tone: StatusTone): string {
-  return TONE_DOT_CLASS[tone];
-}
-
 export const CLIENT_CONTRACT_STATUS_REGISTRY: Record<`client_contract.${ClientContractStatus}`, StatusEntry> = {
   "client_contract.ativo": { label: "Ativo", badgeClassName: SUCCESS, tone: "success", order: 0 },
   "client_contract.pausado": { label: "Pausado", badgeClassName: WARNING, tone: "warning", order: 1 },
@@ -135,14 +79,6 @@ export const SPEND_STATUS_REGISTRY: Record<`spend.${SpendStatus}`, StatusEntry> 
   // report_action_item.em_andamento — achado adicional desta etapa, mesma
   // categoria do que a auditoria já tinha encontrado com "atencao").
   "spend.em_andamento": { label: "Sprint em andamento", badgeClassName: BRAND_SOFT, tone: "brand", order: 5 },
-};
-
-export const OPERATIONAL_ACTIVITY_STATUS_REGISTRY: Record<`operational_activity.${OperationalActivityStatus}`, StatusEntry> = {
-  "operational_activity.ativo": { label: "Ativo", badgeClassName: SUCCESS, tone: "success", order: 0 },
-  // Qualificado — colidia em texto com account_health.atencao (achado
-  // original da auditoria).
-  "operational_activity.atencao": { label: "Operação em atenção", badgeClassName: WARNING, tone: "warning", order: 1 },
-  "operational_activity.inativo": { label: "Inativo", badgeClassName: DANGER, tone: "danger", order: 2 },
 };
 
 export const TEAM_MEMBER_STATUS_REGISTRY: Record<`team_member.${TeamMemberStatus}`, StatusEntry> = {
@@ -183,11 +119,8 @@ export const KPI_TARGET_STATUS_REGISTRY: Record<`kpi_target.${KpiTargetStatus}`,
  * todos os domínios de uma vez (ex.: uma futura tela de auditoria viva) —
  * consumo normal continua sendo direto pelo registry do próprio domínio. */
 export const STATUS_REGISTRIES = {
-  task: TASK_STATUS_REGISTRY,
-  task_priority: TASK_PRIORITY_REGISTRY,
   client_contract: CLIENT_CONTRACT_STATUS_REGISTRY,
   spend: SPEND_STATUS_REGISTRY,
-  operational_activity: OPERATIONAL_ACTIVITY_STATUS_REGISTRY,
   team_member: TEAM_MEMBER_STATUS_REGISTRY,
   team_invitation: TEAM_INVITATION_STATUS_REGISTRY,
   monthly_report: MONTHLY_REPORT_STATUS_REGISTRY,

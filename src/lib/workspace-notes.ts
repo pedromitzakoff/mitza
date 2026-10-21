@@ -20,8 +20,6 @@ export interface WorkspaceNote {
  * exato. */
 const CONTEXT_LABEL_RULES: { test: (path: string) => boolean; label: string }[] = [
   { test: (path) => path === "/", label: "Painel Geral" },
-  { test: (path) => path.startsWith("/operation"), label: "Operação" },
-  { test: (path) => path.startsWith("/sprints"), label: "Sprints" },
   { test: (path) => path === "/clients" || path === "/clients/new", label: "Clientes" },
   { test: (path) => path.startsWith("/clients/"), label: "Cliente" },
   { test: (path) => path.startsWith("/settings"), label: "Configurações" },

@@ -33,11 +33,6 @@ export interface ClientOperationalState {
   avatarUrl: string | null;
   performanceGoal: PerformanceGoal | null;
   evaluation: AccountHealthEvaluation;
-  overdueTasksCount: number;
-  /** Nº de tarefas ABERTAS (pendente + atrasado, não só atrasado) —
-   * diferente de `overdueTasksCount` (só atrasado). Alimenta
-   * `diagnostics.pendencias`, ver metric-diagnostics.ts. */
-  openTasksCount: number;
   /** `daily_spend.synced_at` mais recente do cliente (qualquer canal) —
    * alimenta o indicador "Atualizado hoje/ontem/há N dias". `null` = nunca
    * sincronizado. */
@@ -54,7 +49,7 @@ export interface ClientOperationalState {
   performanceLatestSource: PerformanceSource | null;
   performanceLastUpdatedAt: string | null;
   /** Etapa "Novo Conceito de Monitoramento Operacional" — os eixos do
-   * Motor de Diagnóstico Único (CPA, Investimento, Pendências, Atividade),
+   * Motor de Diagnóstico Único (CPA, Investimento, Atividade),
    * computados uma única vez aqui e consumidos por qualquer tela (nunca
    * recalculados no componente). `atividade` combina a atividade
    * operacional real (`client_last_operational_activity`) com
@@ -125,8 +120,8 @@ export function sortClientOperationalStates(cards: ClientOperationalState[]): Cl
  * `evaluateCpaDiagnostic` em vez de reimplementar qualquer regra: nenhuma
  * severidade nova, só os mesmos dois cálculos do Core com os valores do
  * canal (`ClientChannelState`, `client-channel-breakdown.ts`) no lugar dos
- * valores consolidados. Planejamento e Pendências são fatos de nível de
- * CONTA, não de canal — vêm de `state.diagnostics` sem reavaliação.
+ * valores consolidados. Planejamento é fato de nível de CONTA, não de
+ * canal — vem de `state.diagnostics` sem reavaliação.
  *
  * Investimento esperado (prorrateado) não existe por canal neste modelo de
  * dados (só o Consolidado tem orçamento planejado — mesma decisão já
@@ -143,7 +138,6 @@ export function evaluateClientChannelDiagnostics(
 ): ClientDiagnostics {
   return {
     planejamento: state.diagnostics.planejamento,
-    pendencias: state.diagnostics.pendencias,
     atividade: state.diagnostics.atividade,
     investment: evaluateInvestmentDiagnostic(channelState.investmentActual, null),
     cpa: evaluateCpaDiagnostic(

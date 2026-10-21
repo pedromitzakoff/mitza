@@ -208,11 +208,12 @@ console.log("\n13 — Nenhuma rota antiga quebrada; nenhuma rota nova criada al�
     ["src", "app", "clients", "page.tsx"],
     ["src", "app", "clients", "[id]", "page.tsx"],
     ["src", "app", "clients", "new", "page.tsx"],
-    ["src", "app", "operation", "page.tsx"],
   ];
   for (const route of existingRoutes) {
     ok(`rota ${route.join("/")} continua existindo`, existsSync(join(__dirname, "..", ...route)));
   }
+  // KOFF Analytics — Etapa 1.8: /operation foi removida do produto —
+  // deixou de fazer parte da lista de rotas existentes verificada aqui.
   check("nenhuma pasta nova src/app/clients/list ou similar foi criada (a listagem é a própria page.tsx já existente)", existsSync(join(__dirname, "..", "src", "app", "clients", "list")), false);
 }
 

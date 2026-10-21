@@ -20,7 +20,6 @@ import {
   resolveGoalCoverage,
   resolveLatestImportedDate,
 } from "../src/lib/data-trust";
-import { buildModuleContextHref, resolveReplicableSuffix } from "../src/lib/client-workspace-nav";
 import { TRAFFIC_CHANNELS } from "../src/lib/traffic-channels";
 import { PERFORMANCE_GOALS } from "../src/lib/performance-goals";
 
@@ -43,7 +42,6 @@ const dataTrustSource = loadSource("src", "lib", "data-trust.ts");
 const dadosDataSource = loadSource("src", "app", "clients", "dados-data.ts");
 const dadosPageSource = loadSource("src", "app", "clients", "[id]", "dados", "page.tsx");
 const sidebarSource = loadSource("src", "app", "sidebar.tsx");
-const navSource = loadSource("src", "lib", "client-workspace-nav.ts");
 
 console.log("\n1 — Taxonomia de status (resolveImportSourceDisplayStatus) — enabled=false sempre vence; nenhum rótulo 'Conectado/Desconectado' fabricado\n");
 {
@@ -206,15 +204,12 @@ console.log("\n12 — Responsividade básica: grid de SAÚDE colapsa em mobile (
   ok("cards de fonte/atenção usam flex-wrap (nunca overflow horizontal forçado em tela estreita)", /flex-wrap/.test(dadosPageSource));
 }
 
-console.log("\n13 — Contexto CLIENTE (rota /clients/[id]/dados) e contexto TODOS (mantém decisão da Fase 4.6: sem agregação global nova)\n");
+console.log("\n13 — Contexto CLIENTE (rota /clients/[id]/dados)\n");
 {
-  check("buildModuleContextHref('dados', Todos) continua caindo em /clients — nenhuma agregação de carteira inventada nesta fase", buildModuleContextHref("dados", { type: "all" }, null), "/clients");
-  const moduleGlobalHrefBlock = navSource.slice(navSource.indexOf("MODULE_GLOBAL_HREF"), navSource.indexOf("MODULE_GLOBAL_HREF") + 400);
-  ok(
-    "MODULE_GLOBAL_HREF (lib/client-workspace-nav.ts) continua sem entrada pra 'dados' — decisão documentada, não uma omissão",
-    !/\bdados:/.test(moduleGlobalHrefBlock.slice(0, moduleGlobalHrefBlock.indexOf("};"))),
-  );
-  check("trocar de cliente dentro de /dados preserva o módulo (mesma regra de replicação dos outros 6 módulos)", resolveReplicableSuffix("/dados"), "/dados");
+  // KOFF Analytics — Etapa 1.8: o sistema de "módulos" (buildModuleContextHref/
+  // resolveReplicableSuffix, lib/client-workspace-nav.ts) foi removido —
+  // existia só pra sustentar Operação/GlobalScopeSelect, ambos fora do
+  // produto nesta etapa. As checagens dependentes dele saíram daqui.
   ok("página usa WorkspaceContainer (mesma largura/identidade visual do resto do workspace do cliente)", dadosPageSource.includes("<WorkspaceContainer>"));
 }
 

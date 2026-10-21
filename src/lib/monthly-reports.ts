@@ -1,21 +1,5 @@
-import type {
-  KpiDirection,
-  KpiUnit,
-  MonthlyReportStatus,
-  ReportActionItemDependency,
-  TaskRecurrence,
-  TaskStatus,
-  TaskType,
-} from "@/lib/supabase/database.types";
-import { effectiveTaskStatus } from "@/lib/task-status";
+import type { KpiDirection, KpiUnit, MonthlyReportStatus, ReportActionItemDependency } from "@/lib/supabase/database.types";
 import { formatCurrency } from "@/lib/format";
-import type { SpendStatus } from "@/lib/spend-status";
-import {
-  classifySprintSpendStatus,
-  computeSprintExpectedToDate,
-  computeSprintMonthActualSpend,
-} from "@/lib/sprint-financials";
-import { formatSprintPeriodLabel } from "@/lib/sprint-week";
 import { KPI_TARGET_STATUS_REGISTRY, MONTHLY_REPORT_STATUS_REGISTRY } from "@/lib/status-registry";
 
 /** Deriva do Status Registry (`@/lib/status-registry`), ver Platform
@@ -94,107 +78,8 @@ export function computeKpiVariationPct(current: number | null, previous: number 
   return ((current - previous) / Math.abs(previous)) * 100;
 }
 
-export interface AgencyExecutionSummary {
-  optimizationsDone: number;
-  meetingsDone: number;
-  creativeDeliveriesDone: number;
-  operationalTasksDone: number;
-  overdueTasks: number;
-  /** Tarefas recorrentes (diária/semanal/mensal) do mês que não foram
-   * concluídas — a cadência combinada não foi cumprida. */
-  missedCadences: number;
-}
-
-/** Bloco 3 ("Execução da agência") — resumo operacional do mês, nunca a
- * lista completa de tarefas (isso fica atrás de "Ver execução completa").
- * Reuniões/entregas/tarefas reaproveitam `tasks.type`/`recurrence`/
- * `effectiveTaskStatus` já existentes — nenhum dado novo, só uma leitura
- * agregada. `optimizationsCount` (Etapa 74) já vem pronto de quem chama —
- * é a contagem de otimizações (account_reviews.reviewed_at, a revisão
- * estratégica da conta) do mês, nunca mais derivado da tarefa recorrente
- * "otimizacao" (desativada desde a Etapa 57 e nunca migrada pra este
- * resumo, o que o deixava sempre zerado). */
-export function computeAgencyExecutionSummary(
-  monthTasks: { type: TaskType; status: TaskStatus; due_date: string; recurrence: TaskRecurrence }[],
-  today: Date,
-  optimizationsCount: number,
-): AgencyExecutionSummary {
-  const summary: AgencyExecutionSummary = {
-    optimizationsDone: optimizationsCount,
-    meetingsDone: 0,
-    creativeDeliveriesDone: 0,
-    operationalTasksDone: 0,
-    overdueTasks: 0,
-    missedCadences: 0,
-  };
-
-  for (const task of monthTasks) {
-    const status = effectiveTaskStatus(task, today);
-
-    if (status === "feito") {
-      summary.operationalTasksDone++;
-      if (task.type === "reuniao") summary.meetingsDone++;
-      if (task.type === "entrega_criativo") summary.creativeDeliveriesDone++;
-    } else if (status === "atrasado") {
-      summary.overdueTasks++;
-      if (task.recurrence !== "nenhuma") summary.missedCadences++;
-    }
-  }
-
-  return summary;
-}
-
 export const REPORT_ACTION_ITEM_DEPENDENCY_LABEL: Record<ReportActionItemDependency, string> = {
   agencia: "Agência",
   cliente: "Cliente",
   terceiro: "Terceiro",
 };
-
-/** Bloco "Comportamento por sprint" — uma linha por sprint do mês, cada uma
- * usando as mesmas funções financeiras centrais de sempre (nunca um cálculo
- * paralelo pro relatório). `executionPct` é a taxa de conclusão das tarefas
- * daquela sprint específica (não do mês inteiro, que já é o Bloco 3). */
-export interface SprintBehaviorRow {
-  sprintId: string;
-  periodLabel: string;
-  planned: number;
-  actual: number;
-  pct: number | null;
-  status: SpendStatus;
-  executionPct: number | null;
-}
-
-export function computeSprintBehaviorRows(
-  sprints: { id: string; start_date: string; end_date: string; planned_spend: number; spend_source: "manual" | "meta_api"; manual_actual_spend: number | null }[],
-  plannedAllocations: { sprintId: string; amount: number }[],
-  dailySpend: { date: string; spend: number }[],
-  tasks: { sprint_id: string | null; status: TaskStatus; due_date: string; recurrence: TaskRecurrence }[],
-  monthRange: { firstDay: string; lastDay: string },
-  today: Date,
-): SprintBehaviorRow[] {
-  return [...sprints]
-    .sort((a, b) => a.start_date.localeCompare(b.start_date))
-    .map((sprint) => {
-      const planned = plannedAllocations
-        .filter((a) => a.sprintId === sprint.id)
-        .reduce((sum, a) => sum + a.amount, 0);
-      const actual = computeSprintMonthActualSpend(sprint, monthRange, dailySpend);
-      const expectedToDate = computeSprintExpectedToDate(sprint, today);
-      const status = classifySprintSpendStatus(sprint, actual, expectedToDate, planned, today);
-      const pct = planned > 0 ? (actual / planned) * 100 : null;
-
-      const sprintTasks = tasks.filter((t) => t.sprint_id === sprint.id);
-      const doneCount = sprintTasks.filter((t) => effectiveTaskStatus(t, today) === "feito").length;
-      const executionPct = sprintTasks.length > 0 ? (doneCount / sprintTasks.length) * 100 : null;
-
-      return {
-        sprintId: sprint.id,
-        periodLabel: formatSprintPeriodLabel(sprint.start_date, sprint.end_date),
-        planned,
-        actual,
-        pct,
-        status,
-        executionPct,
-      };
-    });
-}

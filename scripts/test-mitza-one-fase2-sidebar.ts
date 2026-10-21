@@ -10,7 +10,7 @@
  * Rodar: npx tsx scripts/test-mitza-one-fase2-sidebar.ts
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { resolveActiveClientIdFromPathname, buildWorkspaceHref } from "../src/lib/client-workspace-nav";
 import { filterAgencyTreeClients, type AgencyTreeClient } from "../src/lib/agency-accounts-tree";
@@ -28,6 +28,9 @@ function check(name: string, actual: unknown, expected: unknown) {
 }
 function loadSource(...segments: string[]): string {
   return readFileSync(join(__dirname, "..", ...segments), "utf8");
+}
+function fileExists(...segments: string[]): boolean {
+  return existsSync(join(__dirname, "..", ...segments));
 }
 
 const sidebarSource = loadSource("src", "app", "sidebar.tsx");
@@ -192,18 +195,21 @@ console.log("\nI — Rotas preservadas (seção 8 do pedido): nenhuma removida/r
     ["clients", "[id]", "metas", "page.tsx"],
     ["clients", "[id]", "relatorio", "page.tsx"],
     ["clients", "[id]", "dados", "page.tsx"],
-    ["clients", "[id]", "operation", "page.tsx"],
     ["clients", "[id]", "edit", "page.tsx"],
   ]) {
     ok(`/${route.slice(0, -1).join("/")} continua existindo`, loadSource("src", "app", ...route).length > 0);
   }
   // /team e /achievements foram removidas na Etapa 1.4, /demandas na
-  // Etapa 1.6 da reestruturação KOFF Analytics.
-  ok("/operation, /clients, /settings continuam existindo", loadSource("src", "app", "operation", "page.tsx").length > 0 && loadSource("src", "app", "clients", "page.tsx").length > 0 && loadSource("src", "app", "settings", "page.tsx").length > 0);
-  // /reports (painel operacional de fechamento) foi removida na Etapa 1.5
-  // da reestruturação KOFF Analytics.
-  ok("/sprints não foi tocada", loadSource("src", "app", "sprints", "page.tsx").length > 0);
-  ok("reminders/LegacyGlobalDashboard não foram alterados nesta fase (nenhum arquivo de reminders tocado; LegacyGlobalDashboard continua export órfão em app/page.tsx)", loadSource("src", "app", "page.tsx").includes("export async function LegacyGlobalDashboard("));
+  // Etapa 1.6, /operation (global e por cliente) na Etapa 1.8 da
+  // reestruturação KOFF Analytics.
+  ok("/operation (global e por cliente) foi removida por completo", !fileExists("src", "app", "operation", "page.tsx") && !fileExists("src", "app", "clients", "[id]", "operation", "page.tsx"));
+  ok("/clients, /settings continuam existindo", loadSource("src", "app", "clients", "page.tsx").length > 0 && loadSource("src", "app", "settings", "page.tsx").length > 0);
+  // /reports (painel operacional de fechamento) foi removida na Etapa 1.5;
+  // /sprints e LegacyGlobalDashboard (código 100% morto, nunca alcançado
+  // por nenhuma rota) foram removidos na Etapa 1.8 da reestruturação KOFF
+  // Analytics.
+  ok("/sprints foi removida", !fileExists("src", "app", "sprints", "page.tsx"));
+  ok("LegacyGlobalDashboard foi removida por completo de app/page.tsx", !loadSource("src", "app", "page.tsx").includes("export async function LegacyGlobalDashboard("));
 }
 
 // ---------------------------------------------------------------------------

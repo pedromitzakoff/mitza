@@ -8,11 +8,16 @@
  * pelo Sprints — em vez do antigo `OPTIMIZATION_LOOKBACK_DAYS` (14 dias
  * corridos fixos) que só o Motor legado usava.
  *
- * Cobre os 9 cenários pedidos (A-I): números exatos em dias úteis dados
- * pelo pedido de implementação, mais os testes de integração de ponta a
- * ponta (via `buildOperationClientCard`/`buildAttentionAlerts`/
- * `priorityTier`) que provam que Sprints e Operação chegam à MESMA
- * resposta.
+ * Cobre os 7 cenários pedidos (A-G): números exatos em dias úteis dados
+ * pelo pedido de implementação.
+ *
+ * KOFF Analytics — Etapa 1.8: os testes de integração de ponta a ponta
+ * (via `buildOperationClientCard`/`priorityTier`, `app/operation/operation-data.ts`/
+ * `lib/account-priority.ts` — removidos junto com Operação/Sprints) saíram
+ * deste arquivo — provavam que a revisão atrasada não influenciava mais
+ * alertas/prioridade nesses módulos, que não existem mais. O núcleo puro
+ * (`resolveReviewDimension`/`resolveReviewComplianceStatus`/etc., em
+ * `account-health-engine.ts`) continua intocado e em uso real pelo Cockpit.
  *
  * Rodar: npx tsx scripts/test-review-compliance.ts
  */
@@ -24,8 +29,6 @@ import {
   isReviewOverdue,
   type AccountReviewCadenceRow,
 } from "../src/lib/account-health-engine";
-import { buildOperationClientCard, type OperationClientRawData } from "../src/app/operation/operation-data";
-import { priorityTier } from "../src/lib/account-priority";
 
 let passed = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -38,29 +41,6 @@ const TODAY = new Date("2026-08-19T12:00:00Z"); // quarta-feira
 
 function isoDaysAgo(days: number): string {
   return new Date(TODAY.getTime() - days * 86_400_000).toISOString();
-}
-
-function minimalRawClient(overrides: Partial<OperationClientRawData>): OperationClientRawData {
-  return {
-    id: "client-1",
-    name: "Cliente Teste",
-    metaAdAccountId: "act_1",
-    managerNames: [],
-    managerIds: [],
-    sprints: [],
-    dailySpend: [],
-    plannedAllocations: [],
-    monthlyBudgetChanges: [],
-    tasks: [],
-    // Ativo e sincronizado por padrão, pra nenhum alerta estranho (atividade/
-    // sync) contaminar os testes que só querem isolar o sinal de revisão.
-    clientLastActivityAt: TODAY.toISOString(),
-    sprintLastActivityAt: null,
-    lastSyncedAt: TODAY.toISOString(),
-    lastReviewAt: null,
-    reviewIsOverdue: false,
-    ...overrides,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -142,89 +122,6 @@ console.log("\nCenário G — cadência mudou de 10 para 5 dias úteis -> a pró
   check("G — antes do aperto (prazo 10): em dia", before.status, "nenhum");
   check("G — depois do aperto (prazo 5): atrasada, sem nenhum cache do valor antigo", isReviewOverdue(after), true);
   check("G — o prazo usado (planned) reflete o valor NOVO imediatamente", after.planned, 5);
-}
-
-// ---------------------------------------------------------------------------
-// Integração — Etapa "Simplificação do Cadastro do Cliente": a KOFF não usa
-// mais Cadência de Revisões como processo operacional (bloco removido de
-// `/clients/[id]/edit`). `resolveReviewDimension`/`resolveReviewComplianceStatus`
-// (cenários A-G acima) continuam calculando a MESMA matemática — só a
-// INFLUÊNCIA de `reviewIsOverdue` sobre alertas/prioridade foi removida
-// (`lib/attention-alerts.ts`, o bloco `optimizationRecentlyDone` inteiro).
-// Estes testes agora provam a ausência de influência, não a presença —
-// exatamente o oposto do que esta seção testava antes desta etapa.
-// ---------------------------------------------------------------------------
-
-console.log("\nIntegração A/D (revisada) — revisão atrasada NUNCA mais gera alerta/penaliza o tier\n");
-{
-  const overdueClient = minimalRawClient({ reviewIsOverdue: true });
-  const card = buildOperationClientCard(overdueClient, TODAY);
-  check("A/D — nenhum alerta 'otimizacao' mesmo com reviewIsOverdue=true", card.alerts.some((a) => a.kind === "otimizacao"), false);
-  check("A/D — accountHealth continua saudável (revisão não é mais um sinal de saúde)", card.accountHealth, "saudavel");
-  check("A/D — priorityTier = 5 (revisão atrasada não move mais o tier)", priorityTier(card, "month", TODAY), 5);
-}
-
-console.log("\nIntegração B/C — em dia continua sem gerar alerta nem penalizar o tier (comportamento preservado)\n");
-{
-  const compliantClient = minimalRawClient({ reviewIsOverdue: false });
-  const card = buildOperationClientCard(compliantClient, TODAY);
-  check("B/C integração — nenhum alerta 'otimizacao'", card.alerts.some((a) => a.kind === "otimizacao"), false);
-  check("B/C integração — accountHealth saudável", card.accountHealth, "saudavel");
-  check("B/C integração — priorityTier = 5 (sem nenhum sinal de atenção)", priorityTier(card, "month", TODAY), 5);
-}
-
-console.log("\nCenário F (revisado) — cadência desativada: continua sem penalizar (nunca penalizou)\n");
-{
-  const disabledCadenceClient = minimalRawClient({ lastReviewAt: isoDaysAgo(90), reviewIsOverdue: false });
-  const card = buildOperationClientCard(disabledCadenceClient, TODAY);
-  check("F integração — nenhum alerta 'otimizacao' mesmo com 90 dias sem revisão", card.alerts.some((a) => a.kind === "otimizacao"), false);
-  check("F integração — priorityTier = 5", priorityTier(card, "month", TODAY), 5);
-}
-
-console.log(
-  "\nFechamento (revisado) — 'oficial diz atrasada' continua verdadeiro (matemática intacta), mas deixou de virar alerta/tier\n",
-);
-{
-  // A decisão "está atrasada?" continua exatamente a mesma (nenhuma
-  // mudança em resolveReviewComplianceStatus) — só parou de ser
-  // repassada como severidade operacional pros consumidores de card.
-  const { isOverdue } = resolveReviewComplianceStatus(isoDaysAgo(8), { max_business_days_without_review: 5, is_active: true }, TODAY);
-  check("fechamento — 8 dias corridos, cadência 5 dias úteis: oficial ainda diz atrasada", isOverdue, true);
-
-  const client = minimalRawClient({ lastReviewAt: isoDaysAgo(8), reviewIsOverdue: isOverdue });
-  const card = buildOperationClientCard(client, TODAY);
-  check("fechamento — card NÃO reflete mais esse atraso em nenhum alerta", card.alerts.some((a) => a.kind === "otimizacao"), false);
-  check("fechamento — nem no tier", priorityTier(card, "month", TODAY), 5);
-}
-
-console.log("\nCenário H — performance crítica + revisão em dia -> prioridade continua vindo só da tarefa atrasada\n");
-{
-  const criticalClient = minimalRawClient({
-    reviewIsOverdue: false,
-    tasks: [
-      {
-        id: "t1",
-        title: "Tarefa atrasada",
-        type: "outro",
-        due_date: "2026-08-01",
-        status: "pendente",
-        assignee: null,
-        notes: null,
-        sprint_id: null,
-      },
-    ],
-  });
-  const card = buildOperationClientCard(criticalClient, TODAY);
-  check("H — accountHealth crítico (tarefa atrasada), não por revisão", card.accountHealth, "critico");
-  check("H — priorityTier = 0 (accountHealth crítico vence, revisão nem é consultada)", priorityTier(card, "month", TODAY), 0);
-}
-
-console.log("\nCenário I (revisado) — performance saudável + revisão atrasada -> prioridade NÃO é mais influenciada pela revisão\n");
-{
-  const healthyButOverdueClient = minimalRawClient({ reviewIsOverdue: true });
-  const card = buildOperationClientCard(healthyButOverdueClient, TODAY);
-  check("I — accountHealth saudável (revisão deixou de ser um sinal de saúde)", card.accountHealth, "saudavel");
-  check("I — priorityTier = 5, revisão atrasada sozinha não move mais o tier", priorityTier(card, "month", TODAY), 5);
 }
 
 console.log(`\n${passed} verificações passaram.`);

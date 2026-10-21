@@ -1,16 +1,20 @@
 /**
- * Fase 1 "Confiabilidade dos Dados" — testes de reconciliação pros 4 bugs
+ * Fase 1 "Confiabilidade dos Dados" — testes de reconciliação pros bugs
  * recuperados e corrigidos nesta rodada. Cada bloco reproduz o cenário
  * numérico que provaria o bug ANTES da correção (comentado no início de
  * cada bloco) e confirma o comportamento correto depois.
  *
+ * KOFF Analytics — Etapa 1.8: BUG 1/2 e a reconciliação cruzada via
+ * `computeAgencyResultsByChannel`/`computeFinancialSummary`
+ * (lib/agency-metrics.ts, removido — exclusivo da antiga "Visão Geral"/
+ * `LegacyGlobalDashboard`, também removido) saíram deste arquivo. BUG 3
+ * (`resolveConsolidatedMonthlyPlanned`, lib/client-plan.ts) e BUG 4
+ * (independência Meta/Realizado) continuam cobrindo lógica em uso real.
+ *
  * Rodar: npx tsx scripts/test-fase1-data-trust.ts
  */
 import assert from "node:assert/strict";
-import { computeFinancialSummary, computeAgencyResultsByChannel } from "../src/lib/agency-metrics";
 import { resolveConsolidatedMonthlyPlanned } from "../src/lib/client-plan";
-import type { OperationClientCard } from "../src/app/operation/operation-data";
-import type { PerformanceSummary } from "../src/lib/performance";
 
 let passed = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -24,101 +28,8 @@ function ok(name: string, condition: boolean) {
   console.log(`  ok — ${name}`);
 }
 
-/** Só os 2 campos que `summarizeGoalByChannel` (dentro de
- * `computeAgencyResultsByChannel`) lê de `PerformanceSummary`
- * (`resultCount`/`hasAnyRecord`) — mesmo espírito de `fakeCard` abaixo. */
-function fakeSummary(input: { resultType?: string; resultCount: number; hasAnyRecord: boolean }): PerformanceSummary {
-  return input as unknown as PerformanceSummary;
-}
-
-/** Só os campos que `computeFinancialSummary`/`computeAgencyResultsByChannel`
- * de fato leem — mesmo espírito de `minimalRawClient` em
- * `test-review-compliance.ts`, mas pro tipo de SAÍDA (`OperationClientCard`),
- * não de entrada: construir o card inteiro via `buildOperationClientCard`
- * exigiria simular todo o motor de sprint/spend só pra testar 2 funções que
- * não tocam nele. */
-function fakeCard(overrides: Partial<OperationClientCard>): OperationClientCard {
-  return {
-    clientId: "c1",
-    clientName: "Cliente Teste",
-    hasMonthGoal: false,
-    monthPlanned: 0,
-    monthActual: 0,
-    monthExpectedToDate: 0,
-    performanceGoal: null,
-    monthActualByChannel: {},
-    clientUsesChannel: {},
-    monthPerformanceSummaryByChannel: {},
-    ...overrides,
-  } as unknown as OperationClientCard;
-}
-
 // ---------------------------------------------------------------------------
-console.log("BUG 1 — Leads/Vendas/CPL/CPA respeitando o filtro de plataforma\n");
-console.log("Antes da correção: a Visão Geral usava computeHealthResultsSummary(ClientOperationalState),");
-console.log("que não tem NENHUMA dimensão por canal — Leads/Vendas somavam TODOS os canais do cliente");
-console.log("mesmo com o filtro de plataforma ativo (ex.: TikTok aparecendo com resultado mesmo sem investir nele).\n");
-{
-  // Cliente de leads que roda em Meta E Google — resultado por canal
-  // DIFERENTE (Meta converte melhor que Google neste cenário).
-  const client = fakeCard({
-    clientId: "c1",
-    performanceGoal: "leads",
-    monthActualByChannel: { meta: 1000, google: 500 },
-    monthPerformanceSummaryByChannel: {
-      meta: fakeSummary({ resultType: "leads", resultCount: 40, hasAnyRecord: true }),
-      google: fakeSummary({ resultType: "leads", resultCount: 5, hasAnyRecord: true }),
-    },
-  });
-
-  const metaOnly = computeAgencyResultsByChannel([client], "meta");
-  const googleOnly = computeAgencyResultsByChannel([client], "google");
-
-  check("filtro Meta: 40 leads (só o canal Meta, nunca soma Google)", metaOnly.leads.count, 40);
-  check("filtro Meta: CPL = 1000/40", metaOnly.leads.costPerResult, 25);
-  check("filtro Google: 5 leads (só o canal Google, nunca soma Meta)", googleOnly.leads.count, 5);
-  check("filtro Google: CPL = 500/5", googleOnly.leads.costPerResult, 100);
-  ok(
-    "Meta e Google produzem números DIFERENTES pro mesmo cliente/mês (prova que o filtro atua na agregação, não só na lista de clientes)",
-    metaOnly.leads.count !== googleOnly.leads.count && metaOnly.leads.costPerResult !== googleOnly.leads.costPerResult,
-  );
-
-  // Cliente que NÃO usa TikTok — clientUsesChannel filtra ele fora ANTES de
-  // chegar em computeAgencyResultsByChannel (mesmo critério de `filteredBase`
-  // na Visão Geral); aqui simulamos o array já filtrado, vazio.
-  const tiktokOnly = computeAgencyResultsByChannel([], "tiktok");
-  check("filtro TikTok sem nenhum cliente que usa o canal: 0 leads (nunca herda o consolidado)", tiktokOnly.leads.count, 0);
-  check("filtro TikTok: clientsWithData = 0", tiktokOnly.leads.clientsWithData, 0);
-}
-
-// ---------------------------------------------------------------------------
-console.log("\nBUG 2 — Investimento (topo da Visão Geral) respeitando o filtro de plataforma\n");
-console.log("Antes da correção: o card 'Investimento' sempre mostrava financial.actual (monthActual,");
-console.log("SEMPRE consolidado), divergindo de 'Realizado · Plataforma' (channelActualTotal),");
-console.log("que já era corretamente escopado — dois números diferentes na MESMA tela.\n");
-{
-  // Cliente com R$1500 de investimento TOTAL (R$1000 Meta + R$500 Google).
-  const client = fakeCard({
-    clientId: "c1",
-    hasMonthGoal: true,
-    monthPlanned: 2000,
-    monthActual: 1500, // consolidado — o que `financial.actual` somava antes, ignorando o filtro
-    monthActualByChannel: { meta: 1000, google: 500 },
-  });
-
-  const financial = computeFinancialSummary([client]);
-  const channelActualTotal = [client].reduce((sum, c) => sum + (c.monthActualByChannel.meta ?? 0), 0);
-
-  check("financial.actual (consolidado) = 1500 — inclui Google mesmo filtrando por Meta", financial.actual, 1500);
-  check("channelActualTotal (Meta) = 1000 — só o canal selecionado", channelActualTotal, 1000);
-  ok(
-    "financial.actual != channelActualTotal pro mesmo cliente/mês quando filtrado por Meta — exatamente a divergência do bug original; a correção troca QUAL dos dois é mostrado no card 'Investimento' conforme o filtro, nunca soma os dois nem inventa um terceiro número",
-    financial.actual !== channelActualTotal,
-  );
-}
-
-// ---------------------------------------------------------------------------
-console.log("\nBUG 3 — Orçamento vigente definido em mês anterior não pode sumir do total da agência\n");
+console.log("BUG 3 — Orçamento vigente definido em mês anterior não pode sumir do total da agência\n");
 console.log("Antes da correção: a query de monthly_budget_changes usava .eq('month', mêsSelecionado) —");
 console.log("um cliente cujo orçamento não mudou ESTE mês vinha com ZERO linhas, resolvendo");
 console.log("monthPlanned=0/hasMonthGoal=false mesmo tendo um orçamento vigente real.\n");
@@ -186,30 +97,6 @@ console.log("MESMOS investimento/resultado. Meta e Realizado ficavam idênticos 
   ok(
     "fórmula NOVA: Meta permanece INDEPENDENTE do Realizado (30 != 45.5), mesmo quando o canal tem investimento/resultado reais",
     newFormulaChannelScoped !== channelActualCpa,
-  );
-}
-
-// ---------------------------------------------------------------------------
-console.log("\nOBJETIVO PRINCIPAL — reconciliação cruzada (mesma métrica, mesmo cliente, mesma plataforma, mesmo período)\n");
-{
-  // Simula: Overview (via computeAgencyResultsByChannel) e um consumidor
-  // hipotético que também precisasse do CPL de Meta pro mesmo cliente/mês —
-  // ambos DEVEM usar a mesma função central, nunca uma segunda fórmula.
-  const client = fakeCard({
-    clientId: "c1",
-    performanceGoal: "leads",
-    monthActualByChannel: { meta: 2000 },
-    monthPerformanceSummaryByChannel: {
-      meta: fakeSummary({ resultType: "leads", resultCount: 50, hasAnyRecord: true }),
-    },
-  });
-
-  const fromOverview = computeAgencyResultsByChannel([client], "meta");
-  const fromSameFunctionAgain = computeAgencyResultsByChannel([client], "meta");
-  check(
-    "mesma métrica (Leads/CPL) + mesmo cliente + mesma plataforma (Meta) + mesmo período => mesmo número, sempre (mesma função central, nunca duas implementações)",
-    fromOverview,
-    fromSameFunctionAgain,
   );
 }
 

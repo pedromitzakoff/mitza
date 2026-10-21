@@ -1,10 +1,19 @@
 /**
- * Testes da Etapa "MITZA ONE — Simplificação da Operação": descontinua a
+ * Testes da Etapa "MITZA ONE — Simplificação da Operação": descontinuou a
  * experiência de Operação baseada em sprints na NAVEGAÇÃO PRINCIPAL
- * (Sidebar + Cockpit), sem apagar nada do sistema legado (sprints,
+ * (Sidebar + Cockpit), sem apagar o sistema legado NAQUELE momento (sprints,
  * snapshots, revisões de conta, eventos operacionais, tarefas recorrentes,
- * rotas antigas, RPCs/tabelas/migrations). Checagens ESTRUTURAIS via grep
- * de código-fonte (mesmo padrão das suites anteriores).
+ * rotas antigas) — a remoção de arquivos ficou deliberadamente fora do
+ * escopo daquela etapa.
+ *
+ * KOFF Analytics — Etapa 1.8: a Operação (rota, UI, tarefas, revisões de
+ * conta) foi removida por completo do produto, junto com Sprints — as
+ * seções A/C abaixo, que antes confirmavam "nada foi excluído", foram
+ * atualizadas pra confirmar o oposto: que a remoção aconteceu, preservando
+ * só o que é genuinamente analítico (sprint-financials.ts/sprint-snapshot.ts,
+ * operational-events.ts, as dependências reais de orçamento do Cockpit).
+ * Checagens ESTRUTURAIS via grep de código-fonte (mesmo padrão das suites
+ * anteriores).
  *
  * Rodar: npx tsx scripts/test-simplificacao-operacao.ts
  */
@@ -50,7 +59,10 @@ console.log("\nA — Sidebar (seção 1 do pedido): Operação removida da área
     "ícone ListChecks, quando presente, está de fato em uso (import morto nunca sobrevive) — hoje é o item 'Minha Rotina', não mais 'Operação'",
     !/\bListChecks\b/.test(sidebarSource) || (sidebarSource.includes("ListChecks,") && sidebarSource.includes("icon: ListChecks")),
   );
-  ok("rota /operation NÃO foi excluída do disco", fileExists("src", "app", "operation", "page.tsx") && fileExists("src", "app", "clients", "[id]", "operation", "page.tsx"));
+  ok(
+    "rota /operation FOI excluída do disco na Etapa 1.8 da reestruturação KOFF Analytics (histórico: preservada quando esta suíte foi escrita, removida depois)",
+    !fileExists("src", "app", "operation", "page.tsx") && !fileExists("src", "app", "clients", "[id]", "operation", "page.tsx"),
+  );
 }
 
 console.log("\nB — Cockpit do cliente (seção 2 do pedido): seção visual de Operação removida\n");
@@ -66,16 +78,16 @@ console.log("\nB — Cockpit do cliente (seção 2 do pedido): seção visual de
   // Analytics, respectivamente.
 }
 
-console.log("\nC — Sistema legado (seção 3 do pedido): nada excluído, nenhuma dependência de verdade removida\n");
+console.log("\nC — Sistema legado: Operação/tarefas/revisões removidas na Etapa 1.8; o que é genuinamente analítico foi preservado\n");
 {
-  ok("rota /operation (global) continua no disco", fileExists("src", "app", "operation", "page.tsx"));
-  ok("rota /clients/[id]/operation (por cliente) continua no disco", fileExists("src", "app", "clients", "[id]", "operation", "page.tsx"));
-  ok("operation-section.tsx (UI completa de Operação) continua no disco, intocado", fileExists("src", "app", "clients", "operation-section.tsx"));
-  ok("record-account-review-drawer.tsx (Registrar revisão) continua no disco — só parou de ser aberto A PARTIR do Cockpit", fileExists("src", "app", "clients", "record-account-review-drawer.tsx"));
-  ok("sprint-financials.ts/sprint-snapshot.ts (sprints, snapshots) continuam no disco, intocados", fileExists("src", "lib", "sprint-financials.ts") && fileExists("src", "lib", "sprint-snapshot.ts"));
-  ok("account-reviews.ts (revisões de conta) continua no disco", fileExists("src", "lib", "account-reviews.ts"));
-  ok("operational-events.ts (eventos operacionais) continua no disco", fileExists("src", "lib", "operational-events.ts"));
-  ok("recurring-tasks.ts (tarefas recorrentes) continua no disco", fileExists("src", "lib", "recurring-tasks.ts"));
+  ok("rota /operation (global) foi removida", !fileExists("src", "app", "operation", "page.tsx"));
+  ok("rota /clients/[id]/operation (por cliente) foi removida", !fileExists("src", "app", "clients", "[id]", "operation", "page.tsx"));
+  ok("operation-section.tsx (UI completa de Operação) foi removido", !fileExists("src", "app", "clients", "operation-section.tsx"));
+  ok("record-account-review-drawer.tsx (Registrar revisão) foi removido — o workflow de revisão/otimização não existe mais", !fileExists("src", "app", "clients", "record-account-review-drawer.tsx"));
+  ok("sprint-financials.ts/sprint-snapshot.ts (sprints, snapshots — base do orçamento/ritmo do Cockpit) continuam no disco, intocados", fileExists("src", "lib", "sprint-financials.ts") && fileExists("src", "lib", "sprint-snapshot.ts"));
+  ok("account-reviews.ts (labels/tipos de revisão de conta, só usado pela UI operacional removida) foi removido", !fileExists("src", "lib", "account-reviews.ts"));
+  ok("operational-events.ts (log genérico, usado também por criação/transferência de clientes e gestão de equipe) continua no disco", fileExists("src", "lib", "operational-events.ts"));
+  ok("recurring-tasks.ts (motor de tarefas recorrentes, exclusivo de Operação/Sprints) foi removido", !fileExists("src", "lib", "recurring-tasks.ts"));
   ok("nenhum arquivo .sql de migration foi tocado por esta etapa (checagem indireta: nenhuma referência a DROP/ALTER TABLE no diff de page.tsx/sidebar.tsx)", !pageSource.includes("DROP TABLE") && !sidebarSource.includes("DROP TABLE"));
 
   ok(
