@@ -36,6 +36,12 @@ export interface CampaignDailyMetricRow {
   impressions: number | null;
   reach: number | null;
   clicks: number | null;
+  /** Cliques especificamente no link/CTA de destino (DISTINTO de `clicks`,
+   * que inclui curtidas/compartilhamentos/visitas ao perfil em alguns
+   * contextos de relatório da própria Meta) — KOFF Analytics Fase 2, Etapa
+   * 2.4. `null` em linhas gravadas antes da coluna existir, ou em fontes
+   * sem esse campo configurado (todo Stract hoje) — nunca `0` fabricado. */
+  linkClicks: number | null;
   resultType: PerformanceGoal | null;
   resultCount: number | null;
   revenue: number | null;
@@ -48,12 +54,19 @@ export interface CampaignSummary {
   totalImpressions: number | null;
   totalReach: number | null;
   totalClicks: number | null;
+  totalLinkClicks: number | null;
   resultType: PerformanceGoal | null;
   totalResultCount: number | null;
   totalRevenue: number | null;
   cpa: number | null;
   cpc: number | null;
   ctr: number | null;
+  cpm: number | null;
+  /** CTR do link — cliques no link ÷ impressões. DISTINTO de `ctr` (cliques
+   * totais ÷ impressões). `null` sem `totalLinkClicks` disponível. */
+  linkCtr: number | null;
+  /** CPC do link — investimento ÷ cliques no link. DISTINTO de `cpc`. */
+  linkCpc: number | null;
   roas: number | null;
 }
 
@@ -69,6 +82,7 @@ interface CampaignAccumulator {
   totalImpressions: number | null;
   totalReach: number | null;
   totalClicks: number | null;
+  totalLinkClicks: number | null;
   resultType: PerformanceGoal | null;
   totalResultCount: number | null;
   totalRevenue: number | null;
@@ -82,6 +96,7 @@ function newAccumulator(channel: TrafficChannel, campaignName: string): Campaign
     totalImpressions: null,
     totalReach: null,
     totalClicks: null,
+    totalLinkClicks: null,
     resultType: null,
     totalResultCount: null,
     totalRevenue: null,
@@ -93,6 +108,7 @@ function accumulateRow(acc: CampaignAccumulator, row: CampaignDailyMetricRow): v
   acc.totalImpressions = sumNullable(acc.totalImpressions, row.impressions);
   acc.totalReach = sumNullable(acc.totalReach, row.reach);
   acc.totalClicks = sumNullable(acc.totalClicks, row.clicks);
+  acc.totalLinkClicks = sumNullable(acc.totalLinkClicks, row.linkClicks);
   acc.totalResultCount = sumNullable(acc.totalResultCount, row.resultCount);
   acc.totalRevenue = sumNullable(acc.totalRevenue, row.revenue);
   if (row.resultType) acc.resultType = row.resultType;
@@ -134,12 +150,17 @@ export function buildCampaignSummaries(rows: CampaignDailyMetricRow[]): Campaign
         totalImpressions: acc.totalImpressions,
         totalReach: acc.totalReach,
         totalClicks: acc.totalClicks,
+        totalLinkClicks: acc.totalLinkClicks,
         resultType: acc.resultType,
         totalResultCount,
         totalRevenue: acc.totalRevenue,
         cpa: totalResultCount && totalResultCount > 0 ? acc.totalSpend / totalResultCount : null,
         cpc: acc.totalClicks && acc.totalClicks > 0 ? acc.totalSpend / acc.totalClicks : null,
         ctr: acc.totalClicks !== null && acc.totalImpressions && acc.totalImpressions > 0 ? acc.totalClicks / acc.totalImpressions : null,
+        cpm: acc.totalImpressions && acc.totalImpressions > 0 ? (acc.totalSpend * 1000) / acc.totalImpressions : null,
+        linkCtr:
+          acc.totalLinkClicks !== null && acc.totalImpressions && acc.totalImpressions > 0 ? acc.totalLinkClicks / acc.totalImpressions : null,
+        linkCpc: acc.totalLinkClicks && acc.totalLinkClicks > 0 ? acc.totalSpend / acc.totalLinkClicks : null,
         roas: acc.totalRevenue !== null && acc.totalSpend > 0 ? acc.totalRevenue / acc.totalSpend : null,
       };
     })

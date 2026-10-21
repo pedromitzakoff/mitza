@@ -45,6 +45,7 @@ function row(partial: Partial<CampaignDailyMetricRow> & { date: string; spend: n
     impressions: null,
     reach: null,
     clicks: null,
+    linkClicks: null,
     resultType: null,
     resultCount: null,
     revenue: null,
@@ -76,6 +77,7 @@ check("soma de spend/impressions/clicks/resultCount", sumAdditiveTotals(rows), {
   spend: 300,
   impressions: 3000,
   clicks: 30,
+  linkClicks: null,
   resultCount: 5,
   revenue: 50,
 } as MetaAdsAdditiveTotals);

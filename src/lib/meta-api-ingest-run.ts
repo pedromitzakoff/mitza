@@ -233,6 +233,7 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload): Promi
     impressionsColumn: META_API_COLUMNS.impressions,
     reachColumn: META_API_COLUMNS.reach,
     clicksColumn: META_API_COLUMNS.clicks,
+    linkClicksColumn: META_API_COLUMNS.linkClicks,
     campaignIdColumn: META_API_COLUMNS.campaignId,
   });
   hadInvalidRows = hadInvalidRows || campaignAggregate.some((row) => row.invalidRowCount > 0);
@@ -263,6 +264,7 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload): Promi
       impressionsColumn: META_API_COLUMNS.impressions,
       reachColumn: META_API_COLUMNS.reach,
       clicksColumn: META_API_COLUMNS.clicks,
+      linkClicksColumn: META_API_COLUMNS.linkClicks,
       campaignIdColumn: META_API_COLUMNS.campaignId,
       adSetIdColumn: META_API_COLUMNS.adSetId,
     });
@@ -293,6 +295,7 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload): Promi
       impressionsColumn: META_API_COLUMNS.impressions,
       reachColumn: META_API_COLUMNS.reach,
       clicksColumn: META_API_COLUMNS.clicks,
+      linkClicksColumn: META_API_COLUMNS.linkClicks,
       campaignIdColumn: META_API_COLUMNS.campaignId,
       adIdColumn: META_API_COLUMNS.adId,
     });

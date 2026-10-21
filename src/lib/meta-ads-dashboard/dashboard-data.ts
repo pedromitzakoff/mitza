@@ -1,7 +1,11 @@
 import type { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { getCampaignDailyMetricsForPeriod } from "@/lib/campaign-analytics-data";
-import type { CampaignDailyMetricRow } from "@/lib/campaign-analytics";
+import { buildCampaignSummaries, type CampaignDailyMetricRow, type CampaignSummary } from "@/lib/campaign-analytics";
+import { getAdSetDailyMetricsForPeriod } from "@/lib/ad-set-analytics-data";
+import type { AdSetDailyMetricRow } from "@/lib/ad-set-analytics";
+import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
+import type { AdCreativeDailyMetricRow } from "@/lib/creative-analytics";
 import { previousEquivalentPeriod, computePercentChange, type PeriodRange } from "@/lib/period-comparison";
 import { computeCpm, computeCtr, computeCpc, computeCostPerResult, computeRoas, computeFrequency } from "@/lib/performance";
 import { fetchMetaApiPeriodReach } from "@/lib/meta-api-fetch";
@@ -28,6 +32,12 @@ export interface MetaAdsAdditiveTotals {
   spend: number;
   impressions: number;
   clicks: number;
+  /** Cliques especificamente no link/CTA de destino (DISTINTO de `clicks`)
+   * — KOFF Analytics Fase 2, Etapa 2.4. `null` quando NENHUMA linha do
+   * escopo tem esse campo (período inteiro antes da coluna existir, ou
+   * fonte sem o campo configurado) — nunca `0` fabricado, mesma convenção
+   * de `revenue` abaixo. */
+  linkClicks: number | null;
   resultCount: number;
   /** `null` quando nenhuma linha do escopo tem receita registrada (nunca
    * `0` fabricado — mesma convenção de `PerformanceSummary.revenue`). */
@@ -38,6 +48,11 @@ export interface MetaAdsDerivedMetrics {
   cpm: number | null;
   ctr: number | null;
   cpc: number | null;
+  /** CTR do link — DISTINTO de `ctr` (cliques totais). `null` sem
+   * `totalLinkClicks`/impressões disponíveis. */
+  linkCtr: number | null;
+  /** CPC do link — DISTINTO de `cpc`. `null` sem `totalLinkClicks`. */
+  linkCpc: number | null;
   costPerResult: number | null;
   roas: number | null;
 }
@@ -114,6 +129,11 @@ export function buildReachComparison(current: MetaAdsReachSnapshot, previous: Me
 
 export interface MetaAdsDashboardData {
   client: { id: string; name: string };
+  /** `import_sources.external_account_id` (`act_...`) da integração direta
+   * Meta — `null` quando o cliente não tem essa fonte habilitada (ex.: só
+   * usa Stract). Exibido no cabeçalho do dashboard (pedido do usuário,
+   * Etapa 2.4, item 4: "cabeçalho com cliente, conta..."). */
+  metaAdAccountId: string | null;
   comparison: MetaAdsPeriodComparison;
   reachComparison: MetaAdsReachComparison;
   /** Etapa 2.3 — séries diárias das 9 métricas selecionáveis no gráfico de
@@ -121,6 +141,22 @@ export interface MetaAdsDashboardData {
    * alcance/frequência (ver doc-comment de `buildEvolutionSeries`,
    * `lib/meta-ads-dashboard/evolution-data.ts`). */
   evolution: ChartMetricSeries[];
+  /** KOFF Analytics Fase 2, Etapa 2.4 — exploração Campanhas → Conjuntos →
+   * Anúncios, tudo na mesma tela. `explorationCampaigns` já vem resumido
+   * (`buildCampaignSummaries`, uma linha por campanha); `explorationAdSetRows`/
+   * `explorationCreativeRows` vêm BRUTOS (uma linha por dia) porque a
+   * seção de exploração precisa refiltrar por campanha selecionada e
+   * reagregar (`buildAdSetSummaries`/`buildCreativeSummaries`) só sobre o
+   * subconjunto — mesmo padrão já usado por `ReportFilterableTables`
+   * (`performance-report/report-filterable-tables.tsx`), nunca uma segunda
+   * lógica de filtro. Achado da auditoria desta etapa, documentado em
+   * `docs/META_ADS_DASHBOARD_METRICS_GAP_ANALYSIS.md`: `ad_creative_daily_metrics`
+   * não tem `ad_set_id`/`ad_set_name` — Anúncios é filtrável por CAMPANHA,
+   * nunca por Conjunto especificamente (a UI trata isso como dois recortes
+   * irmãos da mesma campanha, nunca um 3º nível fabricado). */
+  explorationCampaigns: CampaignSummary[];
+  explorationAdSetRows: AdSetDailyMetricRow[];
+  explorationCreativeRows: AdCreativeDailyMetricRow[];
   /** Resultados somados de `campaign_daily_metrics.result_count` são SEMPRE
    * atribuídos pela Meta (vêm de `actions`/`metric_mappings`, dentro da
    * janela de atribuição do próprio Ads Manager) — nunca confirmados por
@@ -152,6 +188,7 @@ export function sumAdditiveTotals(rows: CampaignDailyMetricRow[]): MetaAdsAdditi
   let spend = 0;
   let impressions = 0;
   let clicks = 0;
+  let linkClicks: number | null = null;
   let resultCount = 0;
   let revenue: number | null = null;
 
@@ -159,11 +196,12 @@ export function sumAdditiveTotals(rows: CampaignDailyMetricRow[]): MetaAdsAdditi
     spend += row.spend;
     impressions += row.impressions ?? 0;
     clicks += row.clicks ?? 0;
+    if (row.linkClicks !== null) linkClicks = (linkClicks ?? 0) + row.linkClicks;
     resultCount += row.resultCount ?? 0;
     if (row.revenue !== null) revenue = (revenue ?? 0) + row.revenue;
   }
 
-  return { spend, impressions, clicks, resultCount, revenue };
+  return { spend, impressions, clicks, linkClicks, resultCount, revenue };
 }
 
 /** Monta um snapshot completo (totais + métricas derivadas) de UM período
@@ -179,6 +217,8 @@ export function buildPeriodSnapshot(period: PeriodRange, rows: CampaignDailyMetr
     cpm: computeCpm(totals.spend, totals.impressions),
     ctr: computeCtr(totals.clicks, totals.impressions),
     cpc: computeCpc(totals.spend, totals.clicks),
+    linkCtr: totals.linkClicks !== null ? computeCtr(totals.linkClicks, totals.impressions) : null,
+    linkCpc: totals.linkClicks !== null ? computeCpc(totals.spend, totals.linkClicks) : null,
     costPerResult: computeCostPerResult(totals.spend, totals.resultCount, hasAnyRecord),
     roas: computeRoas(totals.revenue, totals.spend),
   };
@@ -244,8 +284,7 @@ async function resolveMetaAdAccountId(supabase: Supabase, clientId: string): Pro
  * normalmente devolve uma única linha, mas nunca assume isso como garantia
  * contratual da API).
  */
-async function fetchAccountPeriodReachSnapshot(supabase: Supabase, clientId: string, period: PeriodRange): Promise<MetaAdsReachSnapshot> {
-  const accountId = await resolveMetaAdAccountId(supabase, clientId);
+async function fetchAccountPeriodReachSnapshot(accountId: string | null, period: PeriodRange): Promise<MetaAdsReachSnapshot> {
   if (!accountId) return { status: "unavailable", reason: "not_configured" };
 
   try {
@@ -277,7 +316,7 @@ export async function buildMetaAdsDashboardData(
 ): Promise<MetaAdsDashboardData | null> {
   const previousPeriod = previousEquivalentPeriod(period);
 
-  const [clientRows, importSourceRows, currentRowsAll, previousRowsAll, currentReach, previousReach] = await Promise.all([
+  const [clientRows, importSourceRows, currentRowsAll, previousRowsAll, adSetRowsAll, creativeRows, metaAdAccountId] = await Promise.all([
     requireQuery(
       supabase.from("clients").select("id, name, performance_goal").eq("id", clientId).is("deleted_at", null),
       "clients:meta-ads-dashboard",
@@ -288,21 +327,38 @@ export async function buildMetaAdsDashboardData(
     ),
     getCampaignDailyMetricsForPeriod(supabase, clientId, period),
     getCampaignDailyMetricsForPeriod(supabase, clientId, previousPeriod),
-    fetchAccountPeriodReachSnapshot(supabase, clientId, period),
-    fetchAccountPeriodReachSnapshot(supabase, clientId, previousPeriod),
+    // Etapa 2.4 — exploração Campanhas → Conjuntos → Anúncios: só o
+    // período ATUAL (a tabela de exploração não compara períodos, só os
+    // cards/gráficos acima dela). `ad_creative_daily_metrics` já é
+    // implicitamente Meta-only (sem coluna de canal); `ad_set_daily_metrics`
+    // é channel-aware, filtrado abaixo junto com `campaign_daily_metrics`.
+    getAdSetDailyMetricsForPeriod(supabase, clientId, period),
+    getAdCreativeDailyMetricsForPeriod(supabase, clientId, period),
+    // Resolvido UMA vez (nunca duas, uma por período) — reaproveitado pelas
+    // duas buscas de alcance abaixo E exposto no cabeçalho do dashboard
+    // ("conta", pedido do usuário, Etapa 2.4, item 4).
+    resolveMetaAdAccountId(supabase, clientId),
   ]);
 
   const client = clientRows[0];
   if (!client) return null;
 
-  // `campaign_daily_metrics` é channel-aware (pode ter linhas de outro
-  // canal se o cliente também usa Google) — mesmo filtro explícito de
-  // `report-data.ts`, nunca assumido implicitamente.
+  const [currentReach, previousReach] = await Promise.all([
+    fetchAccountPeriodReachSnapshot(metaAdAccountId, period),
+    fetchAccountPeriodReachSnapshot(metaAdAccountId, previousPeriod),
+  ]);
+
+  // `campaign_daily_metrics`/`ad_set_daily_metrics` são channel-aware
+  // (podem ter linhas de outro canal se o cliente também usa Google) —
+  // mesmo filtro explícito de `report-data.ts`, nunca assumido
+  // implicitamente.
   const currentRows = currentRowsAll.filter((row) => row.channel === "meta");
   const previousRows = previousRowsAll.filter((row) => row.channel === "meta");
+  const explorationAdSetRows = adSetRowsAll.filter((row) => row.channel === "meta");
 
   const comparison = buildPeriodComparison(period, currentRows, previousRows);
   const reachComparison = buildReachComparison(currentReach, previousReach);
+  const explorationCampaigns = buildCampaignSummaries(currentRows);
   const evolution = buildEvolutionSeries(period, previousPeriod, currentRows, previousRows, client.performance_goal);
   const lastSyncAt = resolveLatestSuccessAt(
     importSourceRows.map((row) => ({ enabled: row.enabled, lastSuccessAt: row.last_success_at })),
@@ -310,9 +366,13 @@ export async function buildMetaAdsDashboardData(
 
   return {
     client: { id: client.id, name: client.name },
+    metaAdAccountId,
     comparison,
     reachComparison,
     evolution,
+    explorationCampaigns,
+    explorationAdSetRows,
+    explorationCreativeRows: creativeRows,
     resultSource: "meta_attributed",
     resultType: client.performance_goal,
     lastSyncAt,

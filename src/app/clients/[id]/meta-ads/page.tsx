@@ -4,12 +4,14 @@ import { todayDateString } from "@/lib/today";
 import { resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
 import { buildMetaAdsDashboardData } from "@/lib/meta-ads-dashboard/dashboard-data";
 import { buildMetricCardViewModels } from "@/lib/meta-ads-dashboard/metric-cards";
+import { campaignSummaryToRow } from "@/lib/meta-ads-dashboard/exploration-data";
 import { formatDateRange } from "@/lib/format";
 import { DataFreshnessTimer } from "../../data-freshness-timer";
 import { WORKSPACE_CONTENT_MAX_WIDTH_CLASS } from "../../workspace-container";
 import { MetaAdsPeriodControl } from "./period-control";
 import { MetricCardsPanel } from "./metric-cards-panel";
 import { EvolutionSection } from "./evolution-section";
+import { ExplorationSection } from "./exploration-section";
 
 /**
  * MITZA ONE — KOFF Analytics Fase 2 — `/clients/[id]/meta-ads`, decisão 1
@@ -23,13 +25,15 @@ import { EvolutionSection } from "./evolution-section";
  *   da MITZA. Toda troca de período (`MetaAdsPeriodControl`) navega pra
  *   ESTA MESMA rota, nunca pra fora ("experiência de página única").
  * - `buildMetaAdsDashboardData` busca TUDO de uma vez (período atual e
- *   anterior: investimento/resultado/alcance/frequência/séries diárias),
- *   então cards E gráficos sempre respeitam o MESMO período selecionado,
- *   com a MESMA comparação — nenhuma segunda consulta.
- * - Ordem da tela (Etapa 2.3, pedido explícito do usuário): filtros globais
- *   → cards de KPI (`MetricCardsPanel`) → gráficos de evolução
- *   (`EvolutionSection`) → futura exploração de campanhas/conjuntos/
- *   anúncios (ainda não implementada, próxima etapa).
+ *   anterior: investimento/resultado/alcance/frequência/séries diárias/
+ *   exploração por campanha-conjunto-anúncio), então cards, gráficos E a
+ *   seção de exploração sempre respeitam o MESMO período selecionado —
+ *   nenhuma segunda consulta/rota.
+ * - Ordem da tela (pedido explícito do usuário, Etapa 2.4): cabeçalho
+ *   (cliente/conta/período/última sincronização) → cards de KPI
+ *   (`MetricCardsPanel`) → gráficos de evolução (`EvolutionSection`) →
+ *   exploração de campanhas/conjuntos/anúncios (`ExplorationSection`),
+ *   SEMPRE na mesma tela — nenhum link/botão pra outra rota de performance.
  */
 export default async function ClientMetaAdsDashboardPage({
   params,
@@ -42,10 +46,6 @@ export default async function ClientMetaAdsDashboardPage({
   const { preset: presetParam, start: startParam, end: endParam } = await searchParams;
   const supabase = await createSupabaseClient();
 
-  const { data: client, error } = await supabase.from("clients").select("id").eq("id", id).is("deleted_at", null).maybeSingle();
-  if (error) console.error(`[ClientMetaAdsDashboardPage] falha ao buscar cliente ${id}:`, error);
-  if (!client) notFound();
-
   const today = todayDateString();
   const activePreset = (presetParam ?? "this_month") as AnalyticsPeriodPreset;
   const period = resolveAnalyticsPeriod(presetParam, today, { start: startParam, end: endParam });
@@ -54,13 +54,20 @@ export default async function ClientMetaAdsDashboardPage({
   if (!data) notFound();
 
   const cards = buildMetricCardViewModels(data);
+  const explorationCampaignRows = data.explorationCampaigns.map(campaignSummaryToRow);
 
   return (
     <div className={`mx-auto w-full ${WORKSPACE_CONTENT_MAX_WIDTH_CLASS} px-4 py-4 sm:px-6 sm:py-6 lg:px-10`}>
+      {/* Cabeçalho (pedido do usuário, Etapa 2.4, item 4): cliente, conta,
+          período e última sincronização — tudo visível de uma vez, nunca
+          escondido atrás de outra tela. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#17171A]">Meta Ads</h1>
-          <p className="mt-0.5 text-sm text-[#6F6B65]">{formatDateRange(period.start, period.end)} — comparado ao período anterior de mesma duração.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-[#17171A]">Meta Ads — {data.client.name}</h1>
+          <p className="mt-0.5 text-sm text-[#6F6B65]">
+            {data.metaAdAccountId ? `Conta ${data.metaAdAccountId}` : "Conta Meta direta não configurada"} ·{" "}
+            {formatDateRange(period.start, period.end)} — comparado ao período anterior de mesma duração.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <MetaAdsPeriodControl clientId={id} activePreset={activePreset} customStart={period.start} customEnd={period.end} today={today} />
@@ -85,6 +92,14 @@ export default async function ClientMetaAdsDashboardPage({
 
         <EvolutionSection series={data.evolution} />
       </div>
+
+      <ExplorationSection
+        clientId={id}
+        resultType={data.resultType}
+        campaigns={explorationCampaignRows}
+        adSetDailyRows={data.explorationAdSetRows}
+        creativeDailyRows={data.explorationCreativeRows}
+      />
     </div>
   );
 }

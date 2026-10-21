@@ -31,6 +31,7 @@ export const META_API_COLUMNS = {
   impressions: "impressions",
   reach: "reach",
   clicks: "clicks",
+  linkClicks: "link_clicks",
 } as const;
 
 /** Prefixo das chaves achatadas pra `actions`/`actionValues` — usado tanto
@@ -59,6 +60,10 @@ export interface MetaApiIngestRow {
   impressions?: number;
   reach?: number;
   clicks?: number;
+  /** Cliques especificamente no link/CTA de destino (`inline_link_clicks`
+   * da Graph API) — DISTINTO de `clicks` (todos os cliques no anúncio).
+   * KOFF Analytics Fase 2, Etapa 2.4. */
+  linkClicks?: number;
   /** `action_type` (nomenclatura da Meta Insights API, ex.: "lead",
    * "purchase", "onsite_conversion.lead_grouped") -> contagem do dia. A
    * MITZA decide, via `metric_mappings`, quais `action_type` somam pra qual
@@ -180,7 +185,7 @@ export function validateMetaApiIngestPayload(body: unknown): MetaApiIngestValida
       errors.push(`${rowLabel}: "platformPosition", quando presente, precisa ser string.`);
     }
 
-    for (const field of ["impressions", "reach", "clicks"] as const) {
+    for (const field of ["impressions", "reach", "clicks", "linkClicks"] as const) {
       const value = row[field];
       if (value !== undefined && !isFiniteNonNegative(value)) {
         errors.push(`${rowLabel}: "${field}", quando presente, precisa ser número >= 0.`);
@@ -212,6 +217,7 @@ export function validateMetaApiIngestPayload(body: unknown): MetaApiIngestValida
         impressions: row.impressions as number | undefined,
         reach: row.reach as number | undefined,
         clicks: row.clicks as number | undefined,
+        linkClicks: row.linkClicks as number | undefined,
         actions,
         actionValues,
       });
@@ -246,6 +252,7 @@ export function flattenMetaApiRowToRawSourceRow(row: MetaApiIngestRow): RawSourc
   if (row.impressions !== undefined) flat[META_API_COLUMNS.impressions] = row.impressions;
   if (row.reach !== undefined) flat[META_API_COLUMNS.reach] = row.reach;
   if (row.clicks !== undefined) flat[META_API_COLUMNS.clicks] = row.clicks;
+  if (row.linkClicks !== undefined) flat[META_API_COLUMNS.linkClicks] = row.linkClicks;
 
   for (const [actionType, count] of Object.entries(row.actions ?? {})) {
     flat[`${META_API_ACTIONS_PREFIX}${actionType}`] = count;

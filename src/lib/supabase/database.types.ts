@@ -836,6 +836,7 @@ export interface Database {
           impressions: number | null;
           reach: number | null;
           clicks: number | null;
+          link_clicks: number | null;
           result_type: PerformanceGoalDb | null;
           result_count: number | null;
           revenue: number | null;
@@ -857,6 +858,7 @@ export interface Database {
           impressions?: number | null;
           reach?: number | null;
           clicks?: number | null;
+          link_clicks?: number | null;
           result_type?: PerformanceGoalDb | null;
           result_count?: number | null;
           revenue?: number | null;
@@ -878,6 +880,7 @@ export interface Database {
           impressions?: number | null;
           reach?: number | null;
           clicks?: number | null;
+          link_clicks?: number | null;
           result_type?: PerformanceGoalDb | null;
           result_count?: number | null;
           revenue?: number | null;
@@ -914,6 +917,7 @@ export interface Database {
           impressions: number | null;
           reach: number | null;
           clicks: number | null;
+          link_clicks: number | null;
           result_type: PerformanceGoalDb | null;
           result_count: number | null;
           revenue: number | null;
@@ -932,6 +936,7 @@ export interface Database {
           impressions?: number | null;
           reach?: number | null;
           clicks?: number | null;
+          link_clicks?: number | null;
           result_type?: PerformanceGoalDb | null;
           result_count?: number | null;
           revenue?: number | null;
@@ -950,6 +955,7 @@ export interface Database {
           impressions?: number | null;
           reach?: number | null;
           clicks?: number | null;
+          link_clicks?: number | null;
           result_type?: PerformanceGoalDb | null;
           result_count?: number | null;
           revenue?: number | null;
@@ -1161,6 +1167,7 @@ export interface Database {
           impressions: number | null;
           reach: number | null;
           clicks: number | null;
+          link_clicks: number | null;
           result_type: PerformanceGoalDb | null;
           result_count: number | null;
           revenue: number | null;
@@ -1181,6 +1188,7 @@ export interface Database {
           impressions?: number | null;
           reach?: number | null;
           clicks?: number | null;
+          link_clicks?: number | null;
           result_type?: PerformanceGoalDb | null;
           result_count?: number | null;
           revenue?: number | null;
@@ -1201,6 +1209,7 @@ export interface Database {
           impressions?: number | null;
           reach?: number | null;
           clicks?: number | null;
+          link_clicks?: number | null;
           result_type?: PerformanceGoalDb | null;
           result_count?: number | null;
           revenue?: number | null;

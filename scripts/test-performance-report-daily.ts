@@ -467,7 +467,7 @@ console.log("\n11 — Campanhas: nenhuma mudança de comportamento nesta etapa (
 
 {
   const campaigns = buildCampaignSummaries([
-    { date: "2026-09-01", channel: "meta", campaignName: "Campanha A", campaignId: null, spend: 100, impressions: null, reach: null, clicks: null, resultType: "leads", resultCount: 5, revenue: null },
+    { date: "2026-09-01", channel: "meta", campaignName: "Campanha A", campaignId: null, spend: 100, impressions: null, reach: null, clicks: null, linkClicks: null, resultType: "leads", resultCount: 5, revenue: null },
   ]);
   const data: PerformanceReportData = {
     campaignDailyRows: [],

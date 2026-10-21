@@ -143,8 +143,8 @@ console.log("\n10 — Bug encontrado na auditoria (NÃO corrigido nesta rodada, 
   // comportamento ATUAL (seção 19 do pedido: "se encontrar bug, documente
   // antes de ampliar escopo" — correção fica pra rodada própria, auditada).
   const rows = [
-    { date: "2026-10-01", channel: "meta" as const, campaignName: "Campanha X", campaignId: "c1", spend: 100, impressions: null, reach: null, clicks: null, resultType: "leads" as const, resultCount: 10, revenue: null },
-    { date: "2026-10-02", channel: "meta" as const, campaignName: "Campanha X", campaignId: "c1", spend: 100, impressions: null, reach: null, clicks: null, resultType: "sales" as const, resultCount: 3, revenue: null },
+    { date: "2026-10-01", channel: "meta" as const, campaignName: "Campanha X", campaignId: "c1", spend: 100, impressions: null, reach: null, clicks: null, linkClicks: null, resultType: "leads" as const, resultCount: 10, revenue: null },
+    { date: "2026-10-02", channel: "meta" as const, campaignName: "Campanha X", campaignId: "c1", spend: 100, impressions: null, reach: null, clicks: null, linkClicks: null, resultType: "sales" as const, resultCount: 3, revenue: null },
   ];
   const summaries = buildCampaignSummaries(rows);
   check("UMA campanha só na saída (agrupada por canal+nome, nunca por result_type)", summaries.length, 1);

@@ -4,10 +4,11 @@ import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals
 import type { MetaAdsDashboardData, MetaAdsReachSnapshot } from "./dashboard-data";
 
 /**
- * MITZA ONE — KOFF Analytics Fase 2, Etapa 2.2 (Cards de KPI configuráveis).
- * Núcleo puro: recebe o `MetaAdsDashboardData` já montado (Camada 1) e
- * devolve os 11 cards prontos pra exibição (valor já formatado + variação
- * já calculada) — nenhum componente de tela recalcula nada, só apresenta.
+ * MITZA ONE — KOFF Analytics Fase 2, Etapa 2.2 (Cards de KPI configuráveis),
+ * estendida na Etapa 2.4 (cliques no link/CTR do link/CPC do link). Núcleo
+ * puro: recebe o `MetaAdsDashboardData` já montado (Camada 1) e devolve os
+ * 14 cards prontos pra exibição (valor já formatado + variação já
+ * calculada) — nenhum componente de tela recalcula nada, só apresenta.
  * Reaproveita `buildPercentChangeComparison` (`lib/analytics.ts`, já usado
  * pelos KPIs do Relatório/Visão Geral) pra "↑X% vs período anterior" com o
  * MESMO tom semântico (verde-limão só quando a variação é `positive`) —
@@ -22,24 +23,34 @@ export type MetricCardId =
   | "reach"
   | "frequency"
   | "clicks"
+  | "linkClicks"
   | "cpc"
+  | "linkCpc"
   | "ctr"
+  | "linkCtr"
   | "cpm"
   | "roas";
 
 /** Ordem canônica de apresentação — a mesma ordem usada na lista de
- * personalização e como ordem inicial dos cards selecionados. */
+ * personalização e como ordem inicial dos cards selecionados. Agrupada por
+ * categoria (pedido do usuário, Etapa 2.4 — Entrega/Tráfego/Resultados/
+ * Receita): Entrega (impressões/alcance/frequência/CPM) → Tráfego (cliques
+ * e suas variantes de LINK, sempre o par "geral" antes do par "do link") →
+ * Resultados → Receita. */
 export const ALL_METRIC_CARD_IDS: MetricCardId[] = [
   "investment",
-  "results",
-  "costPerResult",
   "impressions",
   "reach",
   "frequency",
-  "clicks",
-  "cpc",
-  "ctr",
   "cpm",
+  "clicks",
+  "linkClicks",
+  "ctr",
+  "linkCtr",
+  "cpc",
+  "linkCpc",
+  "results",
+  "costPerResult",
   "roas",
 ];
 
@@ -83,6 +94,13 @@ function reachUnavailableLabel(snapshot: MetaAdsReachSnapshot): string {
   }
 }
 
+/** Texto do card quando cliques no link/CTR do link/CPC do link não têm
+ * dado disponível — SEMPRE por limitação de histórico (coluna nova, Etapa
+ * 2.4: dias sincronizados antes dela nunca têm esse campo) ou fonte sem o
+ * campo configurado (todo Stract hoje), nunca indisponibilidade de API —
+ * motivo DIFERENTE do de alcance/frequência, por isso mensagem própria. */
+const LINK_METRIC_UNAVAILABLE_LABEL = "Sem dado de cliques no link neste período";
+
 /** Rótulo dinâmico de "Resultados"/"Custo por resultado" por objetivo do
  * cliente (`PERFORMANCE_GOALS`) — mesma fonte usada pelo Cockpit
  * (`CockpitResultCard`/`CockpitCostCard`), nunca um segundo rótulo fixo.
@@ -96,7 +114,7 @@ export function resolveResultLabels(resultType: PerformanceGoal | null): { resul
 }
 
 /**
- * Monta os 11 cards, na ordem canônica, a partir dos dados já buscados.
+ * Monta os 14 cards, na ordem canônica, a partir dos dados já buscados.
  * Pura — testável sem rede/banco, só com um `MetaAdsDashboardData` montado
  * à mão.
  */
@@ -117,27 +135,6 @@ export function buildMetricCardViewModels(data: MetaAdsDashboardData): MetricCar
       label: "Investimento",
       value: formatCurrency(current.totals.spend),
       comparison: buildPercentChangeComparison(current.totals.spend, previous?.totals.spend ?? null, "neutral"),
-    },
-    {
-      id: "results",
-      label: resultLabel,
-      value: current.hasAnyRecord ? formatCount(current.totals.resultCount) : "Sem dados no período",
-      comparison: current.hasAnyRecord
-        ? buildPercentChangeComparison(
-            current.totals.resultCount,
-            previous?.hasAnyRecord ? previous.totals.resultCount : null,
-            "higher_is_better",
-          )
-        : null,
-    },
-    {
-      id: "costPerResult",
-      label: costLabel,
-      value: current.derived.costPerResult !== null ? formatCurrency(current.derived.costPerResult) : "—",
-      comparison:
-        current.derived.costPerResult !== null
-          ? buildPercentChangeComparison(current.derived.costPerResult, previous?.derived.costPerResult ?? null, "lower_is_better")
-          : null,
     },
     {
       id: "impressions",
@@ -169,23 +166,32 @@ export function buildMetricCardViewModels(data: MetaAdsDashboardData): MetricCar
           : null,
     },
     {
+      id: "cpm",
+      label: "CPM",
+      value: current.derived.cpm !== null ? formatCurrency(current.derived.cpm) : "—",
+      comparison:
+        current.derived.cpm !== null
+          ? buildPercentChangeComparison(current.derived.cpm, previous?.derived.cpm ?? null, "lower_is_better")
+          : null,
+    },
+    {
       id: "clicks",
-      label: "Cliques",
+      label: "Cliques totais",
       value: formatCount(current.totals.clicks),
       comparison: buildPercentChangeComparison(current.totals.clicks, previous?.totals.clicks ?? null, "neutral"),
     },
     {
-      id: "cpc",
-      label: "CPC",
-      value: current.derived.cpc !== null ? formatCurrency(current.derived.cpc) : "—",
+      id: "linkClicks",
+      label: "Cliques no link",
+      value: current.totals.linkClicks !== null ? formatCount(current.totals.linkClicks) : LINK_METRIC_UNAVAILABLE_LABEL,
       comparison:
-        current.derived.cpc !== null
-          ? buildPercentChangeComparison(current.derived.cpc, previous?.derived.cpc ?? null, "lower_is_better")
+        current.totals.linkClicks !== null
+          ? buildPercentChangeComparison(current.totals.linkClicks, previous?.totals.linkClicks ?? null, "neutral")
           : null,
     },
     {
       id: "ctr",
-      label: "CTR",
+      label: "CTR geral",
       value: current.derived.ctr !== null ? formatPercent(current.derived.ctr * 100) : "—",
       comparison:
         current.derived.ctr !== null
@@ -193,12 +199,51 @@ export function buildMetricCardViewModels(data: MetaAdsDashboardData): MetricCar
           : null,
     },
     {
-      id: "cpm",
-      label: "CPM",
-      value: current.derived.cpm !== null ? formatCurrency(current.derived.cpm) : "—",
+      id: "linkCtr",
+      label: "CTR do link",
+      value: current.derived.linkCtr !== null ? formatPercent(current.derived.linkCtr * 100) : LINK_METRIC_UNAVAILABLE_LABEL,
       comparison:
-        current.derived.cpm !== null
-          ? buildPercentChangeComparison(current.derived.cpm, previous?.derived.cpm ?? null, "lower_is_better")
+        current.derived.linkCtr !== null
+          ? buildPercentChangeComparison(current.derived.linkCtr, previous?.derived.linkCtr ?? null, "higher_is_better")
+          : null,
+    },
+    {
+      id: "cpc",
+      label: "CPC geral",
+      value: current.derived.cpc !== null ? formatCurrency(current.derived.cpc) : "—",
+      comparison:
+        current.derived.cpc !== null
+          ? buildPercentChangeComparison(current.derived.cpc, previous?.derived.cpc ?? null, "lower_is_better")
+          : null,
+    },
+    {
+      id: "linkCpc",
+      label: "CPC do link",
+      value: current.derived.linkCpc !== null ? formatCurrency(current.derived.linkCpc) : LINK_METRIC_UNAVAILABLE_LABEL,
+      comparison:
+        current.derived.linkCpc !== null
+          ? buildPercentChangeComparison(current.derived.linkCpc, previous?.derived.linkCpc ?? null, "lower_is_better")
+          : null,
+    },
+    {
+      id: "results",
+      label: resultLabel,
+      value: current.hasAnyRecord ? formatCount(current.totals.resultCount) : "Sem dados no período",
+      comparison: current.hasAnyRecord
+        ? buildPercentChangeComparison(
+            current.totals.resultCount,
+            previous?.hasAnyRecord ? previous.totals.resultCount : null,
+            "higher_is_better",
+          )
+        : null,
+    },
+    {
+      id: "costPerResult",
+      label: costLabel,
+      value: current.derived.costPerResult !== null ? formatCurrency(current.derived.costPerResult) : "—",
+      comparison:
+        current.derived.costPerResult !== null
+          ? buildPercentChangeComparison(current.derived.costPerResult, previous?.derived.costPerResult ?? null, "lower_is_better")
           : null,
     },
     {

@@ -36,6 +36,9 @@ export interface AdSetDailyMetricRow {
   impressions: number | null;
   reach: number | null;
   clicks: number | null;
+  /** Cliques no link/CTA de destino — DISTINTO de `clicks`. KOFF Analytics
+   * Fase 2, Etapa 2.4. `null` em linhas antigas ou fontes sem esse campo. */
+  linkClicks: number | null;
   resultType: PerformanceGoal | null;
   resultCount: number | null;
   revenue: number | null;
@@ -49,12 +52,16 @@ export interface AdSetSummary {
   totalImpressions: number | null;
   totalReach: number | null;
   totalClicks: number | null;
+  totalLinkClicks: number | null;
   resultType: PerformanceGoal | null;
   totalResultCount: number | null;
   totalRevenue: number | null;
   cpa: number | null;
   cpc: number | null;
   ctr: number | null;
+  cpm: number | null;
+  linkCtr: number | null;
+  linkCpc: number | null;
   roas: number | null;
 }
 
@@ -71,6 +78,7 @@ interface AdSetAccumulator {
   totalImpressions: number | null;
   totalReach: number | null;
   totalClicks: number | null;
+  totalLinkClicks: number | null;
   resultType: PerformanceGoal | null;
   totalResultCount: number | null;
   totalRevenue: number | null;
@@ -85,6 +93,7 @@ function newAccumulator(channel: TrafficChannel, adSetName: string): AdSetAccumu
     totalImpressions: null,
     totalReach: null,
     totalClicks: null,
+    totalLinkClicks: null,
     resultType: null,
     totalResultCount: null,
     totalRevenue: null,
@@ -97,6 +106,7 @@ function accumulateRow(acc: AdSetAccumulator, row: AdSetDailyMetricRow): void {
   acc.totalImpressions = sumNullable(acc.totalImpressions, row.impressions);
   acc.totalReach = sumNullable(acc.totalReach, row.reach);
   acc.totalClicks = sumNullable(acc.totalClicks, row.clicks);
+  acc.totalLinkClicks = sumNullable(acc.totalLinkClicks, row.linkClicks);
   acc.totalResultCount = sumNullable(acc.totalResultCount, row.resultCount);
   acc.totalRevenue = sumNullable(acc.totalRevenue, row.revenue);
   if (row.resultType) acc.resultType = row.resultType;
@@ -145,12 +155,17 @@ export function buildAdSetSummaries(rows: AdSetDailyMetricRow[]): AdSetSummary[]
         totalImpressions: acc.totalImpressions,
         totalReach: acc.totalReach,
         totalClicks: acc.totalClicks,
+        totalLinkClicks: acc.totalLinkClicks,
         resultType: acc.resultType,
         totalResultCount,
         totalRevenue: acc.totalRevenue,
         cpa: totalResultCount && totalResultCount > 0 ? acc.totalSpend / totalResultCount : null,
         cpc: acc.totalClicks && acc.totalClicks > 0 ? acc.totalSpend / acc.totalClicks : null,
         ctr: acc.totalClicks !== null && acc.totalImpressions && acc.totalImpressions > 0 ? acc.totalClicks / acc.totalImpressions : null,
+        cpm: acc.totalImpressions && acc.totalImpressions > 0 ? (acc.totalSpend * 1000) / acc.totalImpressions : null,
+        linkCtr:
+          acc.totalLinkClicks !== null && acc.totalImpressions && acc.totalImpressions > 0 ? acc.totalLinkClicks / acc.totalImpressions : null,
+        linkCpc: acc.totalLinkClicks && acc.totalLinkClicks > 0 ? acc.totalSpend / acc.totalLinkClicks : null,
         roas: acc.totalRevenue !== null && acc.totalSpend > 0 ? acc.totalRevenue / acc.totalSpend : null,
       };
     })

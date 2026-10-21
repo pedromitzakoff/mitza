@@ -39,6 +39,10 @@ interface MetaInsightsRawRow {
   impressions?: string;
   reach?: string;
   clicks?: string;
+  /** KOFF Analytics Fase 2, Etapa 2.4 — cliques especificamente no link/CTA
+   * de destino (DISTINTO de `clicks`, que inclui curtidas/compartilhamentos/
+   * visitas ao perfil em alguns contextos de relatório da própria Meta). */
+  inline_link_clicks?: string;
   actions?: MetaInsightsActionEntry[];
   action_values?: MetaInsightsActionEntry[];
 }
@@ -88,13 +92,14 @@ export function mapMetaInsightsRowToIngestRow(row: MetaInsightsRawRow): MetaApiI
     impressions: row.impressions !== undefined ? Number(row.impressions) : undefined,
     reach: row.reach !== undefined ? Number(row.reach) : undefined,
     clicks: row.clicks !== undefined ? Number(row.clicks) : undefined,
+    linkClicks: row.inline_link_clicks !== undefined ? Number(row.inline_link_clicks) : undefined,
     actions: parseActionEntries(row.actions),
     actionValues: parseActionEntries(row.action_values),
   };
 }
 
 const INSIGHTS_FIELDS =
-  "campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,reach,clicks,actions,action_values";
+  "campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,reach,clicks,inline_link_clicks,actions,action_values";
 
 /**
  * Busca os insights de UMA conta de anúncios, já convertidos pro formato de

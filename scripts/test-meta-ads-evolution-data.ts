@@ -7,7 +7,7 @@
  *  - `computeDailyMetricValue`: `null` (vão na linha) pro dia sem registro
  *    — nunca `0` fabricado; métricas derivadas calculadas a partir dos
  *    totais DAQUELE dia, nunca do acumulado do período;
- *  - `buildEvolutionSeries`: as 9 métricas selecionáveis, NUNCA
+ *  - `buildEvolutionSeries`: as 12 métricas selecionáveis, NUNCA
  *    alcance/frequência (pedido do usuário: "sem somar indicadores não
  *    aditivos" — essas duas exigiriam uma chamada à API por dia, que a
  *    Etapa 2.3 explicitamente não faz); período atual e anterior com a
@@ -46,6 +46,7 @@ function row(partial: Partial<CampaignDailyMetricRow> & { date: string; spend: n
     impressions: null,
     reach: null,
     clicks: null,
+    linkClicks: null,
     resultType: null,
     resultCount: null,
     revenue: null,
@@ -79,6 +80,7 @@ check("dia sem nenhuma linha: hasAnyRecord false, tudo zerado (nunca usado como 
   spend: 0,
   impressions: 0,
   clicks: 0,
+  linkClicks: null,
   resultCount: 0,
   revenue: null,
 });
@@ -110,7 +112,7 @@ const previousRows: CampaignDailyMetricRow[] = [row({ date: "2026-09-28", spend:
 
 const evolution = buildEvolutionSeries(period, previousPeriod, rows, previousRows, "leads");
 
-check("exatamente as 9 métricas selecionáveis, na ordem canônica", evolution.map((e) => e.id), CHART_METRIC_IDS);
+check("exatamente as 12 métricas selecionáveis, na ordem canônica", evolution.map((e) => e.id), CHART_METRIC_IDS);
 ok("NUNCA inclui alcance/frequência (sem série diária correta disponível)", !evolution.some((e) => (e.id as string) === "reach" || (e.id as string) === "frequency"));
 
 const resultsSeries = evolution.find((e) => e.id === "results")!;
@@ -118,7 +120,7 @@ check("rótulo dinâmico por objetivo (leads)", resultsSeries.label, "Leads");
 check("período atual e anterior com a MESMA quantidade de pontos (alinhável por posição)", resultsSeries.current.length, resultsSeries.previous.length);
 
 const typedIds: ChartMetricId[] = CHART_METRIC_IDS;
-ok("CHART_METRIC_IDS é tipado corretamente", typedIds.length === 9);
+ok("CHART_METRIC_IDS é tipado corretamente", typedIds.length === 12);
 
 // ---------------------------------------------------------------------------
 console.log(`\nTodos os ${passed} testes passaram.`);

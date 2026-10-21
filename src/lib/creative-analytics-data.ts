@@ -21,7 +21,7 @@ export async function getAdCreativeDailyMetricsForPeriod(
     supabase
       .from("ad_creative_daily_metrics")
       .select(
-        "date, campaign_name, campaign_id, creative_name, creative_permalink_url, preview_image_url, spend, impressions, reach, clicks, result_type, result_count, revenue",
+        "date, campaign_name, campaign_id, creative_name, creative_permalink_url, preview_image_url, spend, impressions, reach, clicks, link_clicks, result_type, result_count, revenue",
       )
       .eq("client_id", clientId)
       .gte("date", period.start)
@@ -40,6 +40,7 @@ export async function getAdCreativeDailyMetricsForPeriod(
     impressions: row.impressions,
     reach: row.reach,
     clicks: row.clicks,
+    linkClicks: row.link_clicks,
     resultType: row.result_type as PerformanceGoal | null,
     resultCount: row.result_count,
     revenue: row.revenue,

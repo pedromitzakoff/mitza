@@ -277,6 +277,9 @@ export interface AggregateAdCreativeRowsColumns {
   impressionsColumn?: string | null;
   reachColumn?: string | null;
   clicksColumn?: string | null;
+  /** Cliques especificamente no link/CTA de destino (DISTINTO de
+   * `clicksColumn`) — KOFF Analytics Fase 2, Etapa 2.4. */
+  linkClicksColumn?: string | null;
   /** ID estável da campanha — mesmo padrão de `AggregateCampaignRowsColumns.campaignIdColumn`. */
   campaignIdColumn?: string | null;
   /** ID estável do anúncio — opcional, hoje só disponível via API oficial da
@@ -304,6 +307,7 @@ export interface AggregatedAdCreativeRow {
   impressions: number | null;
   reach: number | null;
   clicks: number | null;
+  linkClicks: number | null;
   invalidRowCount: number;
 }
 
@@ -322,6 +326,7 @@ export function aggregateAdCreativeDailyRows(
     impressionsColumn,
     reachColumn,
     clicksColumn,
+    linkClicksColumn,
     campaignIdColumn,
     adIdColumn,
   } = columns;
@@ -358,6 +363,7 @@ export function aggregateAdCreativeDailyRows(
       impressions: null,
       reach: null,
       clicks: null,
+      linkClicks: null,
       invalidRowCount: 0,
     };
 
@@ -406,6 +412,11 @@ export function aggregateAdCreativeDailyRows(
     if (clicksColumn) {
       const value = parseSourceNumericValue(row[clicksColumn]);
       if (value.kind === "ok") group.clicks = (group.clicks ?? 0) + value.value;
+      if (value.kind === "invalid") group.invalidRowCount += 1;
+    }
+    if (linkClicksColumn) {
+      const value = parseSourceNumericValue(row[linkClicksColumn]);
+      if (value.kind === "ok") group.linkClicks = (group.linkClicks ?? 0) + value.value;
       if (value.kind === "invalid") group.invalidRowCount += 1;
     }
 
@@ -494,6 +505,7 @@ export interface AdCreativeDailyMetricsUpsertRow {
   impressions: number | null;
   reach: number | null;
   clicks: number | null;
+  link_clicks: number | null;
   result_type: PerformanceGoal | null;
   result_count: number | null;
   revenue: number | null;
@@ -535,6 +547,7 @@ export function buildAdCreativeDailyMetricsUpsertRows(
       impressions: row.impressions,
       reach: row.reach,
       clicks: row.clicks,
+      link_clicks: row.linkClicks,
       result_type: resultCount !== undefined ? (options?.resultType ?? null) : null,
       result_count: resultCount !== undefined ? Math.round(resultCount) : null,
       revenue: options?.revenueByGroup?.get(key) ?? null,
@@ -558,6 +571,9 @@ export interface AggregateCampaignRowsColumns {
   impressionsColumn?: string | null;
   reachColumn?: string | null;
   clicksColumn?: string | null;
+  /** Cliques especificamente no link/CTA de destino (DISTINTO de
+   * `clicksColumn`) — KOFF Analytics Fase 2, Etapa 2.4. */
+  linkClicksColumn?: string | null;
   /** Etapa "Múltiplos Objetivos": coluna com o ID ESTÁVEL da campanha na
    * plataforma (nunca o nome) — opcional, só presente quando
    * `import_sources.campaign_id_column` estiver configurado pra esta fonte.
@@ -577,11 +593,12 @@ export interface AggregatedCampaignRow {
   impressions: number | null;
   reach: number | null;
   clicks: number | null;
+  linkClicks: number | null;
   invalidRowCount: number;
 }
 
 export function aggregateCampaignDailyRows(rows: RawSourceRow[], columns: AggregateCampaignRowsColumns): AggregatedCampaignRow[] {
-  const { dateColumn, campaignNameColumn, spendColumn, impressionsColumn, reachColumn, clicksColumn, campaignIdColumn } = columns;
+  const { dateColumn, campaignNameColumn, spendColumn, impressionsColumn, reachColumn, clicksColumn, linkClicksColumn, campaignIdColumn } = columns;
 
   // Mesma falha corrigida em aggregatePlacementDailyRows (auditoria de
   // arquitetura): campaignNameColumn CONFIGURADO mas ausente da tabela
@@ -608,6 +625,7 @@ export function aggregateCampaignDailyRows(rows: RawSourceRow[], columns: Aggreg
       impressions: null,
       reach: null,
       clicks: null,
+      linkClicks: null,
       invalidRowCount: 0,
     };
 
@@ -636,6 +654,11 @@ export function aggregateCampaignDailyRows(rows: RawSourceRow[], columns: Aggreg
     if (clicksColumn) {
       const value = parseSourceNumericValue(row[clicksColumn]);
       if (value.kind === "ok") group.clicks = (group.clicks ?? 0) + value.value;
+      if (value.kind === "invalid") group.invalidRowCount += 1;
+    }
+    if (linkClicksColumn) {
+      const value = parseSourceNumericValue(row[linkClicksColumn]);
+      if (value.kind === "ok") group.linkClicks = (group.linkClicks ?? 0) + value.value;
       if (value.kind === "invalid") group.invalidRowCount += 1;
     }
 
@@ -718,6 +741,9 @@ export interface AggregateAdSetRowsColumns {
   impressionsColumn?: string | null;
   reachColumn?: string | null;
   clicksColumn?: string | null;
+  /** Cliques especificamente no link/CTA de destino (DISTINTO de
+   * `clicksColumn`) — KOFF Analytics Fase 2, Etapa 2.4. */
+  linkClicksColumn?: string | null;
   /** ID estável da campanha — mesmo padrão de `AggregateCampaignRowsColumns.campaignIdColumn`.
    * Opcional; sem ela (caso de toda fonte Stract hoje), `campaignId` sai
    * sempre `null` e o vínculo campanha→funil continua dependendo da ponte
@@ -744,12 +770,23 @@ export interface AggregatedAdSetRow {
   impressions: number | null;
   reach: number | null;
   clicks: number | null;
+  linkClicks: number | null;
   invalidRowCount: number;
 }
 
 export function aggregateAdSetDailyRows(rows: RawSourceRow[], columns: AggregateAdSetRowsColumns): AggregatedAdSetRow[] {
-  const { dateColumn, campaignNameColumn, adSetNameColumn, spendColumn, impressionsColumn, reachColumn, clicksColumn, campaignIdColumn, adSetIdColumn } =
-    columns;
+  const {
+    dateColumn,
+    campaignNameColumn,
+    adSetNameColumn,
+    spendColumn,
+    impressionsColumn,
+    reachColumn,
+    clicksColumn,
+    linkClicksColumn,
+    campaignIdColumn,
+    adSetIdColumn,
+  } = columns;
 
   // Mesma falha de aggregatePlacementDailyRows/aggregateCampaignDailyRows —
   // campaignNameColumn OU adSetNameColumn configurado mas ausente da
@@ -781,6 +818,7 @@ export function aggregateAdSetDailyRows(rows: RawSourceRow[], columns: Aggregate
       impressions: null,
       reach: null,
       clicks: null,
+      linkClicks: null,
       invalidRowCount: 0,
     };
 
@@ -813,6 +851,11 @@ export function aggregateAdSetDailyRows(rows: RawSourceRow[], columns: Aggregate
     if (clicksColumn) {
       const value = parseSourceNumericValue(row[clicksColumn]);
       if (value.kind === "ok") group.clicks = (group.clicks ?? 0) + value.value;
+      if (value.kind === "invalid") group.invalidRowCount += 1;
+    }
+    if (linkClicksColumn) {
+      const value = parseSourceNumericValue(row[linkClicksColumn]);
+      if (value.kind === "ok") group.linkClicks = (group.linkClicks ?? 0) + value.value;
       if (value.kind === "invalid") group.invalidRowCount += 1;
     }
 
@@ -893,6 +936,7 @@ export interface AdSetDailyMetricsUpsertRow {
   impressions: number | null;
   reach: number | null;
   clicks: number | null;
+  link_clicks: number | null;
   result_type: PerformanceGoal | null;
   result_count: number | null;
   revenue: number | null;
@@ -930,6 +974,7 @@ export function buildAdSetDailyMetricsUpsertRows(
       impressions: row.impressions,
       reach: row.reach,
       clicks: row.clicks,
+      link_clicks: row.linkClicks,
       result_type: resultCount !== undefined ? (options?.resultType ?? null) : null,
       result_count: resultCount !== undefined ? Math.round(resultCount) : null,
       revenue: options?.revenueByGroup?.get(key) ?? null,
@@ -948,6 +993,7 @@ export interface CampaignDailyMetricsUpsertRow {
   impressions: number | null;
   reach: number | null;
   clicks: number | null;
+  link_clicks: number | null;
   result_type: PerformanceGoal | null;
   result_count: number | null;
   revenue: number | null;
@@ -983,6 +1029,7 @@ export function buildCampaignDailyMetricsUpsertRows(
       impressions: row.impressions,
       reach: row.reach,
       clicks: row.clicks,
+      link_clicks: row.linkClicks,
       result_type: resultCount !== undefined ? (options?.resultType ?? null) : null,
       result_count: resultCount !== undefined ? Math.round(resultCount) : null,
       revenue: options?.revenueByGroup?.get(key) ?? null,
