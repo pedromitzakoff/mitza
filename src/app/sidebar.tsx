@@ -8,7 +8,6 @@ import {
   Briefcase,
   ChevronRight,
   Clock,
-  ListChecks,
   LogOut,
   Menu,
   PanelLeftClose,
@@ -125,13 +124,6 @@ interface NavItem {
   adminOnly?: boolean;
   isActive: (pathname: string) => boolean;
 }
-
-/** MITZA ONE — Minha Rotina (Fase 1 do pedido): item FIXO no topo da
- * Sidebar, acima da busca/carteira — independente de qual cliente está
- * ativo (nunca um link contextual de cliente, por isso fora de
- * `GESTAO_ITEMS`, que vive no rodapé da carteira). Mesmo
- * componente `NavLink` de sempre, só outra posição de render. */
-const MINHA_ROTINA_ITEM: NavItem = { label: "Minha Rotina", href: "/minha-rotina", icon: ListChecks, isActive: (p) => p.startsWith("/minha-rotina") };
 
 /** "Gestão" — administração/infraestrutura da carteira (busca/filtros/
  * `wallet_position`), nunca navegação do dia a dia (mesmo raciocínio da
@@ -391,13 +383,6 @@ function SidebarContent({
         >
           {collapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
         </button>
-      </div>
-
-      {/* MINHA ROTINA — item fixo, acima da busca/carteira (seção Fase 1 do
-          pedido), visível em qualquer estado (expandida/recolhida, mobile/
-          desktop) — nunca depende de qual cliente está ativo. */}
-      <div className="shrink-0 px-2.5 pb-1.5">
-        <NavLink item={MINHA_ROTINA_ITEM} pathname={pathname} collapsed={collapsed} />
       </div>
 
       {/* CARTEIRA — seção 1 do pedido. Busca + lista ficam JUNTAS numa

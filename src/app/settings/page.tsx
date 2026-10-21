@@ -8,15 +8,6 @@ interface SettingsLink {
   description: string;
 }
 
-/** Agrupamento do índice (Etapa "Evolução da Settings") — a auditoria
- * mostrou só 2 famílias reais por trás das 4 telas, não os 5-6 grupos de
- * referência inicialmente cogitados: cadastro/arquivo de Clientes, e os
- * modelos operacionais aplicados a eles (Tarefas padrão de sprint +
- * Recorrências, hoje com implementação quase gêmea). "Rotina operacional"
- * (não "Planejamento") de propósito — "Planejamento" já é o termo fixo do
- * produto pra orçamento mensal (`resolveClientMonthlyPlan`,
- * MonthInvestmentSummary); reaproveitar a palavra aqui criaria uma
- * ambiguidade nova em vez de resolver uma. */
 const SETTINGS_GROUPS: { label: string; items: SettingsLink[] }[] = [
   {
     label: "Equipe",
@@ -51,22 +42,6 @@ const SETTINGS_GROUPS: { label: string; items: SettingsLink[] }[] = [
         href: "/settings/meta-connections",
         title: "Conexões Meta",
         description: "Quais clientes ainda estão sem conta de anúncio, campanha, público ou anúncio conectados no Meta.",
-      },
-    ],
-  },
-  {
-    label: "Rotina operacional",
-    items: [
-      {
-        href: "/settings/sprint-task-templates",
-        title: "Tarefas padrão de sprint",
-        description: "Plano operacional aplicado a todos os clientes ou a clientes selecionados.",
-      },
-      {
-        href: "/settings/recurring-tasks",
-        title: "Recorrências",
-        description:
-          "Checar saldo, Reportar cliente, Otimização e outras tarefas permanentes — meta semanal e histórico, nunca uma tarefa nova por sprint.",
       },
     ],
   },
