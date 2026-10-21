@@ -3,11 +3,9 @@
 import { useRef, useTransition } from "react";
 import type { CommentableType } from "@/lib/supabase/database.types";
 import { createCommentAction } from "./comments-actions";
-import { toggleCommentReportSelectionAction } from "@/app/reports/report-actions";
 import { useToast } from "@/app/toast-provider";
 import { isRedirectSignal } from "@/lib/next-redirect";
 import { formatDateTime } from "@/lib/format";
-import { SubmitButton } from "@/app/submit-button";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export interface CommentItem {
@@ -16,10 +14,11 @@ export interface CommentItem {
   content: string;
   created_at: string;
   author: { name: string } | null;
-  /** Só populado por quem já sabe se este comentário está marcado "incluir
-   * no fechamento mensal" (hoje, só a tela Sprints) — undefined em qualquer
-   * outro lugar que renderize CommentThread simplesmente esconde a ação,
-   * em vez de arriscar mostrar um estado desatualizado. */
+  /** Campo legado do workflow operacional de envio de relatórios (removido
+   * na Etapa 1.5 da reestruturação KOFF Analytics, junto com
+   * `toggleCommentReportSelectionAction`) — não aciona mais nenhuma ação
+   * nesta tela; mantido só porque `/sprints` (ainda não removida) continua
+   * populando o valor. */
   includedInReport?: boolean;
 }
 
@@ -76,24 +75,6 @@ export function CommentThread({
               <span className="font-medium text-overview-text-primary">{comment.author?.name ?? "Alguém"}</span>{" "}
               · {formatDateTime(comment.created_at)}
               <p>{comment.content}</p>
-              {commentableType === "sprint" && comment.includedInReport !== undefined && (
-                <form
-                  action={toggleCommentReportSelectionAction.bind(
-                    null,
-                    comment.id,
-                    commentableId,
-                    clientId,
-                    comment.includedInReport,
-                  )}
-                >
-                  <SubmitButton
-                    pendingChildren="Salvando..."
-                    className={comment.includedInReport ? "font-medium text-brand hover:underline" : "hover:text-brand hover:underline"}
-                  >
-                    {comment.includedInReport ? "✓ Incluído no relatório mensal" : "Adicionar ao relatório mensal"}
-                  </SubmitButton>
-                </form>
-              )}
             </li>
           ))}
         </ul>

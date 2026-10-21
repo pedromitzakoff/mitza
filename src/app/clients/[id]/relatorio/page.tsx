@@ -7,9 +7,6 @@ import { buildPerformanceReportData } from "@/lib/performance-report/report-data
 import { buildPerformanceReportDocument } from "@/lib/performance-report/report-document";
 import { getReportShareLinkStatus } from "@/lib/report-share-links";
 import { fetchClientFunnels, listCampaignsForFunnelClassification } from "@/lib/client-funnels-data";
-import { defaultReportPeriod } from "@/lib/client-reports";
-import { fetchClientReportDetail } from "../../client-report-data";
-import { ClientReportWizard } from "../../client-report-wizard";
 import { FunnelsSection } from "../../funnels-section";
 import { ReportPeriodControl } from "./report-period-control";
 import { buildReportPdfHref } from "./report-period-nav";
@@ -50,10 +47,6 @@ export default async function ClientPerformanceReportPage({
     analyticsStart?: string;
     analyticsEnd?: string;
     view?: string;
-    clientReport?: string;
-    reportRecurringTaskId?: string;
-    reportPeriodStart?: string;
-    reportPeriodEnd?: string;
   }>;
 }) {
   const { id } = await params;
@@ -62,10 +55,6 @@ export default async function ClientPerformanceReportPage({
     analyticsStart: startParam,
     analyticsEnd: endParam,
     view: viewParam,
-    clientReport: clientReportParam,
-    reportRecurringTaskId,
-    reportPeriodStart: reportPeriodStartParam,
-    reportPeriodEnd: reportPeriodEndParam,
   } = await searchParams;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
@@ -111,16 +100,6 @@ export default async function ClientPerformanceReportPage({
     fetchClientFunnels(supabase, id),
     listCampaignsForFunnelClassification(supabase, id, today),
   ]);
-
-  // Assistente de Relatório ("Reportar cliente", decisão 5: fica em
-  // Performance — "transforma os dados/resultados em comunicação para o
-  // cliente"). Entrada só pelo drawer de recorrência em Operação/`/sprints`
-  // (`?clientReport=new&reportRecurringTaskId=...`) — nenhum botão solto
-  // aqui ainda (mesmo comportamento de sempre, só a rota mudou).
-  const isNewClientReport = clientReportParam === "new";
-  const clientReportDetail = clientReportParam && !isNewClientReport ? await fetchClientReportDetail(supabase, id, clientReportParam) : null;
-  const suggestedReportPeriod =
-    reportPeriodStartParam && reportPeriodEndParam ? { start: reportPeriodStartParam, end: reportPeriodEndParam } : defaultReportPeriod(today);
 
   return (
     <div className={`mx-auto w-full ${WORKSPACE_CONTENT_MAX_WIDTH_CLASS} px-4 py-4 sm:px-6 sm:py-6 lg:px-10`}>
@@ -169,33 +148,6 @@ export default async function ClientPerformanceReportPage({
           <FunnelsSection clientId={id} returnTo={returnTo} funnels={clientFunnels} campaigns={funnelClassificationCampaigns} isAdmin={isAdmin} />
         </div>
       </details>
-
-      {isNewClientReport && (
-        <ClientReportWizard
-          clientId={id}
-          clientName={client.name}
-          closeHref={returnTo}
-          initialPeriodStart={suggestedReportPeriod.start}
-          initialPeriodEnd={suggestedReportPeriod.end}
-          recurringTaskId={reportRecurringTaskId ?? null}
-        />
-      )}
-
-      {clientReportDetail && (
-        <ClientReportWizard
-          clientId={id}
-          clientName={client.name}
-          closeHref={returnTo}
-          reportId={clientReportDetail.id}
-          initialPeriodStart={clientReportDetail.periodStart}
-          initialPeriodEnd={clientReportDetail.periodEnd}
-          initialMetrics={clientReportDetail.metrics}
-          initialObservations={clientReportDetail.observations}
-          initialStatus={clientReportDetail.status}
-          initialSentAt={clientReportDetail.sentAt}
-          initialSentByName={clientReportDetail.sentByName}
-        />
-      )}
     </div>
   );
 }

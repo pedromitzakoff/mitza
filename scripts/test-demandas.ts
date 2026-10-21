@@ -380,7 +380,6 @@ console.log("\n13 — correção de conceito: Pendências mostra só DEMANDA man
 console.log("\n14 — regra estrutural 'origin': gravada explicitamente em CADA caminho que insere em tasks (nunca inferida depois)\n");
 {
   const tasksActionsSource = readFileSync(join(__dirname, "../src/app/clients/tasks-actions.ts"), "utf8");
-  const reportActionsSource = readFileSync(join(__dirname, "../src/app/reports/report-actions.ts"), "utf8");
   const migrationSource = readFileSync(join(__dirname, "../supabase/tasks-origin.sql"), "utf8");
 
   ok("performCreateTask (criação manual — toda tela) grava origin: 'manual'", tasksActionsSource.includes('origin: "manual",'));
@@ -388,10 +387,10 @@ console.log("\n14 — regra estrutural 'origin': gravada explicitamente em CADA 
     "completeTaskAction (próxima ocorrência de recorrência leve, sempre configurada manualmente) grava origin: 'manual'",
     tasksActionsSource.includes('origin: "manual" as const,'),
   );
-  ok(
-    "sendActionItemToSprintAction (Relatório -> \"Enviar para próxima sprint\", clique humano) grava origin: 'manual'",
-    reportActionsSource.includes('origin: "manual" as const,'),
-  );
+  // sendActionItemToSprintAction ("Relatório -> Enviar para próxima
+  // sprint") foi removida na Etapa 1.5 da reestruturação KOFF Analytics,
+  // junto com o painel operacional /reports — esse caminho de criação de
+  // tasks não existe mais.
   ok(
     "generate_sprint_tasks_from_templates (ÚNICO caminho 100% automático) grava origin: 'template' na migration",
     /insert into tasks \([\s\S]*?origin[\s\S]*?\)[\s\S]*?'template'/.test(migrationSource),

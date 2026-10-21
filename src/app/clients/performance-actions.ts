@@ -202,16 +202,12 @@ export async function updateClientPerformanceGoalAction(
     return { error: toUserFacingError(error, "Não foi possível atualizar o objetivo de performance.") };
   }
 
-  // Visão Geral, Sprints, Relatórios e a página do próprio cliente precisam
-  // refletir o novo objetivo (Parte 3 do pedido) — Relatórios não exibe o
-  // objetivo diretamente hoje, mas é revalidado por segurança/futuro mesmo
-  // assim, já que consome dados do mesmo cliente.
+  // Visão Geral, Sprints e a página do próprio cliente precisam refletir o
+  // novo objetivo (Parte 3 do pedido).
   revalidatePath("/");
   revalidatePath("/clients");
   revalidatePath("/sprints");
-  revalidatePath("/reports");
   revalidatePath(`/clients/${clientId}`);
-  revalidatePath(`/reports/${clientId}`);
 
   return {};
 }

@@ -24,7 +24,6 @@ const CONTEXT_LABEL_RULES: { test: (path: string) => boolean; label: string }[] 
   { test: (path) => path.startsWith("/sprints"), label: "Sprints" },
   { test: (path) => path === "/clients" || path === "/clients/new", label: "Clientes" },
   { test: (path) => path.startsWith("/clients/"), label: "Cliente" },
-  { test: (path) => path.startsWith("/reports"), label: "Relatórios" },
   { test: (path) => path.startsWith("/settings"), label: "Configurações" },
 ];
 

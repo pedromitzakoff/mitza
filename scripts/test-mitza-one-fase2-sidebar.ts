@@ -201,7 +201,9 @@ console.log("\nI — Rotas preservadas (seção 8 do pedido): nenhuma removida/r
   // /team e /achievements foram removidas na Etapa 1.4 da reestruturação
   // KOFF Analytics (gamificação e portfólio de equipe saíram do produto).
   ok("/operation, /demandas, /clients, /settings continuam existindo", loadSource("src", "app", "operation", "page.tsx").length > 0 && loadSource("src", "app", "demandas", "page.tsx").length > 0 && loadSource("src", "app", "clients", "page.tsx").length > 0 && loadSource("src", "app", "settings", "page.tsx").length > 0);
-  ok("/sprints, /reports não foram tocados", loadSource("src", "app", "sprints", "page.tsx").length > 0 && loadSource("src", "app", "reports", "page.tsx").length > 0);
+  // /reports (painel operacional de fechamento) foi removida na Etapa 1.5
+  // da reestruturação KOFF Analytics.
+  ok("/sprints não foi tocada", loadSource("src", "app", "sprints", "page.tsx").length > 0);
   ok("reminders/LegacyGlobalDashboard não foram alterados nesta fase (nenhum arquivo de reminders tocado; LegacyGlobalDashboard continua export órfão em app/page.tsx)", loadSource("src", "app", "page.tsx").includes("export async function LegacyGlobalDashboard("));
 }
 
