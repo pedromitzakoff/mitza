@@ -128,6 +128,42 @@ export function computeAverageTicket(revenue: number | null, resultCount: number
   return safeDivide(revenue, resultCount);
 }
 
+/**
+ * CPM — custo por mil impressões. `null` sem impressões no escopo (via
+ * `safeDivide`, nunca `0`/`Infinity`).
+ */
+export function computeCpm(spend: number, impressions: number): number | null {
+  return safeDivide(spend * 1000, impressions);
+}
+
+/** CTR — cliques ÷ impressões (fração 0-1, mesma convenção de
+ * `computeConversionRate`; quem exibe formata com `formatPercent(ctr * 100)`). */
+export function computeCtr(clicks: number, impressions: number): number | null {
+  return safeDivide(clicks, impressions);
+}
+
+/** CPC — custo por clique. `null` sem clique no escopo. */
+export function computeCpc(spend: number, clicks: number): number | null {
+  return safeDivide(spend, clicks);
+}
+
+/**
+ * Frequência — impressões ÷ alcance, SEMPRE do MESMO escopo/período.
+ * MITZA ONE — KOFF Analytics Fase 2 (Dashboard Meta Ads), pedido explícito
+ * do usuário: "frequência e alcance devem respeitar a deduplicação do
+ * período; não calcule frequência de períodos longos somando alcance
+ * diário". Alcance não é aditivo — a Meta deduplica usuários únicos dentro
+ * da janela consultada, então somar `campaign_daily_metrics.reach` (ou
+ * equivalente por ad set/criativo) entre vários dias conta a mesma pessoa
+ * de novo em cada dia que ela viu o anúncio. `reach`/`impressions` aqui só
+ * podem vir de uma consulta que já cobre o período inteiro de uma vez (ver
+ * `fetchMetaApiPeriodReach`, `lib/meta-api-fetch.ts`), nunca de uma soma de
+ * linhas diárias.
+ */
+export function computeFrequency(impressions: number, reach: number): number | null {
+  return safeDivide(impressions, reach);
+}
+
 /** Taxa de conversão — vendas ÷ carrinhos (fração 0-1, nunca 0-100; quem
  * exibe formata com `formatPercent(rate * 100)`, mesma convenção do resto da
  * MITZA). Carrinho é sempre uma métrica SECUNDÁRIA (nunca um

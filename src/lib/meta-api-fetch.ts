@@ -138,3 +138,101 @@ export async function fetchMetaApiInsightsForAccount(accountId: string, since: s
   }
   return rows;
 }
+
+export interface MetaApiPeriodReachRow {
+  campaignId?: string;
+  campaignName?: string;
+  adsetId?: string;
+  adsetName?: string;
+  adId?: string;
+  adName?: string;
+  impressions: number;
+  reach: number;
+}
+
+const PERIOD_REACH_FIELDS = "campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,impressions,reach";
+
+interface MetaPeriodReachRawRow {
+  campaign_id?: string;
+  campaign_name?: string;
+  adset_id?: string;
+  adset_name?: string;
+  ad_id?: string;
+  ad_name?: string;
+  impressions?: string;
+  reach?: string;
+}
+
+interface MetaPeriodReachResponse {
+  data: MetaPeriodReachRawRow[];
+  paging?: { next?: string };
+  error?: { message: string };
+}
+
+/**
+ * MITZA ONE — KOFF Analytics Fase 2 (Dashboard Meta Ads), pedido explícito
+ * do usuário: "frequência e alcance devem respeitar a deduplicação do
+ * período; não calcule frequência de períodos longos somando alcance
+ * diário". `fetchMetaApiInsightsForAccount` (acima) usa `time_increment=1`
+ * — correto pra ingestão diária, mas o `reach` de cada linha é deduplicado
+ * só DENTRO daquele dia; somar essas linhas entre dias conta a mesma pessoa
+ * de novo em cada dia que ela viu o anúncio.
+ *
+ * Esta função busca o alcance/impressões do PERÍODO INTEIRO de uma vez só
+ * (sem `time_increment` — a Graph API devolve UMA linha por entidade já
+ * deduplicada pro intervalo pedido) — é a ÚNICA fonte correta de alcance de
+ * período na MITZA; nunca somar `campaign_daily_metrics.reach`/
+ * `ad_set_daily_metrics.reach`/`ad_creative_daily_metrics.reach` entre datas
+ * pra este fim. `level` decide a granularidade (conta/campanha/conjunto/
+ * anúncio) — mesma convenção de `fetchMetaApiInsightsForAccount`.
+ *
+ * Ainda não conectada a nenhuma tela (Fundação do Dashboard Meta Ads,
+ * Etapa 2.1) — `buildMetaAdsDashboardData` ainda devolve `reach: null`;
+ * entra em uso a partir da etapa que exibir alcance/frequência nos
+ * KPIs/gráficos.
+ */
+export async function fetchMetaApiPeriodReach(
+  accountId: string,
+  level: "account" | "campaign" | "adset" | "ad",
+  since: string,
+  until: string,
+): Promise<MetaApiPeriodReachRow[]> {
+  const accessToken = process.env.META_API_ACCESS_TOKEN;
+  if (!accessToken) {
+    throw new Error("META_API_ACCESS_TOKEN não configurado");
+  }
+
+  const url = new URL(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/${accountId}/insights`);
+  url.searchParams.set("level", level);
+  url.searchParams.set("time_range", JSON.stringify({ since, until }));
+  url.searchParams.set("fields", PERIOD_REACH_FIELDS);
+  url.searchParams.set("access_token", accessToken);
+
+  const rows: MetaApiPeriodReachRow[] = [];
+  let nextUrl: string | undefined = url.toString();
+
+  while (nextUrl) {
+    const response: Response = await fetch(nextUrl);
+    const json: MetaPeriodReachResponse = await response.json();
+
+    if (!response.ok) {
+      throw new Error(`Meta Insights API error (${accountId}, period reach): ${json?.error?.message ?? response.statusText}`);
+    }
+
+    for (const row of json.data ?? []) {
+      rows.push({
+        campaignId: row.campaign_id,
+        campaignName: row.campaign_name,
+        adsetId: row.adset_id,
+        adsetName: row.adset_name,
+        adId: row.ad_id,
+        adName: row.ad_name,
+        impressions: Number(row.impressions ?? 0),
+        reach: Number(row.reach ?? 0),
+      });
+    }
+    nextUrl = json.paging?.next;
+  }
+
+  return rows;
+}
