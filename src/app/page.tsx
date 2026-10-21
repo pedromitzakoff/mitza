@@ -41,11 +41,6 @@ import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
 import { GlobalScopeSelect } from "./global-scope-select";
 import { OperationMetric } from "./operation-metric";
 import { PLATFORM_LABEL } from "./client-objective-table";
-import { getCompletedReminders, getOpenReminders, getReminderById } from "@/lib/reminders-data";
-import { computeReminderCounts, filterReminders, sortReminders, type ReminderFilter } from "@/lib/reminders";
-import { RemindersPanel } from "./reminders-panel";
-import { RemindersCompletedDrawer } from "./reminders-completed-drawer";
-import { ReminderFormDrawer } from "./reminder-form-drawer";
 import { fetchRecentAgencyEvents } from "@/lib/agency-timeline";
 import { Button, IconButton } from "@/components/workspace/button";
 import { SectionHeader } from "@/components/workspace/section-header";
@@ -133,10 +128,6 @@ export async function LegacyGlobalDashboard({
     sync?: string;
     meta?: string;
     platform?: string;
-    pendenciaFiltro?: string;
-    pendenciaModal?: string;
-    pendenciasConcluidas?: string;
-    pendenciaExpandir?: string;
   }>;
 }) {
   // Instrumentação temporária (Navigation Performance & Perceived Speed 1.0)
@@ -168,8 +159,6 @@ export async function LegacyGlobalDashboard({
   const ritmoFilter = (params.ritmo ?? "todos") as RitmoFilter;
   const sprintBucketFilter = params.sprintBucket as SprintFilterBucket | undefined;
   const platformFilter = (params.platform ?? "consolidado") as PlatformFilter;
-  const pendenciaFiltroFilter = (params.pendenciaFiltro ?? "todas") as ReminderFilter;
-  const pendenciaExpandirFilter = params.pendenciaExpandir === "1";
   const syncFilter = params.sync;
   const metaFilter = params.meta;
 
@@ -203,7 +192,6 @@ export async function LegacyGlobalDashboard({
       performanceTargetHistory,
     ],
     clientOperationalStates,
-    openReminders,
     recentAgencyEvents,
     metaOperationStates,
     googleOperationStates,
@@ -336,7 +324,6 @@ export async function LegacyGlobalDashboard({
     ),
     ]),
     loadClientOperationalStates(supabase, monthRange.firstDay),
-    getOpenReminders(supabase),
     // Etapa "Timeline 2.0 — Revisão de Acoplamento": "Aconteceu recentemente"
     // consome `fetchRecentAgencyEvents` (`lib/agency-timeline.ts`) — uma
     // casca fina sobre o MESMO núcleo canônico que `/timeline` usa
@@ -866,8 +853,6 @@ export async function LegacyGlobalDashboard({
     if (syncFilter) next.set("sync", syncFilter);
     if (metaFilter) next.set("meta", metaFilter);
     if (platformFilter !== "consolidado") next.set("platform", platformFilter);
-    if (pendenciaFiltroFilter !== "todas") next.set("pendenciaFiltro", pendenciaFiltroFilter);
-    if (pendenciaExpandirFilter) next.set("pendenciaExpandir", "1");
 
     for (const [key, value] of Object.entries(overrides)) {
       if (value === "") next.delete(key);
@@ -876,32 +861,6 @@ export async function LegacyGlobalDashboard({
 
     return `/?${next.toString()}`;
   };
-
-  // Módulo "Lembretes" — independente de mês/gestor/plataforma de
-  // propósito (são registros rápidos, não parte do recorte financeiro/
-  // operacional). Mesmo espírito de `prioritiesUrl`: abrir/fechar os
-  // overlays (drawer de adicionar/editar, "Ver concluídas") nunca "gruda"
-  // em outras navegações — só o filtro de chips (Todas/Agência/Clientes/
-  // Minhas) é preservado via `buildUrl` (mesmo tratamento de `ritmo`/
-  // `tasks`).
-  const remindersSorted = sortReminders(openReminders, todayStr);
-  const reminderCounts = computeReminderCounts(remindersSorted, todayStr);
-  const remindersFiltered = filterReminders(remindersSorted, pendenciaFiltroFilter, profile.id);
-  const buildReminderFilterHref = (filter: ReminderFilter) => buildUrl({ pendenciaFiltro: filter === "todas" ? "" : filter });
-  const buildReminderEditHref = (reminderId: string) => buildUrl({ pendenciaModal: reminderId });
-  const addReminderHref = buildUrl({ pendenciaModal: "new" });
-  const closeReminderModalHref = buildUrl({ pendenciaModal: "" });
-  const openCompletedRemindersHref = buildUrl({ pendenciasConcluidas: "1" });
-  const closeCompletedRemindersHref = buildUrl({ pendenciasConcluidas: "" });
-  const expandRemindersHref = buildUrl({ pendenciaExpandir: "1" });
-  const collapseRemindersHref = buildUrl({ pendenciaExpandir: "" });
-
-  const isNewReminderModal = params.pendenciaModal === "new";
-  const editingReminder =
-    params.pendenciaModal && !isNewReminderModal ? await getReminderById(supabase, params.pendenciaModal) : null;
-  const showReminderModal = isNewReminderModal || Boolean(editingReminder);
-  const showCompletedReminders = params.pendenciasConcluidas === "1";
-  const completedReminders = showCompletedReminders ? await getCompletedReminders(supabase) : [];
 
   // Etapa "Timeline 2.0 — Revisão de Acoplamento": "Aconteceu recentemente"
   // é um RESUMO do MESMO núcleo canônico de `/timeline`
@@ -1166,49 +1125,6 @@ export async function LegacyGlobalDashboard({
             <span className="shrink-0 text-xs font-medium text-brand">Ver tudo →</span>
           </Link>
         </div>
-
-        {/* Módulo "Lembretes": registros rápidos e leves (agência/cliente).
-            Etapa "Reformulação da Home": mesmo `border-t` das seções acima
-            (era um card com borda própria) — não deve dominar a página
-            quando vazio, nem quando tem só 1-2 itens. Lista sempre capada
-            (`REMINDERS_HOME_VISIBLE_LIMIT`, dentro de `RemindersPanel`),
-            "Ver todas" expande via `pendenciaExpandir` (mesmo padrão de
-            `pendenciasConcluidas`). Nenhuma funcionalidade removida:
-            adicionar/editar/concluir/filtrar continuam intactos. */}
-        <div className="mt-6 border-t border-overview-border pt-4">
-          <RemindersPanel
-            reminders={remindersFiltered}
-            todayStr={todayStr}
-            counts={reminderCounts}
-            filter={pendenciaFiltroFilter}
-            buildFilterHref={buildReminderFilterHref}
-            addHref={addReminderHref}
-            completedHref={openCompletedRemindersHref}
-            buildEditHref={buildReminderEditHref}
-            expanded={pendenciaExpandirFilter}
-            expandHref={expandRemindersHref}
-            collapseHref={collapseRemindersHref}
-          />
-        </div>
-
-        {showReminderModal && (
-          <ReminderFormDrawer
-            closeHref={closeReminderModalHref}
-            clients={clientOptions}
-            teamMembers={gestores ?? []}
-            reminderId={editingReminder?.id}
-            initialTitle={editingReminder?.title}
-            initialScope={editingReminder?.scope}
-            initialClientId={editingReminder?.clientId}
-            initialAssigneeId={editingReminder?.assigneeId}
-            initialDueDate={editingReminder?.dueDate}
-            initialNotes={editingReminder?.notes}
-          />
-        )}
-
-        {showCompletedReminders && (
-          <RemindersCompletedDrawer reminders={completedReminders} closeHref={closeCompletedRemindersHref} />
-        )}
       </div>
     </div>
   );
