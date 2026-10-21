@@ -1,6 +1,6 @@
 import { buildPercentChangeComparison, type AnalyticsKpiComparison } from "@/lib/analytics";
 import { formatCurrency, formatCount, formatPercent } from "@/lib/format";
-import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
+import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import type { MetaAdsDashboardData, MetaAdsReachSnapshot } from "./dashboard-data";
 
 /**
@@ -83,6 +83,18 @@ function reachUnavailableLabel(snapshot: MetaAdsReachSnapshot): string {
   }
 }
 
+/** Rótulo dinâmico de "Resultados"/"Custo por resultado" por objetivo do
+ * cliente (`PERFORMANCE_GOALS`) — mesma fonte usada pelo Cockpit
+ * (`CockpitResultCard`/`CockpitCostCard`), nunca um segundo rótulo fixo.
+ * Exportada: a Etapa 2.3 (`evolution-data.ts`) reaproveita pro seletor de
+ * métrica do gráfico, nunca duplicando esta lógica. */
+export function resolveResultLabels(resultType: PerformanceGoal | null): { resultLabel: string; costLabel: string } {
+  return {
+    resultLabel: resultType ? PERFORMANCE_GOALS[resultType].resultMetricLabel : "Resultados",
+    costLabel: resultType ? PERFORMANCE_GOALS[resultType].costMetricShortLabel : "Custo por resultado",
+  };
+}
+
 /**
  * Monta os 11 cards, na ordem canônica, a partir dos dados já buscados.
  * Pura — testável sem rede/banco, só com um `MetaAdsDashboardData` montado
@@ -93,8 +105,7 @@ export function buildMetricCardViewModels(data: MetaAdsDashboardData): MetricCar
   const current = comparison.current;
   const previous = comparison.previous;
 
-  const resultLabel = resultType ? PERFORMANCE_GOALS[resultType].resultMetricLabel : "Resultados";
-  const costLabel = resultType ? PERFORMANCE_GOALS[resultType].costMetricShortLabel : "Custo por resultado";
+  const { resultLabel, costLabel } = resolveResultLabels(resultType);
 
   const reachCurrent = reachComparison.current;
   const reachPrevious = reachComparison.previous;

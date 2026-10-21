@@ -7,6 +7,7 @@ import { computeCpm, computeCtr, computeCpc, computeCostPerResult, computeRoas, 
 import { fetchMetaApiPeriodReach } from "@/lib/meta-api-fetch";
 import { resolveLatestSuccessAt } from "@/lib/data-trust";
 import type { PerformanceGoal } from "@/lib/performance-goals";
+import { buildEvolutionSeries, type ChartMetricSeries } from "./evolution-data";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -115,6 +116,11 @@ export interface MetaAdsDashboardData {
   client: { id: string; name: string };
   comparison: MetaAdsPeriodComparison;
   reachComparison: MetaAdsReachComparison;
+  /** Etapa 2.3 — séries diárias das 9 métricas selecionáveis no gráfico de
+   * evolução, pro período atual e pro anterior equivalente. Nunca inclui
+   * alcance/frequência (ver doc-comment de `buildEvolutionSeries`,
+   * `lib/meta-ads-dashboard/evolution-data.ts`). */
+  evolution: ChartMetricSeries[];
   /** Resultados somados de `campaign_daily_metrics.result_count` são SEMPRE
    * atribuídos pela Meta (vêm de `actions`/`metric_mappings`, dentro da
    * janela de atribuição do próprio Ads Manager) — nunca confirmados por
@@ -297,6 +303,7 @@ export async function buildMetaAdsDashboardData(
 
   const comparison = buildPeriodComparison(period, currentRows, previousRows);
   const reachComparison = buildReachComparison(currentReach, previousReach);
+  const evolution = buildEvolutionSeries(period, previousPeriod, currentRows, previousRows, client.performance_goal);
   const lastSyncAt = resolveLatestSuccessAt(
     importSourceRows.map((row) => ({ enabled: row.enabled, lastSuccessAt: row.last_success_at })),
   );
@@ -305,6 +312,7 @@ export async function buildMetaAdsDashboardData(
     client: { id: client.id, name: client.name },
     comparison,
     reachComparison,
+    evolution,
     resultSource: "meta_attributed",
     resultType: client.performance_goal,
     lastSyncAt,

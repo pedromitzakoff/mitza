@@ -9,28 +9,27 @@ import { DataFreshnessTimer } from "../../data-freshness-timer";
 import { WORKSPACE_CONTENT_MAX_WIDTH_CLASS } from "../../workspace-container";
 import { MetaAdsPeriodControl } from "./period-control";
 import { MetricCardsPanel } from "./metric-cards-panel";
+import { EvolutionSection } from "./evolution-section";
 
 /**
- * MITZA ONE — KOFF Analytics Fase 2, Etapa 2.2 (Cards de KPI configuráveis)
- * — `/clients/[id]/meta-ads`, decisão 1 da Fase 2: dashboard principal de
- * mídia paga do cliente, independente de `/relatorio` (PDF/link externo,
- * intocado). Esta etapa transforma o esqueleto da Etapa 2.1 num painel de
- * indicadores completo:
+ * MITZA ONE — KOFF Analytics Fase 2 — `/clients/[id]/meta-ads`, decisão 1
+ * da Fase 2: dashboard principal de mídia paga do cliente, independente de
+ * `/relatorio` (PDF/link externo, intocado).
  *
  * - `preset`/`start`/`end` na URL (vocabulário PRÓPRIO desta rota, nunca
  *   `analyticsPreset`/`analyticsStart`/`analyticsEnd` do Relatório) são a
  *   ÚNICA fonte de verdade do período em exibição — refresh/back/forward
  *   sempre reproduzem exatamente o mesmo período, mesma disciplina do resto
  *   da MITZA. Toda troca de período (`MetaAdsPeriodControl`) navega pra
- *   ESTA MESMA rota, nunca pra fora (seção 6 do pedido: "experiência de
- *   página única").
- * - `buildMetaAdsDashboardData` já busca o período atual E o anterior
- *   (investimento/resultado/alcance/frequência), então os 11 cards
- *   (`buildMetricCardViewModels`) sempre respeitam o MESMO período
- *   selecionado, com a MESMA comparação.
- * - `MetricCardsPanel` (Client Component) decide só QUAIS cards aparecem e
- *   EM QUE ORDEM (preferência pessoal, localStorage) — nenhum valor é
- *   recalculado ali, só apresentado.
+ *   ESTA MESMA rota, nunca pra fora ("experiência de página única").
+ * - `buildMetaAdsDashboardData` busca TUDO de uma vez (período atual e
+ *   anterior: investimento/resultado/alcance/frequência/séries diárias),
+ *   então cards E gráficos sempre respeitam o MESMO período selecionado,
+ *   com a MESMA comparação — nenhuma segunda consulta.
+ * - Ordem da tela (Etapa 2.3, pedido explícito do usuário): filtros globais
+ *   → cards de KPI (`MetricCardsPanel`) → gráficos de evolução
+ *   (`EvolutionSection`) → futura exploração de campanhas/conjuntos/
+ *   anúncios (ainda não implementada, próxima etapa).
  */
 export default async function ClientMetaAdsDashboardPage({
   params,
@@ -83,6 +82,8 @@ export default async function ClientMetaAdsDashboardPage({
         <div className="mt-4">
           <MetricCardsPanel clientId={id} cards={cards} />
         </div>
+
+        <EvolutionSection series={data.evolution} />
       </div>
     </div>
   );

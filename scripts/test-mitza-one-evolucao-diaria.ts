@@ -282,10 +282,16 @@ console.log("\nJ — Estados e UI (estrutural): tooltip, múltiplos objetivos, f
   ok("frescor dos dados mostra 'Dados até' distinto de 'Última sincronização' (seção 5 do pedido, nunca a mesma frase)", sectionSource.includes("Dados até") && sectionSource.includes("Última sincronização:"));
   ok("estado desconhecido de frescor nunca inventa uma data — cai em texto neutro", sectionSource.includes('"Frescor dos dados: desconhecido"'));
   ok("estados vazios (no_goal/unavailable) tratados sem gráfico fabricado", sectionSource.includes('view.kind === "no_goal"') && sectionSource.includes('view.kind === "unavailable"'));
-  ok("nenhuma biblioteca de gráfico nova foi instalada (barras em divs puros, mesma convenção já usada no Cockpit)", !sectionSource.includes('from "recharts"') && !sectionSource.includes('from "chart.js"') && !sectionSource.includes('from "d3"'));
-
-  const packageJson = loadSource("package.json");
-  ok("package.json não ganhou nenhuma dependência de gráfico nova", !/"(recharts|chart\.js|victory|visx|d3|nivo)"\s*:/.test(packageJson));
+  // KOFF Analytics Fase 2, Etapa 2.3 (Dashboard Meta Ads — Gráficos
+  // interativos): `recharts` foi instalado com aprovação explícita do
+  // usuário, mas só pra `clients/[id]/meta-ads/evolution-section.tsx` —
+  // o invariante real que esta suite protege é "o CARD DE EVOLUÇÃO DIÁRIA
+  // DO COCKPIT continua em divs puros, sem biblioteca", nunca "nenhuma
+  // biblioteca de gráfico existe em lugar nenhum do app" (checagem contra
+  // `package.json` inteiro, que a Etapa 2.3 tornou uma suposição
+  // ultrapassada). A checagem abaixo passou a ler só o arquivo do Cockpit,
+  // nunca o `package.json` global.
+  ok("nenhuma biblioteca de gráfico foi introduzida NO CARD DE EVOLUÇÃO DIÁRIA DO COCKPIT (barras em divs puros, mesma convenção de sempre)", !sectionSource.includes('from "recharts"') && !sectionSource.includes('from "chart.js"') && !sectionSource.includes('from "d3"'));
 }
 
 console.log("\nJ.2 — Correção do tooltip (Etapa 'Correção do tooltip da Evolução Diária'): nunca cortado, Portal + posicionamento inteligente\n");

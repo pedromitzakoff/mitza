@@ -100,6 +100,7 @@ function buildData(overrides: Partial<MetaAdsDashboardData>): MetaAdsDashboardDa
       resultCountChangePct: ((20 - 10) / 10) * 100,
     },
     reachComparison: buildReachComparison(reachOk(50000, 100000), reachOk(40000, 80000)),
+    evolution: [],
     resultSource: "meta_attributed",
     resultType: "leads",
     lastSyncAt: "2026-10-21T12:00:00Z",
