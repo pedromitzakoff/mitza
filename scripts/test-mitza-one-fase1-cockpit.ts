@@ -57,10 +57,6 @@ const metaRitmoSource = loadSource("src", "app", "clients", "cockpit-meta-ritmo-
 // as checagens de conteúdo desses dois cards abaixo leem esta fonte.
 const goalCardSource = loadSource("src", "app", "clients", "cockpit-goal-card.tsx");
 const diagnosticsCardSource = loadSource("src", "app", "clients", "cockpit-diagnostics-card.tsx");
-// Etapa "Simplificação da Operação": cockpit-execution-section.tsx (Operação
-// + Demandas no mesmo componente) foi substituído por cockpit-demandas-section.tsx
-// (Demandas isolada, mesma lógica) — ver seção E abaixo.
-const demandasSectionSource = loadSource("src", "app", "clients", "cockpit-demandas-section.tsx");
 const performanceSectionSource = loadSource("src", "app", "clients", "cockpit-performance-section.tsx");
 const channelSectionSource = loadSource("src", "app", "clients", "dashboard-channel-section.tsx");
 const budgetSource = loadSource("src", "app", "clients", "dashboard-budget.tsx");
@@ -265,20 +261,10 @@ console.log("\nE — Demandas (histórico: Fase 1 chamava esta seção 'Execuç�
     "a query de account_reviews feita SÓ pra exibir 'última otimização' no Cockpit foi removida — nenhuma consulta exclusiva a um componente que não renderiza mais",
     !pageSource.includes("account_reviews:cockpit-resumo") && !pageSource.includes('.from("account_reviews")'),
   );
-  ok("cockpit-execution-section.tsx (Operação + Demandas no mesmo componente) foi removido — nenhum arquivo órfão", (() => {
-    try {
-      loadSource("src", "app", "clients", "cockpit-execution-section.tsx");
-      return false;
-    } catch {
-      return true;
-    }
-  })());
-  ok("Demandas: contagem + preview continuam vindo de loadPendenciasRawData/countOpenDemandas (MESMA fonte/regra de sempre, nenhuma lógica reescrita)", pageSource.includes("loadPendenciasRawData(supabase, id)") && pageSource.includes("countOpenDemandas("));
-  ok("preview de demandas continua limitado a 3 itens", pageSource.includes(".slice(0, 3)"));
-  ok("sem demandas abertas -> estado compacto explícito 'Nenhuma demanda aberta.' (nunca lista vazia silenciosa)", demandasSectionSource.includes("Nenhuma demanda aberta."));
-  ok("Concluir reaproveita completeTaskAction (MESMA Server Action da Demandas completa, nenhuma segunda implementação)", loadSource("src", "app", "clients", "cockpit-complete-task-button.tsx").includes('import { completeTaskAction } from "./tasks-actions"'));
-  ok("ação de escrita (Concluir) só aparece com canOperate=true (client.status === 'ativo', mesmo guard de /operation, preservado)", demandasSectionSource.includes("canOperate &&") && pageSource.includes('const canOperate = client.status === "ativo"'));
-  ok("NENHUM bulk delete/bulk duplicate/CRUD completo trazido pro cockpit (seção 24 do pedido original) — sem duplicateTasksAction/bulkDeleteTasksAction aqui", !demandasSectionSource.includes("duplicateTasksAction") && !demandasSectionSource.includes("bulkDeleteTasksAction"));
+  // Demandas (contagem/preview/CockpitDemandasSection/cockpit-complete-task-button
+  // no Cockpit, cockpit-execution-section.tsx órfão) — seção removida: o
+  // módulo Demandas em si saiu do produto na Etapa 1.6 da reestruturação
+  // KOFF Analytics.
 }
 
 // ---------------------------------------------------------------------------
@@ -293,13 +279,11 @@ console.log("\nG — Regressão (rotas antigas continuam intactas; sem redirects
     ["clients", "[id]", "relatorio", "page.tsx"],
     ["clients", "[id]", "dados", "page.tsx"],
     ["clients", "[id]", "operation", "page.tsx"],
-    ["clients", "[id]", "demandas", "page.tsx"],
     ["clients", "[id]", "edit", "page.tsx"],
   ]) {
     ok(`/${route.slice(0, -1).join("/")} continua existindo no disco, intocada`, loadSource("src", "app", ...route).length > 0);
   }
   ok("/operation GLOBAL continua intocada (nenhuma incorporação à tela do cliente)", loadSource("src", "app", "operation", "page.tsx").length > 0);
-  ok("/demandas GLOBAL continua intocada", loadSource("src", "app", "demandas", "page.tsx").length > 0);
   ok("/clients (Gestão/carteira) continua intocada", loadSource("src", "app", "clients", "page.tsx").includes("AgencyAccountsTree") || loadSource("src", "app", "clients", "page.tsx").length > 0);
   // Nota (MITZA ONE — Fase 2, posterior a este arquivo): Sidebar e
   // ClientWorkspaceHeader foram DELIBERADAMENTE alterados na Fase 2

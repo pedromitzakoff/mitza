@@ -27,14 +27,15 @@ function fileExists(...segments: string[]): boolean {
 
 const sidebarSource = loadSource("src", "app", "sidebar.tsx");
 const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
-const demandasSectionSource = loadSource("src", "app", "clients", "cockpit-demandas-section.tsx");
 
 // ---------------------------------------------------------------------------
-console.log("\nA — Sidebar (seção 1 do pedido): Operação removida da área Agência, Demandas preservado (Timeline removida depois, na Etapa 1.3 da reestruturação KOFF Analytics)\n");
+console.log("\nA — Sidebar (seção 1 do pedido): Operação removida da área Agência (histórico — Demandas, preservada aqui na época, e o próprio grupo 'Agência' saíram depois, nas Etapas 1.6/1.3 da reestruturação KOFF Analytics)\n");
 {
   ok("'Operação' não existe mais como item da Sidebar", !sidebarSource.includes('label: "Operação"'));
-  ok("'Demandas' continua na área Agência", /label: "Demandas", href: "\/demandas"/.test(sidebarSource));
-  ok("AGENCIA_ITEMS tem exatamente 1 item agora (Demandas)", /const AGENCIA_ITEMS: NavItem\[\] = \[\s*\{ label: "Demandas"[\s\S]*?\},\s*\];/.test(sidebarSource));
+  ok(
+    "grupo 'Agência' não existe mais (Demandas, seu último item, removida na Etapa 1.6; Timeline já tinha saído na 1.3)",
+    !sidebarSource.includes('label: "Demandas"') && !sidebarSource.includes('label="Agência"'),
+  );
   // "Equipe" (/team) foi removido do GESTAO_ITEMS na Etapa 1.4 da
   // reestruturação KOFF Analytics, posterior a esta etapa.
   ok("Gestão (Clientes/Configurações) continua intocada", /label: "Clientes", href: "\/clients"/.test(sidebarSource) && !/label: "Equipe"/.test(sidebarSource) && /label: "Configurações", href: "\/settings", icon: Settings, adminOnly: true/.test(sidebarSource));
@@ -52,20 +53,17 @@ console.log("\nA — Sidebar (seção 1 do pedido): Operação removida da área
   ok("rota /operation NÃO foi excluída do disco", fileExists("src", "app", "operation", "page.tsx") && fileExists("src", "app", "clients", "[id]", "operation", "page.tsx"));
 }
 
-console.log("\nB — Cockpit do cliente (seção 2 do pedido): seção visual de Operação removida, Demandas preservada com a MESMA lógica\n");
+console.log("\nB — Cockpit do cliente (seção 2 do pedido): seção visual de Operação removida\n");
 {
   ok(
     "Cockpit não renderiza mais 'Sprint atual'/'Última otimização'/'Registrar revisão' — nenhuma referência a findSprintForDate/ACCOUNT_REVIEW_OUTCOME_LABEL/RecordAccountReviewDrawer",
     !pageSource.includes("findSprintForDate(") && !pageSource.includes("ACCOUNT_REVIEW_OUTCOME_LABEL") && !pageSource.includes("RecordAccountReviewDrawer"),
   );
   ok("cockpit-execution-section.tsx (continha Operação + Demandas) foi removido do disco", !fileExists("src", "app", "clients", "cockpit-execution-section.tsx"));
-  ok("cockpit-demandas-section.tsx (só Demandas, mesma lógica) existe e é importado pelo Cockpit", fileExists("src", "app", "clients", "cockpit-demandas-section.tsx") && pageSource.includes('import { CockpitDemandasSection } from "../cockpit-demandas-section"'));
-  ok("Demandas continua com contagem aberta/atrasada", demandasSectionSource.includes("{demandasOpenCount} em aberto") && demandasSectionSource.includes("demandasOverdueCount"));
-  ok("Demandas continua com preview de até 3 prioritárias", pageSource.includes(".slice(0, 3)"));
-  ok("ação de concluir demanda preservada (CockpitCompleteTaskButton, MESMA Server Action completeTaskAction)", demandasSectionSource.includes("<CockpitCompleteTaskButton") && loadSource("src", "app", "clients", "cockpit-complete-task-button.tsx").includes('import { completeTaskAction } from "./tasks-actions"'));
-  ok("lógica de Demandas (loadPendenciasRawData/countOpenDemandas) continua intocada em page.tsx — nenhuma reescrita", pageSource.includes("loadPendenciasRawData(supabase, id)") && pageSource.includes("countOpenDemandas("));
-  // Histórico (CockpitHistorySection) foi removido do Cockpit na Etapa 1.3 da
-  // reestruturação KOFF Analytics, junto com a Timeline.
+  // Demandas (cockpit-demandas-section.tsx, contagem/preview/CockpitCompleteTaskButton,
+  // loadPendenciasRawData/countOpenDemandas) e Histórico (CockpitHistorySection)
+  // foram removidos do Cockpit nas Etapas 1.6 e 1.3 da reestruturação KOFF
+  // Analytics, respectivamente.
 }
 
 console.log("\nC — Sistema legado (seção 3 do pedido): nada excluído, nenhuma dependência de verdade removida\n");
@@ -106,45 +104,35 @@ console.log("\nC — Sistema legado (seção 3 do pedido): nada excluído, nenhu
 console.log("\nD — Navegação (seção 4 do pedido): estrutura final exata, nenhum módulo novo\n");
 {
   ok(
-    "seções do Cockpit, na ordem: Meta & Ritmo, Diagnóstico, Evolução Diária, Canais, Performance, Demandas (Histórico foi removido na Etapa 1.3)",
+    "seções do Cockpit, na ordem: Meta & Ritmo, Diagnóstico, Evolução Diária, Canais, Performance (Histórico removido na Etapa 1.3, Demandas na Etapa 1.6)",
     (() => {
       const metaRitmoIdx = pageSource.indexOf("Meta &amp; Ritmo");
       const diagnosticoIdx = pageSource.indexOf("<CockpitDiagnosticsCard");
       const evolucaoIdx = pageSource.indexOf("<CockpitDailyEvolutionSection");
       const canaisIdx = pageSource.indexOf("<DashboardChannelSection");
       const performanceIdx = pageSource.indexOf("<CockpitPerformanceSection");
-      const demandasIdx = pageSource.indexOf("<CockpitDemandasSection");
       return (
-        [metaRitmoIdx, diagnosticoIdx, evolucaoIdx, canaisIdx, performanceIdx, demandasIdx].every((i) => i !== -1) &&
+        [metaRitmoIdx, diagnosticoIdx, evolucaoIdx, canaisIdx, performanceIdx].every((i) => i !== -1) &&
         metaRitmoIdx < diagnosticoIdx &&
         diagnosticoIdx < evolucaoIdx &&
         evolucaoIdx < canaisIdx &&
-        canaisIdx < performanceIdx &&
-        performanceIdx < demandasIdx
+        canaisIdx < performanceIdx
       );
     })(),
   );
-  ok("Agência = Demandas (nenhum item extra, Operação removido; Timeline removida na Etapa 1.3)", AGENCIA_ITEMS_HAS_ONLY_DEMANDAS(sidebarSource));
+  ok(
+    "Agência = nenhum item (Demandas, seu último item, removida na Etapa 1.6; Operação já tinha saído, Timeline na Etapa 1.3 — o grupo em si não existe mais)",
+    !sidebarSource.includes('label="Agência"') && !sidebarSource.includes('label: "Demandas"'),
+  );
   // "Equipe" (/team) foi removido do GESTAO_ITEMS na Etapa 1.4 da
   // reestruturação KOFF Analytics, posterior a esta etapa.
   ok("Gestão = Clientes + Configurações (Equipe removido na Etapa 1.4)", /const GESTAO_ITEMS: NavItem\[\] = \[\s*\{ label: "Clientes"[\s\S]*?\{ label: "Configurações"[\s\S]*?\];/.test(sidebarSource));
-  ok("nenhum módulo/item novo foi adicionado à Sidebar (contagem de 'label:' em AGENCIA_ITEMS+GESTAO_ITEMS = 3: Demandas, Clientes, Configurações)", countLabels(sidebarSource) === 3);
-}
-
-function AGENCIA_ITEMS_HAS_ONLY_DEMANDAS(source: string): boolean {
-  const match = source.match(/const AGENCIA_ITEMS: NavItem\[\] = \[([\s\S]*?)\];/);
-  if (!match) return false;
-  const body = match[1];
-  const labels = [...body.matchAll(/label: "([^"]+)"/g)].map((m) => m[1]);
-  return labels.length === 1 && labels.includes("Demandas");
+  ok("nenhum módulo/item novo foi adicionado à Sidebar (contagem de 'label:' em GESTAO_ITEMS = 2: Clientes, Configurações)", countLabels(sidebarSource) === 2);
 }
 
 function countLabels(source: string): number {
-  const agencia = source.match(/const AGENCIA_ITEMS: NavItem\[\] = \[([\s\S]*?)\];/);
   const gestao = source.match(/const GESTAO_ITEMS: NavItem\[\] = \[([\s\S]*?)\];/);
-  const agenciaLabels = agencia ? [...agencia[1].matchAll(/label: "([^"]+)"/g)].length : 0;
-  const gestaoLabels = gestao ? [...gestao[1].matchAll(/label: "([^"]+)"/g)].length : 0;
-  return agenciaLabels + gestaoLabels;
+  return gestao ? [...gestao[1].matchAll(/label: "([^"]+)"/g)].length : 0;
 }
 
 console.log("\nE — Orçamento/metas/resultados (seção 3/5 do pedido): nenhum cálculo alterado\n");

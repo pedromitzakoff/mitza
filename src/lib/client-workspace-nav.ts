@@ -4,13 +4,13 @@
  * Workspace" — as 5 abas viraram 5 ROTAS DE APROFUNDAMENTO, não mais
  * abas equivalentes competindo no header; revisado novamente na Etapa
  * "MEGA FACELIFT — Fase 1: Novo Shell da Growth Infra" — as seções
- * reconhecidas passam a ser os 7 módulos da Growth Infra do cliente
- * (Dashboard/Metas/Performance/Dados/Operação/Demandas/Timeline), agora
- * navegáveis diretamente pela Sidebar (`CLIENT_MODULE_ITEMS`,
- * `sidebar.tsx`), não só pelo header). Este módulo só resolve "qual
- * sufixo replicar ao trocar de cliente" e "qual URL montar" — extraído de
- * `client-workspace-header.tsx` pra ser testável sem DOM/router (mesmo
- * padrão já usado em `lib/pendencias.ts` pro núcleo de filtro/agrupamento).
+ * reconhecidas eram os módulos da Growth Infra do cliente, navegáveis
+ * diretamente pela Sidebar, não só pelo header; Demandas e Timeline foram
+ * removidas do produto nas Etapas 1.6/1.3 da reestruturação KOFF
+ * Analytics, restando Dashboard/Metas/Performance/Dados/Operação. Este
+ * módulo só resolve "qual sufixo replicar ao trocar de cliente" e "qual
+ * URL montar" — extraído de `client-workspace-header.tsx` pra ser
+ * testável sem DOM/router.
  *
  * `resolveActiveTab`/`WORKSPACE_TABS` (com `label`) existiram só pra
  * destacar a aba ativa na antiga barra `role="tablist"` — removidos junto
@@ -34,7 +34,7 @@
  * "Cliente" da Sidebar. "" é o Dashboard (Painel). `/relatorio` continua
  * com este nome técnico de rota (nenhum link/PDF/`/r/[token]` quebra) —
  * "Performance" é só o rótulo exibido na navegação. */
-export const WORKSPACE_SECTION_SUFFIXES: string[] = ["", "/metas", "/relatorio", "/dados", "/operation", "/demandas"];
+export const WORKSPACE_SECTION_SUFFIXES: string[] = ["", "/metas", "/relatorio", "/dados", "/operation"];
 
 /** Sufixo da rota atual relativo a `/clients/[id]` — "" na raiz. */
 export function resolveCurrentSuffix(pathname: string, clientId: string): string {
@@ -86,7 +86,7 @@ export function resolveActiveClientIdFromPathname(pathname: string): string | nu
  * por `GlobalScopeSelect` (entrada de "Todos" pra um cliente), nunca
  * duplicado/reimplementado em cada componente (seção 17 do pedido).
  */
-export type ModuleKey = "dashboard" | "metas" | "performance" | "dados" | "operation" | "demandas";
+export type ModuleKey = "dashboard" | "metas" | "performance" | "dados" | "operation";
 
 export type AppContext = { type: "all" } | { type: "client"; id: string };
 
@@ -100,7 +100,6 @@ const MODULE_CLIENT_SUFFIX: Record<ModuleKey, string> = {
   performance: "/relatorio",
   dados: "/dados",
   operation: "/operation",
-  demandas: "/demandas",
 };
 
 const SUFFIX_TO_MODULE: Record<string, ModuleKey> = {
@@ -109,7 +108,6 @@ const SUFFIX_TO_MODULE: Record<string, ModuleKey> = {
   "/relatorio": "performance",
   "/dados": "dados",
   "/operation": "operation",
-  "/demandas": "demandas",
 };
 
 /**
@@ -132,13 +130,14 @@ const SUFFIX_TO_MODULE: Record<string, ModuleKey> = {
  *   primeiro cliente" no cliente (eles não têm a árvore da carteira em
  *   mãos) — nunca pra oferecer "Todos" como opção real no seletor, por
  *   isso NÃO entra em `MODULES_OFFERING_ALL_IN_SELECTOR` abaixo.
- * - MÓDULOS OPERACIONAIS (operation/demandas/timeline): sempre suportaram
- *   "Todos" de verdade (Fase 4.5/4.6) — nenhuma mudança aqui.
+ * - MÓDULOS OPERACIONAIS (operation): sempre suportaram "Todos" de verdade
+ *   (Fase 4.5/4.6) — nenhuma mudança aqui. (demandas/timeline ofereciam o
+ *   mesmo antes de serem removidas do produto nas Etapas 1.6/1.3 da
+ *   reestruturação KOFF Analytics.)
  */
 const MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = {
   dashboard: "/",
   operation: "/operation",
-  demandas: "/demandas",
 };
 
 /**
@@ -149,7 +148,7 @@ const MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = {
  * mas isso é uma resolução interna de navegação, nunca uma opção real que
  * o usuário escolhe — o seletor em Dashboard/Metas/Performance/Dados
  * nunca mostra "Todos os clientes". Usado por `ClientWorkspaceHeader`. */
-const MODULES_OFFERING_ALL_IN_SELECTOR: readonly ModuleKey[] = ["operation", "demandas"];
+const MODULES_OFFERING_ALL_IN_SELECTOR: readonly ModuleKey[] = ["operation"];
 
 export function moduleSupportsAllContext(module: ModuleKey): boolean {
   return MODULES_OFFERING_ALL_IN_SELECTOR.includes(module);
@@ -169,19 +168,12 @@ export function buildModuleContextHref(module: ModuleKey, context: AppContext, m
 /**
  * Módulos cujo link na SIDEBAR sempre abre em contexto Todos, mesmo
  * estando dentro do workspace de um cliente específico (Etapa "Demandas
- * sempre abre em Todos por padrão") — Demandas é a lista do que precisa
- * ser feito NA AGÊNCIA TODA; abrir só a fração de um cliente por estar
- * "de passagem" nele (ex.: Aibou -> Operação -> Demandas) escondia o
- * resto do trabalho pendente, o oposto do propósito da tela.
- *
- * Isso é só sobre o DESTINO do clique na Sidebar (`resolveModuleLinkContext`
- * abaixo) — nunca sobre o módulo em si: `/clients/[id]/demandas` continua
- * existindo e funcionando normalmente (deep link, anterior/próximo, busca
- * do header), e `moduleSupportsAllContext("demandas")` continua `true`
- * (nada muda no seletor). Dashboard/Metas/Performance/Dados/Operação/
- * Timeline continuam preservando o cliente atual, como sempre.
+ * sempre abre em Todos por padrão") — regra específica de Demandas, que
+ * saiu do produto na Etapa 1.6 da reestruturação KOFF Analytics. Vazio
+ * desde então; Dashboard/Metas/Performance/Dados/Operação sempre
+ * preservaram o cliente atual.
  */
-const MODULES_DEFAULT_TO_ALL_CONTEXT_ON_SIDEBAR: readonly ModuleKey[] = ["demandas"];
+const MODULES_DEFAULT_TO_ALL_CONTEXT_ON_SIDEBAR: readonly ModuleKey[] = [];
 
 /** Resolve o contexto a usar pra montar o link de um módulo NA SIDEBAR —
  * normalmente o contexto ambiente (preserva o cliente atual, mesma regra
@@ -209,6 +201,5 @@ export function resolveCurrentModuleAndContext(pathname: string): { module: Modu
   }
   if (pathname === "/") return { module: "dashboard", context: { type: "all" } };
   if (pathname.startsWith("/operation")) return { module: "operation", context: { type: "all" } };
-  if (pathname.startsWith("/demandas") || pathname.startsWith("/pendencias")) return { module: "demandas", context: { type: "all" } };
   return { module: null, context: { type: "all" } };
 }

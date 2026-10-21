@@ -304,7 +304,7 @@ console.log("\nK — Navegação (Fase 1 do pedido): item fixo acima da busca/ca
 
   ok("rota /minha-rotina", loadSource("src", "app", "minha-rotina", "page.tsx").includes("MinhaRotinaPage"));
   ok(
-    "item 'Minha Rotina' definido com href /minha-rotina e ícone próprio (ListChecks, distinto do ClipboardList já usado por Demandas)",
+    "item 'Minha Rotina' definido com href /minha-rotina e ícone próprio (ListChecks)",
     sidebarSource.includes('href: "/minha-rotina"') && sidebarSource.includes("icon: ListChecks"),
   );
   ok(
@@ -312,18 +312,16 @@ console.log("\nK — Navegação (Fase 1 do pedido): item fixo acima da busca/ca
     /<NavLink item=\{MINHA_ROTINA_ITEM\}[\s\S]{0,400}CARTEIRA — seção 1/.test(sidebarSource),
   );
   ok(
-    "Sidebar continua com Demandas em Agência, intocada (Timeline removida na Etapa 1.3 da reestruturação KOFF Analytics)",
-    sidebarSource.includes('label: "Demandas"') && !sidebarSource.includes('label: "Timeline"'),
+    "Sidebar sem grupo 'Agência' (Demandas removida na Etapa 1.6, Timeline na Etapa 1.3 da reestruturação KOFF Analytics — era seu único item restante)",
+    !sidebarSource.includes('label: "Demandas"') && !sidebarSource.includes('label: "Timeline"') && !sidebarSource.includes('label="Agência"'),
   );
   ok("navegação do Cockpit (cockpit-meta-ritmo-section.tsx e afins) não foi tocada por esta etapa", !sidebarSource.includes("minha-rotina") || sidebarSource.includes('href: "/minha-rotina"'));
 }
 
-console.log("\nL — Compatibilidade com Demandas/Pendências: nenhuma regra duplicada, nenhuma tabela/RPC nova\n");
+console.log("\nL — Compatibilidade: nenhuma regra duplicada, nenhuma tabela/RPC nova (Demandas, antes citada aqui, foi removida na Etapa 1.6 — Minha Rotina sempre teve sua própria query de tasks, nunca reaproveitou loadPendenciasRawData)\n");
 {
-  const pendenciasDataSource = loadSource("src", "app", "demandas", "pendencias-data.ts");
   const minhaRotinaDataSource = loadSource("src", "app", "minha-rotina", "minha-rotina-data.ts");
 
-  ok("loadPendenciasRawData (Demandas/Pendências) não foi alterado por esta etapa", pendenciasDataSource.includes('.eq("origin", "manual")'));
   ok(
     "Minha Rotina usa effectiveTaskStatus, a MESMA fonte de status efetivo que Pendências usa — nenhuma segunda regra de 'atrasado'",
     minhaRotinaDataSource.includes("effectiveTaskStatus("),

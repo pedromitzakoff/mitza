@@ -53,8 +53,8 @@ console.log("\nA — Arquitetura final da Sidebar (seção 1/2/7 do pedido): car
   ok("Sidebar importa buildWorkspaceHref/resolveActiveClientIdFromPathname de lib/client-workspace-nav (núcleo único, nenhuma segunda lógica de pathname)", sidebarSource.includes('import { buildWorkspaceHref, resolveActiveClientIdFromPathname } from "@/lib/client-workspace-nav"'));
   ok("Sidebar importa filterAgencyTreeClients de lib/agency-accounts-tree (núcleo puro, nenhuma segunda implementação de busca)", sidebarSource.includes("filterAgencyTreeClients"));
   ok(
-    "AGENCIA_ITEMS define Demandas, href global fixo (Operação removido na Etapa 'Simplificação da Operação'; Timeline removida na Etapa 1.3 — ver test-mega-facelift-fase1-shell.ts)",
-    /label: "Demandas", href: "\/demandas"/.test(sidebarSource) && !sidebarSource.includes('label: "Operação"') && !sidebarSource.includes('label: "Timeline"'),
+    "Grupo 'Agência' não existe mais (Demandas, seu último item, removida na Etapa 1.6; Operação já tinha saído na 'Simplificação da Operação'; Timeline na Etapa 1.3 — ver test-mega-facelift-fase1-shell.ts)",
+    !sidebarSource.includes('label: "Demandas"') && !sidebarSource.includes('label: "Operação"') && !sidebarSource.includes('label: "Timeline"') && !sidebarSource.includes('label="Agência"'),
   );
   // "Equipe" (/team) foi removido do GESTAO_ITEMS na Etapa 1.4 da
   // reestruturação KOFF Analytics (o portfólio de equipe saiu do produto;
@@ -193,14 +193,13 @@ console.log("\nI — Rotas preservadas (seção 8 do pedido): nenhuma removida/r
     ["clients", "[id]", "relatorio", "page.tsx"],
     ["clients", "[id]", "dados", "page.tsx"],
     ["clients", "[id]", "operation", "page.tsx"],
-    ["clients", "[id]", "demandas", "page.tsx"],
     ["clients", "[id]", "edit", "page.tsx"],
   ]) {
     ok(`/${route.slice(0, -1).join("/")} continua existindo`, loadSource("src", "app", ...route).length > 0);
   }
-  // /team e /achievements foram removidas na Etapa 1.4 da reestruturação
-  // KOFF Analytics (gamificação e portfólio de equipe saíram do produto).
-  ok("/operation, /demandas, /clients, /settings continuam existindo", loadSource("src", "app", "operation", "page.tsx").length > 0 && loadSource("src", "app", "demandas", "page.tsx").length > 0 && loadSource("src", "app", "clients", "page.tsx").length > 0 && loadSource("src", "app", "settings", "page.tsx").length > 0);
+  // /team e /achievements foram removidas na Etapa 1.4, /demandas na
+  // Etapa 1.6 da reestruturação KOFF Analytics.
+  ok("/operation, /clients, /settings continuam existindo", loadSource("src", "app", "operation", "page.tsx").length > 0 && loadSource("src", "app", "clients", "page.tsx").length > 0 && loadSource("src", "app", "settings", "page.tsx").length > 0);
   // /reports (painel operacional de fechamento) foi removida na Etapa 1.5
   // da reestruturação KOFF Analytics.
   ok("/sprints não foi tocada", loadSource("src", "app", "sprints", "page.tsx").length > 0);
@@ -240,20 +239,22 @@ console.log("\nK — MITZA ONE — Fase 2.1: Agência e Gestão como menus expan
   ok("AccordionGroup existe como componente dedicado (fechado/aberto controlado pelo pai)", /function AccordionGroup\(/.test(sidebarSource));
   ok("Cabeçalho do grupo é um <button> real (cobre teclado de graça) com aria-expanded/aria-controls", sidebarSource.includes("aria-expanded={open}") && sidebarSource.includes("aria-controls={panelId}"));
   ok("Chevron rotaciona 90° quando aberto (indicador visual de estado)", sidebarSource.includes('open ? "rotate-90" : ""'));
+  // O grupo "Agência" em si foi removido na Etapa 1.6 da reestruturação
+  // KOFF Analytics (Demandas, seu último item, saiu do produto) — resta
+  // só "Gestão" como AccordionGroup.
   ok(
-    "fechados por padrão: o estado inicial de cada grupo vem de isActive(pathname) na pathname atual, nunca hardcoded 'true' (closed-by-default salvo quando a rota já pertence ao grupo)",
-    /useState\(\(\) => \(\{\s*agencia: AGENCIA_ITEMS\.some/.test(sidebarSource),
+    "fechados por padrão: o estado inicial do grupo vem de isActive(pathname) na pathname atual, nunca hardcoded 'true' (closed-by-default salvo quando a rota já pertence ao grupo)",
+    /useState\(\(\) => \(\{\s*gestao: gestaoItems\.some/.test(sidebarSource),
   );
   ok(
     "auto-open nunca FECHA um grupo já aberto manualmente — sempre 'prev.X || isActive(...)' (OR, nunca sobrescreve com false)",
-    sidebarSource.includes("agencia: prev.agencia || AGENCIA_ITEMS.some((item) => item.isActive(pathname))") &&
-      sidebarSource.includes("gestao: prev.gestao || gestaoItems.some((item) => item.isActive(pathname))"),
+    sidebarSource.includes("gestao: prev.gestao || gestaoItems.some((item) => item.isActive(pathname))"),
   );
   ok(
     "auto-open reavalia a cada navegação via comparação de pathname DURANTE o render (estado, nunca ref — React proíbe ler/escrever ref durante o render; nunca setState síncrono dentro de useEffect, que causaria um render em cascata extra)",
     sidebarSource.includes("lastAutoOpenPathname !== pathname"),
   );
-  ok("Agência e Gestão continuam os MESMOS itens/links/permissões de antes (nenhuma rota nova, Configurações continua adminOnly)", sidebarSource.includes("items={AGENCIA_ITEMS}") && sidebarSource.includes("items={gestaoItems}"));
+  ok("Gestão continua com os MESMOS itens/links/permissões de antes (nenhuma rota nova, Configurações continua adminOnly)", sidebarSource.includes("items={gestaoItems}"));
   ok(
     "desktop recolhido preserva o comportamento ANTERIOR (tira de ícones plana, sem cabeçalho clicável/acordeão) — Fase 2.1 não altera a apresentação recolhida",
     sidebarSource.includes('collapsed ? "hidden shrink-0 flex-col gap-0.5 px-2.5 pb-2 md:flex" : "hidden"'),

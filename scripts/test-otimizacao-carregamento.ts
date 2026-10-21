@@ -40,24 +40,17 @@ console.log("\nA — Item 1 (Cockpit): as 5 operações independentes entraram n
 {
   ok(
     "loadClientOperationalStates entra no array do Promise.all principal (antes rodava sozinha, sequencial, ANTES do batch, sem nenhuma dependência real)",
-    /\[\s*clientOperationalState\s*\]\s*,\s*\n\s*pendenciasRawData,/.test(pageSource) && pageSource.includes("loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, id),"),
-  );
-  ok(
-    "loadPendenciasRawData entra no mesmo Promise.all (antes era 'await loadPendenciasRawData(...)' solto, bem depois do batch)",
-    pageSource.includes("pendenciasRawData,") && pageSource.includes("loadPendenciasRawData(supabase, id),") && !pageSource.includes("await loadPendenciasRawData("),
+    /\[\s*clientOperationalState\s*\]\s*,\s*\n\s*performanceReportData,/.test(pageSource) && pageSource.includes("loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, id),"),
   );
   ok(
     "buildPerformanceReportData entra no mesmo Promise.all (era a chamada mais isolada — só precisa de id/firstDay/lastDay, nenhuma dependência do resto do batch)",
     pageSource.includes("buildPerformanceReportData(supabase, id, { start: firstDay, end: lastDay }),") && !pageSource.includes("await buildPerformanceReportData("),
   );
-  ok(
-    "os pontos de USO continuam lendo os valores já resolvidos pelo Promise.all (desestruturação), nenhum novo await disperso pelo corpo da função",
-    pageSource.includes("const { items: demandaItems } = pendenciasRawData;"),
-  );
-  // Nota (Etapa 1.3 da reestruturação KOFF Analytics): fetchClientTimelinePage
-  // e a leitura de historyRows foram removidas junto com a Seção 6
-  // "Histórico" do Cockpit e a Timeline — não fazem mais parte deste
-  // Promise.all nem do corpo da função.
+  // Nota (Etapas 1.3/1.5/1.6 da reestruturação KOFF Analytics):
+  // fetchClientTimelinePage/historyRows (Seção 6 "Histórico"),
+  // ClientReportWizard e loadPendenciasRawData/pendenciasRawData/
+  // demandaItems (Seção 5 "Demandas") foram removidos do Cockpit — não
+  // fazem mais parte deste Promise.all nem do corpo da função.
 }
 
 console.log("\nB — Item 1: dependências reais preservadas — ensureClosedSprintSnapshots (escrita) nunca entra no Promise.all, nunca roda em paralelo com leitura que dependa dela\n");

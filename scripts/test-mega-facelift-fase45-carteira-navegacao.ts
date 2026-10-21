@@ -124,17 +124,19 @@ console.log("\n7 — Módulos fixos (Fase 4.6): substituídos por navegação po
   // MITZA ONE — Fase 2: Dashboard/Metas/Performance/Dados deixaram de ser
   // itens de navegação (viraram seções DENTRO do cockpit único,
   // `/clients/[id]`, Fase 1) — nunca removidos do produto, só não têm
-  // mais item próprio na Sidebar. Demandas continua como link global
-  // fixo na área "Agência" — Operação saiu dessa área na Etapa
-  // "Simplificação da Operação" (a ROTA /operation continua existindo,
-  // só sem item na Sidebar); Timeline saiu do produto por completo na
-  // Etapa 1.3 da reestruturação KOFF Analytics.
+  // mais item próprio na Sidebar. Operação saiu da área "Agência" na
+  // Etapa "Simplificação da Operação" (a ROTA /operation continua
+  // existindo, só sem item na Sidebar); Timeline saiu do produto por
+  // completo na Etapa 1.3 e Demandas na Etapa 1.6 da reestruturação KOFF
+  // Analytics — o grupo "Agência" em si deixou de existir, sem nenhum
+  // item restante.
   ok("Sidebar não define mais um item de navegação 'Metas'/'Dados' (migraram pra dentro do cockpit, Fase 1)", !/\{ key: "metas"/.test(sidebarSource) && !/\{ key: "dados"/.test(sidebarSource));
   ok(
-    "Agência: Demandas continua o link global (Operação removido na Etapa 'Simplificação da Operação'; Timeline removida na Etapa 1.3)",
+    "Agência: nenhum link restante (Operação removido na Etapa 'Simplificação da Operação'; Timeline na Etapa 1.3; Demandas na Etapa 1.6 — grupo 'Agência' em si saiu)",
     !/label: "Operação", href: "\/operation"/.test(sidebarSource) &&
-      /label: "Demandas", href: "\/demandas"/.test(sidebarSource) &&
-      !/label: "Timeline"/.test(sidebarSource),
+      !/label: "Demandas"/.test(sidebarSource) &&
+      !/label: "Timeline"/.test(sidebarSource) &&
+      !sidebarSource.includes('label="Agência"'),
   );
 }
 
@@ -207,7 +209,6 @@ console.log("\n13 — Nenhuma rota antiga quebrada; nenhuma rota nova criada al�
     ["src", "app", "clients", "[id]", "page.tsx"],
     ["src", "app", "clients", "new", "page.tsx"],
     ["src", "app", "operation", "page.tsx"],
-    ["src", "app", "demandas", "page.tsx"],
   ];
   for (const route of existingRoutes) {
     ok(`rota ${route.join("/")} continua existindo`, existsSync(join(__dirname, "..", ...route)));

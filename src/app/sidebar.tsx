@@ -7,7 +7,6 @@ import { Tooltip } from "@/components/ui/tooltip";
 import {
   Briefcase,
   ChevronRight,
-  ClipboardList,
   Clock,
   ListChecks,
   LogOut,
@@ -127,30 +126,10 @@ interface NavItem {
   isActive: (pathname: string) => boolean;
 }
 
-/** Ferramentas transversais da agência (seção 2 do pedido) — nunca módulos
- * do cliente: destinos GLOBAIS fixos, sempre o mesmo href, independente de
- * qual cliente está ativo. Demandas/Timeline já suportavam "Todos" desde a
- * Fase 4.5/4.6 — aqui são simplesmente os links diretos, sem nenhuma
- * lógica de contexto (essa lógica — `buildModuleContextHref`/
- * `resolveModuleLinkContext` — continua existindo em
- * `lib/client-workspace-nav.ts` pra quem ainda precisa dela, ex.:
- * `GlobalScopeSelect` nas próprias páginas globais; a Sidebar não usa
- * mais).
- *
- * Etapa "Simplificação da Operação": o item "Operação" (`/operation`) saiu
- * da navegação principal — o Cockpit já cobre orçamento/investimento/
- * ritmo/resultados/projeção, tornando a experiência de sprints redundante
- * como ferramenta de acompanhamento do dia a dia. A ROTA `/operation`
- * continua existindo e acessível por link direto (nunca excluída) — só
- * deixou de ter item próprio aqui. */
-const AGENCIA_ITEMS: NavItem[] = [
-  { label: "Demandas", href: "/demandas", icon: ClipboardList, isActive: (p) => p.startsWith("/demandas") || p.startsWith("/pendencias") },
-];
-
 /** MITZA ONE — Minha Rotina (Fase 1 do pedido): item FIXO no topo da
  * Sidebar, acima da busca/carteira — independente de qual cliente está
  * ativo (nunca um link contextual de cliente, por isso fora de
- * `AGENCIA_ITEMS`/`GESTAO_ITEMS`, que vivem no rodapé da carteira). Mesmo
+ * `GESTAO_ITEMS`, que vive no rodapé da carteira). Mesmo
  * componente `NavLink` de sempre, só outra posição de render. */
 const MINHA_ROTINA_ITEM: NavItem = { label: "Minha Rotina", href: "/minha-rotina", icon: ListChecks, isActive: (p) => p.startsWith("/minha-rotina") };
 
@@ -375,14 +354,12 @@ function SidebarContent({
   // síncrona dentro de um efeito aqui causaria um render em cascata
   // extra a cada navegação.
   const [openGroups, setOpenGroups] = useState(() => ({
-    agencia: AGENCIA_ITEMS.some((item) => item.isActive(pathname)),
     gestao: gestaoItems.some((item) => item.isActive(pathname)),
   }));
   const [lastAutoOpenPathname, setLastAutoOpenPathname] = useState(pathname);
   if (lastAutoOpenPathname !== pathname) {
     setLastAutoOpenPathname(pathname);
     setOpenGroups((prev) => ({
-      agencia: prev.agencia || AGENCIA_ITEMS.some((item) => item.isActive(pathname)),
       gestao: prev.gestao || gestaoItems.some((item) => item.isActive(pathname)),
     }));
   }
@@ -504,17 +481,6 @@ function SidebarContent({
           `md:hidden` quando `collapsed`: some só no desktop recolhido,
           mesma convenção da carteira (ver comentário acima). */}
       <div className={`mt-2 shrink-0 space-y-1.5 px-2.5 pb-2 ${collapsed ? "md:hidden" : ""}`}>
-        <AccordionGroup
-          groupId="agencia"
-          label="Agência"
-          navLabel="Ferramentas da agência"
-          items={AGENCIA_ITEMS}
-          pathname={pathname}
-          collapsed={collapsed}
-          open={openGroups.agencia}
-          onToggle={() => setOpenGroups((prev) => ({ ...prev, agencia: !prev.agencia }))}
-        />
-
         {gestaoItems.length > 0 && (
           <AccordionGroup
             groupId="gestao"
@@ -537,9 +503,6 @@ function SidebarContent({
           de antes desta fase. `hidden md:flex`: nunca aparece no mobile
           (o bloco com rótulos acima já cobre esse caso). */}
       <div className={collapsed ? "hidden shrink-0 flex-col gap-0.5 px-2.5 pb-2 md:flex" : "hidden"}>
-        {AGENCIA_ITEMS.map((item) => (
-          <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
-        ))}
         {gestaoItems.map((item) => (
           <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
         ))}

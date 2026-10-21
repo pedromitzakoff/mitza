@@ -42,8 +42,6 @@ import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals
 import { AVAILABLE_TRAFFIC_CHANNELS, resolveClientMediaChannels, TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { MonthSelect } from "../month-select";
 import { DashboardChannelSection, type DashboardChannelDataIssue } from "../dashboard-channel-section";
-import { countOpenDemandas } from "@/lib/pendencias";
-import { loadPendenciasRawData } from "@/app/demandas/pendencias-data";
 import { WorkspaceContainer } from "../workspace-container";
 import { IconButton } from "@/components/workspace/button";
 import { buildMetasHref } from "./metas/page";
@@ -62,7 +60,6 @@ import {
 } from "../cockpit-meta-ritmo-section";
 import { CockpitResultCard, CockpitCostCard } from "../cockpit-goal-card";
 import { CockpitDiagnosticsCard } from "../cockpit-diagnostics-card";
-import { CockpitDemandasSection } from "../cockpit-demandas-section";
 import { CockpitPerformanceSection, type CockpitPerformanceView } from "../cockpit-performance-section";
 import { buildCockpitDailyEvolutionPoints } from "@/lib/cockpit-daily-evolution";
 import {
@@ -180,8 +177,6 @@ export default async function ClientPage({
   if (clientQueryError) console.error(`[ClientPage] falha ao buscar cliente ${id}:`, clientQueryError);
   if (!client) notFound();
 
-  const canOperate = client.status === "ativo";
-
   // Etapa "Evolução do Dashboard — Visão Simultânea de Canais" (seção 12
   // do pedido): a MESMA fonte de sempre pra "quais canais este cliente
   // realmente usa" (`clients.media_channels`, lib/traffic-channels.ts) —
@@ -211,7 +206,6 @@ export default async function ClientPage({
     dadosData,
     dailyPerformanceRowsForEvolution,
     [clientOperationalState],
-    pendenciasRawData,
     performanceReportData,
   ] = await Promise.all([
       requireQuery(
@@ -297,7 +291,6 @@ export default async function ClientPage({
       // continuam intocados — só esta leitura PARTICULAR, feita só pra
       // exibir aqui, deixou de ser disparada.
       loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, id),
-      loadPendenciasRawData(supabase, id),
       buildPerformanceReportData(supabase, id, { start: firstDay, end: lastDay }),
     ]);
 
@@ -622,22 +615,6 @@ export default async function ClientPage({
       })
     : [];
 
-  // Demandas — resumo: contagem + até 3 itens mais urgentes, nunca a List
-  // View inteira. Reaproveita `loadPendenciasRawData` (MESMA fonte/regra de
-  // `/clients/[id]/demandas` e da área global — `origin='manual'`); busca
-  // já resolvida em paralelo no Promise.all principal, acima.
-  const { items: demandaItems } = pendenciasRawData;
-  const { openCount: demandasOpenCount, overdueCount: demandasOverdueCount } = countOpenDemandas(
-    demandaItems.map((item) => ({ origin: "manual" as const, client_id: id, status: item.rawStatus, due_date: item.dueDate })),
-    () => true,
-    today,
-  );
-  const demandasPreview = demandaItems
-    .filter((item) => item.status !== "feito" && item.status !== "nao_realizado")
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
-    .slice(0, 3);
-
-
   // MITZA ONE — Fase 1, Seção "Performance essencial" (seções 18-20 do
   // pedido): reaproveita 100% a Camada 1 do Relatório de Performance
   // (`buildPerformanceReportData`) e a "Leitura do período"
@@ -677,7 +654,6 @@ export default async function ClientPage({
 
   const metasHref = buildMetasHref(client.id, { month: monthParam }, {});
   const performanceHref = `/clients/${client.id}/relatorio`;
-  const demandasHref = `/clients/${client.id}/demandas`;
 
   return (
     <WorkspaceContainer>
@@ -797,22 +773,6 @@ export default async function ClientPage({
           o problema ou oportunidade?". */}
       <div className="mt-5">
         <CockpitPerformanceSection view={performanceView} campaignsHref={performanceHref} fullReportHref={performanceHref} />
-      </div>
-
-      {/* SEÇÃO 5 — DEMANDAS (pedido original, seções 21-25; Etapa
-          "Simplificação da Operação": a seção visual de Operação — sprint
-          atual, última otimização, Registrar revisão — saiu do Cockpit,
-          nunca do sistema (continua intacta em `/operation`). Demandas
-          preservada integralmente, só sem o card vizinho). */}
-      <div className="mt-5">
-        <CockpitDemandasSection
-          clientId={client.id}
-          demandasOpenCount={demandasOpenCount}
-          demandasOverdueCount={demandasOverdueCount}
-          demandasPreview={demandasPreview}
-          demandasHref={demandasHref}
-          canOperate={canOperate}
-        />
       </div>
     </WorkspaceContainer>
   );

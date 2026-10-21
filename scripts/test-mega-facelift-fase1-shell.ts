@@ -53,7 +53,10 @@ console.log("\n1 — MITZA ONE — Fase 2 (Sidebar = Carteira de Clientes) subst
     "Operação NÃO tem mais item fixo na área Agência (Etapa 'Simplificação da Operação': o Cockpit já cobre orçamento/ritmo/resultados, sprints deixou de ser a ferramenta principal) — a ROTA /operation continua existindo, só sem link na Sidebar",
     !/label: "Operação", href: "\/operation"/.test(sidebarSource) && loadSource("src", "app", "operation", "page.tsx").length > 0,
   );
-  ok("Demandas continua acessível — mesmo padrão (link global fixo)", /label: "Demandas", href: "\/demandas"/.test(sidebarSource));
+  ok(
+    "Demandas NÃO tem mais link na Sidebar (removida na Etapa 1.6 da reestruturação KOFF Analytics; grupo 'Agência' em si saiu, era seu último item)",
+    !/label: "Demandas"/.test(sidebarSource) && !sidebarSource.includes('label="Agência"'),
+  );
   ok(
     "Timeline NÃO tem mais link na Sidebar (removida na Etapa 1.3 da reestruturação KOFF Analytics)",
     !/label: "Timeline"/.test(sidebarSource),
@@ -69,8 +72,8 @@ console.log("\n2 — Carteira de clientes (MITZA ONE — Fase 2): busca + lista 
 {
   ok('eyebrow "Growth"/"Execução" não existem mais (não há mais agrupamento por módulo)', !/>\s*Growth\s*</.test(sidebarSource) && !/>\s*Execução\s*</.test(sidebarSource));
   ok(
-    'eyebrow "Agência" existe (ferramentas transversais; MITZA ONE — Fase 2.1: agora o título do grupo expansível, label="Agência")',
-    sidebarSource.includes('label="Agência"'),
+    'grupo "Agência" não existe mais (Demandas, seu último item, foi removida na Etapa 1.6 da reestruturação KOFF Analytics)',
+    !sidebarSource.includes('label="Agência"'),
   );
   ok("Sidebar renderiza um campo de busca de cliente (input controlado, filtro local)", sidebarSource.includes('placeholder="Buscar cliente...') && sidebarSource.includes("onChange={(e) => setSearch(e.target.value)}"));
   ok("ClientRow usa ClientAvatar (mesmo componente já usado na Operação/árvore de contas) — nenhum avatar novo", sidebarSource.includes("<ClientAvatar name={client.name} imageUrl={client.avatarUrl}"));
@@ -106,21 +109,20 @@ console.log("\n4 — Árvore 'Contas da Agência': Fase 1 a mantinha montada na 
   ok("agency-accounts-tree.tsx continua no disco, intocado", loadSource("src", "app", "agency-accounts-tree.tsx").includes("export async function AgencyAccountsTree"));
 }
 
-console.log("\n5 — WORKSPACE_SECTION_SUFFIXES generalizado pra 6 módulos (Timeline removida na Etapa 1.3); '/edit' deixou de ser replicável (mudança de comportamento explícita, não uma remoção de funcionalidade)\n");
+console.log("\n5 — WORKSPACE_SECTION_SUFFIXES generalizado pra 5 módulos (Timeline removida na Etapa 1.3, Demandas na Etapa 1.6); '/edit' deixou de ser replicável (mudança de comportamento explícita, não uma remoção de funcionalidade)\n");
 {
-  check("os 6 sufixos reconhecidos, na ordem Dashboard/Metas/Performance/Dados/Operação/Demandas", WORKSPACE_SECTION_SUFFIXES, [
+  check("os 5 sufixos reconhecidos, na ordem Dashboard/Metas/Performance/Dados/Operação", WORKSPACE_SECTION_SUFFIXES, [
     "",
     "/metas",
     "/relatorio",
     "/dados",
     "/operation",
-    "/demandas",
   ]);
   check("'/edit' não é mais replicado ao trocar de cliente (cai pro Dashboard, mesma regra de qualquer rota fora da lista)", resolveReplicableSuffix("/edit"), "");
   ok("a rota /clients/[id]/edit em si não foi tocada nesta fase (segue existindo)", existsSync(join(__dirname, "..", "src", "app", "clients", "[id]", "edit", "page.tsx")));
 }
 
-console.log("\n6 — Trocar de cliente preserva a dimensão atual, para cada um dos 6 módulos (simulação ponta a ponta)\n");
+console.log("\n6 — Trocar de cliente preserva a dimensão atual, para cada um dos 5 módulos (simulação ponta a ponta)\n");
 {
   const scenarios: { label: string; path: string; suffix: string }[] = [
     { label: "Dashboard", path: "/clients/leonardo", suffix: "" },
@@ -128,7 +130,6 @@ console.log("\n6 — Trocar de cliente preserva a dimensão atual, para cada um 
     { label: "Performance", path: "/clients/leonardo/relatorio", suffix: "/relatorio" },
     { label: "Dados", path: "/clients/leonardo/dados", suffix: "/dados" },
     { label: "Operação", path: "/clients/leonardo/operation", suffix: "/operation" },
-    { label: "Demandas", path: "/clients/leonardo/demandas", suffix: "/demandas" },
   ];
 
   for (const scenario of scenarios) {
@@ -183,16 +184,14 @@ console.log("\n9 — Shells da Fase 1 que sobrevivem evoluíram pra conteúdo fu
   ok("Dados não é mais o placeholder da Fase 1 (evoluiu na Fase 5)", !dadosSource.includes("Infraestrutura de dados do cliente."));
 }
 
-console.log("\n10 — Rotas existentes (Performance/Operação/Demandas) permanecem tecnicamente intactas — só o RÓTULO muda na navegação\n");
+console.log("\n10 — Rotas existentes (Performance/Operação) permanecem tecnicamente intactas — só o RÓTULO muda na navegação (Demandas removida na Etapa 1.6)\n");
 {
   const relatorioSource = loadSource("src", "app", "clients", "[id]", "relatorio", "page.tsx");
   const operationSource = loadSource("src", "app", "clients", "[id]", "operation", "page.tsx");
-  const demandasSource = loadSource("src", "app", "clients", "[id]", "demandas", "page.tsx");
 
   ok("/relatorio não foi renomeada tecnicamente — rota/arquivo intactos", existsSync(join(__dirname, "..", "src", "app", "clients", "[id]", "relatorio", "page.tsx")));
   ok("/relatorio continua usando a mesma largura compartilhada de sempre", relatorioSource.includes("WORKSPACE_CONTENT_MAX_WIDTH_CLASS"));
   ok("/clients/[id]/operation continua intacta (origin='template' preservado)", operationSource.includes("origin='template'") || operationSource.includes("origin=\"template\""));
-  ok("/clients/[id]/demandas continua reaproveitando loadPendenciasRawData (nenhuma segunda implementação)", demandasSource.includes("loadPendenciasRawData(supabase, id)"));
 
   ok(
     "relatório público (/r/[token]) e geração de PDF não foram tocados nesta fase",

@@ -37,9 +37,6 @@ const globalScopeSelectSource = loadSource("src", "app", "global-scope-select.ts
 const homePageSource = loadSource("src", "app", "page.tsx");
 const operationPageSource = loadSource("src", "app", "operation", "page.tsx");
 const operationViewSource = loadSource("src", "app", "operation", "operation-triage-view.tsx");
-const demandasPageSource = loadSource("src", "app", "demandas", "page.tsx");
-const demandasClientSource = loadSource("src", "app", "demandas", "pendencias-page-client.tsx");
-const clientScopedDemandasSource = loadSource("src", "app", "clients", "[id]", "demandas", "page.tsx");
 
 console.log("\n1 — SIDEBAR: MITZA ONE — Fase 2 substituiu Growth/Execução (módulos) por CARTEIRA + Agência/Gestão — histórico preservado, assertivas atualizadas\n");
 {
@@ -50,8 +47,8 @@ console.log("\n1 — SIDEBAR: MITZA ONE — Fase 2 substituiu Growth/Execução 
   // carteira. Cobertura completa em test-mitza-one-fase2-sidebar.ts.
   ok('eyebrow "Growth"/"Execução" não existem mais (não há mais agrupamento por módulo)', !/>\s*Growth\s*</.test(sidebarSource) && !/>\s*Execução\s*</.test(sidebarSource));
   ok(
-    'eyebrow "Agência" presente (Demandas/Operação/Timeline — ferramentas transversais; MITZA ONE — Fase 2.1: agora título do grupo expansível, label="Agência")',
-    sidebarSource.includes('label="Agência"'),
+    'grupo "Agência" não existe mais (Demandas, seu último item, foi removida na Etapa 1.6 da reestruturação KOFF Analytics — Operação e Timeline já tinham saído antes)',
+    !sidebarSource.includes('label="Agência"'),
   );
   ok(
     'eyebrow "Gestão" presente (Clientes/Equipe/Configurações; MITZA ONE — Fase 2.1: agora título do grupo expansível, label="Gestão")',
@@ -63,7 +60,10 @@ console.log("\n1 — SIDEBAR: MITZA ONE — Fase 2 substituiu Growth/Execução 
     "Operação NÃO tem mais item na Sidebar (Etapa 'Simplificação da Operação' — ver test-mega-facelift-fase1-shell.ts); a rota /operation em si não foi excluída",
     !sidebarSource.includes('label: "Operação"'),
   );
-  ok("Demandas aparece só UMA vez na Sidebar", (sidebarSource.match(/label: "Demandas"/g) ?? []).length === 1);
+  ok(
+    "Demandas NÃO tem mais item na Sidebar (removida na Etapa 1.6 da reestruturação KOFF Analytics)",
+    !sidebarSource.includes('label: "Demandas"'),
+  );
   ok(
     "Timeline NÃO tem mais item na Sidebar (removida na Etapa 1.3 da reestruturação KOFF Analytics)",
     !sidebarSource.includes('label: "Timeline"'),
@@ -107,8 +107,11 @@ console.log("\n3 — resolveCurrentModuleAndContext: pathname -> módulo + conte
 {
   check("'/' -> dashboard + Todos", resolveCurrentModuleAndContext("/"), { module: "dashboard", context: { type: "all" } });
   check("'/operation' -> operation + Todos", resolveCurrentModuleAndContext("/operation"), { module: "operation", context: { type: "all" } });
-  check("'/demandas' -> demandas + Todos", resolveCurrentModuleAndContext("/demandas"), { module: "demandas", context: { type: "all" } });
-  check("'/pendencias' (nome antigo) -> demandas + Todos", resolveCurrentModuleAndContext("/pendencias"), { module: "demandas", context: { type: "all" } });
+  check(
+    "'/demandas' (rota removida na Etapa 1.6) -> nenhum módulo, contexto Todos",
+    resolveCurrentModuleAndContext("/demandas"),
+    { module: null, context: { type: "all" } },
+  );
   check(
     "'/timeline' (rota removida na Etapa 1.3) -> nenhum módulo, contexto Todos",
     resolveCurrentModuleAndContext("/timeline"),
@@ -165,19 +168,11 @@ console.log("\n5 — OPERAÇÃO: Todos -> /operation; cliente -> /clients/[id]/o
   ok("OperationTriageView aceita scopeSelector opt-in — tela funciona idêntica sem ele (nenhum cálculo de triagem tocado)", operationViewSource.includes("scopeSelector?: React.ReactNode"));
 }
 
-console.log("\n6 — DEMANDAS: Todos -> /demandas; cliente -> /clients/[id]/demandas; preservado nas duas direções + entre clientes\n");
-{
-  check("Demandas + Todos -> /demandas", buildModuleContextHref("demandas", { type: "all" }, null), "/demandas");
-  check("Demandas + cliente -> /clients/[id]/demandas", buildModuleContextHref("demandas", { type: "client", id: "leonardo" }, null), "/clients/leonardo/demandas");
-  ok("/demandas monta GlobalScopeSelect", demandasPageSource.includes('<GlobalScopeSelect module="demandas"'));
-  ok(
-    "PendenciasPageClient aceita scopeSelector opt-in, só renderizado quando !hideHeading (nunca no workspace do cliente)",
-    demandasClientSource.includes("scopeSelector?: React.ReactNode") &&
-      /\{!hideHeading && \([\s\S]{0,400}\{scopeSelector\}/.test(demandasClientSource),
-  );
-  ok("/clients/[id]/demandas NUNCA passa scopeSelector (workspace do cliente não precisa de atalho 'Todos -> cliente')", !clientScopedDemandasSource.includes("scopeSelector"));
-  ok("ZERO mudança na lógica de Demandas: tasks/origin='manual'/filtros/bulk/comments/completion/reopen/assignee/priority/status continuam vindo de loadPendenciasRawData, nenhuma reimplementação", demandasPageSource.includes("loadPendenciasRawData"));
-}
+// ---------------------------------------------------------------------------
+// (Seção 6 — "Demandas" — removida na Etapa 1.6 da reestruturação KOFF
+// Analytics: /demandas, /clients/[id]/demandas e lib/pendencias.ts saíram
+// do produto.)
+// ---------------------------------------------------------------------------
 
 console.log("\n8 — METAS/PERFORMANCE/DADOS: sem rota global (decisão documentada) — Todos cai em /clients, nunca inventa agregação\n");
 {
@@ -195,7 +190,7 @@ console.log("\n8 — METAS/PERFORMANCE/DADOS: sem rota global (decisão document
   // própria da correção.
   ok(
     "nenhum cálculo/agregação consolidada nova foi criada pra Metas/Performance/Dados (MODULE_GLOBAL_HREF só ganhou o resolver do Dashboard, nunca uma entrada pra Metas/Performance/Dados)",
-    /MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = \{\s*dashboard: "\/",\s*operation: "\/operation",\s*demandas: "\/demandas",\s*\};/.test(
+    /MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = \{\s*dashboard: "\/",\s*operation: "\/operation",\s*\};/.test(
       loadSource("src", "lib", "client-workspace-nav.ts"),
     ),
   );
