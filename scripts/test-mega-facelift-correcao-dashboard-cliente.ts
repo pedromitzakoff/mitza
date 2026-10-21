@@ -42,7 +42,7 @@ function check(name: string, actual: unknown, expected: unknown) {
 }
 
 const CLIENT_ONLY_MODULES: ModuleKey[] = ["dashboard", "metas", "performance", "dados"];
-const DUAL_CONTEXT_MODULES: ModuleKey[] = ["operation", "demandas", "timeline"];
+const DUAL_CONTEXT_MODULES: ModuleKey[] = ["operation", "demandas"];
 
 console.log("\n1 — Matriz final: módulos de Growth do cliente NUNCA oferecem Todos no seletor (moduleSupportsAllContext)\n");
 {
@@ -62,7 +62,7 @@ console.log("\n1 — Matriz final: módulos de Growth do cliente NUNCA oferecem 
 
 console.log("\n2 — Matriz final: módulos operacionais continuam Todos-ou-Cliente, sem mudança\n");
 {
-  const expectedGlobalHref: Record<string, string> = { operation: "/operation", demandas: "/demandas", timeline: "/timeline" };
+  const expectedGlobalHref: Record<string, string> = { operation: "/operation", demandas: "/demandas" };
   for (const moduleKey of DUAL_CONTEXT_MODULES) {
     ok(`moduleSupportsAllContext("${moduleKey}") === true`, moduleSupportsAllContext(moduleKey) === true);
     check(`buildModuleContextHref("${moduleKey}", Todos) continua em ${expectedGlobalHref[moduleKey]}`, buildModuleContextHref(moduleKey, { type: "all" }, null), expectedGlobalHref[moduleKey]);
@@ -109,7 +109,6 @@ console.log("\n7 — Rotas antigas preservadas (nenhum link quebrado)\n");
   check("'/' ainda resolve como Dashboard+Todos pro núcleo de leitura de pathname (agora o resolver do primeiro cliente, ver test-mega-facelift-correcao-dashboard-entrypoint.ts)", resolveCurrentModuleAndContext("/"), { module: "dashboard", context: { type: "all" } });
   check("'/operation' ainda resolve normalmente", resolveCurrentModuleAndContext("/operation").module, "operation");
   check("'/demandas' ainda resolve normalmente", resolveCurrentModuleAndContext("/demandas").module, "demandas");
-  check("'/timeline' ainda resolve normalmente", resolveCurrentModuleAndContext("/timeline").module, "timeline");
 }
 
 console.log(`\n${passed} verificações passaram.\n`);

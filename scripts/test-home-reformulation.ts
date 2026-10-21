@@ -34,23 +34,18 @@
  *    nenhum `.sort()` novo — reaproveitando a ordem que
  *    `loadOperationChannelStates` já resolve (`sortClientOperationalStates`,
  *    dentro do loader).
- * 7. "Aconteceu recentemente" nunca cria um motor de eventos novo —
- *    reaproveita `fetchAchievements`/`fetchAgencyTimeline`, ambas leituras
- *    já existentes de `operational_events`.
- * 8. Limite de eventos (6), conquistas sempre antes dos eventos operacionais
- *    na composição (`recentActivityAchievementItems` antes de
- *    `recentActivityEventItems` no `[...]`).
+ * 7-8. (Removidos na Etapa 1.3 da reestruturação KOFF Analytics — "Aconteceu
+ *    recentemente" e a Timeline que o alimentava saíram do produto.)
  * 9-10. (Removidos na Etapa 1.2 da reestruturação KOFF Analytics — o
  *    módulo "Lembretes"/`RemindersPanel` em si saiu do produto.)
  * 11-14. Nenhuma regressão em Operação/Timeline/Conquistas/páginas de
  *    cliente — verificado por este script NÃO tocar em nenhum desses
- *    arquivos-fonte (`operation-triage.ts`, `agency-timeline.ts`,
- *    `achievements-data.ts`, `account-health-engine.ts`,
+ *    arquivos-fonte (`operation-triage.ts`, `account-health-engine.ts`,
  *    `client-operational-state-data.ts` continuam com as mesmas
  *    assinaturas já cobertas pelas suites próprias dessas telas —
- *    `test-operation-*.ts`/`test-timeline-detail.ts`/`test-achievement-*.ts`/
- *    `test-account-health-engine.ts`/`test-client-page-facelift.ts`, rodadas
- *    separadamente na suíte completa).
+ *    `test-operation-*.ts`/`test-account-health-engine.ts`/
+ *    `test-client-page-facelift.ts`, rodadas separadamente na suíte
+ *    completa).
  *
  * Rodar: npx tsx scripts/test-home-reformulation.ts
  */
@@ -263,37 +258,12 @@ console.log("\n6 — Ordenação: selectAccountsNeedingAttention só filtra + co
   ok("...NUNCA usa .sort() — reaproveita a ordem que o loader já resolveu", !/\.sort\(/.test(selectFnBody));
 }
 
-console.log('\n7 — "Aconteceu recentemente" nunca cria um motor de eventos novo\n');
-{
-  // Etapa "Timeline 2.0 — Revisão de Acoplamento": a Home deixou de
-  // depender do loader/vocabulário de filtro específico da tela Timeline
-  // (fetchAgencyTimeline, type/family) — agora chama fetchRecentAgencyEvents,
-  // uma casca fina própria sobre o MESMO núcleo canônico
-  // (fetchAgencyEvents, lib/agency-timeline.ts), que já classifica
-  // achievement_unlocked como "performance" intercalado. Nenhuma segunda
-  // leitura, nenhum motor novo, nenhum acoplamento ao filtro de Tipo/Família
-  // que a Home nem expõe na UI.
-  ok("NÃO importa mais fetchAchievements (Timeline 2.0 unificou a fonte)", !/from "@\/lib\/achievements-data"/.test(homePageSource));
-  ok(
-    "importa fetchRecentAgencyEvents (casca própria da Home, nunca o loader/vocabulário de filtro da tela Timeline)",
-    /import \{ fetchRecentAgencyEvents \} from "@\/lib\/agency-timeline"/.test(homePageSource),
-  );
-  ok("NÃO importa fetchAgencyTimeline (esse é específico da tela /timeline — paginação, tipo, família)", !/import \{ fetchAgencyTimeline \}/.test(homePageSource));
-  ok("nenhuma nova constante de OperationalEventType/tabela é definida em page.tsx", !/OperationalEventType\.\w+\s*=/.test(homePageSource) && !/from\("operational_events"\)/.test(homePageSource));
-  ok(
-    "chama fetchRecentAgencyEvents só com limite 6 — nunca precisa saber o que é 'type'/'family'/página",
-    /fetchRecentAgencyEvents\(supabase, profile\.organizationId, 6\)/.test(homePageSource),
-  );
-}
-
-console.log("\n8 — Limite de eventos (6), sem segunda composição/sort próprio\n");
-{
-  ok(
-    "recentActivity é um .map DIRETO sobre o resultado de fetchRecentAgencyEvents (nunca uma concatenação de duas listas nem um sort por peso/score)",
-    /const recentActivity: RecentActivityItem\[\] = recentAgencyEvents\.map\(/.test(homePageSource),
-  );
-  ok("busca já vem com limite 6 (nenhuma query pesada, nenhum .slice adicional escondendo um limite diferente)", /fetchRecentAgencyEvents\(supabase, profile\.organizationId, 6\)/.test(homePageSource));
-}
+// ---------------------------------------------------------------------------
+// 7-8 — ("Aconteceu recentemente" removido na Etapa 1.3 da reestruturação
+// KOFF Analytics junto com a Timeline — a Home deixou de ler
+// fetchRecentAgencyEvents/lib/agency-timeline.ts, ambos removidos do
+// produto.)
+// ---------------------------------------------------------------------------
 
 console.log('\n11 — "Ritmo de investimento" (agregado da agência) foi removido da Home, sem quebrar consumidores compartilhados\n');
 {

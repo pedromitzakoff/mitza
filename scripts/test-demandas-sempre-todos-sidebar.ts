@@ -4,8 +4,8 @@
  * deixou de preservar o cliente atual (ex.: Aibou -> Operação -> Demandas
  * não deve mais abrir só a fração de Aibou) e passou a ir sempre pra
  * `/demandas` (Todos), mesma regra independente de QUAL módulo/cliente o
- * usuário estava antes. Os outros 6 módulos (Dashboard/Metas/Performance/
- * Dados/Operação/Timeline) continuam preservando o cliente atual, como
+ * usuário estava antes. Os outros 5 módulos (Dashboard/Metas/Performance/
+ * Dados/Operação) continuam preservando o cliente atual, como
  * sempre — nenhuma mudança neles.
  *
  * Isso é só sobre o DESTINO do clique na Sidebar: `/clients/[id]/demandas`
@@ -42,9 +42,9 @@ console.log("\n1 — resolveModuleLinkContext: Demandas SEMPRE força Todos, mes
   check('resolveModuleLinkContext("demandas", Todos) -> Todos (sem mudança quando já era Todos)', resolveModuleLinkContext("demandas", { type: "all" }), { type: "all" });
 }
 
-console.log("\n2 — Os outros 6 módulos continuam preservando o contexto ambiente, sem mudança\n");
+console.log("\n2 — Os outros 5 módulos continuam preservando o contexto ambiente, sem mudança\n");
 {
-  const unaffected: ModuleKey[] = ["dashboard", "metas", "performance", "dados", "operation", "timeline"];
+  const unaffected: ModuleKey[] = ["dashboard", "metas", "performance", "dados", "operation"];
   for (const moduleKey of unaffected) {
     check(`resolveModuleLinkContext("${moduleKey}", cliente aibou) continua cliente aibou (nenhuma mudança)`, resolveModuleLinkContext(moduleKey, { type: "client", id: "aibou" }), { type: "client", id: "aibou" });
     check(`resolveModuleLinkContext("${moduleKey}", Todos) continua Todos (nenhuma mudança)`, resolveModuleLinkContext(moduleKey, { type: "all" }), { type: "all" });
@@ -53,7 +53,7 @@ console.log("\n2 — Os outros 6 módulos continuam preservando o contexto ambie
 
 console.log("\n3 — Combinado com buildModuleContextHref: clicar Demandas na Sidebar sempre cai em /demandas, de qualquer módulo/cliente\n");
 {
-  for (const fromModule of ["dashboard", "metas", "performance", "dados", "operation", "timeline"] as const) {
+  for (const fromModule of ["dashboard", "metas", "performance", "dados", "operation"] as const) {
     check(
       `Aibou/${fromModule} -> clicar Demandas na Sidebar cai em /demandas (Todos), nunca /clients/aibou/demandas`,
       buildModuleContextHref("demandas", resolveModuleLinkContext("demandas", { type: "client", id: "aibou" }), null),

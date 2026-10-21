@@ -39,7 +39,6 @@ const operationPageSource = loadSource("src", "app", "operation", "page.tsx");
 const operationViewSource = loadSource("src", "app", "operation", "operation-triage-view.tsx");
 const demandasPageSource = loadSource("src", "app", "demandas", "page.tsx");
 const demandasClientSource = loadSource("src", "app", "demandas", "pendencias-page-client.tsx");
-const timelinePageSource = loadSource("src", "app", "timeline", "page.tsx");
 const clientScopedDemandasSource = loadSource("src", "app", "clients", "[id]", "demandas", "page.tsx");
 
 console.log("\n1 — SIDEBAR: MITZA ONE — Fase 2 substituiu Growth/Execução (módulos) por CARTEIRA + Agência/Gestão — histórico preservado, assertivas atualizadas\n");
@@ -65,7 +64,10 @@ console.log("\n1 — SIDEBAR: MITZA ONE — Fase 2 substituiu Growth/Execução 
     !sidebarSource.includes('label: "Operação"'),
   );
   ok("Demandas aparece só UMA vez na Sidebar", (sidebarSource.match(/label: "Demandas"/g) ?? []).length === 1);
-  ok("Timeline aparece só UMA vez na Sidebar", (sidebarSource.match(/label: "Timeline"/g) ?? []).length === 1);
+  ok(
+    "Timeline NÃO tem mais item na Sidebar (removida na Etapa 1.3 da reestruturação KOFF Analytics)",
+    !sidebarSource.includes('label: "Timeline"'),
+  );
   ok('"Clientes" presente em GESTAO_ITEMS, aponta pra /clients', /\{ label: "Clientes", href: "\/clients"/.test(sidebarSource));
   ok(
     "collapsed continua controlado só por md:hidden (ItemLabel) — nenhuma dependência de cliente ativo pra funcionar",
@@ -107,8 +109,11 @@ console.log("\n3 — resolveCurrentModuleAndContext: pathname -> módulo + conte
   check("'/operation' -> operation + Todos", resolveCurrentModuleAndContext("/operation"), { module: "operation", context: { type: "all" } });
   check("'/demandas' -> demandas + Todos", resolveCurrentModuleAndContext("/demandas"), { module: "demandas", context: { type: "all" } });
   check("'/pendencias' (nome antigo) -> demandas + Todos", resolveCurrentModuleAndContext("/pendencias"), { module: "demandas", context: { type: "all" } });
-  check("'/timeline' -> timeline + Todos", resolveCurrentModuleAndContext("/timeline"), { module: "timeline", context: { type: "all" } });
-  check("'/achievements' (nome antigo) -> timeline + Todos", resolveCurrentModuleAndContext("/achievements"), { module: "timeline", context: { type: "all" } });
+  check(
+    "'/timeline' (rota removida na Etapa 1.3) -> nenhum módulo, contexto Todos",
+    resolveCurrentModuleAndContext("/timeline"),
+    { module: null, context: { type: "all" } },
+  );
   check("'/clients' -> nenhum módulo (área Gestão), contexto Todos", resolveCurrentModuleAndContext("/clients"), { module: null, context: { type: "all" } });
   check("'/team' -> nenhum módulo", resolveCurrentModuleAndContext("/team").module, null);
   check("'/clients/leonardo' -> dashboard + cliente leonardo", resolveCurrentModuleAndContext("/clients/leonardo"), {
@@ -174,13 +179,6 @@ console.log("\n6 — DEMANDAS: Todos -> /demandas; cliente -> /clients/[id]/dema
   ok("ZERO mudança na lógica de Demandas: tasks/origin='manual'/filtros/bulk/comments/completion/reopen/assignee/priority/status continuam vindo de loadPendenciasRawData, nenhuma reimplementação", demandasPageSource.includes("loadPendenciasRawData"));
 }
 
-console.log("\n7 — TIMELINE: Todos -> /timeline; cliente -> /clients/[id]/timeline; preservado nas duas direções\n");
-{
-  check("Timeline + Todos -> /timeline", buildModuleContextHref("timeline", { type: "all" }, null), "/timeline");
-  check("Timeline + cliente -> /clients/[id]/timeline", buildModuleContextHref("timeline", { type: "client", id: "leonardo" }, null), "/clients/leonardo/timeline");
-  ok("/timeline monta GlobalScopeSelect", timelinePageSource.includes('<GlobalScopeSelect module="timeline"'));
-}
-
 console.log("\n8 — METAS/PERFORMANCE/DADOS: sem rota global (decisão documentada) — Todos cai em /clients, nunca inventa agregação\n");
 {
   const modulesWithoutGlobal: ModuleKey[] = ["metas", "performance", "dados"];
@@ -197,7 +195,7 @@ console.log("\n8 — METAS/PERFORMANCE/DADOS: sem rota global (decisão document
   // própria da correção.
   ok(
     "nenhum cálculo/agregação consolidada nova foi criada pra Metas/Performance/Dados (MODULE_GLOBAL_HREF só ganhou o resolver do Dashboard, nunca uma entrada pra Metas/Performance/Dados)",
-    /MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = \{\s*dashboard: "\/",\s*operation: "\/operation",\s*demandas: "\/demandas",\s*timeline: "\/timeline",\s*\};/.test(
+    /MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = \{\s*dashboard: "\/",\s*operation: "\/operation",\s*demandas: "\/demandas",\s*\};/.test(
       loadSource("src", "lib", "client-workspace-nav.ts"),
     ),
   );

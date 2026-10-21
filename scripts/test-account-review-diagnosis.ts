@@ -26,7 +26,6 @@ import {
   OPTIMIZATION_QUICK_GROUPS,
 } from "../src/lib/account-reviews";
 import { buildReviewDetail, buildReviewPresentation } from "../src/lib/client-operational-history";
-import { resolveAgencyTimelineType, eventTypesForFilter, AGENCY_TIMELINE_TYPE_OPTIONS } from "../src/lib/agency-timeline";
 
 let passed = 0;
 function ok(name: string, condition: boolean) {
@@ -341,73 +340,13 @@ console.log("\n7 — buildReviewPresentation: Diagnóstico + Ações + Observaç
     { type: "AUDIENCE", action: "ACTIVATED", quantity: 1 },
   ]);
   ok("observação só espaços em branco nunca aparece como preenchida", noNotesCase?.notes === null);
-
-  ok(
-    "página da Timeline só renderiza a linha de Observação quando reviewPresentation.notes existe (condicional, não sempre)",
-    /row\.reviewPresentation\.notes &&/.test(stripComments(loadSource("src", "app", "timeline", "page.tsx"))),
-  );
-  ok(
-    "página da Timeline renderiza headline (Diagnóstico) e actionsLine (Ação) da revisão",
-    /row\.reviewPresentation\.headline/.test(stripComments(loadSource("src", "app", "timeline", "page.tsx"))) &&
-      /row\.reviewPresentation\.actionsLine/.test(stripComments(loadSource("src", "app", "timeline", "page.tsx"))),
-  );
 }
 
 // ---------------------------------------------------------------------------
-// 12-15 — Filtros: gestor, cliente, tipo, e os três combinados.
+// (Seção "Filtros de Timeline" removida na Etapa 1.3 da reestruturação KOFF
+// Analytics — testava exclusivamente lib/agency-timeline.ts e
+// app/timeline/page.tsx, ambos removidos do produto.)
 // ---------------------------------------------------------------------------
-console.log("\n8 — Filtro por Tipo (URL) e combinação com Gestor/Cliente\n");
-{
-  check("sem parâmetro -> 'todos' (fallback seguro)", resolveAgencyTimelineType(undefined), "todos");
-  check("?type=otimizacoes -> 'otimizacoes'", resolveAgencyTimelineType("otimizacoes"), "otimizacoes");
-  check("?type=reports -> 'reports'", resolveAgencyTimelineType("reports"), "reports");
-  check("?type=outros -> 'outros'", resolveAgencyTimelineType("outros"), "outros");
-  check("?type=lixo (valor inválido) -> fallback seguro 'todos'", resolveAgencyTimelineType("lixo"), "todos");
-  check("4 opções de Tipo (Todos/Otimizações/Reports/Outros)", AGENCY_TIMELINE_TYPE_OPTIONS.length, 4);
-
-  const todos = eventTypesForFilter("todos");
-  const otimizacoes = eventTypesForFilter("otimizacoes");
-  const reports = eventTypesForFilter("reports");
-  const outros = eventTypesForFilter("outros");
-
-  check("Otimizações = só account_review_recorded", otimizacoes, ["account_review_recorded"]);
-  ok("Reports inclui client_report_generated", reports.includes("client_report_generated"));
-  ok("Reports inclui client_report_sent", reports.includes("client_report_sent"));
-  ok("Reports nunca inclui account_review_recorded", !reports.includes("account_review_recorded"));
-  ok("Outros nunca inclui account_review_recorded nem os 2 tipos de report (sem sobreposição entre categorias)", !outros.includes("account_review_recorded") && !outros.includes("client_report_generated") && !outros.includes("client_report_sent"));
-  check(
-    "Otimizações + Reports + Outros particionam exatamente 'todos' (nenhum tipo perdido, nenhum duplicado)",
-    [...otimizacoes, ...reports, ...outros].sort(),
-    [...todos].sort(),
-  );
-
-  const timelineCode = stripComments(loadSource("src", "lib", "agency-timeline.ts"));
-  // Etapa "Timeline 2.0 — Revisão de Acoplamento": a query real migrou pra
-  // fetchAgencyEvents (núcleo canônico) — mesmo .eq direto de sempre, só o
-  // nome do parâmetro deixou de ter o prefixo "filters." (fetchAgencyTimeline
-  // continua repassando filters.actorId/filters.clientId pra ela, ver
-  // "casca fina" abaixo).
-  ok("filtro de gestor vira .eq na própria query (nunca filtro em memória)", /actorId\) query = query\.eq\("actor_team_member_id", actorId\)/.test(timelineCode));
-  ok("filtro de cliente vira .eq na própria query", /clientId\) query = query\.eq\("client_id", clientId\)/.test(timelineCode));
-  ok(
-    "fetchAgencyTimeline (casca fina de /timeline) repassa filters.actorId/filters.clientId pra fetchAgencyEvents sem reimplementar o filtro",
-    /actorId: filters\.actorId,\s*\n\s*clientId: filters\.clientId,/.test(timelineCode),
-  );
-  ok(
-    // Etapa "Timeline 2.0": eventTypesForFilter (Tipo) foi combinada com o
-    // filtro de Família (Todos/Ações/Performance) num único resolvedor
-    // (eventTypesForFilters) — resolvido em fetchAgencyTimeline (a casca
-    // fina de /timeline), repassado como eventTypes já pronto pra
-    // fetchAgencyEvents (núcleo canônico, que faz o .in real).
-    "fetchAgencyTimeline resolve tipo+família via eventTypesForFilters e repassa como eventTypes pra fetchAgencyEvents",
-    /eventTypes: eventTypesForFilters\(filters\.family, filters\.type\)/.test(timelineCode),
-  );
-  ok(
-    "fetchAgencyEvents (núcleo canônico) faz o .in real com os eventTypes já resolvidos — nunca decide sozinho quais tipos existem",
-    /\.in\("event_type", eventTypes\)/.test(timelineCode),
-  );
-}
-
 // ---------------------------------------------------------------------------
 // 16 — Interface: sem texto explicativo grande, nomenclatura "Seguidores"/
 // "Alterou público" etc. já resolvida na taxonomia (seção 9 do pedido).

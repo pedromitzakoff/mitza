@@ -9,7 +9,6 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
-  History,
   ListChecks,
   LogOut,
   Menu,
@@ -147,7 +146,6 @@ interface NavItem {
  * deixou de ter item próprio aqui. */
 const AGENCIA_ITEMS: NavItem[] = [
   { label: "Demandas", href: "/demandas", icon: ClipboardList, isActive: (p) => p.startsWith("/demandas") || p.startsWith("/pendencias") },
-  { label: "Timeline", href: "/timeline", icon: History, isActive: (p) => p.startsWith("/timeline") || p.startsWith("/achievements") },
 ];
 
 /** MITZA ONE — Minha Rotina (Fase 1 do pedido): item FIXO no topo da

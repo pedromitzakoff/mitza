@@ -124,16 +124,17 @@ console.log("\n7 — Módulos fixos (Fase 4.6): substituídos por navegação po
   // MITZA ONE — Fase 2: Dashboard/Metas/Performance/Dados deixaram de ser
   // itens de navegação (viraram seções DENTRO do cockpit único,
   // `/clients/[id]`, Fase 1) — nunca removidos do produto, só não têm
-  // mais item próprio na Sidebar. Demandas/Timeline continuam como links
-  // globais fixos na área "Agência" — Operação saiu dessa área na Etapa
+  // mais item próprio na Sidebar. Demandas continua como link global
+  // fixo na área "Agência" — Operação saiu dessa área na Etapa
   // "Simplificação da Operação" (a ROTA /operation continua existindo,
-  // só sem item na Sidebar).
+  // só sem item na Sidebar); Timeline saiu do produto por completo na
+  // Etapa 1.3 da reestruturação KOFF Analytics.
   ok("Sidebar não define mais um item de navegação 'Metas'/'Dados' (migraram pra dentro do cockpit, Fase 1)", !/\{ key: "metas"/.test(sidebarSource) && !/\{ key: "dados"/.test(sidebarSource));
   ok(
-    "Agência: Demandas/Timeline continuam os links globais (Operação removido da Sidebar, Etapa 'Simplificação da Operação')",
+    "Agência: Demandas continua o link global (Operação removido na Etapa 'Simplificação da Operação'; Timeline removida na Etapa 1.3)",
     !/label: "Operação", href: "\/operation"/.test(sidebarSource) &&
       /label: "Demandas", href: "\/demandas"/.test(sidebarSource) &&
-      /label: "Timeline", href: "\/timeline"/.test(sidebarSource),
+      !/label: "Timeline"/.test(sidebarSource),
   );
 }
 
@@ -172,25 +173,11 @@ console.log("\n9 — Árvore 'Contas da Agência' não é mais renderizada na Si
   ok("agency-accounts-tree.tsx/agency-accounts-tree-client.tsx/agency-accounts-tree-actions.ts continuam intactos no disco (nenhum deletado)", existsSync(join(__dirname, "..", "src", "app", "agency-accounts-tree.tsx")) && existsSync(join(__dirname, "..", "src", "app", "agency-accounts-tree-client.tsx")) && existsSync(join(__dirname, "..", "src", "app", "agency-accounts-tree-actions.ts")));
 }
 
-console.log("\n10 — Timeline global permanece em Carteira (auditoria: função distinta da Timeline por cliente, que ainda é um shell vazio da Fase 1)\n");
-{
-  // Fase 4.6: "Timeline" não é mais um item global de "Carteira" com href
-  // fixo — virou o módulo único `{ key: "timeline", ... }` (MODULES),
-  // cujo destino em contexto "Todos" continua sendo /timeline
-  // (MODULE_GLOBAL_HREF, lib/client-workspace-nav.ts) — mesmo resultado,
-  // mecanismo consolidado.
-  ok("Timeline continua definida na Sidebar — agora como link global fixo na área Agência (Fase 2), não removida da nav", /label: "Timeline", href: "\/timeline"/.test(sidebarSource));
-  ok("contexto Todos + módulo Timeline continua resolvendo pra /timeline em lib/client-workspace-nav.ts (intocado, ainda usado por GlobalScopeSelect)", loadSource("src", "lib", "client-workspace-nav.ts").includes('timeline: "/timeline"'));
-  // Etapa "MEGA FACELIFT — Fase 6: Timeline": o shell vazio desta fase foi
-  // substituído por conteúdo funcional real (memória do Growth do cliente,
-  // `lib/client-timeline.ts`) — continua NÃO redundante com a Timeline
-  // global: uma é o recorte de UM cliente, a outra agrega a agência inteira
-  // (ver suite própria, test-mega-facelift-fase6-timeline.ts).
-  const clientTimelineSource = loadSource("src", "app", "clients", "[id]", "timeline", "page.tsx");
-  ok("Timeline por cliente não é mais o placeholder da Fase 1 (evoluiu na Fase 6)", !clientTimelineSource.includes("sem nenhum conteúdo funcional ainda"));
-  ok("Timeline por cliente usa seu próprio núcleo (fetchClientTimelinePage), nunca uma segunda cópia de fetchAgencyTimeline", clientTimelineSource.includes("fetchClientTimelinePage"));
-  ok("Timeline global (/timeline) continua agregando toda a agência (fetchAgencyTimeline), nunca um recorte por cliente só", loadSource("src", "app", "timeline", "page.tsx").includes("fetchAgencyTimeline("));
-}
+// ---------------------------------------------------------------------------
+// (Seção 10 — "Timeline global" — removida na Etapa 1.3 da reestruturação
+// KOFF Analytics: /timeline, /clients/[id]/timeline e lib/agency-timeline.ts/
+// client-timeline.ts saíram do produto.)
+// ---------------------------------------------------------------------------
 
 console.log("\n11 — Collapsed/mobile: Sidebar continua um único componente (drawer), sem navegação paralela nova\n");
 {
@@ -221,7 +208,6 @@ console.log("\n13 — Nenhuma rota antiga quebrada; nenhuma rota nova criada al�
     ["src", "app", "clients", "new", "page.tsx"],
     ["src", "app", "operation", "page.tsx"],
     ["src", "app", "demandas", "page.tsx"],
-    ["src", "app", "timeline", "page.tsx"],
   ];
   for (const route of existingRoutes) {
     ok(`rota ${route.join("/")} continua existindo`, existsSync(join(__dirname, "..", ...route)));

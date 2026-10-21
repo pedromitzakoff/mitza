@@ -47,17 +47,17 @@ console.log("\nA — Item 1 (Cockpit): as 5 operações independentes entraram n
     pageSource.includes("pendenciasRawData,") && pageSource.includes("loadPendenciasRawData(supabase, id),") && !pageSource.includes("await loadPendenciasRawData("),
   );
   ok(
-    "fetchClientTimelinePage entra no mesmo Promise.all, preservando o MESMO condicional 'profile ? ... : { rows: [] }' de antes (nunca chamada pra profile null)",
-    pageSource.includes('profile ? fetchClientTimelinePage(supabase, profile.organizationId, id, "todos", 0, 6) : Promise.resolve({ rows: [] }),'),
-  );
-  ok(
     "buildPerformanceReportData entra no mesmo Promise.all (era a chamada mais isolada — só precisa de id/firstDay/lastDay, nenhuma dependência do resto do batch)",
     pageSource.includes("buildPerformanceReportData(supabase, id, { start: firstDay, end: lastDay }),") && !pageSource.includes("await buildPerformanceReportData("),
   );
   ok(
     "os pontos de USO continuam lendo os valores já resolvidos pelo Promise.all (desestruturação), nenhum novo await disperso pelo corpo da função",
-    pageSource.includes("const { items: demandaItems } = pendenciasRawData;") && pageSource.includes("const { rows: historyRows } = timelinePageResult;"),
+    pageSource.includes("const { items: demandaItems } = pendenciasRawData;"),
   );
+  // Nota (Etapa 1.3 da reestruturação KOFF Analytics): fetchClientTimelinePage
+  // e a leitura de historyRows foram removidas junto com a Seção 6
+  // "Histórico" do Cockpit e a Timeline — não fazem mais parte deste
+  // Promise.all nem do corpo da função.
 }
 
 console.log("\nB — Item 1: dependências reais preservadas — ensureClosedSprintSnapshots (escrita) nunca entra no Promise.all, nunca roda em paralelo com leitura que dependa dela\n");

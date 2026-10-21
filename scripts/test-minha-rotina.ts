@@ -311,7 +311,10 @@ console.log("\nK — Navegação (Fase 1 do pedido): item fixo acima da busca/ca
     "renderizado ACIMA da Carteira (busca + lista de clientes) — nunca dentro do grupo Agência/Gestão (que ficam no rodapé da carteira)",
     /<NavLink item=\{MINHA_ROTINA_ITEM\}[\s\S]{0,400}CARTEIRA — seção 1/.test(sidebarSource),
   );
-  ok("Sidebar continua com Demandas e Timeline em Agência, intocados", sidebarSource.includes('label: "Demandas"') && sidebarSource.includes('label: "Timeline"'));
+  ok(
+    "Sidebar continua com Demandas em Agência, intocada (Timeline removida na Etapa 1.3 da reestruturação KOFF Analytics)",
+    sidebarSource.includes('label: "Demandas"') && !sidebarSource.includes('label: "Timeline"'),
+  );
   ok("navegação do Cockpit (cockpit-meta-ritmo-section.tsx e afins) não foi tocada por esta etapa", !sidebarSource.includes("minha-rotina") || sidebarSource.includes('href: "/minha-rotina"'));
 }
 

@@ -15,7 +15,7 @@ import {
   monthRangeFromParam,
   shiftMonthParam,
 } from "@/lib/sprint-financials";
-import { formatCurrency, formatMonthLabel, formatRelativeShortDateTime } from "@/lib/format";
+import { formatCurrency, formatMonthLabel } from "@/lib/format";
 import { resolvePlanningHorizon } from "@/lib/monthly-budget";
 import { getClientMonthHorizons } from "@/lib/client-month-horizons";
 import {
@@ -41,7 +41,6 @@ import { AgencyFilters, type AgencyClientOption } from "./agency-filters";
 import { GlobalScopeSelect } from "./global-scope-select";
 import { OperationMetric } from "./operation-metric";
 import { PLATFORM_LABEL } from "./client-objective-table";
-import { fetchRecentAgencyEvents } from "@/lib/agency-timeline";
 import { Button, IconButton } from "@/components/workspace/button";
 import { SectionHeader } from "@/components/workspace/section-header";
 import { SandRail } from "@/components/workspace/sand-rail";
@@ -192,7 +191,6 @@ export async function LegacyGlobalDashboard({
       performanceTargetHistory,
     ],
     clientOperationalStates,
-    recentAgencyEvents,
     metaOperationStates,
     googleOperationStates,
   ] = await Promise.all([
@@ -324,18 +322,6 @@ export async function LegacyGlobalDashboard({
     ),
     ]),
     loadClientOperationalStates(supabase, monthRange.firstDay),
-    // Etapa "Timeline 2.0 — Revisão de Acoplamento": "Aconteceu recentemente"
-    // consome `fetchRecentAgencyEvents` (`lib/agency-timeline.ts`) — uma
-    // casca fina sobre o MESMO núcleo canônico que `/timeline` usa
-    // (`fetchAgencyEvents`), mas SEM importar o vocabulário de filtro da
-    // tela Timeline (tipo/família/paginação) nem herdar decisões de UI que
-    // não fazem sentido pra um resumo executivo. A Home nunca soube o que é
-    // "family: todos" — só pede "os últimos 6 acontecimentos", ponto.
-    // Nenhum motor de evento novo, nenhuma tabela nova, nenhuma query
-    // duplicada — as conquistas (`achievement_unlocked`) já vêm intercaladas
-    // cronologicamente porque a classificação `acao`/`performance` vive
-    // uma única vez, no núcleo compartilhado.
-    fetchRecentAgencyEvents(supabase, profile.organizationId, 6),
     // Etapa "Correção da Home — Atenção por canal": chamada DIRETA da MESMA
     // pipeline canônica da Operação (`lib/operation-channel-state-data.ts`,
     // sem wrapper novo) — uma vez por canal, `goal: "todos"` (mesma
@@ -862,33 +848,7 @@ export async function LegacyGlobalDashboard({
     return `/?${next.toString()}`;
   };
 
-  // Etapa "Timeline 2.0 — Revisão de Acoplamento": "Aconteceu recentemente"
-  // é um RESUMO do MESMO núcleo canônico de `/timeline`
-  // (`fetchRecentAgencyEvents`, já buscado acima com limite 6) — nunca o
-  // loader/vocabulário de filtro da própria tela Timeline, nenhum motor de
-  // relevância próprio, nenhuma segunda leitura. Conquistas
-  // (`achievement_unlocked`) já vêm intercaladas cronologicamente no
-  // resultado (a classificação `acao`/`performance` vive uma única vez, em
-  // `lib/agency-timeline.ts#fetchAgencyEvents`), então a Home nunca mais
-  // precisa decidir "conquista primeiro ou evento primeiro".
-  interface RecentActivityItem {
-    id: string;
-    subject: string;
-    text: string;
-    occurredAt: string;
-  }
-  const recentActivity: RecentActivityItem[] = recentAgencyEvents.map((row) => ({
-    id: row.id,
-    subject: row.clientName ?? row.actorName ?? "Agência",
-    text: row.reviewPresentation?.headline ?? row.label,
-    occurredAt: row.occurredAt,
-  }));
-
   const monthLabel = formatMonthLabel(monthRange.firstDay);
-  // Instante real pro relógio relativo de "Aconteceu recentemente" — nunca
-  // `todayUTC()`/`today` (que já são meia-noite civil truncada pelo fuso,
-  // ver a ressalva de `formatRelativeShortDateTime`, lib/format.ts).
-  const now = new Date();
 
   // Etapa "Cabeçalho executivo": o título "Visão Geral" saiu (redundante com
   // a Sidebar + o próprio conteúdo da página) e o seletor de mês — antes uma
@@ -1068,42 +1028,6 @@ export async function LegacyGlobalDashboard({
               </div>
             ))}
           </div>
-        </div>
-
-        {/* "ACONTECEU RECENTEMENTE" — Etapa "Timeline 2.0 — Revisão de
-            Acoplamento": resumo executivo (top 6) do MESMO núcleo canônico
-            de `/timeline` (`fetchRecentAgencyEvents`, nunca o loader
-            específico da tela Timeline) — nunca a Timeline inteira, nunca
-            um segundo motor de eventos. Conquistas (`achievement_unlocked`)
-            já vêm intercaladas cronologicamente dentro desse resultado —
-            ver `recentActivity` acima. */}
-        <div className="mt-6 border-t border-overview-border pt-4">
-          <SectionHeader
-            title="Aconteceu recentemente"
-            action={
-              <Link
-                href="/timeline"
-                className="shrink-0 text-[13px] text-overview-text-muted underline decoration-overview-border hover:text-overview-text-secondary"
-              >
-                Ver Timeline →
-              </Link>
-            }
-          />
-          {recentActivity.length > 0 ? (
-            <div className="mt-2.5 flex flex-col divide-y divide-overview-border">
-              {recentActivity.map((item) => (
-                <div key={item.id} className="py-2">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="min-w-0 truncate text-sm font-medium text-overview-text-primary">{item.subject}</p>
-                    <span className="shrink-0 text-[12px] text-overview-text-muted">{formatRelativeShortDateTime(item.occurredAt, now)}</span>
-                  </div>
-                  <p className="mt-0.5 truncate text-[13px] text-overview-text-secondary">{item.text}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2 text-[13px] text-overview-text-secondary">Nenhuma atividade recente para mostrar.</p>
-          )}
         </div>
 
         {/* Resumo compacto "Demandas": a Home nunca mais carrega UI pesada

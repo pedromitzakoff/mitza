@@ -52,7 +52,6 @@ import { buildCockpitInsights } from "@/lib/cockpit-diagnostics";
 import type { DataAttention } from "@/lib/data-trust";
 import { loadDadosPageData } from "../dados-data";
 import { DataFreshnessTimer } from "../data-freshness-timer";
-import { fetchClientTimelinePage } from "@/lib/client-timeline";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
 import { buildPeriodReading } from "@/lib/performance-report/report-derivatives";
 import {
@@ -65,7 +64,6 @@ import { CockpitResultCard, CockpitCostCard } from "../cockpit-goal-card";
 import { CockpitDiagnosticsCard } from "../cockpit-diagnostics-card";
 import { CockpitDemandasSection } from "../cockpit-demandas-section";
 import { CockpitPerformanceSection, type CockpitPerformanceView } from "../cockpit-performance-section";
-import { CockpitHistorySection } from "../cockpit-history-section";
 import { buildCockpitDailyEvolutionPoints } from "@/lib/cockpit-daily-evolution";
 import {
   CockpitDailyEvolutionSection,
@@ -214,7 +212,6 @@ export default async function ClientPage({
     dailyPerformanceRowsForEvolution,
     [clientOperationalState],
     pendenciasRawData,
-    timelinePageResult,
     performanceReportData,
   ] = await Promise.all([
       requireQuery(
@@ -301,7 +298,6 @@ export default async function ClientPage({
       // exibir aqui, deixou de ser disparada.
       loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, id),
       loadPendenciasRawData(supabase, id),
-      profile ? fetchClientTimelinePage(supabase, profile.organizationId, id, "todos", 0, 6) : Promise.resolve({ rows: [] }),
       buildPerformanceReportData(supabase, id, { start: firstDay, end: lastDay }),
     ]);
 
@@ -641,10 +637,6 @@ export default async function ClientPage({
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
     .slice(0, 3);
 
-  // MITZA ONE — Fase 1, Seção "Histórico": MESMA fonte da Timeline do
-  // cliente (`fetchClientTimelinePage`), só as linhas mais recentes. Busca
-  // já resolvida em paralelo no Promise.all principal, acima.
-  const { rows: historyRows } = timelinePageResult;
 
   // MITZA ONE — Fase 1, Seção "Performance essencial" (seções 18-20 do
   // pedido): reaproveita 100% a Camada 1 do Relatório de Performance
@@ -686,7 +678,6 @@ export default async function ClientPage({
   const metasHref = buildMetasHref(client.id, { month: monthParam }, {});
   const performanceHref = `/clients/${client.id}/relatorio`;
   const demandasHref = `/clients/${client.id}/demandas`;
-  const timelineHref = `/clients/${client.id}/timeline`;
 
   return (
     <WorkspaceContainer>
@@ -822,12 +813,6 @@ export default async function ClientPage({
           demandasHref={demandasHref}
           canOperate={canOperate}
         />
-      </div>
-
-      {/* SEÇÃO 6 — HISTÓRICO (pedido, seções 26-28): "O que aconteceu
-          recentemente?". */}
-      <div className="mt-5">
-        <CockpitHistorySection rows={historyRows} fullHistoryHref={timelineHref} />
       </div>
     </WorkspaceContainer>
   );

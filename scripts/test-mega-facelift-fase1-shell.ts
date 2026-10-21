@@ -54,7 +54,10 @@ console.log("\n1 — MITZA ONE — Fase 2 (Sidebar = Carteira de Clientes) subst
     !/label: "Operação", href: "\/operation"/.test(sidebarSource) && loadSource("src", "app", "operation", "page.tsx").length > 0,
   );
   ok("Demandas continua acessível — mesmo padrão (link global fixo)", /label: "Demandas", href: "\/demandas"/.test(sidebarSource));
-  ok("Timeline continua acessível — mesmo padrão (link global fixo)", /label: "Timeline", href: "\/timeline"/.test(sidebarSource));
+  ok(
+    "Timeline NÃO tem mais link na Sidebar (removida na Etapa 1.3 da reestruturação KOFF Analytics)",
+    !/label: "Timeline"/.test(sidebarSource),
+  );
   ok('eyebrow "Carteira" não existe mais como label — a carteira agora é a lista de clientes diretamente, sem rótulo "Carteira" acima', !/>\s*Carteira\s*</.test(sidebarSource));
   ok(
     'eyebrow "Gestão" continua — Clientes/Equipe/Configurações, agora dentro da área "Agência" (MITZA ONE — Fase 2.1: virou o título de um grupo expansível, rótulo passado por prop — "Gestão" sobrevive como label="Gestão", não mais como texto JSX literal)',
@@ -103,22 +106,21 @@ console.log("\n4 — Árvore 'Contas da Agência': Fase 1 a mantinha montada na 
   ok("agency-accounts-tree.tsx continua no disco, intocado", loadSource("src", "app", "agency-accounts-tree.tsx").includes("export async function AgencyAccountsTree"));
 }
 
-console.log("\n5 — WORKSPACE_SECTION_SUFFIXES generalizado pra 7 módulos; '/edit' deixou de ser replicável (mudança de comportamento explícita, não uma remoção de funcionalidade)\n");
+console.log("\n5 — WORKSPACE_SECTION_SUFFIXES generalizado pra 6 módulos (Timeline removida na Etapa 1.3); '/edit' deixou de ser replicável (mudança de comportamento explícita, não uma remoção de funcionalidade)\n");
 {
-  check("os 7 sufixos reconhecidos, na ordem Dashboard/Metas/Performance/Dados/Operação/Demandas/Timeline", WORKSPACE_SECTION_SUFFIXES, [
+  check("os 6 sufixos reconhecidos, na ordem Dashboard/Metas/Performance/Dados/Operação/Demandas", WORKSPACE_SECTION_SUFFIXES, [
     "",
     "/metas",
     "/relatorio",
     "/dados",
     "/operation",
     "/demandas",
-    "/timeline",
   ]);
   check("'/edit' não é mais replicado ao trocar de cliente (cai pro Dashboard, mesma regra de qualquer rota fora da lista)", resolveReplicableSuffix("/edit"), "");
   ok("a rota /clients/[id]/edit em si não foi tocada nesta fase (segue existindo)", existsSync(join(__dirname, "..", "src", "app", "clients", "[id]", "edit", "page.tsx")));
 }
 
-console.log("\n6 — Trocar de cliente preserva a dimensão atual, para cada um dos 7 módulos (simulação ponta a ponta)\n");
+console.log("\n6 — Trocar de cliente preserva a dimensão atual, para cada um dos 6 módulos (simulação ponta a ponta)\n");
 {
   const scenarios: { label: string; path: string; suffix: string }[] = [
     { label: "Dashboard", path: "/clients/leonardo", suffix: "" },
@@ -127,7 +129,6 @@ console.log("\n6 — Trocar de cliente preserva a dimensão atual, para cada um 
     { label: "Dados", path: "/clients/leonardo/dados", suffix: "/dados" },
     { label: "Operação", path: "/clients/leonardo/operation", suffix: "/operation" },
     { label: "Demandas", path: "/clients/leonardo/demandas", suffix: "/demandas" },
-    { label: "Timeline", path: "/clients/leonardo/timeline", suffix: "/timeline" },
   ];
 
   for (const scenario of scenarios) {
@@ -164,11 +165,10 @@ console.log("\n8 — Preservação de ?month= ao trocar de módulo/cliente (cont
   );
 }
 
-console.log("\n9 — Todos os shells da Fase 1 evoluíram pra conteúdo funcional: Metas (Fase 2), Dados (Fase 5), Timeline (Fase 6) — ver suites próprias\n");
+console.log("\n9 — Shells da Fase 1 que sobrevivem evoluíram pra conteúdo funcional: Metas (Fase 2), Dados (Fase 5) — ver suites próprias (o shell de Timeline foi removido do produto na Etapa 1.3)\n");
 {
   const metasSource = loadSource("src", "app", "clients", "[id]", "metas", "page.tsx");
   const dadosSource = loadSource("src", "app", "clients", "[id]", "dados", "page.tsx");
-  const timelineSource = loadSource("src", "app", "clients", "[id]", "timeline", "page.tsx");
 
   // Etapa "MEGA FACELIFT — Fase 2: Metas": o shell vazio desta fase foi
   // substituído por conteúdo funcional real — a checagem de que ainda é só
@@ -181,12 +181,6 @@ console.log("\n9 — Todos os shells da Fase 1 evoluíram pra conteúdo funciona
   // (test-mega-facelift-fase5-dados.ts).
   ok("Dados usa WorkspaceContainer (mesma largura do resto do workspace, nenhum max-width solto novo)", dadosSource.includes("<WorkspaceContainer>"));
   ok("Dados não é mais o placeholder da Fase 1 (evoluiu na Fase 5)", !dadosSource.includes("Infraestrutura de dados do cliente."));
-
-  // Etapa "MEGA FACELIFT — Fase 6: Timeline": idem, shell vazio substituído
-  // por conteúdo funcional real (memória do Growth do cliente) — ver suite
-  // própria (test-mega-facelift-fase6-timeline.ts).
-  ok("Timeline usa WorkspaceContainer (mesma largura do resto do workspace, nenhum max-width solto novo)", timelineSource.includes("<WorkspaceContainer>"));
-  ok("Timeline não é mais o placeholder da Fase 1 (evoluiu na Fase 6)", !timelineSource.includes("Histórico do Growth deste cliente."));
 }
 
 console.log("\n10 — Rotas existentes (Performance/Operação/Demandas) permanecem tecnicamente intactas — só o RÓTULO muda na navegação\n");

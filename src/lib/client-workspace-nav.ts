@@ -34,7 +34,7 @@
  * "Cliente" da Sidebar. "" é o Dashboard (Painel). `/relatorio` continua
  * com este nome técnico de rota (nenhum link/PDF/`/r/[token]` quebra) —
  * "Performance" é só o rótulo exibido na navegação. */
-export const WORKSPACE_SECTION_SUFFIXES: string[] = ["", "/metas", "/relatorio", "/dados", "/operation", "/demandas", "/timeline"];
+export const WORKSPACE_SECTION_SUFFIXES: string[] = ["", "/metas", "/relatorio", "/dados", "/operation", "/demandas"];
 
 /** Sufixo da rota atual relativo a `/clients/[id]` — "" na raiz. */
 export function resolveCurrentSuffix(pathname: string, clientId: string): string {
@@ -86,7 +86,7 @@ export function resolveActiveClientIdFromPathname(pathname: string): string | nu
  * por `GlobalScopeSelect` (entrada de "Todos" pra um cliente), nunca
  * duplicado/reimplementado em cada componente (seção 17 do pedido).
  */
-export type ModuleKey = "dashboard" | "metas" | "performance" | "dados" | "operation" | "demandas" | "timeline";
+export type ModuleKey = "dashboard" | "metas" | "performance" | "dados" | "operation" | "demandas";
 
 export type AppContext = { type: "all" } | { type: "client"; id: string };
 
@@ -101,7 +101,6 @@ const MODULE_CLIENT_SUFFIX: Record<ModuleKey, string> = {
   dados: "/dados",
   operation: "/operation",
   demandas: "/demandas",
-  timeline: "/timeline",
 };
 
 const SUFFIX_TO_MODULE: Record<string, ModuleKey> = {
@@ -111,7 +110,6 @@ const SUFFIX_TO_MODULE: Record<string, ModuleKey> = {
   "/dados": "dados",
   "/operation": "operation",
   "/demandas": "demandas",
-  "/timeline": "timeline",
 };
 
 /**
@@ -141,7 +139,6 @@ const MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = {
   dashboard: "/",
   operation: "/operation",
   demandas: "/demandas",
-  timeline: "/timeline",
 };
 
 /**
@@ -152,7 +149,7 @@ const MODULE_GLOBAL_HREF: Partial<Record<ModuleKey, string>> = {
  * mas isso é uma resolução interna de navegação, nunca uma opção real que
  * o usuário escolhe — o seletor em Dashboard/Metas/Performance/Dados
  * nunca mostra "Todos os clientes". Usado por `ClientWorkspaceHeader`. */
-const MODULES_OFFERING_ALL_IN_SELECTOR: readonly ModuleKey[] = ["operation", "demandas", "timeline"];
+const MODULES_OFFERING_ALL_IN_SELECTOR: readonly ModuleKey[] = ["operation", "demandas"];
 
 export function moduleSupportsAllContext(module: ModuleKey): boolean {
   return MODULES_OFFERING_ALL_IN_SELECTOR.includes(module);
@@ -213,6 +210,5 @@ export function resolveCurrentModuleAndContext(pathname: string): { module: Modu
   if (pathname === "/") return { module: "dashboard", context: { type: "all" } };
   if (pathname.startsWith("/operation")) return { module: "operation", context: { type: "all" } };
   if (pathname.startsWith("/demandas") || pathname.startsWith("/pendencias")) return { module: "demandas", context: { type: "all" } };
-  if (pathname.startsWith("/timeline") || pathname.startsWith("/achievements")) return { module: "timeline", context: { type: "all" } };
   return { module: null, context: { type: "all" } };
 }

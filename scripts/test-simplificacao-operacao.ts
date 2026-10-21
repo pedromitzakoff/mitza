@@ -30,12 +30,11 @@ const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
 const demandasSectionSource = loadSource("src", "app", "clients", "cockpit-demandas-section.tsx");
 
 // ---------------------------------------------------------------------------
-console.log("\nA — Sidebar (seção 1 do pedido): Operação removida da área Agência, Demandas/Timeline preservados\n");
+console.log("\nA — Sidebar (seção 1 do pedido): Operação removida da área Agência, Demandas preservado (Timeline removida depois, na Etapa 1.3 da reestruturação KOFF Analytics)\n");
 {
   ok("'Operação' não existe mais como item da Sidebar", !sidebarSource.includes('label: "Operação"'));
   ok("'Demandas' continua na área Agência", /label: "Demandas", href: "\/demandas"/.test(sidebarSource));
-  ok("'Timeline' continua na área Agência", /label: "Timeline", href: "\/timeline"/.test(sidebarSource));
-  ok("AGENCIA_ITEMS tem exatamente 2 itens agora (Demandas, Timeline)", /const AGENCIA_ITEMS: NavItem\[\] = \[\s*\{ label: "Demandas"[\s\S]*?\},\s*\{ label: "Timeline"[\s\S]*?\},\s*\];/.test(sidebarSource));
+  ok("AGENCIA_ITEMS tem exatamente 1 item agora (Demandas)", /const AGENCIA_ITEMS: NavItem\[\] = \[\s*\{ label: "Demandas"[\s\S]*?\},\s*\];/.test(sidebarSource));
   ok("Gestão (Clientes/Equipe/Configurações) continua intocada", /label: "Clientes", href: "\/clients"/.test(sidebarSource) && /label: "Equipe", href: "\/team"/.test(sidebarSource) && /label: "Configurações", href: "\/settings", icon: Settings, adminOnly: true/.test(sidebarSource));
   // MITZA ONE — Minha Rotina: ListChecks voltou a ser importado, agora pro
   // item "Minha Rotina" (ícone de checklist, seção 1 daquele pedido) —
@@ -63,7 +62,8 @@ console.log("\nB — Cockpit do cliente (seção 2 do pedido): seção visual de
   ok("Demandas continua com preview de até 3 prioritárias", pageSource.includes(".slice(0, 3)"));
   ok("ação de concluir demanda preservada (CockpitCompleteTaskButton, MESMA Server Action completeTaskAction)", demandasSectionSource.includes("<CockpitCompleteTaskButton") && loadSource("src", "app", "clients", "cockpit-complete-task-button.tsx").includes('import { completeTaskAction } from "./tasks-actions"'));
   ok("lógica de Demandas (loadPendenciasRawData/countOpenDemandas) continua intocada em page.tsx — nenhuma reescrita", pageSource.includes("loadPendenciasRawData(supabase, id)") && pageSource.includes("countOpenDemandas("));
-  ok("Histórico (CockpitHistorySection) permanece íntegro, MESMA fonte (fetchClientTimelinePage)", pageSource.includes("<CockpitHistorySection") && pageSource.includes("fetchClientTimelinePage(supabase, profile.organizationId, id"));
+  // Histórico (CockpitHistorySection) foi removido do Cockpit na Etapa 1.3 da
+  // reestruturação KOFF Analytics, junto com a Timeline.
 }
 
 console.log("\nC — Sistema legado (seção 3 do pedido): nada excluído, nenhuma dependência de verdade removida\n");
@@ -104,7 +104,7 @@ console.log("\nC — Sistema legado (seção 3 do pedido): nada excluído, nenhu
 console.log("\nD — Navegação (seção 4 do pedido): estrutura final exata, nenhum módulo novo\n");
 {
   ok(
-    "seções do Cockpit, na ordem: Meta & Ritmo, Diagnóstico, Evolução Diária, Canais, Performance, Demandas, Histórico",
+    "seções do Cockpit, na ordem: Meta & Ritmo, Diagnóstico, Evolução Diária, Canais, Performance, Demandas (Histórico foi removido na Etapa 1.3)",
     (() => {
       const metaRitmoIdx = pageSource.indexOf("Meta &amp; Ritmo");
       const diagnosticoIdx = pageSource.indexOf("<CockpitDiagnosticsCard");
@@ -112,29 +112,27 @@ console.log("\nD — Navegação (seção 4 do pedido): estrutura final exata, n
       const canaisIdx = pageSource.indexOf("<DashboardChannelSection");
       const performanceIdx = pageSource.indexOf("<CockpitPerformanceSection");
       const demandasIdx = pageSource.indexOf("<CockpitDemandasSection");
-      const historicoIdx = pageSource.indexOf("<CockpitHistorySection");
       return (
-        [metaRitmoIdx, diagnosticoIdx, evolucaoIdx, canaisIdx, performanceIdx, demandasIdx, historicoIdx].every((i) => i !== -1) &&
+        [metaRitmoIdx, diagnosticoIdx, evolucaoIdx, canaisIdx, performanceIdx, demandasIdx].every((i) => i !== -1) &&
         metaRitmoIdx < diagnosticoIdx &&
         diagnosticoIdx < evolucaoIdx &&
         evolucaoIdx < canaisIdx &&
         canaisIdx < performanceIdx &&
-        performanceIdx < demandasIdx &&
-        demandasIdx < historicoIdx
+        performanceIdx < demandasIdx
       );
     })(),
   );
-  ok("Agência = Demandas + Timeline (nenhum item extra, Operação removido)", AGENCIA_ITEMS_HAS_ONLY_DEMANDAS_E_TIMELINE(sidebarSource));
+  ok("Agência = Demandas (nenhum item extra, Operação removido; Timeline removida na Etapa 1.3)", AGENCIA_ITEMS_HAS_ONLY_DEMANDAS(sidebarSource));
   ok("Gestão = Clientes + Equipe + Configurações (inalterado)", /const GESTAO_ITEMS: NavItem\[\] = \[\s*\{ label: "Clientes"[\s\S]*?\{ label: "Equipe"[\s\S]*?\{ label: "Configurações"[\s\S]*?\];/.test(sidebarSource));
-  ok("nenhum módulo/item novo foi adicionado à Sidebar (contagem de 'label:' em AGENCIA_ITEMS+GESTAO_ITEMS = 5: Demandas, Timeline, Clientes, Equipe, Configurações)", countLabels(sidebarSource) === 5);
+  ok("nenhum módulo/item novo foi adicionado à Sidebar (contagem de 'label:' em AGENCIA_ITEMS+GESTAO_ITEMS = 4: Demandas, Clientes, Equipe, Configurações)", countLabels(sidebarSource) === 4);
 }
 
-function AGENCIA_ITEMS_HAS_ONLY_DEMANDAS_E_TIMELINE(source: string): boolean {
+function AGENCIA_ITEMS_HAS_ONLY_DEMANDAS(source: string): boolean {
   const match = source.match(/const AGENCIA_ITEMS: NavItem\[\] = \[([\s\S]*?)\];/);
   if (!match) return false;
   const body = match[1];
   const labels = [...body.matchAll(/label: "([^"]+)"/g)].map((m) => m[1]);
-  return labels.length === 2 && labels.includes("Demandas") && labels.includes("Timeline");
+  return labels.length === 1 && labels.includes("Demandas");
 }
 
 function countLabels(source: string): number {

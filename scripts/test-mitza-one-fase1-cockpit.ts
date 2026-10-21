@@ -62,7 +62,6 @@ const diagnosticsCardSource = loadSource("src", "app", "clients", "cockpit-diagn
 // (Demandas isolada, mesma lógica) — ver seção E abaixo.
 const demandasSectionSource = loadSource("src", "app", "clients", "cockpit-demandas-section.tsx");
 const performanceSectionSource = loadSource("src", "app", "clients", "cockpit-performance-section.tsx");
-const historySource = loadSource("src", "app", "clients", "cockpit-history-section.tsx");
 const channelSectionSource = loadSource("src", "app", "clients", "dashboard-channel-section.tsx");
 const budgetSource = loadSource("src", "app", "clients", "dashboard-budget.tsx");
 
@@ -283,14 +282,9 @@ console.log("\nE — Demandas (histórico: Fase 1 chamava esta seção 'Execuç�
 }
 
 // ---------------------------------------------------------------------------
-console.log("\nF — Histórico\n");
-{
-  ok("Histórico reaproveita fetchClientTimelinePage (MESMA fonte da Timeline do cliente), nenhum histórico novo", pageSource.includes("fetchClientTimelinePage(supabase,"));
-  ok("categorização reaproveitada (ClientTimelineRow['category']), nenhuma taxonomia nova", historySource.includes("ClientTimelineRow"));
-  ok("ausência de eventos -> estado compacto explícito", historySource.includes("Nenhum evento registrado ainda."));
-  ok("/clients/[id]/timeline (completa) não foi alterada nesta fase", loadSource("src", "app", "clients", "[id]", "timeline", "page.tsx").includes("fetchClientTimelinePage"));
-}
-
+// (Seção F — "Histórico" — removida na Etapa 1.3 da reestruturação KOFF
+// Analytics: a Seção 6 do Cockpit, /clients/[id]/timeline e a Timeline
+// global saíram do produto.)
 // ---------------------------------------------------------------------------
 console.log("\nG — Regressão (rotas antigas continuam intactas; sem redirects/remoções novos)\n");
 {
@@ -300,14 +294,12 @@ console.log("\nG — Regressão (rotas antigas continuam intactas; sem redirects
     ["clients", "[id]", "dados", "page.tsx"],
     ["clients", "[id]", "operation", "page.tsx"],
     ["clients", "[id]", "demandas", "page.tsx"],
-    ["clients", "[id]", "timeline", "page.tsx"],
     ["clients", "[id]", "edit", "page.tsx"],
   ]) {
     ok(`/${route.slice(0, -1).join("/")} continua existindo no disco, intocada`, loadSource("src", "app", ...route).length > 0);
   }
   ok("/operation GLOBAL continua intocada (nenhuma incorporação à tela do cliente)", loadSource("src", "app", "operation", "page.tsx").length > 0);
   ok("/demandas GLOBAL continua intocada", loadSource("src", "app", "demandas", "page.tsx").length > 0);
-  ok("/timeline GLOBAL continua intocada", loadSource("src", "app", "timeline", "page.tsx").length > 0);
   ok("/clients (Gestão/carteira) continua intocada", loadSource("src", "app", "clients", "page.tsx").includes("AgencyAccountsTree") || loadSource("src", "app", "clients", "page.tsx").length > 0);
   // Nota (MITZA ONE — Fase 2, posterior a este arquivo): Sidebar e
   // ClientWorkspaceHeader foram DELIBERADAMENTE alterados na Fase 2

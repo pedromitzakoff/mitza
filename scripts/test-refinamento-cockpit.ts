@@ -241,7 +241,9 @@ console.log("\nE — Preservações obrigatórias (seção 7 do pedido): autenti
 
   ok("requireAdmin/getCurrentProfile continuam as únicas fontes de permissão — nenhuma segunda checagem de auth inventada por esta etapa", pageSource.includes("getCurrentProfile()"));
   ok("sidebar.tsx não foi tocado por esta etapa", !loadSource("src", "app", "sidebar.tsx").includes("Refinamento do Cockpit"));
-  ok("Histórico (fetchClientTimelinePage) e Demandas (loadPendenciasRawData/countOpenDemandas) continuam as mesmas fontes, nenhuma reescrita", pageSource.includes("fetchClientTimelinePage") && pageSource.includes("loadPendenciasRawData"));
+  // Histórico (fetchClientTimelinePage) foi removido do Cockpit na Etapa 1.3
+  // da reestruturação KOFF Analytics, junto com a Timeline.
+  ok("Demandas (loadPendenciasRawData/countOpenDemandas) continua a mesma fonte, nenhuma reescrita", pageSource.includes("loadPendenciasRawData"));
   ok(
     "cálculos oficiais (resolveClientMonthlyGoals, computeMonthlyBudgetPlan, computePerformanceSummary, groupChannelsByResultType) continuam as únicas fontes — nenhuma segunda implementação",
     pageSource.includes("resolveClientMonthlyGoals(") && pageSource.includes("computeMonthlyBudgetPlan(") && pageSource.includes("computePerformanceSummary(") && pageSource.includes("groupChannelsByResultType("),
