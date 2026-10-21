@@ -24,7 +24,7 @@ import { type AgencyTree, type AgencyTreeClient } from "@/lib/agency-accounts-tr
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/app/toast-provider";
-import { getOpenTaskCountForManagerAction, moveClientAction, type ClientTransferMode } from "./agency-accounts-tree-actions";
+import { moveClientAction } from "./agency-accounts-tree-actions";
 import { AgencyTransferDialog } from "./agency-accounts-tree-transfer-dialog";
 
 const UNASSIGNED_KEY = "__unassigned__";
@@ -82,13 +82,11 @@ interface PendingTransfer {
   clientId: string;
   clientName: string;
   previousManagerId: string | null;
-  previousManagerName: string | null;
   targetKey: string;
   targetManagerId: string | null;
   targetLabel: string;
   previousSiblingId: string | null;
   nextSiblingId: string | null;
-  openTaskCount: number;
   /** Arranjo completo (todos os containers) já refletindo a movimentação —
    * aplicado de volta ao estado só quando o usuário confirma. Até lá, a
    * árvore visível volta pro snapshot anterior ao drag: a confirmação é
@@ -254,11 +252,16 @@ function ManagerFolder({
  * gestor — Etapa "Habilitar Gestores 2.0") pode arrastar um cliente
  * (`@dnd-kit`) pra reordenar dentro da mesma pasta (persistido em
  * `clients.wallet_position`, sem diálogo) ou pra outra pasta (troca de
- * `primary_manager_id`, com a mesma confirmação de transferência de
- * atividades já validada antes) — ambos os fluxos passam por
- * `moveClientAction`, o único ponto de entrada de movimentação de
- * cliente. Busca ativa desabilita o arraste (a lista filtrada não é uma
- * ordem estável pra reordenar contra).
+ * `primary_manager_id`, com uma confirmação simples) — ambos os fluxos
+ * passam por `moveClientAction`, o único ponto de entrada de movimentação
+ * de cliente. Busca ativa desabilita o arraste (a lista filtrada não é
+ * uma ordem estável pra reordenar contra).
+ *
+ * KOFF Analytics — Etapa 1.9: a escolha "transferir só a conta / conta +
+ * atividades abertas" (reatribuição de tarefas do gestor anterior pro
+ * novo) foi removida — rastreamento operacional sem lugar numa
+ * plataforma de análise. A transferência agora move só a responsabilidade
+ * da conta, sempre.
  */
 export function AgencyAccountsTreeView({
   tree,
@@ -495,43 +498,16 @@ export function AgencyAccountsTreeView({
     const targetManagerId = endContainer === UNASSIGNED_KEY ? null : endContainer;
     const targetLabel = managerNameByKey.get(endContainer) ?? "";
 
-    if (!previousManagerId) {
-      setPendingTransfer({
-        clientId,
-        clientName,
-        previousManagerId: null,
-        previousManagerName: null,
-        targetKey: endContainer,
-        targetManagerId,
-        targetLabel,
-        previousSiblingId: previousSibling?.id ?? null,
-        nextSiblingId: nextSibling?.id ?? null,
-        openTaskCount: 0,
-        optimisticContainers,
-      });
-      return;
-    }
-
-    const previousManagerName = managerNameByKey.get(startContainer) ?? "";
-    startTransition(async () => {
-      const result = await getOpenTaskCountForManagerAction(clientId, previousManagerId);
-      if ("error" in result) {
-        showToast(result.error, "error");
-        return;
-      }
-      setPendingTransfer({
-        clientId,
-        clientName,
-        previousManagerId,
-        previousManagerName,
-        targetKey: endContainer,
-        targetManagerId,
-        targetLabel,
-        previousSiblingId: previousSibling?.id ?? null,
-        nextSiblingId: nextSibling?.id ?? null,
-        openTaskCount: result.count,
-        optimisticContainers,
-      });
+    setPendingTransfer({
+      clientId,
+      clientName,
+      previousManagerId,
+      targetKey: endContainer,
+      targetManagerId,
+      targetLabel,
+      previousSiblingId: previousSibling?.id ?? null,
+      nextSiblingId: nextSibling?.id ?? null,
+      optimisticContainers,
     });
   }
 
@@ -540,7 +516,7 @@ export function AgencyAccountsTreeView({
     setPendingTransfer(null);
   }
 
-  function handleConfirmTransfer(mode: ClientTransferMode) {
+  function handleConfirmTransfer() {
     if (!pendingTransfer) return;
     const {
       clientId,
@@ -558,7 +534,7 @@ export function AgencyAccountsTreeView({
     setExpanded((prev) => (prev.has(targetKey) ? prev : new Set(prev).add(targetKey)));
 
     startTransition(async () => {
-      const result = await moveClientAction(clientId, previousManagerId, targetManagerId, previousSiblingId, nextSiblingId, mode);
+      const result = await moveClientAction(clientId, previousManagerId, targetManagerId, previousSiblingId, nextSiblingId);
       if (result.error) {
         setContainers(snapshotRef.current);
         showToast(result.error, "error");
@@ -580,8 +556,7 @@ export function AgencyAccountsTreeView({
 
   // Habilitar Gestores 2.0: arrastar clientes entre pastas deixou de ser
   // admin-only — qualquer gestor ativo pode, igual ao admin (ver
-  // moveClientAction/getOpenTaskCountForManagerAction em
-  // agency-accounts-tree-actions.ts).
+  // moveClientAction em agency-accounts-tree-actions.ts).
   const dragDisabled = isBusy || searchActive;
   const activeContainerKey = activeId ? findContainerKey(containers, activeId) : null;
 
@@ -681,8 +656,6 @@ export function AgencyAccountsTreeView({
           <AgencyTransferDialog
             clientName={pendingTransfer.clientName}
             targetLabel={pendingTransfer.targetLabel}
-            previousManagerName={pendingTransfer.previousManagerName}
-            openTaskCount={pendingTransfer.openTaskCount}
             pending={isPending}
             onCancel={handleCancelTransfer}
             onConfirm={handleConfirmTransfer}

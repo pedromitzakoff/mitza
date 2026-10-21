@@ -13,8 +13,7 @@ import { AccountInfoDrawerLauncher } from "./account-info-drawer-launcher";
  * Cabeçalho do workspace do cliente — vive no `layout.tsx` de
  * `clients/[id]/**`, montado em toda navegação entre o cockpit
  * (`/clients/[id]`, MITZA ONE — Fase 1) e as rotas de aprofundamento
- * ainda preservadas (`/metas`, `/relatorio`, `/dados`, `/operation`,
- * `/demandas`, `/timeline`, `/edit`).
+ * ainda preservadas (`/metas`, `/relatorio`, `/dados`, `/edit`).
  *
  * MITZA ONE — Fase 2 (Sidebar = Carteira, Header Simplificado): a Sidebar
  * virou a fonte principal de seleção/troca de cliente (busca + lista

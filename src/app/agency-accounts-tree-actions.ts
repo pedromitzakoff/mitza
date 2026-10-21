@@ -8,44 +8,6 @@ import { actorFromProfile, recordOperationalEvent } from "@/lib/record-operation
 import { toUserFacingError } from "@/lib/user-facing-error";
 import { queryOrError } from "@/lib/require-query";
 import { computeInsertPosition, needsNormalization, buildNormalizedPositions } from "@/lib/agency-wallet-position";
-import type { TaskStatus } from "@/lib/supabase/database.types";
-
-const OPEN_TASK_STATUSES: TaskStatus[] = ["pendente", "atrasado"];
-
-/**
- * Conta atividades abertas do cliente atribuídas a um gestor específico —
- * usado pelo drag and drop da árvore "Contas da Agência" pra decidir se
- * mostra a confirmação simples ou a escolha "só a conta / conta e
- * atividades". Só considera `assignee_id` (fonte única de atribuição de
- * tarefa/atividade — nunca existiu tabela separada pra isso) e os dois
- * status não-terminais (`feito`/`nao_realizado` nunca entram aqui).
- *
- * Habilitar Gestores 2.0: qualquer gestor ativo pode arrastar clientes na
- * árvore, igual ao admin — sem restrição por carteira (é literalmente o
- * que a árvore serve pra fazer: mover cliente PRA uma pasta que ainda não
- * é a dele). `requireAdmin()` virou `requireActiveProfile()`.
- */
-export async function getOpenTaskCountForManagerAction(
-  clientId: string,
-  managerId: string,
-): Promise<{ count: number } | { error: string }> {
-  await requireActiveProfile();
-  const supabase = await createSupabaseClient();
-
-  const { count, error } = await supabase
-    .from("tasks")
-    .select("id", { count: "exact", head: true })
-    .eq("client_id", clientId)
-    .eq("assignee_id", managerId)
-    .in("status", OPEN_TASK_STATUSES);
-
-  if (error) {
-    return { error: toUserFacingError(error, "Não foi possível verificar as atividades abertas.") };
-  }
-  return { count: count ?? 0 };
-}
-
-export type ClientTransferMode = "account_only" | "account_and_open_tasks";
 
 /**
  * Resolve as posições REAIS dos vizinhos informados (nunca confia num
@@ -116,20 +78,9 @@ async function resolveInsertPosition(
  * "Contas da Agência" (Etapa "Árvore Viva 1.0") — reordenar dentro da
  * mesma pasta e trocar de gestor passam pela mesma função. Quando
  * `previousManagerId === newManagerId`, é só uma reordenação: nenhum
- * evento de troca de gestor é emitido, nenhuma tarefa é reatribuída,
- * `mode` é ignorado (nunca há diálogo de confirmação nesse caso, decidido
- * inteiramente no cliente antes de chamar esta action). Quando os dois
- * diferem, é uma transferência de responsabilidade de verdade — mesmo
- * comportamento já validado antes:
- *
- * `mode === "account_and_open_tasks"` reatribui só as tarefas ainda abertas
- * (`pendente`/`atrasado`) do cliente que estavam com o gestor anterior —
- * espelha exatamente a mesma transação que `performUpdateTask`
- * (`clients/tasks-actions.ts`) já faz numa reatribuição manual de tarefa
- * (mesmo `reassignment_count`, mesmo evento `task_reassigned`), só que em
- * lote. Tarefas concluídas (`feito`) ou não realizadas (`nao_realizado`),
- * comentários, revisões de conta e qualquer `operational_event` já
- * registrado nunca são tocados.
+ * evento de troca de gestor é emitido (decidido inteiramente no cliente
+ * antes de chamar esta action). Quando os dois diferem, é uma
+ * transferência de responsabilidade de verdade.
  *
  * `primary_manager_id` e `wallet_position` são sempre escritos num único
  * `update` — nunca existe estado intermediário em que um já mudou e o
@@ -143,6 +94,11 @@ async function resolveInsertPosition(
  * alteração em `clients` fora de uma sessão admin, então esta ação
  * continua sem poder tocar dados cadastrais/contratuais do cliente mesmo
  * pra quem não é admin.
+ *
+ * KOFF Analytics — Etapa 1.9: a reatribuição em lote de tarefas abertas
+ * do gestor anterior (`mode === "account_and_open_tasks"`) foi removida —
+ * rastreamento de tarefas não tem lugar numa plataforma de análise de
+ * performance. A transferência move só a responsabilidade da conta.
  */
 export async function moveClientAction(
   clientId: string,
@@ -150,7 +106,6 @@ export async function moveClientAction(
   newManagerId: string | null,
   previousSiblingId: string | null,
   nextSiblingId: string | null,
-  mode: ClientTransferMode = "account_only",
 ): Promise<{ error?: string }> {
   const profile = await requireActiveProfile();
   const supabase = await createSupabaseClient();
@@ -189,56 +144,9 @@ export async function moveClientAction(
     },
   });
 
-  if (mode === "account_and_open_tasks" && previousManagerId) {
-    const openTasksResult = await queryOrError(
-      supabase
-        .from("tasks")
-        .select("id, sprint_id, reassignment_count")
-        .eq("client_id", clientId)
-        .eq("assignee_id", previousManagerId)
-        .in("status", OPEN_TASK_STATUSES),
-      "tasks:reassign-open",
-      "O cliente foi movido, mas não foi possível reatribuir as atividades abertas.",
-    );
-    if ("error" in openTasksResult) {
-      // A troca de responsável já foi commitada — revalida antes de
-      // devolver o erro, senão a árvore ficaria mostrando o estado antigo
-      // enquanto o banco já reflete a mudança.
-      revalidatePath("/", "layout");
-      revalidatePath("/clients");
-      revalidatePath(`/clients/${clientId}`);
-      revalidatePath("/sprints");
-      return { error: openTasksResult.error };
-    }
-
-    for (const task of openTasksResult.data) {
-      const { error: taskError } = await supabase
-        .from("tasks")
-        .update({ assignee_id: newManagerId, reassignment_count: (task.reassignment_count ?? 0) + 1 })
-        .eq("id", task.id);
-
-      if (taskError) continue;
-
-      await recordOperationalEvent(supabase, actor, {
-        eventType: OperationalEventType.TASK_REASSIGNED,
-        entityType: "task",
-        entityId: task.id,
-        clientId,
-        sprintId: task.sprint_id,
-        source: "web",
-        metadata: {
-          previous_assignee_team_member_id: previousManagerId,
-          new_assignee_team_member_id: newManagerId,
-          origin: "agency_accounts_tree_drag",
-        },
-      });
-    }
-  }
-
   revalidatePath("/", "layout");
   revalidatePath("/clients");
   revalidatePath(`/clients/${clientId}`);
-  revalidatePath("/sprints");
 
   return {};
 }

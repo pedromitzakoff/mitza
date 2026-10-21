@@ -120,8 +120,8 @@ export function evaluateInvestmentDiagnostic(actualSpend: number, expectedToDate
 }
 
 // ---------------------------------------------------------------------------
-// Planejamento — não é um problema de ritmo (CPA, Investimento, Atividade),
-// é um problema ESTRUTURAL: a conta ainda não tem as configurações mínimas
+// Planejamento — não é um problema de ritmo (CPA, Investimento), é um
+// problema ESTRUTURAL: a conta ainda não tem as configurações mínimas
 // pro motor conseguir diagnosticá-la de verdade. Deliberadamente separado
 // dos outros eixos: sem meta de custo ou sem plano mensal de investimento,
 // `evaluateCpaDiagnostic`/`evaluateInvestmentDiagnostic` voltam
@@ -174,63 +174,17 @@ export function evaluatePlanejamento(input: {
 }
 
 // ---------------------------------------------------------------------------
-// Atividade — não é "o que falta fazer", é "há quanto tempo alguém age de
-// fato nesta conta" (otimização registrada, ou qualquer outra ação
-// registrada como atividade operacional real) — eixo independente de
-// Performance (CPA/Investimento).
-//
-// Diferente de Performance, aqui só existe UM estado de alerta (sem
-// gradiente atenção/crítico): abaixo de 48h sem atividade a conta fica
-// visualmente limpa (nenhuma mensagem); a partir de 48h aparece em
-// vermelho. O objetivo é que só a exceção chame atenção — contas com
-// atividade recente não precisam de nenhum selo "tudo bem".
-// ---------------------------------------------------------------------------
-
-export const ATIVIDADE_OVERDUE_HOURS = 48;
-
-export interface AtividadeDiagnostic {
-  lastActivityAt: string | null;
-  hoursSinceLastActivity: number | null;
-  /** `hoursSinceLastActivity === null` (nunca houve atividade) também
-   * conta como atrasado — nunca um "em dia" fabricado sem nenhum registro. */
-  isOverdue: boolean;
-}
-
-export function evaluateAtividade(input: {
-  lastActivityAt: string | null;
-  hoursSinceLastActivity: number | null;
-}): AtividadeDiagnostic {
-  const isOverdue = input.hoursSinceLastActivity === null || input.hoursSinceLastActivity >= ATIVIDADE_OVERDUE_HOURS;
-
-  return {
-    lastActivityAt: input.lastActivityAt,
-    hoursSinceLastActivity: input.hoursSinceLastActivity,
-    isOverdue,
-  };
-}
-
-/** `null` enquanto a conta está em dia (< 48h de atividade) — o card
- * simplesmente não mostra nada, de propósito (ruído zero em contas
- * saudáveis). A partir de 48h: "Sem atividade há 48 horas" / "...há 3
- * dias" / "...há 7 dias" (sempre em vermelho). Único lugar que traduz
- * `AtividadeDiagnostic` pra texto — qualquer tela que precise deste rótulo
- * usa esta função, nunca monta a frase sozinha. */
-export function formatAtividadeLabel(diagnostic: AtividadeDiagnostic): string | null {
-  const { hoursSinceLastActivity } = diagnostic;
-  if (hoursSinceLastActivity === null) return "Sem atividade registrada";
-  if (hoursSinceLastActivity < ATIVIDADE_OVERDUE_HOURS) return null;
-
-  const days = Math.floor(hoursSinceLastActivity / 24);
-  if (days < 3) return `Sem atividade há ${ATIVIDADE_OVERDUE_HOURS} horas`;
-  return `Sem atividade há ${days} dias`;
-}
-
-// ---------------------------------------------------------------------------
 // Agregado por cliente — o formato único que qualquer tela deve consumir,
-// em vez de montar sua própria combinação de CPA/Investimento/Atividade.
+// em vez de montar sua própria combinação de CPA/Investimento.
 // KOFF Analytics — Etapa 1.8: o eixo Pendências (contagem de tarefas em
 // aberto) foi removido por completo — a plataforma não usa mais quantidade
 // de tarefas como indicador de saúde ou performance.
+// KOFF Analytics — Etapa 1.9: o eixo Atividade (AtividadeDiagnostic/
+// evaluateAtividade/formatAtividadeLabel) foi removido pelo mesmo motivo —
+// media só execução operacional (tarefa concluída/comentada, otimização
+// registrada), nunca resultado de marketing, e suas duas fontes
+// (operational_activities, account_reviews) deixaram de receber eventos
+// novos desde a Etapa 1.8, que removeu todo o código que as escrevia.
 // ---------------------------------------------------------------------------
 
 export interface ClientDiagnosticsInput {
@@ -240,14 +194,12 @@ export interface ClientDiagnosticsInput {
    * segunda fonte, ver `evaluateCpaDiagnostic`. */
   cpa: { costPerResult: number | null; targetCostPerResult: number | null; resultCount: number };
   investment: { actualSpend: number; expectedToDate: number | null };
-  atividade: { lastActivityAt: string | null; hoursSinceLastActivity: number | null };
 }
 
 export interface ClientDiagnostics {
   planejamento: PlanejamentoDiagnostic;
   cpa: MetricDiagnostic | null;
   investment: MetricDiagnostic;
-  atividade: AtividadeDiagnostic;
 }
 
 export function evaluateClientDiagnostics(input: ClientDiagnosticsInput): ClientDiagnostics {
@@ -255,7 +207,6 @@ export function evaluateClientDiagnostics(input: ClientDiagnosticsInput): Client
     planejamento: evaluatePlanejamento(input.planejamento),
     cpa: evaluateCpaDiagnostic(input.cpa.costPerResult, input.cpa.targetCostPerResult, input.cpa.resultCount),
     investment: evaluateInvestmentDiagnostic(input.investment.actualSpend, input.investment.expectedToDate),
-    atividade: evaluateAtividade(input.atividade),
   };
 }
 

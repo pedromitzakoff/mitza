@@ -90,8 +90,6 @@ export async function applyMonthlyChannelPlanChangeAction(
   // versão desatualizada do cache até a próxima revalidação natural.
   revalidatePath("/");
   revalidatePath("/clients");
-  revalidatePath("/sprints");
-  revalidatePath("/operation");
   revalidatePath(`/clients/${clientId}`);
   return {};
 }
@@ -131,8 +129,6 @@ export async function setClientMonthHorizonAction(
   // plataforma, não só na página do cliente.
   revalidatePath("/");
   revalidatePath("/clients");
-  revalidatePath("/sprints");
-  revalidatePath("/operation");
   revalidatePath(`/clients/${clientId}`);
   return {};
 }

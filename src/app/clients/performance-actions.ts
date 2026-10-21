@@ -171,7 +171,6 @@ export async function updateSprintPerformanceAction(
   // justificativa em `resetSprintSpendSourceAction` (mesmo padrão).
   revalidatePath("/");
   revalidatePath("/clients");
-  revalidatePath("/sprints");
   revalidatePath(`/clients/${clientId}`);
 }
 
@@ -206,7 +205,6 @@ export async function updateClientPerformanceGoalAction(
   // novo objetivo (Parte 3 do pedido).
   revalidatePath("/");
   revalidatePath("/clients");
-  revalidatePath("/sprints");
   revalidatePath(`/clients/${clientId}`);
 
   return {};

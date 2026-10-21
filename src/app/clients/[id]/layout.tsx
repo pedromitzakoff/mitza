@@ -15,8 +15,7 @@ export const maxDuration = 300;
 /**
  * Layout compartilhado do workspace do cliente — envolve TODAS as
  * sub-rotas de `clients/[id]/**` (cockpit, `/metas`, `/relatorio`,
- * `/dados`, `/operation`, `/demandas`, `/timeline`, `/edit`, e as legadas
- * `/tasks/new`/`/tasks/[taskId]/edit`) com o cabeçalho persistente.
+ * `/dados`, `/edit`) com o cabeçalho persistente.
  *
  * MITZA ONE — Fase 2 (Sidebar = Carteira, Header Simplificado): este
  * layout deixou de buscar a árvore "Contas da Agência"

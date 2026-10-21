@@ -16,10 +16,8 @@ import {
   revokeAccessAction,
   updateTeamMemberAction,
 } from "./actions";
-import { OperationalActivityPanel } from "./operational-activity-panel";
 import { SubmitButton } from "@/app/submit-button";
 import { ToastActionButton } from "@/app/toast-action-button";
-import type { ActivityPeriodKey, TeamMemberActivitySummary, TeamMemberTimelineRow } from "@/lib/team-member-activity";
 
 const inputClasses =
   "rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:border-zinc-500";
@@ -36,8 +34,6 @@ export interface TeamMemberDetail {
   auth_user_id: string | null;
   invited_at: string | null;
   assignedClientsCount: number;
-  pendingTasksCount: number;
-  futureMeetingsCount: number;
 }
 
 function DrawerShell({ title, closeHref, children }: { title: string; closeHref: string; children: React.ReactNode }) {
@@ -114,25 +110,23 @@ export function NewTeamMemberDrawer({ closeHref }: { closeHref: string }) {
   );
 }
 
-/** Perfil do membro (seção 25 do pedido) — DADOS, OPERAÇÃO e ACESSO num só
- * drawer. Nenhum jargão técnico visível (auth_user_id nunca aparece; só os
- * rótulos em linguagem simples de TEAM_INVITATION_STATUS_LABEL). */
+/** Perfil do membro — DADOS, CARTEIRA e ACESSO num só drawer. Nenhum jargão
+ * técnico visível (auth_user_id nunca aparece; só os rótulos em linguagem
+ * simples de TEAM_INVITATION_STATUS_LABEL).
+ *
+ * KOFF Analytics — Etapa 1.9: a seção "Operação" (tarefas pendentes,
+ * reuniões futuras) e o painel de atividade operacional individual
+ * (tarefas concluídas/no prazo/atrasadas, otimizações, reuniões, timeline)
+ * foram removidos — rastreamento de produtividade por pessoa, nunca
+ * resultado de marketing, e já congelado desde a Etapa 1.8 (nenhum evento
+ * novo pode mais ser gerado). "Clientes atribuídos" continua — é
+ * composição de carteira, não produtividade. */
 export function EditTeamMemberDrawer({
   member,
   closeHref,
-  activityPeriod,
-  activitySummary,
-  timelineRows,
-  timelinePage,
-  timelineHasMore,
 }: {
   member: TeamMemberDetail;
   closeHref: string;
-  activityPeriod: ActivityPeriodKey;
-  activitySummary: TeamMemberActivitySummary;
-  timelineRows: TeamMemberTimelineRow[];
-  timelinePage: number;
-  timelineHasMore: boolean;
 }) {
   return (
     <DrawerShell title={member.name} closeHref={closeHref}>
@@ -165,19 +159,11 @@ export function EditTeamMemberDrawer({
       </section>
 
       <section className="mt-5 border-t border-border pt-4">
-        <SectionHeader>Operação</SectionHeader>
+        <SectionHeader>Carteira</SectionHeader>
         <dl className="mt-2 flex flex-col gap-1.5 text-sm">
           <div className="flex justify-between">
             <dt className="text-muted-foreground">Clientes atribuídos</dt>
             <dd className="font-medium text-foreground">{member.assignedClientsCount}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-muted-foreground">Tarefas pendentes</dt>
-            <dd className="font-medium text-foreground">{member.pendingTasksCount}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-muted-foreground">Reuniões futuras</dt>
-            <dd className="font-medium text-foreground">{member.futureMeetingsCount}</dd>
           </div>
         </dl>
       </section>
@@ -251,15 +237,6 @@ export function EditTeamMemberDrawer({
           )}
         </div>
       </section>
-
-      <OperationalActivityPanel
-        memberId={member.id}
-        period={activityPeriod}
-        summary={activitySummary}
-        timelineRows={timelineRows}
-        timelinePage={timelinePage}
-        timelineHasMore={timelineHasMore}
-      />
     </DrawerShell>
   );
 }

@@ -58,7 +58,6 @@ export async function loadClientOperationalStates(
 ): Promise<ClientOperationalState[]> {
   const today = todayUTC();
   const todayStr = todayDateString();
-  const now = new Date();
 
   const monthRange = monthRangeFromOperationParam(monthParam);
   const { firstDay: monthStart, lastDay: monthEnd } = monthRange;
@@ -92,16 +91,15 @@ export async function loadClientOperationalStates(
     .lte("date", monthEnd);
   if (clientId) dailySpendQuery = dailySpendQuery.eq("client_id", clientId);
 
+  // KOFF Analytics — Etapa 1.9: usada só pra alimentar `reviewBusinessDaysAgo`/
+  // `reviewMaxBusinessDays` (dimensão "review" do Motor de Saúde da Conta,
+  // abaixo) — nunca mais pro eixo Atividade do Motor de Diagnóstico Único
+  // (removido nesta etapa, junto com a query de `client_last_operational_activity`
+  // que só servia a ele). Ver nota na Etapa 1.9 sobre essa dimensão nunca
+  // mais poder avançar: a Etapa 1.8 removeu todo o código que registrava
+  // uma revisão nova.
   let latestReviewsQuery = supabase.from("account_reviews").select("client_id, reviewed_at").order("reviewed_at", { ascending: false });
   if (clientId) latestReviewsQuery = latestReviewsQuery.eq("client_id", clientId);
-
-  // Fonte real de Atividade (task criada/editada/concluída/comentada,
-  // comentário de sprint) — `operational_activities`/view agregada já
-  // existiam (Etapa 15) pra outro propósito; aqui viram, junto com
-  // `account_reviews` acima, os dois insumos legítimos de "alguém agiu
-  // nesta conta", nunca um valor fabricado.
-  let lastActivityQuery = supabase.from("client_last_operational_activity").select("client_id, last_activity_at");
-  if (clientId) lastActivityQuery = lastActivityQuery.eq("client_id", clientId);
 
   // Etapa "Migração Multicanal dos Consumidores": todos os canais (nunca
   // mais só `channel = 'meta'`) — `resolveClientMonthlyPlan` resolve o
@@ -138,7 +136,6 @@ export async function loadClientOperationalStates(
     sprints,
     dailySpendRows,
     latestReviews,
-    lastActivityRows,
     planChanges,
     reviewCadences,
     activeImportSources,
@@ -149,7 +146,6 @@ export async function loadClientOperationalStates(
       requireQuery(sprintsQuery, "sprints"),
       requireQuery(dailySpendQuery, "daily_spend"),
       requireQuery(latestReviewsQuery, "account_reviews"),
-      requireQuery(lastActivityQuery, "client_last_operational_activity"),
       requireQuery(planChangesQuery, "monthly_budget_changes:plan-history"),
       requireQuery(reviewCadencesQuery, "account_review_cadences"),
       requireQuery(activeImportSourcesQuery, "import_sources:active"),
@@ -251,11 +247,6 @@ export async function loadClientOperationalStates(
   const latestReviewByClient = new Map<string, string>();
   for (const row of latestReviews ?? []) {
     if (!latestReviewByClient.has(row.client_id)) latestReviewByClient.set(row.client_id, row.reviewed_at);
-  }
-
-  const lastTaskActivityByClient = new Map<string, string>();
-  for (const row of lastActivityRows ?? []) {
-    if (row.client_id && row.last_activity_at) lastTaskActivityByClient.set(row.client_id, row.last_activity_at);
   }
 
   // Etapa "Múltiplos Objetivos": Saúde/Operação só conhecem o objetivo
@@ -435,22 +426,6 @@ export async function loadClientOperationalStates(
         ? computeMonthlyExpectedToDateByCalendar(plan.investmentPlanned, clientHorizon, todayStr).expectedToDate
         : null;
 
-    // Atividade: "alguém agiu nesta conta" — o mais recente entre uma
-    // otimização (`account_reviews`, placeholder até a estrutura real de
-    // Otimizações existir) e qualquer atividade operacional real já
-    // logada (`client_last_operational_activity`: tarefa criada/editada/
-    // concluída/comentada, comentário de sprint). Nunca um só dos dois:
-    // uma conta pode estar sendo bem cuidada só com tarefas em dia, sem
-    // nenhuma otimização registrada ainda, e vice-versa.
-    const lastTaskActivityAt = lastTaskActivityByClient.get(client.id) ?? null;
-    const lastActivityAt =
-      !lastReviewAt || !lastTaskActivityAt
-        ? (lastReviewAt ?? lastTaskActivityAt)
-        : new Date(lastReviewAt).getTime() >= new Date(lastTaskActivityAt).getTime()
-          ? lastReviewAt
-          : lastTaskActivityAt;
-    const hoursSinceLastActivity = lastActivityAt ? (now.getTime() - new Date(lastActivityAt).getTime()) / 3_600_000 : null;
-
     const diagnostics = evaluateClientDiagnostics({
       planejamento: {
         hasPerformanceGoal: client.performance_goal !== null,
@@ -459,7 +434,6 @@ export async function loadClientOperationalStates(
       },
       cpa: { costPerResult: costActual, targetCostPerResult: plan.targetCostPerResult, resultCount: performanceResult.resultCount },
       investment: { actualSpend: spend.actual, expectedToDate: investmentExpectedToDate },
-      atividade: { lastActivityAt, hoursSinceLastActivity },
     });
 
     return {

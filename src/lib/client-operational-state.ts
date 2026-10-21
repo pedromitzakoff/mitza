@@ -49,13 +49,13 @@ export interface ClientOperationalState {
   performanceLatestSource: PerformanceSource | null;
   performanceLastUpdatedAt: string | null;
   /** Etapa "Novo Conceito de Monitoramento Operacional" — os eixos do
-   * Motor de Diagnóstico Único (CPA, Investimento, Atividade),
-   * computados uma única vez aqui e consumidos por qualquer tela (nunca
-   * recalculados no componente). `atividade` combina a atividade
-   * operacional real (`client_last_operational_activity`) com
-   * `account_reviews` (ver client-operational-state-data.ts) — a parte de
-   * `account_reviews` é um placeholder deliberado até a estrutura real de
-   * Otimizações substituir essa fonte. */
+   * Motor de Diagnóstico Único (CPA, Investimento), computados uma única
+   * vez aqui e consumidos por qualquer tela (nunca recalculados no
+   * componente). O eixo Atividade existiu até a Etapa 1.9 da
+   * reestruturação KOFF Analytics — removido por medir só execução
+   * operacional (tarefa/comentário/otimização), nunca resultado de
+   * marketing, e por suas fontes terem parado de receber dados novos
+   * desde a Etapa 1.8. */
   diagnostics: ClientDiagnostics;
 }
 
@@ -138,7 +138,6 @@ export function evaluateClientChannelDiagnostics(
 ): ClientDiagnostics {
   return {
     planejamento: state.diagnostics.planejamento,
-    atividade: state.diagnostics.atividade,
     investment: evaluateInvestmentDiagnostic(channelState.investmentActual, null),
     cpa: evaluateCpaDiagnostic(
       channelState.performanceSummary?.costPerResult ?? null,

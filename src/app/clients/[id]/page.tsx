@@ -71,11 +71,10 @@ import {
 /**
  * Objetivo em exibição na Performance (`?goal=`) — núcleo puro extraído de
  * dentro do componente (Etapa "Primeira Rodada Visual — Contexto +
- * Performance", seção 6/18 do pedido), mesmo padrão de
- * `resolveOperationGoal` (`app/operation/page.tsx`): valor inválido/ausente
- * NUNCA quebra a página, sempre cai num default seguro. Aqui o default é o
- * objetivo PRINCIPAL do cliente (nunca `"todos"` como em Operação — a
- * Performance sempre mostra EXATAMENTE um objetivo por vez), e "válido"
+ * Performance", seção 6/18 do pedido): valor inválido/ausente NUNCA quebra
+ * a página, sempre cai num default seguro. Aqui o default é o objetivo
+ * PRINCIPAL do cliente (a Performance sempre mostra EXATAMENTE um objetivo
+ * por vez, nunca "todos"), e "válido"
  * significa literalmente "está entre os objetivos que ESTE cliente tem
  * configurado" — nunca um objetivo de outro cliente sobrevivendo a uma
  * troca (seção 6: "compatível com troca de cliente"). Continua exportada e
@@ -133,15 +132,16 @@ export function findChannelDataIssue(attentions: DataAttention[], channelLabel: 
  * que esta página responde, e SÓ esta: "como está o growth deste cliente
  * agora, e o que precisa da minha atenção?" — uma NOVA COMPOSIÇÃO em torno
  * da infraestrutura oficial já existente (Dashboard/Metas/Performance/
- * Dados/Operação/Demandas/Timeline), nunca as 7 páginas antigas empilhadas
- * (ver relatório de entrega desta fase — estrutura final, fontes por
- * seção, divergências encontradas).
+ * Dados), nunca as páginas antigas empilhadas (ver relatório de entrega
+ * desta fase — estrutura final, fontes por seção, divergências
+ * encontradas).
  *
- * As 7 rotas de aprofundamento (`/metas`, `/relatorio`, `/dados`,
- * `/operation`, `/demandas`, `/timeline`, `/edit`) continuam existindo
- * integralmente — esta página só deixa de ser a soma delas, virando o
- * ponto de partida que aponta pra cada uma quando for preciso investigar
- * mais a fundo.
+ * As rotas de aprofundamento que sobrevivem (`/metas`, `/relatorio`,
+ * `/dados`, `/edit`) continuam existindo integralmente — esta página só
+ * deixa de ser a soma delas, virando o ponto de partida que aponta pra
+ * cada uma quando for preciso investigar mais a fundo. Operação/Demandas/
+ * Timeline saíram do produto nas Etapas 1.3/1.6/1.8 da reestruturação
+ * KOFF Analytics.
  */
 export default async function ClientPage({
   params,
@@ -282,14 +282,14 @@ export default async function ClientPage({
       // `primaryBudgetChanges` estarem calculados — nunca em paralelo com
       // uma leitura que dependa dela.
       //
-      // Etapa "Simplificação da Operação" (seção 3 do pedido: "evitar
-      // consultas... exclusivamente destinadas a componentes que não serão
-      // mais renderizados"): a query de `account_reviews` pra "Última
-      // otimização" saiu de aqui — era usada SÓ pela seção visual de
-      // Operação removida do Cockpit (ver `cockpit-demandas-section.tsx`).
-      // A tabela `account_reviews`, o motor de revisões e `/operation`
-      // continuam intocados — só esta leitura PARTICULAR, feita só pra
-      // exibir aqui, deixou de ser disparada.
+      // Etapa "Simplificação da Operação": a query de `account_reviews` pra
+      // "Última otimização" saiu de aqui — era usada SÓ pela seção visual
+      // de Operação, removida do Cockpit nessa etapa (o módulo Operação em
+      // si, incluindo a rota `/operation`, saiu do produto depois, na
+      // Etapa 1.8 da reestruturação KOFF Analytics). A tabela
+      // `account_reviews` e o motor de saúde da conta continuam intocados —
+      // só esta leitura PARTICULAR, feita só pra exibir aqui, deixou de
+      // ser disparada.
       loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, id),
       buildPerformanceReportData(supabase, id, { start: firstDay, end: lastDay }),
     ]);

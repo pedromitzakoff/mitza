@@ -184,7 +184,6 @@ console.log("\nC — Diagnóstico\n");
     planejamento: { items: [], isIncomplete: false },
     cpa: null,
     investment: { value: 1000, expected: 1000, deviationPct: 0, direction: "flat", tone: "normal", isOutOfRange: false },
-    atividade: { lastActivityAt: null, hoursSinceLastActivity: null, isOverdue: false },
   };
 
   check(

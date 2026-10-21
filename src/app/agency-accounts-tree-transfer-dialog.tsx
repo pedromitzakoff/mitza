@@ -1,13 +1,9 @@
 "use client";
 
-import type { ClientTransferMode } from "./agency-accounts-tree-actions";
-
 const CANCEL_CLASSES =
   "mitza-pressable rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-overview-surface-hover disabled:cursor-not-allowed disabled:opacity-60";
 const PRIMARY_CLASSES =
   "mitza-pressable rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60";
-const SECONDARY_CLASSES =
-  "mitza-pressable rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-overview-surface-hover disabled:cursor-not-allowed disabled:opacity-60";
 
 /**
  * Confirmação da transferência de responsável (drag and drop da árvore
@@ -17,29 +13,23 @@ const SECONDARY_CLASSES =
  * em vez de rota/searchParam — a transferência nasce de um drop, não de
  * uma navegação.
  *
- * Duas variantes na mesma janela: sem atividades abertas do gestor
- * anterior, confirmação simples; havendo alguma, escolha explícita entre
- * "só a conta" e "conta + atividades abertas" (nunca conclusão implícita).
+ * KOFF Analytics — Etapa 1.9: a escolha "só a conta / conta + atividades
+ * abertas" foi removida — a transferência sempre move só a responsabilidade
+ * da conta agora, com uma única confirmação simples.
  */
 export function AgencyTransferDialog({
   clientName,
   targetLabel,
-  previousManagerName,
-  openTaskCount,
   pending,
   onCancel,
   onConfirm,
 }: {
   clientName: string;
   targetLabel: string;
-  previousManagerName: string | null;
-  openTaskCount: number;
   pending: boolean;
   onCancel: () => void;
-  onConfirm: (mode: ClientTransferMode) => void;
+  onConfirm: () => void;
 }) {
-  const hasOpenTasks = openTaskCount > 0;
-
   return (
     <>
       <button
@@ -56,56 +46,18 @@ export function AgencyTransferDialog({
           aria-labelledby="agency-transfer-title"
           className="mitza-modal-in w-full max-w-sm rounded-lg border border-border bg-card p-4 shadow-lg"
         >
-          {!hasOpenTasks ? (
-            <>
-              <h2 id="agency-transfer-title" className="text-sm font-semibold text-foreground">
-                Transferir {clientName} para {targetLabel}?
-              </h2>
-              <p className="mt-1.5 text-sm text-muted-foreground">O responsável principal da conta será alterado.</p>
-              <div className="mt-4 flex items-center justify-end gap-2">
-                <button type="button" onClick={onCancel} disabled={pending} className={CANCEL_CLASSES}>
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onConfirm("account_only")}
-                  disabled={pending}
-                  className={PRIMARY_CLASSES}
-                >
-                  {pending ? "Transferindo..." : "Transferir"}
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <h2 id="agency-transfer-title" className="text-sm font-semibold text-foreground">
-                Existem {openTaskCount} atividade{openTaskCount === 1 ? "" : "s"} aberta
-                {openTaskCount === 1 ? "" : "s"} atribuída{openTaskCount === 1 ? "" : "s"} a {previousManagerName}.
-              </h2>
-              <p className="mt-1.5 text-sm text-muted-foreground">O que deseja fazer?</p>
-              <div className="mt-4 flex flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={() => onConfirm("account_only")}
-                  disabled={pending}
-                  className={`${SECONDARY_CLASSES} w-full`}
-                >
-                  Transferir somente a conta
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onConfirm("account_and_open_tasks")}
-                  disabled={pending}
-                  className={`${PRIMARY_CLASSES} w-full`}
-                >
-                  {pending ? "Transferindo..." : "Transferir conta e atividades abertas"}
-                </button>
-                <button type="button" onClick={onCancel} disabled={pending} className={`${CANCEL_CLASSES} w-full`}>
-                  Cancelar
-                </button>
-              </div>
-            </>
-          )}
+          <h2 id="agency-transfer-title" className="text-sm font-semibold text-foreground">
+            Transferir {clientName} para {targetLabel}?
+          </h2>
+          <p className="mt-1.5 text-sm text-muted-foreground">O responsável principal da conta será alterado.</p>
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <button type="button" onClick={onCancel} disabled={pending} className={CANCEL_CLASSES}>
+              Cancelar
+            </button>
+            <button type="button" onClick={onConfirm} disabled={pending} className={PRIMARY_CLASSES}>
+              {pending ? "Transferindo..." : "Transferir"}
+            </button>
+          </div>
         </div>
       </div>
     </>

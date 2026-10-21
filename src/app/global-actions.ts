@@ -24,8 +24,6 @@ export async function syncAllMetaAction() {
   }
 
   revalidatePath("/");
-  revalidatePath("/operation");
-  revalidatePath("/sprints");
   revalidatePath("/clients");
   redirect(`/?synced=${syncedCount}`);
 }
