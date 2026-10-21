@@ -2,9 +2,8 @@
  * Etapa 2B (Hardening antes do link externo) — dois itens sem dependência
  * comum, agrupados num arquivo só por serem pequenos:
  *
- * 1. Sanitização de erro cru em `/api/admin/sync-stract` e
- *    `/api/cron/evaluate-achievements` — antes devolviam `err.message`/
- *    `String(err)` direto no corpo da resposta; agora usam
+ * 1. Sanitização de erro cru em `/api/admin/sync-stract` — antes devolvia
+ *    `err.message`/`String(err)` direto no corpo da resposta; agora usa
  *    `toUserFacingError` (mesmo padrão do resto do projeto): o erro
  *    completo continua logado (`console.error`) server-side, a resposta
  *    HTTP recebe só uma mensagem genérica, status preservado.
@@ -39,22 +38,19 @@ console.log("\n1 — /api/admin/sync-stract: nunca mais devolve err.message/Stri
   ok("importa toUserFacingError de lib/user-facing-error", /import\s*\{\s*toUserFacingError\s*\}\s*from\s*"@\/lib\/user-facing-error"/.test(source));
 }
 
-console.log("\n2 — /api/cron/evaluate-achievements: nunca mais devolve err.message cru\n");
-{
-  const source = readRoute("cron", "evaluate-achievements", "route.ts");
-  ok("usa toUserFacingError no catch", /toUserFacingError\(err,/.test(source));
-  ok("não devolve mais `err instanceof Error ? err.message : ...` no JSON de resposta", !/error: err instanceof Error \? err\.message :/.test(source));
-  ok("status 500 preservado no catch", /\{ status: 500 \}/.test(source));
-}
+// ---------------------------------------------------------------------------
+// (Seção 2 — "/api/cron/evaluate-achievements" — removida: a rota foi
+// excluída na Etapa 1.4 da reestruturação KOFF Analytics, junto com o
+// motor de Achievements.)
+// ---------------------------------------------------------------------------
 
-console.log("\n3 — as 5 rotas de cron/admin usam guardCronRequest (auth + rate limit centralizados)\n");
+console.log("\n3 — as 4 rotas de cron/admin usam guardCronRequest (auth + rate limit centralizados)\n");
 {
   const routes: [string[], string][] = [
     [["admin", "sync-stract", "route.ts"], "admin-sync-stract"],
     [["cron", "sync-meta", "route.ts"], "sync-meta"],
     [["cron", "sync-stract", "route.ts"], "sync-stract"],
     [["cron", "ensure-sprints", "route.ts"], "ensure-sprints"],
-    [["cron", "evaluate-achievements", "route.ts"], "evaluate-achievements"],
   ];
   for (const [segments, routeName] of routes) {
     const source = readRoute(...segments);

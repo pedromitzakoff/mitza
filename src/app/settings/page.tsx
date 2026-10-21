@@ -24,7 +24,7 @@ const SETTINGS_GROUPS: { label: string; items: SettingsLink[] }[] = [
       {
         href: "/settings/team",
         title: "Equipe",
-        description: "Convidar, editar cargo/papel e desativar membros da equipe — gestão administrativa, separada do Perfil Profissional em Equipe (/team).",
+        description: "Convidar, editar cargo/papel e desativar membros da equipe.",
       },
     ],
   },

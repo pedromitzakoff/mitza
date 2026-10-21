@@ -35,7 +35,9 @@ console.log("\nA — Sidebar (seção 1 do pedido): Operação removida da área
   ok("'Operação' não existe mais como item da Sidebar", !sidebarSource.includes('label: "Operação"'));
   ok("'Demandas' continua na área Agência", /label: "Demandas", href: "\/demandas"/.test(sidebarSource));
   ok("AGENCIA_ITEMS tem exatamente 1 item agora (Demandas)", /const AGENCIA_ITEMS: NavItem\[\] = \[\s*\{ label: "Demandas"[\s\S]*?\},\s*\];/.test(sidebarSource));
-  ok("Gestão (Clientes/Equipe/Configurações) continua intocada", /label: "Clientes", href: "\/clients"/.test(sidebarSource) && /label: "Equipe", href: "\/team"/.test(sidebarSource) && /label: "Configurações", href: "\/settings", icon: Settings, adminOnly: true/.test(sidebarSource));
+  // "Equipe" (/team) foi removido do GESTAO_ITEMS na Etapa 1.4 da
+  // reestruturação KOFF Analytics, posterior a esta etapa.
+  ok("Gestão (Clientes/Configurações) continua intocada", /label: "Clientes", href: "\/clients"/.test(sidebarSource) && !/label: "Equipe"/.test(sidebarSource) && /label: "Configurações", href: "\/settings", icon: Settings, adminOnly: true/.test(sidebarSource));
   // MITZA ONE — Minha Rotina: ListChecks voltou a ser importado, agora pro
   // item "Minha Rotina" (ícone de checklist, seção 1 daquele pedido) —
   // reaproveitado de propósito, nunca um import morto. A checagem real
@@ -123,8 +125,10 @@ console.log("\nD — Navegação (seção 4 do pedido): estrutura final exata, n
     })(),
   );
   ok("Agência = Demandas (nenhum item extra, Operação removido; Timeline removida na Etapa 1.3)", AGENCIA_ITEMS_HAS_ONLY_DEMANDAS(sidebarSource));
-  ok("Gestão = Clientes + Equipe + Configurações (inalterado)", /const GESTAO_ITEMS: NavItem\[\] = \[\s*\{ label: "Clientes"[\s\S]*?\{ label: "Equipe"[\s\S]*?\{ label: "Configurações"[\s\S]*?\];/.test(sidebarSource));
-  ok("nenhum módulo/item novo foi adicionado à Sidebar (contagem de 'label:' em AGENCIA_ITEMS+GESTAO_ITEMS = 4: Demandas, Clientes, Equipe, Configurações)", countLabels(sidebarSource) === 4);
+  // "Equipe" (/team) foi removido do GESTAO_ITEMS na Etapa 1.4 da
+  // reestruturação KOFF Analytics, posterior a esta etapa.
+  ok("Gestão = Clientes + Configurações (Equipe removido na Etapa 1.4)", /const GESTAO_ITEMS: NavItem\[\] = \[\s*\{ label: "Clientes"[\s\S]*?\{ label: "Configurações"[\s\S]*?\];/.test(sidebarSource));
+  ok("nenhum módulo/item novo foi adicionado à Sidebar (contagem de 'label:' em AGENCIA_ITEMS+GESTAO_ITEMS = 3: Demandas, Clientes, Configurações)", countLabels(sidebarSource) === 3);
 }
 
 function AGENCIA_ITEMS_HAS_ONLY_DEMANDAS(source: string): boolean {

@@ -82,7 +82,6 @@ const clientsActionsSource = stripComments(readFileSync(join(__dirname, "..", "s
 const settingsClientsActionsSource = stripComments(readFileSync(join(__dirname, "..", "src", "app", "settings", "clients", "actions.ts"), "utf8"));
 const agencyTreeActionsSource = stripComments(readFileSync(join(__dirname, "..", "src", "app", "agency-accounts-tree-actions.ts"), "utf8"));
 const assignmentsLibSource = stripComments(readFileSync(join(__dirname, "..", "src", "lib", "client-manager-assignments.ts"), "utf8"));
-const teamPerformanceDataSource = stripComments(readFileSync(join(__dirname, "..", "src", "lib", "team-performance-data.ts"), "utf8"));
 
 console.log("\n1 — cliente sem gestor → gestor A (atribuição inicial)\n");
 {
@@ -311,18 +310,16 @@ console.log("\n15 — client_manager_assignments é só-leitura a partir do cód
 {
   ok("RLS: só existe policy de SELECT (nenhuma de insert/update/delete)", /create policy client_manager_assignments_select/.test(migrationSource) && !/create policy client_manager_assignments_(insert|update|delete)/.test(migrationSource));
   ok("lib/client-manager-assignments.ts só usa .select() na tabela nova, nunca .insert/.update/.upsert/.delete", /\.from\("client_manager_assignments"\)/.test(assignmentsLibSource) && !/\.from\("client_manager_assignments"\)[\s\S]{0,80}\.(insert|update|upsert|delete)\(/.test(assignmentsLibSource));
-  ok(
-    "team-performance-data.ts (UI de histórico) também só lê — nunca escreve na tabela nova",
-    !/\.from\("client_manager_assignments"\)/.test(teamPerformanceDataSource) || !/\.(insert|update|upsert|delete)\(/.test(teamPerformanceDataSource),
-  );
 }
 
-console.log("\n16 — nenhuma nota/score/ranking/bônus na UI de histórico de carteira\n");
-{
-  const teamProfilePageSource = stripComments(readFileSync(join(__dirname, "..", "src", "app", "team", "[id]", "page.tsx"), "utf8"));
-  ok('seção se chama "Histórico de carteira" (fato, não métrica)', /Histórico de carteira/.test(teamProfilePageSource));
-  ok("nenhuma contagem agregada (ex.: 'X clientes ao longo do tempo') foi adicionada junto", !/ao longo do tempo|total de clientes já geridos/i.test(teamProfilePageSource));
-  ok("nenhuma palavra de score/ranking/nível/bônus na página do perfil", !/\bscore\b|\branking\b|\bn[íi]vel\b|b[oô]nus/i.test(teamProfilePageSource));
-}
+// ---------------------------------------------------------------------------
+// (Seção 16 — "UI de histórico de carteira" — removida: a página
+// app/team/[id]/page.tsx que a exibia foi removida na Etapa 1.4 da
+// reestruturação KOFF Analytics (junto com Achievements/portfólio de
+// equipe). lib/client-manager-assignments.ts, a tabela
+// client_manager_assignments e seu trigger NÃO foram tocados — ficaram
+// sem consumidor de UI por ora, mas intactos; essa decisão não estava no
+// escopo explicitamente aprovado desta etapa, então não foi removida.)
+// ---------------------------------------------------------------------------
 
 console.log(`\nTodos os ${passed} testes passaram.`);

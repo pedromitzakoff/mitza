@@ -17,7 +17,6 @@ import {
   RefreshCw,
   Search,
   Settings,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
@@ -162,7 +161,6 @@ const MINHA_ROTINA_ITEM: NavItem = { label: "Minha Rotina", href: "/minha-rotina
  * agrupar Clientes, Equipe e Configurações sob Gestão"). */
 const GESTAO_ITEMS: NavItem[] = [
   { label: "Clientes", href: "/clients", icon: Briefcase, isActive: (p) => p === "/clients" || p.startsWith("/clients/new") },
-  { label: "Equipe", href: "/team", icon: Users, isActive: (p) => p.startsWith("/team") },
   { label: "Configurações", href: "/settings", icon: Settings, adminOnly: true, isActive: (p) => p.startsWith("/settings") },
 ];
 

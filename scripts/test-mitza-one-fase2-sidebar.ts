@@ -56,7 +56,11 @@ console.log("\nA — Arquitetura final da Sidebar (seção 1/2/7 do pedido): car
     "AGENCIA_ITEMS define Demandas, href global fixo (Operação removido na Etapa 'Simplificação da Operação'; Timeline removida na Etapa 1.3 — ver test-mega-facelift-fase1-shell.ts)",
     /label: "Demandas", href: "\/demandas"/.test(sidebarSource) && !sidebarSource.includes('label: "Operação"') && !sidebarSource.includes('label: "Timeline"'),
   );
-  ok("GESTAO_ITEMS define Clientes/Equipe/Configurações (Configurações admin-only), mesmo grupo de sempre", /label: "Clientes", href: "\/clients"/.test(sidebarSource) && /label: "Equipe", href: "\/team"/.test(sidebarSource) && /label: "Configurações", href: "\/settings", icon: Settings, adminOnly: true/.test(sidebarSource));
+  // "Equipe" (/team) foi removido do GESTAO_ITEMS na Etapa 1.4 da
+  // reestruturação KOFF Analytics (o portfólio de equipe saiu do produto;
+  // /settings/team, a gestão administrativa de usuários, continua
+  // acessível por dentro de Configurações).
+  ok("GESTAO_ITEMS define Clientes/Configurações (Configurações admin-only), sem 'Equipe'", /label: "Clientes", href: "\/clients"/.test(sidebarSource) && !/label: "Equipe"/.test(sidebarSource) && /label: "Configurações", href: "\/settings", icon: Settings, adminOnly: true/.test(sidebarSource));
   ok("nenhum componente/ícone decorativo novo (sem lib de ícone nova, sem gráfico/badge novo) — só lucide-react, já em uso", !sidebarSource.includes("from \"recharts\"") && !sidebarSource.includes("Badge"));
 }
 
@@ -194,8 +198,10 @@ console.log("\nI — Rotas preservadas (seção 8 do pedido): nenhuma removida/r
   ]) {
     ok(`/${route.slice(0, -1).join("/")} continua existindo`, loadSource("src", "app", ...route).length > 0);
   }
-  ok("/operation, /demandas, /clients, /team, /settings continuam existindo", loadSource("src", "app", "operation", "page.tsx").length > 0 && loadSource("src", "app", "demandas", "page.tsx").length > 0 && loadSource("src", "app", "clients", "page.tsx").length > 0 && loadSource("src", "app", "team", "page.tsx").length > 0 && loadSource("src", "app", "settings", "page.tsx").length > 0);
-  ok("/sprints, /reports, /achievements não foram tocados", loadSource("src", "app", "sprints", "page.tsx").length > 0 && loadSource("src", "app", "reports", "page.tsx").length > 0 && loadSource("src", "app", "achievements", "page.tsx").length > 0);
+  // /team e /achievements foram removidas na Etapa 1.4 da reestruturação
+  // KOFF Analytics (gamificação e portfólio de equipe saíram do produto).
+  ok("/operation, /demandas, /clients, /settings continuam existindo", loadSource("src", "app", "operation", "page.tsx").length > 0 && loadSource("src", "app", "demandas", "page.tsx").length > 0 && loadSource("src", "app", "clients", "page.tsx").length > 0 && loadSource("src", "app", "settings", "page.tsx").length > 0);
+  ok("/sprints, /reports não foram tocados", loadSource("src", "app", "sprints", "page.tsx").length > 0 && loadSource("src", "app", "reports", "page.tsx").length > 0);
   ok("reminders/LegacyGlobalDashboard não foram alterados nesta fase (nenhum arquivo de reminders tocado; LegacyGlobalDashboard continua export órfão em app/page.tsx)", loadSource("src", "app", "page.tsx").includes("export async function LegacyGlobalDashboard("));
 }
 
