@@ -276,6 +276,71 @@ export async function runMetaApiBackfillAction(accountId: string, clientId: stri
   success(`Backfill concluído — ${result.totalBatches} lote(s), ${result.totalRowsRead} linha(s) lida(s).`, clientId);
 }
 
+export interface ConnectionTestResult {
+  clientId: string;
+  clientName: string;
+  accountId: string;
+  ok: boolean;
+  error?: string;
+}
+
+/**
+ * "Testar todas as conexões" — pedido do usuário depois de descobrir, uma
+ * conta de cada vez, que algumas (ex.: Vaapty SBC) não têm permissão
+ * concedida pro token da MITZA na Meta. Em vez de abrir "Gerenciar" e
+ * clicar em cada cliente um por um, testa TODAS as fontes `meta_api`
+ * habilitadas de uma vez, em paralelo — reaproveita exatamente a mesma
+ * chamada de validação do "Conectar" (`fetchMetaApiAccountBalance`) e a
+ * mesma tradução de erro (`describeMetaApiError`), nunca uma segunda
+ * implementação. Só leitura — nenhuma gravação, mesmo critério de qualquer
+ * outro diagnóstico desta tela.
+ *
+ * Paralelo (não sequencial como `syncAllMetaApiAccounts`): são chamadas
+ * independentes, só leitura, disparadas manualmente por um admin — nunca
+ * automático/frequente — então não tem o mesmo risco de rate limit que uma
+ * sincronização em lote escrevendo no banco teria.
+ */
+export async function testAllMetaConnectionsAction(): Promise<{ results: ConnectionTestResult[] } | { error: string }> {
+  await requireAdmin();
+  const supabase = await createSupabaseClient();
+
+  const [{ data: sources, error: sourcesError }, { data: clients, error: clientsError }] = await Promise.all([
+    supabase.from("import_sources").select("client_id, external_account_id").eq("provider", "meta_api").eq("channel", "meta").eq("enabled", true),
+    supabase.from("clients").select("id, name"),
+  ]);
+
+  if (sourcesError) return { error: "Não foi possível carregar as conexões cadastradas." };
+  if (clientsError) return { error: "Não foi possível carregar os clientes." };
+  if (!sources || sources.length === 0) return { results: [] };
+
+  const nameById = new Map((clients ?? []).map((c) => [c.id, c.name]));
+
+  const results = await Promise.all(
+    sources.map(async (source): Promise<ConnectionTestResult> => {
+      const clientName = nameById.get(source.client_id) ?? "Cliente desconhecido";
+      try {
+        const row = await fetchMetaApiAccountBalance(source.external_account_id);
+        if (row === null) {
+          return {
+            clientId: source.client_id,
+            clientName,
+            accountId: source.external_account_id,
+            ok: false,
+            error: "A Meta respondeu, mas sem os dados mínimos da conta.",
+          };
+        }
+        return { clientId: source.client_id, clientName, accountId: source.external_account_id, ok: true };
+      } catch (err) {
+        return { clientId: source.client_id, clientName, accountId: source.external_account_id, ok: false, error: describeMetaApiError(err) };
+      }
+    }),
+  );
+
+  results.sort((a, b) => (a.ok === b.ok ? a.clientName.localeCompare(b.clientName) : a.ok ? 1 : -1));
+
+  return { results };
+}
+
 /** "Desativar" — nunca `DELETE`, mesma disciplina de histórico preservado
  * de `docs/STRACT_INTEGRATION_ARCHITECTURE.md` (ponto 2: "mudança de
  * mapeamento desativa a linha antiga... nunca UPDATE destrutivo"). */

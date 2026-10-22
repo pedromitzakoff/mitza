@@ -10,6 +10,7 @@ import type { PerformanceGoal } from "@/lib/performance-goals";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SettingsPageShell } from "../settings-shell";
 import { MetaConnectionDrawer } from "./meta-connection-drawer";
+import { TestAllConnectionsButton } from "./test-all-connections-button";
 
 const IMPORT_SOURCE_STATUS_LABEL: Record<ImportSourceStatusDb, string> = {
   active: "Ativa",
@@ -151,6 +152,7 @@ export default async function MetaConnectionsPage({
         <EmptyState>Nenhum cliente ativo com Meta configurado em Canais de mídia.</EmptyState>
       ) : (
         <>
+          <TestAllConnectionsButton />
           <p className="mb-4 text-sm text-muted-foreground">
             {problemCount === 0
               ? `Todos os ${audits.length} clientes Meta ativos estão com conta e integração conectadas.`
