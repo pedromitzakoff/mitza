@@ -60,8 +60,17 @@ import {
 import { CockpitResultCard, CockpitCostCard } from "../cockpit-goal-card";
 import { CockpitDiagnosticsCard } from "../cockpit-diagnostics-card";
 import { buildCockpitDailyEvolutionPoints } from "@/lib/cockpit-daily-evolution";
-import { buildGoalEvolutionSeries, type EvolutionSeriesOption } from "@/lib/cockpit-evolution-merge";
+import { buildGoalEvolutionSeries, resolveDefaultEvolutionSeriesId, type EvolutionSeriesOption } from "@/lib/cockpit-evolution-merge";
 import { CockpitEvolutionSection } from "../cockpit-evolution-section";
+import {
+  resolveCockpitFilterState,
+  filterCampaignDailyRows,
+  filterCampaignSummaries,
+  filterAdSetDailyRows,
+  filterCreativeDailyRows,
+  resolveFilteredExecutiveCardOverride,
+} from "@/lib/cockpit-global-filter";
+import { CockpitGlobalFilterBar } from "../cockpit-global-filter-bar";
 import {
   resolveMetaAdAccountId,
   fetchAccountPeriodReachSnapshot,
@@ -160,10 +169,18 @@ export default async function ClientPage({
     synced?: string;
     saved?: string;
     month?: string;
+    filtro?: string;
+    modo?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, synced, saved, month: monthQueryParam } = await searchParams;
+  const { error, synced, saved, month: monthQueryParam, filtro: filterTextParam, modo: filterModeParam } = await searchParams;
+  // KOFF Analytics — "Filtro global de performance": ÚNICA definição de
+  // escopo pra página inteira (`lib/cockpit-global-filter.ts`) — lida uma
+  // vez aqui, propagada por filtragem server-side pra tudo que depende
+  // dela (nunca cada componente decidindo por conta própria se está
+  // filtrado).
+  const cockpitFilter = resolveCockpitFilterState(filterTextParam, filterModeParam);
 
   function buildContextHref(overrides: { month?: string }): string {
     return buildClientContextHref(id, { month: monthQueryParam }, overrides);
@@ -538,27 +555,42 @@ export default async function ClientPage({
           : null;
       const costDiagnostic = evaluateCpaDiagnostic(performanceSummary.costPerResult, targetCostPerResult, performanceSummary.resultCount);
 
+      // KOFF Analytics — "Filtro global de performance": com o filtro
+      // ativo, Resultado/Custo deste objetivo são recalculados a partir de
+      // `campaign_daily_metrics` filtrado (`resolveFilteredExecutiveCardOverride`)
+      // em vez do `performanceSummary` global acima — nunca os dois
+      // misturados. `performanceReportData.campaignDailyRows` é sempre o
+      // conjunto COMPLETO (não filtrado por nome); a função decide
+      // calculável/indisponível e aplica o filtro de nome por dentro.
+      const filteredOverride = cockpitFilter.isActive
+        ? resolveFilteredExecutiveCardOverride(group.resultType, group.channels, performanceReportData.campaignDailyRows, cockpitFilter)
+        : null;
+
       return {
         result: {
           resultType: group.resultType,
           channelsLabel: resultGroups.length > 1 ? group.channels.map((c) => TRAFFIC_CHANNELS[c].label).join(" + ") : null,
-          resultCount: performanceSummary.resultCount,
-          targetResultCount,
-          expectedResultsToDate,
-          neededDailyRate,
-          edit: goalEdit,
+          resultCount: filteredOverride ? filteredOverride.resultCount ?? 0 : performanceSummary.resultCount,
+          targetResultCount: filteredOverride ? null : targetResultCount,
+          expectedResultsToDate: filteredOverride ? null : expectedResultsToDate,
+          neededDailyRate: filteredOverride ? null : neededDailyRate,
+          edit: filteredOverride ? null : goalEdit,
+          filteredNotice: filteredOverride?.filteredNotice,
+          unavailableReason: filteredOverride?.unavailableReason,
         },
-        status,
+        status: filteredOverride ? null : status,
         cost: {
           resultType: group.resultType,
-          costPerResult: performanceSummary.costPerResult,
-          targetCostPerResult,
-          deviationPct: costDiagnostic?.deviationPct ?? null,
-          tone: costDiagnostic?.tone ?? "normal",
+          costPerResult: filteredOverride ? filteredOverride.costPerResult : performanceSummary.costPerResult,
+          targetCostPerResult: filteredOverride ? null : targetCostPerResult,
+          deviationPct: filteredOverride ? null : costDiagnostic?.deviationPct ?? null,
+          tone: filteredOverride ? "normal" : costDiagnostic?.tone ?? "normal",
           // Custo por resultado nunca é editável pra objetivo secundário
           // (sempre derivado de Investimento/Resultado, nunca gravado por
           // si — ver nota em `cockpit-meta-ritmo-section.tsx`).
-          edit: group.isPrimary ? goalEdit : null,
+          edit: filteredOverride ? null : group.isPrimary ? goalEdit : null,
+          filteredNotice: filteredOverride?.filteredNotice,
+          unavailableReason: filteredOverride?.unavailableReason,
         },
       };
     });
@@ -612,8 +644,11 @@ export default async function ClientPage({
     latestSyncLabel: dadosData?.health.latestSuccessAtLabel ?? null,
   };
 
-  const evolutionEmptyMessage =
-    resultGroups.length === 0
+  const evolutionEmptyMessage = cockpitFilter.isActive
+    ? !clientChannels.includes("meta")
+      ? "Métricas diárias não podem ser filtradas por campanha sem a integração Meta Ads (única fonte com esse nível de detalhe)."
+      : "Nenhuma campanha corresponde a este filtro no período."
+    : resultGroups.length === 0
       ? "Este cliente ainda não tem um objetivo de performance configurado."
       : !hasDailyIntegration
         ? "Sem dados diários disponíveis para este cliente."
@@ -656,19 +691,33 @@ export default async function ClientPage({
       ])
     : ([{ status: "unavailable", reason: "not_configured" }, { status: "unavailable", reason: "not_configured" }] as const);
 
+  // KOFF Analytics — "Filtro global de performance": as 4 linhas granulares
+  // que alimentam Indicadores/Evolução Meta Ads/Exploração passam pelo
+  // filtro ANTES de entrar em `buildCockpitAdPerformanceData` — sem filtro
+  // ativo, `filterCampaignDailyRows`/etc devolvem as linhas intocadas
+  // (mesmo comportamento de sempre); com o filtro ativo, TUDO que deriva
+  // dessas linhas (comparação de período, séries diárias, resumos de
+  // campanha/conjunto/anúncio) já nasce filtrado, sem nenhum cálculo
+  // paralelo — a MESMA função que já existia (`buildCockpitAdPerformanceData`)
+  // simplesmente recebe menos linhas.
+  const filteredCampaignDailyRows = filterCampaignDailyRows(performanceReportData.campaignDailyRows, cockpitFilter);
+  const filteredExplorationCampaigns = filterCampaignSummaries(performanceReportData.campaigns, cockpitFilter);
+  const filteredAdSetDailyRows = filterAdSetDailyRows(performanceReportData.adSetDailyRows, cockpitFilter);
+  const filteredCreativeDailyRows = filterCreativeDailyRows(performanceReportData.creativeDailyRows, cockpitFilter);
+
   const adPerformanceData = buildCockpitAdPerformanceData({
     client: { id: client.id, name: client.name },
     metaAdAccountId,
     period: { start: firstDay, end: lastDay },
-    campaignDailyRows: performanceReportData.campaignDailyRows,
-    explorationCampaigns: performanceReportData.campaigns,
-    explorationAdSetRows: performanceReportData.adSetDailyRows,
-    explorationCreativeRows: performanceReportData.creativeDailyRows,
+    campaignDailyRows: filteredCampaignDailyRows,
+    explorationCampaigns: filteredExplorationCampaigns,
+    explorationAdSetRows: filteredAdSetDailyRows,
+    explorationCreativeRows: filteredCreativeDailyRows,
     resultType: performanceReportData.performanceGoal,
     reach: adReach,
     lastSyncAt: dadosData?.health.latestSuccessAt ?? null,
   });
-  const adMetricCards = buildMetricCardViewModels(adPerformanceData);
+  const adMetricCards = buildMetricCardViewModels(adPerformanceData, cockpitFilter.isActive);
   const adExplorationCampaignRows = adPerformanceData.explorationCampaigns.map(campaignSummaryToRow);
 
   // Fusão final da Evolução: séries por objetivo primeiro (viram a opção
@@ -676,12 +725,34 @@ export default async function ClientPage({
   // Custo por resultado NUNCA entram duas vezes (já cobertos pelas séries
   // por objetivo acima); o resto (impressões/cliques/CTR/CPM/ROAS etc.)
   // continua disponível normalmente.
-  const mergedEvolutionSeries: EvolutionSeriesOption[] = [
-    ...goalEvolutionSeries,
-    ...(clientChannels.includes("meta")
-      ? adPerformanceData.evolution.filter((s) => s.id !== "investment" && s.id !== "results" && s.id !== "costPerResult")
-      : []),
-  ];
+  //
+  // KOFF Analytics — "Filtro global de performance": séries por OBJETIVO
+  // vêm de `daily_performance`/`performance_records` (achado da auditoria:
+  // SEM coluna de campanha) — nunca recalculáveis no escopo filtrado, por
+  // isso saem INTEIRAS da lista quando o filtro está ativo (nunca uma
+  // série global disfarçada de filtrada no seletor). As métricas Meta Ads
+  // (`adPerformanceData.evolution`, incluindo de volta Investimento/
+  // Resultado/Custo por resultado — já corretamente filtradas, vieram de
+  // `filteredCampaignDailyRows` acima) passam a ser a ÚNICA fonte.
+  const mergedEvolutionSeries: EvolutionSeriesOption[] = cockpitFilter.isActive
+    ? clientChannels.includes("meta")
+      ? adPerformanceData.evolution
+      : []
+    : [
+        ...goalEvolutionSeries,
+        ...(clientChannels.includes("meta")
+          ? adPerformanceData.evolution.filter((s) => s.id !== "investment" && s.id !== "results" && s.id !== "costPerResult")
+          : []),
+      ];
+
+  const defaultEvolutionLeftId = resolveDefaultEvolutionSeriesId(
+    mergedEvolutionSeries,
+    cockpitFilter.isActive ? ["results"] : primaryResultType ? [`goal:${primaryResultType}:result`, "results"] : ["results"],
+  );
+  const defaultEvolutionRightId = resolveDefaultEvolutionSeriesId(
+    mergedEvolutionSeries,
+    cockpitFilter.isActive ? ["investment"] : primaryResultType ? [`goal:${primaryResultType}:investment`, "investment"] : ["investment"],
+  );
 
   // KOFF Analytics — Redesign definitivo do Cockpit: quebra por canal
   // (`cockpit-channel-breakdown.tsx`) só é relevante com mais de um canal —
@@ -773,6 +844,14 @@ export default async function ClientPage({
         </div>
       </div>
 
+      {/* KOFF Analytics — "Filtro global de performance": local visível
+          ACIMA da Visão executiva (pedido explícito do usuário) — rege a
+          página inteira a partir daqui (searchParams `filtro`/`modo`,
+          única definição de escopo em `lib/cockpit-global-filter.ts`). */}
+      <div className="mt-6">
+        <CockpitGlobalFilterBar initialText={cockpitFilter.text} initialMode={cockpitFilter.mode} />
+      </div>
+
       {/* ÁREA 1 — VISÃO EXECUTIVA (KOFF Analytics, Redesign definitivo):
           "entender rapidamente resultados e situação de orçamento" — um
           único bloco, nunca mais Meta & Ritmo / Diagnóstico / Canais /
@@ -793,20 +872,26 @@ export default async function ClientPage({
         <CockpitDiagnosticsCard insights={insights} />
       </div>
 
+      {/* Ordem obrigatória (pedido explícito do usuário): Investimento →
+          Resultado → Custo por resultado. Orçamento é sempre 1 card só
+          (dinheiro soma entre canais, independente de objetivo) — vem
+          PRIMEIRO; Resultado/Custo seguem par a par, 1 par por objetivo em
+          jogo. */}
       <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {resultCards.map(({ result, status, cost }) => (
-          <Fragment key={`group-${result.resultType}-${result.channelsLabel ?? "all"}`}>
-            <CockpitResultCard view={result} status={status} />
-            <CockpitCostCard view={cost} />
-          </Fragment>
-        ))}
         <CockpitBudgetCard
           headline={{ monthActual, monthPlanned, monthExpectedToDate, monthStatus, neededDailyRate: budgetNeededDailyRate }}
           clientId={client.id}
           monthParam={monthParam}
           channels={dashboardChannels.map((c) => ({ channel: c.channel, planned: c.planned }))}
           canEdit={canEditBudgetInline}
+          isGlobalFilterActive={cockpitFilter.isActive}
         />
+        {resultCards.map(({ result, status, cost }) => (
+          <Fragment key={`group-${result.resultType}-${result.channelsLabel ?? "all"}`}>
+            <CockpitResultCard view={result} status={status} />
+            <CockpitCostCard view={cost} />
+          </Fragment>
+        ))}
       </div>
 
       {/* Quebra por canal — só aparece com mais de um canal (ver
@@ -841,7 +926,14 @@ export default async function ClientPage({
           Investimento, por dia) quanto as métricas Meta Ads (impressões,
           CTR, CPM, ROAS...). */}
       <div className="mt-8">
-        <CockpitEvolutionSection series={mergedEvolutionSeries} freshness={evolutionFreshness} emptyMessage={evolutionEmptyMessage} />
+        <CockpitEvolutionSection
+          clientId={client.id}
+          series={mergedEvolutionSeries}
+          defaultLeftId={defaultEvolutionLeftId}
+          defaultRightId={defaultEvolutionRightId}
+          freshness={evolutionFreshness}
+          emptyMessage={evolutionEmptyMessage}
+        />
       </div>
 
       {/* ÁREA 3 — CAMPANHAS, CONJUNTOS E ANÚNCIOS: seção ampla e

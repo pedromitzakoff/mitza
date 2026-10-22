@@ -12,8 +12,9 @@ import {
   PACE_VERDICT_TONE,
   costVerdictLabel,
   COST_VERDICT_TONE,
-  COCKPIT_TONE_CARD_CLASSES,
+  COCKPIT_CARD_CLASSES,
   COCKPIT_TONE_BADGE_CLASSES,
+  COCKPIT_TONE_DOT_CLASSES,
 } from "@/lib/cockpit-pace";
 import { InlineGoalPlanEditor } from "./cockpit-inline-goal-editor";
 import { MetasSecondaryTargetForm } from "./metas-secondary-target-form";
@@ -32,15 +33,32 @@ import type { CockpitResultCardView, CockpitCostCardView, CockpitGoalEditAfforda
  * `MetasSecondaryTargetForm` direto (objetivo SECUNDÁRIO — já era editado
  * inline, só ganhou aqui o Fechar que antes vivia em
  * `CockpitSecondaryGoalEditor`).
+ *
+ * KOFF Analytics — "Refinamento de UX e filtros globais do Cockpit": o card
+ * inteiro nunca mais herda a cor do veredito (fundo sempre neutro,
+ * `COCKPIT_CARD_CLASSES`) — a cor migrou pro ponto pequeno ao lado do
+ * rótulo (`PaceVerdictBadge`/`CostVerdictBadge`). Valor principal com mais
+ * peso tipográfico (`text-2xl`); meta/progresso ficam visualmente em
+ * segundo plano (`text-overview-text-muted`, nunca mais a cor primária).
  */
 function PaceVerdictBadge({ status }: { status: SpendStatus }) {
   const tone = PACE_VERDICT_TONE[status];
-  return <p className={`text-[11px] font-semibold uppercase tracking-wide ${COCKPIT_TONE_BADGE_CLASSES[tone]}`}>{PACE_VERDICT_LABEL[status]}</p>;
+  return (
+    <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide">
+      <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${COCKPIT_TONE_DOT_CLASSES[tone]}`} />
+      <span className={COCKPIT_TONE_BADGE_CLASSES[tone]}>{PACE_VERDICT_LABEL[status]}</span>
+    </p>
+  );
 }
 
 function CostVerdictBadge({ tone }: { tone: MetricTone }) {
   const cockpitTone = COST_VERDICT_TONE[tone];
-  return <p className={`text-[11px] font-semibold uppercase tracking-wide ${COCKPIT_TONE_BADGE_CLASSES[cockpitTone]}`}>{costVerdictLabel(tone)}</p>;
+  return (
+    <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide">
+      <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${COCKPIT_TONE_DOT_CLASSES[cockpitTone]}`} />
+      <span className={COCKPIT_TONE_BADGE_CLASSES[cockpitTone]}>{costVerdictLabel(tone)}</span>
+    </p>
+  );
 }
 
 function GoalPencilButton({ onClick, label }: { onClick: () => void; label: string }) {
@@ -114,18 +132,22 @@ export function CockpitResultCard({ view, status }: { view: CockpitResultCardVie
       )
     : null;
 
-  const tone = status ? PACE_VERDICT_TONE[status] : "neutral";
-
   return (
-    <div className={`rounded-lg border p-3 ${COCKPIT_TONE_CARD_CLASSES[tone]}`}>
+    <div className={`rounded-lg border p-2.5 ${COCKPIT_CARD_CLASSES}`}>
       {status ? <PaceVerdictBadge status={status} /> : <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-secondary">RESULTADO</p>}
-      <p className="mt-0.5 text-xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{formatCount(view.resultCount)}</p>
+      <p className="mt-1 text-2xl font-bold tracking-tight text-overview-text-primary tabular-nums">
+        {view.unavailableReason ? "—" : formatCount(view.resultCount)}
+      </p>
       <p className="text-xs text-overview-text-secondary">
         {config.resultMetricLabel}
         {view.channelsLabel ? ` · ${view.channelsLabel}` : ""}
       </p>
-      {view.targetResultCount !== null && view.targetResultCount > 0 ? (
-        <div className="mt-1.5 flex flex-col gap-1 text-xs text-overview-text-secondary">
+      {view.unavailableReason ? (
+        <p className="mt-1.5 text-[11px] text-overview-text-muted">{view.unavailableReason}</p>
+      ) : view.filteredNotice ? (
+        <p className="mt-1.5 text-[11px] text-overview-text-muted">{view.filteredNotice}</p>
+      ) : view.targetResultCount !== null && view.targetResultCount > 0 ? (
+        <div className="mt-1.5 flex flex-col gap-0.5 text-[11px] text-overview-text-muted">
           <div className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-1">
               Meta
@@ -133,19 +155,19 @@ export function CockpitResultCard({ view, status }: { view: CockpitResultCardVie
                 <GoalPencilButton onClick={() => setIsEditing(true)} label={`Editar meta de ${config.resultMetricLabel.toLowerCase()}`} />
               )}
             </span>
-            <span className="tabular-nums font-medium text-overview-text-primary">{formatCount(view.targetResultCount)}</span>
+            <span className="tabular-nums font-medium text-overview-text-secondary">{formatCount(view.targetResultCount)}</span>
           </div>
           {view.neededDailyRate !== null && (
             <div className="flex items-center justify-between gap-3">
               <span>Necessário</span>
-              <span className="tabular-nums font-medium text-overview-text-primary">{formatCount(Math.ceil(view.neededDailyRate))} / dia</span>
+              <span className="tabular-nums font-medium text-overview-text-secondary">{formatCount(Math.ceil(view.neededDailyRate))} / dia</span>
             </div>
           )}
           {summary && <AgencyInvestmentBar summary={summary} showLegend={false} formatValue={formatCount} overflowIsPositive />}
         </div>
       ) : (
-        <div className="mt-1.5 flex items-center gap-1 text-xs text-overview-text-secondary">
-          <p>Sem meta de {config.resultMetricLabel.toLowerCase()} configurada para o mês.</p>
+        <div className="mt-1.5 flex items-center gap-1 text-[11px] text-overview-text-muted">
+          <p>Sem meta de {config.resultMetricLabel.toLowerCase()} configurada.</p>
           {view.edit && !isEditing && (
             <GoalPencilButton onClick={() => setIsEditing(true)} label={`Configurar meta de ${config.resultMetricLabel.toLowerCase()}`} />
           )}
@@ -171,18 +193,22 @@ export function CockpitCostCard({ view }: { view: CockpitCostCardView }) {
   const hasTarget = view.targetCostPerResult !== null && view.deviationPct !== null;
 
   return (
-    <div className={`rounded-lg border p-3 ${COCKPIT_TONE_CARD_CLASSES[hasTarget ? COST_VERDICT_TONE[view.tone] : "neutral"]}`}>
+    <div className={`rounded-lg border p-2.5 ${COCKPIT_CARD_CLASSES}`}>
       {hasTarget ? (
         <CostVerdictBadge tone={view.tone} />
       ) : (
         <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-secondary">{config.costMetricShortLabel.toUpperCase()}</p>
       )}
-      <p className="mt-0.5 text-xl font-semibold tracking-tight text-overview-text-primary tabular-nums">
-        {view.costPerResult !== null ? formatCurrency(view.costPerResult) : "—"}
+      <p className="mt-1 text-2xl font-bold tracking-tight text-overview-text-primary tabular-nums">
+        {view.unavailableReason ? "—" : view.costPerResult !== null ? formatCurrency(view.costPerResult) : "—"}
       </p>
       <p className="text-xs text-overview-text-secondary">{config.costMetricShortLabel}</p>
-      {view.targetCostPerResult !== null ? (
-        <div className="mt-1.5 flex flex-col gap-0.5 text-xs text-overview-text-secondary">
+      {view.unavailableReason ? (
+        <p className="mt-1.5 text-[11px] text-overview-text-muted">{view.unavailableReason}</p>
+      ) : view.filteredNotice ? (
+        <p className="mt-1.5 text-[11px] text-overview-text-muted">{view.filteredNotice}</p>
+      ) : view.targetCostPerResult !== null ? (
+        <div className="mt-1.5 flex flex-col gap-0.5 text-[11px] text-overview-text-muted">
           <div className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-1">
               Meta
@@ -190,14 +216,12 @@ export function CockpitCostCard({ view }: { view: CockpitCostCardView }) {
                 <GoalPencilButton onClick={() => setIsEditing(true)} label={`Editar meta de ${config.costMetricShortLabel.toLowerCase()}`} />
               )}
             </span>
-            <span className="tabular-nums font-medium text-overview-text-primary">{formatCurrency(view.targetCostPerResult)}</span>
+            <span className="tabular-nums font-medium text-overview-text-secondary">{formatCurrency(view.targetCostPerResult)}</span>
           </div>
-          {view.deviationPct !== null && view.deviationPct > 0 && (
-            <p className="text-overview-text-secondary">{Math.round(view.deviationPct * 100)}% acima</p>
-          )}
+          {view.deviationPct !== null && view.deviationPct > 0 && <p>{Math.round(view.deviationPct * 100)}% acima</p>}
         </div>
       ) : (
-        <div className="mt-1.5 flex items-center gap-1 text-xs text-overview-text-secondary">
+        <div className="mt-1.5 flex items-center gap-1 text-[11px] text-overview-text-muted">
           <p>Meta de custo não configurada.</p>
           {view.edit && !isEditing && (
             <GoalPencilButton onClick={() => setIsEditing(true)} label={`Configurar meta de ${config.costMetricShortLabel.toLowerCase()}`} />

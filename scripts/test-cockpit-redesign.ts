@@ -81,9 +81,15 @@ ok("personalização continua persistida por cliente via localStorage (nenhuma t
 console.log("\n4 — EVOLUÇÃO DA PERFORMANCE: módulo único, nunca mais dois gráficos separados\n");
 
 ok("page.tsx renderiza um CockpitEvolutionSection só (nenhum CockpitDailyEvolutionSection/CockpitAdEvolutionSection remanescente)", pageSource.includes("<CockpitEvolutionSection") && !pageSource.includes("CockpitDailyEvolutionSection") && !pageSource.includes("CockpitAdEvolutionSection"));
+// Etapa posterior "KOFF Analytics — Refinamento de UX e filtros globais do
+// Cockpit" (pedido explícito do usuário) substituiu o "um seletor só"
+// desta etapa por "SEMPRE exatamente dois gráficos, lado a lado, cada um
+// com seu próprio seletor" — as duas asserções abaixo foram atualizadas
+// pra essa decisão posterior e aprovada (ver scripts/test-koff-filtro-global-cockpit.ts,
+// seção H, pra cobertura completa dos dois painéis/sem "Outra métrica").
 ok(
-  "séries por objetivo (Resultado/Custo/Investimento diário) e séries Meta Ads são concatenadas no MESMO array — um seletor só, nunca dois gráficos lado a lado",
-  pageSource.includes("const mergedEvolutionSeries: EvolutionSeriesOption[] = [") && pageSource.includes("...goalEvolutionSeries,"),
+  "séries por objetivo (Resultado/Custo/Investimento diário) e séries Meta Ads continuam disponíveis no MESMO seletor — fonte única pros dois painéis fixos (esquerda/direita), nunca dois seletores com catálogos diferentes",
+  pageSource.includes("const mergedEvolutionSeries: EvolutionSeriesOption[]") && pageSource.includes("...goalEvolutionSeries,"),
 );
 ok(
   "Investimento/Resultado/Custo por resultado das métricas Meta Ads são excluídos da fusão quando já existe série por objetivo — nunca duplicados no mesmo seletor",
@@ -94,7 +100,10 @@ ok(
   mergeLibSource.includes('import type { CockpitDailyEvolutionPoint } from "./cockpit-daily-evolution";'),
 );
 ok("escalas/unidades preservadas — cada métrica mantém seu próprio eixo (ChartMetricUnit), nunca dual-axis", evolutionSource.includes("formatMetricValue(unit, value)") && !evolutionSource.includes("yAxisId"));
-ok("comparação entre métricas preservada ('Outra métrica', cada painel com sua régua)", evolutionSource.includes('"other_metric"') && evolutionSource.includes("EvolutionChartPanel"));
+ok(
+  "dois painéis fixos, cada um com seletor PRÓPRIO e independente (substituiu o modo 'Outra métrica', removido por pedido explícito do usuário)",
+  evolutionSource.includes('side="left"') && evolutionSource.includes('side="right"') && !evolutionSource.includes('"other_metric"'),
+);
 ok("estado vazio nunca fabrica gráfico — mensagem explícita decidida por quem monta a página", evolutionSource.includes("emptyMessage"));
 
 console.log("\n5 — EXPLORAÇÃO DE CAMPANHAS: seção própria, prioritária, funcionalidades intocadas\n");
@@ -102,7 +111,15 @@ console.log("\n5 — EXPLORAÇÃO DE CAMPANHAS: seção própria, prioritária, 
 ok("page.tsx renderiza CockpitAdExplorationSection como ÁREA 3, própria (fora de qualquer aba)", /ÁREA 3[\s\S]{0,700}<CockpitAdExplorationSection/.test(pageSource));
 ok("heading com o mesmo peso visual da Visão executiva (text-base, nunca mais o rótulo pequeno de antes)", /Campanhas, conjuntos e an.{1}ncios<\/h2>/.test(pageSource) && /text-base font-medium[\s\S]{0,40}Campanhas, conjuntos/.test(pageSource));
 ok("busca + personalização de colunas preservadas (nenhuma funcionalidade removida)", explorationSectionSource.includes("SlidersHorizontal") && explorationSectionSource.includes("loadStoredColumns"));
-ok("drill-down Campanha->Conjunto/Anúncio preservado, mesma limitação documentada (abas irmãs, nunca filtro cruzado)", explorationSectionSource.includes("abas IRMÃS"));
+// Etapa posterior "KOFF Analytics — Refinamento de UX e filtros globais do
+// Cockpit" substituiu as abas IRMÃS (só apareciam depois de clicar numa
+// campanha) por 3 abas SEMPRE visíveis com entrada direta — a limitação
+// de dados em si (sem relação Conjunto->Anúncio, Gap C) continua
+// documentada e respeitada, só a wording do comentário mudou.
+ok(
+  "drill-down Campanha->Conjunto/Anúncio preservado, mesma limitação documentada (Gap C: sem ad_set_id em ad_creative_daily_metrics, nunca filtro cruzado fabricado)",
+  explorationSectionSource.includes("Gap C") && explorationSectionSource.includes("ad_set_id"),
+);
 
 console.log("\n6 — Preservação: nada essencial foi removido\n");
 

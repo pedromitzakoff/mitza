@@ -6,7 +6,7 @@ import { formatCurrency } from "@/lib/format";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import type { ChannelMetrics } from "@/lib/channel-metrics";
 import type { TrafficChannel } from "@/lib/traffic-channels";
-import { PACE_VERDICT_LABEL, PACE_VERDICT_TONE, COCKPIT_TONE_CARD_CLASSES, COCKPIT_TONE_BADGE_CLASSES } from "@/lib/cockpit-pace";
+import { PACE_VERDICT_LABEL, PACE_VERDICT_TONE, COCKPIT_CARD_CLASSES, COCKPIT_TONE_BADGE_CLASSES, COCKPIT_TONE_DOT_CLASSES } from "@/lib/cockpit-pace";
 import { DashboardBudget, type DashboardBudgetChannel } from "./dashboard-budget";
 
 /**
@@ -71,7 +71,12 @@ export interface CockpitGoalEditAffordance {
 
 function PaceVerdictBadge({ status }: { status: SpendStatus }) {
   const tone = PACE_VERDICT_TONE[status];
-  return <p className={`text-[11px] font-semibold uppercase tracking-wide ${COCKPIT_TONE_BADGE_CLASSES[tone]}`}>{PACE_VERDICT_LABEL[status]}</p>;
+  return (
+    <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide">
+      <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${COCKPIT_TONE_DOT_CLASSES[tone]}`} />
+      <span className={COCKPIT_TONE_BADGE_CLASSES[tone]}>{PACE_VERDICT_LABEL[status]}</span>
+    </p>
+  );
 }
 
 export interface CockpitResultCardView {
@@ -90,6 +95,22 @@ export interface CockpitResultCardView {
    * de edição aqui (não-admin ou mês encerrado, mesmo gate de
    * `canEditBudgetInline`) — nenhum lápis aparece. */
   edit: CockpitGoalEditAffordance | null;
+  /** KOFF Analytics — "Filtro global de performance": presente SÓ quando o
+   * filtro global está ativo — substitui meta/progresso/lápis por uma nota
+   * explícita ("Escopo filtrado — meta do mês não comparável aqui"), nunca
+   * compara o subconjunto filtrado contra a meta da carteira inteira
+   * (pedido explícito do usuário). `null`/ausente = comportamento de
+   * sempre. Nunca coexiste com `unavailableReason`. */
+  filteredNotice?: string;
+  /** KOFF Analytics — "Filtro global de performance": presente SÓ quando o
+   * filtro está ativo E este objetivo não pode ser recalculado no escopo
+   * filtrado (combina canais sem granularidade de campanha, ou não tem
+   * nenhuma linha de campanha pra recalcular) — `resultCount` já vem `0`
+   * fabricado neste caso (`resolveFilteredExecutiveCardOverride`,
+   * `lib/cockpit-global-filter.ts`); o card mostra "—" em vez do número e
+   * este texto no lugar de meta/progresso, NUNCA o número global
+   * disfarçado de filtrado (pedido explícito do usuário). */
+  unavailableReason?: string;
 }
 
 export interface CockpitCostCardView {
@@ -101,6 +122,10 @@ export interface CockpitCostCardView {
   /** Só pro objetivo PRINCIPAL — ver nota no componente abaixo. `null`
    * também cobre "sem permissão de edição aqui". */
   edit: CockpitGoalEditAffordance | null;
+  /** Ver `CockpitResultCardView.filteredNotice` — mesma regra. */
+  filteredNotice?: string;
+  /** Ver `CockpitResultCardView.unavailableReason` — mesma regra. */
+  unavailableReason?: string;
 }
 
 export interface CockpitBudgetHeadlineView {
@@ -126,12 +151,22 @@ export function CockpitBudgetCard({
   monthParam,
   channels,
   canEdit,
+  /** KOFF Analytics — "Filtro global de performance": Orçamento é sempre
+   * do CLIENTE INTEIRO (dinheiro planejado pro mês, nunca um recorte por
+   * campanha) — nunca recalculado pro escopo filtrado (pedido explícito do
+   * usuário: "orçamentos e metas globais não devem ser apresentados como
+   * metas do subconjunto filtrado"). Quando o filtro está ativo, mostra
+   * uma nota explícita deixando claro que este card continua olhando o
+   * cliente inteiro — nunca mistura silenciosamente dado global com
+   * filtrado. */
+  isGlobalFilterActive = false,
 }: {
   headline: CockpitBudgetHeadlineView;
   clientId: string;
   monthParam: string;
   channels: DashboardBudgetChannel[];
   canEdit: boolean;
+  isGlobalFilterActive?: boolean;
 }) {
   const summary = resolveMonthPeriodSummary(
     {
@@ -143,25 +178,26 @@ export function CockpitBudgetCard({
     "",
     { firstDay: "", lastDay: "" },
   );
-  const tone = PACE_VERDICT_TONE[headline.monthStatus];
 
   return (
-    <div className={`rounded-lg border p-3 ${COCKPIT_TONE_CARD_CLASSES[tone]}`}>
+    <div className={`rounded-lg border p-2.5 ${COCKPIT_CARD_CLASSES}`}>
       <PaceVerdictBadge status={headline.monthStatus} />
-      <p className="mt-0.5 text-xl font-semibold tracking-tight text-overview-text-primary tabular-nums">{formatCurrency(headline.monthActual)}</p>
-      <p className="text-xs text-overview-text-secondary">investido no mês</p>
+      <p className="mt-1 text-2xl font-bold tracking-tight text-overview-text-primary tabular-nums">{formatCurrency(headline.monthActual)}</p>
+      <p className="text-xs text-overview-text-secondary">
+        investido no mês{isGlobalFilterActive && <span className="text-overview-text-muted"> · cliente inteiro, não filtrado</span>}
+      </p>
       {headline.monthPlanned > 0 ? (
-        <div className="mt-1.5 flex flex-col gap-1 text-xs text-overview-text-secondary">
+        <div className="mt-1.5 flex flex-col gap-0.5 text-[11px] text-overview-text-muted">
           {headline.neededDailyRate !== null && (
             <div className="flex items-center justify-between gap-3">
               <span>Necessário</span>
-              <span className="tabular-nums font-medium text-overview-text-primary">{formatCurrency(headline.neededDailyRate)} / dia</span>
+              <span className="tabular-nums font-medium text-overview-text-secondary">{formatCurrency(headline.neededDailyRate)} / dia</span>
             </div>
           )}
           <AgencyInvestmentBar summary={summary} showLegend={false} />
         </div>
       ) : (
-        <p className="mt-1.5 text-xs text-overview-text-secondary">Sem planejamento configurado para o mês.</p>
+        <p className="mt-1.5 text-[11px] text-overview-text-muted">Sem planejamento configurado para o mês.</p>
       )}
 
       {/* `compact`: `DashboardBudget` mostra "Planejado" (pencil + composição

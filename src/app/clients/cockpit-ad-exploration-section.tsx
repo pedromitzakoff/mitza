@@ -24,13 +24,30 @@ import {
  * continua na MESMA tela (nenhuma rota nova nem botão "Ver performance
  * completa").
  *
- * Drill-down: Campanhas (ponto de entrada) → ao selecionar uma campanha,
- * "Conjuntos" e "Anúncios" aparecem como abas IRMÃS, ambas filtradas pela
- * MESMA campanha — `ad_creative_daily_metrics` não tem `ad_set_id`/
- * `ad_set_name` (limitação documentada em
- * `docs/META_ADS_DASHBOARD_METRICS_GAP_ANALYSIS.md`, Gap C), então não há
- * como filtrar Anúncios por Conjunto especificamente; abas irmãs são a
- * única opção honesta até essa extensão ser aprovada e implementada.
+ * KOFF Analytics — "Refinamento de UX e filtros globais do Cockpit" (pedido
+ * explícito do usuário, seção 3): "A navegação atual não está clara...
+ * Permitir entrar diretamente em qualquer nível." As três abas
+ * (Campanhas|Conjuntos|Anúncios) ficam SEMPRE visíveis — nunca mais
+ * "Conjuntos"/"Anúncios" só aparecem depois de clicar numa campanha. Uma
+ * campanha selecionada passa a ser um ESCOPO independente da aba ativa
+ * (`selectedCampaign`): clicar numa linha de campanha ainda seleciona essa
+ * campanha e leva pra "Conjuntos" (drill-down de sempre, preservado), mas
+ * agora dá pra entrar direto em "Conjuntos"/"Anúncios" sem selecionar nada
+ * — mostra os conjuntos/anúncios de TODAS as campanhas (reaproveitando
+ * `buildAdSetSummaries`/`buildCreativeSummaries` sem filtro, que já
+ * agregam entre campanhas e já retornam `campaignNames`), com a campanha
+ * de cada linha indicada como legenda (`ExplorationRow.campaignNames`).
+ * Um chip "Campanha: {nome} ×" (breadcrumb/filtro de contexto, pedido
+ * explícito) aparece só enquanto o escopo está ativo e pode ser limpo sem
+ * sair da aba.
+ *
+ * `ad_creative_daily_metrics` não tem `ad_set_id`/`ad_set_name`
+ * (limitação documentada em
+ * `docs/META_ADS_DASHBOARD_METRICS_GAP_ANALYSIS.md`, Gap C) — não existe
+ * relação Conjunto→Anúncio pra drill-down (pedido explícito: "não inventar
+ * relacionamentos inexistentes... mostrar uma limitação clara"), por isso
+ * linhas de Conjuntos nunca são clicáveis e a aba Anúncios sempre mostra o
+ * aviso da limitação quando escopada por campanha.
  */
 
 type ExplorationLevel = "campaigns" | "adsets" | "ads";
@@ -97,6 +114,7 @@ function ExplorationTable({
   onSortChange,
   onRowClick,
   emptyMessage,
+  showCampaignNames,
 }: {
   rows: ExplorationRow[];
   columns: ReturnType<typeof buildExplorationColumns>;
@@ -105,6 +123,13 @@ function ExplorationTable({
   onSortChange: (columnId: ExplorationColumnId) => void;
   onRowClick?: (row: ExplorationRow) => void;
   emptyMessage: string;
+  /** KOFF Analytics — "entrar diretamente em qualquer nível": entrada
+   * direta (sem campanha selecionada) mistura linhas de campanhas
+   * diferentes — mostra a legenda `row.campaignNames` embaixo do nome pra
+   * nunca deixar ambíguo de onde cada conjunto/anúncio vem. `false` no
+   * modo escopado (já sabido pela campanha selecionada, repetir seria
+   * ruído). */
+  showCampaignNames: boolean;
 }) {
   const columnsById = new Map(columns.map((col) => [col.id, col]));
   const visibleColumns = visibleColumnIds.map((id) => columnsById.get(id)).filter((col): col is NonNullable<typeof col> => col !== undefined);
@@ -156,6 +181,11 @@ function ExplorationTable({
                   className={`whitespace-nowrap px-3.5 py-2.5 tabular-nums text-overview-text-primary ${col.align === "right" ? "text-right" : "text-left font-medium"}`}
                 >
                   {formatExplorationCell(col.id, row)}
+                  {col.id === "name" && showCampaignNames && row.campaignNames && row.campaignNames.length > 0 && (
+                    <span className="mt-0.5 block truncate text-xs font-normal normal-case text-overview-text-muted">
+                      {row.campaignNames.join(" · ")}
+                    </span>
+                  )}
                 </td>
               ))}
             </tr>
@@ -294,9 +324,8 @@ export function CockpitAdExplorationSection({
     setSort(null);
   }
 
-  function handleBackToCampaigns() {
+  function handleClearScope() {
     setSelectedCampaign(null);
-    setLevel("campaigns");
     setSearchText("");
     setSort(null);
   }
@@ -310,60 +339,68 @@ export function CockpitAdExplorationSection({
   const normalizedSearch = searchText.trim().toLowerCase();
 
   const adSetRows: ExplorationRow[] = useMemo(() => {
-    if (!selectedCampaign) return [];
-    const filtered = adSetDailyRows.filter(
-      (row) => (row.campaignId && row.campaignId === selectedCampaign.id) || row.campaignName === selectedCampaign.name,
-    );
-    return buildAdSetSummaries(filtered).map(adSetSummaryToRow);
+    const scoped = selectedCampaign
+      ? adSetDailyRows.filter((row) => (row.campaignId && row.campaignId === selectedCampaign.id) || row.campaignName === selectedCampaign.name)
+      : adSetDailyRows;
+    return buildAdSetSummaries(scoped).map(adSetSummaryToRow);
   }, [adSetDailyRows, selectedCampaign]);
 
   const adRows: ExplorationRow[] = useMemo(() => {
-    if (!selectedCampaign) return [];
-    const filtered = creativeDailyRows.filter(
-      (row) => (row.campaignId && row.campaignId === selectedCampaign.id) || row.campaignName === selectedCampaign.name,
-    );
-    return buildCreativeSummaries(filtered).map(creativeSummaryToRow);
+    const scoped = selectedCampaign
+      ? creativeDailyRows.filter((row) => (row.campaignId && row.campaignId === selectedCampaign.id) || row.campaignName === selectedCampaign.name)
+      : creativeDailyRows;
+    return buildCreativeSummaries(scoped).map(creativeSummaryToRow);
   }, [creativeDailyRows, selectedCampaign]);
 
   const activeRows = level === "campaigns" ? campaigns : level === "adsets" ? adSetRows : adRows;
   const filteredRows = activeRows.filter((row) => matchesNameFilter(row.name, searchMode, normalizedSearch));
+  const isScopedByCampaign = selectedCampaign !== null && level !== "campaigns";
 
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <nav aria-label="Navegação de exploração" className="flex items-center gap-1.5 text-sm text-overview-text-secondary">
-          <button type="button" onClick={handleBackToCampaigns} className="mitza-pressable hover:text-overview-text-primary hover:underline">
+        <nav aria-label="Navegação de exploração" className="inline-flex w-fit items-center gap-1 rounded-full border border-overview-border bg-overview-surface p-1 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => handleChangeLevel("campaigns")}
+            className={`rounded-full px-3 py-1.5 ${level === "campaigns" ? "bg-brand text-white" : "text-overview-text-secondary hover:text-overview-text-primary"}`}
+          >
             Campanhas
           </button>
-          {selectedCampaign && (
-            <>
-              <span aria-hidden="true">›</span>
-              <span className="font-medium text-overview-text-primary">{selectedCampaign.name}</span>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={() => handleChangeLevel("adsets")}
+            className={`rounded-full px-3 py-1.5 ${level === "adsets" ? "bg-brand text-white" : "text-overview-text-secondary hover:text-overview-text-primary"}`}
+          >
+            Conjuntos
+          </button>
+          <button
+            type="button"
+            onClick={() => handleChangeLevel("ads")}
+            className={`rounded-full px-3 py-1.5 ${level === "ads" ? "bg-brand text-white" : "text-overview-text-secondary hover:text-overview-text-primary"}`}
+          >
+            Anúncios
+          </button>
         </nav>
 
-        {selectedCampaign && (
-          <div className="inline-flex w-fit items-center gap-1 rounded-full border border-overview-border bg-overview-surface p-1 text-xs font-semibold">
+        {isScopedByCampaign && (
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-overview-border bg-overview-surface-subtle px-2.5 py-1 text-xs text-overview-text-secondary">
+            <span>
+              Campanha: <span className="font-medium text-overview-text-primary">{selectedCampaign?.name}</span>
+            </span>
             <button
               type="button"
-              onClick={() => handleChangeLevel("adsets")}
-              className={`rounded-full px-3 py-1.5 ${level === "adsets" ? "bg-brand text-white" : "text-overview-text-secondary hover:text-overview-text-primary"}`}
+              onClick={handleClearScope}
+              aria-label="Limpar campanha selecionada"
+              className="mitza-pressable rounded-full px-1 text-overview-text-muted hover:text-overview-text-primary"
             >
-              Conjuntos
-            </button>
-            <button
-              type="button"
-              onClick={() => handleChangeLevel("ads")}
-              className={`rounded-full px-3 py-1.5 ${level === "ads" ? "bg-brand text-white" : "text-overview-text-secondary hover:text-overview-text-primary"}`}
-            >
-              Anúncios
+              ×
             </button>
           </div>
         )}
       </div>
 
-      {selectedCampaign && level === "ads" && (
+      {level === "ads" && isScopedByCampaign && (
         <p className="mt-2 text-xs text-overview-text-muted">
           Anúncios desta campanha — a ligação direta com um Conjunto específico não está disponível nos dados atuais (limitação conhecida,
           documentada).
@@ -385,14 +422,19 @@ export function CockpitAdExplorationSection({
           sort={sort}
           onSortChange={handleSortChange}
           onRowClick={level === "campaigns" ? handleSelectCampaign : undefined}
+          showCampaignNames={level !== "campaigns" && !isScopedByCampaign}
           emptyMessage={
             normalizedSearch !== ""
               ? "Nenhum resultado para esse filtro."
               : level === "campaigns"
                 ? "Nenhuma campanha com investimento neste período."
                 : level === "adsets"
-                  ? "Nenhum conjunto de anúncios encontrado para esta campanha no período."
-                  : "Nenhum anúncio encontrado para esta campanha no período."
+                  ? isScopedByCampaign
+                    ? "Nenhum conjunto de anúncios encontrado para esta campanha no período."
+                    : "Nenhum conjunto de anúncios encontrado no período."
+                  : isScopedByCampaign
+                    ? "Nenhum anúncio encontrado para esta campanha no período."
+                    : "Nenhum anúncio encontrado no período."
           }
         />
       </div>

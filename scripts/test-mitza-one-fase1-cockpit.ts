@@ -260,7 +260,16 @@ console.log("\nD — Performance (essencial + completa)\n");
   // (o componente antigo) foi removido; `cockpit-ad-performance-section.tsx`
   // é o novo.
   ok("Performance Meta Ads reaproveita buildPerformanceReportData (Camada 1 oficial do Relatório) — nenhuma segunda agregação de campanha/conjunto/criativo", pageSource.includes("buildPerformanceReportData(supabase, id,"));
-  ok("nenhuma segunda consulta de campanha/conjunto/criativo — reaproveita campaignDailyRows/campaigns/adSetDailyRows/creativeDailyRows já buscados", pageSource.includes("campaignDailyRows: performanceReportData.campaignDailyRows"));
+  // Etapa posterior "KOFF Analytics — Refinamento de UX e filtros globais
+  // do Cockpit" (filtro global) passou essas MESMAS linhas por uma função
+  // pura de filtro (`filterCampaignDailyRows` etc., `lib/cockpit-global-filter.ts`)
+  // antes de `buildCockpitAdPerformanceData` — continua sendo as mesmas
+  // linhas já buscadas por `performanceReportData`, nenhuma segunda
+  // consulta nova.
+  ok(
+    "nenhuma segunda consulta de campanha/conjunto/criativo — reaproveita campaignDailyRows/campaigns/adSetDailyRows/creativeDailyRows já buscados (hoje passados por um filtro puro antes de uso, nunca uma segunda busca)",
+    pageSource.includes("filterCampaignDailyRows(performanceReportData.campaignDailyRows, cockpitFilter)") && pageSource.includes("campaignDailyRows: filteredCampaignDailyRows"),
+  );
   ok("alcance/frequência do período vêm de fetchAccountPeriodReachSnapshot (1 chamada à Graph API) — nunca somado a partir de reach diário", pageSource.includes("fetchAccountPeriodReachSnapshot("));
   ok("seção só renderiza pra cliente que usa o canal Meta — mesmo critério de clientChannels já usado em toda a Visão executiva", pageSource.includes('clientChannels.includes("meta")'));
   ok("nenhum CTA 'Ver Performance completa'/'Ver campanhas' pra outra rota — toda exploração fica na própria tela (regra de página única)", !pageSource.includes("Ver Performance completa") && !pageSource.includes("Ver campanhas"));

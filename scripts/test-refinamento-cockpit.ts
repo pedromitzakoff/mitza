@@ -35,16 +35,21 @@ console.log("\nA — Cards compactos (seção 1 do pedido): paddings/gaps reduzi
   const cardsSource = loadSource("src", "app", "clients", "cockpit-meta-ritmo-section.tsx");
   const goalCardSource = loadSource("src", "app", "clients", "cockpit-goal-card.tsx");
 
-  // Ajuste de proporção posterior (p-3.5 -> p-3): a checagem real desta
-  // etapa é "os 3 cards continuam com a MESMA moldura/padding entre si"
-  // (compactação consistente), não um valor de padding travado no tempo.
+  // Ajuste de proporção posterior (p-3.5 -> p-3 -> p-2.5) + etapa posterior
+  // "KOFF Analytics — Refinamento de UX e filtros globais do Cockpit"
+  // (pedido explícito do usuário: "remover fundos vermelhos e verdes muito
+  // fortes") trocou `COCKPIT_TONE_CARD_CLASSES` (Record por tom, moldura
+  // colorida) por `COCKPIT_CARD_CLASSES` (valor ÚNICO, sempre neutro) — a
+  // checagem real desta etapa continua "os 3 cards continuam com a MESMA
+  // moldura/padding entre si" (compactação consistente), agora por
+  // definição já que os 3 usam literalmente a mesma constante fixa.
   // MITZA ONE — Refinamento do Cockpit (redesenho de edição): RESULTADO/
   // CUSTO moraram pra cockpit-goal-card.tsx (precisam de `isEditing`
   // próprio); ORÇAMENTO continua em cockpit-meta-ritmo-section.tsx — a
   // checagem soma as classes das DUAS fontes, nunca uma só.
   const paddingClasses = [
-    ...(cardsSource.match(/rounded-lg border p-\S+ \$\{COCKPIT_TONE_CARD_CLASSES/g) ?? []),
-    ...(goalCardSource.match(/rounded-lg border p-\S+ \$\{COCKPIT_TONE_CARD_CLASSES/g) ?? []),
+    ...(cardsSource.match(/rounded-lg border p-\S+ \$\{COCKPIT_CARD_CLASSES/g) ?? []),
+    ...(goalCardSource.match(/rounded-lg border p-\S+ \$\{COCKPIT_CARD_CLASSES/g) ?? []),
   ];
   ok(
     "os 3 cards de Meta & Ritmo continuam com a MESMA classe de moldura/padding entre si (compactação consistente, sem corte de conteúdo)",
@@ -153,7 +158,13 @@ console.log(
   );
   ok(
     "objetivo SECUNDÁRIO nunca tem lápis de Custo por resultado (nunca existiu meta de custo gravável pra ele) — page.tsx só passa `edit` no card de custo quando group.isPrimary",
-    pageSource.includes("edit: group.isPrimary ? goalEdit : null,"),
+    // Etapa posterior "KOFF Analytics — Refinamento de UX e filtros globais
+    // do Cockpit" (filtro global) ganhou uma camada extra: com o filtro
+    // ativo e o card recalculado (`filteredOverride`), nenhum card mostra
+    // lápis (editar a meta global não faz sentido olhando um subconjunto
+    // filtrado) — a regra original (`group.isPrimary`) continua intacta
+    // por dentro desse `filteredOverride ? null : ...`.
+    pageSource.includes("edit: filteredOverride ? null : group.isPrimary ? goalEdit : null,"),
   );
   ok(
     "edição do objetivo PRINCIPAL continua usando TODOS os canais disponíveis (AVAILABLE_TRAFFIC_CHANNELS, mesma regra de /metas) — nunca restrita só aos canais do grupo exibido",

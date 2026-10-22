@@ -46,6 +46,25 @@ function pointsToSeries(points: CockpitDailyEvolutionPoint[], pick: (point: Cock
  * Google") entra no rótulo pra nunca confundir com as métricas Meta-only
  * do Ads abaixo, quando as duas listas convivem no mesmo seletor.
  */
+/** KOFF Analytics — "Filtro global de performance": resolve o default de
+ * cada lado do seletor (esquerda = resultados, direita = investimento,
+ * pedido explícito do usuário) a partir de uma lista de IDs preferidos em
+ * ORDEM — o primeiro que existir na lista de séries disponíveis ganha,
+ * nunca um id fixo que pode não existir pra este cliente/escopo (ex.: sem
+ * filtro ativo, a série por objetivo `goal:${resultType}:result` é
+ * preferida; com o filtro ativo, essa série não entra na lista por não ser
+ * recalculável por campanha — cai pra `"results"`, a série Meta
+ * equivalente, já corretamente filtrada por vir de `campaign_daily_metrics`
+ * já filtrado). Cai pro primeiro id disponível quando nenhum preferido
+ * existe — nunca uma string fixa que pode não bater com nenhuma série
+ * (ex.: cliente sem nenhuma integração habilitada). */
+export function resolveDefaultEvolutionSeriesId(series: EvolutionSeriesOption[], preferredIds: string[]): string {
+  for (const id of preferredIds) {
+    if (series.some((option) => option.id === id)) return id;
+  }
+  return series[0]?.id ?? "";
+}
+
 export function buildGoalEvolutionSeries(dailySeries: GoalDailySeriesInput[]): EvolutionSeriesOption[] {
   const options: EvolutionSeriesOption[] = [];
   for (const series of dailySeries) {

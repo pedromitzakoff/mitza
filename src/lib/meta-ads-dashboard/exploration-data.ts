@@ -46,6 +46,13 @@ export interface ExplorationRow {
   /** Só criativos — `undefined` pra campanhas/conjuntos (nunca `null`
    * fabricado pra um nível que nem tem esse conceito). */
   previewImageUrl?: string | null;
+  /** Campanhas onde este conjunto/anúncio aparece — vem de
+   * `AdSetSummary.campaignNames`/`CreativeSummary.campaignNames` (já
+   * calculado, nunca um cálculo novo). `undefined` pra campanhas (não se
+   * aplica); exibido como legenda da linha só quando a tabela está em modo
+   * "entrada direta" (sem campanha selecionada), pra deixar explícito a
+   * qual campanha cada conjunto/anúncio pertence. */
+  campaignNames?: string[];
 }
 
 export function campaignSummaryToRow(summary: CampaignSummary): ExplorationRow {
@@ -87,6 +94,7 @@ export function adSetSummaryToRow(summary: AdSetSummary): ExplorationRow {
     cpm: summary.cpm,
     roas: summary.roas,
     resultType: summary.resultType,
+    campaignNames: summary.campaignNames,
   };
 }
 
@@ -109,6 +117,7 @@ export function creativeSummaryToRow(summary: CreativeSummary): ExplorationRow {
     roas: summary.roas,
     resultType: summary.resultType,
     previewImageUrl: summary.previewImageUrl,
+    campaignNames: summary.campaignNames,
   };
 }
 

@@ -50,16 +50,30 @@ export const COST_VERDICT_TONE: Record<MetricTone, CockpitPaceTone> = {
   critical: "danger",
 };
 
-export const COCKPIT_TONE_CARD_CLASSES: Record<CockpitPaceTone, string> = {
-  success: "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950",
-  warning: "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950",
-  danger: "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950",
-  neutral: "border-overview-border bg-overview-surface",
-};
+/**
+ * KOFF Analytics — "Refinamento de UX e filtros globais do Cockpit" (pedido
+ * explícito do usuário: "remover fundos vermelhos e verdes muito fortes.
+ * Utilizar cores apenas em estados e pequenos indicadores"). O card INTEIRO
+ * nunca mais herda a cor do estado — fica sempre neutro
+ * (`COCKPIT_CARD_CLASSES`, um valor fixo, não mais um Record por tom).
+ * A cor do estado continua existindo, só migrou pra um indicador pequeno
+ * (ponto colorido, `COCKPIT_TONE_DOT_CLASSES`) ao lado do rótulo de
+ * veredito — nunca mais a moldura inteira do card.
+ */
+export const COCKPIT_CARD_CLASSES = "border-overview-border bg-overview-surface";
 
 export const COCKPIT_TONE_BADGE_CLASSES: Record<CockpitPaceTone, string> = {
   success: "text-green-700 dark:text-green-300",
   warning: "text-amber-800 dark:text-amber-300",
   danger: "text-red-700 dark:text-red-300",
   neutral: "text-overview-text-secondary",
+};
+
+/** Ponto colorido (8px) — o único lugar onde a cor do estado aparece fora
+ * do próprio texto do veredito. Nunca um fundo/moldura. */
+export const COCKPIT_TONE_DOT_CLASSES: Record<CockpitPaceTone, string> = {
+  success: "bg-green-500 dark:bg-green-400",
+  warning: "bg-amber-500 dark:bg-amber-400",
+  danger: "bg-red-500 dark:bg-red-400",
+  neutral: "bg-overview-text-muted",
 };

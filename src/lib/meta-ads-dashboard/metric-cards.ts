@@ -119,12 +119,25 @@ export function resolveResultLabels(resultType: PerformanceGoal | null): { resul
   };
 }
 
+/** KOFF Analytics — "Filtro global de performance": Alcance/Frequência
+ * SEMPRE vêm de uma consulta à Graph API no nível da conta inteira (nunca
+ * somados a partir de linhas de campanha — `reach` não é aditivo entre
+ * dias, e somar só as campanhas filtradas duplicaria contagem de público
+ * sobreposto entre elas) — achado da auditoria desta etapa: não há como
+ * recalcular esses dois cards corretamente pro escopo filtrado com a
+ * infraestrutura atual. Pedido explícito do usuário: "nunca misturar dados
+ * globais com dados filtrados" — por isso, com o filtro ativo, os dois
+ * cards mostram indisponibilidade explícita em vez do número da conta
+ * inteira disfarçado de filtrado. */
+const REACH_FILTERED_UNAVAILABLE_LABEL = "Indisponível no escopo filtrado — alcance é sempre da conta inteira";
+const FREQUENCY_FILTERED_UNAVAILABLE_LABEL = "Indisponível no escopo filtrado — frequência é sempre da conta inteira";
+
 /**
  * Monta os 14 cards, na ordem canônica, a partir dos dados já buscados.
  * Pura — testável sem rede/banco, só com um `MetaAdsDashboardData` montado
  * à mão.
  */
-export function buildMetricCardViewModels(data: MetaAdsDashboardData): MetricCardViewModel[] {
+export function buildMetricCardViewModels(data: MetaAdsDashboardData, isGlobalFilterActive = false): MetricCardViewModel[] {
   const { comparison, reachComparison, resultType } = data;
   const current = comparison.current;
   const previous = comparison.previous;
@@ -151,23 +164,28 @@ export function buildMetricCardViewModels(data: MetaAdsDashboardData): MetricCar
     {
       id: "reach",
       label: "Alcance",
-      value: reachCurrent.status === "ok" ? formatCount(reachCurrent.reach) : reachUnavailableLabel(reachCurrent),
+      value: isGlobalFilterActive
+        ? REACH_FILTERED_UNAVAILABLE_LABEL
+        : reachCurrent.status === "ok"
+          ? formatCount(reachCurrent.reach)
+          : reachUnavailableLabel(reachCurrent),
       comparison:
-        reachCurrent.status === "ok"
+        !isGlobalFilterActive && reachCurrent.status === "ok"
           ? buildPercentChangeComparison(reachCurrent.reach, reachPrevious.status === "ok" ? reachPrevious.reach : null, "neutral")
           : null,
     },
     {
       id: "frequency",
       label: "Frequência",
-      value:
-        reachCurrent.status === "ok"
+      value: isGlobalFilterActive
+        ? FREQUENCY_FILTERED_UNAVAILABLE_LABEL
+        : reachCurrent.status === "ok"
           ? reachCurrent.frequency !== null
             ? formatRatio(reachCurrent.frequency)
             : "—"
           : reachUnavailableLabel(reachCurrent),
       comparison:
-        reachCurrent.status === "ok" && reachCurrent.frequency !== null
+        !isGlobalFilterActive && reachCurrent.status === "ok" && reachCurrent.frequency !== null
           ? buildPercentChangeComparison(reachCurrent.frequency, previousFrequency, "neutral")
           : null,
     },
