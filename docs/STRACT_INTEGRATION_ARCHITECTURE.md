@@ -1,4 +1,24 @@
-# Integração Stract → Supabase → MITZA
+> **DESCONTINUADO — pedido explícito do usuário**: "remova a integração do
+> Stract do sistema. Não quero mais ela. Pode migrar 100% para API do
+> Meta." O Import Service (`lib/stract-sync.ts`), o cron
+> (`/api/cron/sync-stract`), a rota admin (`/api/admin/sync-stract`) e a
+> Server Action de sincronização manual (`stract-sync-actions.ts`) foram
+> REMOVIDOS do código. A busca direta Meta API (`provider = 'meta_api'`,
+> `lib/meta-api-fetch.ts`/`lib/meta-api-ingest-run.ts`) é hoje a ÚNICA
+> integração automática ativa. Este documento fica só como registro
+> histórico da arquitetura original — nada aqui descreve o estado atual do
+> sistema. Nenhuma alteração destrutiva foi feita no banco: o schema
+> (`import_sources`, `daily_spend`, `daily_performance`, `data_sync_runs`)
+> continua aceitando `provider = 'stract'` (histórico preservado), e
+> qualquer linha `import_sources` antiga com esse provider não foi
+> apagada — só parou de ser lida/sincronizada pelo código.
+>
+> Clientes que dependiam do Stract ficam sem sincronização automática até
+> serem reconectados manualmente via `meta_api` (decisão explícita do
+> usuário: "o que não tiver conectado pode remover que eu conecto
+> depois").
+
+# Integração Stract → Supabase → MITZA (histórico — descontinuada)
 
 ## Objetivo da arquitetura
 

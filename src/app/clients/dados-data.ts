@@ -1,8 +1,7 @@
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { listClientGoals } from "@/lib/client-goals";
-import { getRecentSyncRunsForClient, type SyncRunSummary } from "@/lib/performance-queries";
-import { getLatestSyncRunStatusBySourceId } from "@/lib/stract-sync";
+import { getRecentSyncRunsForClient, getLatestSyncRunStatusBySourceId, type SyncRunSummary } from "@/lib/performance-queries";
 import { SYNC_RUN_STATUS_LABEL, SYNC_RUN_STATUS_BADGE_CLASSES, formatSyncRunCounts } from "@/lib/sync-run-status";
 import { formatShortDate, formatRelativeDateTime } from "@/lib/format";
 import { TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
@@ -25,7 +24,7 @@ type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
  * nunca "esse resultado é bom?" (isso continua em Performance). Reaproveita
  * integralmente o que já existia: `listClientGoals` (mesmo núcleo de
  * Metas), `getRecentSyncRunsForClient`/`getLatestSyncRunStatusBySourceId`
- * (mesmas consultas do drawer "Informações da conta", `lib/stract-sync.ts`/
+ * (mesmas consultas do drawer "Informações da conta", ambas em
  * `lib/performance-queries.ts`) — a única leitura genuinamente NOVA aqui é
  * `metric_mappings` (nunca lida por nenhuma tela antes desta). Classificação
  * de status/atenção é sempre `lib/data-trust.ts` (núcleo puro, testável sem

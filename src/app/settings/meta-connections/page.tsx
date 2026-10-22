@@ -17,10 +17,12 @@ const IMPORT_SOURCE_STATUS_LABEL: Record<ImportSourceStatusDb, string> = {
   no_data: "Sem dado",
 };
 
-/** Coluna preenchida = nível populado por `runImportForSource`
- * (`lib/stract-sync.ts`) — nunca reimplementa a regra, só lê a mesma
- * configuração que decide se `campaign_daily_metrics`/`ad_set_daily_metrics`/
- * `ad_creative_daily_metrics` recebem linha pra este cliente. */
+/** Coluna preenchida = nível populado pela integração automática (busca
+ * direta Meta API — Stract foi descontinuado, ver
+ * `docs/STRACT_INTEGRATION_ARCHITECTURE.md`) — nunca reimplementa a regra,
+ * só lê a mesma configuração que decide se `campaign_daily_metrics`/
+ * `ad_set_daily_metrics`/`ad_creative_daily_metrics` recebem linha pra este
+ * cliente. */
 interface MetaImportSourceRow {
   client_id: string;
   status: ImportSourceStatusDb;
@@ -52,18 +54,20 @@ function hasColumn(value: string | null): boolean {
  * responder "quais clientes ainda não estão com anúncio/campanha/público
  * conectados no Meta", sem precisar abrir o Supabase direto. Só audita
  * clientes ATIVOS (Workspace) com Meta em `media_channels` — a mesma
- * população que `syncAllClientsMetaSpend`/o cron do Stract realmente
- * tentam sincronizar; cliente pausado ou sem Meta configurado no cadastro
- * não é "problema de conexão", é esperado não ter nada aqui.
+ * população que `syncAllClientsMetaSpend`/o cron da busca direta Meta API
+ * realmente tentam sincronizar; cliente pausado ou sem Meta configurado no
+ * cadastro não é "problema de conexão", é esperado não ter nada aqui.
  *
  * Duas camadas independentes, nunca confundidas:
  * 1. `clients.meta_ad_account_id` — a conta de anúncio em si (alimenta o
  *    investimento nativo, `lib/meta-sync.ts`).
- * 2. `import_sources` (canal "meta", sempre provider "stract" nesta etapa)
- *    — de onde vêm Campanha/Público/Anúncio granulares. Sem uma fonte ativa
- *    aqui, o cliente pode ter investimento sincronizado e mesmo assim zero
- *    campanha/público/anúncio no relatório — daí as 3 colunas separadas em
- *    vez de um único "conectado sim/não".
+ * 2. `import_sources` (canal "meta", hoje sempre provider "meta_api" — a
+ *    integração Stract foi descontinuada, ver
+ *    `docs/STRACT_INTEGRATION_ARCHITECTURE.md`) — de onde vêm Campanha/
+ *    Público/Anúncio granulares. Sem uma fonte ativa aqui, o cliente pode
+ *    ter investimento sincronizado e mesmo assim zero campanha/público/
+ *    anúncio no relatório — daí as 3 colunas separadas em vez de um único
+ *    "conectado sim/não".
  */
 export default async function MetaConnectionsPage() {
   await requireAdmin();

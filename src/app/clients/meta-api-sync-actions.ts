@@ -9,16 +9,14 @@ import { toUserFacingError } from "@/lib/user-facing-error";
 
 /**
  * "Sincronizar agora" pro caminho de busca direta na Meta (`provider =
- * 'meta_api'`) — mesmo botão/mesma ideia de `syncClientStractSourcesAction`
- * (`stract-sync-actions.ts`), só que chamando `syncOneMetaApiAccount`
- * (`lib/meta-api-direct-sync.ts`) em vez de `runImportForSource`, que é
- * Stract-only (não entende fonte `meta_api` — `table_name`/`account_id_column`
- * são sempre `null` pra esse provider, ver `supabase/meta-api-import-source.sql`).
- * Sincroniza TODAS as contas `meta_api` ativas do cliente de uma vez (um
- * cliente pode ter mais de uma, embora o caso comum seja uma só).
+ * 'meta_api'`, hoje a ÚNICA fonte automática ativa — Stract foi
+ * descontinuado, ver `docs/STRACT_INTEGRATION_ARCHITECTURE.md`) — chama
+ * `syncOneMetaApiAccount` (`lib/meta-api-direct-sync.ts`). Sincroniza TODAS
+ * as contas `meta_api` ativas do cliente de uma vez (um cliente pode ter
+ * mais de uma, embora o caso comum seja uma só).
  *
- * Mesma autorização de `syncClientStractSourcesAction` (`requireClientManagerAccess`,
- * nunca dependente de RLS de SELECT — ver nota lá).
+ * Autorização explícita via `requireClientManagerAccess` — nunca dependente
+ * de RLS de SELECT (ver `scripts/test-sync-actions-authorization.ts`).
  */
 export async function syncClientMetaApiSourcesAction(clientId: string) {
   await requireClientManagerAccess(clientId);

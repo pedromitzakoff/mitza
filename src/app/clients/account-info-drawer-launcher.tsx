@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { AccountInfoDrawer, type AccountInfoSyncRun } from "./account-info-drawer";
 import { getAccountInfoDrawerDataAction } from "./account-info-actions";
-import { syncClientStractSourcesAction } from "./stract-sync-actions";
 import { syncClientMetaApiSourcesAction } from "./meta-api-sync-actions";
 
 interface DrawerData {
@@ -11,7 +10,6 @@ interface DrawerData {
   latestDataDateLabel: string | null;
   hasAutomaticSyncSource: boolean;
   syncProviderLabel: string | null;
-  isMetaApiSyncProvider: boolean;
   syncStatusLabel: string;
   syncStatusBadgeClassName: string;
   syncStartedAtLabel: string | null;
@@ -66,11 +64,7 @@ export function AccountInfoDrawerLauncher({ clientId, triggerClassName }: { clie
             syncStartedAtLabel={data.syncStartedAtLabel}
             metaOnlyLastSyncLabel={data.metaOnlyLastSyncLabel}
             canOperate={data.canOperate}
-            syncAction={
-              data.isMetaApiSyncProvider
-                ? syncClientMetaApiSourcesAction.bind(null, clientId)
-                : syncClientStractSourcesAction.bind(null, clientId)
-            }
+            syncAction={syncClientMetaApiSourcesAction.bind(null, clientId)}
             recentSyncRuns={data.recentSyncRuns}
             clientId={clientId}
             isAdmin={data.isAdmin}

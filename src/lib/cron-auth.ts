@@ -3,8 +3,8 @@ import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * Etapa 2A (Auditoria de Segurança — correções prioritárias): única
- * implementação da checagem de `CRON_SECRET` — as 5 rotas de cron/admin
- * (`/api/cron/*`, `/api/admin/sync-stract`) chamam esta função em vez de
+ * implementação da checagem de `CRON_SECRET` — as rotas de cron
+ * (`/api/cron/*`) chamam esta função em vez de
  * cada uma reimplementar `if (cronSecret) { ... }`, que degradava pra
  * "aberto" quando a env var não existia (fail-open — a Vercel Cron sempre
  * envia o header quando a variável está configurada no projeto, então isso

@@ -1,4 +1,5 @@
 import type { createClient as createSupabaseClient } from "./supabase/server";
+import { createAdminClient } from "./supabase/admin";
 import type { PerformanceRecordRow, PerformanceSource } from "./performance";
 import type { PerformanceGoalDb, TrafficChannelDb, PerformanceSourceDb, DataSyncRunStatusDb } from "./supabase/database.types";
 import { requireQuery } from "./require-query";
@@ -236,18 +237,20 @@ export interface SyncRunSummary {
   errorMessage: string | null;
 }
 
-/** Últimas execuções do Import Service (`data_sync_runs`) pras fontes Stract
- * de UM cliente — histórico DETALHADO por execução (rows lidas/gravadas por
- * tabela, erro bruto daquela rodada específica). Existia só no banco, sem
- * nenhuma tela lendo — motivo real de precisar de SQL manual pra
- * diagnosticar uma sincronização com problema. RLS restringe a leitura de
- * `data_sync_runs` a admin; pra qualquer outro perfil a consulta sempre
- * volta vazia (só chamar dentro de um bloco `isAdmin`, senão o gestor veria
- * uma seção "sem histórico" enganosa em vez de "sem acesso"). O status/
- * horário mais recente SEM detalhe (visível pra qualquer um com acesso à
- * página, gestor incluso) é `getLatestSyncRunStatusForSources`,
- * `lib/stract-sync.ts` — lê com o client admin de propósito, pra não
- * depender desta mesma restrição de RLS. */
+/** Últimas execuções do Import Service (`data_sync_runs`) das fontes
+ * automáticas (Meta API direta — Stract foi descontinuado, ver
+ * `docs/STRACT_INTEGRATION_ARCHITECTURE.md`) de UM cliente — histórico
+ * DETALHADO por execução (rows lidas/gravadas por tabela, erro bruto
+ * daquela rodada específica). Existia só no banco, sem nenhuma tela lendo
+ * — motivo real de precisar de SQL manual pra diagnosticar uma
+ * sincronização com problema. RLS restringe a leitura de `data_sync_runs`
+ * a admin; pra qualquer outro perfil a consulta sempre volta vazia (só
+ * chamar dentro de um bloco `isAdmin`, senão o gestor veria uma seção "sem
+ * histórico" enganosa em vez de "sem acesso"). O status/horário mais
+ * recente SEM detalhe (visível pra qualquer um com acesso à página, gestor
+ * incluso) é `getLatestSyncRunStatusForSources`, logo abaixo — lê com o
+ * client admin de propósito, pra não depender desta mesma restrição de
+ * RLS. */
 export async function getRecentSyncRunsForClient(
   supabase: Supabase,
   importSourceIds: string[],
@@ -279,6 +282,73 @@ export async function getRecentSyncRunsForClient(
     placementRowsWritten: row.placement_rows_written,
     errorMessage: row.error_message,
   }));
+}
+
+export interface LatestSyncRunStatus {
+  status: DataSyncRunStatusDb;
+  startedAt: string;
+}
+
+/** Status/horário (SEM detalhe — nunca `error_message`/contagens) da
+ * execução mais recente entre as fontes automáticas de um cliente — usado
+ * pela linha-resumo de sincronização que QUALQUER pessoa com acesso à
+ * página do cliente vê, não só admin (ver Etapa "Consolidação do status de
+ * sincronização" em `clients/[id]/page.tsx`). Lê deliberadamente com o
+ * client ADMIN (bypassa RLS): `data_sync_runs` é admin-only via RLS (é
+ * detalhe técnico — mensagem de erro bruta, contagem por tabela), mas quem
+ * já vê esta página (garantido pela RLS de `clients`, resolvida antes desta
+ * chamada) precisa saber se a integração está saudável mesmo sem acesso ao
+ * histórico técnico completo (esse continua só em
+ * `getRecentSyncRunsForClient`, acima, admin-only).
+ *
+ * Movida de `lib/stract-sync.ts` (removido junto com a descontinuação do
+ * Stract — ver `docs/STRACT_INTEGRATION_ARCHITECTURE.md`) pra cá: sempre
+ * foi genérica, nunca teve nada específico de um provider — `data_sync_runs`
+ * é escrita tanto pelo Import Service antigo quanto por
+ * `lib/meta-api-ingest-run.ts` (busca direta Meta API). */
+export async function getLatestSyncRunStatusForSources(importSourceIds: string[]): Promise<LatestSyncRunStatus | null> {
+  if (importSourceIds.length === 0) return null;
+
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("data_sync_runs")
+    .select("status, started_at")
+    .in("import_source_id", importSourceIds)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return data ? { status: data.status, startedAt: data.started_at } : null;
+}
+
+/** Igual a `getLatestSyncRunStatusForSources`, mas devolvendo o status mais
+ * recente de CADA fonte separadamente (Etapa "MEGA FACELIFT — Fase 5:
+ * Dados") — a tela Dados mostra um card por fonte, nunca um status único
+ * combinado. Mesma leitura admin-bypassando-RLS, mesmos dois campos (nunca
+ * `error_message`/contagens, que continuam exclusivos de
+ * `getRecentSyncRunsForClient`, visível só a admin). Sem agregação SQL por
+ * grupo (nenhuma função nova no banco) — lê um lote recente o bastante pra
+ * cobrir a última execução de cada fonte (até 20 por fonte, teto generoso
+ * pra uma lista que hoje nunca passa de poucas fontes por cliente) e reduz
+ * no próprio código, mantendo a mesma simplicidade de consulta de sempre. */
+export async function getLatestSyncRunStatusBySourceId(importSourceIds: string[]): Promise<Map<string, LatestSyncRunStatus>> {
+  const result = new Map<string, LatestSyncRunStatus>();
+  if (importSourceIds.length === 0) return result;
+
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("data_sync_runs")
+    .select("import_source_id, status, started_at")
+    .in("import_source_id", importSourceIds)
+    .order("started_at", { ascending: false })
+    .limit(importSourceIds.length * 20);
+
+  for (const row of data ?? []) {
+    if (!result.has(row.import_source_id)) {
+      result.set(row.import_source_id, { status: row.status, startedAt: row.started_at });
+    }
+  }
+  return result;
 }
 
 /**

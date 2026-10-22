@@ -2,11 +2,12 @@
  * Etapa 2B (Hardening antes do link externo) — dois itens sem dependência
  * comum, agrupados num arquivo só por serem pequenos:
  *
- * 1. Sanitização de erro cru em `/api/admin/sync-stract` — antes devolvia
- *    `err.message`/`String(err)` direto no corpo da resposta; agora usa
- *    `toUserFacingError` (mesmo padrão do resto do projeto): o erro
- *    completo continua logado (`console.error`) server-side, a resposta
- *    HTTP recebe só uma mensagem genérica, status preservado.
+ * 1. (Removida — a rota que auditava, `/api/admin/sync-stract`, foi excluída
+ *    junto com a descontinuação do Stract, ver
+ *    `docs/STRACT_INTEGRATION_ARCHITECTURE.md`. Nenhuma rota remanescente
+ *    tem o mesmo formato try/catch-com-JSON-de-erro pra auditar no lugar —
+ *    `cron/sync-meta-api` não captura erro nenhum, deixa propagar pro 500
+ *    genérico do próprio Next.js, nunca um `err.message` cru em JSON.)
  * 2. Headers globais de `next.config.ts` — a verificação chama
  *    `nextConfig.headers()` de verdade (é só uma função assíncrona pura,
  *    sem runtime do Next.js envolvido) e confere o resultado.
@@ -29,27 +30,21 @@ function readRoute(...segments: string[]): string {
   return readFileSync(join(__dirname, "..", "src", "app", "api", ...segments), "utf8");
 }
 
-console.log("\n1 — /api/admin/sync-stract: nunca mais devolve err.message/String(err) cru\n");
-{
-  const source = readRoute("admin", "sync-stract", "route.ts");
-  ok("usa toUserFacingError no catch", /toUserFacingError\(err,/.test(source));
-  ok("não devolve mais `err instanceof Error ? err.message : String(err)` no JSON de resposta", !/error: err instanceof Error \? err\.message : String\(err\)/.test(source));
-  ok("status 500 preservado no catch", /\{ status: 500 \}/.test(source));
-  ok("importa toUserFacingError de lib/user-facing-error", /import\s*\{\s*toUserFacingError\s*\}\s*from\s*"@\/lib\/user-facing-error"/.test(source));
-}
-
+// ---------------------------------------------------------------------------
+// (Seção 1 — "/api/admin/sync-stract" — removida: a rota foi excluída junto
+// com a descontinuação do Stract, ver
+// docs/STRACT_INTEGRATION_ARCHITECTURE.md.)
 // ---------------------------------------------------------------------------
 // (Seção 2 — "/api/cron/evaluate-achievements" — removida: a rota foi
 // excluída na Etapa 1.4 da reestruturação KOFF Analytics, junto com o
 // motor de Achievements.)
 // ---------------------------------------------------------------------------
 
-console.log("\n3 — as 4 rotas de cron/admin usam guardCronRequest (auth + rate limit centralizados)\n");
+console.log("\n3 — as rotas de cron usam guardCronRequest (auth + rate limit centralizados)\n");
 {
   const routes: [string[], string][] = [
-    [["admin", "sync-stract", "route.ts"], "admin-sync-stract"],
     [["cron", "sync-meta", "route.ts"], "sync-meta"],
-    [["cron", "sync-stract", "route.ts"], "sync-stract"],
+    [["cron", "sync-meta-api", "route.ts"], "sync-meta-api"],
     [["cron", "ensure-sprints", "route.ts"], "ensure-sprints"],
   ];
   for (const [segments, routeName] of routes) {

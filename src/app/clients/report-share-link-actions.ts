@@ -12,7 +12,7 @@ import { rotateReportShareLink, revokeReportShareLink, resolvePublicShareLinkBas
  * histórico de sincronização/orçamento, `account-info-drawer.tsx`).
  *
  * A checagem de acesso ao cliente em si passa pelo client normal (RLS),
- * mesmo padrão de `stract-sync-actions.ts` — nunca confia só no `clientId`
+ * mesmo padrão de `meta-api-sync-actions.ts` — nunca confia só no `clientId`
  * recebido como argumento.
  */
 async function assertAdminCanAccessClient(clientId: string): Promise<void> {

@@ -79,25 +79,24 @@ export function AccountInfoDrawer({
   onClose: () => void;
   lastPerformanceUpdateValue: string;
   /** `dados até DD/MM` — `null` quando o cliente não tem fonte automática
-   * (Stract ou busca direta na Meta). */
+   * (busca direta na Meta — Stract descontinuado, ver
+   * `docs/STRACT_INTEGRATION_ARCHITECTURE.md`). */
   latestDataDateLabel: string | null;
-  /** `true` = existe pelo menos uma fonte automática habilitada (Stract OU
-   * busca direta na Meta) — decide se o bloco "Sincronização" aparece. */
+  /** `true` = existe pelo menos uma fonte `meta_api` habilitada — decide se
+   * o bloco "Sincronização" aparece. */
   hasAutomaticSyncSource: boolean;
-  /** "Stract" / "Meta (busca direta)" — só usado quando
-   * `hasAutomaticSyncSource` é `true`, nunca hardcoded (bug real corrigido:
-   * o rótulo "Stract" aparecia mesmo pra clientes só com busca direta na
-   * Meta ativa). */
+  /** Sempre "Meta (busca direta)" quando `hasAutomaticSyncSource` é
+   * `true`. */
   syncProviderLabel: string | null;
   syncStatusLabel: string;
   syncStatusBadgeClassName: string;
   syncStartedAtLabel: string | null;
-  /** Fato cru pra cliente sem fonte Stract (Meta-only) — sem classificação
-   * de status, mesma decisão de sempre (não existe "success/partial/failed"
+  /** Fato cru pra cliente sem fonte automática — sem classificação de
+   * status, mesma decisão de sempre (não existe "success/partial/failed"
    * pro Meta). */
   metaOnlyLastSyncLabel: string | null;
   canOperate: boolean;
-  /** Server Action já vinculada ao cliente (`syncClientStractSourcesAction.bind(null, clientId)`)
+  /** Server Action já vinculada ao cliente (`syncClientMetaApiSourcesAction.bind(null, clientId)`)
    * — este componente só a invoca via `<form action>`, nunca reimplementa a
    * sincronização. */
   syncAction: NonNullable<React.ComponentPropsWithoutRef<"form">["action"]>;

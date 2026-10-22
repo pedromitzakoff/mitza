@@ -7,8 +7,9 @@ import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals
  * este módulo responde é sempre "posso confiar nesse dado?", nunca "esse
  * resultado é bom?" (isso é Performance, nunca duplicado aqui). Deliberado:
  * NENHUMA função aqui classifica "conectado/desconectado" — só reflete os 3
- * campos que `lib/stract-sync.ts`/`lib/meta-api-ingest-run.ts` já mantêm com
- * disciplina (auditados antes de escrever este arquivo):
+ * campos que `lib/meta-api-ingest-run.ts` (hoje a única fonte automática —
+ * Stract foi descontinuado, ver `docs/STRACT_INTEGRATION_ARCHITECTURE.md`)
+ * já mantém com disciplina (auditados antes de escrever este arquivo):
  *
  * - `import_sources.status` (`pending`/`active`/`error`/`disabled`/`no_data`)
  *   — SAÚDE PERSISTENTE da fonte, avançada SÓ quando a leitura encontrou
@@ -23,7 +24,7 @@ import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals
  *   `lib/performance-queries.ts`).
  *
  * Deliberadamente SEM threshold de "dado antigo demais" — a auditoria desta
- * fase achou só `STALE_RUNNING_RUN_THRESHOLD_MS` (`lib/stract-sync.ts`),
+ * fase achou só `STALE_RUNNING_RUN_THRESHOLD_MS` (`lib/meta-api-ingest-run.ts`),
  * que resolve um problema diferente (execução travada em "running", nunca
  * frescor de dado) e não serve de precedente aqui. Inventar um novo número
  * ("dado velho depois de N dias") seria exatamente a heurística frágil que

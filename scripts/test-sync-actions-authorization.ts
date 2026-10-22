@@ -1,6 +1,13 @@
 /**
- * Auditoria de Segurança — Security Regression Audit, Achado #1 (correção):
- * `syncClientMetaAction`/`syncClientStractSourcesAction` tratavam um SELECT
+ * Auditoria de Segurança — Security Regression Audit, Achado #1 (correção).
+ * Atualizado quando o Stract foi descontinuado (ver
+ * `docs/STRACT_INTEGRATION_ARCHITECTURE.md`): os cenários 5-8, que
+ * auditavam `syncClientStractSourcesAction` (removida), passaram a auditar
+ * `syncClientMetaApiSourcesAction` — mesma garantia de autorização, único
+ * caminho de sincronização automática que resta.
+ *
+ * `syncClientMetaAction`/`syncClientStractSourcesAction` (a segunda, hoje
+ * substituída por `syncClientMetaApiSourcesAction`) tratavam um SELECT
  * em `clients` como autorização — comentário antigo dizia "RLS garante que
  * o select só retorna o cliente se o usuário for admin ou gestor atribuído
  * a ele". Isso parou de ser verdade quando `supabase/operation-collaboration-rls.sql`
@@ -58,7 +65,12 @@ function stripComments(source: string): string {
 }
 
 const metaSource = loadSource("src", "app", "clients", "meta-actions.ts");
-const stractSource = loadSource("src", "app", "clients", "stract-sync-actions.ts");
+// Stract foi descontinuado (ver docs/STRACT_INTEGRATION_ARCHITECTURE.md) —
+// `stract-sync-actions.ts` foi removido; os cenários 5-8 abaixo, que
+// auditavam essa action, passaram a auditar `syncClientMetaApiSourcesAction`
+// (`meta-api-sync-actions.ts`), o único caminho de sincronização automática
+// que resta.
+const metaApiSyncSource = loadSource("src", "app", "clients", "meta-api-sync-actions.ts");
 
 console.log("\n1 — syncClientMetaAction: autorização explícita via requireClientManagerAccess\n");
 {
@@ -96,37 +108,37 @@ console.log("\n4 — syncClientMetaAction: cliente inexistente continua um camin
   ok("erro do sync (inclusive 'cliente não encontrado', lançado por syncClientMetaSpend) vira mensagem segura via toUserFacingError", /toUserFacingError\(err,/.test(metaSource));
 }
 
-console.log("\n5 — syncClientStractSourcesAction: mesma autorização explícita via requireClientManagerAccess\n");
+console.log("\n5 — syncClientMetaApiSourcesAction: mesma autorização explícita via requireClientManagerAccess\n");
 {
-  ok('importa requireClientManagerAccess de "@/lib/auth"', /import\s*\{\s*requireClientManagerAccess\s*\}\s*from\s*"@\/lib\/auth"/.test(stractSource));
-  ok("chama requireClientManagerAccess(clientId) dentro da action", /await requireClientManagerAccess\(clientId\)/.test(stractSource));
+  ok('importa requireClientManagerAccess de "@/lib/auth"', /import\s*\{\s*requireClientManagerAccess\s*\}\s*from\s*"@\/lib\/auth"/.test(metaApiSyncSource));
+  ok("chama requireClientManagerAccess(clientId) dentro da action", /await requireClientManagerAccess\(clientId\)/.test(metaApiSyncSource));
 }
 
-console.log("\n6 — syncClientStractSourcesAction: o SELECT em `clients` como autorização foi removido\n");
+console.log("\n6 — syncClientMetaApiSourcesAction: nunca usou SELECT em `clients` como autorização\n");
 {
-  const code = stripComments(stractSource);
-  ok('não importa mais queryOrError (padrão antigo "clients:access-check")', !/queryOrError/.test(code));
-  ok('não existe mais nenhum .from("clients").select(...) nesta action', !/\.from\("clients"\)/.test(code));
+  const code = stripComments(metaApiSyncSource);
+  ok('não importa queryOrError (padrão antigo "clients:access-check")', !/queryOrError/.test(code));
+  ok('não existe nenhum .from("clients").select(...) nesta action', !/\.from\("clients"\)/.test(code));
 }
 
-console.log("\n7 — syncClientStractSourcesAction: service role (via runImportForSource) só é alcançado DEPOIS da autorização\n");
+console.log("\n7 — syncClientMetaApiSourcesAction: service role (via syncOneMetaApiAccount) só é alcançado DEPOIS da autorização\n");
 {
-  const idxAuth = stractSource.indexOf("await requireClientManagerAccess(clientId)");
-  const idxImport = stractSource.indexOf("getEnabledImportSourceIdsForClient(supabase, clientId)");
-  const idxRun = stractSource.indexOf("runImportForSource(importSourceId)");
+  const idxAuth = metaApiSyncSource.indexOf("await requireClientManagerAccess(clientId)");
+  const idxImportSources = metaApiSyncSource.indexOf('.from("import_sources")');
+  const idxSync = metaApiSyncSource.indexOf("syncOneMetaApiAccount(accountId)");
   ok("requireClientManagerAccess() aparece no código", idxAuth !== -1);
-  ok("getEnabledImportSourceIdsForClient() aparece no código", idxImport !== -1);
-  ok("runImportForSource() aparece no código", idxRun !== -1);
-  ok("requireClientManagerAccess() está ANTES de getEnabledImportSourceIdsForClient() (nunca depois)", idxAuth < idxImport);
-  ok("requireClientManagerAccess() está ANTES de runImportForSource() (nunca depois)", idxAuth < idxRun);
+  ok('.from("import_sources") aparece no código', idxImportSources !== -1);
+  ok("syncOneMetaApiAccount() aparece no código", idxSync !== -1);
+  ok('requireClientManagerAccess() está ANTES de .from("import_sources") (nunca depois)', idxAuth < idxImportSources);
+  ok("requireClientManagerAccess() está ANTES de syncOneMetaApiAccount() (nunca depois)", idxAuth < idxSync);
 }
 
 console.log("\n8 — as duas actions continuam funcionalmente idênticas depois da autorização passar (nenhuma lógica de sync foi alterada)\n");
 {
   ok("syncClientMetaAction ainda revalida /clients/[id] e redireciona com synced=N/error=", /revalidatePath\(`\/clients\/\$\{clientId\}`\)/.test(metaSource) && /synced=\$\{result\.daysSynced\}/.test(metaSource));
   ok(
-    "syncClientStractSourcesAction ainda soma falhas por fonte e preserva a mensagem de 'sem integração ativa'",
-    /Este cliente não tem nenhuma integração ativa para sincronizar\./.test(stractSource) && /failedCount/.test(stractSource),
+    "syncClientMetaApiSourcesAction ainda soma falhas por conta e preserva a mensagem de 'nenhuma conta ativa'",
+    /Este cliente não tem nenhuma conta de busca direta na Meta ativa pra sincronizar\./.test(metaApiSyncSource) && /failedCount/.test(metaApiSyncSource),
   );
 }
 

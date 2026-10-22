@@ -50,13 +50,15 @@ export async function syncClientMetaSpend(clientId: string): Promise<SyncResult>
     throw new Error(`Cliente ${clientId} não tem conta Meta configurada.`);
   }
 
-  // Integração Stract (arquitetura aprovada — ver DECISIONS.md, ponto 7):
-  // cliente com uma import_source ativa pro canal Meta nunca usa a sync
-  // nativa em paralelo — duas fontes automáticas escrevendo a mesma chave
-  // `(client_id, date, channel)` de daily_spend virariam uma corrida de
-  // "quem rodou por último". O Import Service (`lib/stract-sync.ts`) é a
-  // única fonte automática pra esse cliente a partir do momento em que a
-  // integração é ligada.
+  // Integração automática (arquitetura aprovada — ver DECISIONS.md, ponto 7;
+  // hoje só busca direta Meta API — Stract foi descontinuado, ver
+  // docs/STRACT_INTEGRATION_ARCHITECTURE.md): cliente com uma import_source
+  // ativa pro canal Meta nunca usa a sync nativa em paralelo — duas fontes
+  // automáticas escrevendo a mesma chave `(client_id, date, channel)` de
+  // daily_spend virariam uma corrida de "quem rodou por último". A
+  // integração automática é a única fonte pra esse cliente a partir do
+  // momento em que é ligada — consulta genérica por `provider`, continua
+  // valendo pra qualquer fonte automática habilitada.
   const { data: activeImportSource } = await supabase
     .from("import_sources")
     .select("id")
@@ -67,7 +69,7 @@ export async function syncClientMetaSpend(clientId: string): Promise<SyncResult>
 
   if (activeImportSource) {
     throw new Error(
-      `Cliente ${clientId} sincroniza o canal Meta via integração Stract — a sincronização nativa fica desativada enquanto essa integração estiver ativa.`,
+      `Cliente ${clientId} sincroniza o canal Meta via integração automática — a sincronização nativa fica desativada enquanto essa integração estiver ativa.`,
     );
   }
 

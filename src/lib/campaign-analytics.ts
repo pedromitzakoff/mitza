@@ -9,8 +9,8 @@ import type { TrafficChannel } from "./traffic-channels";
  * tornava Campanhas Google impossível sem fabricar criativo). Lê
  * `campaign_daily_metrics`, channel-aware desde a origem (populada sempre
  * que `campaign_name_column` existir na fonte, independente de
- * `ad_name_column` — ver `lib/stract-sync.ts`) — nenhuma tabela de criativo
- * envolvida aqui.
+ * `ad_name_column` — ver `lib/import-sources.ts`) — nenhuma tabela de
+ * criativo envolvida aqui.
  *
  * Identidade analítica de campanha = `(channel, campaignName)` — NUNCA só
  * `campaignName`: Meta e Google podem ter campanhas com o mesmo nome, e
