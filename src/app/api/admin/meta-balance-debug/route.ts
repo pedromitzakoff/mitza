@@ -3,7 +3,10 @@ import { requireAdmin } from "@/lib/auth";
 import { fetchMetaApiAccountBalance } from "@/lib/meta-api-fetch";
 
 /**
- * Diagnóstico pontual — `fetchAccountBalanceSnapshot` (Cockpit) some em
+ * Diagnóstico pontual (reconfirmado após META_API_ACCESS_TOKEN ser
+ * habilitado também pro ambiente Preview na Vercel — a variável só vale
+ * pros deploys criados DEPOIS dessa mudança, nunca retroativamente) —
+ * `fetchAccountBalanceSnapshot` (Cockpit) some em
  * silêncio em QUALQUER estado indisponível (`not_configured`/
  * `token_missing`/`timeout`/`fetch_error`, ver `CockpitAdAccountBalance`:
  * "qualquer estado indisponível... some por completo", decisão deliberada
