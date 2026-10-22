@@ -60,8 +60,11 @@ const metaRitmoSource = loadSource("src", "app", "clients", "cockpit-meta-ritmo-
 // as checagens de conteúdo desses dois cards abaixo leem esta fonte.
 const goalCardSource = loadSource("src", "app", "clients", "cockpit-goal-card.tsx");
 const diagnosticsCardSource = loadSource("src", "app", "clients", "cockpit-diagnostics-card.tsx");
-const performanceSectionSource = loadSource("src", "app", "clients", "cockpit-ad-performance-section.tsx");
-const channelSectionSource = loadSource("src", "app", "clients", "dashboard-channel-section.tsx");
+// KOFF Analytics — Redesign definitivo do Cockpit: `cockpit-ad-performance-section.tsx`
+// (abas Indicadores/Evolução) e o card por canal de `dashboard-channel-section.tsx`
+// foram removidos/consolidados — ver `cockpit-evolution-section.tsx` e
+// `cockpit-channel-breakdown.tsx`, cobertos por `test-cockpit-redesign.ts`.
+const channelBreakdownSource = loadSource("src", "app", "clients", "cockpit-channel-breakdown.tsx");
 const budgetSource = loadSource("src", "app", "clients", "dashboard-budget.tsx");
 
 // ---------------------------------------------------------------------------
@@ -235,7 +238,12 @@ console.log("\nC — Diagnóstico\n");
   );
 
   ok("limite 'poucos insights' (default 4) — nunca uma lista longa (seção 11 do pedido)", /limit = 4/.test(loadSource("src", "lib", "cockpit-diagnostics.ts")));
-  ok("CockpitDiagnosticsCard mostra estado saudável compacto quando não há insight nenhum", diagnosticsCardSource.includes("Nenhum ponto de atenção"));
+  // KOFF Analytics — Redesign definitivo do Cockpit ("incorporar alertas e
+  // diagnóstico de forma discreta e contextual, sem ocupar uma seção
+  // inteira quando não houver nada relevante"): sem insight nenhum, o
+  // componente devolve `null` — nenhuma caixa, nenhum texto tranquilizador
+  // ocupando espaço. Substitui o estado "saudável compacto" anterior.
+  ok("CockpitDiagnosticsCard devolve null (nenhuma caixa) quando não há insight nenhum", diagnosticsCardSource.includes("if (insights.length === 0) return null;"));
 }
 
 // ---------------------------------------------------------------------------
@@ -254,8 +262,8 @@ console.log("\nD — Performance (essencial + completa)\n");
   ok("Performance Meta Ads reaproveita buildPerformanceReportData (Camada 1 oficial do Relatório) — nenhuma segunda agregação de campanha/conjunto/criativo", pageSource.includes("buildPerformanceReportData(supabase, id,"));
   ok("nenhuma segunda consulta de campanha/conjunto/criativo — reaproveita campaignDailyRows/campaigns/adSetDailyRows/creativeDailyRows já buscados", pageSource.includes("campaignDailyRows: performanceReportData.campaignDailyRows"));
   ok("alcance/frequência do período vêm de fetchAccountPeriodReachSnapshot (1 chamada à Graph API) — nunca somado a partir de reach diário", pageSource.includes("fetchAccountPeriodReachSnapshot("));
-  ok("seção só renderiza pra cliente que usa o canal Meta — mesmo critério de clientChannels já usado por Canais", pageSource.includes('clientChannels.includes("meta")'));
-  ok("nenhum CTA 'Ver Performance completa'/'Ver campanhas' pra outra rota — toda exploração fica na própria tela (regra de página única)", !performanceSectionSource.includes("Ver Performance completa") && !performanceSectionSource.includes("Ver campanhas"));
+  ok("seção só renderiza pra cliente que usa o canal Meta — mesmo critério de clientChannels já usado em toda a Visão executiva", pageSource.includes('clientChannels.includes("meta")'));
+  ok("nenhum CTA 'Ver Performance completa'/'Ver campanhas' pra outra rota — toda exploração fica na própria tela (regra de página única)", !pageSource.includes("Ver Performance completa") && !pageSource.includes("Ver campanhas"));
   ok("/clients/[id]/relatorio continua existindo e não foi tocado por esta consolidação (serve PDF/link público, propósito distinto do Cockpit)", loadSource("src", "app", "clients", "[id]", "relatorio", "page.tsx").length > 0);
   ok("PDF (/api/clients/[id]/performance-report) e link público (/r/[token]) não foram alterados", loadSource("src", "app", "api", "clients", "[id]", "performance-report", "route.ts").length > 0 && loadSource("src", "app", "r", "[token]", "page.tsx").length > 0);
   ok("a antiga rota separada /clients/[id]/meta-ads foi removida (consolidada no Cockpit)", !fileExists("src", "app", "clients", "[id]", "meta-ads", "page.tsx"));
@@ -328,7 +336,10 @@ console.log("\nH — Canal sem dados / erro de sincronização (seção 16 do pe
     findChannelDataIssue([{ id: "x", severity: "warning", message: "Stract · Google Ads: a última sincronização completa não encontrou nenhuma linha." }], "Google Ads"),
     { severity: "warning", label: "Sem dados recebidos" },
   );
-  ok("DashboardChannelSection aceita dataIssue opcional (default: nenhum selo, comportamento de antes desta fase preservado)", channelSectionSource.includes("dataIssue?: DashboardChannelDataIssue | null"));
+  ok(
+    "CockpitChannelBreakdown (sucessora de DashboardChannelSection no redesign) aceita dataIssue opcional por linha de canal (default: nenhum selo, comportamento preservado)",
+    channelBreakdownSource.includes("dataIssue?: DashboardChannelDataIssue | null"),
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -115,20 +115,27 @@ console.log("\nC — Sistema legado: Operação/tarefas/revisões removidas na E
 
 console.log("\nD — Navegação (seção 4 do pedido): estrutura final exata, nenhum módulo novo\n");
 {
+  // KOFF Analytics — Redesign definitivo do Cockpit (posterior a esta
+  // etapa): "Meta & Ritmo"/"Diagnóstico"/"Canais"/"Performance Meta Ads"
+  // deixaram de ser seções separadas — viraram UM bloco só ("Visão
+  // executiva"), seguido de "Evolução da performance" (módulo único) e
+  // "Campanhas, conjuntos e anúncios". A checagem de ordem abaixo foi
+  // atualizada pra essa estrutura atual — ver `test-cockpit-redesign.ts`
+  // pra cobertura completa do redesign.
   ok(
-    "seções do Cockpit, na ordem: Meta & Ritmo, Diagnóstico, Evolução Diária, Canais, Performance (Histórico removido na Etapa 1.3, Demandas na Etapa 1.6)",
+    "áreas do Cockpit, na ordem: Visão executiva (Diagnóstico + Resultado/Custo/Orçamento), Evolução da performance, Campanhas/Conjuntos/Anúncios",
     (() => {
-      const metaRitmoIdx = pageSource.indexOf("Meta &amp; Ritmo");
+      const visaoExecutivaIdx = pageSource.indexOf("Visão executiva");
       const diagnosticoIdx = pageSource.indexOf("<CockpitDiagnosticsCard");
-      const evolucaoIdx = pageSource.indexOf("<CockpitDailyEvolutionSection");
-      const canaisIdx = pageSource.indexOf("<DashboardChannelSection");
-      const performanceIdx = pageSource.indexOf("<CockpitAdPerformanceSection");
+      const resultCardIdx = pageSource.indexOf("<CockpitResultCard");
+      const evolucaoIdx = pageSource.indexOf("<CockpitEvolutionSection");
+      const explorationIdx = pageSource.indexOf("<CockpitAdExplorationSection");
       return (
-        [metaRitmoIdx, diagnosticoIdx, evolucaoIdx, canaisIdx, performanceIdx].every((i) => i !== -1) &&
-        metaRitmoIdx < diagnosticoIdx &&
-        diagnosticoIdx < evolucaoIdx &&
-        evolucaoIdx < canaisIdx &&
-        canaisIdx < performanceIdx
+        [visaoExecutivaIdx, diagnosticoIdx, resultCardIdx, evolucaoIdx, explorationIdx].every((i) => i !== -1) &&
+        visaoExecutivaIdx < diagnosticoIdx &&
+        diagnosticoIdx < resultCardIdx &&
+        resultCardIdx < evolucaoIdx &&
+        evolucaoIdx < explorationIdx
       );
     })(),
   );

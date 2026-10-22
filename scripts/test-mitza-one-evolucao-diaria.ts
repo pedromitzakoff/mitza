@@ -1,24 +1,27 @@
 /**
- * Testes da Etapa "MITZA ONE — Evolução Diária no Cockpit": visualização
- * compacta de evolução diária em `/clients/[id]`, inserida entre Meta &
- * Ritmo/Diagnóstico e os detalhes dos Canais. Cobre o núcleo puro novo
- * (`lib/cockpit-daily-evolution.ts`), a extensão aditiva de frescor em
- * `lib/data-trust.ts`/`app/clients/dados-data.ts`, e checagens ESTRUTURAIS
- * de `app/clients/[id]/page.tsx`/`app/clients/cockpit-daily-evolution-section.tsx`
- * via grep de código-fonte — mesmo padrão já usado pelas suites anteriores
- * (sem DOM/React Testing Library neste ambiente).
+ * Testes da Etapa "MITZA ONE — Evolução Diária no Cockpit" (núcleo puro,
+ * `lib/cockpit-daily-evolution.ts`, e frescor de dados,
+ * `lib/data-trust.ts`/`app/clients/dados-data.ts`).
+ *
+ * KOFF Analytics — Redesign definitivo do Cockpit: as checagens
+ * ESTRUTURAIS que viviam aqui (posicionamento no Cockpit, componente
+ * `cockpit-daily-evolution-section.tsx`, tooltip/Portal) saíram — o gráfico
+ * SVG artesanal que elas protegiam foi substituído por um módulo único em
+ * Recharts (`cockpit-evolution-section.tsx`), coberto por
+ * `scripts/test-cockpit-redesign.ts`. `resolveDailyTargetResultCount`/
+ * `describeCockpitDailyPointState` (geometria/texto só usados por aquele
+ * componente) foram removidas de `lib/cockpit-daily-evolution.ts` por
+ * ficarem sem chamador — os testes delas saíram junto. `buildCockpitDailyEvolutionPoints`
+ * (fonte de dado real, consumida agora por `lib/cockpit-evolution-merge.ts`)
+ * continua EXATAMENTE igual — todas as checagens de cálculo abaixo
+ * permanecem válidas sem nenhuma alteração.
  *
  * Rodar: npx tsx scripts/test-mitza-one-evolucao-diaria.ts
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  buildCockpitDailyEvolutionPoints,
-  resolveDailyTargetResultCount,
-  describeCockpitDailyPointState,
-  type CockpitDailySpendRawRow,
-} from "../src/lib/cockpit-daily-evolution";
+import { buildCockpitDailyEvolutionPoints, type CockpitDailySpendRawRow } from "../src/lib/cockpit-daily-evolution";
 import { resolveLatestImportedDate, resolveLatestSuccessAt } from "../src/lib/data-trust";
 import type { DailyResultRawRow } from "../src/lib/daily-results";
 import { listDatesInclusive } from "../src/lib/monthly-budget";
@@ -87,7 +90,7 @@ console.log("\nB — Compatibilidade entre métricas: só soma linhas do MESMO r
   check("resultType='sales' na mesma data NUNCA entra na série de 'leads'", points[0].resultCount, 10);
 }
 
-console.log("\nC — Distinção entre zero confirmado e ausência de dados (seção 5 do pedido)\n");
+console.log("\nC — Distinção entre zero confirmado e ausência de dados\n");
 {
   const points = buildCockpitDailyEvolutionPoints({
     windowDates: ["2026-10-01", "2026-10-02", "2026-10-03"],
@@ -103,8 +106,6 @@ console.log("\nC — Distinção entre zero confirmado e ausência de dados (se�
   check("dia 1 (sincronizado, sem resultado) -> state 'result', resultCount 0 (ZERO CONFIRMADO, nunca 'no_data')", [points[0].state, points[0].resultCount], ["result", 0]);
   check("dia 2 (nenhum sinal) -> state 'no_data', resultCount null (nunca 0 fabricado)", [points[1].state, points[1].resultCount], ["no_data", null]);
   check("dia 3 (resultado real) -> state 'result', resultCount 7", [points[2].state, points[2].resultCount], ["result", 7]);
-
-  ok("describeCockpitDailyPointState distingue 'Zero confirmado' de 'Sem dados'", describeCockpitDailyPointState(points[0]).includes("Zero confirmado") && describeCockpitDailyPointState(points[1]).includes("Sem dados"));
 }
 
 console.log("\nD — Períodos futuros: nunca projeta resultado, nunca mostra investimento\n");
@@ -118,10 +119,12 @@ console.log("\nD — Períodos futuros: nunca projeta resultado, nunca mostra in
     spendRows: [spendRow("2026-10-14", "meta", 40)],
   });
   check("dia anterior a hoje: estado normal", points[0].state, "result");
-  check("HOJE (= todayStr) ainda é um dia normal, nunca futuro", points[1].state <= "result" ? true : false, true);
+  // HOJE (= todayStr) não tem nenhum sinal nos dados de teste (nem
+  // performanceRows nem spendRows pra 2026-10-15) — vira "no_data", nunca
+  // "future": a regra é "date > todayStr", e hoje não é maior que hoje.
+  check("HOJE (= todayStr) sem sinal ainda vira 'no_data', nunca 'future' (a regra é só data > todayStr)", points[1].state, "no_data");
   check("dia DEPOIS de hoje -> state 'future'", points[2].state, "future");
   check("dia futuro nunca tem resultCount/spend/costPerResult (nunca projetado)", [points[2].resultCount, points[2].spend, points[2].costPerResult], [null, null, null]);
-  ok("describeCockpitDailyPointState rotula dia futuro como 'ainda não ocorreu'", describeCockpitDailyPointState(points[2]).includes("futuro"));
 }
 
 console.log("\nE — CPL/CPA diário: nunca divide por zero, reaproveita computeCostPerResult oficial\n");
@@ -157,16 +160,7 @@ console.log("\nE — CPL/CPA diário: nunca divide por zero, reaproveita compute
   check("resultado real sem nenhuma linha de investimento no escopo -> spend null, custo null (nunca dividido por null)", [noSpendResult.spend, noSpendResult.costPerResult], [null, null]);
 }
 
-console.log("\nF — Meta diária (seção 2/6 do pedido): só quando houver meta oficial válida\n");
-{
-  check("meta mensal 310, mês de 31 dias -> meta diária 10", resolveDailyTargetResultCount(310, 31), 10);
-  check("sem meta configurada (null) -> omite a série (null)", resolveDailyTargetResultCount(null, 31), null);
-  check("meta zerada -> omite (nunca uma referência de '0/dia' enganosa)", resolveDailyTargetResultCount(0, 31), null);
-  check("meta negativa (dado inconsistente) -> omite, nunca mostra referência negativa", resolveDailyTargetResultCount(-5, 31), null);
-  check("daysInMonth 0 (defensivo) -> omite, nunca divide por zero", resolveDailyTargetResultCount(100, 0), null);
-}
-
-console.log("\nG — Último dia com dados vs. última sincronização bem-sucedida (seção 5 do pedido, lib/data-trust.ts)\n");
+console.log("\nF — Último dia com dados vs. última sincronização bem-sucedida (lib/data-trust.ts)\n");
 {
   check(
     "resolveLatestImportedDate: só considera fontes HABILITADAS, pega a mais recente",
@@ -189,11 +183,11 @@ console.log("\nG — Último dia com dados vs. última sincronização bem-suced
   check("resolveLatestSuccessAt: nenhuma fonte habilitada sincronizou -> null", resolveLatestSuccessAt([{ enabled: false, lastSuccessAt: "2026-10-15T08:00:00Z" }]), null);
 
   const dadosDataSource = loadSource("src", "app", "clients", "dados-data.ts");
-  ok("dados-data.ts expõe latestImportedDate BRUTO (ISO), não só o rótulo formatado — Evolução Diária precisa do valor bruto", dadosDataSource.includes("latestImportedDate: latestImportedRaw"));
+  ok("dados-data.ts expõe latestImportedDate BRUTO (ISO), não só o rótulo formatado — Evolução precisa do valor bruto", dadosDataSource.includes("latestImportedDate: latestImportedRaw"));
   ok("dados-data.ts expõe latestSuccessAtLabel agregado (última sincronização bem-sucedida entre as fontes habilitadas)", dadosDataSource.includes("resolveLatestSuccessAt("));
 }
 
-console.log("\nH — Janela cronológica: windowDates sempre na mesma ordem, nenhum dia omitido\n");
+console.log("\nG — Janela cronológica: windowDates sempre na mesma ordem, nenhum dia omitido\n");
 {
   check("31 dias de outubro -> 31 pontos, nenhum omitido mesmo sem nenhum dado", buildCockpitDailyEvolutionPoints({
     windowDates: WINDOW,
@@ -221,141 +215,18 @@ console.log("\nH — Janela cronológica: windowDates sempre na mesma ordem, nen
   }).map((p) => p.state)), new Set(["no_data"]));
 }
 
-// ---------------------------------------------------------------------------
-console.log("\nI — Integração no Cockpit (estrutural): posicionamento, reaproveitamento de dados oficiais, sem N+1\n");
+console.log("\nH — Restrições: nenhuma rota/componente legado removido por esta etapa, nenhuma migration/schema nova\n");
 {
-  const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
-
-  ok(
-    "Evolução Diária é renderizada DEPOIS de CockpitDiagnosticsCard e ANTES do map de DashboardChannelSection (posicionamento exigido, seção 1 do pedido)",
-    (() => {
-      const diagIndex = pageSource.indexOf("<CockpitDiagnosticsCard");
-      const evolIndex = pageSource.indexOf("<CockpitDailyEvolutionSection");
-      const channelsIndex = pageSource.indexOf("<DashboardChannelSection");
-      return diagIndex !== -1 && evolIndex !== -1 && channelsIndex !== -1 && diagIndex < evolIndex && evolIndex < channelsIndex;
-    })(),
-  );
-
-  ok(
-    "reaproveita resultGroups (groupChannelsByResultType) pra construir as séries — nenhum segundo agrupamento por objetivo inventado",
-    /dailyEvolutionSeries[\s\S]{0,80}=\s*hasDailyIntegration\s*\?\s*resultGroups\.map/.test(pageSource),
-  );
-  ok(
-    "reaproveita getDailyPerformanceRowsForPeriod (MESMA consulta já usada por Analytics/Relatório de Performance) — nenhuma tabela nova",
-    /import \{[^}]*\bgetDailyPerformanceRowsForPeriod\b[^}]*\} from "@\/lib\/performance-queries"/.test(pageSource),
-  );
-  ok(
-    "reaproveita a linha `dailySpend` JÁ buscada pro mês (seção 6 do pedido: 'não duplicar investimento entre canais') — nenhuma segunda consulta a daily_spend",
-    pageSource.includes("const evolutionDailySpendRows = (dailySpend ?? []).map("),
-  );
-  ok(
-    "a nova consulta diária entra no MESMO Promise.all de sempre (seção 7: 'não bloquear desnecessariamente o resto do cockpit') — nenhum await solto fora do Promise.all pra granularidade diária (continua um elemento puro do array, nunca um 'await getDailyPerformanceRowsForPeriod' isolado — Otimização de carregamento Item 1 só acrescentou MAIS elementos independentes ao mesmo array, nunca tirou este dali)",
-    pageSource.includes("getDailyPerformanceRowsForPeriod(supabase, id, { firstDay, lastDay }),") && !pageSource.includes("await getDailyPerformanceRowsForPeriod("),
-  );
-  ok(
-    "gate de disponibilidade usa dadosData.sources (import_sources.enabled) já carregado — nenhuma segunda consulta pra decidir se a granularidade diária existe",
-    pageSource.includes("const hasDailyIntegration = Boolean(dadosData?.sources.some((s) => s.enabled));"),
-  );
-  ok(
-    "MITZA ONE — Refinamento do Cockpit (seção 6): 'Meta diária' foi deliberadamente removida da série/tooltip — a chamada a resolveDailyTargetResultCount saiu do wiring deste gráfico (a função pura continua existindo/testada em lib/cockpit-daily-evolution.ts, só este consumidor específico parou de usá-la)",
-    !pageSource.includes("resolveDailyTargetResultCount(goalPlan.consolidated.resultCount, evolutionDaysInMonth)") && !pageSource.includes("resolveDailyTargetResultCount"),
-  );
-}
-
-console.log("\nJ — Estados e UI (estrutural): tooltip, múltiplos objetivos, frescor, sem seletor de canal global\n");
-{
-  const sectionSource = loadSource("src", "app", "clients", "cockpit-daily-evolution-section.tsx");
-
-  ok("componente é client component (precisa de hover/toque pro tooltip)", sectionSource.startsWith('"use client"'));
-  ok(
-    "tooltip mostra Data/Investimento/Resultado/Custo (seção 3 do pedido original) — 'Meta diária' removida pelo Refinamento do Cockpit (seção 6), nunca reintroduzida por engano",
-    sectionSource.includes("Investimento:") && !sectionSource.includes("Meta diária:") && /\{costLabel\}:/.test(sectionSource),
-  );
-  ok("tooltip usa describeCockpitDailyPointState pro estado de disponibilidade — nenhuma segunda lógica de rótulo", sectionSource.includes("describeCockpitDailyPointState(point)"));
-  ok("tooltip reaproveita formatCostMetric oficial (lib/performance.ts) — nunca formata CPL/CPA manualmente, nunca mostra 'R$0' por divisão por zero", sectionSource.includes("formatCostMetric(point.costPerResult, formatCurrency)"));
-  ok(
-    "bars são <button> com onClick/onFocus/onMouseEnter (clique/toque/teclado funcionam de graça, seção 3: 'permitir interação por toque')",
-    /<button\s[\s\S]{0,300}onClick={onOpen}/.test(sectionSource) && sectionSource.includes("onFocus={onOpen}") && sectionSource.includes("onMouseEnter={onOpen}"),
-  );
-  ok("múltiplos objetivos: um botão por série, nunca soma entre objetivos (seção 4 do pedido)", sectionSource.includes("view.series.length > 1") && sectionSource.includes("setSelectedGoal(s.resultType)"));
-  ok("nenhum seletor de CANAL (Meta/Google) foi introduzido — só objetivo (resultType)", !sectionSource.includes("ChannelScope") && !/selectedChannel|setSelectedChannel/.test(sectionSource));
-  ok("frescor dos dados mostra 'Dados até' distinto de 'Última sincronização' (seção 5 do pedido, nunca a mesma frase)", sectionSource.includes("Dados até") && sectionSource.includes("Última sincronização:"));
-  ok("estado desconhecido de frescor nunca inventa uma data — cai em texto neutro", sectionSource.includes('"Frescor dos dados: desconhecido"'));
-  ok("estados vazios (no_goal/unavailable) tratados sem gráfico fabricado", sectionSource.includes('view.kind === "no_goal"') && sectionSource.includes('view.kind === "unavailable"'));
-  // KOFF Analytics Fase 2, Etapa 2.3 (Dashboard Meta Ads — Gráficos
-  // interativos): `recharts` foi instalado com aprovação explícita do
-  // usuário, mas só pra `clients/[id]/meta-ads/evolution-section.tsx` —
-  // o invariante real que esta suite protege é "o CARD DE EVOLUÇÃO DIÁRIA
-  // DO COCKPIT continua em divs puros, sem biblioteca", nunca "nenhuma
-  // biblioteca de gráfico existe em lugar nenhum do app" (checagem contra
-  // `package.json` inteiro, que a Etapa 2.3 tornou uma suposição
-  // ultrapassada). A checagem abaixo passou a ler só o arquivo do Cockpit,
-  // nunca o `package.json` global.
-  ok("nenhuma biblioteca de gráfico foi introduzida NO CARD DE EVOLUÇÃO DIÁRIA DO COCKPIT (barras em divs puros, mesma convenção de sempre)", !sectionSource.includes('from "recharts"') && !sectionSource.includes('from "chart.js"') && !sectionSource.includes('from "d3"'));
-}
-
-console.log("\nJ.2 — Correção do tooltip (Etapa 'Correção do tooltip da Evolução Diária'): nunca cortado, Portal + posicionamento inteligente\n");
-{
-  const sectionSource = loadSource("src", "app", "clients", "cockpit-daily-evolution-section.tsx");
-
-  ok(
-    "tooltip é renderizado via createPortal pro document.body — nunca mais um <div> absoluto DENTRO da linha de barras (que tinha overflow-x-auto cortando o eixo Y)",
-    sectionSource.includes("createPortal(") && sectionSource.includes("document.body"),
-  );
-  ok(
-    "posição é calculada via getBoundingClientRect do próprio gatilho (nunca CSS relativo a um ancestral que pode cortar)",
-    sectionSource.includes("anchor.getBoundingClientRect()"),
-  );
-  ok(
-    "mede a ALTURA REAL do próprio tooltip (tooltipRef) em vez de estimar — funciona igual pra qualquer conteúdo/barra (seção 2 da correção: 'independentemente da altura da barra selecionada')",
-    sectionSource.includes("tooltip?.offsetHeight"),
-  );
-  ok(
-    "prefere abrir ACIMA do gatilho e só abre ABAIXO quando não há espaço (seção 3 da correção: 'preferencialmente acima... abrir abaixo ou lateralmente quando não houver espaço')",
-    sectionSource.includes("fitsAbove") && sectionSource.includes("anchorRect.bottom + TOOLTIP_ANCHOR_GAP_PX"),
-  );
-  ok(
-    "posição horizontal é sempre recortada (clamp) dentro da viewport — cobre as barras das EXTREMIDADES do gráfico (dia 01/dia 31) sem estourar a tela",
-    /left = Math\.min\(left, window\.innerWidth/.test(sectionSource) && /left = Math\.max\(left, TOOLTIP_VIEWPORT_MARGIN_PX\)/.test(sectionSource),
-  );
-  ok(
-    "posição vertical também é recortada dentro da viewport (nunca estoura topo/rodapé da tela)",
-    /top = Math\.min\(top, window\.innerHeight/.test(sectionSource) && /top = Math\.max\(top, TOOLTIP_VIEWPORT_MARGIN_PX\)/.test(sectionSource),
-  );
-  ok(
-    "usa useLayoutEffect (mede/posiciona ANTES do navegador pintar — nunca um tooltip 'pulando' de posição visível ao usuário)",
-    /import \{[^}]*\buseLayoutEffect\b[^}]*\} from "react"/.test(sectionSource),
-  );
-  ok(
-    "o contêiner rolável (overflow-x-auto) continua existindo pra linha de barras — o tooltip sai da árvore de layout via Portal (document.body, já confirmado acima), nunca altera largura/altura do gráfico nem provoca rolagem nova",
-    sectionSource.includes('className="relative mt-2 overflow-x-auto pb-1"'),
-  );
-  ok(
-    "só um tooltip ativo por vez entre as barras (activeDate, mutuamente exclusivo) — trocar de barra fecha a anterior sozinho, nunca dois abertos ao mesmo tempo",
-    sectionSource.includes("const [activeDate, setActiveDate] = useState<string | null>(null)") && sectionSource.includes("isOpen={activeDate === point.date}"),
-  );
-  ok("Esc fecha o tooltip (navegação por teclado, seção 6 da correção)", sectionSource.includes('event.key === "Escape"') && sectionSource.includes("onCloseAll"));
-  ok("tooltip escuro preservado (zinc-900/zinc-100, mesma paleta de antes)", sectionSource.includes("bg-zinc-900") && sectionSource.includes("text-zinc-100"));
-  ok(
-    "tooltip continua mostrando Data/estado/Investimento/Resultado/Custo — a correção de posicionamento desta etapa não foi desfeita; 'Meta diária' foi removida por decisão posterior (Refinamento do Cockpit, seção 6), não por esta correção",
-    sectionSource.includes("formatShortDate(point.date)") &&
-      sectionSource.includes("describeCockpitDailyPointState(point)") &&
-      sectionSource.includes("Investimento:"),
-  );
-}
-
-console.log("\nK — Restrições (seção 9 do pedido): nenhuma rota/componente legado removido, nenhuma migration/schema nova\n");
-{
-  ok("sidebar.tsx não foi tocado por esta etapa (restrição: 'não modificar a sidebar nem o header')", (() => {
+  ok("sidebar.tsx não foi tocado por esta etapa (restrição histórica: 'não modificar a sidebar nem o header')", (() => {
     try {
       const sidebarSource = loadSource("src", "app", "sidebar.tsx");
-      return sidebarSource.includes("AccordionGroup"); // já existia da Fase 2.1, prova que o arquivo não foi revertido/alterado por esta etapa
+      return sidebarSource.includes("AccordionGroup");
     } catch {
       return false;
     }
   })());
   ok("client-workspace-header.tsx continua sem nenhuma referência à Evolução Diária (header intocado)", !loadSource("src", "app", "clients", "client-workspace-header.tsx").includes("DailyEvolution"));
-  ok("nenhum arquivo .sql novo foi criado por esta etapa (checagem indireta: nenhuma migration de evolução diária referenciada no código novo)", !loadSource("src", "lib", "cockpit-daily-evolution.ts").toLowerCase().includes("migration"));
+  ok("nenhum arquivo .sql novo foi criado por esta etapa (checagem indireta: nenhuma migration referenciada no código do núcleo puro)", !loadSource("src", "lib", "cockpit-daily-evolution.ts").toLowerCase().includes("migration"));
   ok(
     "orphan pré-existente (DailyResultsEvolution, app/clients/daily-results-evolution.tsx) continua no disco, intocado — nenhuma remoção agressiva",
     loadSource("src", "app", "clients", "daily-results-evolution.tsx").includes("export function DailyResultsEvolution"),

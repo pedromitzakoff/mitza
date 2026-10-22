@@ -33,12 +33,20 @@ export type MetricCardId =
 
 /** Ordem canônica de apresentação — a mesma ordem usada na lista de
  * personalização e como ordem inicial dos cards selecionados. Agrupada por
- * categoria (pedido do usuário, Etapa 2.4 — Entrega/Tráfego/Resultados/
- * Receita): Entrega (impressões/alcance/frequência/CPM) → Tráfego (cliques
- * e suas variantes de LINK, sempre o par "geral" antes do par "do link") →
- * Resultados → Receita. */
+ * categoria (Entrega/Tráfego/Receita): Entrega (impressões/alcance/
+ * frequência/CPM) → Tráfego (cliques e suas variantes de LINK, sempre o par
+ * "geral" antes do par "do link") → Receita.
+ *
+ * KOFF Analytics — Redesign definitivo do Cockpit: "investment"/"results"/
+ * "costPerResult" SAÍRAM desta lista (removidos, não só escondidos do
+ * padrão) — a nova "Visão executiva" sempre mostra Investimento/Resultado/
+ * Custo por resultado consolidados (`cockpit-goal-card.tsx`) bem ao lado
+ * destes cards, na MESMA área da tela; oferecê-los de novo aqui via
+ * personalização seria a duplicação exata que o redesign pediu pra
+ * eliminar. `buildMetricCardViewModels` continua calculando os 3 (histórico
+ * preservado pra quem ainda lê esse view-model em outro lugar), só a UI de
+ * seleção não os oferece mais. */
 export const ALL_METRIC_CARD_IDS: MetricCardId[] = [
-  "investment",
   "impressions",
   "reach",
   "frequency",
@@ -49,24 +57,14 @@ export const ALL_METRIC_CARD_IDS: MetricCardId[] = [
   "linkCtr",
   "cpc",
   "linkCpc",
-  "results",
-  "costPerResult",
   "roas",
 ];
 
-/** Seleção inicial inteligente (~6 métricas principais) — redefinida na
- * Etapa "Redesign e organização visual do Cockpit" (consolidação dentro do
- * Cockpit Único do Cliente, pedido explícito do usuário: "evitar duplicar
- * indicadores que já apareçam em outras partes do Cockpit"). Investimento/
- * Resultados/Custo por resultado SAÍRAM do padrão porque já aparecem na
- * seção Canais (bloco "META ADS") e, pro objetivo em jogo, em Meta & Ritmo
- * — continuam disponíveis aqui via personalização, só não duplicados por
- * padrão. O padrão passa a ser Impressões/CPM/Cliques/CTR/CPC/ROAS —
- * cobre Entrega+Tráfego+Receita sem repetir nada, e todos degradam pra "—"
- * quando indisponíveis (nunca a mensagem longa de indisponibilidade de
- * integração). Alcance/Frequência/Cliques no link/CTR do link/CPC do link
- * ficam de fora do padrão pelo mesmo motivo de sempre: dependem da
- * integração direta Meta ou de uma migração recente, podem chegar
+/** Seleção inicial (~6 métricas principais) — cobre Entrega+Tráfego+Receita
+ * sem repetir nada, todos degradam pra "—" quando indisponíveis (nunca a
+ * mensagem longa de indisponibilidade de integração). Alcance/Frequência/
+ * Cliques no link/CTR do link/CPC do link ficam de fora do padrão: dependem
+ * da integração direta Meta ou de uma migração recente, podem chegar
  * "indisponível" — melhor como opção explícita de personalização do que
  * forçados na primeira experiência. */
 export const DEFAULT_SELECTED_METRIC_IDS: MetricCardId[] = ["impressions", "cpm", "clicks", "ctr", "cpc", "roas"];

@@ -119,8 +119,32 @@ function buildData(overrides: Partial<MetaAdsDashboardData>): MetaAdsDashboardDa
 const data = buildData({});
 const cards = buildMetricCardViewModels(data);
 
-check("monta exatamente os 14 cards, na ordem canônica", cards.map((c) => c.id), ALL_METRIC_CARD_IDS);
-ok("seleção padrão tem ~6 métricas, todas entre as 14 existentes, nenhuma delas investimento/resultados/custo por resultado (já aparecem em Canais/Meta & Ritmo)", DEFAULT_SELECTED_METRIC_IDS.length === 6 && DEFAULT_SELECTED_METRIC_IDS.every((id) => ALL_METRIC_CARD_IDS.includes(id)) && !DEFAULT_SELECTED_METRIC_IDS.some((id) => id === "investment" || id === "results" || id === "costPerResult"));
+// KOFF Analytics — Redesign definitivo do Cockpit: `buildMetricCardViewModels`
+// continua calculando os 14 cards (histórico preservado, view-model puro) —
+// só `ALL_METRIC_CARD_IDS` (catálogo SELECIONÁVEL na UI de personalização)
+// ficou menor (11), já que Investimento/Resultado/Custo por resultado
+// passaram a aparecer incondicionalmente na Visão executiva, ao lado destes
+// cards — ofertá-los de novo aqui seria duplicação. A ordem canônica dos 14
+// view-models em si nunca mudou (mesma de sempre, `metric-cards.ts`).
+const CANONICAL_VIEW_MODEL_ORDER = [
+  "investment",
+  "impressions",
+  "reach",
+  "frequency",
+  "cpm",
+  "clicks",
+  "linkClicks",
+  "ctr",
+  "linkCtr",
+  "cpc",
+  "linkCpc",
+  "results",
+  "costPerResult",
+  "roas",
+];
+check("monta exatamente os 14 cards, na ordem canônica", cards.map((c) => c.id), CANONICAL_VIEW_MODEL_ORDER);
+ok("ALL_METRIC_CARD_IDS (catálogo selecionável) tem 11 ids, subconjunto dos 14 view-models, sem investimento/resultados/custo por resultado", ALL_METRIC_CARD_IDS.length === 11 && ALL_METRIC_CARD_IDS.every((id) => CANONICAL_VIEW_MODEL_ORDER.includes(id)) && !ALL_METRIC_CARD_IDS.some((id) => id === "investment" || id === "results" || id === "costPerResult"));
+ok("seleção padrão tem ~6 métricas, todas entre as 11 selecionáveis, nenhuma delas investimento/resultados/custo por resultado (já aparecem incondicionalmente na Visão executiva)", DEFAULT_SELECTED_METRIC_IDS.length === 6 && DEFAULT_SELECTED_METRIC_IDS.every((id) => ALL_METRIC_CARD_IDS.includes(id)) && !DEFAULT_SELECTED_METRIC_IDS.some((id) => id === "investment" || id === "results" || id === "costPerResult"));
 
 const investmentCard = cards.find((c) => c.id === "investment")!;
 check("Investimento formatado em moeda", investmentCard.value, formatCurrency(1000));

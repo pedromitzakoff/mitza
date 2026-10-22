@@ -41,7 +41,7 @@ import { resolvePerformanceRowsForSprints, getDailyPerformanceRowsForPeriod } fr
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { AVAILABLE_TRAFFIC_CHANNELS, resolveClientMediaChannels, TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { MonthSelect } from "../month-select";
-import { DashboardChannelSection, type DashboardChannelDataIssue } from "../dashboard-channel-section";
+import type { DashboardChannelDataIssue } from "../channel-data-issue";
 import { WorkspaceContainer } from "../workspace-container";
 import { IconButton } from "@/components/workspace/button";
 import { buildMetasHref } from "./metas/page";
@@ -60,11 +60,8 @@ import {
 import { CockpitResultCard, CockpitCostCard } from "../cockpit-goal-card";
 import { CockpitDiagnosticsCard } from "../cockpit-diagnostics-card";
 import { buildCockpitDailyEvolutionPoints } from "@/lib/cockpit-daily-evolution";
-import {
-  CockpitDailyEvolutionSection,
-  type CockpitDailyEvolutionView,
-  type CockpitDailyEvolutionSeriesView,
-} from "../cockpit-daily-evolution-section";
+import { buildGoalEvolutionSeries, type EvolutionSeriesOption } from "@/lib/cockpit-evolution-merge";
+import { CockpitEvolutionSection } from "../cockpit-evolution-section";
 import {
   resolveMetaAdAccountId,
   fetchAccountPeriodReachSnapshot,
@@ -74,8 +71,9 @@ import {
 import { CockpitAdAccountBalance } from "../cockpit-ad-account-balance";
 import { buildMetricCardViewModels } from "@/lib/meta-ads-dashboard/metric-cards";
 import { campaignSummaryToRow } from "@/lib/meta-ads-dashboard/exploration-data";
-import { CockpitAdPerformanceSection } from "../cockpit-ad-performance-section";
+import { CockpitAdMetricCards } from "../cockpit-ad-metric-cards";
 import { CockpitAdExplorationSection } from "../cockpit-ad-exploration-section";
+import { CockpitChannelBreakdown, type ChannelBreakdownRowView } from "../cockpit-channel-breakdown";
 
 /**
  * Objetivo em exibição na Performance (`?goal=`) — núcleo puro extraído de
@@ -584,9 +582,15 @@ export default async function ClientPage({
   }));
   const evolutionDailySpendRows = (dailySpend ?? []).map((row) => ({ date: row.date, channel: row.channel as TrafficChannel, spend: row.spend }));
 
-  const dailyEvolutionSeries: CockpitDailyEvolutionSeriesView[] = hasDailyIntegration
-    ? resultGroups.map((group) => {
-        return {
+  // KOFF Analytics — Redesign definitivo do Cockpit: "Evolução da
+  // performance" virou um módulo só (`lib/cockpit-evolution-merge.ts`) —
+  // esta parte monta as séries por OBJETIVO (Resultado/Custo/Investimento,
+  // mesmo cálculo de sempre, `buildCockpitDailyEvolutionPoints`); a fusão
+  // com as métricas Meta Ads específicas acontece mais abaixo, depois de
+  // `adPerformanceData` existir.
+  const goalEvolutionSeries: EvolutionSeriesOption[] = hasDailyIntegration
+    ? buildGoalEvolutionSeries(
+        resultGroups.map((group) => ({
           resultType: group.resultType,
           resultLabel: PERFORMANCE_GOALS[group.resultType].resultMetricLabel,
           costLabel: PERFORMANCE_GOALS[group.resultType].costMetricShortLabel,
@@ -599,22 +603,21 @@ export default async function ClientPage({
             performanceRows: evolutionDailyPerformanceRows,
             spendRows: evolutionDailySpendRows,
           }),
-        };
-      })
+        })),
+      )
     : [];
 
-  const dailyEvolutionView: CockpitDailyEvolutionView = !hasDailyIntegration
-    ? { kind: "unavailable" }
-    : resultGroups.length === 0
-      ? { kind: "no_goal" }
-      : {
-          kind: "available",
-          series: dailyEvolutionSeries,
-          freshness: {
-            latestDataLabel: dadosData?.health.latestImportedDate ? formatShortDate(dadosData.health.latestImportedDate) : null,
-            latestSyncLabel: dadosData?.health.latestSuccessAtLabel ?? null,
-          },
-        };
+  const evolutionFreshness = {
+    latestDataLabel: dadosData?.health.latestImportedDate ? formatShortDate(dadosData.health.latestImportedDate) : null,
+    latestSyncLabel: dadosData?.health.latestSuccessAtLabel ?? null,
+  };
+
+  const evolutionEmptyMessage =
+    resultGroups.length === 0
+      ? "Este cliente ainda não tem um objetivo de performance configurado."
+      : !hasDailyIntegration
+        ? "Sem dados diários disponíveis para este cliente."
+        : "Nenhuma métrica de evolução disponível para este cliente.";
 
   // MITZA ONE — Fase 1, Seção "Diagnóstico" (seções 11-13 do pedido):
   // reaproveita o `ClientDiagnostics` que `loadClientOperationalStates` já
@@ -667,6 +670,36 @@ export default async function ClientPage({
   });
   const adMetricCards = buildMetricCardViewModels(adPerformanceData);
   const adExplorationCampaignRows = adPerformanceData.explorationCampaigns.map(campaignSummaryToRow);
+
+  // Fusão final da Evolução: séries por objetivo primeiro (viram a opção
+  // padrão do seletor), métricas Meta Ads depois — Investimento/Resultado/
+  // Custo por resultado NUNCA entram duas vezes (já cobertos pelas séries
+  // por objetivo acima); o resto (impressões/cliques/CTR/CPM/ROAS etc.)
+  // continua disponível normalmente.
+  const mergedEvolutionSeries: EvolutionSeriesOption[] = [
+    ...goalEvolutionSeries,
+    ...(clientChannels.includes("meta")
+      ? adPerformanceData.evolution.filter((s) => s.id !== "investment" && s.id !== "results" && s.id !== "costPerResult")
+      : []),
+  ];
+
+  // KOFF Analytics — Redesign definitivo do Cockpit: quebra por canal
+  // (`cockpit-channel-breakdown.tsx`) só é relevante com mais de um canal —
+  // o próprio componente já descarta a si mesmo com `rows.length < 2`, mas
+  // a lista só é montada quando faz sentido (evita calcular à toa pro caso
+  // comum de 1 canal só).
+  const channelBreakdownRows: ChannelBreakdownRowView[] =
+    dashboardChannels.length > 1
+      ? dashboardChannels.map((c) => ({
+          channel: c.channel,
+          goal: c.goal,
+          actualSpend: c.actualSpend,
+          performanceSummary: c.performanceSummary,
+          targetCostPerResult: c.targetCostPerResult,
+          configureObjectiveHref: `/clients/${client.id}/edit`,
+          dataIssue: findChannelDataIssue(dadosData?.attentions ?? [], TRAFFIC_CHANNELS[c.channel].label),
+        }))
+      : [];
 
   const contractBannerText = contractStatusBannerText(client.status);
   const banners = [
@@ -740,17 +773,26 @@ export default async function ClientPage({
         </div>
       </div>
 
-      {/* SEÇÃO 1 — META & RITMO (pedido, seções 5-10): "Estamos no caminho
-          certo?". Um par Resultado/Custo por objetivo realmente em jogo +
-          1 card de Orçamento (sempre multicanal). "Ver Metas →" aponta pro
-          planejamento completo por canal (`ChannelPlanEditor`), mesma
-          simetria que as outras seções já têm com seu módulo completo. */}
-      <div className="mt-5 flex items-center justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Meta &amp; Ritmo</h2>
+      {/* ÁREA 1 — VISÃO EXECUTIVA (KOFF Analytics, Redesign definitivo):
+          "entender rapidamente resultados e situação de orçamento" — um
+          único bloco, nunca mais Meta & Ritmo / Diagnóstico / Canais /
+          Indicadores Meta Ads como seções separadas e repetindo número.
+          "Ver Metas →" aponta pro planejamento completo por canal
+          (`ChannelPlanEditor`). */}
+      <div className="mt-6 flex items-center justify-between gap-3">
+        <h2 className="text-base font-medium text-overview-text-primary">Visão executiva</h2>
         <Link href={metasHref} className="shrink-0 text-xs font-medium text-brand hover:underline">
           Ver Metas →
         </Link>
       </div>
+
+      {/* Diagnóstico: discreto e contextual — `CockpitDiagnosticsCard`
+          devolve `null` sozinho quando não há ponto de atenção nenhum,
+          nunca ocupa espaço à toa. */}
+      <div className="mt-2">
+        <CockpitDiagnosticsCard insights={insights} />
+      </div>
+
       <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {resultCards.map(({ result, status, cost }) => (
           <Fragment key={`group-${result.resultType}-${result.channelsLabel ?? "all"}`}>
@@ -767,59 +809,50 @@ export default async function ClientPage({
         />
       </div>
 
-      {/* SEÇÃO 2 — DIAGNÓSTICO (pedido, seções 11-13): "Onde preciso
-          prestar atenção?". */}
-      <div className="mt-5">
-        <CockpitDiagnosticsCard insights={insights} />
-      </div>
-
-      {/* EVOLUÇÃO DIÁRIA — MITZA ONE: acompanhamento dia a dia + frescor
-          dos dados, entre Diagnóstico e Canais (seção 1 do pedido). */}
-      <div className="mt-5">
-        <CockpitDailyEvolutionSection view={dailyEvolutionView} />
-      </div>
-
-      {/* SEÇÃO 3 — CANAIS (pedido, seções 14-17): "Como cada canal está
-          performando?". Empilhado verticalmente, sem dropdown/tabs/
-          carousel — mesmos componentes de sempre (`DashboardChannelSection`),
-          só com o selo de atenção de Dados quando existe (seção 16). */}
-      <div className="mt-5 flex flex-col gap-4">
-        {dashboardChannels.map((c) => (
-          <DashboardChannelSection
-            key={c.channel}
-            channel={c.channel}
-            goal={c.goal}
-            actualSpend={c.actualSpend}
-            performanceSummary={c.performanceSummary}
-            targetCostPerResult={c.targetCostPerResult}
-            targetResultCount={c.targetResultCount}
-            configureObjectiveHref={`/clients/${client.id}/edit`}
-            dataIssue={findChannelDataIssue(dadosData?.attentions ?? [], TRAFFIC_CHANNELS[c.channel].label)}
-          />
-        ))}
-      </div>
-
-      {/* SEÇÃO 4 — PERFORMANCE META ADS (consolidação da antiga rota
-          `/clients/[id]/meta-ads` pra dentro do Cockpit, reorganizada na
-          Etapa "Redesign e organização visual do Cockpit"): abas
-          Indicadores/Evolução — a tabela de exploração ganhou destaque
-          próprio, como sua PRÓPRIA seção logo abaixo (pedido explícito:
-          "uma das seções mais úteis da página", nunca escondida atrás de
-          uma aba). Só renderizada pra cliente que usa o canal Meta —
-          mesmo critério já usado pela seção Canais, acima. */}
-      {clientChannels.includes("meta") && (
-        <div className="mt-5">
-          <CockpitAdPerformanceSection clientId={client.id} metaAdAccountId={metaAdAccountId} cards={adMetricCards} evolution={adPerformanceData.evolution} />
+      {/* Quebra por canal — só aparece com mais de um canal (ver
+          `cockpit-channel-breakdown.tsx`: com um canal só, o número é
+          idêntico ao consolidado acima, repeti-lo seria duplicação). */}
+      {channelBreakdownRows.length > 1 && (
+        <div className="mt-3">
+          <CockpitChannelBreakdown rows={channelBreakdownRows} />
         </div>
       )}
 
-      {/* SEÇÃO 5 — CAMPANHAS, CONJUNTOS E ANÚNCIOS: drill-down completo,
-          sempre visível, mesma largura das demais seções (pedido do
-          usuário: "boa utilização da largura da tela"). */}
+      {/* Indicadores Meta Ads — personalizáveis, persistidos por cliente
+          (`cockpit-ad-metric-cards.tsx`). Investimento/Resultado/Custo por
+          resultado saíram da lista de opções (já cobertos acima, sem
+          duplicar) — o resto (entrega/tráfego/receita) continua aqui, na
+          MESMA Visão executiva em vez de uma seção própria. */}
       {clientChannels.includes("meta") && (
-        <div className="mt-5">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Campanhas, conjuntos e anúncios</h2>
+        <div className="mt-4">
+          <p className="text-xs text-overview-text-secondary">
+            Indicadores Meta Ads — resultados atribuídos pela Meta (janela de atribuição do Ads Manager), não confirmados por uma fonte de negócio
+            independente.
+          </p>
           <div className="mt-2">
+            <CockpitAdMetricCards clientId={client.id} cards={adMetricCards} />
+          </div>
+        </div>
+      )}
+
+      {/* ÁREA 2 — EVOLUÇÃO DA PERFORMANCE: módulo único (SVG artesanal +
+          Recharts consolidados em `cockpit-evolution-section.tsx`),
+          seletor de métrica cobre tanto os objetivos (Resultado/Custo/
+          Investimento, por dia) quanto as métricas Meta Ads (impressões,
+          CTR, CPM, ROAS...). */}
+      <div className="mt-8">
+        <CockpitEvolutionSection series={mergedEvolutionSeries} freshness={evolutionFreshness} emptyMessage={evolutionEmptyMessage} />
+      </div>
+
+      {/* ÁREA 3 — CAMPANHAS, CONJUNTOS E ANÚNCIOS: seção ampla e
+          prioritária (pedido explícito do usuário), drill-down completo na
+          MESMA tela, mesma largura das demais áreas. Lógica intocada
+          (`cockpit-ad-exploration-section.tsx` já tinha busca/ordenação/
+          colunas/drill-down) — só ganhou mais peso visual no cabeçalho. */}
+      {clientChannels.includes("meta") && (
+        <div className="mt-8">
+          <h2 className="text-base font-medium text-overview-text-primary">Campanhas, conjuntos e anúncios</h2>
+          <div className="mt-3">
             <CockpitAdExplorationSection
               clientId={client.id}
               resultType={adPerformanceData.resultType}

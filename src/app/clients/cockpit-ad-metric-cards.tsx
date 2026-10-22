@@ -5,18 +5,19 @@ import { SlidersHorizontal } from "lucide-react";
 import { ALL_METRIC_CARD_IDS, DEFAULT_SELECTED_METRIC_IDS, type MetricCardId, type MetricCardViewModel } from "@/lib/meta-ads-dashboard/metric-cards";
 
 /**
- * MITZA ONE — Cockpit Único do Cliente, "Performance Meta Ads" / aba
- * Indicadores. Etapa "Redesign e organização visual do Cockpit" (pedido
- * explícito do usuário): a personalização de métricas (removida na
- * consolidação anterior) volta aqui — 6 indicadores por padrão, escolha
- * livre entre os 14 disponíveis, preferência por cliente persistida em
+ * MITZA ONE — Cockpit Único do Cliente, parte da "Visão executiva" (KOFF
+ * Analytics, Redesign definitivo — antes vivia na aba Indicadores de
+ * "Performance Meta Ads", removida na consolidação). Personalização de
+ * métricas — 6 indicadores por padrão, escolha livre entre os 11
+ * disponíveis (Investimento/Resultado/Custo por resultado saíram da lista:
+ * já aparecem consolidados bem ao lado destes cards, na mesma Visão
+ * executiva — ver `metric-cards.ts`), preferência por cliente persistida em
  * `localStorage` (mesmo padrão já usado em todo o resto do produto, nunca
  * uma tabela nova). Cards sempre aparecem na ordem canônica por categoria
- * (Entrega/Tráfego/Resultados/Receita) — reordenação manual não é
- * necessária aqui (diferente da antiga personalização da Etapa 2.2, que
- * tinha setas pra cima/baixo); escolher QUAIS aparecem já resolve o
- * pedido de reduzir poluição visual sem a complexidade extra de ordem
- * livre.
+ * (Entrega/Tráfego/Receita) — reordenação manual não é necessária aqui
+ * (diferente da antiga personalização da Etapa 2.2, que tinha setas pra
+ * cima/baixo); escolher QUAIS aparecem já resolve o pedido de reduzir
+ * poluição visual sem a complexidade extra de ordem livre.
  *
  * Todo VALOR já chega pronto do servidor (`buildMetricCardViewModels`) —
  * este componente nunca recalcula nada, só decide QUAIS cards aparecem.
@@ -27,7 +28,6 @@ const STORAGE_KEY_PREFIX = "mitza:cockpit:ad-metrics:";
 const CATEGORY_GROUPS: { title: string; ids: MetricCardId[] }[] = [
   { title: "Entrega", ids: ["impressions", "reach", "frequency", "cpm"] },
   { title: "Tráfego", ids: ["clicks", "linkClicks", "ctr", "linkCtr", "cpc", "linkCpc"] },
-  { title: "Resultados", ids: ["investment", "results", "costPerResult"] },
   { title: "Receita", ids: ["roas"] },
 ];
 
