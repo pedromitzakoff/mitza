@@ -65,7 +65,13 @@ import {
   type CockpitDailyEvolutionView,
   type CockpitDailyEvolutionSeriesView,
 } from "../cockpit-daily-evolution-section";
-import { resolveMetaAdAccountId, fetchAccountPeriodReachSnapshot, buildCockpitAdPerformanceData } from "@/lib/meta-ads-dashboard/dashboard-data";
+import {
+  resolveMetaAdAccountId,
+  fetchAccountPeriodReachSnapshot,
+  fetchAccountBalanceSnapshot,
+  buildCockpitAdPerformanceData,
+} from "@/lib/meta-ads-dashboard/dashboard-data";
+import { CockpitAdAccountBalance } from "../cockpit-ad-account-balance";
 import { buildMetricCardViewModels } from "@/lib/meta-ads-dashboard/metric-cards";
 import { campaignSummaryToRow } from "@/lib/meta-ads-dashboard/exploration-data";
 import { CockpitAdPerformanceSection } from "../cockpit-ad-performance-section";
@@ -631,15 +637,21 @@ export default async function ClientPage({
   // linhas já buscadas por `buildPerformanceReportData` acima (`campaigns`/
   // `adSetDailyRows`/`creativeDailyRows`/`campaignDailyRows`, já filtradas
   // pro canal Meta) — nenhuma segunda consulta de campanha/conjunto/
-  // criativo. O único dado novo é o alcance/frequência do PERÍODO INTEIRO
-  // (`fetchAccountPeriodReachSnapshot`, 1 chamada à Graph API, cacheada 5
-  // minutos — nunca somado a partir de `reach` diário, mesma regra de
-  // sempre: "não somar alcance entre dias"). Sem comparação com o mês
-  // anterior aqui (mesma convenção do resto do Cockpit — Meta & Ritmo/
-  // Evolução Diária tampouco comparam mês a mês).
-  const adReach = clientChannels.includes("meta")
-    ? await fetchAccountPeriodReachSnapshot(metaAdAccountId, { start: firstDay, end: lastDay })
-    : ({ status: "unavailable", reason: "not_configured" } as const);
+  // criativo. Dois dados novos, 2 chamadas leves à Graph API (nunca por
+  // entidade), cacheadas 5 minutos cada: alcance/frequência do PERÍODO
+  // INTEIRO (`fetchAccountPeriodReachSnapshot` — nunca somado a partir de
+  // `reach` diário, mesma regra de sempre: "não somar alcance entre
+  // dias") e o saldo da conta (`fetchAccountBalanceSnapshot`, pedido
+  // explícito do usuário: "indicador no topo da tela mostrando saldo da
+  // conta"). Sem comparação com o mês anterior aqui (mesma convenção do
+  // resto do Cockpit — Meta & Ritmo/Evolução Diária tampouco comparam mês
+  // a mês).
+  const [adReach, adBalance] = clientChannels.includes("meta")
+    ? await Promise.all([
+        fetchAccountPeriodReachSnapshot(metaAdAccountId, { start: firstDay, end: lastDay }),
+        fetchAccountBalanceSnapshot(metaAdAccountId),
+      ])
+    : ([{ status: "unavailable", reason: "not_configured" }, { status: "unavailable", reason: "not_configured" }] as const);
 
   const adPerformanceData = buildCockpitAdPerformanceData({
     client: { id: client.id, name: client.name },
@@ -712,6 +724,7 @@ export default async function ClientPage({
           </IconButton>
         </div>
         <div className="ml-auto flex items-center gap-3">
+          <CockpitAdAccountBalance snapshot={adBalance} />
           <DataFreshnessTimer lastSuccessAt={dadosData?.health.latestSuccessAt ?? null} />
           {externalLinks.map((link) => (
             <a

@@ -253,3 +253,86 @@ export async function fetchMetaApiPeriodReach(
 
   return rows;
 }
+
+export interface MetaApiAccountBalanceRow {
+  isPrepay: boolean;
+  /** Em unidade PRINCIPAL da moeda da conta (ex.: reais, nunca centavos) —
+   * já convertido a partir do inteiro em unidade mínima que a Graph API
+   * devolve (`balance`). `null` quando a conta NÃO é pré-paga — pedido
+   * explícito do usuário: "puxe o saldo somente para as contas de
+   * pré-pago; as que não forem, coloca tipo PÓS-PAGO no lugar do saldo" —
+   * pra conta pós-paga (faturamento por limiar), `balance` da Graph API
+   * representa o valor A FATURAR, não um saldo disponível pra gastar;
+   * mostrar esse número como "saldo" seria enganoso, por isso nem é lido
+   * pra essas contas. */
+  balance: number | null;
+  currency: string;
+}
+
+interface MetaAccountBalanceRawResponse {
+  balance?: string;
+  is_prepay_account?: boolean;
+  currency?: string;
+  error?: { message: string };
+}
+
+const ACCOUNT_BALANCE_FIELDS = "balance,is_prepay_account,currency";
+
+/**
+ * Núcleo puro — converte a resposta bruta do nó da conta (Graph API) pro
+ * formato interno. `balance` chega como string numérica em unidade MÍNIMA
+ * da moeda (ex.: centavos pra BRL/USD/EUR — convertida aqui ÷100 pra
+ * unidade principal). Moedas sem casas decimais (ex.: JPY) não são usadas
+ * por nenhum cliente da MITZA hoje — limitação conhecida, documentada,
+ * nunca assumida silenciosamente como coberta. `null` quando a resposta
+ * não tem os campos mínimos (`is_prepay_account`/`currency` ausentes —
+ * nunca um valor fabricado a partir de uma resposta incompleta).
+ */
+export function mapMetaAccountBalanceResponse(raw: MetaAccountBalanceRawResponse): MetaApiAccountBalanceRow | null {
+  if (raw.is_prepay_account === undefined || !raw.currency) return null;
+  const isPrepay = raw.is_prepay_account;
+  return {
+    isPrepay,
+    balance: isPrepay && raw.balance !== undefined ? Number(raw.balance) / 100 : null,
+    currency: raw.currency,
+  };
+}
+
+/**
+ * MITZA ONE — KOFF Analytics (Cockpit Único do Cliente), pedido explícito
+ * do usuário: "puxe o saldo da conta... quero que tenha um indicador no
+ * topo da tela mostrando saldo da conta". Busca `balance`/
+ * `is_prepay_account`/`currency` do nó da própria conta (`/act_...`, sem
+ * `/insights`) — 1 chamada leve, cacheada 5 minutos (mesma janela/mesmo
+ * timeout de `fetchMetaApiPeriodReach`, nenhuma consulta desnecessária).
+ * `null` quando a resposta não tem os campos mínimos; qualquer falha de
+ * rede/API segue lançando (quem chama, `fetchAccountBalanceSnapshot` em
+ * `lib/meta-ads-dashboard/dashboard-data.ts`, trata isso como estado
+ * explícito, nunca deixa quebrar a tela — mesmo padrão de
+ * `fetchAccountPeriodReachSnapshot`).
+ */
+const ACCOUNT_BALANCE_FETCH_TIMEOUT_MS = 8000;
+const ACCOUNT_BALANCE_CACHE_SECONDS = 300;
+
+export async function fetchMetaApiAccountBalance(accountId: string): Promise<MetaApiAccountBalanceRow | null> {
+  const accessToken = process.env.META_API_ACCESS_TOKEN;
+  if (!accessToken) {
+    throw new Error("META_API_ACCESS_TOKEN não configurado");
+  }
+
+  const url = new URL(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/${accountId}`);
+  url.searchParams.set("fields", ACCOUNT_BALANCE_FIELDS);
+  url.searchParams.set("access_token", accessToken);
+
+  const response = await fetch(url.toString(), {
+    signal: AbortSignal.timeout(ACCOUNT_BALANCE_FETCH_TIMEOUT_MS),
+    next: { revalidate: ACCOUNT_BALANCE_CACHE_SECONDS },
+  });
+  const json: MetaAccountBalanceRawResponse = await response.json();
+
+  if (!response.ok) {
+    throw new Error(`Meta Graph API error (${accountId}, saldo da conta): ${json?.error?.message ?? response.statusText}`);
+  }
+
+  return mapMetaAccountBalanceResponse(json);
+}

@@ -4,7 +4,7 @@ import type { AdSetDailyMetricRow } from "@/lib/ad-set-analytics";
 import type { AdCreativeDailyMetricRow } from "@/lib/creative-analytics";
 import { previousEquivalentPeriod, computePercentChange, type PeriodRange } from "@/lib/period-comparison";
 import { computeCpm, computeCtr, computeCpc, computeCostPerResult, computeRoas, computeFrequency } from "@/lib/performance";
-import { fetchMetaApiPeriodReach } from "@/lib/meta-api-fetch";
+import { fetchMetaApiPeriodReach, fetchMetaApiAccountBalance } from "@/lib/meta-api-fetch";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { buildEvolutionSeries, type ChartMetricSeries } from "./evolution-data";
 
@@ -289,6 +289,40 @@ export async function fetchAccountPeriodReachSnapshot(accountId: string | null, 
     return { status: "ok", impressions, reach, frequency: computeFrequency(impressions, reach) };
   } catch (err) {
     console.error(`[meta-ads-dashboard] falha ao buscar alcance de período (conta ${accountId}, ${period.start}..${period.end}):`, err);
+    const name = err instanceof Error ? err.name : "";
+    const message = err instanceof Error ? err.message : "";
+    if (name === "TimeoutError" || name === "AbortError") return { status: "unavailable", reason: "timeout" };
+    if (message.includes("META_API_ACCESS_TOKEN")) return { status: "unavailable", reason: "token_missing" };
+    return { status: "unavailable", reason: "fetch_error" };
+  }
+}
+
+/**
+ * Saldo da conta Meta — pedido explícito do usuário: "puxe o saldo da
+ * conta... indicador no topo da tela... só para as contas de pré-pago; as
+ * que não forem, coloca tipo PÓS-PAGO no lugar do saldo". `isPrepay: false`
+ * nunca carrega `balance`/`currency` — pra conta pós-paga (faturamento por
+ * limiar), o campo `balance` da Graph API representa valor A FATURAR, não
+ * saldo disponível; mostrar isso como "saldo" seria enganoso (ver doc de
+ * `mapMetaAccountBalanceResponse`, `lib/meta-api-fetch.ts`).
+ */
+export type MetaAdAccountBalanceSnapshot =
+  | { status: "ok"; isPrepay: true; balance: number; currency: string }
+  | { status: "ok"; isPrepay: false }
+  | { status: "unavailable"; reason: "not_configured" | "token_missing" | "timeout" | "fetch_error" };
+
+/** Mesmo padrão de `fetchAccountPeriodReachSnapshot` — NUNCA lança, toda
+ * falha vira `{ status: "unavailable", reason }`. */
+export async function fetchAccountBalanceSnapshot(accountId: string | null): Promise<MetaAdAccountBalanceSnapshot> {
+  if (!accountId) return { status: "unavailable", reason: "not_configured" };
+
+  try {
+    const row = await fetchMetaApiAccountBalance(accountId);
+    if (!row) return { status: "unavailable", reason: "fetch_error" };
+    if (!row.isPrepay) return { status: "ok", isPrepay: false };
+    return { status: "ok", isPrepay: true, balance: row.balance as number, currency: row.currency };
+  } catch (err) {
+    console.error(`[meta-ads-dashboard] falha ao buscar saldo da conta ${accountId}:`, err);
     const name = err instanceof Error ? err.name : "";
     const message = err instanceof Error ? err.message : "";
     if (name === "TimeoutError" || name === "AbortError") return { status: "unavailable", reason: "timeout" };

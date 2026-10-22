@@ -9,6 +9,15 @@ export function formatCurrency(value: number): string {
   return currencyFormatter.format(value);
 }
 
+/** Formata um valor monetário na MOEDA informada — nunca assume BRL, ao
+ * contrário de `formatCurrency` (usada em todo o resto da MITZA, onde o
+ * cliente final é sempre cobrado em reais). Uso único hoje: saldo da conta
+ * Meta (`lib/meta-api-fetch.ts`), cuja moeda é a configurada na própria
+ * conta de anúncios — pode ser qualquer uma, nunca assumida como BRL. */
+export function formatCurrencyInCurrency(value: number, currencyCode: string): string {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: currencyCode }).format(value);
+}
+
 /** "883"/"1.000" — contagem inteira formatada (separador de milhar,
  * arredondada pro inteiro mais próximo) — Etapa "Visão Geral: decisão em 5
  * segundos": precisão de casa decimal é detalhe de investigação, não de
