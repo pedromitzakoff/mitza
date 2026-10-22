@@ -60,7 +60,7 @@ const metaRitmoSource = loadSource("src", "app", "clients", "cockpit-meta-ritmo-
 // as checagens de conteúdo desses dois cards abaixo leem esta fonte.
 const goalCardSource = loadSource("src", "app", "clients", "cockpit-goal-card.tsx");
 const diagnosticsCardSource = loadSource("src", "app", "clients", "cockpit-diagnostics-card.tsx");
-const performanceSectionSource = loadSource("src", "app", "clients", "cockpit-performance-section.tsx");
+const performanceSectionSource = loadSource("src", "app", "clients", "cockpit-ad-performance-section.tsx");
 const channelSectionSource = loadSource("src", "app", "clients", "dashboard-channel-section.tsx");
 const budgetSource = loadSource("src", "app", "clients", "dashboard-budget.tsx");
 
@@ -241,11 +241,24 @@ console.log("\nC — Diagnóstico\n");
 // ---------------------------------------------------------------------------
 console.log("\nD — Performance (essencial + completa)\n");
 {
-  ok("Performance essencial reaproveita buildPeriodReading (lib/performance-report/report-derivatives.ts) — nenhum texto/cálculo novo", pageSource.includes("buildPeriodReading({"));
-  ok("Performance essencial reaproveita buildPerformanceReportData (Camada 1 oficial do Relatório) — nenhuma segunda agregação de campanhas", pageSource.includes("buildPerformanceReportData(supabase, id,"));
-  ok("CTA 'Ver campanhas →' e 'Ver Performance completa →' apontam pra /clients/[id]/relatorio, nenhuma rota nova inventada", performanceSectionSource.includes("Ver campanhas →") && performanceSectionSource.includes("Ver Performance completa →"));
-  ok("/clients/[id]/relatorio continua existindo e não foi tocado nesta fase (seção 20 do pedido)", loadSource("src", "app", "clients", "[id]", "relatorio", "page.tsx").length > 0);
+  // KOFF Analytics — Etapa "Cockpit único por cliente": a antiga seção
+  // "Performance essencial" (resumo textual via buildPeriodReading + CTAs
+  // "Ver campanhas →"/"Ver Performance completa →" pra fora da página) foi
+  // SUBSTITUÍDA, a pedido explícito do usuário ("só quero essa página no
+  // sistema para cada cliente"), pelo conteúdo rico que antes vivia na
+  // rota separada `/clients/[id]/meta-ads` (Etapas 2.1-2.4.1) — cards de
+  // KPI, gráfico de evolução e exploração Campanha→Conjunto→Anúncio,
+  // tudo DENTRO desta mesma tela, nenhum link pra fora. `cockpit-performance-section.tsx`
+  // (o componente antigo) foi removido; `cockpit-ad-performance-section.tsx`
+  // é o novo.
+  ok("Performance Meta Ads reaproveita buildPerformanceReportData (Camada 1 oficial do Relatório) — nenhuma segunda agregação de campanha/conjunto/criativo", pageSource.includes("buildPerformanceReportData(supabase, id,"));
+  ok("nenhuma segunda consulta de campanha/conjunto/criativo — reaproveita campaignDailyRows/campaigns/adSetDailyRows/creativeDailyRows já buscados", pageSource.includes("campaignDailyRows: performanceReportData.campaignDailyRows"));
+  ok("alcance/frequência do período vêm de fetchAccountPeriodReachSnapshot (1 chamada à Graph API) — nunca somado a partir de reach diário", pageSource.includes("fetchAccountPeriodReachSnapshot("));
+  ok("seção só renderiza pra cliente que usa o canal Meta — mesmo critério de clientChannels já usado por Canais", pageSource.includes('clientChannels.includes("meta")'));
+  ok("nenhum CTA 'Ver Performance completa'/'Ver campanhas' pra outra rota — toda exploração fica na própria tela (regra de página única)", !performanceSectionSource.includes("Ver Performance completa") && !performanceSectionSource.includes("Ver campanhas"));
+  ok("/clients/[id]/relatorio continua existindo e não foi tocado por esta consolidação (serve PDF/link público, propósito distinto do Cockpit)", loadSource("src", "app", "clients", "[id]", "relatorio", "page.tsx").length > 0);
   ok("PDF (/api/clients/[id]/performance-report) e link público (/r/[token]) não foram alterados", loadSource("src", "app", "api", "clients", "[id]", "performance-report", "route.ts").length > 0 && loadSource("src", "app", "r", "[token]", "page.tsx").length > 0);
+  ok("a antiga rota separada /clients/[id]/meta-ads foi removida (consolidada no Cockpit)", !fileExists("src", "app", "clients", "[id]", "meta-ads", "page.tsx"));
 }
 
 // ---------------------------------------------------------------------------

@@ -17,33 +17,25 @@ import {
 } from "@/lib/meta-ads-dashboard/exploration-data";
 
 /**
- * MITZA ONE — KOFF Analytics Fase 2, Etapa 2.4. Seção "Campanhas,
- * conjuntos e anúncios" — toda a exploração dentro da MESMA tela (regra
- * fundamental do pedido): breadcrumb + abas, nunca uma rota nova nem um
- * botão "Ver performance completa".
+ * MITZA ONE — Cockpit Único do Cliente, "Campanhas, conjuntos e anúncios"
+ * (consolidação da antiga `clients/[id]/meta-ads/exploration-section.tsx`,
+ * Etapa 2.4, pra dentro do Cockpit — restilizada com os tokens
+ * `overview-*`/`brand`, mesma lógica/comportamento). Toda a exploração
+ * continua na MESMA tela (nenhuma rota nova nem botão "Ver performance
+ * completa").
  *
- * Drill-down: Campanhas (sempre o ponto de entrada) → ao selecionar uma
- * campanha, "Conjuntos" e "Anúncios" aparecem como abas IRMÃS, ambas
- * filtradas pela MESMA campanha — nunca um 3º nível "Conjunto → seus
- * Anúncios" aninhado. Achado da auditoria desta etapa (documentado em
- * `docs/META_ADS_DASHBOARD_METRICS_GAP_ANALYSIS.md`):
- * `ad_creative_daily_metrics` não tem `ad_set_id`/`ad_set_name` — não há
- * como filtrar Anúncios por Conjunto especificamente nos dados atuais, só
- * por Campanha. Mostrar os dois recortes como abas irmãs (nunca um filtro
- * que pareceria funcionar mas não filtraria de verdade) é a única opção
- * honesta hoje.
- *
- * `campaigns` já chega pronto (Camada 1, `buildCampaignSummaries`);
- * `adSetDailyRows`/`creativeDailyRows` chegam BRUTOS (uma linha por dia)
- * porque esta seção precisa refiltrar por campanha e reagregar — mesmo
- * padrão já usado por `ReportFilterableTables`
- * (`performance-report/report-filterable-tables.tsx`), nunca uma segunda
- * lógica de filtro/agregação.
+ * Drill-down: Campanhas (ponto de entrada) → ao selecionar uma campanha,
+ * "Conjuntos" e "Anúncios" aparecem como abas IRMÃS, ambas filtradas pela
+ * MESMA campanha — `ad_creative_daily_metrics` não tem `ad_set_id`/
+ * `ad_set_name` (limitação documentada em
+ * `docs/META_ADS_DASHBOARD_METRICS_GAP_ANALYSIS.md`, Gap C), então não há
+ * como filtrar Anúncios por Conjunto especificamente; abas irmãs são a
+ * única opção honesta até essa extensão ser aprovada e implementada.
  */
 
 type ExplorationLevel = "campaigns" | "adsets" | "ads";
 
-const STORAGE_KEY_PREFIX = "mitza:meta-ads-dashboard:exploration-columns:";
+const STORAGE_KEY_PREFIX = "mitza:cockpit:ad-exploration-columns:";
 
 function isExplorationColumnId(value: unknown, validIds: ExplorationColumnId[]): value is ExplorationColumnId {
   return typeof value === "string" && (validIds as string[]).includes(value);
@@ -89,11 +81,11 @@ function sortRows(rows: ExplorationRow[], sort: SortState): ExplorationRow[] {
 }
 
 function SortIcon({ active, direction }: { active: boolean; direction: "asc" | "desc" | null }) {
-  if (!active || !direction) return <ChevronsUpDown className="h-3 w-3 text-[#C8BEAD]" aria-hidden="true" />;
+  if (!active || !direction) return <ChevronsUpDown className="h-3 w-3 text-overview-text-muted" aria-hidden="true" />;
   return direction === "asc" ? (
-    <ChevronUp className="h-3 w-3 text-[#17171A]" aria-hidden="true" />
+    <ChevronUp className="h-3 w-3 text-overview-text-primary" aria-hidden="true" />
   ) : (
-    <ChevronDown className="h-3 w-3 text-[#17171A]" aria-hidden="true" />
+    <ChevronDown className="h-3 w-3 text-overview-text-primary" aria-hidden="true" />
   );
 }
 
@@ -119,26 +111,30 @@ function ExplorationTable({
   const sortedRows = sortRows(rows, sort);
 
   if (rows.length === 0) {
-    return <p className="rounded-lg border border-dashed border-[#D9D3C9] bg-white/60 px-4 py-6 text-center text-sm text-[#6F6B65]">{emptyMessage}</p>;
+    return (
+      <p className="rounded-lg border border-dashed border-overview-border px-4 py-6 text-center text-sm text-overview-text-secondary">
+        {emptyMessage}
+      </p>
+    );
   }
 
   return (
-    <div className="max-h-[480px] overflow-auto rounded-lg border border-[#D9D3C9]">
+    <div className="max-h-[420px] overflow-auto rounded-lg border border-overview-border">
       <table className="w-full min-w-[640px] border-collapse text-sm">
-        <thead className="sticky top-0 z-10 bg-[#F7F4EE]">
+        <thead className="sticky top-0 z-10 bg-overview-surface-subtle">
           <tr>
             {visibleColumns.map((col) => (
               <th
                 key={col.id}
                 scope="col"
-                className={`border-b border-[#D9D3C9] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[#6F6B65] ${
+                className={`border-b border-overview-border px-3 py-2 text-xs font-bold uppercase tracking-wide text-overview-text-muted ${
                   col.align === "right" ? "text-right" : "text-left"
                 }`}
               >
                 <button
                   type="button"
                   onClick={() => onSortChange(col.id)}
-                  className={`mitza-pressable inline-flex items-center gap-1 ${col.align === "right" ? "flex-row-reverse" : ""} hover:text-[#17171A]`}
+                  className={`mitza-pressable inline-flex items-center gap-1 ${col.align === "right" ? "flex-row-reverse" : ""} hover:text-overview-text-primary`}
                 >
                   {col.label}
                   <SortIcon active={sort?.columnId === col.id} direction={sort?.columnId === col.id ? sort.direction : null} />
@@ -152,12 +148,12 @@ function ExplorationTable({
             <tr
               key={row.id}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
-              className={`border-b border-[#EFE9E0] last:border-0 ${onRowClick ? "mitza-pressable cursor-pointer hover:bg-[#EFE9E0]" : ""}`}
+              className={`border-b border-overview-border/60 last:border-0 ${onRowClick ? "mitza-pressable cursor-pointer hover:bg-overview-surface-hover" : ""}`}
             >
               {visibleColumns.map((col) => (
                 <td
                   key={col.id}
-                  className={`whitespace-nowrap px-3 py-2 tabular-nums text-[#17171A] ${col.align === "right" ? "text-right" : "text-left font-medium"}`}
+                  className={`whitespace-nowrap px-3 py-2 tabular-nums text-overview-text-primary ${col.align === "right" ? "text-right" : "text-left font-medium"}`}
                 >
                   {formatExplorationCell(col.id, row)}
                 </td>
@@ -189,24 +185,24 @@ function ColumnPicker({
         onClick={() => setIsOpen((current) => !current)}
         aria-expanded={isOpen}
         aria-controls={panelId}
-        className="mitza-pressable inline-flex items-center gap-1.5 rounded-md border border-[#D9D3C9] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6F6B65] hover:bg-[#EFE9E0] hover:text-[#17171A]"
+        className="mitza-pressable inline-flex items-center gap-1.5 rounded-md border border-overview-border bg-overview-surface px-2.5 py-1.5 text-xs font-medium text-overview-text-secondary hover:bg-overview-surface-hover hover:text-overview-text-primary"
       >
         <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
         Colunas
       </button>
 
       {isOpen && (
-        <div id={panelId} className="absolute z-20 mt-2 max-w-xs rounded-lg border border-[#D9D3C9] bg-white p-3 shadow-lg">
+        <div id={panelId} className="absolute z-20 mt-2 max-w-xs rounded-lg border border-overview-border bg-overview-surface p-3 shadow-[var(--shadow-float)]">
           <ul className="flex flex-col gap-0.5">
             {columns.map((col) => (
               <li key={col.id}>
-                <label className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-[#17171A] hover:bg-[#EFE9E0]">
+                <label className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-overview-text-primary hover:bg-overview-surface-hover">
                   <input
                     type="checkbox"
                     checked={visibleColumnIds.includes(col.id)}
                     disabled={col.id === "name"}
                     onChange={() => onToggle(col.id)}
-                    className="h-4 w-4 rounded border-[#C8BEAD] text-[#17171A] focus:ring-[#17171A] disabled:opacity-50"
+                    className="h-4 w-4 rounded border-overview-border text-brand focus:ring-brand disabled:opacity-50"
                   />
                   {col.label}
                 </label>
@@ -226,7 +222,7 @@ function SearchInput({ value, mode, onValueChange, onModeChange }: { value: stri
         aria-label="Modo da busca"
         value={mode}
         onChange={(event) => onModeChange(event.target.value as NameFilterMode)}
-        className="min-h-9 rounded-lg border border-[#D9D3C9] bg-white px-2 text-xs text-[#17171A]"
+        className="min-h-9 rounded-lg border border-overview-border bg-overview-surface px-2 text-xs text-overview-text-primary"
       >
         <option value="contains">contém</option>
         <option value="not_contains">não contém</option>
@@ -237,13 +233,13 @@ function SearchInput({ value, mode, onValueChange, onModeChange }: { value: stri
         onChange={(event) => onValueChange(event.target.value)}
         placeholder="Buscar por nome"
         aria-label="Buscar por nome"
-        className="min-h-9 min-w-0 flex-1 rounded-lg border border-[#D9D3C9] bg-white px-2.5 text-xs text-[#17171A] placeholder:text-[#9C978D] sm:w-56 sm:flex-none"
+        className="min-h-9 min-w-0 flex-1 rounded-lg border border-overview-border bg-overview-surface px-2.5 text-xs text-overview-text-primary placeholder:text-overview-text-muted sm:w-56 sm:flex-none"
       />
     </div>
   );
 }
 
-export function ExplorationSection({
+export function CockpitAdExplorationSection({
   clientId,
   resultType,
   campaigns,
@@ -265,11 +261,6 @@ export function ExplorationSection({
   const columns = useMemo(() => buildExplorationColumns(resultType), [resultType]);
   const defaultColumnIds = useMemo(() => columns.filter((col) => col.defaultVisible).map((col) => col.id), [columns]);
 
-  // Mesmo cuidado de hidratação de `MetricCardsPanel`: a primeira
-  // renderização usa SEMPRE os defaults (idêntico no servidor e no
-  // cliente antes da hidratação, derivado só de `resultType`) — só troca
-  // pra preferência salva dentro de um `useEffect` (localStorage não
-  // existe no servidor).
   const [visibleColumnIds, setVisibleColumnIds] = useState<ExplorationColumnId[]>(defaultColumnIds);
 
   useEffect(() => {
@@ -338,36 +329,33 @@ export function ExplorationSection({
   const filteredRows = activeRows.filter((row) => matchesNameFilter(row.name, searchMode, normalizedSearch));
 
   return (
-    <section className="mt-6 rounded-2xl border border-[#17171A]/10 bg-white p-4 shadow-sm sm:p-6">
+    <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold tracking-tight text-[#17171A]">Campanhas, conjuntos e anúncios</h2>
-          <nav aria-label="Navegação de exploração" className="mt-1 flex items-center gap-1.5 text-sm text-[#6F6B65]">
-            <button type="button" onClick={handleBackToCampaigns} className="mitza-pressable hover:text-[#17171A] hover:underline">
-              Campanhas
-            </button>
-            {selectedCampaign && (
-              <>
-                <span aria-hidden="true">›</span>
-                <span className="font-medium text-[#17171A]">{selectedCampaign.name}</span>
-              </>
-            )}
-          </nav>
-        </div>
+        <nav aria-label="Navegação de exploração" className="flex items-center gap-1.5 text-sm text-overview-text-secondary">
+          <button type="button" onClick={handleBackToCampaigns} className="mitza-pressable hover:text-overview-text-primary hover:underline">
+            Campanhas
+          </button>
+          {selectedCampaign && (
+            <>
+              <span aria-hidden="true">›</span>
+              <span className="font-medium text-overview-text-primary">{selectedCampaign.name}</span>
+            </>
+          )}
+        </nav>
 
         {selectedCampaign && (
-          <div className="inline-flex w-fit items-center gap-1 rounded-full border border-[#D9D3C9] bg-white p-1 text-xs font-semibold">
+          <div className="inline-flex w-fit items-center gap-1 rounded-full border border-overview-border bg-overview-surface p-1 text-xs font-semibold">
             <button
               type="button"
               onClick={() => handleChangeLevel("adsets")}
-              className={`rounded-full px-3 py-1.5 ${level === "adsets" ? "bg-[#17171A] text-white" : "text-[#6F6B65] hover:text-[#17171A]"}`}
+              className={`rounded-full px-3 py-1.5 ${level === "adsets" ? "bg-brand text-white" : "text-overview-text-secondary hover:text-overview-text-primary"}`}
             >
               Conjuntos
             </button>
             <button
               type="button"
               onClick={() => handleChangeLevel("ads")}
-              className={`rounded-full px-3 py-1.5 ${level === "ads" ? "bg-[#17171A] text-white" : "text-[#6F6B65] hover:text-[#17171A]"}`}
+              className={`rounded-full px-3 py-1.5 ${level === "ads" ? "bg-brand text-white" : "text-overview-text-secondary hover:text-overview-text-primary"}`}
             >
               Anúncios
             </button>
@@ -376,13 +364,13 @@ export function ExplorationSection({
       </div>
 
       {selectedCampaign && level === "ads" && (
-        <p className="mt-2 text-xs text-[#6F6B65]">
+        <p className="mt-2 text-xs text-overview-text-muted">
           Anúncios desta campanha — a ligação direta com um Conjunto específico não está disponível nos dados atuais (limitação conhecida,
           documentada).
         </p>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <SearchInput value={searchText} mode={searchMode} onValueChange={setSearchText} onModeChange={setSearchMode} />
         <div className="relative">
           <ColumnPicker columns={columns} visibleColumnIds={visibleColumnIds} onToggle={toggleColumn} />
@@ -410,8 +398,8 @@ export function ExplorationSection({
       </div>
 
       {level === "campaigns" && campaigns.length > 0 && (
-        <p className="mt-2 text-xs text-[#6F6B65]">Clique numa campanha para ver seus conjuntos e anúncios.</p>
+        <p className="mt-2 text-xs text-overview-text-muted">Clique numa campanha para ver seus conjuntos e anúncios.</p>
       )}
-    </section>
+    </div>
   );
 }

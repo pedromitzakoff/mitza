@@ -20,6 +20,17 @@ alterada pela Etapa 2.3.
 > estruturais, descobertas durante a implementação da tabela de exploração
 > da Etapa 2.4, também foram documentadas no final deste arquivo.
 
+> **Atualização — "Cockpit único por cliente":** a rota separada
+> `/clients/[id]/meta-ads` citada ao longo deste documento (Etapas 2.1-2.4.1)
+> foi REMOVIDA — a pedido explícito do usuário ("só quero essa página no
+> sistema para cada cliente"), todo o conteúdo (cards de KPI, evolução,
+> exploração Campanha→Conjunto→Anúncio) passou a viver dentro do Cockpit
+> Único do Cliente (`app/clients/[id]/page.tsx`, seção "Performance Meta
+> Ads"). Os núcleos puros (`lib/meta-ads-dashboard/*`) e os gaps/limitações
+> documentados abaixo continuam os MESMOS, só a página que os consome
+> mudou — leia as menções a "Dashboard Meta Ads"/"`/clients/[id]/meta-ads`"
+> daqui pra baixo como a seção "Performance Meta Ads" do Cockpit.
+
 ## Resumo
 
 | Métrica | Precisa de ingestão nova? | Status |

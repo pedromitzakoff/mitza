@@ -51,7 +51,6 @@ import type { DataAttention } from "@/lib/data-trust";
 import { loadDadosPageData } from "../dados-data";
 import { DataFreshnessTimer } from "../data-freshness-timer";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
-import { buildPeriodReading } from "@/lib/performance-report/report-derivatives";
 import {
   CockpitBudgetCard,
   type CockpitResultCardView,
@@ -60,13 +59,16 @@ import {
 } from "../cockpit-meta-ritmo-section";
 import { CockpitResultCard, CockpitCostCard } from "../cockpit-goal-card";
 import { CockpitDiagnosticsCard } from "../cockpit-diagnostics-card";
-import { CockpitPerformanceSection, type CockpitPerformanceView } from "../cockpit-performance-section";
 import { buildCockpitDailyEvolutionPoints } from "@/lib/cockpit-daily-evolution";
 import {
   CockpitDailyEvolutionSection,
   type CockpitDailyEvolutionView,
   type CockpitDailyEvolutionSeriesView,
 } from "../cockpit-daily-evolution-section";
+import { resolveMetaAdAccountId, fetchAccountPeriodReachSnapshot, buildCockpitAdPerformanceData } from "@/lib/meta-ads-dashboard/dashboard-data";
+import { buildMetricCardViewModels } from "@/lib/meta-ads-dashboard/metric-cards";
+import { campaignSummaryToRow } from "@/lib/meta-ads-dashboard/exploration-data";
+import { CockpitAdPerformanceSection } from "../cockpit-ad-performance-section";
 
 /**
  * Objetivo em exibição na Performance (`?goal=`) — núcleo puro extraído de
@@ -207,6 +209,7 @@ export default async function ClientPage({
     dailyPerformanceRowsForEvolution,
     [clientOperationalState],
     performanceReportData,
+    metaAdAccountId,
   ] = await Promise.all([
       requireQuery(
         supabase
@@ -292,6 +295,11 @@ export default async function ClientPage({
       // ser disparada.
       loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, id),
       buildPerformanceReportData(supabase, id, { start: firstDay, end: lastDay }),
+      // Performance Meta Ads (seção consolidada do Cockpit, ex-rota
+      // `/clients/[id]/meta-ads`) — resolvido só pra cliente que usa o
+      // canal Meta (`clientChannels`, já calculado acima), nunca uma
+      // consulta desperdiçada pra quem só usa Google Ads.
+      clientChannels.includes("meta") ? resolveMetaAdAccountId(supabase, id) : Promise.resolve(null),
     ]);
 
   const planningHorizon = resolvePlanningHorizon({ firstDay, lastDay }, planningEndDate);
@@ -615,28 +623,37 @@ export default async function ClientPage({
       })
     : [];
 
-  // MITZA ONE — Fase 1, Seção "Performance essencial" (seções 18-20 do
-  // pedido): reaproveita 100% a Camada 1 do Relatório de Performance
-  // (`buildPerformanceReportData`) e a "Leitura do período"
-  // (`buildPeriodReading`) — nenhum cálculo novo, nenhuma segunda
-  // agregação de campanhas. Sempre "Visão geral" (nunca um funil
-  // específico nesta primeira camada). Busca já resolvida em paralelo no
-  // Promise.all principal, acima.
-  const performanceView: CockpitPerformanceView =
-    performanceReportData.summary.status === "no_goal"
-      ? { kind: "no_goal" }
-      : performanceReportData.summary.status === "no_data"
-        ? { kind: "no_data" }
-        : performanceReportData.summary.status === "investment_only"
-          ? { kind: "investment_only", totalSpend: performanceReportData.summary.totalSpend }
-          : {
-              kind: "ok",
-              reading: buildPeriodReading({
-                performanceGoal: performanceReportData.performanceGoal as PerformanceGoal,
-                performanceSummary: performanceReportData.summary.performanceSummary,
-                campaigns: performanceReportData.campaigns,
-              }),
-            };
+  // MITZA ONE — Cockpit Único do Cliente, seção "Performance Meta Ads"
+  // (consolidação da antiga rota `/clients/[id]/meta-ads`, Etapas 2.1-2.4.1,
+  // pra dentro do Cockpit — pedido explícito do usuário: "só quero essa
+  // página no sistema para cada cliente"). Reaproveita INTEGRALMENTE as
+  // linhas já buscadas por `buildPerformanceReportData` acima (`campaigns`/
+  // `adSetDailyRows`/`creativeDailyRows`/`campaignDailyRows`, já filtradas
+  // pro canal Meta) — nenhuma segunda consulta de campanha/conjunto/
+  // criativo. O único dado novo é o alcance/frequência do PERÍODO INTEIRO
+  // (`fetchAccountPeriodReachSnapshot`, 1 chamada à Graph API, cacheada 5
+  // minutos — nunca somado a partir de `reach` diário, mesma regra de
+  // sempre: "não somar alcance entre dias"). Sem comparação com o mês
+  // anterior aqui (mesma convenção do resto do Cockpit — Meta & Ritmo/
+  // Evolução Diária tampouco comparam mês a mês).
+  const adReach = clientChannels.includes("meta")
+    ? await fetchAccountPeriodReachSnapshot(metaAdAccountId, { start: firstDay, end: lastDay })
+    : ({ status: "unavailable", reason: "not_configured" } as const);
+
+  const adPerformanceData = buildCockpitAdPerformanceData({
+    client: { id: client.id, name: client.name },
+    metaAdAccountId,
+    period: { start: firstDay, end: lastDay },
+    campaignDailyRows: performanceReportData.campaignDailyRows,
+    explorationCampaigns: performanceReportData.campaigns,
+    explorationAdSetRows: performanceReportData.adSetDailyRows,
+    explorationCreativeRows: performanceReportData.creativeDailyRows,
+    resultType: performanceReportData.performanceGoal,
+    reach: adReach,
+    lastSyncAt: dadosData?.health.latestSuccessAt ?? null,
+  });
+  const adMetricCards = buildMetricCardViewModels(adPerformanceData);
+  const adExplorationCampaignRows = adPerformanceData.explorationCampaigns.map(campaignSummaryToRow);
 
   const contractBannerText = contractStatusBannerText(client.status);
   const banners = [
@@ -653,7 +670,6 @@ export default async function ClientPage({
   ].filter((link): link is { label: string; href: string } => Boolean(link));
 
   const metasHref = buildMetasHref(client.id, { month: monthParam }, {});
-  const performanceHref = `/clients/${client.id}/relatorio`;
 
   return (
     <WorkspaceContainer>
@@ -769,11 +785,25 @@ export default async function ClientPage({
         ))}
       </div>
 
-      {/* SEÇÃO 4 — PERFORMANCE ESSENCIAL (pedido, seções 18-20): "Onde está
-          o problema ou oportunidade?". */}
-      <div className="mt-5">
-        <CockpitPerformanceSection view={performanceView} campaignsHref={performanceHref} fullReportHref={performanceHref} />
-      </div>
+      {/* SEÇÃO 4 — PERFORMANCE META ADS (consolidação da antiga rota
+          `/clients/[id]/meta-ads` pra dentro do Cockpit): cards de KPI,
+          evolução e exploração Campanha→Conjunto→Anúncio, tudo nesta
+          mesma tela. Só renderizada pra cliente que usa o canal Meta —
+          mesmo critério já usado pela seção Canais, acima. */}
+      {clientChannels.includes("meta") && (
+        <div className="mt-5">
+          <CockpitAdPerformanceSection
+            clientId={client.id}
+            metaAdAccountId={metaAdAccountId}
+            resultType={adPerformanceData.resultType}
+            cards={adMetricCards}
+            evolution={adPerformanceData.evolution}
+            explorationCampaigns={adExplorationCampaignRows}
+            explorationAdSetRows={adPerformanceData.explorationAdSetRows}
+            explorationCreativeRows={adPerformanceData.explorationCreativeRows}
+          />
+        </div>
+      )}
     </WorkspaceContainer>
   );
 }

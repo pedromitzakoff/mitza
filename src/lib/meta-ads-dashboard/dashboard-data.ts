@@ -1,15 +1,10 @@
 import type { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { requireQuery } from "@/lib/require-query";
-import { getCampaignDailyMetricsForPeriod } from "@/lib/campaign-analytics-data";
-import { buildCampaignSummaries, type CampaignDailyMetricRow, type CampaignSummary } from "@/lib/campaign-analytics";
-import { getAdSetDailyMetricsForPeriod } from "@/lib/ad-set-analytics-data";
+import type { CampaignDailyMetricRow, CampaignSummary } from "@/lib/campaign-analytics";
 import type { AdSetDailyMetricRow } from "@/lib/ad-set-analytics";
-import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
 import type { AdCreativeDailyMetricRow } from "@/lib/creative-analytics";
 import { previousEquivalentPeriod, computePercentChange, type PeriodRange } from "@/lib/period-comparison";
 import { computeCpm, computeCtr, computeCpc, computeCostPerResult, computeRoas, computeFrequency } from "@/lib/performance";
 import { fetchMetaApiPeriodReach } from "@/lib/meta-api-fetch";
-import { resolveLatestSuccessAt } from "@/lib/data-trust";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { buildEvolutionSeries, type ChartMetricSeries } from "./evolution-data";
 
@@ -258,7 +253,7 @@ export function buildPeriodComparison(
  * Graph API), nunca um erro: vira `MetaAdsReachSnapshot` com
  * `reason: "not_configured"`.
  */
-async function resolveMetaAdAccountId(supabase: Supabase, clientId: string): Promise<string | null> {
+export async function resolveMetaAdAccountId(supabase: Supabase, clientId: string): Promise<string | null> {
   const { data, error } = await supabase
     .from("import_sources")
     .select("external_account_id")
@@ -284,7 +279,7 @@ async function resolveMetaAdAccountId(supabase: Supabase, clientId: string): Pro
  * normalmente devolve uma única linha, mas nunca assume isso como garantia
  * contratual da API).
  */
-async function fetchAccountPeriodReachSnapshot(accountId: string | null, period: PeriodRange): Promise<MetaAdsReachSnapshot> {
+export async function fetchAccountPeriodReachSnapshot(accountId: string | null, period: PeriodRange): Promise<MetaAdsReachSnapshot> {
   if (!accountId) return { status: "unavailable", reason: "not_configured" };
 
   try {
@@ -303,78 +298,68 @@ async function fetchAccountPeriodReachSnapshot(accountId: string | null, period:
 }
 
 /**
- * Monta os dados do Dashboard Meta Ads pra UM cliente + período. `null`
- * quando o cliente não existe/foi excluído (mesmo critério 404 silencioso
- * das demais rotas de `clients/[id]/**`). KOFF Analytics Fase 2, Etapa 2.2:
- * alcance/frequência de período passam a ser buscados de verdade (Etapa 2.1
- * só preparava a função, sem conectar a nenhuma tela).
+ * Monta os dados de performance Meta Ads a partir de informação JÁ buscada
+ * por quem chama — hoje o Cockpit Único do Cliente (`app/clients/[id]/page.tsx`),
+ * reaproveitando a MESMA leitura de `campaign_daily_metrics`/
+ * `ad_set_daily_metrics`/`ad_creative_daily_metrics` que `buildPerformanceReportData`
+ * já faz pro Relatório (nenhuma segunda consulta ao banco). Pura — nunca
+ * chama Supabase/Graph API diretamente; quem chama resolve `metaAdAccountId`
+ * (`resolveMetaAdAccountId`) e `reach` (`fetchAccountPeriodReachSnapshot`)
+ * antes de montar os parâmetros.
+ *
+ * Consolidação (Etapa "Cockpit único por cliente"): o antigo
+ * `buildMetaAdsDashboardData` — que tinha sua PRÓPRIA rota
+ * (`/clients/[id]/meta-ads`) e buscava tudo de novo — foi removido quando
+ * essa rota separada foi descontinuada a pedido do usuário ("só quero essa
+ * página no sistema para cada cliente"); todo o conteúdo passou a viver
+ * dentro do Cockpit. Diferença real: o Cockpit usa um único mês como
+ * período, SEM comparação com o período anterior (mesma convenção das
+ * demais seções do Cockpit — Meta & Ritmo/Evolução Diária tampouco
+ * comparam mês a mês) — por isso `comparison.previous` e
+ * `reachComparison.previous` são sempre vazios/indisponíveis aqui, nunca
+ * fabricados. `buildPeriodComparison`/`buildReachComparison` continuam os
+ * MESMOS núcleos puros de sempre (só recebem "nada" como período anterior).
  */
-export async function buildMetaAdsDashboardData(
-  supabase: Supabase,
-  clientId: string,
-  period: PeriodRange,
-): Promise<MetaAdsDashboardData | null> {
-  const previousPeriod = previousEquivalentPeriod(period);
+export function buildCockpitAdPerformanceData(params: {
+  client: { id: string; name: string };
+  metaAdAccountId: string | null;
+  period: PeriodRange;
+  campaignDailyRows: CampaignDailyMetricRow[];
+  explorationCampaigns: CampaignSummary[];
+  explorationAdSetRows: AdSetDailyMetricRow[];
+  explorationCreativeRows: AdCreativeDailyMetricRow[];
+  resultType: PerformanceGoal | null;
+  reach: MetaAdsReachSnapshot;
+  lastSyncAt: string | null;
+}): MetaAdsDashboardData {
+  const {
+    client,
+    metaAdAccountId,
+    period,
+    campaignDailyRows,
+    explorationCampaigns,
+    explorationAdSetRows,
+    explorationCreativeRows,
+    resultType,
+    reach,
+    lastSyncAt,
+  } = params;
 
-  const [clientRows, importSourceRows, currentRowsAll, previousRowsAll, adSetRowsAll, creativeRows, metaAdAccountId] = await Promise.all([
-    requireQuery(
-      supabase.from("clients").select("id, name, performance_goal").eq("id", clientId).is("deleted_at", null),
-      "clients:meta-ads-dashboard",
-    ),
-    requireQuery(
-      supabase.from("import_sources").select("enabled, last_success_at").eq("client_id", clientId).eq("channel", "meta"),
-      "import_sources:meta-ads-dashboard",
-    ),
-    getCampaignDailyMetricsForPeriod(supabase, clientId, period),
-    getCampaignDailyMetricsForPeriod(supabase, clientId, previousPeriod),
-    // Etapa 2.4 — exploração Campanhas → Conjuntos → Anúncios: só o
-    // período ATUAL (a tabela de exploração não compara períodos, só os
-    // cards/gráficos acima dela). `ad_creative_daily_metrics` já é
-    // implicitamente Meta-only (sem coluna de canal); `ad_set_daily_metrics`
-    // é channel-aware, filtrado abaixo junto com `campaign_daily_metrics`.
-    getAdSetDailyMetricsForPeriod(supabase, clientId, period),
-    getAdCreativeDailyMetricsForPeriod(supabase, clientId, period),
-    // Resolvido UMA vez (nunca duas, uma por período) — reaproveitado pelas
-    // duas buscas de alcance abaixo E exposto no cabeçalho do dashboard
-    // ("conta", pedido do usuário, Etapa 2.4, item 4).
-    resolveMetaAdAccountId(supabase, clientId),
-  ]);
-
-  const client = clientRows[0];
-  if (!client) return null;
-
-  const [currentReach, previousReach] = await Promise.all([
-    fetchAccountPeriodReachSnapshot(metaAdAccountId, period),
-    fetchAccountPeriodReachSnapshot(metaAdAccountId, previousPeriod),
-  ]);
-
-  // `campaign_daily_metrics`/`ad_set_daily_metrics` são channel-aware
-  // (podem ter linhas de outro canal se o cliente também usa Google) —
-  // mesmo filtro explícito de `report-data.ts`, nunca assumido
-  // implicitamente.
-  const currentRows = currentRowsAll.filter((row) => row.channel === "meta");
-  const previousRows = previousRowsAll.filter((row) => row.channel === "meta");
-  const explorationAdSetRows = adSetRowsAll.filter((row) => row.channel === "meta");
-
-  const comparison = buildPeriodComparison(period, currentRows, previousRows);
-  const reachComparison = buildReachComparison(currentReach, previousReach);
-  const explorationCampaigns = buildCampaignSummaries(currentRows);
-  const evolution = buildEvolutionSeries(period, previousPeriod, currentRows, previousRows, client.performance_goal);
-  const lastSyncAt = resolveLatestSuccessAt(
-    importSourceRows.map((row) => ({ enabled: row.enabled, lastSuccessAt: row.last_success_at })),
-  );
+  const comparison = buildPeriodComparison(period, campaignDailyRows, []);
+  const reachComparison = buildReachComparison(reach, { status: "unavailable", reason: "not_configured" });
+  const evolution = buildEvolutionSeries(period, period, campaignDailyRows, [], resultType);
 
   return {
-    client: { id: client.id, name: client.name },
+    client,
     metaAdAccountId,
     comparison,
     reachComparison,
     evolution,
     explorationCampaigns,
     explorationAdSetRows,
-    explorationCreativeRows: creativeRows,
+    explorationCreativeRows,
     resultSource: "meta_attributed",
-    resultType: client.performance_goal,
+    resultType,
     lastSyncAt,
     generatedAt: new Date().toISOString(),
   };

@@ -194,8 +194,9 @@ export interface ChartMetricSeries extends ChartMetricDef {
 /**
  * Monta as séries diárias das 12 métricas selecionáveis no gráfico, pro
  * período atual E pro anterior equivalente — uma única passada sobre as
- * linhas já buscadas por `buildMetaAdsDashboardData` (nenhuma segunda
- * consulta ao banco: item do pedido "evitar consultas desnecessárias").
+ * linhas já buscadas por quem chama (`buildCockpitAdPerformanceData`,
+ * `dashboard-data.ts` — nenhuma segunda consulta ao banco: item do pedido
+ * "evitar consultas desnecessárias").
  */
 export function buildEvolutionSeries(
   period: PeriodRange,

@@ -314,19 +314,6 @@ export default async function ClientsPage({
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
-                    {/* KOFF Analytics Fase 2 — ajuste do usuário: "acesso
-                        fácil ao dashboard individual de cada cliente",
-                        reaproveitando esta listagem em vez de um módulo
-                        novo. Visão consolidada de todas as contas (mesmo
-                        pedido) fica pra uma etapa própria — este link só
-                        cobre a navegação direta pro dashboard de UM
-                        cliente. */}
-                    <Link
-                      href={`/clients/${card.clientId}/meta-ads`}
-                      className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-overview-surface-hover"
-                    >
-                      Meta Ads
-                    </Link>
                     <Link
                       href={`/clients/${card.clientId}`}
                       className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-overview-surface-hover"

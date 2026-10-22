@@ -122,7 +122,7 @@ console.log("\nD — Navegação (seção 4 do pedido): estrutura final exata, n
       const diagnosticoIdx = pageSource.indexOf("<CockpitDiagnosticsCard");
       const evolucaoIdx = pageSource.indexOf("<CockpitDailyEvolutionSection");
       const canaisIdx = pageSource.indexOf("<DashboardChannelSection");
-      const performanceIdx = pageSource.indexOf("<CockpitPerformanceSection");
+      const performanceIdx = pageSource.indexOf("<CockpitAdPerformanceSection");
       return (
         [metaRitmoIdx, diagnosticoIdx, evolucaoIdx, canaisIdx, performanceIdx].every((i) => i !== -1) &&
         metaRitmoIdx < diagnosticoIdx &&
