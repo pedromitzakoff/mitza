@@ -6,8 +6,10 @@ import { formatRelativeDateTime } from "@/lib/format";
 import { WORKSPACE_ACTIVE_CONTRACT_STATUS } from "@/lib/client-fields";
 import { resolveClientMediaChannels } from "@/lib/traffic-channels";
 import type { ImportSourceStatusDb } from "@/lib/supabase/database.types";
+import type { PerformanceGoal } from "@/lib/performance-goals";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SettingsPageShell } from "../settings-shell";
+import { MetaConnectionDrawer } from "./meta-connection-drawer";
 
 const IMPORT_SOURCE_STATUS_LABEL: Record<ImportSourceStatusDb, string> = {
   active: "Ativa",
@@ -24,7 +26,10 @@ const IMPORT_SOURCE_STATUS_LABEL: Record<ImportSourceStatusDb, string> = {
  * `ad_set_daily_metrics`/`ad_creative_daily_metrics` recebem linha pra este
  * cliente. */
 interface MetaImportSourceRow {
+  id: string;
   client_id: string;
+  provider: "stract" | "meta_api";
+  external_account_id: string;
   status: ImportSourceStatusDb;
   enabled: boolean;
   campaign_name_column: string | null;
@@ -61,16 +66,27 @@ function hasColumn(value: string | null): boolean {
  * Duas camadas independentes, nunca confundidas:
  * 1. `clients.meta_ad_account_id` — a conta de anúncio em si (alimenta o
  *    investimento nativo, `lib/meta-sync.ts`).
- * 2. `import_sources` (canal "meta", hoje sempre provider "meta_api" — a
- *    integração Stract foi descontinuada, ver
- *    `docs/STRACT_INTEGRATION_ARCHITECTURE.md`) — de onde vêm Campanha/
- *    Público/Anúncio granulares. Sem uma fonte ativa aqui, o cliente pode
- *    ter investimento sincronizado e mesmo assim zero campanha/público/
- *    anúncio no relatório — daí as 3 colunas separadas em vez de um único
- *    "conectado sim/não".
+ * 2. `import_sources` (canal "meta" — pode ter mais de uma linha por
+ *    cliente desde a migração Stract -> Meta API direta: uma `stract`
+ *    antiga, desativada, convivendo com a `meta_api` nova. Esta auditoria
+ *    SEMPRE prioriza `meta_api` quando existir, nunca mostra o status da
+ *    fonte Stract morta por acaso ter vindo depois na consulta — ver
+ *    `preferMetaApiSource` abaixo) — de onde vêm Campanha/Público/Anúncio
+ *    granulares. Sem uma fonte ativa aqui, o cliente pode ter investimento
+ *    sincronizado e mesmo assim zero campanha/público/anúncio no relatório
+ *    — daí as 3 colunas separadas em vez de um único "conectado sim/não".
+ *
+ * "Gerenciar" (ponto 1 da migração — interface de conexão) abre
+ * `MetaConnectionDrawer` pra conectar/reconectar a conta, sincronizar
+ * manualmente e mapear resultados, sem precisar de SQL manual.
  */
-export default async function MetaConnectionsPage() {
+export default async function MetaConnectionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ manage?: string; error?: string; saved?: string }>;
+}) {
   await requireAdmin();
+  const { manage: manageClientId, error: drawerError, saved: drawerSaved } = await searchParams;
 
   const supabase = await createSupabaseClient();
   const [clients, importSources] = await Promise.all([
@@ -86,13 +102,25 @@ export default async function MetaConnectionsPage() {
     requireQuery(
       supabase
         .from("import_sources")
-        .select("client_id, status, enabled, campaign_name_column, ad_set_name_column, ad_name_column, creative_permalink_column, last_success_at")
+        .select(
+          "id, client_id, provider, external_account_id, status, enabled, campaign_name_column, ad_set_name_column, ad_name_column, creative_permalink_column, last_success_at",
+        )
         .eq("channel", "meta"),
       "import_sources",
     ),
   ]);
 
-  const importSourceByClientId = new Map<string, MetaImportSourceRow>((importSources ?? []).map((row) => [row.client_id, row]));
+  // Nunca "a última linha que a consulta devolveu" (ordem não é garantida
+  // sem ORDER BY) — sempre prioriza meta_api quando existir, igual ao
+  // critério de leitura das tabelas granulares (`lib/granular-provider-dedup.ts`).
+  const importSourceByClientId = new Map<string, MetaImportSourceRow>();
+  for (const row of importSources ?? []) {
+    const existing = importSourceByClientId.get(row.client_id);
+    if (!existing || row.provider === "meta_api") importSourceByClientId.set(row.client_id, row);
+  }
+  const legacyStractByClientId = new Map<string, MetaImportSourceRow>(
+    (importSources ?? []).filter((row) => row.provider === "stract").map((row) => [row.client_id, row]),
+  );
 
   const audits: MetaConnectionAudit[] = (clients ?? [])
     .filter((client) => resolveClientMediaChannels(client.media_channels).includes("meta"))
@@ -148,6 +176,7 @@ export default async function MetaConnectionsPage() {
                   <th className="px-4 py-2.5">Público</th>
                   <th className="px-4 py-2.5">Anúncio</th>
                   <th className="px-4 py-2.5">Última sincronização</th>
+                  <th className="px-4 py-2.5"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -208,6 +237,15 @@ export default async function MetaConnectionsPage() {
                     <td className="px-4 py-2.5 text-muted-foreground">
                       {audit.importSource?.last_success_at ? formatRelativeDateTime(audit.importSource.last_success_at, new Date()) : "Nunca"}
                     </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <Link
+                        href={`/settings/meta-connections?manage=${audit.clientId}`}
+                        scroll={false}
+                        className="font-medium text-brand hover:underline"
+                      >
+                        Gerenciar
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -215,6 +253,79 @@ export default async function MetaConnectionsPage() {
           </div>
         </>
       )}
+
+      {manageClientId &&
+        (() => {
+          const client = (clients ?? []).find((c) => c.id === manageClientId);
+          if (!client) return null;
+          const importSource = importSourceByClientId.get(manageClientId) ?? null;
+          const legacyStract = legacyStractByClientId.get(manageClientId) ?? null;
+          return (
+            <ManagedMetaConnection
+              clientId={manageClientId}
+              clientName={client.name}
+              importSource={importSource && importSource.provider === "meta_api" ? importSource : null}
+              legacyStractSource={legacyStract ? { externalAccountId: legacyStract.external_account_id, enabled: legacyStract.enabled } : null}
+              error={drawerError}
+              saved={drawerSaved}
+            />
+          );
+        })()}
     </SettingsPageShell>
+  );
+}
+
+/** Busca os mapeamentos ativos só do cliente ABERTO no drawer — nunca pra
+ * todos os clientes da lista (custo desnecessário; a tabela principal já
+ * não depende de `metric_mappings`). */
+async function ManagedMetaConnection({
+  clientId,
+  clientName,
+  importSource,
+  legacyStractSource,
+  error,
+  saved,
+}: {
+  clientId: string;
+  clientName: string;
+  importSource: MetaImportSourceRow | null;
+  legacyStractSource: { externalAccountId: string; enabled: boolean } | null;
+  error?: string;
+  saved?: string;
+}) {
+  const supabase = await createSupabaseClient();
+  const mappings = importSource
+    ? await requireQuery(
+        supabase
+          .from("metric_mappings")
+          .select("id, goal, result_column, value_column")
+          .eq("import_source_id", importSource.id)
+          .eq("active", true)
+          .order("created_at", { ascending: true }),
+        "metric_mappings:meta-connections-drawer",
+      )
+    : [];
+
+  return (
+    <MetaConnectionDrawer
+      clientId={clientId}
+      clientName={clientName}
+      closeHref="/settings/meta-connections"
+      error={error}
+      saved={saved}
+      importSource={
+        importSource
+          ? {
+              id: importSource.id,
+              externalAccountId: importSource.external_account_id,
+              status: importSource.status,
+              enabled: importSource.enabled,
+              lastSuccessAt: importSource.last_success_at,
+            }
+          : null
+      }
+      mappings={mappings.map((m) => ({ id: m.id, goal: m.goal as PerformanceGoal, resultColumn: m.result_column, valueColumn: m.value_column }))}
+      legacyStractSource={legacyStractSource}
+    />
   );
 }
