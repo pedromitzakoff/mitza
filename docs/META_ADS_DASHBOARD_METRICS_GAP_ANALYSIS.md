@@ -30,6 +30,29 @@ alterada pela Etapa 2.3.
 > documentados abaixo continuam os MESMOS, só a página que os consome
 > mudou — leia as menções a "Dashboard Meta Ads"/"`/clients/[id]/meta-ads`"
 > daqui pra baixo como a seção "Performance Meta Ads" do Cockpit.
+>
+> **Decisões conscientes desta consolidação, pra não serem confundidas com
+> perda de escopo:**
+> - **Personalização de métricas** (seleção/ordem dos cards, persistida em
+>   `localStorage`, Etapa 2.2) foi REMOVIDA — os 14 cards passam a aparecer
+>   sempre, agrupados nas 4 categorias do pedido original da Etapa 2.4
+>   (Entrega/Tráfego/Resultados/Receita). Nenhuma outra seção do Cockpit
+>   (Meta & Ritmo, Diagnóstico) tem esse tipo de customização — manter uma
+>   preferência salva só pra esta seção contrariaria o pedido de "produto
+>   coeso". Pode ser reavaliado se o usuário pedir.
+> - **Comparação com o período anterior** (cards/gráfico mostrando "↑X% vs.
+>   mês anterior") foi REMOVIDA nesta consolidação, mas é uma decisão
+>   PROVISÓRIA, não descartada — pedido explícito do usuário: "quero manter
+>   a comparação com o período anterior no planejamento... não considero
+>   essa funcionalidade descartada". O Cockpit hoje não compara NENHUMA
+>   seção mês a mês (Meta & Ritmo, Evolução Diária), e por isso a nova
+>   seção seguiu a mesma convenção por padrão — mas os núcleos puros que
+>   sustentavam a comparação no antigo Dashboard Meta Ads
+>   (`buildPeriodComparison`, `buildReachComparison`, ambos em
+>   `lib/meta-ads-dashboard/dashboard-data.ts`) continuam intactos e
+>   testados; reintroduzir a comparação exigiria só buscar o mês anterior
+>   (`previousEquivalentPeriod`) e passar pra essas mesmas funções — fica
+>   pra uma etapa futura, com aprovação explícita.
 
 ## Resumo
 
