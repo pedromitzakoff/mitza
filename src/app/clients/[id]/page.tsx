@@ -69,6 +69,7 @@ import { resolveMetaAdAccountId, fetchAccountPeriodReachSnapshot, buildCockpitAd
 import { buildMetricCardViewModels } from "@/lib/meta-ads-dashboard/metric-cards";
 import { campaignSummaryToRow } from "@/lib/meta-ads-dashboard/exploration-data";
 import { CockpitAdPerformanceSection } from "../cockpit-ad-performance-section";
+import { CockpitAdExplorationSection } from "../cockpit-ad-exploration-section";
 
 /**
  * Objetivo em exibição na Performance (`?goal=`) — núcleo puro extraído de
@@ -786,22 +787,34 @@ export default async function ClientPage({
       </div>
 
       {/* SEÇÃO 4 — PERFORMANCE META ADS (consolidação da antiga rota
-          `/clients/[id]/meta-ads` pra dentro do Cockpit): cards de KPI,
-          evolução e exploração Campanha→Conjunto→Anúncio, tudo nesta
-          mesma tela. Só renderizada pra cliente que usa o canal Meta —
+          `/clients/[id]/meta-ads` pra dentro do Cockpit, reorganizada na
+          Etapa "Redesign e organização visual do Cockpit"): abas
+          Indicadores/Evolução — a tabela de exploração ganhou destaque
+          próprio, como sua PRÓPRIA seção logo abaixo (pedido explícito:
+          "uma das seções mais úteis da página", nunca escondida atrás de
+          uma aba). Só renderizada pra cliente que usa o canal Meta —
           mesmo critério já usado pela seção Canais, acima. */}
       {clientChannels.includes("meta") && (
         <div className="mt-5">
-          <CockpitAdPerformanceSection
-            clientId={client.id}
-            metaAdAccountId={metaAdAccountId}
-            resultType={adPerformanceData.resultType}
-            cards={adMetricCards}
-            evolution={adPerformanceData.evolution}
-            explorationCampaigns={adExplorationCampaignRows}
-            explorationAdSetRows={adPerformanceData.explorationAdSetRows}
-            explorationCreativeRows={adPerformanceData.explorationCreativeRows}
-          />
+          <CockpitAdPerformanceSection clientId={client.id} metaAdAccountId={metaAdAccountId} cards={adMetricCards} evolution={adPerformanceData.evolution} />
+        </div>
+      )}
+
+      {/* SEÇÃO 5 — CAMPANHAS, CONJUNTOS E ANÚNCIOS: drill-down completo,
+          sempre visível, mesma largura das demais seções (pedido do
+          usuário: "boa utilização da largura da tela"). */}
+      {clientChannels.includes("meta") && (
+        <div className="mt-5">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Campanhas, conjuntos e anúncios</h2>
+          <div className="mt-2">
+            <CockpitAdExplorationSection
+              clientId={client.id}
+              resultType={adPerformanceData.resultType}
+              campaigns={adExplorationCampaignRows}
+              adSetDailyRows={adPerformanceData.explorationAdSetRows}
+              creativeDailyRows={adPerformanceData.explorationCreativeRows}
+            />
+          </div>
         </div>
       )}
     </WorkspaceContainer>

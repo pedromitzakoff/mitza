@@ -54,14 +54,22 @@ export const ALL_METRIC_CARD_IDS: MetricCardId[] = [
   "roas",
 ];
 
-/** Seleção inicial inteligente (~6 métricas principais) — pedido explícito
- * do usuário. Cobre investimento (quanto saiu), resultado (o que voltou),
- * custo por resultado (eficiência), impressões/cliques (volume do funil) e
- * CTR (qualidade do anúncio). Alcance/frequência ficam de fora do padrão
- * por decisão deliberada: dependem da integração direta Meta (podem chegar
- * "indisponível" pra quem só usa Stract) — disponíveis via personalização,
- * nunca forçados na primeira experiência. */
-export const DEFAULT_SELECTED_METRIC_IDS: MetricCardId[] = ["investment", "results", "costPerResult", "impressions", "clicks", "ctr"];
+/** Seleção inicial inteligente (~6 métricas principais) — redefinida na
+ * Etapa "Redesign e organização visual do Cockpit" (consolidação dentro do
+ * Cockpit Único do Cliente, pedido explícito do usuário: "evitar duplicar
+ * indicadores que já apareçam em outras partes do Cockpit"). Investimento/
+ * Resultados/Custo por resultado SAÍRAM do padrão porque já aparecem na
+ * seção Canais (bloco "META ADS") e, pro objetivo em jogo, em Meta & Ritmo
+ * — continuam disponíveis aqui via personalização, só não duplicados por
+ * padrão. O padrão passa a ser Impressões/CPM/Cliques/CTR/CPC/ROAS —
+ * cobre Entrega+Tráfego+Receita sem repetir nada, e todos degradam pra "—"
+ * quando indisponíveis (nunca a mensagem longa de indisponibilidade de
+ * integração). Alcance/Frequência/Cliques no link/CTR do link/CPC do link
+ * ficam de fora do padrão pelo mesmo motivo de sempre: dependem da
+ * integração direta Meta ou de uma migração recente, podem chegar
+ * "indisponível" — melhor como opção explícita de personalização do que
+ * forçados na primeira experiência. */
+export const DEFAULT_SELECTED_METRIC_IDS: MetricCardId[] = ["impressions", "cpm", "clicks", "ctr", "cpc", "roas"];
 
 export interface MetricCardViewModel {
   id: MetricCardId;

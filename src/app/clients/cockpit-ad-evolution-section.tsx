@@ -53,11 +53,11 @@ const SELECT_CLASS = "min-h-9 rounded-lg border border-overview-border bg-overvi
 
 function EvolutionChartPanel({ title, unit, rows }: { title: string; unit: ChartMetricUnit; rows: ChartRow[] }) {
   return (
-    <div className="rounded-lg border border-overview-border bg-overview-surface p-3">
+    <div className="rounded-lg border border-overview-border bg-overview-surface p-4">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">{title}</p>
-      <div className="mt-2 h-56 w-full">
+      <div className="mt-3 h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+          <LineChart data={rows} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="var(--overview-border)" vertical={false} />
             <XAxis
               dataKey="date"
@@ -65,7 +65,7 @@ function EvolutionChartPanel({ title, unit, rows }: { title: string; unit: Chart
               tick={{ fontSize: 11, fill: "var(--overview-text-muted)" }}
               axisLine={{ stroke: "var(--overview-border)" }}
               tickLine={false}
-              minTickGap={24}
+              minTickGap={32}
             />
             <YAxis
               tickFormatter={(value: number) => formatMetricValue(unit, value)}
@@ -77,7 +77,13 @@ function EvolutionChartPanel({ title, unit, rows }: { title: string; unit: Chart
             <Tooltip
               formatter={(value) => (typeof value === "number" ? formatMetricValue(unit, value) : value)}
               labelFormatter={(label) => (typeof label === "string" ? formatShortDate(label) : label)}
-              contentStyle={{ borderRadius: 8, borderColor: "var(--overview-border)", fontSize: 12 }}
+              contentStyle={{
+                borderRadius: 8,
+                borderColor: "var(--overview-border)",
+                backgroundColor: "var(--overview-surface)",
+                color: "var(--overview-text-primary)",
+                fontSize: 12,
+              }}
             />
             <Line
               type="monotone"
@@ -97,9 +103,15 @@ function EvolutionChartPanel({ title, unit, rows }: { title: string; unit: Chart
 }
 
 export function CockpitAdEvolutionSection({ series }: { series: ChartMetricSeries[] }) {
-  const [metricAId, setMetricAId] = useState<ChartMetricId>("investment");
+  // Padrão "impressões" (não "investimento") — a seção "Evolução Diária"
+  // do Cockpit já mostra investimento por dia; começar este gráfico por
+  // outra métrica evita a MESMA série duplicada logo abaixo (pedido do
+  // usuário, Etapa "Redesign": "evitar duplicar indicadores que já
+  // apareçam em outras partes do Cockpit"). Investimento continua
+  // selecionável normalmente, só não é mais o padrão.
+  const [metricAId, setMetricAId] = useState<ChartMetricId>("impressions");
   const [compareMode, setCompareMode] = useState<CompareMode>("none");
-  const [metricBId, setMetricBId] = useState<ChartMetricId>("results");
+  const [metricBId, setMetricBId] = useState<ChartMetricId>("ctr");
   const formId = useId();
 
   const seriesById = useMemo(() => new Map(series.map((item) => [item.id, item])), [series]);

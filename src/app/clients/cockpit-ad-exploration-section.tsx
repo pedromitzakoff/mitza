@@ -119,7 +119,7 @@ function ExplorationTable({
   }
 
   return (
-    <div className="max-h-[420px] overflow-auto rounded-lg border border-overview-border">
+    <div className="max-h-[520px] overflow-auto rounded-lg border border-overview-border">
       <table className="w-full min-w-[640px] border-collapse text-sm">
         <thead className="sticky top-0 z-10 bg-overview-surface-subtle">
           <tr>
@@ -127,7 +127,7 @@ function ExplorationTable({
               <th
                 key={col.id}
                 scope="col"
-                className={`border-b border-overview-border px-3 py-2 text-xs font-bold uppercase tracking-wide text-overview-text-muted ${
+                className={`border-b border-overview-border px-3.5 py-2.5 text-xs font-bold uppercase tracking-wide text-overview-text-muted ${
                   col.align === "right" ? "text-right" : "text-left"
                 }`}
               >
@@ -153,7 +153,7 @@ function ExplorationTable({
               {visibleColumns.map((col) => (
                 <td
                   key={col.id}
-                  className={`whitespace-nowrap px-3 py-2 tabular-nums text-overview-text-primary ${col.align === "right" ? "text-right" : "text-left font-medium"}`}
+                  className={`whitespace-nowrap px-3.5 py-2.5 tabular-nums text-overview-text-primary ${col.align === "right" ? "text-right" : "text-left font-medium"}`}
                 >
                   {formatExplorationCell(col.id, row)}
                 </td>
@@ -185,7 +185,7 @@ function ColumnPicker({
         onClick={() => setIsOpen((current) => !current)}
         aria-expanded={isOpen}
         aria-controls={panelId}
-        className="mitza-pressable inline-flex items-center gap-1.5 rounded-md border border-overview-border bg-overview-surface px-2.5 py-1.5 text-xs font-medium text-overview-text-secondary hover:bg-overview-surface-hover hover:text-overview-text-primary"
+        className="mitza-pressable inline-flex h-9 items-center gap-1.5 rounded-lg border border-overview-border bg-overview-surface px-2.5 text-xs font-medium text-overview-text-secondary hover:bg-overview-surface-hover hover:text-overview-text-primary"
       >
         <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
         Colunas

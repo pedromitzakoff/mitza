@@ -33,13 +33,14 @@ alterada pela Etapa 2.3.
 >
 > **Decisões conscientes desta consolidação, pra não serem confundidas com
 > perda de escopo:**
-> - **Personalização de métricas** (seleção/ordem dos cards, persistida em
->   `localStorage`, Etapa 2.2) foi REMOVIDA — os 14 cards passam a aparecer
->   sempre, agrupados nas 4 categorias do pedido original da Etapa 2.4
->   (Entrega/Tráfego/Resultados/Receita). Nenhuma outra seção do Cockpit
->   (Meta & Ritmo, Diagnóstico) tem esse tipo de customização — manter uma
->   preferência salva só pra esta seção contrariaria o pedido de "produto
->   coeso". Pode ser reavaliado se o usuário pedir.
+> - **Personalização de métricas** foi removida nesta consolidação e depois
+>   REINTRODUZIDA na Etapa "Redesign e organização visual do Cockpit"
+>   (`cockpit-ad-metric-cards.tsx`) — 6 indicadores por padrão, escolha
+>   livre entre os 14, preferência por cliente em `localStorage`. O padrão
+>   de 6 também mudou nessa etapa: deixou de incluir Investimento/
+>   Resultados/Custo por resultado (já aparecem no bloco Meta Ads de
+>   Canais e em Meta & Ritmo) — ver `DEFAULT_SELECTED_METRIC_IDS`,
+>   `lib/meta-ads-dashboard/metric-cards.ts`.
 > - **Comparação com o período anterior** (cards/gráfico mostrando "↑X% vs.
 >   mês anterior") foi REMOVIDA nesta consolidação, mas é uma decisão
 >   PROVISÓRIA, não descartada — pedido explícito do usuário: "quero manter

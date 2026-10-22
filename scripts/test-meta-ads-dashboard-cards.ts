@@ -120,7 +120,7 @@ const data = buildData({});
 const cards = buildMetricCardViewModels(data);
 
 check("monta exatamente os 14 cards, na ordem canônica", cards.map((c) => c.id), ALL_METRIC_CARD_IDS);
-ok("seleção padrão tem ~6 métricas, todas entre as 11 existentes", DEFAULT_SELECTED_METRIC_IDS.length === 6 && DEFAULT_SELECTED_METRIC_IDS.every((id) => ALL_METRIC_CARD_IDS.includes(id)));
+ok("seleção padrão tem ~6 métricas, todas entre as 14 existentes, nenhuma delas investimento/resultados/custo por resultado (já aparecem em Canais/Meta & Ritmo)", DEFAULT_SELECTED_METRIC_IDS.length === 6 && DEFAULT_SELECTED_METRIC_IDS.every((id) => ALL_METRIC_CARD_IDS.includes(id)) && !DEFAULT_SELECTED_METRIC_IDS.some((id) => id === "investment" || id === "results" || id === "costPerResult"));
 
 const investmentCard = cards.find((c) => c.id === "investment")!;
 check("Investimento formatado em moeda", investmentCard.value, formatCurrency(1000));
