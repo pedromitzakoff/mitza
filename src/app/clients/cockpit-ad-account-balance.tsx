@@ -9,9 +9,13 @@ import type { MetaAdAccountBalanceSnapshot } from "@/lib/meta-ads-dashboard/dash
  *
  * Só conta PRÉ-PAGA mostra número de saldo — pedido explícito: "pode
  * trazer somente para as contas de pré-pago; as que não forem, coloca
- * tipo PÓS-PAGO no lugar do saldo". Qualquer estado indisponível
- * (integração não configurada, token ausente, timeout, erro da API) some
- * por completo — mesmo critério silencioso do antigo link externo
+ * tipo PÓS-PAGO no lugar do saldo". O número é "Fundos disponíveis"
+ * (pedido explícito do usuário, achado real 22/10/2026: o campo `balance`
+ * do nó da conta nunca foi o saldo de verdade, só cupons residuais — ver
+ * `parseFundingSourceDisplayAmount`, `lib/meta-api-fetch.ts`). Qualquer
+ * estado indisponível (integração não configurada, token ausente,
+ * timeout, erro da API, ou o texto de saldo não pôde ser interpretado)
+ * some por completo — mesmo critério silencioso do antigo link externo
  * "Saldo" (`client.balance_url`): a maioria dos clientes não tem conta
  * Meta direta configurada, e um indicador de erro no cabeçalho pra todo
  * mundo seria ruído, não informação.

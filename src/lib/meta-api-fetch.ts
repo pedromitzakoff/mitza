@@ -256,44 +256,84 @@ export async function fetchMetaApiPeriodReach(
 
 export interface MetaApiAccountBalanceRow {
   isPrepay: boolean;
-  /** Em unidade PRINCIPAL da moeda da conta (ex.: reais, nunca centavos) —
-   * já convertido a partir do inteiro em unidade mínima que a Graph API
-   * devolve (`balance`). `null` quando a conta NÃO é pré-paga — pedido
-   * explícito do usuário: "puxe o saldo somente para as contas de
-   * pré-pago; as que não forem, coloca tipo PÓS-PAGO no lugar do saldo" —
-   * pra conta pós-paga (faturamento por limiar), `balance` da Graph API
-   * representa o valor A FATURAR, não um saldo disponível pra gastar;
-   * mostrar esse número como "saldo" seria enganoso, por isso nem é lido
-   * pra essas contas. */
+  /** "Fundos disponíveis" da conta, em unidade PRINCIPAL da moeda (ex.:
+   * reais) — achado real (cliente Helping Hand, 22/10/2026): o campo
+   * `balance` do nó da conta NUNCA foi o saldo real disponível pra gastar —
+   * a documentação oficial da Graph API o descreve como "Bill amount due"
+   * (valor a faturar), e na prática ele só reflete cupons/créditos
+   * promocionais residuais da conta (centavos), nunca o valor principal
+   * carregado na forma de pagamento. O valor real só existe dentro de
+   * `funding_source_details.display_string` — um texto formatado pela
+   * própria Meta (ex.: "Saldo disponível (R$37.663,10 BRL)"), sem campo
+   * numérico estruturado equivalente nesta resposta. `null` quando a conta
+   * NÃO é pré-paga (pedido explícito do usuário: "puxe o saldo somente
+   * para as contas de pré-pago; as que não forem, coloca tipo PÓS-PAGO no
+   * lugar do saldo" — pra conta pós-paga, `balance` representa o valor A
+   * FATURAR, nunca um saldo disponível) OU quando `display_string` não
+   * pôde ser interpretado (`parseFundingSourceDisplayAmount` devolveu
+   * `null`) — nunca um valor fabricado a partir de uma resposta
+   * incompleta/inesperada. */
   balance: number | null;
   currency: string;
 }
 
 interface MetaAccountBalanceRawResponse {
-  balance?: string;
   is_prepay_account?: boolean;
   currency?: string;
+  funding_source_details?: { display_string?: string };
   error?: { message: string };
 }
 
-const ACCOUNT_BALANCE_FIELDS = "balance,is_prepay_account,currency";
+const ACCOUNT_BALANCE_FIELDS = "is_prepay_account,currency,funding_source_details";
+
+/**
+ * Extrai o valor numérico de `funding_source_details.display_string` — não
+ * existe campo numérico estruturado equivalente na resposta da Graph API
+ * pra "fundos disponíveis" (ver comentário de `MetaApiAccountBalanceRow`).
+ * Decide qual separador é o decimal pelo ÚLTIMO `,`/`.` seguido de
+ * exatamente 2 dígitos até o fim do número — cobre tanto o formato pt-BR
+ * ("37.663,10") quanto en-US ("37,663.10") sem depender do idioma da conta,
+ * já que o texto vem formatado pela própria Meta conforme o locale do
+ * app/token usado (`META_API_ACCESS_TOKEN`, sempre o mesmo pra toda a
+ * MITZA — nunca varia por sessão de usuário).
+ *
+ * `expectedCurrency` é uma checagem de sanidade (o texto precisa CONTER o
+ * código da moeda já lido separadamente em `currency`) — nunca decide o
+ * valor em si, só rejeita um `display_string` claramente inconsistente.
+ * `null` em qualquer falha de parse — nunca um valor fabricado; melhor não
+ * mostrar saldo nenhum do que mostrar um número errado.
+ */
+export function parseFundingSourceDisplayAmount(displayString: string | undefined, expectedCurrency: string): number | null {
+  if (!displayString) return null;
+
+  const inner = displayString.match(/\(([^)]*)\)/)?.[1] ?? displayString;
+  if (!inner.includes(expectedCurrency)) return null;
+
+  const numberToken = inner.match(/\d[\d.,]*\d|\d/)?.[0];
+  if (!numberToken) return null;
+
+  const lastSeparatorIndex = Math.max(numberToken.lastIndexOf(","), numberToken.lastIndexOf("."));
+  if (lastSeparatorIndex === -1 || numberToken.length - lastSeparatorIndex - 1 !== 2) return null;
+
+  const integerPart = numberToken.slice(0, lastSeparatorIndex).replace(/[.,]/g, "");
+  const decimalPart = numberToken.slice(lastSeparatorIndex + 1);
+  const value = Number(`${integerPart || "0"}.${decimalPart}`);
+
+  return Number.isFinite(value) ? value : null;
+}
 
 /**
  * Núcleo puro — converte a resposta bruta do nó da conta (Graph API) pro
- * formato interno. `balance` chega como string numérica em unidade MÍNIMA
- * da moeda (ex.: centavos pra BRL/USD/EUR — convertida aqui ÷100 pra
- * unidade principal). Moedas sem casas decimais (ex.: JPY) não são usadas
- * por nenhum cliente da MITZA hoje — limitação conhecida, documentada,
- * nunca assumida silenciosamente como coberta. `null` quando a resposta
- * não tem os campos mínimos (`is_prepay_account`/`currency` ausentes —
- * nunca um valor fabricado a partir de uma resposta incompleta).
+ * formato interno. `null` quando a resposta não tem os campos mínimos
+ * (`is_prepay_account`/`currency` ausentes — nunca um valor fabricado a
+ * partir de uma resposta incompleta).
  */
 export function mapMetaAccountBalanceResponse(raw: MetaAccountBalanceRawResponse): MetaApiAccountBalanceRow | null {
   if (raw.is_prepay_account === undefined || !raw.currency) return null;
   const isPrepay = raw.is_prepay_account;
   return {
     isPrepay,
-    balance: isPrepay && raw.balance !== undefined ? Number(raw.balance) / 100 : null,
+    balance: isPrepay ? parseFundingSourceDisplayAmount(raw.funding_source_details?.display_string, raw.currency) : null,
     currency: raw.currency,
   };
 }

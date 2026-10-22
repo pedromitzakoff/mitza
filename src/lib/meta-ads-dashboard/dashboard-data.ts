@@ -320,7 +320,13 @@ export async function fetchAccountBalanceSnapshot(accountId: string | null): Pro
     const row = await fetchMetaApiAccountBalance(accountId);
     if (!row) return { status: "unavailable", reason: "fetch_error" };
     if (!row.isPrepay) return { status: "ok", isPrepay: false };
-    return { status: "ok", isPrepay: true, balance: row.balance as number, currency: row.currency };
+    // `row.balance` pode vir `null` mesmo pra conta pré-paga quando
+    // `funding_source_details.display_string` não pôde ser interpretado
+    // (`parseFundingSourceDisplayAmount`, `lib/meta-api-fetch.ts`) — nunca
+    // mostra `R$ null`/um valor fabricado, trata como indisponível igual a
+    // qualquer outra falha.
+    if (row.balance === null) return { status: "unavailable", reason: "fetch_error" };
+    return { status: "ok", isPrepay: true, balance: row.balance, currency: row.currency };
   } catch (err) {
     console.error(`[meta-ads-dashboard] falha ao buscar saldo da conta ${accountId}:`, err);
     const name = err instanceof Error ? err.name : "";
