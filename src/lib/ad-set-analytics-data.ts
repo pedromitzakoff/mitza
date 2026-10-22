@@ -1,5 +1,6 @@
 import type { createClient as createSupabaseClient } from "./supabase/server";
 import { requireQueryToleratingMissingColumn } from "./require-query";
+import { dedupeRowsByProviderPreference, getMetaImportSourceProviderMap } from "./granular-provider-dedup";
 import type { AdSetDailyMetricRow } from "./ad-set-analytics";
 import type { PerformanceGoal } from "./performance-goals";
 import type { TrafficChannel } from "./traffic-channels";
@@ -20,35 +21,64 @@ type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
  * rodar manualmente; antes disso, a mesma consulta é repetida sem essa
  * coluna, e cada linha recebe `linkClicks: null` (ausência de dado, nunca
  * um erro que derrubaria a tela).
+ *
+ * Migração Stract -> Meta API direta: ver dedup em `getCampaignDailyMetricsForPeriod`
+ * (`lib/campaign-analytics-data.ts`) — mesma lógica, mesma função compartilhada
+ * (`lib/granular-provider-dedup.ts`).
  */
 export async function getAdSetDailyMetricsForPeriod(
   supabase: Supabase,
   clientId: string,
   period: { start: string; end: string },
 ): Promise<AdSetDailyMetricRow[]> {
-  const result = await requireQueryToleratingMissingColumn(
-    supabase
-      .from("ad_set_daily_metrics")
-      .select(
-        "date, channel, campaign_name, campaign_id, ad_set_name, spend, impressions, reach, clicks, link_clicks, result_type, result_count, revenue",
-      )
-      .eq("client_id", clientId)
-      .gte("date", period.start)
-      .lte("date", period.end),
-    () =>
+  const [result, sourceById] = await Promise.all([
+    requireQueryToleratingMissingColumn(
       supabase
         .from("ad_set_daily_metrics")
         .select(
-          "date, channel, campaign_name, campaign_id, ad_set_name, spend, impressions, reach, clicks, result_type, result_count, revenue",
+          "date, channel, campaign_name, campaign_id, ad_set_name, spend, impressions, reach, clicks, link_clicks, result_type, result_count, revenue, import_source_id",
         )
         .eq("client_id", clientId)
         .gte("date", period.start)
         .lte("date", period.end),
-    "link_clicks",
-    "ad_set_daily_metrics:period",
-  );
+      () =>
+        supabase
+          .from("ad_set_daily_metrics")
+          .select(
+            "date, channel, campaign_name, campaign_id, ad_set_name, spend, impressions, reach, clicks, result_type, result_count, revenue, import_source_id",
+          )
+          .eq("client_id", clientId)
+          .gte("date", period.start)
+          .lte("date", period.end),
+      "link_clicks",
+      "ad_set_daily_metrics:period",
+    ),
+    getMetaImportSourceProviderMap(supabase, clientId),
+  ]);
 
-  return result.rows.map((row) => ({
+  // Branches mantidas 100% separadas — ver comentário em
+  // `getCampaignDailyMetricsForPeriod` (`lib/campaign-analytics-data.ts`).
+  if (result.usedFallback) {
+    const dedupedRows = dedupeRowsByProviderPreference(result.rows, (row) => row.import_source_id, (row) => row.date, sourceById);
+    return dedupedRows.map((row) => ({
+      date: row.date,
+      channel: row.channel as TrafficChannel,
+      campaignName: row.campaign_name,
+      campaignId: row.campaign_id,
+      adSetName: row.ad_set_name,
+      spend: row.spend,
+      impressions: row.impressions,
+      reach: row.reach,
+      clicks: row.clicks,
+      linkClicks: null,
+      resultType: row.result_type as PerformanceGoal | null,
+      resultCount: row.result_count,
+      revenue: row.revenue,
+    }));
+  }
+
+  const dedupedRows = dedupeRowsByProviderPreference(result.rows, (row) => row.import_source_id, (row) => row.date, sourceById);
+  return dedupedRows.map((row) => ({
     date: row.date,
     channel: row.channel as TrafficChannel,
     campaignName: row.campaign_name,
@@ -58,7 +88,7 @@ export async function getAdSetDailyMetricsForPeriod(
     impressions: row.impressions,
     reach: row.reach,
     clicks: row.clicks,
-    linkClicks: result.usedFallback ? null : (row as { link_clicks: number | null }).link_clicks,
+    linkClicks: row.link_clicks,
     resultType: row.result_type as PerformanceGoal | null,
     resultCount: row.result_count,
     revenue: row.revenue,
