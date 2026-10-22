@@ -19,12 +19,6 @@ const IMPORT_SOURCE_STATUS_LABEL: Record<ImportSourceStatusDb, string> = {
   no_data: "Sem dado",
 };
 
-/** Coluna preenchida = nível populado pela integração automática (busca
- * direta Meta API — Stract foi descontinuado, ver
- * `docs/STRACT_INTEGRATION_ARCHITECTURE.md`) — nunca reimplementa a regra,
- * só lê a mesma configuração que decide se `campaign_daily_metrics`/
- * `ad_set_daily_metrics`/`ad_creative_daily_metrics` recebem linha pra este
- * cliente. */
 interface MetaImportSourceRow {
   id: string;
   client_id: string;
@@ -32,21 +26,15 @@ interface MetaImportSourceRow {
   external_account_id: string;
   status: ImportSourceStatusDb;
   enabled: boolean;
-  campaign_name_column: string | null;
-  ad_set_name_column: string | null;
-  ad_name_column: string | null;
-  creative_permalink_column: string | null;
   last_success_at: string | null;
 }
 
 interface MetaConnectionAudit {
   clientId: string;
   clientName: string;
+  metaAdAccountId: string | null;
   hasAdAccount: boolean;
   importSource: MetaImportSourceRow | null;
-  hasCampaign: boolean;
-  hasAudience: boolean;
-  hasCreative: boolean;
   hasProblem: boolean;
 }
 
@@ -65,16 +53,26 @@ function hasColumn(value: string | null): boolean {
  *
  * Duas camadas independentes, nunca confundidas:
  * 1. `clients.meta_ad_account_id` — a conta de anúncio em si (alimenta o
- *    investimento nativo, `lib/meta-sync.ts`).
+ *    investimento nativo, `lib/meta-sync.ts`, e também serve de sugestão
+ *    pré-preenchida ao conectar a fonte `meta_api` pela primeira vez — ver
+ *    `ManagedMetaConnection` abaixo).
  * 2. `import_sources` (canal "meta" — pode ter mais de uma linha por
  *    cliente desde a migração Stract -> Meta API direta: uma `stract`
  *    antiga, desativada, convivendo com a `meta_api` nova. Esta auditoria
  *    SEMPRE prioriza `meta_api` quando existir, nunca mostra o status da
- *    fonte Stract morta por acaso ter vindo depois na consulta — ver
- *    `preferMetaApiSource` abaixo) — de onde vêm Campanha/Público/Anúncio
- *    granulares. Sem uma fonte ativa aqui, o cliente pode ter investimento
- *    sincronizado e mesmo assim zero campanha/público/anúncio no relatório
- *    — daí as 3 colunas separadas em vez de um único "conectado sim/não".
+ *    fonte Stract morta por acaso ter vindo depois na consulta).
+ *
+ * Removida 22/10/2026: a auditoria tinha 3 colunas (Campanha/Público/
+ * Anúncio) checando `campaign_name_column`/`ad_set_name_column`/
+ * `ad_name_column` — configuração exclusiva do Stract (nome de coluna a
+ * mapear). A fonte `meta_api` NUNCA usa esses campos (sempre `null` pra
+ * ela, grava campanha incondicionalmente, público/anúncio conforme o dado
+ * que a Meta devolver) — então essas 3 colunas sempre mostravam "não
+ * mapeado" pra qualquer cliente já migrado, mesmo funcionando perfeitamente.
+ * Removidas em vez de corrigidas: confirmar público/anúncio de verdade
+ * exigiria uma consulta adicional por cliente a `ad_set_daily_metrics`/
+ * `ad_creative_daily_metrics`, sem pedido explícito pra esse nível de
+ * detalhe aqui.
  *
  * "Gerenciar" (ponto 1 da migração — interface de conexão) abre
  * `MetaConnectionDrawer` pra conectar/reconectar a conta, sincronizar
@@ -102,9 +100,7 @@ export default async function MetaConnectionsPage({
     requireQuery(
       supabase
         .from("import_sources")
-        .select(
-          "id, client_id, provider, external_account_id, status, enabled, campaign_name_column, ad_set_name_column, ad_name_column, creative_permalink_column, last_success_at",
-        )
+        .select("id, client_id, provider, external_account_id, status, enabled, last_success_at")
         .eq("channel", "meta"),
       "import_sources",
     ),
@@ -127,20 +123,15 @@ export default async function MetaConnectionsPage({
     .map((client) => {
       const importSource = importSourceByClientId.get(client.id) ?? null;
       const sourceHealthy = importSource !== null && importSource.enabled && importSource.status === "active";
-      const hasCampaign = sourceHealthy && hasColumn(importSource.campaign_name_column);
-      const hasAudience = sourceHealthy && hasColumn(importSource.ad_set_name_column);
-      const hasCreative = sourceHealthy && (hasColumn(importSource.ad_name_column) || hasColumn(importSource.creative_permalink_column));
       const hasAdAccount = hasColumn(client.meta_ad_account_id);
 
       return {
         clientId: client.id,
         clientName: client.name,
+        metaAdAccountId: client.meta_ad_account_id,
         hasAdAccount,
         importSource,
-        hasCampaign,
-        hasAudience,
-        hasCreative,
-        hasProblem: !hasAdAccount || !sourceHealthy || !hasCampaign || !hasAudience || !hasCreative,
+        hasProblem: !hasAdAccount || !sourceHealthy,
       };
     })
     .sort((a, b) => {
@@ -153,7 +144,7 @@ export default async function MetaConnectionsPage({
   return (
     <SettingsPageShell
       title="Conexões Meta"
-      description="Conta de anúncio, campanha, público e anúncio (criativo) sincronizados por cliente ativo com Meta configurado — pra saber onde corrigir a integração antes de fechar um relatório."
+      description="Conta de anúncio e integração (busca direta Meta API) por cliente ativo com Meta configurado — pra saber quem ainda falta conectar antes de fechar um relatório."
       backHref="/settings"
     >
       {audits.length === 0 ? (
@@ -162,19 +153,16 @@ export default async function MetaConnectionsPage({
         <>
           <p className="mb-4 text-sm text-muted-foreground">
             {problemCount === 0
-              ? `Todos os ${audits.length} clientes Meta ativos estão com conta, campanha, público e anúncio conectados.`
+              ? `Todos os ${audits.length} clientes Meta ativos estão com conta e integração conectadas.`
               : `${problemCount} de ${audits.length} clientes Meta ativos têm pelo menos uma conexão faltando.`}
           </p>
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-zinc-50 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground dark:bg-zinc-900">
                   <th className="px-4 py-2.5">Cliente</th>
                   <th className="px-4 py-2.5">Conta de anúncio</th>
                   <th className="px-4 py-2.5">Integração</th>
-                  <th className="px-4 py-2.5">Campanha</th>
-                  <th className="px-4 py-2.5">Público</th>
-                  <th className="px-4 py-2.5">Anúncio</th>
                   <th className="px-4 py-2.5">Última sincronização</th>
                   <th className="px-4 py-2.5"></th>
                 </tr>
@@ -205,33 +193,6 @@ export default async function MetaConnectionsPage({
                         <span className="font-medium text-red-700 dark:text-red-300">
                           {audit.importSource.enabled ? IMPORT_SOURCE_STATUS_LABEL[audit.importSource.status] : "Desativada"}
                         </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {audit.importSource === null ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : audit.hasCampaign ? (
-                        <span className="text-muted-foreground">Conectada</span>
-                      ) : (
-                        <span className="font-medium text-red-700 dark:text-red-300">Não mapeada</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {audit.importSource === null ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : audit.hasAudience ? (
-                        <span className="text-muted-foreground">Conectado</span>
-                      ) : (
-                        <span className="font-medium text-red-700 dark:text-red-300">Não mapeado</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {audit.importSource === null ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : audit.hasCreative ? (
-                        <span className="text-muted-foreground">Conectado</span>
-                      ) : (
-                        <span className="font-medium text-red-700 dark:text-red-300">Não mapeado</span>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-muted-foreground">
@@ -266,6 +227,7 @@ export default async function MetaConnectionsPage({
               clientName={client.name}
               importSource={importSource && importSource.provider === "meta_api" ? importSource : null}
               legacyStractSource={legacyStract ? { externalAccountId: legacyStract.external_account_id, enabled: legacyStract.enabled } : null}
+              suggestedAccountId={client.meta_ad_account_id}
               error={drawerError}
               saved={drawerSaved}
             />
@@ -283,6 +245,7 @@ async function ManagedMetaConnection({
   clientName,
   importSource,
   legacyStractSource,
+  suggestedAccountId,
   error,
   saved,
 }: {
@@ -290,6 +253,13 @@ async function ManagedMetaConnection({
   clientName: string;
   importSource: MetaImportSourceRow | null;
   legacyStractSource: { externalAccountId: string; enabled: boolean } | null;
+  /** `clients.meta_ad_account_id` — pré-preenche o campo de conexão quando
+   * ainda não existe fonte `meta_api` pra este cliente. Achado real: todo
+   * cliente já tem esse campo preenchido desde o cadastro, então conectar
+   * vira só confirmar/clicar em vez de ir buscar o `act_...` em outro
+   * lugar. Só sugestão — o admin confere/edita antes de salvar, nunca é
+   * gravado sem confirmação explícita no formulário. */
+  suggestedAccountId: string | null;
   error?: string;
   saved?: string;
 }) {
@@ -326,6 +296,7 @@ async function ManagedMetaConnection({
       }
       mappings={mappings.map((m) => ({ id: m.id, goal: m.goal as PerformanceGoal, resultColumn: m.result_column, valueColumn: m.value_column }))}
       legacyStractSource={legacyStractSource}
+      suggestedAccountId={suggestedAccountId}
     />
   );
 }

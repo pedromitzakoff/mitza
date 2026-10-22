@@ -77,6 +77,7 @@ export function MetaConnectionDrawer({
   importSource,
   mappings,
   legacyStractSource,
+  suggestedAccountId,
 }: {
   clientId: string;
   clientName: string;
@@ -86,6 +87,10 @@ export function MetaConnectionDrawer({
   importSource: MetaConnectionImportSource | null;
   mappings: MetaConnectionMapping[];
   legacyStractSource: { externalAccountId: string; enabled: boolean } | null;
+  /** `clients.meta_ad_account_id` — sugestão pro campo de conexão quando
+   * ainda não existe fonte `meta_api` (ver comentário em
+   * `ManagedMetaConnection`, `page.tsx`). */
+  suggestedAccountId: string | null;
 }) {
   return (
     <DrawerShell title={`Conexão Meta — ${clientName}`} closeHref={closeHref}>
@@ -110,10 +115,15 @@ export function MetaConnectionDrawer({
             <input
               name="account_id"
               required
-              defaultValue={importSource?.externalAccountId ?? ""}
+              defaultValue={importSource?.externalAccountId ?? suggestedAccountId ?? ""}
               placeholder="act_123456789"
               className={inputClasses}
             />
+            {!importSource && suggestedAccountId && (
+              <p className="text-xs text-muted-foreground">
+                Pré-preenchido com a conta já cadastrada no cliente — confira antes de conectar.
+              </p>
+            )}
           </label>
           <SubmitButton
             className="self-start rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
