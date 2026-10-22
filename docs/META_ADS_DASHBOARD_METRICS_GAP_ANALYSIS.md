@@ -208,6 +208,80 @@ uma migração de schema (nova coluna + preenchê-la na ingestão a partir do
 desta etapa (métricas/tabelas/organização visual), fica para aprovação
 separada caso o usuário queira o drill-down completo.
 
+### Gap C — proposta de solução (Etapa 2.4.1, investigação — NÃO implementada)
+
+**Pedido do usuário:** "Investigue a melhor maneira de preservar o vínculo
+entre anúncios e conjuntos usando os identificadores existentes da Meta
+API... apresente a solução e os impactos antes de implementá-la."
+
+**O que a investigação encontrou — o dado já existe, só não é lido:** a
+chamada que já faz a ingestão direta Meta API (`fetchMetaApiInsightsForAccount`,
+`meta-api-fetch.ts`, `level=ad`) **já busca `adset_id`** no mesmo payload
+(`INSIGHTS_FIELDS` inclui `adset_id` desde sempre) e `mapMetaInsightsRowToIngestRow`
+**já mapeia** isso pra `MetaApiIngestRow.adSetId`. `meta-api-ingest.ts`
+**já valida e grava** esse campo numa coluna bruta `ad_set_id` em toda
+linha achatada (`flattenMetaApiRowToRawSourceRow`). Ou seja: **nenhuma
+nova chamada à Graph API é necessária** — o identificador correto já
+chega até a camada de agregação hoje, pra TODO cliente na integração
+direta Meta API.
+
+**Onde o vínculo se perde:** `aggregateAdCreativeDailyRows`
+(`import-sources.ts`, linha ~314) — a única das 3 funções de agregação que
+NÃO tem um parâmetro `adSetIdColumn` (compare com `aggregateAdSetDailyRows`,
+que já tem). A chamada em `meta-api-ingest-run.ts` (linha ~290) por isso
+nunca passa `META_API_COLUMNS.adSetId` pra ela, mesmo a coluna bruta
+`ad_set_id` já existindo na linha. O dado chega na porta e é descartado
+ali.
+
+**Solução proposta (NÃO implementada nesta etapa):**
+1. Adicionar `adSetIdColumn?: string | null` a `AggregateAdCreativeRowsColumns`
+   e um campo `adSetId: string | null` a `AggregatedAdCreativeRow` (mesmo
+   padrão já usado pra `adIdColumn`/`adId` na mesma função).
+2. Nova coluna `ad_set_id text` em `ad_creative_daily_metrics` (migração
+   aditiva, mesmo padrão de `link_clicks`) + `buildAdCreativeDailyMetricsUpsertRows`
+   gravando-a + `creative-analytics-data.ts`/`AdCreativeDailyMetricRow`/
+   `exploration-data.ts` expondo-a até a UI.
+3. `meta-api-ingest-run.ts` passa a repassar `adSetIdColumn: META_API_COLUMNS.adSetId`
+   pra `aggregateAdCreativeDailyRows` (1 linha).
+4. `ExplorationSection` troca o filtro de Anúncios de "mesma campanha" pra
+   "mesmo `adSetId`" quando um conjunto estiver selecionado — aí sim um
+   drill-down real Conjunto → seus Anúncios, nunca uma lista que mistura
+   anúncios de outros conjuntos.
+
+**Impactos a avaliar antes de aprovar:**
+- **Histórico**: `ad_set_id` nasceria `null` em toda linha já gravada
+  (mesma limitação de `link_clicks`) — anúncios de sincronizações antigas
+  só ganhariam o vínculo depois da primeira sincronização seguinte à
+  migração. Dashboard precisaria da mesma salvaguarda de
+  `requireQueryToleratingMissingColumn` já aplicada nesta etapa.
+- **Só integração direta Meta API**: clientes via Stract continuariam sem
+  esse vínculo (Stract não expõe `adset_id` na extração hoje) — pra eles,
+  "Conjuntos"/"Anúncios" permaneceriam abas irmãs (limitação já documentada
+  no Gap C), nunca um drill-down fictício.
+- **Caso de borda deliberadamente não resolvido por esta proposta**: a
+  identidade de um criativo nesta tabela é o NOME do anúncio
+  (`creativeName` = `ad_name`), não o `ad_id` — decisão de design
+  pré-existente, documentada em `AggregateAdCreativeRowsColumns.adIdColumn`
+  ("ids do Meta não são estáveis entre edições/reuploads"). Se o MESMO
+  nome de anúncio existir em DOIS conjuntos diferentes dentro da mesma
+  campanha (raro, mas possível — ex.: o mesmo criativo duplicado pra testar
+  públicos diferentes), a agregação atual já funde as duas linhas numa só
+  (soma o spend das duas) — comportamento pré-existente, sem relação com
+  esta proposta. A solução acima anexaria o `adSetId` da PRIMEIRA linha
+  vista a essa linha já fundida (mesmo critério de `adIdColumn`/`campaignId`
+  hoje), então nesse caso raro o drill-down mostraria o anúncio fundido só
+  no conjunto "errado" (o primeiro). Resolver isso de verdade exigiria
+  trocar a chave de agrupamento pra incluir `adSetId`
+  (`${date} ${campaignName} ${adSetId} ${creativeName}`), o que divide essa
+  fusão em linhas separadas — uma mudança de granularidade mais ampla, que
+  afetaria a leitura de todo cliente na integração direta Meta API (ainda
+  que o Relatório de Performance não pareça depender dessa granularidade
+  especificamente). Fica como uma segunda opção, mais completa e mais
+  arriscada, pra decisão do usuário — a proposta principal acima (1-4) já
+  resolve o caso comum sem essa mudança de granularidade.
+- Nenhuma mudança nesta lista foi implementada — aguardando aprovação
+  explícita, conforme pedido.
+
 ## Gap D — `totalReach` pré-existente soma alcance entre dias (descoberto na Etapa 2.4)
 
 **O que existe hoje:** `CampaignSummary.totalReach`/`AdSetSummary.totalReach`/
@@ -229,3 +303,63 @@ fonte correta de alcance/frequência no Dashboard Meta Ads continua sendo o
 snapshot dedicado de período inteiro via Graph API
 (`fetchAccountPeriodReachSnapshot`, já usado pelos cards de KPI desde a
 Etapa 2.2), nunca uma soma diária.
+
+### Gap D — exatamente onde ocorre e quais telas são afetadas (Etapa 2.4.1)
+
+**Pedido do usuário:** "Verifique o problema identificado... Documente
+exatamente onde ocorre, quais telas são afetadas e como corrigir sem
+gerar chamadas excessivas à Graph API. Não amplie o escopo da correção
+sem aprovação."
+
+**Onde ocorre exatamente:**
+- `lib/campaign-analytics.ts:109`, `lib/ad-set-analytics.ts:107`,
+  `lib/creative-analytics.ts:206` — a mesma linha nos 3 arquivos:
+  `acc.totalReach = sumNullable(acc.totalReach, row.reach)`, dentro do
+  loop que acumula linha-por-dia de `campaign_daily_metrics`/
+  `ad_set_daily_metrics`/`ad_creative_daily_metrics`.
+- O valor somado só é efetivamente EXIBIDO em
+  `lib/performance-report/report-document.ts` — coluna "Alcance" nas 3
+  tabelas (`buildCampaignsTable` linha ~274/298, e as equivalentes de
+  Conjuntos linha ~335/357 e Criativos linha ~440/465). Nenhuma outra
+  lógica (badges, ranking de melhor custo/maior volume, metas) usa
+  `totalReach` — só essa coluna de tabela.
+
+**Quais telas são afetadas** (todas as que renderizam essas 3 tabelas,
+via `report-document.ts`):
+1. `/clients/[id]/relatorio` — Relatório de Performance interno.
+2. `/r/[token]` — o mesmo relatório, link público compartilhado.
+3. `/api/clients/[id]/performance-report` — rota de API que serve os
+   mesmos dados (export/PDF).
+
+O Dashboard Meta Ads (`/clients/[id]/meta-ads`, Etapas 2.1-2.4) **não é
+afetado** — ele nunca usa `totalReach`; alcance/frequência já vêm sempre
+do snapshot de período inteiro via Graph API (ver acima), e a nova tabela
+de exploração desta etapa deliberadamente não tem coluna de alcance.
+
+**Como corrigir sem gerar chamadas excessivas à Graph API (proposta, NÃO
+implementada):** `fetchMetaApiPeriodReach(accountId, level, since, until)`
+(`meta-api-fetch.ts`, já existe desde a Etapa 2.2) aceita
+`level: "campaign" | "adset" | "ad"` e devolve, numa ÚNICA chamada, o
+alcance de TODAS as entidades daquele nível de uma vez — exatamente o
+mesmo padrão já usado pro alcance de conta no Dashboard
+(`fetchAccountPeriodReachSnapshot`). Pra corrigir o Relatório, bastariam
+**3 chamadas por geração de relatório** (uma por nível — campanha/
+conjunto/anúncio — nunca uma por entidade), substituindo `totalReach`
+nas 3 tabelas por esse valor, mesclado por id/nome igual já é feito nas
+outras camadas desta etapa.
+
+**Limitação que a correção não resolve (nem deveria, sem aprovação
+separada):** esse período-dedup só existe na integração DIRETA Meta API.
+Clientes só com Stract não têm um endpoint equivalente — pra eles, a
+coluna "Alcance" nas 3 tabelas precisaria ficar oculta (nunca mostrar um
+número sabidamente errado), em vez de hoje aparecer somada sempre que há
+qualquer dado de alcance.
+
+**Por que não foi implementado nesta etapa:** a correção toca
+`report-document.ts`/`report-data.ts` — código que já está em produção e
+é usado por clientes reais HOJE, fora do escopo do Dashboard Meta Ads
+(Etapas 2.1-2.4). Implementar isso muda um número já exibido a clientes e
+exige uma nova chamada de API em um fluxo que hoje não faz nenhuma (custo/
+latência adicional do Relatório), por isso fica documentado para
+aprovação e implementação separadas, conforme pedido explícito do
+usuário.

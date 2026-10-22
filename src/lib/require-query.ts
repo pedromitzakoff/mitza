@@ -73,6 +73,55 @@ export async function requireQuery<T>(query: PromiseLike<QueryResult<T>>, contex
   return data as T;
 }
 
+interface QueryResultWithCode<T> {
+  data: T | null;
+  error?: { message: string; code?: string } | null;
+}
+
+/**
+ * Variante de `requireQuery` para uma coluna adicionada por uma migração
+ * que pode ainda não ter sido aplicada no banco (ex.: `link_clicks`,
+ * Etapa 2.4 — `supabase/meta-ads-link-clicks.sql`, aplicada manualmente
+ * pelo usuário, nunca automaticamente). Sem isso, a tela inteira cairia no
+ * `error.tsx` genérico assim que o código novo fosse publicado mas a
+ * migração ainda não tivesse rodado — exatamente a causa raiz do
+ * incidente da Árvore Viva 1.0 (ver doc de `requireQuery`), só que
+ * provocado pelo próprio deploy em vez de uma migração esquecida.
+ *
+ * Se a consulta falhar especificamente porque a coluna não existe
+ * (Postgres `42703`, mensagem cita `missingColumnHint`), repete a MESMA
+ * consulta via `fallbackQuery` (que não seleciona essa coluna) e devolve
+ * essas linhas com `usedFallback: true` — quem chamou preenche a coluna
+ * ausente como `null` (nunca um erro, nunca a tela derruba). Qualquer
+ * outro erro (RLS, timeout, erro de sintaxe real) continua lançando, igual
+ * a `requireQuery`.
+ */
+export async function requireQueryToleratingMissingColumn<TFull, TFallback>(
+  primaryQuery: PromiseLike<QueryResultWithCode<TFull[]>>,
+  fallbackQuery: () => PromiseLike<QueryResultWithCode<TFallback[]>>,
+  missingColumnHint: string,
+  context: string,
+): Promise<{ rows: TFull[]; usedFallback: false } | { rows: TFallback[]; usedFallback: true }> {
+  const { data, error } = await primaryQuery;
+  if (!error) return { rows: data as TFull[], usedFallback: false };
+
+  const isMissingColumn = error.code === "42703" && error.message.includes(missingColumnHint);
+  if (!isMissingColumn) {
+    console.error(`[requireQuery][${context}]`, error);
+    throw new Error(`[requireQuery][${context}] ${error.message}`);
+  }
+
+  console.warn(
+    `[requireQuery][${context}] coluna "${missingColumnHint}" ainda não existe no banco (migração pendente) — repetindo a consulta sem ela.`,
+  );
+  const { data: fallbackData, error: fallbackError } = await fallbackQuery();
+  if (fallbackError) {
+    console.error(`[requireQuery][${context}:fallback]`, fallbackError);
+    throw new Error(`[requireQuery][${context}:fallback] ${fallbackError.message}`);
+  }
+  return { rows: fallbackData as TFallback[], usedFallback: true };
+}
+
 export async function queryOrError<T>(
   query: PromiseLike<QueryResult<T>>,
   context: string,

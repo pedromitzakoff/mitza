@@ -1,5 +1,5 @@
 import type { createClient as createSupabaseClient } from "./supabase/server";
-import { requireQuery } from "./require-query";
+import { requireQueryToleratingMissingColumn } from "./require-query";
 import type { AdCreativeDailyMetricRow } from "./creative-analytics";
 import type { PerformanceGoal } from "./performance-goals";
 
@@ -11,13 +11,19 @@ type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
  * e testável sem Supabase). Cliente sem nenhuma fonte com `ad_name_column`
  * configurado simplesmente nunca tem linha nesta tabela — devolve `[]`,
  * nunca um erro (ausência de configuração não é falha de infraestrutura).
+ *
+ * `link_clicks` (Etapa 2.4) é lido com `requireQueryToleratingMissingColumn`
+ * — a coluna só existe depois que `supabase/meta-ads-link-clicks.sql`
+ * rodar manualmente; antes disso, a mesma consulta é repetida sem essa
+ * coluna, e cada linha recebe `linkClicks: null` (ausência de dado, nunca
+ * um erro que derrubaria a tela).
  */
 export async function getAdCreativeDailyMetricsForPeriod(
   supabase: Supabase,
   clientId: string,
   period: { start: string; end: string },
 ): Promise<AdCreativeDailyMetricRow[]> {
-  const rows = await requireQuery(
+  const result = await requireQueryToleratingMissingColumn(
     supabase
       .from("ad_creative_daily_metrics")
       .select(
@@ -26,10 +32,20 @@ export async function getAdCreativeDailyMetricsForPeriod(
       .eq("client_id", clientId)
       .gte("date", period.start)
       .lte("date", period.end),
+    () =>
+      supabase
+        .from("ad_creative_daily_metrics")
+        .select(
+          "date, campaign_name, campaign_id, creative_name, creative_permalink_url, preview_image_url, spend, impressions, reach, clicks, result_type, result_count, revenue",
+        )
+        .eq("client_id", clientId)
+        .gte("date", period.start)
+        .lte("date", period.end),
+    "link_clicks",
     "ad_creative_daily_metrics:period",
   );
 
-  return rows.map((row) => ({
+  return result.rows.map((row) => ({
     date: row.date,
     campaignName: row.campaign_name,
     campaignId: row.campaign_id,
@@ -40,7 +56,7 @@ export async function getAdCreativeDailyMetricsForPeriod(
     impressions: row.impressions,
     reach: row.reach,
     clicks: row.clicks,
-    linkClicks: row.link_clicks,
+    linkClicks: result.usedFallback ? null : (row as { link_clicks: number | null }).link_clicks,
     resultType: row.result_type as PerformanceGoal | null,
     resultCount: row.result_count,
     revenue: row.revenue,
