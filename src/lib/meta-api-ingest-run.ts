@@ -20,6 +20,8 @@ import {
   combineAggregatedDailyValues,
   combineCampaignGroupValues,
   combinePlacementGroupValues,
+  parseSourceNumericValue,
+  type RawSourceRow,
 } from "@/lib/import-sources";
 import {
   META_API_COLUMNS,
@@ -239,9 +241,9 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload): Promi
   hadInvalidRows = hadInvalidRows || campaignAggregate.some((row) => row.invalidRowCount > 0);
 
   if (campaignAggregate.length > 0) {
-    const { resultType: campaignResultType, resultByGroup, revenueByGroup } = resolveCampaignGroupResult(rows, mappingGroupsByGoal);
+    const { resultTypeByGroup: campaignResultTypeByGroup, resultByGroup, revenueByGroup } = resolveCampaignGroupResult(rows, mappingGroupsByGoal);
     const campaignUpsertRows = buildCampaignDailyMetricsUpsertRows(importSource.client_id, importSourceId, channel, campaignAggregate, {
-      resultType: campaignResultType,
+      resultTypeByGroup: campaignResultTypeByGroup,
       resultByGroup,
       revenueByGroup,
     });
@@ -271,9 +273,9 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload): Promi
     hadInvalidRows = hadInvalidRows || adSetAggregate.some((row) => row.invalidRowCount > 0);
 
     if (adSetAggregate.length > 0) {
-      const { resultType, resultByGroup, revenueByGroup } = resolveAdSetGroupResult(rows, mappingGroupsByGoal);
+      const { resultTypeByGroup, resultByGroup, revenueByGroup } = resolveAdSetGroupResult(rows, mappingGroupsByGoal);
       const adSetUpsertRows = buildAdSetDailyMetricsUpsertRows(importSource.client_id, importSourceId, channel, adSetAggregate, {
-        resultType,
+        resultTypeByGroup,
         resultByGroup,
         revenueByGroup,
       });
@@ -302,9 +304,9 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload): Promi
     hadInvalidRows = hadInvalidRows || creativeAggregate.some((row) => row.invalidRowCount > 0);
 
     if (creativeAggregate.length > 0) {
-      const { resultType, resultByGroup, revenueByGroup } = resolveCreativeGroupResult(rows, mappingGroupsByGoal);
+      const { resultTypeByGroup, resultByGroup, revenueByGroup } = resolveCreativeGroupResult(rows, mappingGroupsByGoal);
       const creativeUpsertRows = buildAdCreativeDailyMetricsUpsertRows(importSource.client_id, importSourceId, creativeAggregate, {
-        resultType,
+        resultTypeByGroup,
         resultByGroup,
         revenueByGroup,
       });
@@ -328,9 +330,9 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload): Promi
     hadInvalidRows = hadInvalidRows || placementAggregate.some((row) => row.invalidRowCount > 0);
 
     if (placementAggregate.length > 0) {
-      const { resultType, resultByGroup, revenueByGroup } = resolvePlacementGroupResult(rows, mappingGroupsByGoal);
+      const { resultTypeByGroup, resultByGroup, revenueByGroup } = resolvePlacementGroupResult(rows, mappingGroupsByGoal);
       const placementUpsertRows = buildCampaignPlacementDailyMetricsUpsertRows(importSource.client_id, importSourceId, channel, placementAggregate, {
-        resultType,
+        resultTypeByGroup,
         resultByGroup,
         revenueByGroup,
       });
@@ -400,130 +402,169 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload): Promi
   };
 }
 
-function resolveCampaignGroupResult(
-  rows: ReturnType<typeof flattenMetaApiRowsToRawSourceRows>,
-  mappingGroupsByGoal: Map<PerformanceGoal, { resultColumns: string[]; valueColumns: string[] }>,
-) {
-  let resultType: PerformanceGoal | null = null;
-  let resultByGroup: Map<string, number> | null = null;
-  let revenueByGroup: Map<string, number> | null = null;
+/**
+ * KOFF Analytics — "Reestruturar lógica de mapeamento de objetivos" (pedido
+ * explícito do usuário: uma conta Meta pode ter mais de um objetivo ativo
+ * ao mesmo tempo, ou o objetivo pode mudar com o tempo — "não faz sentido"
+ * a sincronização escolher 1 objetivo vencedor pro lote inteiro e descartar
+ * os outros). Ordem de prioridade FIXA (nunca a ordem de inserção do `Map`,
+ * que depende da ordem de retorno da query — não determinística) — só
+ * entra em jogo no caso raro de a MESMA chave (campanha[+conjunto/anúncio/
+ * posicionamento]+dia) ter resultado em MAIS DE UM objetivo mapeado
+ * simultaneamente, já que uma linha só aguenta um `result_type` (nunca
+ * somar dois objetivos incompatíveis na mesma linha). `followers` segue de
+ * fora deste nível granular — mesmo comportamento de antes desta etapa,
+ * fora do escopo deste pedido.
+ */
+const GRANULAR_RESULT_GOAL_PRIORITY: PerformanceGoal[] = ["leads", "sales"];
 
-  for (const [goal, { resultColumns, valueColumns }] of mappingGroupsByGoal) {
-    if (goal !== "leads" && goal !== "sales") continue;
-    const resultColumnAggregates = resultColumns.map((col) =>
-      aggregateColumnByCampaignGroup(rows, META_API_COLUMNS.date, META_API_COLUMNS.campaignName, col),
-    );
-    const combinedResult = combineCampaignGroupValues(resultColumnAggregates);
-    if (combinedResult.length === 0) continue;
-
-    resultType = goal;
-    resultByGroup = new Map(combinedResult.map((row) => [`${row.date} ${row.campaignName}`, row.value]));
-
-    if (valueColumns.length > 0) {
-      const valueColumnAggregates = valueColumns.map((col) => aggregateColumnByCampaignGroup(rows, META_API_COLUMNS.date, META_API_COLUMNS.campaignName, col));
-      const combinedValue = combineCampaignGroupValues(valueColumnAggregates);
-      revenueByGroup = new Map(combinedValue.map((row) => [`${row.date} ${row.campaignName}`, row.value]));
-    }
-    break;
-  }
-
-  return { resultType, resultByGroup, revenueByGroup };
+function rawColumnString(row: RawSourceRow, column: string): string | null {
+  const raw = row[column];
+  return typeof raw === "string" && raw.length > 0 ? raw : null;
 }
 
-function resolveAdSetGroupResult(
-  rows: ReturnType<typeof flattenMetaApiRowsToRawSourceRows>,
+/** Núcleo genérico reaproveitado pelas 4 granularidades (campanha/conjunto/
+ * anúncio/posicionamento) — cada objetivo mapeado contribui o resultado das
+ * chaves que efetivamente teve; uma chave já resolvida por um objetivo de
+ * prioridade mais alta nunca é sobrescrita por outro. Nenhuma chave de uma
+ * campanha é descartada por causa de outra campanha ter um objetivo
+ * diferente (o bug corrigido aqui) — só o conflito genuíno MESMA
+ * chave+2 objetivos aplica a prioridade.
+ *
+ * `touchedKeys` (achado desta etapa, ao escrever os testes): os agregados
+ * de `aggregateColumnByXGroup` criam uma entrada PRA TODA campanha do lote,
+ * com valor 0, mesmo quando a coluna mapeada nunca apareceu naquela linha
+ * (0 somado vs. "nunca presente" ficam indistinguíveis no valor agregado) —
+ * usar só `combinedResult` pra decidir quem reivindica uma chave faria o
+ * primeiro objetivo da prioridade "vencer" TODA campanha do lote de novo
+ * (reintroduzindo o bug, só que agora com valor 0 fabricado). Por isso
+ * cada objetivo só reivindica as chaves onde pelo menos uma linha BRUTA
+ * teve a coluna mapeada de fato presente (`parseSourceNumericValue(...).kind
+ * !== "empty"`) — nunca um valor 0 de coluna ausente interpretado como
+ * "este objetivo também aconteceu aqui". */
+function resolveGroupResultByGoalPriority<TRow extends { date: string; value: number; invalidRowCount: number }>(
+  rows: RawSourceRow[],
   mappingGroupsByGoal: Map<PerformanceGoal, { resultColumns: string[]; valueColumns: string[] }>,
+  buildKey: (row: TRow) => string,
+  buildRawKey: (row: RawSourceRow) => string | null,
+  aggregateColumn: (col: string) => TRow[],
+  combineAggregates: (aggregates: TRow[][]) => TRow[],
 ) {
-  let resultType: PerformanceGoal | null = null;
-  let resultByGroup: Map<string, number> | null = null;
-  let revenueByGroup: Map<string, number> | null = null;
+  const resultTypeByGroup = new Map<string, PerformanceGoal>();
+  const resultByGroup = new Map<string, number>();
+  const revenueByGroup = new Map<string, number>();
 
-  for (const [goal, { resultColumns, valueColumns }] of mappingGroupsByGoal) {
-    if (goal !== "leads" && goal !== "sales") continue;
-    const resultColumnAggregates = resultColumns.map((col) =>
-      aggregateColumnByAdSetGroup(rows, META_API_COLUMNS.date, META_API_COLUMNS.campaignName, META_API_COLUMNS.adSetName, col),
-    );
-    const combinedResult = combineAdSetGroupValues(resultColumnAggregates);
-    if (combinedResult.length === 0) continue;
+  for (const goal of GRANULAR_RESULT_GOAL_PRIORITY) {
+    const mapping = mappingGroupsByGoal.get(goal);
+    if (!mapping) continue;
+    const { resultColumns, valueColumns } = mapping;
 
-    resultType = goal;
-    resultByGroup = new Map(combinedResult.map((row) => [`${row.date} ${row.campaignName} ${row.adSetName}`, row.value]));
-
-    if (valueColumns.length > 0) {
-      const valueColumnAggregates = valueColumns.map((col) =>
-        aggregateColumnByAdSetGroup(rows, META_API_COLUMNS.date, META_API_COLUMNS.campaignName, META_API_COLUMNS.adSetName, col),
-      );
-      const combinedValue = combineAdSetGroupValues(valueColumnAggregates);
-      revenueByGroup = new Map(combinedValue.map((row) => [`${row.date} ${row.campaignName} ${row.adSetName}`, row.value]));
+    const touchedKeys = new Set<string>();
+    for (const row of rows) {
+      const key = buildRawKey(row);
+      if (key === null) continue;
+      if (resultColumns.some((col) => parseSourceNumericValue(row[col]).kind !== "empty")) touchedKeys.add(key);
     }
-    break;
+    if (touchedKeys.size === 0) continue;
+
+    const combinedResult = combineAggregates(resultColumns.map((col) => aggregateColumn(col)));
+
+    let valueByKey: Map<string, number> | null = null;
+    if (valueColumns.length > 0) {
+      const combinedValue = combineAggregates(valueColumns.map((col) => aggregateColumn(col)));
+      valueByKey = new Map(combinedValue.map((row) => [buildKey(row), row.value]));
+    }
+
+    for (const row of combinedResult) {
+      const key = buildKey(row);
+      if (!touchedKeys.has(key)) continue;
+      if (resultTypeByGroup.has(key)) continue;
+      resultTypeByGroup.set(key, goal);
+      resultByGroup.set(key, row.value);
+      if (valueByKey?.has(key)) revenueByGroup.set(key, valueByKey.get(key) as number);
+    }
   }
 
-  return { resultType, resultByGroup, revenueByGroup };
+  return {
+    resultTypeByGroup: resultTypeByGroup.size > 0 ? resultTypeByGroup : null,
+    resultByGroup: resultByGroup.size > 0 ? resultByGroup : null,
+    revenueByGroup: revenueByGroup.size > 0 ? revenueByGroup : null,
+  };
 }
 
-function resolveCreativeGroupResult(
+export function resolveCampaignGroupResult(
   rows: ReturnType<typeof flattenMetaApiRowsToRawSourceRows>,
   mappingGroupsByGoal: Map<PerformanceGoal, { resultColumns: string[]; valueColumns: string[] }>,
 ) {
-  let resultType: PerformanceGoal | null = null;
-  let resultByGroup: Map<string, number> | null = null;
-  let revenueByGroup: Map<string, number> | null = null;
-
-  for (const [goal, { resultColumns, valueColumns }] of mappingGroupsByGoal) {
-    if (goal !== "leads" && goal !== "sales") continue;
-    const resultColumnAggregates = resultColumns.map((col) =>
-      aggregateColumnByAdCreativeGroup(rows, META_API_COLUMNS.date, META_API_COLUMNS.campaignName, META_API_COLUMNS.adName, col),
-    );
-    const combinedResult = combineAdCreativeGroupValues(resultColumnAggregates);
-    if (combinedResult.length === 0) continue;
-
-    resultType = goal;
-    resultByGroup = new Map(combinedResult.map((row) => [`${row.date} ${row.campaignName} ${row.creativeName}`, row.value]));
-
-    if (valueColumns.length > 0) {
-      const valueColumnAggregates = valueColumns.map((col) =>
-        aggregateColumnByAdCreativeGroup(rows, META_API_COLUMNS.date, META_API_COLUMNS.campaignName, META_API_COLUMNS.adName, col),
-      );
-      const combinedValue = combineAdCreativeGroupValues(valueColumnAggregates);
-      revenueByGroup = new Map(combinedValue.map((row) => [`${row.date} ${row.campaignName} ${row.creativeName}`, row.value]));
-    }
-    break;
-  }
-
-  return { resultType, resultByGroup, revenueByGroup };
+  return resolveGroupResultByGoalPriority(
+    rows,
+    mappingGroupsByGoal,
+    (row) => `${row.date} ${row.campaignName}`,
+    (row) => {
+      const date = rawColumnString(row, META_API_COLUMNS.date);
+      const campaignName = rawColumnString(row, META_API_COLUMNS.campaignName);
+      return date && campaignName ? `${date} ${campaignName}` : null;
+    },
+    (col) => aggregateColumnByCampaignGroup(rows, META_API_COLUMNS.date, META_API_COLUMNS.campaignName, col),
+    combineCampaignGroupValues,
+  );
 }
 
-function resolvePlacementGroupResult(
+export function resolveAdSetGroupResult(
   rows: ReturnType<typeof flattenMetaApiRowsToRawSourceRows>,
   mappingGroupsByGoal: Map<PerformanceGoal, { resultColumns: string[]; valueColumns: string[] }>,
 ) {
-  let resultType: PerformanceGoal | null = null;
-  let resultByGroup: Map<string, number> | null = null;
-  let revenueByGroup: Map<string, number> | null = null;
+  return resolveGroupResultByGoalPriority(
+    rows,
+    mappingGroupsByGoal,
+    (row) => `${row.date} ${row.campaignName} ${row.adSetName}`,
+    (row) => {
+      const date = rawColumnString(row, META_API_COLUMNS.date);
+      const campaignName = rawColumnString(row, META_API_COLUMNS.campaignName);
+      const adSetName = rawColumnString(row, META_API_COLUMNS.adSetName);
+      return date && campaignName && adSetName ? `${date} ${campaignName} ${adSetName}` : null;
+    },
+    (col) => aggregateColumnByAdSetGroup(rows, META_API_COLUMNS.date, META_API_COLUMNS.campaignName, META_API_COLUMNS.adSetName, col),
+    combineAdSetGroupValues,
+  );
+}
 
-  for (const [goal, { resultColumns, valueColumns }] of mappingGroupsByGoal) {
-    if (goal !== "leads" && goal !== "sales") continue;
-    const resultColumnAggregates = resultColumns.map((col) =>
-      aggregateColumnByPlacementGroup(rows, META_API_COLUMNS.date, META_API_COLUMNS.campaignName, META_API_COLUMNS.platformPosition, col),
-    );
-    const combinedResult = combinePlacementGroupValues(resultColumnAggregates);
-    if (combinedResult.length === 0) continue;
+export function resolveCreativeGroupResult(
+  rows: ReturnType<typeof flattenMetaApiRowsToRawSourceRows>,
+  mappingGroupsByGoal: Map<PerformanceGoal, { resultColumns: string[]; valueColumns: string[] }>,
+) {
+  return resolveGroupResultByGoalPriority(
+    rows,
+    mappingGroupsByGoal,
+    (row) => `${row.date} ${row.campaignName} ${row.creativeName}`,
+    (row) => {
+      const date = rawColumnString(row, META_API_COLUMNS.date);
+      const campaignName = rawColumnString(row, META_API_COLUMNS.campaignName);
+      const creativeName = rawColumnString(row, META_API_COLUMNS.adName);
+      return date && campaignName && creativeName ? `${date} ${campaignName} ${creativeName}` : null;
+    },
+    (col) => aggregateColumnByAdCreativeGroup(rows, META_API_COLUMNS.date, META_API_COLUMNS.campaignName, META_API_COLUMNS.adName, col),
+    combineAdCreativeGroupValues,
+  );
+}
 
-    resultType = goal;
-    resultByGroup = new Map(combinedResult.map((row) => [`${row.date} ${row.campaignName} ${row.platformPosition}`, row.value]));
-
-    if (valueColumns.length > 0) {
-      const valueColumnAggregates = valueColumns.map((col) =>
-        aggregateColumnByPlacementGroup(rows, META_API_COLUMNS.date, META_API_COLUMNS.campaignName, META_API_COLUMNS.platformPosition, col),
-      );
-      const combinedValue = combinePlacementGroupValues(valueColumnAggregates);
-      revenueByGroup = new Map(combinedValue.map((row) => [`${row.date} ${row.campaignName} ${row.platformPosition}`, row.value]));
-    }
-    break;
-  }
-
-  return { resultType, resultByGroup, revenueByGroup };
+export function resolvePlacementGroupResult(
+  rows: ReturnType<typeof flattenMetaApiRowsToRawSourceRows>,
+  mappingGroupsByGoal: Map<PerformanceGoal, { resultColumns: string[]; valueColumns: string[] }>,
+) {
+  return resolveGroupResultByGoalPriority(
+    rows,
+    mappingGroupsByGoal,
+    (row) => `${row.date} ${row.campaignName} ${row.platformPosition}`,
+    (row) => {
+      const date = rawColumnString(row, META_API_COLUMNS.date);
+      const campaignName = rawColumnString(row, META_API_COLUMNS.campaignName);
+      const platformPosition = rawColumnString(row, META_API_COLUMNS.platformPosition);
+      return date && campaignName && platformPosition ? `${date} ${campaignName} ${platformPosition}` : null;
+    },
+    (col) => aggregateColumnByPlacementGroup(rows, META_API_COLUMNS.date, META_API_COLUMNS.campaignName, META_API_COLUMNS.platformPosition, col),
+    combinePlacementGroupValues,
+  );
 }
 
 async function finishRun(

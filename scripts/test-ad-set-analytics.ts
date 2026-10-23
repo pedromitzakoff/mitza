@@ -157,8 +157,9 @@ const resultByGroupAgg = aggregateColumnByAdSetGroup(resultRows, COLUMNS.dateCol
 const combined = combineAdSetGroupValues([resultByGroupAgg]);
 const resultByGroup = new Map(combined.map((r) => [`${r.date} ${r.campaignName} ${r.adSetName}`, r.value]));
 
+const resultTypeByGroup = new Map(Array.from(resultByGroup.keys()).map((key) => [key, "sales" as const]));
 const upsertRows = buildAdSetDailyMetricsUpsertRows("client-1", "source-1", "meta", resultAdSetAgg, {
-  resultType: "sales",
+  resultTypeByGroup,
   resultByGroup,
   revenueByGroup: null,
 });

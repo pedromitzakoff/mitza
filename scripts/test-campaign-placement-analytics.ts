@@ -104,8 +104,9 @@ const resultByGroupAgg = aggregateColumnByPlacementGroup(
 const combined = combinePlacementGroupValues([resultByGroupAgg]);
 const resultByGroup = new Map(combined.map((r) => [`${r.date} ${r.campaignName} ${r.platformPosition}`, r.value]));
 
+const resultTypeByGroup = new Map(Array.from(resultByGroup.keys()).map((key) => [key, "sales" as const]));
 const upsertRows = buildCampaignPlacementDailyMetricsUpsertRows("client-1", "source-1", "meta", resultPlacementAgg, {
-  resultType: "sales",
+  resultTypeByGroup,
   resultByGroup,
   revenueByGroup: null,
 });

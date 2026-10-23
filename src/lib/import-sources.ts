@@ -519,13 +519,22 @@ export interface AdCreativeDailyMetricsUpsertRow {
  * usada por `daily_performance` — nunca uma segunda lógica de mapeamento) e
  * são resolvidos pela MESMA chave composta do agregado, então cada
  * campanha+criativo recebe só o resultado que efetivamente teve naquele dia.
+ *
+ * KOFF Analytics — "Reestruturar lógica de mapeamento de objetivos" (pedido
+ * explícito do usuário: uma conta pode ter mais de um objetivo ativo, ou o
+ * objetivo pode mudar com o tempo). `resultTypeByGroup` é um objetivo POR
+ * CHAVE (nunca mais um único objetivo pra todo o lote) — cada
+ * campanha+criativo+dia grava o objetivo que ele efetivamente teve, e dois
+ * objetivos mapeados simultaneamente convivem na mesma sincronização sem
+ * um descartar o outro (ver `resolveCreativeGroupResult`,
+ * `lib/meta-api-ingest-run.ts`, que monta este mapa).
  */
 export function buildAdCreativeDailyMetricsUpsertRows(
   clientId: string,
   importSourceId: string,
   aggregated: AggregatedAdCreativeRow[],
   options?: {
-    resultType?: PerformanceGoal | null;
+    resultTypeByGroup?: Map<string, PerformanceGoal> | null;
     resultByGroup?: Map<string, number> | null;
     revenueByGroup?: Map<string, number> | null;
   },
@@ -548,7 +557,7 @@ export function buildAdCreativeDailyMetricsUpsertRows(
       reach: row.reach,
       clicks: row.clicks,
       link_clicks: row.linkClicks,
-      result_type: resultCount !== undefined ? (options?.resultType ?? null) : null,
+      result_type: resultCount !== undefined ? (options?.resultTypeByGroup?.get(key) ?? null) : null,
       result_count: resultCount !== undefined ? Math.round(resultCount) : null,
       revenue: options?.revenueByGroup?.get(key) ?? null,
     };
@@ -946,6 +955,10 @@ export interface AdSetDailyMetricsUpsertRow {
  * Monta as linhas prontas pro upsert em `ad_set_daily_metrics` — chave
  * `(import_source_id, date, channel, campaign_name, ad_set_name)`. `channel`
  * nunca inferido, sempre o mesmo de `import_sources.channel` da fonte.
+ *
+ * KOFF Analytics — "Reestruturar lógica de mapeamento de objetivos":
+ * `resultTypeByGroup` é por CHAVE (ver doc-comment de
+ * `buildAdCreativeDailyMetricsUpsertRows`, mesma regra).
  */
 export function buildAdSetDailyMetricsUpsertRows(
   clientId: string,
@@ -953,7 +966,7 @@ export function buildAdSetDailyMetricsUpsertRows(
   channel: TrafficChannel,
   aggregated: AggregatedAdSetRow[],
   options?: {
-    resultType?: PerformanceGoal | null;
+    resultTypeByGroup?: Map<string, PerformanceGoal> | null;
     resultByGroup?: Map<string, number> | null;
     revenueByGroup?: Map<string, number> | null;
   },
@@ -975,7 +988,7 @@ export function buildAdSetDailyMetricsUpsertRows(
       reach: row.reach,
       clicks: row.clicks,
       link_clicks: row.linkClicks,
-      result_type: resultCount !== undefined ? (options?.resultType ?? null) : null,
+      result_type: resultCount !== undefined ? (options?.resultTypeByGroup?.get(key) ?? null) : null,
       result_count: resultCount !== undefined ? Math.round(resultCount) : null,
       revenue: options?.revenueByGroup?.get(key) ?? null,
     };
@@ -1003,6 +1016,12 @@ export interface CampaignDailyMetricsUpsertRow {
  * Monta as linhas prontas pro upsert em `campaign_daily_metrics` — chave
  * `(import_source_id, date, channel, campaign_name)`. `channel` nunca
  * inferido, sempre o mesmo de `import_sources.channel` da fonte.
+ *
+ * KOFF Analytics — "Reestruturar lógica de mapeamento de objetivos":
+ * `resultTypeByGroup` é por CHAVE (ver doc-comment de
+ * `buildAdCreativeDailyMetricsUpsertRows`, mesma regra) — cada campanha+dia
+ * grava o objetivo que ela efetivamente teve, nunca um único objetivo
+ * "vencedor" escolhido pra conta inteira.
  */
 export function buildCampaignDailyMetricsUpsertRows(
   clientId: string,
@@ -1010,7 +1029,7 @@ export function buildCampaignDailyMetricsUpsertRows(
   channel: TrafficChannel,
   aggregated: AggregatedCampaignRow[],
   options?: {
-    resultType?: PerformanceGoal | null;
+    resultTypeByGroup?: Map<string, PerformanceGoal> | null;
     resultByGroup?: Map<string, number> | null;
     revenueByGroup?: Map<string, number> | null;
   },
@@ -1030,7 +1049,7 @@ export function buildCampaignDailyMetricsUpsertRows(
       reach: row.reach,
       clicks: row.clicks,
       link_clicks: row.linkClicks,
-      result_type: resultCount !== undefined ? (options?.resultType ?? null) : null,
+      result_type: resultCount !== undefined ? (options?.resultTypeByGroup?.get(key) ?? null) : null,
       result_count: resultCount !== undefined ? Math.round(resultCount) : null,
       revenue: options?.revenueByGroup?.get(key) ?? null,
     };
@@ -1192,6 +1211,10 @@ export interface CampaignPlacementDailyMetricsUpsertRow {
  * — chave `(import_source_id, date, channel, campaign_name,
  * platform_position)`. `channel` nunca inferido, sempre o mesmo de
  * `import_sources.channel` da fonte.
+ *
+ * KOFF Analytics — "Reestruturar lógica de mapeamento de objetivos":
+ * `resultTypeByGroup` é por CHAVE (ver doc-comment de
+ * `buildAdCreativeDailyMetricsUpsertRows`, mesma regra).
  */
 export function buildCampaignPlacementDailyMetricsUpsertRows(
   clientId: string,
@@ -1199,7 +1222,7 @@ export function buildCampaignPlacementDailyMetricsUpsertRows(
   channel: TrafficChannel,
   aggregated: AggregatedPlacementRow[],
   options?: {
-    resultType?: PerformanceGoal | null;
+    resultTypeByGroup?: Map<string, PerformanceGoal> | null;
     resultByGroup?: Map<string, number> | null;
     revenueByGroup?: Map<string, number> | null;
   },
@@ -1216,7 +1239,7 @@ export function buildCampaignPlacementDailyMetricsUpsertRows(
       campaign_id: row.campaignId,
       platform_position: row.platformPosition,
       spend: row.spend,
-      result_type: resultCount !== undefined ? (options?.resultType ?? null) : null,
+      result_type: resultCount !== undefined ? (options?.resultTypeByGroup?.get(key) ?? null) : null,
       result_count: resultCount !== undefined ? Math.round(resultCount) : null,
       revenue: options?.revenueByGroup?.get(key) ?? null,
     };
