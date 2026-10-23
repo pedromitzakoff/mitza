@@ -104,6 +104,9 @@ export function ActionTypePicker({
         <SubmitButton className="self-start rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover" pendingChildren="Salvando…">
           Salvar mapeamento
         </SubmitButton>
+        <p className="text-xs text-muted-foreground">
+          Substitui o evento ativo deste objetivo, se já houver um — nunca soma os dois.
+        </p>
       </form>
     </div>
   );

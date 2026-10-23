@@ -161,6 +161,11 @@ export function MetaConnectionDrawer({
       {importSource && (
         <section className="flex flex-col gap-3 border-t border-border pt-4">
           <h3 className="text-sm font-semibold text-foreground">Mapeamento de resultados</h3>
+          <p className="text-xs text-muted-foreground">
+            Cada objetivo tem só 1 evento ativo por vez — salvar um novo abaixo substitui o anterior (desativa automaticamente),
+            nunca soma os dois. Lead de formulário e mensagem iniciada, por exemplo, são eventos diferentes: escolha qual deles
+            representa este objetivo pra esta conta.
+          </p>
           {mappings.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Nenhum mapeamento ativo — investimento/campanhas continuam sendo gravados normalmente, mas leads/vendas/seguidores não

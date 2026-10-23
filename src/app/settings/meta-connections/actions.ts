@@ -180,12 +180,27 @@ export async function discoverActionTypesAction(accountId: string): Promise<{ er
 }
 
 /**
- * Adiciona um novo mapeamento ativo — NUNCA desativa outro mapeamento do
- * mesmo objetivo automaticamente (um objetivo pode somar mais de um
- * `action_type` ao mesmo tempo, ver `docs/STRACT_INTEGRATION_ARCHITECTURE.md`,
- * ponto 2 da arquitetura original — a mesma regra vale aqui). Pra retirar um
- * mapeamento, o admin usa "Desativar" explicitamente
- * (`deactivateMetricMappingAction`) — nunca um `UPDATE` implícito aqui.
+ * Adiciona um novo mapeamento ativo — SEMPRE substitui qualquer mapeamento
+ * já ativo do MESMO objetivo (nunca soma dois eventos sob o mesmo rótulo).
+ *
+ * KOFF Analytics — "Um evento por objetivo, nunca somar" (pedido explícito
+ * do usuário, reversão de uma decisão anterior documentada em
+ * `supabase/stract-metric-mappings-multi-column.sql`: permitir várias
+ * colunas ativas por objetivo — ex.: "lead" de formulário + "mensagem
+ * iniciada" — e somá-las fazia sentido em teoria ("tudo é lead"), mas na
+ * prática produziu um número errado pro cliente: 20 leads reais de
+ * formulário + 20 "mensagens iniciadas" que nem chegaram até ele (WhatsApp/
+ * Direct mal configurado) viraram "40 leads" relatados. "Lead de formulário
+ * é uma coisa, lead de mensagem é outra" — cada evento precisa da própria
+ * métrica, nunca fundido com outro.
+ *
+ * Salvar aqui desativa o mapeamento anterior do mesmo objetivo (se houver)
+ * e ativa o novo na mesma operação — mesma disciplina de sempre pra trocar
+ * um mapeamento (nunca `UPDATE` em `result_column`/`value_column` em si,
+ * sempre desativa + insere linha nova, histórico vive em `created_at`), só
+ * que automático agora em vez de exigir dois cliques manuais (Desativar +
+ * Novo mapeamento) — substituir o evento de um objetivo que mudou com o
+ * tempo continua sendo 1 ação só.
  */
 export async function saveMetricMappingAction(importSourceId: string, clientId: string, formData: FormData) {
   await requireAdmin();
@@ -208,18 +223,17 @@ export async function saveMetricMappingAction(importSourceId: string, clientId: 
   const resultColumn = `${META_API_ACTIONS_PREFIX}${actionType}`;
   const valueColumn = valueActionType ? `${META_API_ACTION_VALUES_PREFIX}${valueActionType}` : null;
 
-  const { data: duplicate } = await supabase
+  // Substitui, nunca soma: desativa qualquer mapeamento já ativo pro MESMO
+  // objetivo antes de ativar o novo — nunca mais que 1 evento ativo por
+  // objetivo ao mesmo tempo.
+  const { error: deactivateError } = await supabase
     .from("metric_mappings")
-    .select("id")
+    .update({ active: false })
     .eq("import_source_id", importSourceId)
     .eq("goal", goal as PerformanceGoal)
-    .eq("result_column", resultColumn)
-    .eq("active", true)
-    .maybeSingle();
+    .eq("active", true);
 
-  if (duplicate) {
-    failure("Este evento já está mapeado e ativo pra este objetivo.", clientId);
-  }
+  if (deactivateError) failure("Não foi possível substituir o mapeamento anterior deste objetivo.", clientId);
 
   const { error } = await supabase.from("metric_mappings").insert({
     import_source_id: importSourceId,
@@ -232,7 +246,7 @@ export async function saveMetricMappingAction(importSourceId: string, clientId: 
   if (error) failure("Não foi possível salvar o mapeamento.", clientId);
 
   revalidatePath("/settings/meta-connections");
-  success("Mapeamento salvo.", clientId);
+  success("Mapeamento salvo — substituiu o evento anterior deste objetivo, se havia um.", clientId);
 }
 
 /**

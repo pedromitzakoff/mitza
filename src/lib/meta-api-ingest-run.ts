@@ -193,9 +193,15 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload): Promi
     else spendRowsWritten = spendUpsertRows.length;
   }
 
-  // Mesmo agrupamento por objetivo de `runImportForSource` — um objetivo
-  // pode somar mais de um `action_type` (ex.: "lead" + "onsite_conversion.lead_grouped"),
-  // por isso agrupa por goal antes de gravar (nunca sobrescreve).
+  // KOFF Analytics — "Um evento por objetivo, nunca somar" (pedido
+  // explícito do usuário): `saveMetricMappingAction` (`settings/meta-connections/actions.ts`)
+  // garante no momento de salvar que nunca existe mais de 1 mapeamento
+  // ativo por objetivo (salvar um novo desativa o anterior). O agrupamento
+  // por goal aqui continua suportando MAIS DE UM `result_column` ativo só
+  // como tolerância defensiva — nunca deveria acontecer em uso normal
+  // daqui pra frente, mas se acontecer (ex.: linha antiga de antes desta
+  // correção, ainda não limpa no banco), soma em vez de escolher um dos
+  // dois arbitrariamente ou falhar a sincronização por causa disso.
   const mappingGroupsByGoal = new Map<PerformanceGoal, { resultColumns: string[]; valueColumns: string[] }>();
   for (const mapping of mappings ?? []) {
     const goal = mapping.goal as PerformanceGoal;
