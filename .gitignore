@@ -13,6 +13,10 @@
 # testing
 /coverage
 
+# KOFF Analytics — saída da auditoria read-only (scripts/audit-meta-attribution.ts)
+# contém investimento/resultado reais de contas de cliente — nunca committed.
+/scripts/audit-output/
+
 # next.js
 /.next/
 /out/
