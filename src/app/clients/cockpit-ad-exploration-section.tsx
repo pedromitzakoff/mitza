@@ -50,7 +50,7 @@ import {
  * aviso da limitação quando escopada por campanha.
  */
 
-type ExplorationLevel = "campaigns" | "adsets" | "ads";
+export type ExplorationLevel = "campaigns" | "adsets" | "ads";
 
 const STORAGE_KEY_PREFIX = "mitza:cockpit:ad-exploration-columns:";
 
@@ -275,15 +275,22 @@ export function CockpitAdExplorationSection({
   campaigns,
   adSetDailyRows,
   creativeDailyRows,
+  /** KOFF Analytics — "Adaptar o sistema": Campanhas e Anúncios viraram
+   * páginas próprias (menu lateral) em vez de abas de uma mesma seção —
+   * cada página abre direto na aba certa, sem o usuário precisar trocar
+   * manualmente ao entrar. `"campaigns"` preserva o comportamento de
+   * sempre do Cockpit (única tela que ainda embute as 3 abas juntas). */
+  initialLevel = "campaigns",
 }: {
   clientId: string;
   resultType: PerformanceGoal | null;
   campaigns: ExplorationRow[];
   adSetDailyRows: AdSetDailyMetricRow[];
   creativeDailyRows: AdCreativeDailyMetricRow[];
+  initialLevel?: ExplorationLevel;
 }) {
   const [selectedCampaign, setSelectedCampaign] = useState<{ id: string; name: string } | null>(null);
-  const [level, setLevel] = useState<ExplorationLevel>("campaigns");
+  const [level, setLevel] = useState<ExplorationLevel>(initialLevel);
   const [searchText, setSearchText] = useState("");
   const [searchMode, setSearchMode] = useState<NameFilterMode>("contains");
   const [sort, setSort] = useState<SortState>(null);

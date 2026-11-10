@@ -8,13 +8,17 @@ import {
   Briefcase,
   ChevronRight,
   Clock,
+  Image as ImageIcon,
+  LayoutDashboard,
   LogOut,
+  Megaphone,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
   Search,
   Settings,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
@@ -134,6 +138,38 @@ const GESTAO_ITEMS: NavItem[] = [
   { label: "Clientes", href: "/clients", icon: Briefcase, isActive: (p) => p === "/clients" || p.startsWith("/clients/new") },
   { label: "Configurações", href: "/settings", icon: Settings, adminOnly: true, isActive: (p) => p.startsWith("/settings") },
 ];
+
+/**
+ * KOFF Analytics — "Adaptar o sistema" (pedido explícito do usuário, a
+ * partir da referência visual que ele mostrou): dentro do workspace de UM
+ * cliente, a Sidebar troca a Carteira (busca + lista de todos os clientes)
+ * por este menu de 5 itens — Dashboard/Campanhas/Anúncios/Metas sempre
+ * escopados ao cliente ativo, "Contas" voltando pra `/clients` (que por sua
+ * vez já limpa `activeClientId`, fazendo a Carteira reaparecer sozinha —
+ * nenhum estado duplicado, a MESMA fonte de verdade de sempre,
+ * `resolveActiveClientIdFromPathname`). `buildWorkspaceHref` (já existia,
+ * suporta sufixo) preserva o mês como sempre fez pra qualquer link do
+ * workspace.
+ */
+export function buildClientNavItems(clientId: string, month: string | null): NavItem[] {
+  return [
+    { label: "Dashboard", href: buildWorkspaceHref(clientId, "", month), icon: LayoutDashboard, isActive: (p) => p === `/clients/${clientId}` },
+    {
+      label: "Campanhas",
+      href: buildWorkspaceHref(clientId, "/campanhas", month),
+      icon: Megaphone,
+      isActive: (p) => p.startsWith(`/clients/${clientId}/campanhas`),
+    },
+    {
+      label: "Anúncios",
+      href: buildWorkspaceHref(clientId, "/anuncios", month),
+      icon: ImageIcon,
+      isActive: (p) => p.startsWith(`/clients/${clientId}/anuncios`),
+    },
+    { label: "Metas", href: buildWorkspaceHref(clientId, "/metas", month), icon: Target, isActive: (p) => p.startsWith(`/clients/${clientId}/metas`) },
+    { label: "Contas", href: "/clients", icon: Briefcase, isActive: (p) => p === "/clients" || p.startsWith("/clients/new") },
+  ];
+}
 
 /** Label some no desktop quando `collapsed` (só md+ — no drawer mobile o
  * texto sempre aparece, controlado pelas mesmas classes responsivas). Sem
@@ -385,77 +421,123 @@ function SidebarContent({
         </button>
       </div>
 
-      {/* CARTEIRA — seção 1 do pedido. Busca + lista ficam JUNTAS numa
-          região com scroll PRÓPRIO (`flex-1 min-h-0 overflow-y-auto`),
-          separada da área "Agência"/"Gestão"/rodapé abaixo (`shrink-0`,
-          nunca rola com a carteira). `md:hidden` quando `collapsed`: some
-          só no desktop recolhido (mobile sempre mostra tudo, mesmo padrão
-          de sempre — ver `ItemLabel`); o bloco compacto equivalente
-          (abaixo) faz o inverso (`hidden md:flex` quando `collapsed`). */}
-      <div className={`flex min-h-0 flex-1 flex-col px-2.5 ${collapsed ? "md:hidden" : ""}`}>
-        <label className="sr-only" htmlFor="sidebar-client-search">
-          Buscar cliente
-        </label>
-        <div className="relative shrink-0">
-          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground-subtle" aria-hidden="true" />
-          <input
-            ref={searchInputRef}
-            id="sidebar-client-search"
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar cliente..."
-            className="w-full rounded-md bg-sidebar-search-surface py-1.5 pl-7 pr-2 text-[13px] text-sidebar-foreground placeholder:text-sidebar-foreground-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
-          />
-        </div>
+      {activeClientId ? (
+        <>
+          {/* MENU DO CLIENTE — dentro do workspace de um cliente, a
+              Carteira cede lugar a este menu fixo de 5 itens, sempre
+              escopado ao cliente ativo (ver `buildClientNavItems`). O
+              nome/avatar do cliente substitui a marca ("onde está escrito
+              Mitza, fica o nome do cliente", pedido explícito do usuário)
+              — só na apresentação expandida; recolhida mostra só o avatar,
+              mesmo padrão de sempre. */}
+          <div className={`flex min-h-0 flex-1 flex-col px-2.5 ${collapsed ? "md:hidden" : ""}`}>
+            {activeClient && (
+              <div className="mb-2 flex shrink-0 items-center gap-2 border-b border-sidebar-border pb-2.5">
+                <ClientAvatar name={activeClient.name} imageUrl={activeClient.avatarUrl} size="xs" />
+                <span className="truncate text-sm font-semibold text-sidebar-foreground">{activeClient.name}</span>
+              </div>
+            )}
+            <nav aria-label="Menu do cliente" className="flex flex-col gap-0.5">
+              {buildClientNavItems(activeClientId, month).map((item) => (
+                <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
+              ))}
+            </nav>
+          </div>
 
-        <div className="relative mt-2 min-h-0 flex-1">
-          <div ref={scrollRef} className="mitza-scrollbar-hidden h-full overflow-y-auto">
-            <div ref={contentRef}>
-              <nav aria-label="Carteira de clientes" className="flex flex-col gap-0.5 pb-1">
-                {filteredClients.map((client) => (
-                  <ClientRow key={client.id} client={client} activeClientId={activeClientId} month={month} collapsed={collapsed} />
-                ))}
-              </nav>
-              {walletClients.length === 0 && <p className="px-0.5 py-2 text-xs text-sidebar-foreground-subtle">Nenhum cliente na carteira ainda.</p>}
-              {walletClients.length > 0 && filteredClients.length === 0 && (
-                <p className="px-0.5 py-2 text-xs text-sidebar-foreground-subtle">Nenhum cliente encontrado.</p>
-              )}
+          <div className={collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"}>
+            {activeClient && (
+              <div title={activeClient.name} aria-current="page" className="rounded-full ring-2 ring-sand">
+                <ClientAvatar name={activeClient.name} imageUrl={activeClient.avatarUrl} size="xs" />
+              </div>
+            )}
+            {buildClientNavItems(activeClientId, month).map((item) => (
+              <Tooltip key={item.label} label={item.label}>
+                <Link
+                  href={item.href}
+                  aria-label={item.label}
+                  aria-current={item.isActive(pathname) ? "page" : undefined}
+                  className={`mitza-pressable flex h-7 w-7 items-center justify-center rounded-md ${
+                    item.isActive(pathname) ? ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES : ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES
+                  }`}
+                >
+                  <item.icon className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </Tooltip>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* CARTEIRA — seção 1 do pedido. Busca + lista ficam JUNTAS numa
+              região com scroll PRÓPRIO (`flex-1 min-h-0 overflow-y-auto`),
+              separada da área "Agência"/"Gestão"/rodapé abaixo (`shrink-0`,
+              nunca rola com a carteira). `md:hidden` quando `collapsed`:
+              some só no desktop recolhido (mobile sempre mostra tudo,
+              mesmo padrão de sempre — ver `ItemLabel`); o bloco compacto
+              equivalente (abaixo) faz o inverso (`hidden md:flex` quando
+              `collapsed`). Só aparece FORA do workspace de um cliente —
+              dentro dele, o menu do cliente (acima) toma o lugar. */}
+          <div className={`flex min-h-0 flex-1 flex-col px-2.5 ${collapsed ? "md:hidden" : ""}`}>
+            <label className="sr-only" htmlFor="sidebar-client-search">
+              Buscar cliente
+            </label>
+            <div className="relative shrink-0">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground-subtle" aria-hidden="true" />
+              <input
+                ref={searchInputRef}
+                id="sidebar-client-search"
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar cliente..."
+                className="w-full rounded-md bg-sidebar-search-surface py-1.5 pl-7 pr-2 text-[13px] text-sidebar-foreground placeholder:text-sidebar-foreground-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+              />
+            </div>
+
+            <div className="relative mt-2 min-h-0 flex-1">
+              <div ref={scrollRef} className="mitza-scrollbar-hidden h-full overflow-y-auto">
+                <div ref={contentRef}>
+                  <nav aria-label="Carteira de clientes" className="flex flex-col gap-0.5 pb-1">
+                    {filteredClients.map((client) => (
+                      <ClientRow key={client.id} client={client} activeClientId={activeClientId} month={month} collapsed={collapsed} />
+                    ))}
+                  </nav>
+                  {walletClients.length === 0 && <p className="px-0.5 py-2 text-xs text-sidebar-foreground-subtle">Nenhum cliente na carteira ainda.</p>}
+                  {walletClients.length > 0 && filteredClients.length === 0 && (
+                    <p className="px-0.5 py-2 text-xs text-sidebar-foreground-subtle">Nenhum cliente encontrado.</p>
+                  )}
+                </div>
+              </div>
+              <div
+                aria-hidden="true"
+                className={`pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-sidebar-surface to-transparent transition-opacity duration-150 ${edges.top ? "opacity-100" : "opacity-0"}`}
+              />
+              <div
+                aria-hidden="true"
+                className={`pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-sidebar-surface to-transparent transition-opacity duration-150 ${edges.bottom ? "opacity-100" : "opacity-0"}`}
+              />
             </div>
           </div>
-          <div
-            aria-hidden="true"
-            className={`pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-sidebar-surface to-transparent transition-opacity duration-150 ${edges.top ? "opacity-100" : "opacity-0"}`}
-          />
-          <div
-            aria-hidden="true"
-            className={`pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-sidebar-surface to-transparent transition-opacity duration-150 ${edges.bottom ? "opacity-100" : "opacity-0"}`}
-          />
-        </div>
-      </div>
 
-      {/* Versão compacta pro desktop recolhido (seção 5 do pedido: "sem
-          lista de dezenas de ícones indistinguíveis") — só o cliente ATUAL
-          (se houver) + um gatilho que expande a Sidebar e foca a busca.
-          `hidden md:flex`: nunca aparece no mobile (a carteira completa
-          acima já cobre esse caso) nem no desktop expandido. */}
-      <div className={collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"}>
-        {activeClient && (
-          <div title={activeClient.name} aria-current="page" className="rounded-full ring-2 ring-sand">
-            <ClientAvatar name={activeClient.name} imageUrl={activeClient.avatarUrl} size="xs" />
+          {/* Versão compacta pro desktop recolhido (seção 5 do pedido: "sem
+              lista de dezenas de ícones indistinguíveis") — só o cliente
+              ATUAL (se houver) + um gatilho que expande a Sidebar e foca a
+              busca. `hidden md:flex`: nunca aparece no mobile (a carteira
+              completa acima já cobre esse caso) nem no desktop expandido. */}
+          <div className={collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"}>
+            <Tooltip label="Buscar cliente">
+              <button
+                type="button"
+                onClick={expandAndFocusSearch}
+                aria-label="Buscar cliente"
+                className="mitza-pressable flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground-muted hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+              >
+                <Search className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </Tooltip>
           </div>
-        )}
-        <Tooltip label="Buscar cliente">
-          <button
-            type="button"
-            onClick={expandAndFocusSearch}
-            aria-label="Buscar cliente"
-            className="mitza-pressable flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground-muted hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
-          >
-            <Search className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </Tooltip>
-      </div>
+        </>
+      )}
 
       {/* AGÊNCIA + GESTÃO — seção 2 do pedido: ferramentas transversais,
           nunca módulos do cliente. Fixo abaixo da carteira, nunca rola
