@@ -7,6 +7,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import {
   Briefcase,
   ChevronRight,
+  ChevronsUpDown,
   Clock,
   Image as ImageIcon,
   LayoutDashboard,
@@ -140,16 +141,14 @@ const GESTAO_ITEMS: NavItem[] = [
 ];
 
 /**
- * KOFF Analytics — "Adaptar o sistema" (pedido explícito do usuário, a
- * partir da referência visual que ele mostrou): dentro do workspace de UM
- * cliente, a Sidebar troca a Carteira (busca + lista de todos os clientes)
- * por este menu de 5 itens — Dashboard/Campanhas/Anúncios/Metas sempre
- * escopados ao cliente ativo, "Contas" voltando pra `/clients` (que por sua
- * vez já limpa `activeClientId`, fazendo a Carteira reaparecer sozinha —
- * nenhum estado duplicado, a MESMA fonte de verdade de sempre,
- * `resolveActiveClientIdFromPathname`). `buildWorkspaceHref` (já existia,
- * suporta sufixo) preserva o mês como sempre fez pra qualquer link do
- * workspace.
+ * KOFF Analytics — "Adaptar o sistema" (pedido explícito do usuário):
+ * dentro do workspace de UM cliente, a Sidebar troca a Carteira (busca +
+ * lista de todos os clientes) por este menu de 4 itens — Dashboard/
+ * Campanhas/Anúncios/Metas, sempre escopados ao cliente ativo. Trocar de
+ * cliente (ou voltar à Carteira) não é mais um item de menu — é o
+ * `ClientSwitcher` no topo (ver abaixo), um seletor, não uma rota do
+ * cliente. `buildWorkspaceHref` (já existia, suporta sufixo) preserva o
+ * mês como sempre fez pra qualquer link do workspace.
  */
 export function buildClientNavItems(clientId: string, month: string | null): NavItem[] {
   return [
@@ -167,7 +166,6 @@ export function buildClientNavItems(clientId: string, month: string | null): Nav
       isActive: (p) => p.startsWith(`/clients/${clientId}/anuncios`),
     },
     { label: "Metas", href: buildWorkspaceHref(clientId, "/metas", month), icon: Target, isActive: (p) => p.startsWith(`/clients/${clientId}/metas`) },
-    { label: "Contas", href: "/clients", icon: Briefcase, isActive: (p) => p === "/clients" || p.startsWith("/clients/new") },
   ];
 }
 
@@ -195,7 +193,7 @@ function NavLink({
       href={item.href}
       title={item.label}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
+      className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
         active ? ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES : ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES
       }`}
     >
@@ -244,7 +242,7 @@ function AccordionGroup({
         onClick={onToggle}
         aria-expanded={open}
         aria-controls={panelId}
-        className="flex items-center justify-between rounded-md px-0.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-sidebar-foreground-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+        className="flex items-center justify-between rounded-md px-0.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-sidebar-foreground-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel"
       >
         <span>{label}</span>
         <ChevronRight className={`h-3 w-3 shrink-0 transition-transform duration-150 ${open ? "rotate-90" : ""}`} aria-hidden="true" />
@@ -289,7 +287,7 @@ function ClientRow({
       href={href}
       title={client.name}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
+      className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
         active ? ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES : ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES
       }`}
     >
@@ -344,6 +342,122 @@ function useScrollEdges(): {
   }, []);
 
   return { scrollRef, contentRef, edges };
+}
+
+/**
+ * "Contas" como seletor, não como item de menu (pedido explícito do
+ * usuário): no topo do menu do cliente, troca rapidamente de cliente ou
+ * volta à Carteira — mesma busca local de sempre (`filterAgencyTreeClients`,
+ * `walletClients` já carregado), mesmo padrão de popover ancorado já usado
+ * em `SearchableSelect` (busca + lista + "fechar" via overlay invisível).
+ * `presentation` escolhe o gatilho (nome completo vs. só avatar), mas as
+ * duas instâncias têm estado próprio — nunca compartilhado — porque só uma
+ * fica visível por vez (a mesma convenção responsiva de sempre: a Carteira
+ * e a tira compacta, acima, também coexistem assim no DOM).
+ */
+function ClientSwitcher({
+  activeClient,
+  walletClients,
+  month,
+  presentation,
+}: {
+  activeClient: AgencyTreeClient;
+  walletClients: AgencyTreeClient[];
+  month: string | null;
+  presentation: "full" | "compact";
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const filtered = useMemo(() => filterAgencyTreeClients(walletClients, query), [walletClients, query]);
+
+  function openSwitcher() {
+    setOpen(true);
+    setQuery("");
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  return (
+    <div className={presentation === "full" ? "relative" : "relative shrink-0"}>
+      {presentation === "full" ? (
+        <button
+          type="button"
+          onClick={() => (open ? setOpen(false) : openSwitcher())}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          className="mitza-pressable flex w-full items-center gap-2 rounded-md py-1 pl-1 pr-1.5 text-left hover:bg-sidebar-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel"
+        >
+          <ClientAvatar name={activeClient.name} imageUrl={activeClient.avatarUrl} size="xs" />
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-sidebar-foreground">{activeClient.name}</span>
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-sidebar-foreground-muted" aria-hidden="true" />
+        </button>
+      ) : (
+        <Tooltip label={`Trocar cliente (${activeClient.name})`}>
+          <button
+            type="button"
+            onClick={() => (open ? setOpen(false) : openSwitcher())}
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            aria-label="Trocar cliente"
+            className="mitza-pressable block rounded-full ring-2 ring-sidebar-active-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel"
+          >
+            <ClientAvatar name={activeClient.name} imageUrl={activeClient.avatarUrl} size="xs" />
+          </button>
+        </Tooltip>
+      )}
+
+      {open && (
+        <>
+          <button type="button" aria-label="Fechar" onClick={() => setOpen(false)} className="fixed inset-0 z-40" />
+          <div
+            className={`mitza-menu-in absolute z-50 w-64 rounded-xl border border-sidebar-border bg-sidebar-surface p-2 shadow-[var(--shadow-float)] ${
+              presentation === "compact" ? "left-full top-0 ml-2" : "left-0 top-full mt-1"
+            }`}
+          >
+            <label className="sr-only" htmlFor="sidebar-client-switcher-search">
+              Buscar cliente
+            </label>
+            <input
+              ref={inputRef}
+              id="sidebar-client-switcher-search"
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Buscar cliente..."
+              className="w-full rounded-md border border-sidebar-border bg-transparent px-2 py-1 text-xs text-sidebar-foreground placeholder:text-sidebar-foreground-subtle outline-none focus:border-steel"
+            />
+            <ul role="listbox" aria-label="Clientes" className="mt-1.5 max-h-56 overflow-y-auto">
+              {filtered.map((client) => (
+                <li key={client.id} role="option" aria-selected={client.id === activeClient.id}>
+                  <Link
+                    href={buildWorkspaceHref(client.id, "", month)}
+                    onClick={() => setOpen(false)}
+                    className={`flex items-center gap-2 truncate rounded-md px-2 py-1 text-xs ${
+                      client.id === activeClient.id
+                        ? "bg-sidebar-hover font-medium text-sidebar-foreground"
+                        : "text-sidebar-foreground-secondary hover:bg-sidebar-hover hover:text-sidebar-foreground"
+                    }`}
+                  >
+                    <ClientAvatar name={client.name} imageUrl={client.avatarUrl} size="xs" />
+                    <span className="truncate">{client.name}</span>
+                  </Link>
+                </li>
+              ))}
+              {filtered.length === 0 && <li className="px-2 py-1.5 text-xs text-sidebar-foreground-subtle">Nenhum cliente encontrado.</li>}
+            </ul>
+            <Link
+              href="/clients"
+              onClick={() => setOpen(false)}
+              className="mt-1 flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-sidebar-foreground-secondary hover:bg-sidebar-hover hover:text-sidebar-foreground"
+            >
+              <Briefcase className="h-3 w-3 shrink-0" aria-hidden="true" />
+              Ver todos os clientes
+            </Link>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function SidebarContent({
@@ -415,7 +529,7 @@ function SidebarContent({
           onClick={toggleCollapsed}
           aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
-          className="hidden shrink-0 rounded-md p-1 text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand md:block"
+          className="hidden shrink-0 rounded-md p-1 text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel md:block"
         >
           {collapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
         </button>
@@ -424,17 +538,17 @@ function SidebarContent({
       {activeClientId ? (
         <>
           {/* MENU DO CLIENTE — dentro do workspace de um cliente, a
-              Carteira cede lugar a este menu fixo de 5 itens, sempre
+              Carteira cede lugar a este menu fixo de 4 itens, sempre
               escopado ao cliente ativo (ver `buildClientNavItems`). O
-              nome/avatar do cliente substitui a marca ("onde está escrito
-              Mitza, fica o nome do cliente", pedido explícito do usuário)
-              — só na apresentação expandida; recolhida mostra só o avatar,
-              mesmo padrão de sempre. */}
+              nome/avatar do cliente substitui a marca, e funciona como
+              SELETOR (`ClientSwitcher`, não um item de menu) — "Contas"
+              deixou de ser uma rota pra ser essa troca rápida no topo,
+              pedido explícito do usuário. Só na apresentação expandida;
+              recolhida mostra só o avatar (mesmo seletor, `presentation="compact"`). */}
           <div className={`flex min-h-0 flex-1 flex-col px-2.5 ${collapsed ? "md:hidden" : ""}`}>
             {activeClient && (
-              <div className="mb-2 flex shrink-0 items-center gap-2 border-b border-sidebar-border pb-2.5">
-                <ClientAvatar name={activeClient.name} imageUrl={activeClient.avatarUrl} size="xs" />
-                <span className="truncate text-sm font-semibold text-sidebar-foreground">{activeClient.name}</span>
+              <div className="mb-2 shrink-0 border-b border-sidebar-border pb-2.5">
+                <ClientSwitcher activeClient={activeClient} walletClients={walletClients} month={month} presentation="full" />
               </div>
             )}
             <nav aria-label="Menu do cliente" className="flex flex-col gap-0.5">
@@ -445,11 +559,7 @@ function SidebarContent({
           </div>
 
           <div className={collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"}>
-            {activeClient && (
-              <div title={activeClient.name} aria-current="page" className="rounded-full ring-2 ring-sand">
-                <ClientAvatar name={activeClient.name} imageUrl={activeClient.avatarUrl} size="xs" />
-              </div>
-            )}
+            {activeClient && <ClientSwitcher activeClient={activeClient} walletClients={walletClients} month={month} presentation="compact" />}
             {buildClientNavItems(activeClientId, month).map((item) => (
               <Tooltip key={item.label} label={item.label}>
                 <Link
@@ -490,7 +600,7 @@ function SidebarContent({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar cliente..."
-                className="w-full rounded-md bg-sidebar-search-surface py-1.5 pl-7 pr-2 text-[13px] text-sidebar-foreground placeholder:text-sidebar-foreground-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+                className="w-full rounded-md bg-sidebar-search-surface py-1.5 pl-7 pr-2 text-[13px] text-sidebar-foreground placeholder:text-sidebar-foreground-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel"
               />
             </div>
 
@@ -530,7 +640,7 @@ function SidebarContent({
                 type="button"
                 onClick={expandAndFocusSearch}
                 aria-label="Buscar cliente"
-                className="mitza-pressable flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground-muted hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+                className="mitza-pressable flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground-muted hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel"
               >
                 <Search className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -589,7 +699,7 @@ function SidebarContent({
                     <ItemLabel collapsed={collapsed}>Atualizando...</ItemLabel>
                   </>
                 }
-                className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-[11px] text-sidebar-foreground-subtle transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-sidebar-foreground-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${collapsed ? "md:justify-center" : ""}`}
+                className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-[11px] text-sidebar-foreground-subtle transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:text-sidebar-foreground-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel ${collapsed ? "md:justify-center" : ""}`}
               >
                 <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <ItemLabel collapsed={collapsed}>Atualizar Meta (todos)</ItemLabel>
@@ -616,7 +726,7 @@ function SidebarContent({
           <Tooltip label="Sair">
             <button
               type="submit"
-              className={`mitza-pressable flex w-full items-center justify-center gap-1.5 rounded-md border border-sidebar-border px-3 py-1 text-xs font-medium text-sidebar-foreground-secondary hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${collapsed ? "md:px-0" : ""}`}
+              className={`mitza-pressable flex w-full items-center justify-center gap-1.5 rounded-md border border-sidebar-border px-3 py-1 text-xs font-medium text-sidebar-foreground-secondary hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel ${collapsed ? "md:px-0" : ""}`}
             >
               <LogOut className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <ItemLabel collapsed={collapsed}>Sair</ItemLabel>
@@ -636,9 +746,9 @@ function SidebarMonthParam({ onMonth }: { onMonth: (month: string | null) => Rea
 
 /**
  * A Sidebar é o único elemento estrutural fixo da plataforma (Decisão 012 —
- * a Top Bar global foi removida): superfície off-white quente permanente
- * ("Sidebar Off-White + Grafite + Areia Assinatura — v4" — não acompanha o
- * tema claro/escuro do resto da aplicação). A Sidebar ocupa exatamente 100%
+ * a Top Bar global foi removida): superfície Azul Marinho sólida permanente
+ * ("Identidade Visual KOFF Oficial" — não acompanha o tema claro/escuro do
+ * resto da aplicação, ver tokens `--sidebar-*` em `globals.css`). A Sidebar ocupa exatamente 100%
  * da altura da viewport em qualquer breakpoint (`SIDEBAR_HEIGHT_CLASS`) e é
  * o principal elemento de navegação da plataforma. No mobile ela continua
  * sendo um drawer; o próprio componente expõe um gatilho flutuante
@@ -668,7 +778,7 @@ export function Sidebar({
           type="button"
           onClick={onOpen}
           aria-label="Abrir menu"
-          className="mitza-pressable fixed left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-surface text-sidebar-foreground shadow-[var(--shadow-float)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand md:hidden"
+          className="mitza-pressable fixed left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-surface text-sidebar-foreground shadow-[var(--shadow-float)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel md:hidden"
         >
           <Menu className="h-4 w-4" aria-hidden="true" />
         </button>

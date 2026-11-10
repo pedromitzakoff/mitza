@@ -1,11 +1,13 @@
 /**
  * Testes da Etapa "KOFF Analytics — Adaptar o sistema" (pedido explícito
- * do usuário, a partir de uma referência visual): menu lateral do cliente
- * com 5 itens (Dashboard/Campanhas/Anúncios/Metas/Contas), substituindo a
- * Carteira enquanto dentro do workspace de um cliente — "Contas" volta
- * pra `/clients`, que por sua vez já limpa o cliente ativo, trazendo a
- * Carteira de volta sozinha (mesma fonte de verdade de sempre,
- * `resolveActiveClientIdFromPathname`).
+ * do usuário, a partir de uma referência visual, com o ajuste de
+ * arquitetura pedido na rodada seguinte): menu lateral do cliente com 4
+ * itens (Dashboard/Campanhas/Anúncios/Metas), substituindo a Carteira
+ * enquanto dentro do workspace de um cliente — "Contas" deixou de ser
+ * item de menu e virou o `ClientSwitcher` no topo (seletor de cliente,
+ * nunca uma rota), que também permite voltar à Carteira (`/clients`, que
+ * por sua vez já limpa o cliente ativo — mesma fonte de verdade de
+ * sempre, `resolveActiveClientIdFromPathname`).
  *
  * `buildClientNavItems` é puro — testável sem DOM/router, mesmo o arquivo
  * tendo "use client" (só relevante pro bundler do Next, nunca pra
@@ -30,20 +32,16 @@ function loadSource(...segments: string[]): string {
 }
 
 // ---------------------------------------------------------------------------
-console.log("\nA — buildClientNavItems: os 5 itens, na ordem certa, escopados ao cliente\n");
+console.log("\nA — buildClientNavItems: os 4 itens, na ordem certa, escopados ao cliente\n");
 {
   const items = buildClientNavItems("client-1", "2026-11");
 
-  ok("exatamente 5 itens", items.length === 5);
-  ok("ordem: Dashboard, Campanhas, Anúncios, Metas, Contas", items.map((i) => i.label).join(",") === "Dashboard,Campanhas,Anúncios,Metas,Contas");
+  ok("exatamente 4 itens — 'Contas' não é mais item de menu", items.length === 4);
+  ok("ordem: Dashboard, Campanhas, Anúncios, Metas", items.map((i) => i.label).join(",") === "Dashboard,Campanhas,Anúncios,Metas");
   ok("Dashboard aponta pra raiz do workspace do cliente, preservando o mês", items[0].href === "/clients/client-1?month=2026-11");
   ok("Campanhas aponta pra /clients/client-1/campanhas", items[1].href === "/clients/client-1/campanhas?month=2026-11");
   ok("Anúncios aponta pra /clients/client-1/anuncios", items[2].href === "/clients/client-1/anuncios?month=2026-11");
   ok("Metas aponta pra /clients/client-1/metas (rota já existia)", items[3].href === "/clients/client-1/metas?month=2026-11");
-  ok(
-    "Contas volta pra /clients (lista completa) — NUNCA escopado a um cliente, mesmo estando dentro do menu de um cliente",
-    items[4].href === "/clients",
-  );
 
   ok("Dashboard ativo só na raiz exata do cliente, nunca em sub-rotas", items[0].isActive("/clients/client-1") && !items[0].isActive("/clients/client-1/campanhas"));
   ok("Campanhas ativo em qualquer sub-rota de /campanhas", items[1].isActive("/clients/client-1/campanhas") && items[1].isActive("/clients/client-1/campanhas/x"));
@@ -54,21 +52,31 @@ console.log("\nA — buildClientNavItems: os 5 itens, na ordem certa, escopados 
 }
 
 // ---------------------------------------------------------------------------
-console.log("\nB — 'Contas' devolve ao estado de Carteira sozinho (mesma fonte de verdade)\n");
+console.log("\nB — '/clients' (destino do ClientSwitcher) devolve ao estado de Carteira sozinho (mesma fonte de verdade)\n");
 {
-  ok("'/clients' (destino de 'Contas') nunca é reconhecido como workspace de cliente — resolveActiveClientIdFromPathname some, a Carteira reaparece", resolveActiveClientIdFromPathname("/clients") === null);
+  ok("'/clients' nunca é reconhecido como workspace de cliente — resolveActiveClientIdFromPathname some, a Carteira reaparece", resolveActiveClientIdFromPathname("/clients") === null);
   ok("dentro de um cliente, o id é reconhecido normalmente (comportamento de sempre, intocado)", resolveActiveClientIdFromPathname("/clients/client-1/campanhas") === "client-1");
 }
 
 // ---------------------------------------------------------------------------
-console.log("\nC — checagem estrutural: a Sidebar troca Carteira por menu do cliente, nunca os dois ao mesmo tempo\n");
+console.log("\nC — checagem estrutural: a Sidebar troca Carteira por menu do cliente, nunca os dois ao mesmo tempo; ClientSwitcher no topo\n");
 {
   const sidebarSource = loadSource("src", "app", "sidebar.tsx");
   ok(
     "a troca é condicionada a activeClientId (nunca um estado próprio duplicado) — if/else exclusivo entre menu do cliente e Carteira",
     /activeClientId \? \(/.test(sidebarSource) && sidebarSource.includes("buildClientNavItems(activeClientId, month)"),
   );
-  ok("o nome do cliente substitui a marca no topo (pedido explícito do usuário)", sidebarSource.includes("activeClient.name"));
+  ok(
+    "o ClientSwitcher substitui a marca no topo, nas duas apresentações (expandida e recolhida)",
+    /function ClientSwitcher/.test(sidebarSource) &&
+      sidebarSource.includes('<ClientSwitcher activeClient={activeClient} walletClients={walletClients} month={month} presentation="full" />') &&
+      sidebarSource.includes('<ClientSwitcher activeClient={activeClient} walletClients={walletClients} month={month} presentation="compact" />'),
+  );
+  ok(
+    "o switcher deixa trocar de cliente (link escopado por buildWorkspaceHref) e voltar à Carteira (link fixo pra /clients)",
+    sidebarSource.includes('href={buildWorkspaceHref(client.id, "", month)}') && /href="\/clients"/.test(sidebarSource),
+  );
+  ok("'Contas' não existe mais como label de NavItem do cliente", !/label: "Contas"/.test(sidebarSource));
 }
 
 // ---------------------------------------------------------------------------

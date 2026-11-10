@@ -122,7 +122,7 @@ function ClientLeaf({
         title={client.name}
         {...attributes}
         {...listeners}
-        className={`flex items-center gap-1.5 rounded-md py-1 pl-7 pr-2 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand ${
+        className={`flex items-center gap-1.5 rounded-md py-1 pl-7 pr-2 text-[13px] transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel ${
           disabled ? "" : "cursor-grab touch-none active:cursor-grabbing"
         } ${
           // Mesma linguagem de seleção da nav principal (bloco grafite +
@@ -180,14 +180,11 @@ function ManagerFolder({
       ref={setNodeRef}
       className={`rounded-md transition-[opacity,background-color] duration-[var(--motion-fast)] ease-[var(--ease-enter)] ${
         // O alvo de "soltar" ao arrastar é raro e transiente (só existe
-        // durante um drag) — um dos poucos momentos sancionados pro pedido
-        // pra usar a areia institucional (`--sand`) como indicador
-        // funcional, sem repetir o mesmo destaque neutro da busca. Opacidade
-        // um pouco mais alta que os outros micro-acentos porque a superfície
-        // agora é clara (`--sidebar-surface`, off-white) — sand é mais
-        // ESCURA que ela, o oposto da v3, e precisa de mais peso pra não
-        // sumir num drag em andamento.
-        isDropTarget ? "bg-sand/15 ring-1 ring-inset ring-sand/45" : ""
+        // durante um drag) — Etapa "Identidade Visual KOFF Oficial": usa
+        // `--steel`, o acento de destaque/seleção da marca, em vez da
+        // areia (que agora é só a cor de texto normal da Sidebar, sem
+        // sobra de contraste pra servir de indicador funcional).
+        isDropTarget ? "bg-steel/20 ring-1 ring-inset ring-steel/55" : ""
       } ${isDimmed ? "opacity-40" : ""}`}
     >
       <button
@@ -195,18 +192,18 @@ function ManagerFolder({
         onClick={onToggle}
         aria-expanded={isExpanded}
         title={name}
-        className="mitza-pressable flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-[13px] font-medium text-sidebar-foreground-secondary transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+        className="mitza-pressable flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-[13px] font-medium text-sidebar-foreground-secondary transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel"
       >
         <span
-          className={`mitza-chevron shrink-0 text-xs ${isDropTarget ? "text-sand" : "text-sidebar-foreground-muted"} ${isExpanded ? "rotate-90" : ""}`}
+          className={`mitza-chevron shrink-0 text-xs ${isDropTarget ? "text-steel" : "text-sidebar-foreground-muted"} ${isExpanded ? "rotate-90" : ""}`}
           aria-hidden="true"
         >
           ▸
         </span>
-        <Folder className={`h-4 w-4 shrink-0 ${isDropTarget ? "text-sand" : "text-sidebar-foreground-muted"}`} aria-hidden="true" />
+        <Folder className={`h-4 w-4 shrink-0 ${isDropTarget ? "text-steel" : "text-sidebar-foreground-muted"}`} aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate text-left">{name}</span>
         {!isExpanded && clients.length > 0 && (
-          <span className={`shrink-0 text-xs ${isDropTarget ? "text-sand" : "text-sidebar-foreground-muted"}`}>{clients.length}</span>
+          <span className={`shrink-0 text-xs ${isDropTarget ? "text-steel" : "text-sidebar-foreground-muted"}`}>{clients.length}</span>
         )}
       </button>
 
@@ -588,7 +585,7 @@ export function AgencyAccountsTreeView({
               <Link
                 href="/clients/new"
                 aria-label="Novo cliente"
-                className="mitza-pressable flex h-5 w-5 shrink-0 items-center justify-center rounded text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+                className="mitza-pressable flex h-5 w-5 shrink-0 items-center justify-center rounded text-sidebar-foreground-muted transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-steel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel"
               >
                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               </Link>
@@ -615,7 +612,7 @@ export function AgencyAccountsTreeView({
             onKeyDown={handleSearchKeyDown}
             placeholder="Abrir cliente..."
             aria-label="Buscar cliente ou gestor"
-            className="w-full rounded-md border border-sidebar-border bg-sidebar-search-surface py-1 pl-7 pr-2 text-[13px] text-sidebar-foreground placeholder:text-sidebar-foreground-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+            className="w-full rounded-md border border-sidebar-border bg-sidebar-search-surface py-1 pl-7 pr-2 text-[13px] text-sidebar-foreground placeholder:text-sidebar-foreground-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel"
           />
         </div>
 

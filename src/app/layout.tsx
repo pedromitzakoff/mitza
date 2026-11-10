@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Manrope, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { getCurrentProfile } from "@/lib/auth";
 import { loadAgencyAccountsTree } from "@/lib/agency-accounts-tree-data";
@@ -8,8 +8,8 @@ import { AppShell } from "./app-shell";
 import { ToastProvider } from "./toast-provider";
 import { NavigationProgress } from "./navigation-progress";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const manrope = Manrope({
+  variable: "--font-manrope",
   subsets: ["latin"],
 });
 
@@ -61,7 +61,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${manrope.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
         <NavigationProgress />

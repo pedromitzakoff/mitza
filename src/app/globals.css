@@ -1,54 +1,43 @@
 @import "tailwindcss";
 
 /*
- * Tokens de marca (KOFF, Etapa "Identidade Visual KOFF" — migração da
- * identidade antiga MITZA/azul). Componentes novos (header/métricas/painel
- * de atenção/gráfico/sprint) usam essas classes (bg-card, text-muted-foreground,
+ * Tokens de marca (Etapa "Identidade Visual KOFF Oficial" — substitui o
+ * grafite/quase-preto provisório da etapa anterior pela paleta real do
+ * Brand Book: Azul Marinho #172B43, Areia #F1E8D8, Azul Aço #6C9DBB,
+ * tipografia Manrope). Componentes novos (header/métricas/painel de
+ * atenção/gráfico/sprint) usam essas classes (bg-card, text-muted-foreground,
  * border-border, bg-brand...) em vez de zinc-* hardcoded. Componentes mais
  * antigos continuam em zinc-* — as duas paletas são próximas o bastante (não
  * há choque visual) e não valia o risco de retocar tudo que já funciona.
  *
- * Etapa "Identidade Visual KOFF": grafite/quase-preto assume o papel que
- * pertencia ao azul (`--brand`/`--brand-hover`/`--navy`) em toda a
- * plataforma — item ativo, tab ativa, seleção, progress bar, foco, links —
- * SEM tocar em nenhum componente individual: os ~100 lugares que já usavam
- * `bg-brand`/`text-brand`/`border-brand`/`outline-brand` (e os ~8 que usavam
- * `bg-navy`/`text-navy`) herdam a nova cor automaticamente, porque sempre
- * consumiram o TOKEN, nunca um hex solto — essa disciplina prévia é o que
- * torna esta migração uma troca de 2 valores em vez de dezenas de arquivos.
- * Areia (`--sand`/`--sand-subtle`, novos) é a assinatura KOFF — nunca a cor
- * estrutural: usada só onde o azul já tinha um papel "sutil" (fundo
- * selecionado suave, `--overview-brand-subtle`/`--overview-surface-selected`
- * — nunca a seleção SÓLIDA, que continua grafite+branco via `bg-brand`).
- * Verde/laranja/vermelho (`--overview-success/warning/danger`) são
- * significado operacional, não identidade — propositalmente INTOCADOS.
+ * Marinho assume o papel estrutural que pertencia ao grafite
+ * (`--brand`/`--brand-hover`/`--navy`) em toda a plataforma — item ativo,
+ * tab ativa, texto/título, foco, links — SEM tocar em nenhum componente
+ * individual: os lugares que já usavam `bg-brand`/`text-brand`/
+ * `border-brand`/`outline-brand` (e `bg-navy`/`text-navy`) herdam a nova cor
+ * automaticamente, porque sempre consumiram o TOKEN, nunca um hex solto.
+ * Areia (`--sand`/`--sand-subtle`) continua a assinatura — fundo claro de
+ * respiro, nunca a cor estrutural. Azul Aço (`--steel`/`--steel-subtle`,
+ * novo) assume o papel que a seção "Paleta" do Brand Book reserva pra ele:
+ * acentos, destaques e estados SELECIONADOS — usado no item ativo da
+ * Sidebar e em `--overview-brand-subtle`/`--overview-surface-selected`
+ * (que antes usavam areia pra esse papel). Verde/laranja/vermelho
+ * (`--overview-success/warning/danger`) são significado operacional, não
+ * identidade — propositalmente INTOCADOS.
  */
 :root {
-  --background: #f7f7f5;
-  --foreground: #181817;
+  --background: #faf7f1;
+  --foreground: #172b43;
   --card: #ffffff;
-  /* Facelift da plataforma (Etapa "Unificação Visual KOFF — Superfícies
-     Base"): `--muted-foreground`/`--border-default` eram um cinza neutro
-     genérico (#737373/#e7e5e4) — perceptivelmente mais frio que o par
-     equivalente já usado na Visão Geral do cliente (`--overview-text-secondary`
-     #655f56 / `--overview-border` #e5e1d9). O comentário original acima
-     ("as duas paletas são próximas o bastante") datava de antes da área do
-     cliente ganhar a superfície quente própria — agora que ela existe, os
-     ~20 arquivos que ainda consomem só os tokens base (Configurações,
-     Equipe, Relatórios, listagem de Clientes, drawers, toasts) ficavam
-     visivelmente mais "frios" ao lado dela. Reaproveita os MESMOS valores
-     de `--overview-text-secondary`/`--overview-border` (nunca um terceiro
-     tom novo) — qualquer componente que já usa `text-muted-foreground`/
-     `border-border` herda o alinhamento automaticamente, sem precisar
-     trocar uma única classe. */
-  --muted-foreground: #655f56;
+  /* Mantido alinhado a `--overview-text-secondary`/`--overview-border`
+     (ver histórico abaixo) — qualquer componente que só consome os tokens
+     base (Configurações, Equipe, Relatórios, listagem de Clientes,
+     drawers, toasts) continua visualmente alinhado à área do cliente. */
+  --muted-foreground: #5d6e82;
   --border-default: #e5e1d9;
-  /* Grafite KOFF — era azul (#4169e1). Ponto de partida pedido (#1C1C1C),
-     ajustado 1 unidade pra compartilhar o MESMO preto quente que
-     `--foreground`/`--card` (modo escuro) já usam — nunca um preto "frio"
-     dissonante do resto da paleta neutra que já existia. */
-  --brand: #1c1c1c;
-  --brand-hover: #333333;
+  /* Azul Marinho oficial KOFF — era grafite (#1c1c1c) na etapa anterior. */
+  --brand: #172b43;
+  --brand-hover: #28405f;
 
   /* --authenticated-bg (Etapa "Fundo branco autenticado"): fundo estrutural
      de toda a aplicação autenticada (aplicado em `<main>`, AppShell) — nunca
@@ -61,24 +50,24 @@
      cliente) — ambos retirados; as páginas voltam a consumir só este token
      compartilhado, sem override próprio. */
   --authenticated-bg: #ffffff;
-  /* Etapa "Identidade Visual KOFF": `--navy` era um azul-marinho próprio
-     (#0f1c42) pra títulos/valores em destaque e o marcador de "esperado" da
-     barra de progresso (`bg-navy`/`text-navy`, ~8 arquivos) — nunca fazia
-     parte da paleta semântica, sempre foi só "ênfase neutra escura". Vira
-     um alias do grafite: mesmo papel de sempre, cor nova, zero componente
-     tocado. */
-  --navy: #1c1c1c;
+  /* `--navy` é alias do Marinho — mesmo papel de sempre (ênfase neutra
+     escura em títulos/valores), cor oficial do Brand Book. */
+  --navy: #172b43;
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
   --shadow-float: 0 4px 12px rgba(16, 24, 40, 0.10), 0 2px 6px rgba(16, 24, 40, 0.06);
 
-  /* Areia KOFF (novo) — assinatura visual, nunca a cor estrutural (ver
-     comentário acima). `--sand` é o tom de referência; `--sand-subtle` é a
-     derivação bem clara pra uso em UI (fundo selecionado suave, hover,
-     superfícies secundárias institucionais) — o mesmo valor que
-     `--overview-brand-subtle`/`--overview-surface-selected` passam a usar
-     abaixo, em vez do azul-clarinho de antes. */
-  --sand: #c8bead;
-  --sand-subtle: #f1ece4;
+  /* Areia oficial KOFF (Brand Book) — assinatura visual/fundo de respiro,
+     nunca a cor estrutural (ver comentário acima). `--sand-subtle` é a
+     derivação clara pra superfícies secundárias institucionais. */
+  --sand: #f1e8d8;
+  --sand-subtle: #f8f3ea;
+
+  /* Azul Aço oficial KOFF (Brand Book) — acentos/destaques/seleção, nunca
+     fundo estrutural nem superfície grande. `--steel-subtle` é a derivação
+     clara usada em fundos "selecionado" (`--overview-brand-subtle`/
+     `--overview-surface-selected`, abaixo). */
+  --steel: #6c9dbb;
+  --steel-subtle: #e7eff4;
 
   /* Creme/Verde-limão KOFF (Etapa "Evolução Visual Incremental — Área do
      Cliente"): os dois tons que faltavam pra área do cliente falar a mesma
@@ -100,55 +89,43 @@
   --cream: #efe9e0;
   --lime: #d8f238;
 
-  /* Sidebar KOFF — Etapa "Sidebar Off-White + Grafite + Areia Assinatura —
-     v4": a Sidebar é uma superfície FIXA (não acompanha claro/escuro do
-     resto da app — mesma decisão de sempre, ver JSDoc de `Sidebar` em
-     app/sidebar.tsx), então estes tokens vivem só aqui em `:root` e NUNCA
-     são redefinidos no bloco `prefers-color-scheme: dark` abaixo — ao
-     contrário de `--brand`/`--navy`/`--sand`, que trocam de valor no
-     escuro.
+  /* Sidebar KOFF — Etapa "Identidade Visual KOFF Oficial": a Sidebar é uma
+     superfície FIXA (não acompanha claro/escuro do resto da app — mesma
+     decisão de sempre, ver JSDoc de `Sidebar` em app/sidebar.tsx), então
+     estes tokens vivem só aqui em `:root` e NUNCA são redefinidos no bloco
+     `prefers-color-scheme: dark` abaixo.
 
-     Histórico (mesma Sidebar, 4 tentativas de equilíbrio): v1 "Sidebar
-     Areia" (areia inteira + texto grafite) ficou lavada; v2 "Grafite
-     Quente" (fundo grafite + areia de assinatura) ficou genérica; v3
-     "Areia + Ativo Grafite" (taupe médio + texto off-white) resolveu
-     contraste mas virou uma massa vertical de cor grande demais,
-     competindo com o conteúdo. v4 (esta) muda a HIPÓTESE: a identidade não
-     precisa vir de uma superfície colorida — a Sidebar passa a ser
-     OFF-WHITE (quase a mesma família clara do conteúdo, separada só por
-     `border-right` sutil), texto/ícone voltam a GRAFITE, e AREIA vira
-     estritamente assinatura pontual (rail, focus ring, indicador de
-     drop-target, hover do "+") — nunca mais uma superfície.
+     As 4 tentativas anteriores (areia inteira, grafite quente, taupe
+     médio, off-white) buscavam equilíbrio dentro de uma paleta
+     essencialmente monocromática (grafite + um único acento). Com a
+     paleta oficial de 3 cores do Brand Book, a Sidebar passa a USAR Azul
+     Marinho como painel estrutural (literalmente "estrutura", o papel que
+     o Brand Book descreve pra ele) — não é uma 5ª tentativa de equilíbrio
+     monocromático, é uma base diferente: painel Marinho sólido, texto/
+     ícone em Areia (contraste alto, ~12:1), item ativo em Aço (o acento
+     de seleção da marca) com rail Marinho por cima (lê como um recorte no
+     bloco Aço, não uma segunda assinatura concorrendo).
 
-     `--sidebar-warm-white-rgb` (renomeado de `--sidebar-foreground-rgb`: a
-     v3 usava esse tom pra TEXTO sobre fundo escuro; a v4 promove o MESMO
-     tom — `245, 241, 234` = `#f5f1ea` — a SUPERFÍCIE, e ele passa a
-     alimentar só o texto do bloco ativo, não mais o texto normal) e
-     `--sidebar-graphite-rgb` (base grafite — agora tanto do bloco ativo
-     quanto da hierarquia de texto/ícone NORMAL, papel invertido em relação
-     à v3) existem separados de `--brand`/`--foreground`/`--sand-subtle` de
-     propósito: todos esses mudam no dark mode ou já têm outro papel
-     semântico, e a Sidebar precisa de bases fixas e dedicadas pra compor
-     opacidades sem herdar troca nem colidir de significado. `--sand`
-     global nunca muda — continua reaparecendo aqui só como ASSINATURA
-     pontual, exatamente como antes, só que agora sobre uma superfície
-     clara em vez de escura. */
-  --sidebar-warm-white-rgb: 245, 241, 234;
-  --sidebar-graphite-rgb: 28, 28, 28;
-  --sidebar-surface: rgb(var(--sidebar-warm-white-rgb));
-  --sidebar-foreground: rgb(var(--sidebar-graphite-rgb));
-  --sidebar-foreground-secondary: rgba(var(--sidebar-graphite-rgb), 0.78);
-  --sidebar-foreground-muted: rgba(var(--sidebar-graphite-rgb), 0.6);
-  --sidebar-foreground-subtle: rgba(var(--sidebar-graphite-rgb), 0.45);
-  --sidebar-border: rgba(var(--sidebar-graphite-rgb), 0.1);
-  --sidebar-hover: rgba(var(--sidebar-graphite-rgb), 0.05);
-  --sidebar-active-surface: rgb(var(--sidebar-graphite-rgb));
-  --sidebar-active-surface-secondary: rgba(var(--sidebar-graphite-rgb), 0.6);
-  --sidebar-active-foreground: rgb(var(--sidebar-warm-white-rgb));
-  --sidebar-active-rail: var(--sand);
-  --sidebar-search-surface: rgba(var(--sidebar-graphite-rgb), 0.05);
-  --sidebar-match-surface: rgba(var(--sidebar-graphite-rgb), 0.08);
-  --sidebar-match-ring: rgba(var(--sidebar-graphite-rgb), 0.25);
+     RGBs dedicados (não `--brand`/`--foreground`/`--sand`) porque esses
+     mudam no dark mode e a Sidebar precisa de bases fixas pra compor
+     opacidades sem herdar troca. */
+  --sidebar-marinho-rgb: 23, 43, 67;
+  --sidebar-areia-rgb: 241, 232, 216;
+  --sidebar-aco-rgb: 108, 157, 187;
+  --sidebar-surface: rgb(var(--sidebar-marinho-rgb));
+  --sidebar-foreground: rgb(var(--sidebar-areia-rgb));
+  --sidebar-foreground-secondary: rgba(var(--sidebar-areia-rgb), 0.78);
+  --sidebar-foreground-muted: rgba(var(--sidebar-areia-rgb), 0.58);
+  --sidebar-foreground-subtle: rgba(var(--sidebar-areia-rgb), 0.42);
+  --sidebar-border: rgba(var(--sidebar-areia-rgb), 0.14);
+  --sidebar-hover: rgba(var(--sidebar-areia-rgb), 0.08);
+  --sidebar-active-surface: rgb(var(--sidebar-aco-rgb));
+  --sidebar-active-surface-secondary: rgba(var(--sidebar-aco-rgb), 0.55);
+  --sidebar-active-foreground: rgb(var(--sidebar-marinho-rgb));
+  --sidebar-active-rail: rgb(var(--sidebar-marinho-rgb));
+  --sidebar-search-surface: rgba(var(--sidebar-areia-rgb), 0.08);
+  --sidebar-match-surface: rgba(var(--sidebar-aco-rgb), 0.2);
+  --sidebar-match-ring: rgba(var(--sidebar-aco-rgb), 0.45);
 
   /* ---------------------------------------------------------------------
    * Fundação do novo Design System (Etapa 47) — inspirado em densidade de
@@ -163,26 +140,26 @@
    * o valor solto em cada componente.
    *
    * Etapa "Identidade Visual KOFF": os neutros abaixo (surface/border/text)
-   * tinham uma leve subtonalidade FRIA (azulada) — mesma família do azul
-   * que estamos removendo como identidade, só clara demais pra notar sozinha.
-   * Reformulados com subtonalidade QUENTE (mesma família de --background/
-   * --foreground/--sand), luminosidade praticamente idêntica à anterior —
-   * contraste e hierarquia preservados, só a temperatura da cor mudou.
-   * `--overview-brand-subtle`/`--overview-surface-selected` (fundo
-   * "selecionado" sutil) trocam de azul-clarinho pra `--sand-subtle` — é
-   * exatamente o papel que a areia descreve ("backgrounds selecionados
-   * muito sutis"), nunca a seleção sólida (essa é `bg-brand`, grafite).
+   * tinham uma leve subtonalidade FRIA (azulada) — removida na migração pro
+   * grafite. Etapa "Identidade Visual KOFF Oficial": texto primário/
+   * secundário/muted voltam a ter subtonalidade azulada — de propósito,
+   * agora é a do Marinho oficial, não mais um azul genérico. Contraste e
+   * hierarquia preservados, luminosidade praticamente idêntica à versão
+   * anterior. `--overview-brand-subtle`/`--overview-surface-selected`
+   * (fundo "selecionado" sutil) usam `--steel-subtle` — o papel que o
+   * Brand Book reserva pro Aço (seleção/destaque), nunca a seleção SÓLIDA
+   * (essa é `bg-brand`, Marinho).
    * --------------------------------------------------------------------- */
   --overview-surface: #ffffff;
   --overview-surface-subtle: #f7f5f1;
   --overview-surface-hover: #efece5;
-  --overview-surface-selected: var(--sand-subtle);
+  --overview-surface-selected: var(--steel-subtle);
   --overview-border: #e5e1d9;
   --overview-border-strong: #c9c3b6;
-  --overview-text-primary: #181714;
-  --overview-text-secondary: #655f56;
-  --overview-text-muted: #8d887d;
-  --overview-brand-subtle: var(--sand-subtle);
+  --overview-text-primary: #172b43;
+  --overview-text-secondary: #51627a;
+  --overview-text-muted: #7c8ca0;
+  --overview-brand-subtle: var(--steel-subtle);
   --overview-success: #1a7f4e;
   --overview-success-subtle: #e6f5ec;
   --overview-warning: #a35a00;
@@ -213,6 +190,8 @@
   --color-navy: var(--navy);
   --color-sand: var(--sand);
   --color-sand-subtle: var(--sand-subtle);
+  --color-steel: var(--steel);
+  --color-steel-subtle: var(--steel-subtle);
   --color-cream: var(--cream);
   --color-lime: var(--lime);
   --color-sidebar-surface: var(--sidebar-surface);
@@ -245,50 +224,46 @@
   --color-overview-warning-subtle: var(--overview-warning-subtle);
   --color-overview-danger: var(--overview-danger);
   --color-overview-danger-subtle: var(--overview-danger-subtle);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-manrope);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #141412;
-    --foreground: #f2f1ee;
-    --card: #1c1c1a;
+    --background: #0b1622;
+    --foreground: #ede6d8;
+    --card: #122132;
     /* Mesmo alinhamento do modo claro acima — reaproveita os valores
        escuros já usados por `--overview-text-secondary`/`--overview-border`. */
-    --muted-foreground: #aca597;
-    --border-default: #2c2823;
-    /* Etapa "Identidade Visual KOFF": grafite sólido não funciona como
-       identidade no modo escuro (precisa ser CLARO pra ler contra o fundo
-       escuro) — vira areia clara, o mesmo papel que `--navy` já cumpria
-       aqui antes (`#dde4fb`, um lavanda clarinho) só que na família quente
-       da marca em vez de azulada. */
-    --brand: #d8cfbe;
-    --brand-hover: #e6ddcc;
+    --muted-foreground: #9fb0c0;
+    --border-default: #22344a;
+    /* Marinho sólido não funciona como identidade no modo escuro (precisa
+       ser CLARO pra ler contra o fundo escuro) — vira Aço, o acento de
+       destaque oficial da marca, mesmo papel que `--navy` cumpria aqui. */
+    --brand: #6c9dbb;
+    --brand-hover: #86b0c9;
 
     --authenticated-bg: var(--background);
-    --navy: #d8cfbe;
+    --navy: #6c9dbb;
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
     --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
 
-    --sand: #c8bead;
-    --sand-subtle: #2a2620;
-    /* --lime propositalmente ausente daqui — mesmo critério de `--sand`
-       acima (não muda no escuro, ver comentário de `--cream`/`--lime` em
-       :root). --cream reaproveita o mesmo valor que `--overview-surface-subtle`
-       já usa no escuro. */
-    --cream: #201e1a;
+    /* --sand propositalmente igual ao modo claro (não muda no escuro, ver
+       comentário de `--cream`/`--lime` em :root). */
+    --sand-subtle: #1b2a3c;
+    --steel-subtle: rgba(108, 157, 187, 0.18);
+    --cream: #1a2735;
 
-    --overview-surface: #1a1917;
-    --overview-surface-subtle: #201e1a;
-    --overview-surface-hover: #26241f;
-    --overview-surface-selected: var(--sand-subtle);
-    --overview-border: #2c2823;
-    --overview-border-strong: #3a352c;
-    --overview-text-primary: #f0ede6;
-    --overview-text-secondary: #aca597;
-    --overview-text-muted: #847d70;
-    --overview-brand-subtle: var(--sand-subtle);
+    --overview-surface: #141f2c;
+    --overview-surface-subtle: #1a2735;
+    --overview-surface-hover: #223246;
+    --overview-surface-selected: var(--steel-subtle);
+    --overview-border: #24354a;
+    --overview-border-strong: #324a64;
+    --overview-text-primary: #ede7da;
+    --overview-text-secondary: #a9b7c6;
+    --overview-text-muted: #7e8ea0;
+    --overview-brand-subtle: var(--steel-subtle);
     --overview-success: #4fbe86;
     --overview-success-subtle: #163224;
     --overview-warning: #dba24a;
@@ -301,7 +276,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-manrope), Arial, Helvetica, sans-serif;
 }
 
 /*
