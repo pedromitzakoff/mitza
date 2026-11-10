@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { SubmitButton } from "@/app/submit-button";
-import { PERFORMANCE_GOAL_OPTIONS } from "@/lib/performance-goals";
+import { AVAILABLE_PERFORMANCE_GOAL_OPTIONS, PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { discoverActionTypesAction } from "./actions";
 
 const inputClasses = "rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:border-zinc-500";
@@ -15,13 +15,26 @@ const labelClasses = "flex flex-col gap-1 text-sm text-foreground";
  * O campo manual continua existindo como escape (conta nova sem conversão
  * ainda, ou API indisponível no momento) — mas com aviso explícito pra
  * nunca adivinhar, igual ao `docs/N8N_META_INGESTION_GUIDE.md`.
+ *
+ * Etapa "Configuração inteligente de métricas por cliente": `fixedGoal`
+ * (opcional, novo) permite embutir este MESMO componente — mesma
+ * descoberta, mesma Server Action, zero lógica duplicada — dentro de um
+ * card já escopado a um objetivo (`client-goals-section.tsx`), sem repetir
+ * o seletor "Objetivo" (viraria um campo redundante ali, o objetivo já
+ * está implícito no card). Omitido (uso em `/settings/meta-connections`),
+ * o componente continua exatamente como antes — nenhuma mudança visual ou
+ * de comportamento pra quem já o usa.
  */
 export function ActionTypePicker({
   accountId,
   saveMappingAction,
+  fixedGoal,
+  heading = "Novo mapeamento",
 }: {
   accountId: string;
   saveMappingAction: (formData: FormData) => void;
+  fixedGoal?: PerformanceGoal;
+  heading?: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [actionTypes, setActionTypes] = useState<string[] | null>(null);
@@ -44,7 +57,7 @@ export function ActionTypePicker({
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium text-foreground">Novo mapeamento</p>
+        <p className="text-sm font-medium text-foreground">{heading}</p>
         <button
           type="button"
           onClick={handleDiscover}
@@ -61,16 +74,25 @@ export function ActionTypePicker({
       )}
 
       <form action={saveMappingAction} className="flex flex-col gap-3">
-        <label className={labelClasses}>
-          Objetivo
-          <select name="goal" required defaultValue="leads" className={inputClasses}>
-            {PERFORMANCE_GOAL_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {fixedGoal ? (
+          <>
+            <input type="hidden" name="goal" value={fixedGoal} />
+            <p className="text-xs text-muted-foreground">
+              Objetivo: <span className="font-medium text-foreground">{PERFORMANCE_GOALS[fixedGoal].label}</span>
+            </p>
+          </>
+        ) : (
+          <label className={labelClasses}>
+            Objetivo
+            <select name="goal" required defaultValue="leads" className={inputClasses}>
+              {AVAILABLE_PERFORMANCE_GOAL_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         {actionTypes && actionTypes.length > 0 && !useManual ? (
           <label className={labelClasses}>

@@ -8,6 +8,7 @@ import { Block, ClientForm } from "../../client-form";
 import { DeleteClientButton } from "../../delete-client-button";
 import { fetchGoalDisplaySummaries, listClientGoals } from "@/lib/client-goals";
 import { listCampaignsForAssignment } from "@/lib/campaign-goal-assignments";
+import { resolveClientMetaMappingSource, listActiveMetricMappingsByGoal } from "@/lib/client-metric-mapping-source";
 import { todayDateString } from "@/lib/today";
 import { ClientGoalsSection } from "../../client-goals-section";
 
@@ -85,6 +86,17 @@ export default async function EditClientPage({
 
   const goalSummaries = await fetchGoalDisplaySummaries(supabase, id, clientGoals, `${todayDateString().slice(0, 7)}-01`);
 
+  // "Métricas de performance" (Etapa "Configuração inteligente de métricas
+  // por cliente"): resolve a fonte Meta deste cliente uma vez só — os
+  // mapeamentos ativos (2ª consulta) dependem do id dela, por isso roda
+  // depois, não dentro do `Promise.all` acima. `null`/mapa vazio quando o
+  // cliente ainda não tem conta Meta conectada (nunca um erro — só nada
+  // pra mostrar na seção de evento).
+  const metaMappingSource = isAdmin ? await resolveClientMetaMappingSource(supabase, id) : null;
+  const metaMappingsByGoal: Awaited<ReturnType<typeof listActiveMetricMappingsByGoal>> = metaMappingSource
+    ? await listActiveMetricMappingsByGoal(supabase, metaMappingSource.importSourceId)
+    : new Map();
+
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
       <Link href={returnTo} className="text-sm text-overview-text-secondary hover:underline">
@@ -120,8 +132,8 @@ export default async function EditClientPage({
 
         {isAdmin && (
           <Block
-            title="Objetivos da conta"
-            description="Um cliente pode ter mais de um objetivo de performance ao mesmo tempo (ex.: Leads + Seguidores). Cada objetivo tem sua própria meta, canais e campanhas classificadas — o custo por resultado só é calculado quando há investimento real e atribuível às campanhas daquele objetivo."
+            title="Métricas de performance"
+            description="O que este cliente acompanha como resultado — um objetivo pode ter mais de um ao mesmo tempo (ex.: Leads + Seguidores). Cada objetivo tem sua própria meta, canais, campanhas classificadas e evento da Meta — o custo por resultado só é calculado quando há investimento real e atribuível às campanhas daquele objetivo."
           >
             <ClientGoalsSection
               clientId={id}
@@ -130,6 +142,8 @@ export default async function EditClientPage({
               summaries={goalSummaries}
               campaigns={campaignsForAssignment}
               recentSprints={(recentSprints ?? []).map((s) => ({ id: s.id, startDate: s.start_date, endDate: s.end_date }))}
+              metaMappingSource={metaMappingSource}
+              metaMappingsByGoal={metaMappingsByGoal}
             />
           </Block>
         )}

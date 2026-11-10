@@ -118,6 +118,26 @@ export const PERFORMANCE_GOAL_OPTIONS: { value: PerformanceGoal; label: string }
   { value: "followers", label: "Seguidores" },
 ];
 
+/**
+ * Etapa "Configuração inteligente de métricas por cliente": `conversations`/
+ * `registrations` já existem no código (config completa acima, aceitos por
+ * `parsePerformanceGoal`), mas o banco de PRODUÇÃO ainda não aceita esses
+ * valores — a migração (`supabase/performance-goal-conversations-
+ * registrations.sql`) existe como arquivo, NUNCA executada ainda (pedido
+ * explícito do usuário). Enquanto isso, nenhuma tela pode deixar
+ * selecioná-los — salvar um `client_goals`/`metric_mappings` com um desses
+ * valores hoje quebraria a CHECK constraint real do banco. `
+ * AVAILABLE_PERFORMANCE_GOAL_OPTIONS` é o que toda UI de SELEÇÃO deve usar
+ * (nunca `PERFORMANCE_GOAL_OPTIONS` direto) — assim que a migração rodar em
+ * produção, apagar esta lista (ela vira `[]`) é a ÚNICA mudança necessária
+ * pra liberar os 2 objetivos em toda a plataforma de uma vez.
+ */
+export const PERFORMANCE_GOALS_PENDING_MIGRATION: readonly PerformanceGoal[] = ["conversations", "registrations"];
+
+export const AVAILABLE_PERFORMANCE_GOAL_OPTIONS: { value: PerformanceGoal; label: string }[] = PERFORMANCE_GOAL_OPTIONS.filter(
+  (option) => !PERFORMANCE_GOALS_PENDING_MIGRATION.includes(option.value),
+);
+
 /** Único parser de `PerformanceGoal` a partir de `FormData`/texto solto —
  * nunca duplicar esta lista de valores válidos em cada Server Action
  * (era o caso antes desta etapa: `goal-actions.ts`/`funnel-actions.ts`

@@ -4,13 +4,13 @@ import { useOptimistic, useRef, useState, useTransition } from "react";
 import { updateClientPerformanceGoalAction } from "./performance-actions";
 import { useToast } from "@/app/toast-provider";
 import { useFloatingMenuPosition, FloatingPortalPanel } from "@/lib/floating-menu";
-import { PERFORMANCE_GOALS, PERFORMANCE_GOAL_OPTIONS, type PerformanceGoal } from "@/lib/performance-goals";
+import { PERFORMANCE_GOALS, AVAILABLE_PERFORMANCE_GOAL_OPTIONS, type PerformanceGoal } from "@/lib/performance-goals";
 
 /**
  * Etapa "Refinamento de Densidade..." (Parte 3) — configurar o objetivo de
  * performance direto na Sprint, sem navegar até a edição do cliente. Popover
  * compacto (mesmo padrão de `mitza-menu-in` já usado em outros menus
- * pequenos da plataforma) em vez de drawer — poucas opções (`PERFORMANCE_GOAL_OPTIONS`,
+ * pequenos da plataforma) em vez de drawer — poucas opções (`AVAILABLE_PERFORMANCE_GOAL_OPTIONS`,
  * hoje 3), não precisa de mais estrutura que isso. Sem redirect: a Server Action só revalida as
  * telas que mostram o objetivo; o popover fecha e o toast único da
  * plataforma confirma o sucesso, sem perder scroll nem o que está expandido.
@@ -110,7 +110,7 @@ export function ClientPerformanceGoalEditor({
         closeLabel="Fechar seleção de objetivo"
         className="w-40 rounded-lg border border-overview-border bg-overview-surface p-1 shadow-[var(--shadow-float)]"
       >
-        {PERFORMANCE_GOAL_OPTIONS.map((option) => (
+        {AVAILABLE_PERFORMANCE_GOAL_OPTIONS.map((option) => (
           <button
             key={option.value}
             type="button"
