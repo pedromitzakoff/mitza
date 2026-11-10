@@ -45,6 +45,21 @@ begin
     raise exception 'Objetivo inválido: %', p_result_type;
   end if;
 
+  -- Rebaixa qualquer outro objetivo que estivesse marcado como principal —
+  -- SEMPRE antes de promover o novo (ver nota abaixo), nunca passa por um
+  -- estado com 2 simultâneos (mesma garantia de `set_client_goal_primary`,
+  -- agora reaproveitada aqui também).
+  --
+  -- Ordem importa de verdade, não é só estilo: `client_goals_one_primary_
+  -- per_client` é um índice único NÃO adiável — Postgres checa a violação
+  -- ao FINAL de cada statement, não da transação inteira. Promover o novo
+  -- objetivo primeiro (is_primary = true) enquanto o antigo ainda está
+  -- true faria duas linhas true ao mesmo tempo nesse instante — violação
+  -- imediata, a função inteira falharia. Rebaixar primeiro garante que
+  -- nunca existe mais de uma linha true, em nenhum ponto da execução.
+  update client_goals set is_primary = false
+  where client_id = p_client_id and result_type <> p_result_type and is_primary;
+
   -- Cria o objetivo em `client_goals` se o cliente ainda não o tinha (caso
   -- comum: cliente "simples", nunca passou pela tela "Objetivos da conta",
   -- só tem `clients.performance_goal` configurado) — nasce sem restrição de
@@ -54,12 +69,6 @@ begin
   insert into client_goals (client_id, result_type, channels, is_primary, result_source)
   values (p_client_id, p_result_type, '{}', true, 'automatic')
   on conflict (client_id, result_type) do update set is_primary = true;
-
-  -- Rebaixa qualquer outro objetivo que estivesse marcado como principal —
-  -- nunca passa por um estado com 2 simultâneos (mesma garantia de
-  -- `set_client_goal_primary`, agora reaproveitada aqui também).
-  update client_goals set is_primary = false
-  where client_id = p_client_id and result_type <> p_result_type and is_primary;
 
   -- Mantém a coluna legada em sincronia — consumidores ainda não migrados
   -- pra múltiplos objetivos (Dashboard, Relatório, Exploração, Metas) leem

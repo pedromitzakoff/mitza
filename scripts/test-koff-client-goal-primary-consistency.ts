@@ -49,6 +49,11 @@ console.log("\nA — A nova função SQL escreve nas DUAS tabelas, nunca só num
   ok("função existe e tem corpo", fnStart !== -1 && fnEnd > fnStart);
   ok("escreve em client_goals (upsert, is_primary = true)", fnBody.includes("insert into client_goals") && fnBody.includes("is_primary = true"));
   ok("rebaixa qualquer outro objetivo principal do mesmo cliente", fnBody.includes("update client_goals set is_primary = false"));
+  ok(
+    "ORDEM correta: rebaixa o antigo principal ANTES de promover o novo — nunca duas linhas is_primary=true ao mesmo tempo " +
+      "(client_goals_one_primary_per_client é um índice único não adiável, checado ao final de CADA statement; promover antes de rebaixar violaria o índice e falharia)",
+    fnBody.indexOf("update client_goals set is_primary = false") < fnBody.indexOf("insert into client_goals"),
+  );
   ok("escreve em clients.performance_goal — nunca mais só uma das duas tabelas", fnBody.includes("update clients set performance_goal = p_result_type"));
   ok("valida o objetivo contra os 5 valores suportados", fnBody.includes("'leads', 'sales', 'followers', 'conversations', 'registrations'"));
   ok("arquivo documenta 'NÃO EXECUTAR sem aprovação'", sql.includes("NÃO EXECUTAR sem aprovação"));

@@ -46,8 +46,17 @@ alter table client_funnels drop constraint if exists client_funnels_linked_resul
 alter table client_funnels add constraint client_funnels_linked_result_type_check
   check (linked_result_type is null or linked_result_type in ('leads', 'sales', 'followers', 'conversations', 'registrations'));
 
-alter table client_reports drop constraint if exists client_reports_performance_goal_check;
-alter table client_reports add constraint client_reports_performance_goal_check
+-- `IF EXISTS` (incomum neste arquivo — as outras 12 tabelas são lidas por
+-- código em produção hoje, existência já comprovada) só aqui: o próprio
+-- `client-reports-reaffirm.sql` documenta que `client-reports.sql`
+-- original "muito provavelmente nunca rodou por completo" — sem acesso ao
+-- banco de produção pra confirmar se a reafirmação já rodou depois, esta
+-- linha não pode presumir que `client_reports` existe. Sem `IF EXISTS`,
+-- isso pararia a migração inteira (ou a deixaria parcialmente aplicada,
+-- dependendo de como as instruções forem coladas no SQL Editor) assim que
+-- chegasse numa tabela ausente.
+alter table if exists client_reports drop constraint if exists client_reports_performance_goal_check;
+alter table if exists client_reports add constraint client_reports_performance_goal_check
   check (performance_goal in ('leads', 'sales', 'followers', 'conversations', 'registrations'));
 
 alter table performance_records drop constraint if exists performance_records_result_type_check;
