@@ -60,8 +60,14 @@ export function AppShell({
             no nível do shell — toda rota autenticada herda o mesmo fundo
             branco sem precisar de override próprio. min-h-dvh garante que
             o fundo cubra a viewport inteira mesmo em páginas curtas (o pai
-            usa md:items-start, que não estica o <main> no desktop). */}
-        <main className="min-h-dvh min-w-0 flex-1 bg-authenticated-bg">{children}</main>
+            usa md:items-start, que não estica o <main> no desktop).
+            `pt-14 md:pt-0`: o gatilho flutuante do menu mobile (`Sidebar`,
+            `fixed left-3 top-3 h-9 w-9 ... md:hidden`) ocupa 12–48px do
+            topo só no mobile — sem essa reserva, título/controles do
+            início de QUALQUER rota (não só as novas) ficavam embaixo dele.
+            Um único ponto de correção (aqui, não em cada página) porque
+            todas as rotas autenticadas passam por este `<main>`. */}
+        <main className="min-h-dvh min-w-0 flex-1 bg-authenticated-bg pt-14 md:pt-0">{children}</main>
       </div>
       <WorkspaceTrigger />
       <WorkspaceDrawer />
