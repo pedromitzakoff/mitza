@@ -12,7 +12,7 @@ import {
   type ClientFunnelInput,
 } from "@/lib/client-funnels-data";
 import { normalizeNamingKey, isValidNamingKey, sanitizeFunnelIndicators } from "@/lib/client-funnels";
-import type { PerformanceGoal } from "@/lib/performance-goals";
+import { parsePerformanceGoal } from "@/lib/performance-goals";
 import { toUserFacingError } from "@/lib/user-facing-error";
 
 /**
@@ -28,11 +28,6 @@ function withError(returnTo: string, message: string): string {
   return `${returnTo}${returnTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`;
 }
 
-function parseResultType(value: FormDataEntryValue | null): PerformanceGoal | null {
-  const raw = String(value ?? "");
-  return raw === "leads" || raw === "sales" || raw === "followers" ? raw : null;
-}
-
 function parseFunnelInput(formData: FormData): ClientFunnelInput | { error: string } {
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { error: "Informe um nome para o funil." };
@@ -40,7 +35,7 @@ function parseFunnelInput(formData: FormData): ClientFunnelInput | { error: stri
   const namingKey = normalizeNamingKey(String(formData.get("naming_key") ?? ""));
   if (!isValidNamingKey(namingKey)) return { error: "Informe uma chave de nomenclatura válida (sem colchetes, não vazia)." };
 
-  const linkedResultType = parseResultType(formData.get("linked_result_type"));
+  const linkedResultType = parsePerformanceGoal(formData.get("linked_result_type"));
   const relevantIndicators = sanitizeFunnelIndicators(formData.getAll("relevant_indicators").map(String));
 
   return { name, namingKey, linkedResultType, relevantIndicators };

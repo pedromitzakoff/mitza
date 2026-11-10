@@ -9,7 +9,7 @@ import { syncOneMetaApiAccount } from "@/lib/meta-api-direct-sync";
 import { runMetaApiBackfill } from "@/lib/meta-api-backfill";
 import { META_API_ACTIONS_PREFIX, META_API_ACTION_VALUES_PREFIX, collectDistinctActionTypes } from "@/lib/meta-api-ingest";
 import { todayDateString } from "@/lib/today";
-import type { PerformanceGoal } from "@/lib/performance-goals";
+import { parsePerformanceGoal, type PerformanceGoal } from "@/lib/performance-goals";
 
 /**
  * KOFF Analytics — "Interface para conectar contas Meta" (ponto 1 do pedido
@@ -206,8 +206,8 @@ export async function saveMetricMappingAction(importSourceId: string, clientId: 
   await requireAdmin();
   const supabase = await createSupabaseClient();
 
-  const goal = String(formData.get("goal") ?? "");
-  if (goal !== "leads" && goal !== "sales" && goal !== "followers") {
+  const goal = parsePerformanceGoal(formData.get("goal"));
+  if (!goal) {
     failure("Selecione um objetivo válido.", clientId);
   }
 

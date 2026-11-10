@@ -177,13 +177,20 @@ export async function updateSprintPerformanceAction(
 /**
  * Etapa "Refinamento de Densidade, Hierarquia e Contexto Operacional" (Parte
  * 3) — edição inline do objetivo de performance direto na Sprint, sem
- * navegar até `/clients/{id}/edit`. Mesma coluna (`clients.performance_goal`)
- * já usada pelo formulário de edição do cliente — nenhum campo novo, nenhuma
- * segunda fonte de verdade. Mesma permissão de sempre (só admin, igual ao
- * resto de `client-form.tsx`/`updateClientAction`) — esta etapa não amplia
- * quem pode editar, só onde a edição pode ser feita. Sem redirect no
+ * navegar até `/clients/{id}/edit`. Mesma permissão de sempre (só admin,
+ * igual ao resto de `client-form.tsx`/`updateClientAction`) — esta etapa não
+ * amplia quem pode editar, só onde a edição pode ser feita. Sem redirect no
  * sucesso/erro (Platform Continuity System 1.0): quem chama decide o
  * feedback (toast) e a UI local decide se fecha o popover.
+ *
+ * Etapa "Configuração inteligente de métricas por cliente" (corrige bug B1
+ * da auditoria): chama `set_client_primary_performance_goal` — a MESMA
+ * função que `setClientGoalPrimaryAction` (botão "Definir como principal"
+ * em "Objetivos da conta") chama — em vez de escrever direto em
+ * `clients.performance_goal`. Antes, os dois seletores podiam deixar
+ * `clients.performance_goal` e `client_goals.is_primary` apontando pra
+ * objetivos diferentes; agora os dois caminhos de entrada convergem na
+ * mesma transação atômica.
  */
 export async function updateClientPerformanceGoalAction(
   clientId: string,
@@ -192,10 +199,7 @@ export async function updateClientPerformanceGoalAction(
   await requireAdmin();
 
   const supabase = await createSupabaseClient();
-  const { error } = await supabase
-    .from("clients")
-    .update({ performance_goal: goal as PerformanceGoalDb })
-    .eq("id", clientId);
+  const { error } = await supabase.rpc("set_client_primary_performance_goal", { p_client_id: clientId, p_result_type: goal });
 
   if (error) {
     return { error: toUserFacingError(error, "Não foi possível atualizar o objetivo de performance.") };

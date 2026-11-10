@@ -26,8 +26,13 @@ export type CommentableType = "sprint" | "task";
 export type ClientContractStatus = "ativo" | "pausado" | "encerrado";
 export type ClientMainObjective = "leads" | "vendas" | "reservas" | "reconhecimento" | "trafego" | "outro";
 /** Objetivo estruturado de performance (Etapa 71; "followers" adicionado na
- * Etapa "Objetivo Seguidores") — distinto de `ClientMainObjective`. */
-export type PerformanceGoalDb = "leads" | "sales" | "followers";
+ * Etapa "Objetivo Seguidores"; "conversations"/"registrations" na Etapa
+ * "Configuração inteligente de métricas por cliente") — distinto de
+ * `ClientMainObjective`. Deliberadamente NÃO inclui 'carts' (métrica
+ * secundária de `metric_mappings.goal`/`daily_performance.result_type`,
+ * nunca um objetivo de cliente — ver `secondary-cart-metric.sql`); esses 2
+ * pontos usam `string`/cast explícito onde 'carts' precisa passar. */
+export type PerformanceGoalDb = "leads" | "sales" | "followers" | "conversations" | "registrations";
 
 /** Fonte do resultado de um objetivo (Etapa "Múltiplos Objetivos") —
  * "automatic" = daily_performance/performance_records alimentado por
@@ -3297,6 +3302,13 @@ export interface Database {
         Args: {
           p_client_id: string;
           p_goal_id: string;
+        };
+        Returns: void;
+      };
+      set_client_primary_performance_goal: {
+        Args: {
+          p_client_id: string;
+          p_result_type: PerformanceGoalDb;
         };
         Returns: void;
       };

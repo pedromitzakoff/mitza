@@ -6,7 +6,7 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireAdmin, requireClientManagerAccess } from "@/lib/auth";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import type { GoalResultSourceDb, PerformanceGoalDb } from "@/lib/supabase/database.types";
-import type { PerformanceGoal } from "@/lib/performance-goals";
+import { parsePerformanceGoal, type PerformanceGoal } from "@/lib/performance-goals";
 import { toUserFacingError } from "@/lib/user-facing-error";
 
 /**
@@ -31,8 +31,7 @@ function parseChannels(formData: FormData): TrafficChannel[] {
 }
 
 function parseResultType(value: FormDataEntryValue | null): PerformanceGoal | null {
-  const raw = String(value ?? "");
-  return raw === "leads" || raw === "sales" || raw === "followers" ? raw : null;
+  return parsePerformanceGoal(value);
 }
 
 export async function createClientGoalAction(clientId: string, returnTo: string, formData: FormData) {
@@ -87,11 +86,20 @@ export async function updateClientGoalAction(goalId: string, clientId: string, r
   redirect(returnTo);
 }
 
-export async function setClientGoalPrimaryAction(goalId: string, clientId: string, returnTo: string) {
+/**
+ * Etapa "Configuração inteligente de métricas por cliente" (corrige bug
+ * B1 da auditoria): chama `set_client_primary_performance_goal` — a MESMA
+ * função que `updateClientPerformanceGoalAction` (seletor rápido da
+ * toolbar da Sprint) chama — em vez da antiga RPC `set_client_goal_primary`,
+ * que só escrevia em `client_goals.is_primary` e deixava
+ * `clients.performance_goal` pra trás. Os dois caminhos de entrada
+ * convergem na mesma transação atômica; nunca mais divergem.
+ */
+export async function setClientGoalPrimaryAction(resultType: PerformanceGoal, clientId: string, returnTo: string) {
   await requireAdmin();
 
   const supabase = await createSupabaseClient();
-  const { error } = await supabase.rpc("set_client_goal_primary", { p_client_id: clientId, p_goal_id: goalId });
+  const { error } = await supabase.rpc("set_client_primary_performance_goal", { p_client_id: clientId, p_result_type: resultType });
 
   if (error) redirect(withError(returnTo, toUserFacingError(error, "Não foi possível definir o objetivo principal.")));
 

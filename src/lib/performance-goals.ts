@@ -23,8 +23,16 @@
  * faz `if (goal === "leads")`, todas leem de `PERFORMANCE_GOALS[goal]`, por
  * isso um objetivo novo é uma entrada de configuração, nunca uma ramificação
  * de código nova.
+ *
+ * Quarto e quinto valores ("conversations"/"registrations", Etapa
+ * "Configuração inteligente de métricas por cliente"): ao contrário de
+ * "followers", estes DOIS são eventos atribuíveis a uma campanha/anúncio
+ * específico na Meta (mensagem iniciada, cadastro) — por isso entram em
+ * `GRANULAR_RESULT_GOAL_PRIORITY` (`meta-api-ingest-run.ts`), diferente de
+ * "followers", que nunca entrou (não é um resultado por campanha). Mesma
+ * disciplina: só configuração nova aqui, nenhuma ramificação de código.
  */
-export type PerformanceGoal = "leads" | "sales" | "followers";
+export type PerformanceGoal = "leads" | "sales" | "followers" | "conversations" | "registrations";
 
 export interface PerformanceGoalConfig {
   id: PerformanceGoal;
@@ -82,13 +90,42 @@ export const PERFORMANCE_GOALS: Record<PerformanceGoal, PerformanceGoalConfig> =
     // em qualquer espaço, mesmo os compactos que usam `costMetricShortLabel`.
     costMetricShortLabel: "Custo por novo seguidor",
   },
+  conversations: {
+    id: "conversations",
+    label: "Conversas",
+    singularLabel: "Conversa",
+    pluralLabel: "Conversas",
+    resultMetricLabel: "Conversas",
+    costMetricLabel: "Custo por conversa",
+    costMetricShortLabel: "Custo por conversa",
+  },
+  registrations: {
+    id: "registrations",
+    label: "Cadastros",
+    singularLabel: "Cadastro",
+    pluralLabel: "Cadastros",
+    resultMetricLabel: "Cadastros",
+    costMetricLabel: "Custo por cadastro",
+    costMetricShortLabel: "Custo por cadastro",
+  },
 };
 
 export const PERFORMANCE_GOAL_OPTIONS: { value: PerformanceGoal; label: string }[] = [
   { value: "leads", label: "Geração de leads" },
   { value: "sales", label: "Vendas" },
+  { value: "conversations", label: "Conversas" },
+  { value: "registrations", label: "Cadastros" },
   { value: "followers", label: "Seguidores" },
 ];
+
+/** Único parser de `PerformanceGoal` a partir de `FormData`/texto solto —
+ * nunca duplicar esta lista de valores válidos em cada Server Action
+ * (era o caso antes desta etapa: `goal-actions.ts`/`funnel-actions.ts`
+ * tinham cada uma sua própria cópia hardcoded). */
+export function parsePerformanceGoal(value: FormDataEntryValue | null | undefined): PerformanceGoal | null {
+  const raw = String(value ?? "");
+  return (PERFORMANCE_GOAL_OPTIONS as { value: string; label: string }[]).some((opt) => opt.value === raw) ? (raw as PerformanceGoal) : null;
+}
 
 /** `null`/`undefined` = cliente sem objetivo configurado ainda (nunca
  * inventamos "leads" como padrão pra cliente existente — Etapa 71, seção 2). */

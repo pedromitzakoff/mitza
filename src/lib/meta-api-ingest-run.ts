@@ -421,8 +421,14 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload): Promi
  * somar dois objetivos incompatíveis na mesma linha). `followers` segue de
  * fora deste nível granular — mesmo comportamento de antes desta etapa,
  * fora do escopo deste pedido.
+ *
+ * Etapa "Configuração inteligente de métricas por cliente": `conversations`/
+ * `registrations` entram aqui (ao contrário de `followers`) porque SÃO
+ * eventos atribuíveis a uma campanha/anúncio individual na Meta (mensagem
+ * iniciada, cadastro) — mesma natureza de `leads`/`sales`, não um metric de
+ * conta/perfil.
  */
-const GRANULAR_RESULT_GOAL_PRIORITY: PerformanceGoal[] = ["leads", "sales"];
+const GRANULAR_RESULT_GOAL_PRIORITY: PerformanceGoal[] = ["leads", "sales", "conversations", "registrations"];
 
 function rawColumnString(row: RawSourceRow, column: string): string | null {
   const raw = row[column];

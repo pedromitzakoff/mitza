@@ -83,7 +83,7 @@ export function ClientGoalsSection({
                 </div>
                 <div className="flex items-center gap-2">
                   {!goal.isPrimary && (
-                    <form action={setClientGoalPrimaryAction.bind(null, goal.id, clientId, returnTo)}>
+                    <form action={setClientGoalPrimaryAction.bind(null, goal.resultType, clientId, returnTo)}>
                       <SubmitButton pendingChildren="..." className="text-xs text-zinc-500 hover:text-brand">
                         Definir como principal
                       </SubmitButton>

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { SubmitButton } from "@/app/submit-button";
+import { PERFORMANCE_GOAL_OPTIONS } from "@/lib/performance-goals";
 import { discoverActionTypesAction } from "./actions";
 
 const inputClasses = "rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:border-zinc-500";
@@ -63,9 +64,11 @@ export function ActionTypePicker({
         <label className={labelClasses}>
           Objetivo
           <select name="goal" required defaultValue="leads" className={inputClasses}>
-            <option value="leads">Leads</option>
-            <option value="sales">Vendas</option>
-            <option value="followers">Seguidores</option>
+            {PERFORMANCE_GOAL_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </label>
 
