@@ -7,6 +7,7 @@ import { requireAdmin, requireClientManagerAccess } from "@/lib/auth";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import type { PerformanceGoalDb } from "@/lib/supabase/database.types";
 import type { PerformanceGoal } from "@/lib/performance-goals";
+import { PRIMARY_GOAL_CONSISTENCY_RPC_MIGRATED } from "@/lib/migration-flags";
 import { toUserFacingError } from "@/lib/user-facing-error";
 
 function withError(returnTo: string, message: string): string {
@@ -191,6 +192,15 @@ export async function updateSprintPerformanceAction(
  * `clients.performance_goal` e `client_goals.is_primary` apontando pra
  * objetivos diferentes; agora os dois caminhos de entrada convergem na
  * mesma transação atômica.
+ *
+ * `PRIMARY_GOAL_CONSISTENCY_RPC_MIGRATED` (pedido explícito: "separe a
+ * publicação visual das alterações de banco, de forma segura"): a função
+ * nova só existe no banco depois que `supabase/client-goal-primary-
+ * consistency.sql` rodar — ainda não rodou. Enquanto a flag for `false`,
+ * usa o comportamento ANTERIOR (`.update()` direto em `clients.
+ * performance_goal`, sem tocar `client_goals` — o mesmo que já rodava em
+ * produção antes desta etapa, nunca quebrado) pra não depender da função
+ * nova existir.
  */
 export async function updateClientPerformanceGoalAction(
   clientId: string,
@@ -199,10 +209,13 @@ export async function updateClientPerformanceGoalAction(
   await requireAdmin();
 
   const supabase = await createSupabaseClient();
-  const { error } = await supabase.rpc("set_client_primary_performance_goal", { p_client_id: clientId, p_result_type: goal });
 
-  if (error) {
-    return { error: toUserFacingError(error, "Não foi possível atualizar o objetivo de performance.") };
+  if (PRIMARY_GOAL_CONSISTENCY_RPC_MIGRATED) {
+    const { error } = await supabase.rpc("set_client_primary_performance_goal", { p_client_id: clientId, p_result_type: goal });
+    if (error) return { error: toUserFacingError(error, "Não foi possível atualizar o objetivo de performance.") };
+  } else {
+    const { error } = await supabase.from("clients").update({ performance_goal: goal as PerformanceGoalDb }).eq("id", clientId);
+    if (error) return { error: toUserFacingError(error, "Não foi possível atualizar o objetivo de performance.") };
   }
 
   // Visão Geral, Sprints e a página do próprio cliente precisam refletir o

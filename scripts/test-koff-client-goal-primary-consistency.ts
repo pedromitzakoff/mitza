@@ -11,16 +11,20 @@
  * ESTRUTURAIS: leem o código-fonte e a migração, e confirmam:
  *  A. A nova RPC (`set_client_primary_performance_goal`) atualiza as DUAS
  *     tabelas na mesma função (mesma transação implícita do PL/pgSQL).
- *  B. Os DOIS Server Actions (seletor rápido da Sprint + "Definir como
- *     principal") chamam a MESMA RPC nova — nenhum dos dois escreve mais
- *     direto em `clients`/`client_goals` por fora dela.
+ *  B. Os DOIS Server Actions são GATEADOS por `PRIMARY_GOAL_CONSISTENCY_
+ *     RPC_MIGRATED` (Etapa "publicar sem migração" — pedido explícito:
+ *     "separe a publicação visual das alterações de banco, de forma
+ *     segura"): quando `true`, chamam a RPC nova; quando `false` (valor
+ *     atual, a migração ainda não rodou em produção), caem de volta no
+ *     comportamento ANTERIOR a esta etapa — nunca dependem da função nova
+ *     existir pra funcionar hoje.
  *  C. O call site em `client-goals-section.tsx` passa `resultType` (não
  *     mais `goal.id`) — a RPC nova é identificada por objetivo, não por
  *     linha, porque o seletor rápido não tem um `goal.id` quando o cliente
  *     ainda não tem nenhuma linha em `client_goals`.
  *  D. A função antiga (`set_client_goal_primary`) continua existindo no
- *     banco (nunca removida — poderia haver uso externo), mas nenhum
- *     Server Action da aplicação a chama mais diretamente.
+ *     banco (nunca removida) — é exatamente ela que o caminho de
+ *     fallback (B) chama enquanto a flag for `false`.
  *
  * Rodar: npx tsx scripts/test-koff-client-goal-primary-consistency.ts
  */
@@ -60,19 +64,25 @@ console.log("\nA — A nova função SQL escreve nas DUAS tabelas, nunca só num
 }
 
 // ---------------------------------------------------------------------------
-console.log("\nB — Os dois Server Actions convergem na mesma RPC nova\n");
+console.log("\nB — Os dois Server Actions são gateados pela flag — nunca dependem da RPC nova existir hoje\n");
 {
   const goalActionsSource = loadSource("src", "app", "clients", "goal-actions.ts");
   const performanceActionsSource = loadSource("src", "app", "clients", "performance-actions.ts");
+  const flagsSource = loadSource("src", "lib", "migration-flags.ts");
+
+  ok("a flag existe e está false (migração ainda não rodou em produção)", /PRIMARY_GOAL_CONSISTENCY_RPC_MIGRATED = false/.test(flagsSource));
 
   ok(
-    "setClientGoalPrimaryAction chama set_client_primary_performance_goal (nunca mais a RPC antiga)",
-    goalActionsSource.includes('supabase.rpc("set_client_primary_performance_goal"') && !goalActionsSource.includes('"set_client_goal_primary"'),
+    "setClientGoalPrimaryAction tem os DOIS caminhos: a RPC nova (gateada) e o fallback com a RPC antiga",
+    goalActionsSource.includes('supabase.rpc("set_client_primary_performance_goal"') &&
+      goalActionsSource.includes('supabase.rpc("set_client_goal_primary"') &&
+      goalActionsSource.includes("if (PRIMARY_GOAL_CONSISTENCY_RPC_MIGRATED)"),
   );
   ok(
-    "updateClientPerformanceGoalAction chama a MESMA RPC — nunca mais um .update() direto em clients.performance_goal",
+    "updateClientPerformanceGoalAction tem os DOIS caminhos: a RPC nova (gateada) e o fallback com .update() direto",
     performanceActionsSource.includes('supabase.rpc("set_client_primary_performance_goal"') &&
-      !/\.from\("clients"\)\s*\.update\(\{\s*performance_goal/.test(performanceActionsSource),
+      /\.from\("clients"\)\.update\(\{\s*performance_goal/.test(performanceActionsSource) &&
+      performanceActionsSource.includes("if (PRIMARY_GOAL_CONSISTENCY_RPC_MIGRATED)"),
   );
 }
 
@@ -93,16 +103,16 @@ console.log("\nC — call site passa resultType, não goal.id (a RPC é por obje
 }
 
 // ---------------------------------------------------------------------------
-console.log("\nD — a RPC antiga continua existindo no banco (nunca removida), mas sem chamador na aplicação\n");
+console.log("\nD — a RPC antiga continua existindo no banco — é ela que o fallback chama enquanto a flag for false\n");
 {
   const consistencySql = loadSource("supabase", "client-goal-primary-consistency.sql");
   const clientGoalsSql = loadSource("supabase", "client-goals.sql");
-  const srcFiles = ["goal-actions.ts", "performance-actions.ts", "client-goals-section.tsx"].map((f) => loadSource("src", "app", "clients", f));
+  const goalActionsSource = loadSource("src", "app", "clients", "goal-actions.ts");
 
   ok("set_client_goal_primary continua definida em client-goals.sql (nunca um DROP FUNCTION)", clientGoalsSql.includes("create or replace function set_client_goal_primary"));
   ok(
-    "nenhum Server Action da aplicação chama set_client_goal_primary diretamente",
-    srcFiles.every((src) => !src.includes('"set_client_goal_primary"')),
+    "o fallback de setClientGoalPrimaryAction chama exatamente a assinatura antiga (p_client_id, p_goal_id)",
+    /set_client_goal_primary["'],\s*\{\s*p_client_id:\s*clientId,\s*p_goal_id:\s*goal\.id\s*\}/.test(goalActionsSource),
   );
   ok(
     "a migração nova documenta explicitamente por que a função antiga fica (compatibilidade, nunca removida às cegas)",

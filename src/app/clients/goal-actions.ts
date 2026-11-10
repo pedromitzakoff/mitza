@@ -7,6 +7,7 @@ import { requireAdmin, requireClientManagerAccess } from "@/lib/auth";
 import { AVAILABLE_TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import type { GoalResultSourceDb, PerformanceGoalDb } from "@/lib/supabase/database.types";
 import { parsePerformanceGoal, type PerformanceGoal } from "@/lib/performance-goals";
+import { PRIMARY_GOAL_CONSISTENCY_RPC_MIGRATED } from "@/lib/migration-flags";
 import { toUserFacingError } from "@/lib/user-facing-error";
 
 /**
@@ -94,14 +95,38 @@ export async function updateClientGoalAction(goalId: string, clientId: string, r
  * que só escrevia em `client_goals.is_primary` e deixava
  * `clients.performance_goal` pra trás. Os dois caminhos de entrada
  * convergem na mesma transação atômica; nunca mais divergem.
+ *
+ * `PRIMARY_GOAL_CONSISTENCY_RPC_MIGRATED` (pedido explícito: "separe a
+ * publicação visual das alterações de banco, de forma segura"): a função
+ * nova só existe no banco depois que `supabase/client-goal-primary-
+ * consistency.sql` rodar — ainda não rodou. Enquanto a flag for `false`,
+ * usa o caminho ANTERIOR (`set_client_goal_primary`, só `client_goals.
+ * is_primary` — o mesmo que já rodava em produção antes desta etapa,
+ * nunca quebrado) pra não depender da função nova existir. A assinatura
+ * desta action já é por `resultType` (não por `goalId`, que o seletor
+ * rápido nunca teve) — o caminho antigo busca o `id` correspondente antes
+ * de chamar a RPC antiga, que só aceita `goalId`.
  */
 export async function setClientGoalPrimaryAction(resultType: PerformanceGoal, clientId: string, returnTo: string) {
   await requireAdmin();
 
   const supabase = await createSupabaseClient();
-  const { error } = await supabase.rpc("set_client_primary_performance_goal", { p_client_id: clientId, p_result_type: resultType });
 
-  if (error) redirect(withError(returnTo, toUserFacingError(error, "Não foi possível definir o objetivo principal.")));
+  if (PRIMARY_GOAL_CONSISTENCY_RPC_MIGRATED) {
+    const { error } = await supabase.rpc("set_client_primary_performance_goal", { p_client_id: clientId, p_result_type: resultType });
+    if (error) redirect(withError(returnTo, toUserFacingError(error, "Não foi possível definir o objetivo principal.")));
+  } else {
+    const { data: goal, error: lookupError } = await supabase
+      .from("client_goals")
+      .select("id")
+      .eq("client_id", clientId)
+      .eq("result_type", resultType)
+      .maybeSingle();
+    if (lookupError || !goal) redirect(withError(returnTo, "Não foi possível localizar este objetivo."));
+
+    const { error } = await supabase.rpc("set_client_goal_primary", { p_client_id: clientId, p_goal_id: goal.id });
+    if (error) redirect(withError(returnTo, toUserFacingError(error, "Não foi possível definir o objetivo principal.")));
+  }
 
   revalidatePath(`/clients/${clientId}/edit`);
   revalidatePath(`/clients/${clientId}`);
