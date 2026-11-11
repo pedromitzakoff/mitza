@@ -159,6 +159,38 @@ console.log("\nG2 — achado real de produção: limit=500 é rejeitado pela Gra
   );
 }
 
+console.log("\nG3 — achado real de produção: sem effective_status, anúncios arquivados somem silenciosamente\n");
+{
+  const fetchFullSrc = loadSource("src", "lib", "meta-api-fetch.ts");
+
+  ok(
+    "effective_status inclui ARCHIVED (anúncio de campanha antiga encerrada continua tendo preview buscado)",
+    fetchFullSrc.includes("CREATIVE_PREVIEW_EFFECTIVE_STATUS") && /"ARCHIVED"/.test(fetchFullSrc),
+  );
+
+  ok(
+    "DELETED nunca está na lista (apagado de verdade não deveria ter preview buscado)",
+    !/"DELETED"/.test(fetchFullSrc.slice(fetchFullSrc.indexOf("CREATIVE_PREVIEW_EFFECTIVE_STATUS"), fetchFullSrc.indexOf("CREATIVE_PREVIEW_EFFECTIVE_STATUS") + 700)),
+  );
+
+  ok(
+    "o parâmetro effective_status é de fato enviado na URL da chamada",
+    fetchFullSrc.includes('url.searchParams.set("effective_status", CREATIVE_PREVIEW_EFFECTIVE_STATUS)'),
+  );
+}
+
+console.log("\nG4 — achado real de produção: qualidade ruim — image_url (original) deve vencer thumbnail_url (miniatura)\n");
+{
+  const fetchFullSrc = loadSource("src", "lib", "meta-api-fetch.ts");
+  const fnStart = fetchFullSrc.indexOf("export async function fetchMetaApiAdCreativePreviews");
+  const fnSrc = fetchFullSrc.slice(fnStart, fnStart + 2000);
+
+  ok(
+    "image_url (imagem original, melhor qualidade) é tentado ANTES de thumbnail_url (miniatura pequena)",
+    /row\.creative\?\.image_url\s*\?\?\s*row\.creative\?\.thumbnail_url/.test(fnSrc),
+  );
+}
+
 console.log("\nG — migração: tabela mínima (1 linha por cliente, nunca a imagem em si)\n");
 {
   const sql = loadSource("supabase", "creative-preview-refresh-log.sql");

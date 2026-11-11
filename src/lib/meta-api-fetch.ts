@@ -438,6 +438,26 @@ const CREATIVE_PREVIEW_FIELDS = "name,creative{thumbnail_url,image_url}";
 // cliente/conta reais) — 50 é o valor seguro para este campo específico.
 const CREATIVE_PREVIEW_PAGE_LIMIT = 50;
 
+// Sem `effective_status`, o endpoint `/ads` da Graph API exclui
+// silenciosamente anúncios arquivados (campanhas antigas já encerradas) —
+// sem erro nenhum, só ausentes da resposta. Achado real em produção
+// (conta com histórico: nem todos os criativos apareciam). Pedimos todo
+// status "vivo" — só EXCLUDED é `DELETED` (apagado de verdade, nunca mais
+// deveria ter preview buscado).
+const CREATIVE_PREVIEW_EFFECTIVE_STATUS = JSON.stringify([
+  "ACTIVE",
+  "PAUSED",
+  "ARCHIVED",
+  "PENDING_REVIEW",
+  "DISAPPROVED",
+  "PREAPPROVED",
+  "PENDING_BILLING_INFO",
+  "CAMPAIGN_PAUSED",
+  "ADSET_PAUSED",
+  "IN_PROCESS",
+  "WITH_ISSUES",
+]);
+
 export async function fetchMetaApiAdCreativePreviews(accountId: string): Promise<MetaApiCreativePreviewRow[]> {
   const accessToken = process.env.META_API_ACCESS_TOKEN;
   if (!accessToken) {
@@ -447,6 +467,7 @@ export async function fetchMetaApiAdCreativePreviews(accountId: string): Promise
   const url = new URL(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/${accountId}/ads`);
   url.searchParams.set("fields", CREATIVE_PREVIEW_FIELDS);
   url.searchParams.set("limit", String(CREATIVE_PREVIEW_PAGE_LIMIT));
+  url.searchParams.set("effective_status", CREATIVE_PREVIEW_EFFECTIVE_STATUS);
   url.searchParams.set("access_token", accessToken);
 
   const rows: MetaApiCreativePreviewRow[] = [];
@@ -462,7 +483,10 @@ export async function fetchMetaApiAdCreativePreviews(accountId: string): Promise
 
     for (const row of json.data ?? []) {
       if (!row.name) continue; // sem nome -> nunca combina com nenhum creativeName já gravado, nunca gravável.
-      rows.push({ adName: row.name, thumbnailUrl: row.creative?.thumbnail_url ?? row.creative?.image_url ?? null });
+      // `image_url` (imagem original) primeiro — qualidade melhor que
+      // `thumbnail_url` (miniatura pequena da Meta); thumbnail só como
+      // último recurso (ex.: anúncio em vídeo sem imagem estática própria).
+      rows.push({ adName: row.name, thumbnailUrl: row.creative?.image_url ?? row.creative?.thumbnail_url ?? null });
     }
     nextUrl = json.paging?.next;
   }
