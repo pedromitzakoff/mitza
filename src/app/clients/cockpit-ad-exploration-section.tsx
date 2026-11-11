@@ -15,6 +15,7 @@ import {
   type ExplorationColumnId,
   type ExplorationRow,
 } from "@/lib/meta-ads-dashboard/exploration-data";
+import { AdCardGrid } from "./ad-card-grid";
 
 /**
  * MITZA ONE — Cockpit Único do Cliente, "Campanhas, conjuntos e anúncios"
@@ -428,34 +429,49 @@ export function CockpitAdExplorationSection({
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <SearchInput value={searchText} mode={searchMode} onValueChange={setSearchText} onModeChange={setSearchMode} />
-        <div className="relative">
-          <ColumnPicker columns={columns} visibleColumnIds={visibleColumnIds} onToggle={toggleColumn} />
-        </div>
+        {/* Pedido do usuário ("deixar mais bonito... visualizar de formas
+            diferentes"): Anúncios vira grade de cards, sem conceito de
+            "colunas" pra escolher — o seletor some só nesse nível. */}
+        {level !== "ads" && (
+          <div className="relative">
+            <ColumnPicker columns={columns} visibleColumnIds={visibleColumnIds} onToggle={toggleColumn} />
+          </div>
+        )}
       </div>
 
       <div className="mt-3">
-        <ExplorationTable
-          rows={filteredRows}
-          columns={columns}
-          visibleColumnIds={visibleColumnIds}
-          sort={sort}
-          onSortChange={handleSortChange}
-          onRowClick={level === "campaigns" ? handleSelectCampaign : undefined}
-          showCampaignNames={level !== "campaigns" && !isScopedByCampaign}
-          emptyMessage={
-            normalizedSearch !== ""
-              ? "Nenhum resultado para esse filtro."
-              : level === "campaigns"
-                ? "Nenhuma campanha com investimento neste período."
-                : level === "adsets"
-                  ? isScopedByCampaign
+        {level === "ads" ? (
+          <AdCardGrid
+            rows={filteredRows}
+            showCampaignNames={!isScopedByCampaign}
+            emptyMessage={
+              normalizedSearch !== ""
+                ? "Nenhum resultado para esse filtro."
+                : isScopedByCampaign
+                  ? "Nenhum anúncio encontrado para esta campanha no período."
+                  : "Nenhum anúncio encontrado no período."
+            }
+          />
+        ) : (
+          <ExplorationTable
+            rows={filteredRows}
+            columns={columns}
+            visibleColumnIds={visibleColumnIds}
+            sort={sort}
+            onSortChange={handleSortChange}
+            onRowClick={level === "campaigns" ? handleSelectCampaign : undefined}
+            showCampaignNames={level !== "campaigns" && !isScopedByCampaign}
+            emptyMessage={
+              normalizedSearch !== ""
+                ? "Nenhum resultado para esse filtro."
+                : level === "campaigns"
+                  ? "Nenhuma campanha com investimento neste período."
+                  : isScopedByCampaign
                     ? "Nenhum conjunto de anúncios encontrado para esta campanha no período."
                     : "Nenhum conjunto de anúncios encontrado no período."
-                  : isScopedByCampaign
-                    ? "Nenhum anúncio encontrado para esta campanha no período."
-                    : "Nenhum anúncio encontrado no período."
-          }
-        />
+            }
+          />
+        )}
       </div>
 
       {level === "campaigns" && campaigns.length > 0 && (
