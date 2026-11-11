@@ -430,7 +430,13 @@ interface MetaAdsCreativeResponse {
 }
 
 const CREATIVE_PREVIEW_FIELDS = "name,creative{thumbnail_url,image_url}";
-const CREATIVE_PREVIEW_PAGE_LIMIT = 500;
+// 500 (o valor usado em `fetchMetaApiInsightsForAccount`) é grande demais
+// aqui — `creative{...}` é uma expansão de edge aninhada, bem mais "pesada"
+// por linha do que métricas simples, e a Graph API rejeita a chamada
+// inteira com "Please reduce the amount of data you're asking for" acima de
+// um certo tamanho de página. Achado real em produção (log do Vercel,
+// cliente/conta reais) — 50 é o valor seguro para este campo específico.
+const CREATIVE_PREVIEW_PAGE_LIMIT = 50;
 
 export async function fetchMetaApiAdCreativePreviews(accountId: string): Promise<MetaApiCreativePreviewRow[]> {
   const accessToken = process.env.META_API_ACCESS_TOKEN;

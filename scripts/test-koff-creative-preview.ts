@@ -147,6 +147,18 @@ console.log("\nF — UI: o card de anúncio mostra a imagem real quando existe, 
 }
 
 // ---------------------------------------------------------------------------
+console.log("\nG2 — achado real de produção: limit=500 é rejeitado pela Graph API neste campo\n");
+{
+  const fetchFullSrc = loadSource("src", "lib", "meta-api-fetch.ts");
+  const fnStart = fetchFullSrc.indexOf("CREATIVE_PREVIEW_FIELDS");
+  const fetchFnSrc = fetchFullSrc.slice(fnStart, fnStart + 2200);
+
+  ok(
+    "fetchMetaApiAdCreativePreviews usa limit=50, nunca 500 (500 causava 'Please reduce the amount of data you're asking for' em conta real)",
+    fnStart !== -1 && /CREATIVE_PREVIEW_PAGE_LIMIT = 50;/.test(fetchFnSrc) && !/CREATIVE_PREVIEW_PAGE_LIMIT = 500;/.test(fetchFnSrc),
+  );
+}
+
 console.log("\nG — migração: tabela mínima (1 linha por cliente, nunca a imagem em si)\n");
 {
   const sql = loadSource("supabase", "creative-preview-refresh-log.sql");
