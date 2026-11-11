@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Image as ImageIcon } from "lucide-react";
 import { formatCurrency, formatCount } from "@/lib/format";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import type { ExplorationRow } from "@/lib/meta-ads-dashboard/exploration-data";
@@ -59,6 +58,28 @@ export function sortAdRows(rows: ExplorationRow[], key: AdSortKey): ExplorationR
   return sorted;
 }
 
+/** Ícone de placeholder desenhado à mão (nunca `lucide-react` aqui) —
+ * elimina qualquer dependência de biblioteca de ícone pra este elemento
+ * específico, já que é só um espaço reservado visual, nunca informação. */
+function PlaceholderIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-8 w-8 text-overview-text-muted"
+      aria-hidden="true"
+    >
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="m21 15-5-5L5 21" />
+    </svg>
+  );
+}
+
 function AdCard({ row, showCampaignNames }: { row: ExplorationRow; showCampaignNames: boolean }) {
   const goal = row.resultType;
   const entry = goal ? row.resultByGoal[goal] : undefined;
@@ -66,7 +87,7 @@ function AdCard({ row, showCampaignNames }: { row: ExplorationRow; showCampaignN
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
       <div className="flex aspect-square items-center justify-center bg-overview-surface-subtle">
-        <ImageIcon className="h-8 w-8 text-overview-text-muted" aria-hidden="true" strokeWidth={1.5} />
+        <PlaceholderIcon />
       </div>
       <div className="flex flex-col gap-1 p-3">
         <p className="truncate text-sm font-medium text-overview-text-primary" title={row.name}>
@@ -75,24 +96,33 @@ function AdCard({ row, showCampaignNames }: { row: ExplorationRow; showCampaignN
         {showCampaignNames && row.campaignNames && row.campaignNames.length > 0 && (
           <p className="truncate text-xs text-overview-text-muted">{row.campaignNames.join(" · ")}</p>
         )}
+        {/* `min-w-0` em cada célula é o que evita o número vazar pra cima do
+            vizinho — sem isso, um Grid nunca encolhe uma célula abaixo da
+            largura do próprio conteúdo (gotcha conhecido de CSS Grid),
+            exatamente o bug visto em produção (valores embolando). */}
         <div className="mt-1.5 grid grid-cols-3 gap-2 border-t border-overview-border pt-2">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">Investimento</p>
-            <p className="text-sm font-semibold tabular-nums text-overview-text-primary">{formatCurrency(row.spend)}</p>
+          <div className="min-w-0">
+            <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">Investimento</p>
+            <p className="truncate text-sm font-semibold tabular-nums text-overview-text-primary" title={formatCurrency(row.spend)}>
+              {formatCurrency(row.spend)}
+            </p>
           </div>
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
+          <div className="min-w-0">
+            <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
               {goal ? PERFORMANCE_GOALS[goal].resultMetricLabel : "Resultado"}
             </p>
-            <p className="text-sm font-semibold tabular-nums text-overview-text-primary">
+            <p className="truncate text-sm font-semibold tabular-nums text-overview-text-primary">
               {entry?.count !== undefined && entry.count !== null ? formatCount(entry.count) : "—"}
             </p>
           </div>
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
+          <div className="min-w-0">
+            <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
               {goal ? PERFORMANCE_GOALS[goal].costMetricShortLabel : "Custo"}
             </p>
-            <p className="text-sm font-semibold tabular-nums text-overview-text-primary">
+            <p
+              className="truncate text-sm font-semibold tabular-nums text-overview-text-primary"
+              title={entry?.cost !== undefined && entry.cost !== null ? formatCurrency(entry.cost) : undefined}
+            >
               {entry?.cost !== undefined && entry.cost !== null ? formatCurrency(entry.cost) : "—"}
             </p>
           </div>
