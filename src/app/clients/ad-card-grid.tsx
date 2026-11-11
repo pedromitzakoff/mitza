@@ -96,33 +96,25 @@ function AdCard({ row, showCampaignNames }: { row: ExplorationRow; showCampaignN
         {showCampaignNames && row.campaignNames && row.campaignNames.length > 0 && (
           <p className="truncate text-xs text-overview-text-muted">{row.campaignNames.join(" · ")}</p>
         )}
-        {/* `min-w-0` em cada célula é o que evita o número vazar pra cima do
-            vizinho — sem isso, um Grid nunca encolhe uma célula abaixo da
-            largura do próprio conteúdo (gotcha conhecido de CSS Grid),
-            exatamente o bug visto em produção (valores embolando). */}
-        <div className="mt-1.5 grid grid-cols-3 gap-2 border-t border-overview-border pt-2">
-          <div className="min-w-0">
-            <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">Investimento</p>
-            <p className="truncate text-sm font-semibold tabular-nums text-overview-text-primary" title={formatCurrency(row.spend)}>
-              {formatCurrency(row.spend)}
-            </p>
+        {/* Empilhado, nunca lado a lado — 3 colunas numa coluna estreita de
+            card nunca têm espaço suficiente pra um valor grande (ex.: "R$
+            12.102,xx") sem cortar. Uma linha por métrica, label à esquerda
+            e valor à direita, cada um com a largura inteira do card — o
+            valor SEMPRE aparece completo, não importa o tamanho. */}
+        <div className="mt-1.5 flex flex-col gap-1 border-t border-overview-border pt-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+            <p className="text-[11px] font-medium text-overview-text-muted">Investimento</p>
+            <p className="text-sm font-semibold tabular-nums text-overview-text-primary">{formatCurrency(row.spend)}</p>
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
-              {goal ? PERFORMANCE_GOALS[goal].resultMetricLabel : "Resultado"}
-            </p>
-            <p className="truncate text-sm font-semibold tabular-nums text-overview-text-primary">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+            <p className="text-[11px] font-medium text-overview-text-muted">{goal ? PERFORMANCE_GOALS[goal].resultMetricLabel : "Resultado"}</p>
+            <p className="text-sm font-semibold tabular-nums text-overview-text-primary">
               {entry?.count !== undefined && entry.count !== null ? formatCount(entry.count) : "—"}
             </p>
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">
-              {goal ? PERFORMANCE_GOALS[goal].costMetricShortLabel : "Custo"}
-            </p>
-            <p
-              className="truncate text-sm font-semibold tabular-nums text-overview-text-primary"
-              title={entry?.cost !== undefined && entry.cost !== null ? formatCurrency(entry.cost) : undefined}
-            >
+          <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+            <p className="text-[11px] font-medium text-overview-text-muted">{goal ? PERFORMANCE_GOALS[goal].costMetricShortLabel : "Custo"}</p>
+            <p className="text-sm font-semibold tabular-nums text-overview-text-primary">
               {entry?.cost !== undefined && entry.cost !== null ? formatCurrency(entry.cost) : "—"}
             </p>
           </div>
