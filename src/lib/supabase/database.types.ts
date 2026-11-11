@@ -3230,6 +3230,29 @@ export interface Database {
           },
         ];
       };
+      creative_preview_refresh_log: {
+        Row: {
+          client_id: string;
+          refreshed_at: string;
+        };
+        Insert: {
+          client_id: string;
+          refreshed_at?: string;
+        };
+        Update: {
+          client_id?: string;
+          refreshed_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "creative_preview_refresh_log_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: true;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       client_last_operational_activity: {

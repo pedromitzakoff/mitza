@@ -49,6 +49,7 @@ import { groupChannelsByResultType } from "@/lib/cockpit-result-groups";
 import { buildCockpitInsights } from "@/lib/cockpit-diagnostics";
 import type { DataAttention } from "@/lib/data-trust";
 import { loadDadosPageData } from "../dados-data";
+import { scheduleCreativePreviewRefreshIfStale } from "@/lib/creative-preview-refresh";
 import { DataFreshnessTimer } from "../data-freshness-timer";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
 import {
@@ -336,6 +337,11 @@ export default async function ClientPage({
       // consulta desperdiçada pra quem só usa Google Ads.
       clientChannels.includes("meta") ? resolveMetaAdAccountId(supabase, id) : Promise.resolve(null),
     ]);
+
+  // Preview de criativos ("pode fazer já", pedido do usuário) — nunca
+  // bloqueia a página: `after()` dentro desta função agenda a busca de
+  // verdade pra DEPOIS da resposta já ter sido enviada.
+  void scheduleCreativePreviewRefreshIfStale(supabase, id, metaAdAccountId);
 
   const planningHorizon = resolvePlanningHorizon({ firstDay, lastDay }, planningEndDate);
 

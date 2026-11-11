@@ -4,6 +4,7 @@ import { monthRangeFromParam, shiftMonthParam } from "@/lib/sprint-financials";
 import { todayUTC } from "@/lib/today";
 import { resolveClientMediaChannels } from "@/lib/traffic-channels";
 import { resolveMetaAdAccountId } from "@/lib/meta-ads-dashboard/dashboard-data";
+import { scheduleCreativePreviewRefreshIfStale } from "@/lib/creative-preview-refresh";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
 import { campaignSummaryToRow, type ExplorationRow } from "@/lib/meta-ads-dashboard/exploration-data";
 import type { AdSetDailyMetricRow } from "@/lib/ad-set-analytics";
@@ -96,7 +97,10 @@ export async function loadCockpitExplorationPageData(
     resolveMetaAdAccountId(supabase, clientId),
     buildPerformanceReportData(supabase, clientId, { start: firstDay, end: lastDay }),
   ]);
-  void metaAdAccountId; // resolvido só pra manter o mesmo padrão de carregamento do Cockpit; não usado nesta página (sem saldo/reach aqui).
+  // Preview de criativos ("pode fazer já", pedido do usuário) — nunca
+  // bloqueia a página: `after()` dentro desta função agenda a busca de
+  // verdade pra DEPOIS da resposta já ter sido enviada.
+  void scheduleCreativePreviewRefreshIfStale(supabase, clientId, metaAdAccountId);
 
   const filteredCampaigns = filterCampaignSummaries(performanceReportData.campaigns, cockpitFilter);
   const filteredAdSetDailyRows = filterAdSetDailyRows(performanceReportData.adSetDailyRows, cockpitFilter);

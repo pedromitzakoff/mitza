@@ -393,3 +393,73 @@ export async function fetchMetaApiAccountBalance(accountId: string): Promise<Met
 
   return mapMetaAccountBalanceResponse(json);
 }
+
+/**
+ * Preview de criativo (Etapa "Preview de criativos nos cards de Anúncios")
+ * — pedido explícito do usuário: mostrar a imagem/thumbnail de vídeo real
+ * de cada anúncio, sem baixar/guardar o arquivo (só o link que a Meta já
+ * devolve, reaproveitado direto como `src` de `<img>` — nunca armazenado
+ * em Supabase Storage, decisão explícita por custo/peso).
+ *
+ * Busca TODOS os anúncios da conta de uma vez (nunca um por um) — nó
+ * `/{account}/ads`, DISTINTO do nó `/insights` usado pra performance
+ * (nenhuma relação com data/período, metadado de anúncio é "o que existe
+ * agora", não histórico). `creative.thumbnail_url` funciona tanto pra
+ * imagem quanto pra vídeo (frame de capa); `image_url` como fallback pros
+ * poucos casos em que `thumbnail_url` não vem.
+ *
+ * `adName` é a mesma identidade canônica de sempre (`creativeName`, ver
+ * `lib/creative-analytics.ts`) — quem chama agrupa por nome, nunca por
+ * `ad_id` (vários `ad_id` podem compartilhar o mesmo criativo ao longo do
+ * tempo).
+ */
+export interface MetaApiCreativePreviewRow {
+  adName: string;
+  thumbnailUrl: string | null;
+}
+
+interface MetaAdsCreativeRawRow {
+  name?: string;
+  creative?: { thumbnail_url?: string; image_url?: string };
+}
+
+interface MetaAdsCreativeResponse {
+  data: MetaAdsCreativeRawRow[];
+  paging?: { next?: string };
+  error?: { message: string };
+}
+
+const CREATIVE_PREVIEW_FIELDS = "name,creative{thumbnail_url,image_url}";
+const CREATIVE_PREVIEW_PAGE_LIMIT = 500;
+
+export async function fetchMetaApiAdCreativePreviews(accountId: string): Promise<MetaApiCreativePreviewRow[]> {
+  const accessToken = process.env.META_API_ACCESS_TOKEN;
+  if (!accessToken) {
+    throw new Error("META_API_ACCESS_TOKEN não configurado");
+  }
+
+  const url = new URL(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/${accountId}/ads`);
+  url.searchParams.set("fields", CREATIVE_PREVIEW_FIELDS);
+  url.searchParams.set("limit", String(CREATIVE_PREVIEW_PAGE_LIMIT));
+  url.searchParams.set("access_token", accessToken);
+
+  const rows: MetaApiCreativePreviewRow[] = [];
+  let nextUrl: string | undefined = url.toString();
+
+  while (nextUrl) {
+    const response: Response = await fetch(nextUrl);
+    const json: MetaAdsCreativeResponse = await response.json();
+
+    if (!response.ok) {
+      throw new Error(`Meta Graph API error (${accountId}, preview de criativo): ${json?.error?.message ?? response.statusText}`);
+    }
+
+    for (const row of json.data ?? []) {
+      if (!row.name) continue; // sem nome -> nunca combina com nenhum creativeName já gravado, nunca gravável.
+      rows.push({ adName: row.name, thumbnailUrl: row.creative?.thumbnail_url ?? row.creative?.image_url ?? null });
+    }
+    nextUrl = json.paging?.next;
+  }
+
+  return rows;
+}

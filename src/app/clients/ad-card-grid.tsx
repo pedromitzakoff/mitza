@@ -11,10 +11,10 @@ import type { ExplorationRow } from "@/lib/meta-ads-dashboard/exploration-data";
  * apresentação — reaproveita `ExplorationRow` (já calculado, mesmo dado da
  * tabela de Campanhas/Conjuntos) e `row.resultType`/`row.resultByGoal` pra
  * mostrar o Resultado/Custo do PRÓPRIO objetivo de cada anúncio, nunca um
- * número genérico. O quadrado cinza no lugar da imagem é proposital — não
- * existe preview de criativo hoje (`previewImageUrl` sempre `null`, ver
- * `creative-analytics.ts`); o espaço já fica reservado pra quando essa
- * captura existir, sem precisar redesenhar o card depois.
+ * número genérico. `row.previewImageUrl` (link da Meta, nunca baixado/
+ * guardado por nós — ver `lib/creative-preview-refresh.ts`) mostra a
+ * imagem/thumbnail real do criativo quando já foi capturado; o quadrado
+ * cinza com `PlaceholderIcon` é só o fallback enquanto isso não existe.
  *
  * Os pills "Ordenar por" são um atalho SEPARADO do clique-no-cabeçalho da
  * tabela (pedido explícito: "ordenar por maior conversão" precisa ser óbvio,
@@ -86,8 +86,13 @@ function AdCard({ row, showCampaignNames }: { row: ExplorationRow; showCampaignN
 
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-overview-border bg-overview-surface">
-      <div className="flex aspect-square items-center justify-center bg-overview-surface-subtle">
-        <PlaceholderIcon />
+      <div className="flex aspect-square items-center justify-center overflow-hidden bg-overview-surface-subtle">
+        {row.previewImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- imagem externa (CDN da Meta), mesma convenção de `client-form.tsx`/`ClientAvatar`.
+          <img src={row.previewImageUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <PlaceholderIcon />
+        )}
       </div>
       <div className="flex flex-col gap-1 p-3">
         <p className="truncate text-sm font-medium text-overview-text-primary" title={row.name}>
