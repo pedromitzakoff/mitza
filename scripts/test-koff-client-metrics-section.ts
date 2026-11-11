@@ -7,9 +7,11 @@
  * de evento, nenhum segundo sistema de mapeamento.
  *
  * Cobre:
- *  A. Conversas/Cadastros NÃO aparecem em nenhum seletor hoje (banco de
- *     produção ainda não suporta — migração pendente) — `AVAILABLE_
- *     PERFORMANCE_GOAL_OPTIONS` gateia os 4 pontos de seleção.
+ *  A. Conversas/Cadastros já aparecem em todo seletor (migração
+ *     `performance-goal-conversations-registrations.sql` confirmada
+ *     executada em produção) — `AVAILABLE_PERFORMANCE_GOAL_OPTIONS`
+ *     (lista vazia de pendências) é a fonte única nos 4 pontos de seleção,
+ *     nunca `PERFORMANCE_GOAL_OPTIONS` direto.
  *  B. `ActionTypePicker` com `fixedGoal`: esconde o seletor "Objetivo",
  *     mostra o nome do objetivo como texto, nunca duplica a lógica de
  *     descoberta/salvamento (`discoverActionTypesAction`/
@@ -42,14 +44,12 @@ function loadSource(...segments: string[]): string {
 }
 
 // ---------------------------------------------------------------------------
-console.log("\nA — Conversas/Cadastros ficam de fora de toda seleção até a migração rodar\n");
+console.log("\nA — Conversas/Cadastros liberados em toda seleção (migração já rodou)\n");
 {
-  ok("AVAILABLE_PERFORMANCE_GOAL_OPTIONS tem só 3 (migração ainda não rodou)", AVAILABLE_PERFORMANCE_GOAL_OPTIONS.length === 3);
-  ok(
-    "nenhum dos 2 objetivos pendentes aparece na lista disponível",
-    AVAILABLE_PERFORMANCE_GOAL_OPTIONS.every((opt) => !PERFORMANCE_GOALS_PENDING_MIGRATION.includes(opt.value)),
-  );
-  ok("mas continuam existindo na config completa (código já pronto, só aguardando o banco)", PERFORMANCE_GOAL_OPTIONS.length === 5);
+  ok("PERFORMANCE_GOALS_PENDING_MIGRATION está vazia (migração confirmada em produção)", PERFORMANCE_GOALS_PENDING_MIGRATION.length === 0);
+  ok("AVAILABLE_PERFORMANCE_GOAL_OPTIONS tem os 5 objetivos agora", AVAILABLE_PERFORMANCE_GOAL_OPTIONS.length === 5);
+  ok("AVAILABLE_PERFORMANCE_GOAL_OPTIONS é idêntica a PERFORMANCE_GOAL_OPTIONS (lista de pendências vazia)", AVAILABLE_PERFORMANCE_GOAL_OPTIONS.length === PERFORMANCE_GOAL_OPTIONS.length);
+  ok("mas continuam existindo na config completa (a mesma fonte de sempre, nunca duplicada)", PERFORMANCE_GOAL_OPTIONS.length === 5);
 
   const actionTypePickerSource = loadSource("src", "app", "settings", "meta-connections", "action-type-picker.tsx");
   const clientPerfGoalEditorSource = loadSource("src", "app", "clients", "client-performance-goal-editor.tsx");
