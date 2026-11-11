@@ -9,8 +9,10 @@ import { DeleteClientButton } from "../../delete-client-button";
 import { fetchGoalDisplaySummaries, listClientGoals } from "@/lib/client-goals";
 import { listCampaignsForAssignment } from "@/lib/campaign-goal-assignments";
 import { resolveClientMetaMappingSource, listActiveMetricMappingsByGoal } from "@/lib/client-metric-mapping-source";
+import { resolveEffectiveDashboardMetrics } from "@/lib/dashboard-metrics";
 import { todayDateString } from "@/lib/today";
 import { ClientGoalsSection } from "../../client-goals-section";
+import { DashboardMetricsSection } from "../../dashboard-metrics-section";
 
 /**
  * Etapa "Simplificação do Cadastro do Cliente": este cadastro deixou de
@@ -144,6 +146,19 @@ export default async function EditClientPage({
               recentSprints={(recentSprints ?? []).map((s) => ({ id: s.id, startDate: s.start_date, endDate: s.end_date }))}
               metaMappingSource={metaMappingSource}
               metaMappingsByGoal={metaMappingsByGoal}
+            />
+          </Block>
+        )}
+
+        {isAdmin && (
+          <Block
+            title="Métricas exibidas"
+            description="Quais cards de resultado, eficiência e entrega aparecem no Dashboard e nas tabelas deste cliente — independente de ter um objetivo configurado em Métricas de performance. Uma métrica sem evento da Meta configurado nunca mostra um número, só avisa que falta configurar."
+          >
+            <DashboardMetricsSection
+              clientId={id}
+              returnTo={`/clients/${id}/edit`}
+              selected={resolveEffectiveDashboardMetrics(client.dashboard_metrics ?? [], client.performance_goal)}
             />
           </Block>
         )}

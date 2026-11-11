@@ -357,6 +357,7 @@ export interface Database {
           balance_url: string | null;
           monthly_closing_sheet_url: string | null;
           report_theme: ReportThemeDb;
+          dashboard_metrics: string[];
         };
         Insert: {
           id?: string;
@@ -408,6 +409,7 @@ export interface Database {
           balance_url?: string | null;
           monthly_closing_sheet_url?: string | null;
           report_theme?: ReportThemeDb;
+          dashboard_metrics?: string[];
         };
         Update: {
           id?: string;
@@ -459,6 +461,7 @@ export interface Database {
           balance_url?: string | null;
           monthly_closing_sheet_url?: string | null;
           report_theme?: ReportThemeDb;
+          dashboard_metrics?: string[];
         };
         Relationships: [
           {
