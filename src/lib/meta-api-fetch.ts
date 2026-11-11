@@ -506,7 +506,7 @@ export async function fetchMetaApiAdCreativePreviews(accountId: string): Promise
   const INTER_PAGE_DELAY_MS = 300;
 
   let isFirstPage = true;
-  while (nextUrl) {
+  pageLoop: while (nextUrl) {
     if (!isFirstPage) await sleep(INTER_PAGE_DELAY_MS);
     isFirstPage = false;
 
@@ -521,9 +521,24 @@ export async function fetchMetaApiAdCreativePreviews(accountId: string): Promise
         break;
       }
 
-      if (isMetaAdAccountRateLimitError(pageJson?.error) && attempt < RATE_LIMIT_BACKOFF_MS.length) {
-        await sleep(RATE_LIMIT_BACKOFF_MS[attempt]);
-        continue;
+      if (isMetaAdAccountRateLimitError(pageJson?.error)) {
+        if (attempt < RATE_LIMIT_BACKOFF_MS.length) {
+          await sleep(RATE_LIMIT_BACKOFF_MS[attempt]);
+          continue;
+        }
+        // Esgotou as tentativas — conta sem orçamento pra terminar agora
+        // (achado real: isto já aconteceu de novo mesmo depois do backoff
+        // mais longo, em mais de uma conta). Devolve o que já foi
+        // capturado ATÉ AQUI em vez de descartar tudo — nunca joga fora
+        // progresso de verdade por causa do resto que não deu. A próxima
+        // tentativa só daqui a 24h: `scheduleCreativePreviewRefreshIfStale`
+        // grava o log ANTES de chamar esta função, então reloads repetidos
+        // enquanto a conta está sem orçamento não empilham mais chamadas
+        // em cima (era exatamente isso que piorava o próprio rate limit).
+        console.warn(
+          `[fetchMetaApiAdCreativePreviews] rate limit persistente (conta ${accountId}) — devolvendo ${rows.length} criativo(s) já capturado(s) antes de parar.`,
+        );
+        break pageLoop;
       }
 
       throw new Error(`Meta Graph API error (${accountId}, preview de criativo): ${pageJson?.error?.message ?? response.statusText}`);
@@ -531,10 +546,11 @@ export async function fetchMetaApiAdCreativePreviews(accountId: string): Promise
 
     for (const row of json.data ?? []) {
       if (!row.name) continue; // sem nome -> nunca combina com nenhum creativeName já gravado, nunca gravável.
-      // `image_url` (imagem original) primeiro — qualidade melhor que
-      // `thumbnail_url` (miniatura pequena da Meta); thumbnail só como
-      // último recurso (ex.: anúncio em vídeo sem imagem estática própria).
-      rows.push({ adName: row.name, thumbnailUrl: row.creative?.image_url ?? row.creative?.thumbnail_url ?? null });
+      // Só `image_url` (imagem original) — pedido explícito do usuário:
+      // nunca mostrar a miniatura pequena (`thumbnail_url`) como segunda
+      // opção. Sem `image_url`, o anúncio fica sem preview (fallback do
+      // ícone) em vez de mostrar algo de baixa qualidade.
+      if (row.creative?.image_url) rows.push({ adName: row.name, thumbnailUrl: row.creative.image_url });
     }
     nextUrl = json.paging?.next;
   }

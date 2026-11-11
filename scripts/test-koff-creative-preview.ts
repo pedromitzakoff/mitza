@@ -112,6 +112,27 @@ console.log("\nC — decisão 2: busca sob demanda com TTL de 24h (nunca cron, n
     "tolerante à tabela de log ainda não existir (migração pendente, Postgres 42P01) — nunca derruba a tela",
     refreshSrc.includes('"42P01"'),
   );
+
+  // Achado real em produção: gravar o log só em caso de SUCESSO fazia
+  // cada reload numa conta já sem orçamento de rate limit disparar uma
+  // tentativa NOVA inteira (empilhando mais chamadas na mesma conta já no
+  // limite). Corrigido: grava ANTES de tentar, garantindo intervalo
+  // mínimo entre TENTATIVAS, dê certo ou não.
+  const scheduleFnStart = refreshSrc.indexOf("export async function scheduleCreativePreviewRefreshIfStale");
+  const scheduleFnSrc = sliceFunctionBody(refreshSrc, scheduleFnStart);
+  const afterCallIndex = scheduleFnSrc.indexOf("after(() => refreshCreativePreviews(");
+  const logUpsertIndex = scheduleFnSrc.indexOf('.from("creative_preview_refresh_log")\n    .upsert(');
+
+  ok(
+    "scheduleCreativePreviewRefreshIfStale grava o log ANTES de agendar a busca de verdade (after())",
+    scheduleFnStart !== -1 && logUpsertIndex !== -1 && afterCallIndex !== -1 && logUpsertIndex < afterCallIndex,
+  );
+
+  const refreshFnSrc = sliceFunctionBody(refreshSrc, refreshSrc.indexOf("export async function refreshCreativePreviews"));
+  ok(
+    "refreshCreativePreviews NÃO grava mais o log (só quem chama grava, antes de chamar)",
+    !refreshFnSrc.includes("creative_preview_refresh_log"),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -203,8 +224,13 @@ console.log("\nG4 — achado real de produção: qualidade ruim — image_url (o
   const fnSrc = sliceFunctionBody(fetchFullSrc, fnStart);
 
   ok(
-    "image_url (imagem original, melhor qualidade) é tentado ANTES de thumbnail_url (miniatura pequena)",
-    /row\.creative\?\.image_url\s*\?\?\s*row\.creative\?\.thumbnail_url/.test(fnSrc),
+    "pedido explícito do usuário: SÓ image_url (imagem original) — nunca thumbnail_url (miniatura) como alternativa",
+    fnSrc.includes("row.creative?.image_url") && !/thumbnailUrl:\s*row\.creative\?\.image_url\s*\?\?\s*row\.creative\?\.thumbnail_url/.test(fnSrc),
+  );
+
+  ok(
+    "sem image_url, o anúncio simplesmente não entra (nunca um preview de baixa qualidade)",
+    /if \(row\.creative\?\.image_url\) rows\.push/.test(fnSrc),
   );
 }
 
@@ -263,10 +289,12 @@ console.log("\nH — achado real de produção (conta Helping Hand): rate limit 
       ok("erro que NÃO é rate limit nunca tenta de novo — 1 chamada só, falha na hora", callCount === 1);
     }
 
-    // H3 — achado real de produção (2ª conta, depois do fix H1): o rate
-    // limit pode persistir além da 1ª tentativa de retry — confirma que
-    // esgota as 4 tentativas (achado real: 3 não foi suficiente) antes de
-    // desistir, nunca trava num loop infinito.
+    // H3 — achado real de produção (2ª e 3ª ocorrência, depois do fix H1):
+    // o rate limit persistiu MESMO com o backoff mais longo, em duas
+    // contas diferentes, e numa delas chegou a derrubar outra função que
+    // já funcionava (busca de saldo, mesmo orçamento por conta). Esgotadas
+    // as tentativas, a função agora devolve o que já capturou em vez de
+    // jogar tudo fora — nunca lança nesse caso específico.
     {
       let callCount = 0;
       globalThis.fetch = (async () => {
@@ -274,8 +302,32 @@ console.log("\nH — achado real de produção (conta Helping Hand): rate limit 
         return new Response(rateLimitBody, { status: 400 });
       }) as typeof fetch;
 
-      await assert.rejects(() => fetchMetaApiAdCreativePreviews("act_persistent_rate_limit_test"));
+      const rows = await fetchMetaApiAdCreativePreviews("act_persistent_rate_limit_test");
       ok("esgota as 4 tentativas de retry (1 inicial + 4) antes de desistir, nunca menos nem mais", callCount === 5);
+      ok("NUNCA lança quando o rate limit persiste — devolve o que capturou (vazio aqui, já que a 1ª página nunca respondeu) em vez de derrubar o resto da página", Array.isArray(rows) && rows.length === 0);
+    }
+
+    // H4 — a página 1 (com sucesso) nunca é jogada fora só porque a
+    // página 2 bateu no limite persistente — progresso real é preservado.
+    {
+      let pageRequests = 0;
+      const page1Url = "https://graph.facebook.com/v1/act_partial_progress_test/ads?after=page1";
+      const page1Body = JSON.stringify({
+        data: [{ name: "ad-pagina-1", creative: { image_url: "https://scontent.fbcdn.net/pagina1.jpg" } }],
+        paging: { next: page1Url },
+      });
+
+      globalThis.fetch = (async () => {
+        pageRequests++;
+        if (pageRequests === 1) return new Response(page1Body, { status: 200 });
+        return new Response(rateLimitBody, { status: 400 }); // página 2 em diante: sempre rate limit.
+      }) as typeof fetch;
+
+      const rows = await fetchMetaApiAdCreativePreviews("act_partial_progress_test");
+      ok(
+        "progresso de página(s) anteriores bem-sucedidas é preservado mesmo quando uma página seguinte esgota o rate limit",
+        rows.length === 1 && rows[0].adName === "ad-pagina-1",
+      );
     }
 
     globalThis.fetch = originalFetch;

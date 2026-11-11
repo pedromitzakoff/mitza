@@ -48,6 +48,11 @@ export function isCreativePreviewRefreshStale(refreshedAt: string | null, now: D
  * chamar isto, então uma falha aqui nunca derruba nada visível pro
  * usuário (mesma filosofia de "falha de rede nunca quebra a tela" já
  * usada em `fetchAccountPeriodReachSnapshot`/`fetchAccountBalanceSnapshot`).
+ *
+ * NÃO grava `creative_preview_refresh_log` aqui — quem chama
+ * (`scheduleCreativePreviewRefreshIfStale`) já grava ANTES de chamar esta
+ * função (ver o comentário lá: garante um intervalo mínimo entre
+ * TENTATIVAS, não só entre sucessos).
  */
 export async function refreshCreativePreviews(clientId: string, accountId: string): Promise<void> {
   const admin = createAdminClient();
@@ -70,11 +75,6 @@ export async function refreshCreativePreviews(clientId: string, accountId: strin
         .eq("creative_name", creativeName);
       if (error) console.error(`[refreshCreativePreviews] falha ao gravar preview de "${creativeName}" (cliente ${clientId}):`, error);
     }
-
-    const { error: logError } = await admin
-      .from("creative_preview_refresh_log")
-      .upsert({ client_id: clientId, refreshed_at: new Date().toISOString() }, { onConflict: "client_id" });
-    if (logError) console.error(`[refreshCreativePreviews] falha ao gravar log de atualização (cliente ${clientId}):`, logError);
   } catch (err) {
     console.error(`[refreshCreativePreviews] falha ao buscar previews na Meta (cliente ${clientId}, conta ${accountId}):`, err);
   }
@@ -95,6 +95,17 @@ export async function refreshCreativePreviews(clientId: string, accountId: strin
  * já faz pra coluna ausente (`lib/require-query.ts`). Qualquer outro erro
  * de leitura também nunca agenda (silencioso, só log) — uma falha aqui
  * nunca pode impedir a tela de carregar.
+ *
+ * Achado real em produção: antes, o log só era gravado em caso de SUCESSO
+ * — então, numa conta cujo rate limit da Meta já esgotou (achado real:
+ * contas grandes bateram nisso mais de uma vez), CADA reload da página
+ * disparava uma tentativa NOVA inteira (mais uma rodada de chamadas numa
+ * conta que já estava sem orçamento — piorando exatamente o problema que
+ * se tentava esperar passar, e chegando a derrubar outra função que já
+ * funcionava, `fetchAccountBalanceSnapshot`, que compartilha o mesmo
+ * orçamento por conta). Agora o log é gravado JÁ AQUI, ANTES de sequer
+ * tentar buscar na Meta — garante pelo menos 24h de intervalo entre
+ * TENTATIVAS (não só entre sucessos), dê certo ou não.
  */
 export async function scheduleCreativePreviewRefreshIfStale(supabase: Supabase, clientId: string, accountId: string | null): Promise<void> {
   if (!accountId) return;
@@ -106,7 +117,18 @@ export async function scheduleCreativePreviewRefreshIfStale(supabase: Supabase, 
   }
 
   const refreshedAt = data?.[0]?.refreshed_at ?? null;
-  if (isCreativePreviewRefreshStale(refreshedAt, new Date())) {
-    after(() => refreshCreativePreviews(clientId, accountId));
+  if (!isCreativePreviewRefreshStale(refreshedAt, new Date())) return;
+
+  const admin = createAdminClient();
+  const { error: logError } = await admin
+    .from("creative_preview_refresh_log")
+    .upsert({ client_id: clientId, refreshed_at: new Date().toISOString() }, { onConflict: "client_id" });
+  if (logError) {
+    // Sem conseguir "reservar" a tentativa, não arrisca agendar mesmo
+    // assim — poderia disparar junto com um reload concorrente.
+    console.error(`[scheduleCreativePreviewRefreshIfStale] falha ao gravar log antes da busca (cliente ${clientId}):`, logError);
+    return;
   }
+
+  after(() => refreshCreativePreviews(clientId, accountId));
 }
