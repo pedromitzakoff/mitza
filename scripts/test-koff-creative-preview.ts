@@ -25,6 +25,21 @@ function ok(name: string, condition: boolean) {
 function loadSource(...segments: string[]): string {
   return readFileSync(join(__dirname, "..", ...segments), "utf8");
 }
+/** Corpo de UMA função a partir do texto onde ela começa (ex.: o índice de
+ * `export async function nome`) até o `}` que fecha, contando chaves —
+ * nunca uma janela de tamanho fixo (quebra toda vez que a função cresce). */
+function sliceFunctionBody(src: string, startIndex: number): string {
+  const firstBrace = src.indexOf("{", startIndex);
+  let depth = 0;
+  for (let i = firstBrace; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") {
+      depth--;
+      if (depth === 0) return src.slice(startIndex, i + 1);
+    }
+  }
+  return src.slice(startIndex);
+}
 
 // ---------------------------------------------------------------------------
 console.log("\nA — isCreativePreviewRefreshStale: núcleo puro\n");
@@ -57,7 +72,7 @@ console.log("\nB — decisão 1: nunca baixar/guardar a imagem, só o link da Me
   const refreshSrc = loadSource("src", "lib", "creative-preview-refresh.ts");
   const fetchFullSrc = loadSource("src", "lib", "meta-api-fetch.ts");
   const fnStart = fetchFullSrc.indexOf("export async function fetchMetaApiAdCreativePreviews");
-  const fetchFnSrc = fetchFullSrc.slice(fnStart, fnStart + 2500);
+  const fetchFnSrc = sliceFunctionBody(fetchFullSrc, fnStart);
 
   ok(
     "fetchMetaApiAdCreativePreviews busca thumbnail_url/image_url (nunca baixa o arquivo)",
@@ -151,12 +166,13 @@ console.log("\nF — UI: o card de anúncio mostra a imagem real quando existe, 
 console.log("\nG2 — achado real de produção: limit=500 é rejeitado pela Graph API neste campo\n");
 {
   const fetchFullSrc = loadSource("src", "lib", "meta-api-fetch.ts");
-  const fnStart = fetchFullSrc.indexOf("CREATIVE_PREVIEW_FIELDS");
-  const fetchFnSrc = fetchFullSrc.slice(fnStart, fnStart + 2200);
+  const fieldsStart = fetchFullSrc.indexOf("CREATIVE_PREVIEW_FIELDS");
+  const fnStart = fetchFullSrc.indexOf("export async function fetchMetaApiAdCreativePreviews");
+  const constsSrc = fetchFullSrc.slice(fieldsStart, fnStart);
 
   ok(
     "fetchMetaApiAdCreativePreviews usa limit=50, nunca 500 (500 causava 'Please reduce the amount of data you're asking for' em conta real)",
-    fnStart !== -1 && /CREATIVE_PREVIEW_PAGE_LIMIT = 50;/.test(fetchFnSrc) && !/CREATIVE_PREVIEW_PAGE_LIMIT = 500;/.test(fetchFnSrc),
+    fieldsStart !== -1 && /CREATIVE_PREVIEW_PAGE_LIMIT = 50;/.test(constsSrc) && !/CREATIVE_PREVIEW_PAGE_LIMIT = 500;/.test(constsSrc),
   );
 }
 
@@ -184,7 +200,7 @@ console.log("\nG4 — achado real de produção: qualidade ruim — image_url (o
 {
   const fetchFullSrc = loadSource("src", "lib", "meta-api-fetch.ts");
   const fnStart = fetchFullSrc.indexOf("export async function fetchMetaApiAdCreativePreviews");
-  const fnSrc = fetchFullSrc.slice(fnStart, fnStart + 2500);
+  const fnSrc = sliceFunctionBody(fetchFullSrc, fnStart);
 
   ok(
     "image_url (imagem original, melhor qualidade) é tentado ANTES de thumbnail_url (miniatura pequena)",
@@ -210,8 +226,9 @@ console.log("\nH — achado real de produção (conta Helping Hand): rate limit 
     const originalFetch = globalThis.fetch;
     const originalSetTimeout = globalThis.setTimeout;
     process.env.META_API_ACCESS_TOKEN = "token-de-teste";
-    // Acelera o backoff real (5s/15s/30s) pro teste não esperar de verdade —
-    // mesma ideia de qualquer outro teste de timing, só troca o relógio.
+    // Acelera o backoff real (10s/30s/60s/90s) pro teste não esperar de
+    // verdade — mesma ideia de qualquer outro teste de timing, só troca o
+    // relógio.
     globalThis.setTimeout = ((fn: () => void) => {
       fn();
       return 0 as unknown as ReturnType<typeof setTimeout>;
@@ -244,6 +261,21 @@ console.log("\nH — achado real de produção (conta Helping Hand): rate limit 
 
       await assert.rejects(() => fetchMetaApiAdCreativePreviews("act_other_error_test"));
       ok("erro que NÃO é rate limit nunca tenta de novo — 1 chamada só, falha na hora", callCount === 1);
+    }
+
+    // H3 — achado real de produção (2ª conta, depois do fix H1): o rate
+    // limit pode persistir além da 1ª tentativa de retry — confirma que
+    // esgota as 4 tentativas (achado real: 3 não foi suficiente) antes de
+    // desistir, nunca trava num loop infinito.
+    {
+      let callCount = 0;
+      globalThis.fetch = (async () => {
+        callCount++;
+        return new Response(rateLimitBody, { status: 400 });
+      }) as typeof fetch;
+
+      await assert.rejects(() => fetchMetaApiAdCreativePreviews("act_persistent_rate_limit_test"));
+      ok("esgota as 4 tentativas de retry (1 inicial + 4) antes de desistir, nunca menos nem mais", callCount === 5);
     }
 
     globalThis.fetch = originalFetch;

@@ -493,9 +493,23 @@ export async function fetchMetaApiAdCreativePreviews(accountId: string): Promise
   // Backoff só pro rate limit "por conta" (transitório, a própria Meta
   // recomenda esperar) — qualquer outro erro continua falhando na hora,
   // sem retry (nunca mascarar um erro de verdade atrás de uma espera).
-  const RATE_LIMIT_BACKOFF_MS = [5_000, 15_000, 30_000];
+  // Achado real em produção: 5s/15s/30s (3 tentativas) NÃO foi suficiente
+  // pra uma 2ª conta grande (Helping Hand "liberou" depois, mas outra conta
+  // continuou batendo no limite) — alongado pra 10s/30s/60s/90s (4
+  // tentativas, ~190s no pior caso). `/clients/[id]/**` tem
+  // `maxDuration = 300` (ver `layout.tsx`), que cobre o `after()` inteiro —
+  // ainda sobra margem confortável pras chamadas de verdade antes/depois.
+  const RATE_LIMIT_BACKOFF_MS = [10_000, 30_000, 60_000, 90_000];
+  // Pausa fixa entre páginas BEM-SUCEDIDAS (não é retry) — espaça o ritmo
+  // de chamadas pra reduzir a chance de disparar o limite por conta logo
+  // de cara, numa conta com muitos anúncios (muitas páginas em sequência).
+  const INTER_PAGE_DELAY_MS = 300;
 
+  let isFirstPage = true;
   while (nextUrl) {
+    if (!isFirstPage) await sleep(INTER_PAGE_DELAY_MS);
+    isFirstPage = false;
+
     const pageUrl: string = nextUrl;
     let json!: MetaAdsCreativeResponse;
     for (let attempt = 0; ; attempt++) {
