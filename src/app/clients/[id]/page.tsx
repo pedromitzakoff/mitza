@@ -83,6 +83,10 @@ import { campaignSummaryToRow } from "@/lib/meta-ads-dashboard/exploration-data"
 import { CockpitAdMetricCards } from "../cockpit-ad-metric-cards";
 import { CockpitAdExplorationSection } from "../cockpit-ad-exploration-section";
 import { CockpitChannelBreakdown, type ChannelBreakdownRowView } from "../cockpit-channel-breakdown";
+import { resolveEffectiveDashboardMetrics } from "@/lib/dashboard-metrics";
+import { resolveDashboardMetricViews } from "@/lib/dashboard-metrics-resolver";
+import { loadDashboardGoalPerformanceData } from "@/lib/dashboard-metrics-data";
+import { DashboardMetricsCards } from "../dashboard-metrics-cards";
 
 /**
  * Objetivo em exibição na Performance (`?goal=`) — núcleo puro extraído de
@@ -193,13 +197,22 @@ export default async function ClientPage({
   const { data: client, error: clientQueryError } = await supabase
     .from("clients")
     .select(
-      "id, name, meta_ad_account_id, status, primary_manager:team_members!clients_primary_manager_id_fkey(name), performance_goal, target_cost_per_result, avatar_url, media_channels, dashboard_url, balance_url, monthly_closing_sheet_url",
+      "id, name, meta_ad_account_id, status, primary_manager:team_members!clients_primary_manager_id_fkey(name), performance_goal, target_cost_per_result, avatar_url, media_channels, dashboard_url, balance_url, monthly_closing_sheet_url, dashboard_metrics",
     )
     .eq("id", id)
     .is("deleted_at", null)
     .single();
   if (clientQueryError) console.error(`[ClientPage] falha ao buscar cliente ${id}:`, clientQueryError);
   if (!client) notFound();
+
+  // Fase B ("integração das métricas selecionadas com o Dashboard") — ponto
+  // 2/8 do pedido: cliente que NUNCA configurou "Métricas exibidas"
+  // (`dashboard_metrics` vazio) mantém esta página EXATAMENTE como sempre
+  // foi — a seção nova (`DashboardMetricsCards`, mais abaixo) só aparece
+  // depois que o cliente configura de propósito. `effectiveDashboardMetrics`
+  // só é usado quando `hasConfiguredDashboardMetrics` é `true`.
+  const hasConfiguredDashboardMetrics = (client.dashboard_metrics ?? []).length > 0;
+  const effectiveDashboardMetrics = resolveEffectiveDashboardMetrics(client.dashboard_metrics ?? [], client.performance_goal);
 
   // Etapa "Evolução do Dashboard — Visão Simultânea de Canais" (seção 12
   // do pedido): a MESMA fonte de sempre pra "quais canais este cliente
@@ -369,6 +382,16 @@ export default async function ClientPage({
         ? [{ id: "", clientId: id, resultType: client.performance_goal, channels: [], isPrimary: true, resultSource: "automatic" }]
         : [];
   const primaryResultType = resolvePrimaryGoal(effectiveClientGoals)?.resultType ?? null;
+
+  // Fase B — ingrediente Resultado/Eficiência das "Métricas exibidas"
+  // (ponto 2 da Fase A: nunca depende de `client_goals`/`is_primary` pra
+  // decidir o que buscar — reaproveita uma linha já configurada quando
+  // existe, sintetiza quando não existe, ver `dashboard-metrics-data.ts`).
+  // Só roda quando a seção nova vai aparecer (`hasConfiguredDashboardMetrics`)
+  // — cliente que não configurou nada não paga o custo desta consulta.
+  const dashboardGoalPerformance = hasConfiguredDashboardMetrics
+    ? await loadDashboardGoalPerformanceData(supabase, id, effectiveDashboardMetrics, { firstDay, lastDay }, effectiveClientGoals)
+    : { hasMetaAccount: false, goalsWithActiveMapping: new Set<PerformanceGoal>(), goals: new Map() };
 
   const performanceTargetHistoryRows: ClientPlanChangeRow[] = (performanceTargetHistoryRaw ?? []).map((row) => ({
     channel: row.channel as TrafficChannel,
@@ -720,6 +743,39 @@ export default async function ClientPage({
   const adMetricCards = buildMetricCardViewModels(adPerformanceData, cockpitFilter.isActive);
   const adExplorationCampaignRows = adPerformanceData.explorationCampaigns.map(campaignSummaryToRow);
 
+  // Fase B — monta os `MetricView` finais das "Métricas exibidas", 100%
+  // reaproveitando dados já calculados acima: Entrega vem dos MESMOS totais
+  // de `adPerformanceData.comparison.current` (já corretamente recalculados
+  // do escopo filtrado quando o filtro global está ativo — nenhum segundo
+  // cálculo); Alcance é `adReach`, a MESMA fonte de sempre (nunca somada por
+  // campanha); erro de sincronização reaproveita a MESMA lista de atenções
+  // que `/clients/[id]/dados` já mostra (`findChannelDataIssue`, mesmo
+  // padrão de busca por rótulo do canal).
+  const hasMetaSyncError = (dadosData?.attentions ?? []).some(
+    (a) => a.severity === "error" && a.message.includes(TRAFFIC_CHANNELS.meta.label),
+  );
+  const dashboardMetricViews = hasConfiguredDashboardMetrics
+    ? resolveDashboardMetricViews({
+        keys: effectiveDashboardMetrics,
+        hasMetaSyncError,
+        hasMetaAccount: dashboardGoalPerformance.hasMetaAccount,
+        goalsWithActiveMapping: dashboardGoalPerformance.goalsWithActiveMapping,
+        goals: dashboardGoalPerformance.goals,
+        delivery: clientChannels.includes("meta")
+          ? {
+              spend: adPerformanceData.comparison.current.totals.spend,
+              impressions: adPerformanceData.comparison.current.totals.impressions,
+              clicks: adPerformanceData.comparison.current.totals.clicks,
+              ctr: adPerformanceData.comparison.current.derived.ctr,
+              cpc: adPerformanceData.comparison.current.derived.cpc,
+              cpm: adPerformanceData.comparison.current.derived.cpm,
+            }
+          : null,
+        reach: adReach,
+        isGlobalFilterActive: cockpitFilter.isActive,
+      })
+    : new Map();
+
   // Fusão final da Evolução: séries por objetivo primeiro (viram a opção
   // padrão do seletor), métricas Meta Ads depois — Investimento/Resultado/
   // Custo por resultado NUNCA entram duas vezes (já cobertos pelas séries
@@ -916,6 +972,25 @@ export default async function ClientPage({
           </p>
           <div className="mt-2">
             <CockpitAdMetricCards clientId={client.id} cards={adMetricCards} />
+          </div>
+        </div>
+      )}
+
+      {/* "Métricas exibidas" (Fase B) — só aparece pro cliente que já
+          configurou de propósito em `/clients/[id]/edit` (ponto 2/8 do
+          pedido: nunca aparece sozinha nem substitui o que já existe acima,
+          Meta & Ritmo/Planejamento continuam intocados). */}
+      {hasConfiguredDashboardMetrics && (
+        <div className="mt-4">
+          <p className="text-xs text-overview-text-secondary">
+            Métricas exibidas — configurável em{" "}
+            <Link href={`/clients/${client.id}/edit`} className="font-medium text-brand hover:underline">
+              Cadastro do Cliente
+            </Link>
+            .
+          </p>
+          <div className="mt-2">
+            <DashboardMetricsCards views={dashboardMetricViews} />
           </div>
         </div>
       )}

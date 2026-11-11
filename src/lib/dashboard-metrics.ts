@@ -112,20 +112,42 @@ export function resolveEffectiveDashboardMetrics(stored: readonly string[], lega
   return [legacyGoal, ...(costKey ? [costKey] : []), ...LEGACY_DELIVERY_METRICS];
 }
 
-/** Ponto 3 do pedido: uma métrica marcada nunca vira um número sem dizer
- * de onde veio. `reason` sempre explica — nunca um traço silencioso nem um
- * 0 fabricado quando não há evento configurado. */
+/**
+ * Ponto 4 do pedido (Fase B) — 3 estados, NUNCA confundidos entre si:
+ *  - `available` (valor 0 incluso): evento configurado, resultado real do
+ *    período — "resultado zero" é um dado tão real quanto "resultado 5".
+ *  - `unavailable`: lacuna de CONFIGURAÇÃO (sem evento mapeado, sem conta
+ *    Meta conectada, sem investimento classificado pro objetivo) — nada
+ *    quebrou, falta só configurar. Tom calmo, nunca alarmado.
+ *  - `error`: falha de INTEGRAÇÃO (sincronização não rodou, API
+ *    indisponível no momento) — existe configuração, mas não foi possível
+ *    confirmar o número agora. Tom de "tente de novo", nunca "configure".
+ */
 export type MetricUnavailableReason =
   | "sem_evento_configurado"
   | "sem_conta_meta"
-  | "api_indisponivel"
-  | "sem_investimento_classificado";
+  | "sem_investimento_classificado"
+  /** Razão sem resultado/base pra formar a razão (ex.: CTR sem impressões no
+   * período, CPL sem nenhum resultado registrado) — NUNCA um "0" fabricado
+   * pra uma divisão sem denominador real. Distinto de
+   * `sem_investimento_classificado`: aqui o investimento/evento existe, só
+   * não há base suficiente pra calcular ESTA razão específica no período. */
+  | "sem_base_para_calculo";
+export type MetricErrorReason = "falha_sincronizacao" | "api_indisponivel";
 
-export type MetricView = { status: "available"; value: number } | { status: "unavailable"; reason: MetricUnavailableReason };
+export type MetricView =
+  | { status: "available"; value: number }
+  | { status: "unavailable"; reason: MetricUnavailableReason }
+  | { status: "error"; reason: MetricErrorReason };
 
 export const METRIC_UNAVAILABLE_REASON_LABEL: Record<MetricUnavailableReason, string> = {
   sem_evento_configurado: "Evento não configurado",
   sem_conta_meta: "Conta Meta não conectada",
-  api_indisponivel: "Indisponível no momento",
   sem_investimento_classificado: "Sem investimento classificado",
+  sem_base_para_calculo: "Sem base para calcular neste período",
+};
+
+export const METRIC_ERROR_REASON_LABEL: Record<MetricErrorReason, string> = {
+  falha_sincronizacao: "Falha ao sincronizar — tente novamente",
+  api_indisponivel: "Indisponível no momento — tente novamente",
 };
