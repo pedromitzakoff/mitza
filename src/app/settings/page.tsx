@@ -43,6 +43,11 @@ const SETTINGS_GROUPS: { label: string; items: SettingsLink[] }[] = [
         title: "Conexões Meta",
         description: "Quais clientes ainda estão sem conta de anúncio, campanha, público ou anúncio conectados no Meta.",
       },
+      {
+        href: "/settings/sync-health",
+        title: "Diagnóstico de sincronização",
+        description: "Contas com investimento registrado mas sem campanha/conjunto/criativo gravado no mesmo dia — e correção de um clique.",
+      },
     ],
   },
 ];

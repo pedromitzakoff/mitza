@@ -264,30 +264,45 @@ export async function runMetaApiBackfillAction(accountId: string, clientId: stri
 
   const since = String(formData.get("since") ?? "").trim();
   const until = String(formData.get("until") ?? "").trim();
+  // "/settings/sync-health" (Etapa "Diagnóstico de sincronização"): corrigir
+  // um gap encontrado automaticamente deve voltar pra lista de gaps, não
+  // pra tela de Conexões Meta — opcional, nunca muda o destino de quem já
+  // chama esta action hoje (`meta-connection-drawer.tsx`, que não envia
+  // este campo e continua caindo em `manageUrl` como sempre).
+  const returnTo = String(formData.get("return_to") ?? "").trim();
+
+  function redirectBack(kind: "saved" | "error", message: string): never {
+    if (returnTo.startsWith("/")) {
+      redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}${kind}=${encodeURIComponent(message)}`);
+    }
+    if (kind === "error") failure(message, clientId);
+    success(message, clientId);
+  }
 
   const outcome = await runMetaApiBackfill(accountId, since, until);
   revalidatePath("/settings/meta-connections");
+  revalidatePath("/settings/sync-health");
 
-  if ("error" in outcome) failure(outcome.error, clientId);
+  if ("error" in outcome) redirectBack("error", outcome.error);
 
   const { result } = outcome;
   if (result.stoppedEarly) {
     const lastOutcome = result.batches[result.batches.length - 1]?.outcome ?? "desconhecida";
-    failure(
+    redirectBack(
+      "error",
       `Backfill interrompido depois de ${result.completedBatches}/${result.totalBatches} lote(s) — motivo: ${lastOutcome}. ${result.totalRowsRead} linha(s) lida(s) até parar.`,
-      clientId,
     );
   }
 
   const failedBatches = result.batches.filter((b) => b.outcome !== "ok");
   if (failedBatches.length > 0) {
-    failure(
+    redirectBack(
+      "error",
       `Backfill concluído com ${failedBatches.length} de ${result.totalBatches} lote(s) com problema — ${result.totalRowsRead} linha(s) lida(s) no total. Confira o histórico de execuções antes de considerar completo.`,
-      clientId,
     );
   }
 
-  success(`Backfill concluído — ${result.totalBatches} lote(s), ${result.totalRowsRead} linha(s) lida(s).`, clientId);
+  redirectBack("saved", `Backfill concluído — ${result.totalBatches} lote(s), ${result.totalRowsRead} linha(s) lida(s).`);
 }
 
 export interface ConnectionTestResult {
