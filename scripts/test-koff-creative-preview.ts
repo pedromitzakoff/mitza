@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isCreativePreviewRefreshStale, CREATIVE_PREVIEW_REFRESH_TTL_MS } from "../src/lib/creative-preview-refresh";
+import { fetchMetaApiAdCreativePreviews } from "../src/lib/meta-api-fetch";
 
 let passed = 0;
 function ok(name: string, condition: boolean) {
@@ -56,7 +57,7 @@ console.log("\nB — decisão 1: nunca baixar/guardar a imagem, só o link da Me
   const refreshSrc = loadSource("src", "lib", "creative-preview-refresh.ts");
   const fetchFullSrc = loadSource("src", "lib", "meta-api-fetch.ts");
   const fnStart = fetchFullSrc.indexOf("export async function fetchMetaApiAdCreativePreviews");
-  const fetchFnSrc = fetchFullSrc.slice(fnStart, fnStart + 1500);
+  const fetchFnSrc = fetchFullSrc.slice(fnStart, fnStart + 2500);
 
   ok(
     "fetchMetaApiAdCreativePreviews busca thumbnail_url/image_url (nunca baixa o arquivo)",
@@ -183,7 +184,7 @@ console.log("\nG4 — achado real de produção: qualidade ruim — image_url (o
 {
   const fetchFullSrc = loadSource("src", "lib", "meta-api-fetch.ts");
   const fnStart = fetchFullSrc.indexOf("export async function fetchMetaApiAdCreativePreviews");
-  const fnSrc = fetchFullSrc.slice(fnStart, fnStart + 2000);
+  const fnSrc = fetchFullSrc.slice(fnStart, fnStart + 2500);
 
   ok(
     "image_url (imagem original, melhor qualidade) é tentado ANTES de thumbnail_url (miniatura pequena)",
@@ -203,4 +204,52 @@ console.log("\nG — migração: tabela mínima (1 linha por cliente, nunca a im
   );
 }
 
-console.log(`\n${passed} verificações passaram.\n`);
+console.log("\nH — achado real de produção (conta Helping Hand): rate limit por conta é transitório, deve ter retry\n");
+{
+  async function main() {
+    const originalFetch = globalThis.fetch;
+    const originalSetTimeout = globalThis.setTimeout;
+    process.env.META_API_ACCESS_TOKEN = "token-de-teste";
+    // Acelera o backoff real (5s/15s/30s) pro teste não esperar de verdade —
+    // mesma ideia de qualquer outro teste de timing, só troca o relógio.
+    globalThis.setTimeout = ((fn: () => void) => {
+      fn();
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
+
+    const rateLimitBody = JSON.stringify({ error: { message: "There have been too many calls to this ad-account. Wait a bit and try again." } });
+    const successBody = JSON.stringify({ data: [{ name: "ad-real-de-producao", creative: { image_url: "https://scontent.fbcdn.net/real.jpg" } }] });
+
+    // H1 — erro de rate limit (achado real) some sozinho na 2ª tentativa.
+    {
+      let callCount = 0;
+      globalThis.fetch = (async () => {
+        callCount++;
+        if (callCount === 1) return new Response(rateLimitBody, { status: 400 });
+        return new Response(successBody, { status: 200 });
+      }) as typeof fetch;
+
+      const rows = await fetchMetaApiAdCreativePreviews("act_rate_limit_test");
+      ok("depois do rate limit, uma 2ª tentativa com sucesso retorna os dados normalmente", rows.length === 1 && rows[0].thumbnailUrl === "https://scontent.fbcdn.net/real.jpg");
+      ok("fez exatamente 2 chamadas (1 que falhou + 1 retry que funcionou), nunca mais que o necessário", callCount === 2);
+    }
+
+    // H2 — erro DIFERENTE de rate limit nunca tenta de novo (nunca mascarar um erro de verdade atrás de uma espera).
+    {
+      let callCount = 0;
+      globalThis.fetch = (async () => {
+        callCount++;
+        return new Response(JSON.stringify({ error: { message: "Invalid OAuth access token." } }), { status: 400 });
+      }) as typeof fetch;
+
+      await assert.rejects(() => fetchMetaApiAdCreativePreviews("act_other_error_test"));
+      ok("erro que NÃO é rate limit nunca tenta de novo — 1 chamada só, falha na hora", callCount === 1);
+    }
+
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+  }
+  main().then(() => {
+    console.log(`\n${passed} verificações passaram.\n`);
+  });
+}

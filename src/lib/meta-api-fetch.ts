@@ -426,7 +426,25 @@ interface MetaAdsCreativeRawRow {
 interface MetaAdsCreativeResponse {
   data: MetaAdsCreativeRawRow[];
   paging?: { next?: string };
-  error?: { message: string };
+  error?: { message: string; code?: number };
+}
+
+/** Achado real em produção (log do Vercel, conta Helping Hand): "There have
+ * been too many calls to this ad-account. Wait a bit and try again." — a
+ * própria Meta documenta isto como transitório (rate limit por CONTA, não
+ * da aplicação inteira — contas com histórico de gasto menor têm um
+ * orçamento de chamadas menor, então uma conta grande como esta esgota mais
+ * rápido ao paginar todos os anúncios). Código 80004 é o oficial pra "ads
+ * management"; a checagem por texto cobre o caso de a Meta não mandar
+ * `code` (como no erro real capturado). */
+function isMetaAdAccountRateLimitError(error: { message: string; code?: number } | undefined): boolean {
+  if (!error) return false;
+  if (error.code === 80004) return true;
+  return /too many calls to this ad-account/i.test(error.message);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 const CREATIVE_PREVIEW_FIELDS = "name,creative{thumbnail_url,image_url}";
@@ -472,13 +490,29 @@ export async function fetchMetaApiAdCreativePreviews(accountId: string): Promise
 
   const rows: MetaApiCreativePreviewRow[] = [];
   let nextUrl: string | undefined = url.toString();
+  // Backoff só pro rate limit "por conta" (transitório, a própria Meta
+  // recomenda esperar) — qualquer outro erro continua falhando na hora,
+  // sem retry (nunca mascarar um erro de verdade atrás de uma espera).
+  const RATE_LIMIT_BACKOFF_MS = [5_000, 15_000, 30_000];
 
   while (nextUrl) {
-    const response: Response = await fetch(nextUrl);
-    const json: MetaAdsCreativeResponse = await response.json();
+    const pageUrl: string = nextUrl;
+    let json!: MetaAdsCreativeResponse;
+    for (let attempt = 0; ; attempt++) {
+      const response: Response = await fetch(pageUrl);
+      const pageJson: MetaAdsCreativeResponse = await response.json();
 
-    if (!response.ok) {
-      throw new Error(`Meta Graph API error (${accountId}, preview de criativo): ${json?.error?.message ?? response.statusText}`);
+      if (response.ok) {
+        json = pageJson;
+        break;
+      }
+
+      if (isMetaAdAccountRateLimitError(pageJson?.error) && attempt < RATE_LIMIT_BACKOFF_MS.length) {
+        await sleep(RATE_LIMIT_BACKOFF_MS[attempt]);
+        continue;
+      }
+
+      throw new Error(`Meta Graph API error (${accountId}, preview de criativo): ${pageJson?.error?.message ?? response.statusText}`);
     }
 
     for (const row of json.data ?? []) {
