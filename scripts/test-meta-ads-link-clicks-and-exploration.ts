@@ -179,10 +179,53 @@ check("adSetSummaryToRow: id/name = adSetName", adSetExplorationRow.id, "Conjunt
 const creativeExplorationRow = creativeSummaryToRow(creativeSummary);
 check("creativeSummaryToRow: preserva previewImageUrl", creativeExplorationRow.previewImageUrl, null);
 
-const columns = buildExplorationColumns("leads");
+const columns = buildExplorationColumns(["leads"]);
 ok("NUNCA existe coluna de alcance (pedido do usuário: nunca somar alcance entre dias)", !columns.some((c) => (c.id as string) === "reach"));
 ok("coluna 'Nome' é sempre a primeira e nunca removível (sem flag de 'opcional')", columns[0].id === "name");
-check("rótulo dinâmico do objetivo (leads)", columns.find((c) => c.id === "resultCount")?.label, "Leads");
+check("coluna de Resultado específica do objetivo presente (leads), rótulo dinâmico", columns.find((c) => c.id === "result:leads")?.label, "Leads");
+
+const multiGoalColumns = buildExplorationColumns(["leads", "sales"]);
+check(
+  "mais de 1 objetivo presente -> um par Resultado/Custo PRÓPRIO por objetivo, nunca uma coluna genérica",
+  multiGoalColumns.filter((c) => c.id === "result:leads" || c.id === "result:sales").map((c) => c.label),
+  ["Leads", "Vendas"],
+);
+ok(
+  "com mais de 1 objetivo, todos os pares vêm visíveis por padrão (pedido: ver Leads+Vendas simultaneamente)",
+  multiGoalColumns.find((c) => c.id === "result:leads")?.defaultVisible === true &&
+    multiGoalColumns.find((c) => c.id === "result:sales")?.defaultVisible === true,
+);
+ok(
+  "com 1 objetivo só, o par continua visível por padrão (compatibilidade com quem não configurou nada)",
+  columns.find((c) => c.id === "result:leads")?.defaultVisible === true,
+);
+
+const leadsSummary = buildCampaignSummaries([campaignRow({ date: "2026-10-01", spend: 100, resultType: "leads", resultCount: 20 })])[0];
+const salesSummary = buildCampaignSummaries([campaignRow({ date: "2026-10-01", spend: 100, resultType: "sales", resultCount: 4 })])[0];
+const leadsRow = campaignSummaryToRow(leadsSummary);
+const salesRow = campaignSummaryToRow(salesSummary);
+
+check(
+  "linha de Leads SÓ preenche resultByGoal.leads — nunca mistura com outro objetivo",
+  { leads: leadsRow.resultByGoal.leads?.count, sales: leadsRow.resultByGoal.sales },
+  { leads: 20, sales: undefined },
+);
+check(
+  "coluna 'Vendas' numa linha de Leads mostra '—' (nunca 0 fabricado, nunca o número de Leads vazando)",
+  formatExplorationCell("result:sales", leadsRow),
+  "—",
+);
+check("coluna 'Leads' na linha de Leads mostra o valor certo", formatExplorationCell("result:leads", leadsRow), "20");
+check(
+  "coluna 'Leads' numa linha de Vendas mostra '—' (mesma garantia no sentido inverso)",
+  formatExplorationCell("result:leads", salesRow),
+  "—",
+);
+check("coluna 'CPA' (custo de Vendas) na linha de Vendas usa o investimento da PRÓPRIA linha (100/4=25)", formatExplorationCell("cost:sales", salesRow), formatCurrency(25));
+ok(
+  "explorationSortValue de uma coluna de objetivo errado nunca ordena como se fosse 0 real — cai no mesmo '-1' de 'sem dado'",
+  explorationSortValue("result:sales", leadsRow) === -1,
+);
 
 check("formatExplorationCell: moeda", formatExplorationCell("spend", explorationRow), formatCurrency(100));
 check("formatExplorationCell: '—' pra métrica indisponível", formatExplorationCell("revenue", explorationRow), "—");

@@ -50,7 +50,6 @@ export default async function ClientCampanhasPage({
         <div className="mt-4">
           <CockpitAdExplorationSection
             clientId={data.clientId}
-            resultType={data.resultType}
             campaigns={data.campaigns}
             adSetDailyRows={data.adSetDailyRows}
             creativeDailyRows={data.creativeDailyRows}

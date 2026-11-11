@@ -271,7 +271,6 @@ function SearchInput({ value, mode, onValueChange, onModeChange }: { value: stri
 
 export function CockpitAdExplorationSection({
   clientId,
-  resultType,
   campaigns,
   adSetDailyRows,
   creativeDailyRows,
@@ -283,7 +282,6 @@ export function CockpitAdExplorationSection({
   initialLevel = "campaigns",
 }: {
   clientId: string;
-  resultType: PerformanceGoal | null;
   campaigns: ExplorationRow[];
   adSetDailyRows: AdSetDailyMetricRow[];
   creativeDailyRows: AdCreativeDailyMetricRow[];
@@ -295,7 +293,21 @@ export function CockpitAdExplorationSection({
   const [searchMode, setSearchMode] = useState<NameFilterMode>("contains");
   const [sort, setSort] = useState<SortState>(null);
 
-  const columns = useMemo(() => buildExplorationColumns(resultType), [resultType]);
+  // Pedido explícito do usuário: colunas de Resultado/Custo específicas por
+  // objetivo (Leads/CPL, Vendas/CPA, Conversas/Custo por conversa...), nunca
+  // uma coluna genérica que muda de sentido conforme o objetivo principal.
+  // `goalsPresent` é calculado da UNIÃO dos 3 níveis (nunca só do nível
+  // ativo) — as colunas oferecidas no seletor ficam estáveis ao trocar de
+  // aba Campanhas/Conjuntos/Anúncios, em vez de aparecer/sumir sozinhas.
+  const goalsPresent = useMemo(() => {
+    const goals = new Set<PerformanceGoal>();
+    for (const row of campaigns) if (row.resultType) goals.add(row.resultType);
+    for (const row of adSetDailyRows) if (row.resultType) goals.add(row.resultType);
+    for (const row of creativeDailyRows) if (row.resultType) goals.add(row.resultType);
+    return Array.from(goals);
+  }, [campaigns, adSetDailyRows, creativeDailyRows]);
+
+  const columns = useMemo(() => buildExplorationColumns(goalsPresent), [goalsPresent]);
   const defaultColumnIds = useMemo(() => columns.filter((col) => col.defaultVisible).map((col) => col.id), [columns]);
 
   const [visibleColumnIds, setVisibleColumnIds] = useState<ExplorationColumnId[]>(defaultColumnIds);
