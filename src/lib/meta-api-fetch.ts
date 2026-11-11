@@ -102,6 +102,22 @@ const INSIGHTS_FIELDS =
   "campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,reach,clicks,inline_link_clicks,actions,action_values";
 
 /**
+ * Achado real de produção (11/2026 — "Diagnóstico de sincronização"): sem
+ * `limit` explícito, a Graph API usa o próprio tamanho de página padrão
+ * (pequeno) pra esta consulta — nível de anúncio + 2 dimensões de
+ * breakdown gera MUITAS linhas pra uma conta grande/ativa, e cada página a
+ * mais é uma viagem de rede sequencial inteira (a paginação por cursor não
+ * dá pra paralelizar). Pedir um lote bem maior por página reduz
+ * drasticamente o número de viagens pro MESMO total de linhas — nenhuma
+ * mudança no que é buscado/gravado (mesmos `fields`/`breakdowns` de
+ * sempre), só menos idas e vindas pra montar a mesma resposta. 500 é um
+ * valor seguro e comum pra este endpoint da Graph API (bem abaixo de
+ * limites de tamanho de resposta que forçariam a própria Meta a reduzir
+ * sozinha).
+ */
+const INSIGHTS_PAGE_LIMIT = 500;
+
+/**
  * Busca os insights de UMA conta de anúncios, já convertidos pro formato de
  * ingestão (`MetaApiIngestRow[]`) — equivalente direto ao que o n8n faria
  * pra montar `MetaApiIngestPayload.rows`. `accountId` no formato `act_...`
@@ -119,6 +135,7 @@ export async function fetchMetaApiInsightsForAccount(accountId: string, since: s
   url.searchParams.set("time_range", JSON.stringify({ since, until }));
   url.searchParams.set("breakdowns", "publisher_platform,platform_position");
   url.searchParams.set("fields", INSIGHTS_FIELDS);
+  url.searchParams.set("limit", String(INSIGHTS_PAGE_LIMIT));
   url.searchParams.set("access_token", accessToken);
 
   const rawRows: MetaInsightsRawRow[] = [];
