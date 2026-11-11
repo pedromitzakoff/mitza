@@ -40,7 +40,7 @@ export default async function SyncHealthPage({
   return (
     <SettingsPageShell
       title="Diagnóstico de sincronização"
-      description="Contas com investimento registrado num dia, mas sem campanha/conjunto/criativo gravado no mesmo dia — sinal de falha de gravação, nunca de ausência real de investimento."
+      description="Contas com investimento registrado num dia, mas sem campanha/conjunto/criativo gravado no mesmo dia — sinal de falha de gravação, nunca de ausência real de investimento. Os últimos 3 dias nunca aparecem aqui (a sincronização normal ainda está processando essa janela)."
       backHref="/settings"
     >
       {error && (

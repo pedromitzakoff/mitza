@@ -10,7 +10,7 @@ import { todayDateString } from "@/lib/today";
  * própria Meta, os 1-2 dias anteriores) — nunca o histórico completo. Mesma
  * ideia de "janela curta, re-escrita idempotente" já usada em outros syncs
  * (upsert pela mesma chave natural, nunca duplica linha). */
-const DIRECT_SYNC_WINDOW_DAYS = 3;
+export const DIRECT_SYNC_WINDOW_DAYS = 3;
 
 export function resolveSyncWindow(today: string): { since: string; until: string } {
   const untilDate = new Date(`${today}T00:00:00Z`);

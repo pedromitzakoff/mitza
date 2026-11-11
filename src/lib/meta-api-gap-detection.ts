@@ -1,6 +1,7 @@
 import type { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
-import { todayDateString, todayUTC } from "@/lib/today";
+import { todayDateString } from "@/lib/today";
+import { DIRECT_SYNC_WINDOW_DAYS } from "@/lib/meta-api-direct-sync";
 
 type Supabase = Awaited<ReturnType<typeof createSupabaseClient>>;
 
@@ -43,6 +44,31 @@ function subtractDays(date: Date, days: number): Date {
   return result;
 }
 
+/** `date.toISOString().slice(0, 10)` — NUNCA `todayDateString(date)` aqui:
+ * essa Date já representa meia-noite UTC de um dia civil específico (mesma
+ * convenção de `todayUTC()`/`meta-api-backfill.ts#toDateString`), e
+ * reformatá-la via `todayDateString` reconverteria pelo fuso da agência
+ * (America/Sao_Paulo, UTC-3), voltando um dia errado. */
+function toDateString(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Núcleo puro — decide a janela de datas elegível pra checagem de gap, a
+ * partir de "hoje". `windowEnd` NUNCA inclui os últimos `syncWindowDays`
+ * dias (ponto 1 do pedido: nunca confundir "a sincronização normal ainda
+ * não processou esse dia" com "falha real de gravação") — um dia só entra
+ * na checagem depois de ter saído da janela de autocorreção da
+ * sincronização normal.
+ */
+export function resolveGapScanWindow(today: string, lookbackDays: number, syncWindowDays: number): { windowStart: string; windowEnd: string } {
+  const todayDate = new Date(`${today}T00:00:00Z`);
+  return {
+    windowStart: toDateString(subtractDays(todayDate, lookbackDays)),
+    windowEnd: toDateString(subtractDays(todayDate, syncWindowDays)),
+  };
+}
+
 /**
  * Núcleo puro — dado os dias com investimento REAL (spend > 0) e os dias
  * que JÁ têm granularidade de campanha gravada, decide se há um buraco e
@@ -72,9 +98,18 @@ export function detectGapRange(
  * (`daily_spend`/`campaign_daily_metrics`), nunca uma junção SQL — mais
  * simples de revisar e não depende de nenhuma relação de chave estrangeira
  * nomeada em particular.
+ *
+ * Garantia explícita (ponto 1 do pedido): NUNCA aponta os últimos
+ * `DIRECT_SYNC_WINDOW_DAYS` dias (hoje + 2 anteriores) como gap — essa é
+ * exatamente a janela que a sincronização normal ainda está processando
+ * (`meta-api-direct-sync.ts`; a própria Meta atribui resultado com atraso
+ * nesses dias mais recentes), nunca um problema real. Um dia só vira "gap"
+ * depois de ter saído dessa janela e MESMO ASSIM continuar sem campanha —
+ * sinal de que a sincronização normal teve chance de se autocorrigir e não
+ * conseguiu.
  */
 export async function findCampaignDataGaps(supabase: Supabase, lookbackDays = 60): Promise<CampaignDataGap[]> {
-  const windowStart = todayDateString(subtractDays(todayUTC(), lookbackDays));
+  const { windowStart, windowEnd } = resolveGapScanWindow(todayDateString(), lookbackDays, DIRECT_SYNC_WINDOW_DAYS);
 
   const sources = await requireQuery(
     supabase.from("import_sources").select("client_id, external_account_id").eq("channel", "meta").eq("provider", "meta_api").eq("enabled", true),
@@ -105,11 +140,18 @@ export async function findCampaignDataGaps(supabase: Supabase, lookbackDays = 60
             .eq("client_id", source.client_id)
             .eq("channel", "meta")
             .gte("date", windowStart)
+            .lte("date", windowEnd)
             .gt("spend", 0),
           "daily_spend:gap-detection",
         ),
         requireQuery(
-          supabase.from("campaign_daily_metrics").select("date").eq("client_id", source.client_id).eq("channel", "meta").gte("date", windowStart),
+          supabase
+            .from("campaign_daily_metrics")
+            .select("date")
+            .eq("client_id", source.client_id)
+            .eq("channel", "meta")
+            .gte("date", windowStart)
+            .lte("date", windowEnd),
           "campaign_daily_metrics:gap-detection",
         ),
       ]);

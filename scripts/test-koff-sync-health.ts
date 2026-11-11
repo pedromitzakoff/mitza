@@ -14,7 +14,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { detectGapRange } from "../src/lib/meta-api-gap-detection";
+import { detectGapRange, resolveGapScanWindow } from "../src/lib/meta-api-gap-detection";
 
 let passed = 0;
 function ok(name: string, condition: boolean) {
@@ -55,6 +55,17 @@ console.log("\nA — detectGapRange: núcleo puro, sem Supabase\n");
   const irregular = detectGapRange(["2026-11-01", "2026-11-02", "2026-11-03"], new Set(["2026-11-02"]));
   ok("dia certo no meio do intervalo não quebra o cálculo do intervalo cheio", irregular?.since === "2026-11-01" && irregular?.until === "2026-11-03");
   ok("missingDayCount conta só os dias REALMENTE faltantes (2), não o tamanho do intervalo (3)", irregular?.missingDayCount === 2);
+}
+
+// ---------------------------------------------------------------------------
+console.log("\nA2 — resolveGapScanWindow: nunca aponta os dias ainda em autocorreção\n");
+{
+  const w1 = resolveGapScanWindow("2026-11-11", 60, 3);
+  ok("windowEnd exclui os últimos 3 dias (hoje=11, janela some até o dia 8)", w1.windowEnd === "2026-11-08");
+  ok("windowStart respeita lookbackDays (60 dias antes de hoje)", w1.windowStart === "2026-09-12");
+
+  const w2 = resolveGapScanWindow("2026-11-11", 60, 1);
+  ok("syncWindowDays menor -> windowEnd mais próximo de hoje (exclui só ontem)", w2.windowEnd === "2026-11-10");
 }
 
 // ---------------------------------------------------------------------------
