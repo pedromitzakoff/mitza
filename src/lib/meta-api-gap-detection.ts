@@ -54,6 +54,31 @@ function toDateString(date: Date): string {
 }
 
 /**
+ * Núcleo puro — achado real de produção (11/2026): pedir pro backfill
+ * cobrir o gap INTEIRO de uma vez (ex.: 17 dias de uma conta grande e
+ * ativa) pode estourar o limite de execução da Vercel (300s) numa única
+ * requisição — o volume de campanha/conjunto/criativo da Graph API cresce
+ * com o número de dias E com o tamanho da conta, não só um dos dois.
+ *
+ * Corta o gap detectado numa fatia de no máximo `maxSliceDays` dias,
+ * SEMPRE a partir do início (`since`) — mesmo tamanho da janela que a
+ * sincronização automática normal já prova ser segura pra qualquer conta,
+ * rodando sozinha a cada poucos minutos sem nunca estourar tempo
+ * (`DIRECT_SYNC_WINDOW_DAYS`, `meta-api-direct-sync.ts`). Cada clique em
+ * "Corrigir" processa uma fatia; o diagnóstico recalcula o gap restante
+ * (menor) depois — repetir o clique até o gap zerar é o fluxo esperado,
+ * nunca um "falso incompleto".
+ */
+export function clampGapToSafeSlice(since: string, until: string, maxSliceDays: number): { since: string; until: string } {
+  const sinceDate = new Date(`${since}T00:00:00Z`);
+  const untilDate = new Date(`${until}T00:00:00Z`);
+  const sliceEnd = new Date(sinceDate);
+  sliceEnd.setUTCDate(sliceEnd.getUTCDate() + maxSliceDays - 1);
+  const clampedUntilDate = sliceEnd.getTime() < untilDate.getTime() ? sliceEnd : untilDate;
+  return { since, until: toDateString(clampedUntilDate) };
+}
+
+/**
  * Núcleo puro — decide a janela de datas elegível pra checagem de gap, a
  * partir de "hoje". `windowEnd` NUNCA inclui os últimos `syncWindowDays`
  * dias (ponto 1 do pedido: nunca confundir "a sincronização normal ainda

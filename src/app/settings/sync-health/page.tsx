@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { findCampaignDataGaps } from "@/lib/meta-api-gap-detection";
+import { findCampaignDataGaps, clampGapToSafeSlice } from "@/lib/meta-api-gap-detection";
+import { DIRECT_SYNC_WINDOW_DAYS } from "@/lib/meta-api-direct-sync";
 import { runMetaApiBackfillAction } from "../meta-connections/actions";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SettingsPageShell, SETTINGS_SECONDARY_BUTTON_CLASSES } from "../settings-shell";
@@ -25,6 +26,14 @@ import { SubmitButton } from "@/app/submit-button";
  * sozinha, só encontra o intervalo certo e pré-preenche o mesmo formulário
  * que já existia. `return_to` traz de volta pra esta lista depois de
  * corrigir, pra descer pelos gaps um a um sem perder o lugar.
+ *
+ * Achado real de produção (11/2026, pós-publicação): pedir o backfill do
+ * gap INTEIRO de uma vez pode estourar o limite de execução da Vercel
+ * (300s) numa conta grande/ativa — `clampGapToSafeSlice` corta cada clique
+ * numa fatia de no máximo `DIRECT_SYNC_WINDOW_DAYS` dias (mesmo tamanho já
+ * provado seguro pela sincronização automática). Um gap grande precisa de
+ * vários cliques — o restante (menor) reaparece a cada volta, nunca um
+ * "concluído" fabricado antes da hora.
  */
 export default async function SyncHealthPage({
   searchParams,
@@ -64,25 +73,41 @@ export default async function SyncHealthPage({
               </tr>
             </thead>
             <tbody>
-              {gaps.map((gap) => (
-                <tr key={gap.clientId} className="border-t border-overview-border/60">
-                  <td className="px-3.5 py-2.5 font-medium text-overview-text-primary">{gap.clientName}</td>
-                  <td className="px-3.5 py-2.5 text-overview-text-secondary tabular-nums">
-                    {gap.since} a {gap.until}
-                  </td>
-                  <td className="px-3.5 py-2.5 text-right tabular-nums">{gap.missingDayCount}</td>
-                  <td className="px-3.5 py-2.5 text-right">
-                    <form action={runMetaApiBackfillAction.bind(null, gap.accountId, gap.clientId)}>
-                      <input type="hidden" name="since" value={gap.since} />
-                      <input type="hidden" name="until" value={gap.until} />
-                      <input type="hidden" name="return_to" value="/settings/sync-health" />
-                      <SubmitButton pendingChildren="Corrigindo..." className={`${SETTINGS_SECONDARY_BUTTON_CLASSES} px-2 py-1 text-xs`}>
-                        Corrigir
-                      </SubmitButton>
-                    </form>
-                  </td>
-                </tr>
-              ))}
+              {gaps.map((gap) => {
+                // Achado real de produção (11/2026): pedir o gap inteiro de
+                // uma vez estourou o limite de execução da Vercel (300s)
+                // numa conta grande/ativa. Cada clique processa só uma
+                // fatia segura (mesmo tamanho da janela que a sincronização
+                // automática já prova ser segura pra qualquer conta) — o
+                // gap restante (menor) reaparece pra um próximo clique.
+                const slice = clampGapToSafeSlice(gap.since, gap.until, DIRECT_SYNC_WINDOW_DAYS);
+                const isPartial = slice.until !== gap.until;
+
+                return (
+                  <tr key={gap.clientId} className="border-t border-overview-border/60">
+                    <td className="px-3.5 py-2.5 font-medium text-overview-text-primary">{gap.clientName}</td>
+                    <td className="px-3.5 py-2.5 text-overview-text-secondary tabular-nums">
+                      {gap.since} a {gap.until}
+                      {isPartial && (
+                        <span className="mt-0.5 block text-xs text-overview-text-muted">
+                          Próxima correção cobre {slice.since} a {slice.until} — repita o clique até zerar
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3.5 py-2.5 text-right tabular-nums">{gap.missingDayCount}</td>
+                    <td className="px-3.5 py-2.5 text-right">
+                      <form action={runMetaApiBackfillAction.bind(null, gap.accountId, gap.clientId)}>
+                        <input type="hidden" name="since" value={slice.since} />
+                        <input type="hidden" name="until" value={slice.until} />
+                        <input type="hidden" name="return_to" value="/settings/sync-health" />
+                        <SubmitButton pendingChildren="Corrigindo..." className={`${SETTINGS_SECONDARY_BUTTON_CLASSES} px-2 py-1 text-xs`}>
+                          Corrigir
+                        </SubmitButton>
+                      </form>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

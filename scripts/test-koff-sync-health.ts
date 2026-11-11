@@ -14,7 +14,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { detectGapRange, resolveGapScanWindow } from "../src/lib/meta-api-gap-detection";
+import { detectGapRange, resolveGapScanWindow, clampGapToSafeSlice } from "../src/lib/meta-api-gap-detection";
 
 let passed = 0;
 function ok(name: string, condition: boolean) {
@@ -69,6 +69,22 @@ console.log("\nA2 — resolveGapScanWindow: nunca aponta os dias ainda em autoco
 }
 
 // ---------------------------------------------------------------------------
+console.log("\nA3 — clampGapToSafeSlice: achado real de produção (timeout de 300s da Vercel numa conta grande)\n");
+{
+  const smallGap = clampGapToSafeSlice("2026-11-01", "2026-11-02", 3);
+  ok("gap menor que a fatia segura -> passa intacto (since/until originais)", smallGap.since === "2026-11-01" && smallGap.until === "2026-11-02");
+
+  const bigGap = clampGapToSafeSlice("2026-10-23", "2026-11-08", 3);
+  ok("gap de 17 dias cortado em fatia de 3 (since + 2 dias)", bigGap.since === "2026-10-23" && bigGap.until === "2026-10-25");
+
+  const exactGap = clampGapToSafeSlice("2026-11-01", "2026-11-03", 3);
+  ok("gap do tamanho exato da fatia -> cobre o intervalo inteiro numa tacada só", exactGap.since === "2026-11-01" && exactGap.until === "2026-11-03");
+
+  const oneDaySlice = clampGapToSafeSlice("2026-10-23", "2026-11-08", 1);
+  ok("fatia de 1 dia -> since === until (nunca um intervalo invertido)", oneDaySlice.since === "2026-10-23" && oneDaySlice.until === "2026-10-23");
+}
+
+// ---------------------------------------------------------------------------
 console.log("\nB — Wiring: a correção reaproveita o backfill já existente, nunca uma segunda implementação\n");
 {
   const gapDetectionSource = loadSource("src", "lib", "meta-api-gap-detection.ts");
@@ -89,8 +105,12 @@ console.log("\nB — Wiring: a correção reaproveita o backfill já existente, 
     syncHealthPageSource.includes("runMetaApiBackfillAction") && syncHealthPageSource.includes('from "../meta-connections/actions"'),
   );
   ok(
-    'a tela nova pré-preenche "since"/"until" do próprio gap detectado — nunca pede o admin digitar de novo',
-    syncHealthPageSource.includes('name="since" value={gap.since}') && syncHealthPageSource.includes('name="until" value={gap.until}'),
+    'a tela nova pré-preenche "since"/"until" a partir da FATIA segura (nunca o gap inteiro, nunca pede o admin digitar)',
+    syncHealthPageSource.includes('name="since" value={slice.since}') && syncHealthPageSource.includes('name="until" value={slice.until}'),
+  );
+  ok(
+    "a fatia reaproveita DIRECT_SYNC_WINDOW_DAYS (mesma janela já provada segura pela sincronização automática, nunca um número novo)",
+    syncHealthPageSource.includes("clampGapToSafeSlice(gap.since, gap.until, DIRECT_SYNC_WINDOW_DAYS)"),
   );
   ok(
     "return_to opcional preserva o destino original (meta-connections) quando ausente — nunca quebra o formulário antigo",
