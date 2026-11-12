@@ -17,7 +17,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
-  Search,
   Settings,
   Target,
   type LucideIcon,
@@ -77,6 +76,40 @@ function getCollapsedServerSnapshot() {
 function setSidebarCollapsedPreference(value: boolean) {
   window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, value ? "1" : "0");
   window.dispatchEvent(new Event(SIDEBAR_COLLAPSED_EVENT));
+}
+
+/**
+ * Bugfix de navegação (pedido explícito do usuário): a Sidebar é o único
+ * elemento de navegação da plataforma — nunca deveria reverter pra Carteira
+ * (busca + lista vertical de todos os clientes) só porque a rota atual
+ * (`/clients`, `/settings/**`) não carrega um id de cliente na própria URL.
+ * `resolveActiveClientIdFromPathname` continua sendo a ÚNICA fonte de
+ * verdade quando a URL TEM um cliente (nenhuma duplicação) — este par
+ * grava/lê (mesmo padrão de `SIDEBAR_COLLAPSED_STORAGE_KEY`/
+ * `useSyncExternalStore` acima, só o suficiente pra lembrar qual foi o
+ * ÚLTIMO cliente visitado, pra reaproveitar o menu do cliente (Dashboard/
+ * Campanhas/Anúncios/Metas) mesmo em páginas administrativas sem cliente
+ * na própria URL. `/clients` (lista) e `/clients/new` nunca escrevem aqui
+ * (`resolveActiveClientIdFromPathname` já devolve `null` pra eles). */
+const SIDEBAR_LAST_CLIENT_STORAGE_KEY = "mitza:sidebar-last-client-id";
+const SIDEBAR_LAST_CLIENT_EVENT = "mitza:sidebar-last-client-changed";
+
+function subscribeToLastClientId(callback: () => void) {
+  window.addEventListener(SIDEBAR_LAST_CLIENT_EVENT, callback);
+  return () => window.removeEventListener(SIDEBAR_LAST_CLIENT_EVENT, callback);
+}
+
+function getLastClientIdSnapshot(): string | null {
+  return window.localStorage.getItem(SIDEBAR_LAST_CLIENT_STORAGE_KEY);
+}
+
+function getLastClientIdServerSnapshot(): string | null {
+  return null;
+}
+
+function setLastActiveClientId(clientId: string) {
+  window.localStorage.setItem(SIDEBAR_LAST_CLIENT_STORAGE_KEY, clientId);
+  window.dispatchEvent(new Event(SIDEBAR_LAST_CLIENT_EVENT));
 }
 
 /** Relógio da agência — migrado da Top Bar (removida na Etapa Global UX
@@ -259,92 +292,6 @@ function AccordionGroup({
 }
 
 /**
- * Uma linha da carteira — mesmo visual de `NavLink` (reaproveita as
- * classes do "KOFF Active Indicator"), mas o destino é sempre o cockpit
- * (`/clients/[id]`, suffix `""`) e o estado ativo compara contra o ID do
- * cliente extraído do pathname (`resolveActiveClientIdFromPathname`,
- * `lib/client-workspace-nav.ts` — já existia, testado, pensado pra
- * reconhecer o cliente certo mesmo em sub-rotas legadas, seção 4 do
- * pedido: "se o usuário abrir diretamente uma rota antiga do cliente, a
- * sidebar ainda deve destacar o cliente correto").
- */
-function ClientRow({
-  client,
-  activeClientId,
-  month,
-  collapsed,
-}: {
-  client: AgencyTreeClient;
-  activeClientId: string | null;
-  month: string | null;
-  collapsed: boolean;
-}) {
-  const active = client.id === activeClientId;
-  const href = buildWorkspaceHref(client.id, "", month);
-
-  return (
-    <Link
-      href={href}
-      title={client.name}
-      aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-2 rounded-md ${ACTIVE_INDICATOR_RAIL_CLASSES} py-1 pl-2 pr-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel ${collapsed ? "md:justify-center md:border-l-0 md:pl-2.5" : ""} ${
-        active ? ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES : ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES
-      }`}
-    >
-      <ClientAvatar name={client.name} imageUrl={client.avatarUrl} size="xs" />
-      <ItemLabel collapsed={collapsed}>
-        <span className="truncate">{client.name}</span>
-      </ItemLabel>
-    </Link>
-  );
-}
-
-/**
- * Etapa "Revisão da Sidebar — indicador de overflow": detecta se a região
- * de navegação tem mais conteúdo além do que está visível, em cada borda
- * (topo/rodapé) — hoje a scrollbar fica escondida (`mitza-scrollbar-hidden`)
- * sem nenhum outro indício de que dá pra rolar. Reaproveitado nesta fase
- * pra região rolável da CARTEIRA (seção 7 do pedido: "a área da carteira
- * deve rolar independentemente da área de Agência").
- */
-function useScrollEdges(): {
-  scrollRef: React.RefObject<HTMLDivElement | null>;
-  contentRef: React.RefObject<HTMLDivElement | null>;
-  edges: { top: boolean; bottom: boolean };
-} {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const contentRef = useRef<HTMLDivElement | null>(null);
-  const [edges, setEdges] = useState({ top: false, bottom: false });
-
-  useEffect(() => {
-    const scrollEl = scrollRef.current;
-    const contentEl = contentRef.current;
-    if (!scrollEl || !contentEl) return;
-
-    function measure() {
-      if (!scrollEl) return;
-      const scrollable = scrollEl.scrollHeight > scrollEl.clientHeight + 1;
-      setEdges({
-        top: scrollable && scrollEl.scrollTop > 1,
-        bottom: scrollable && scrollEl.scrollTop + scrollEl.clientHeight < scrollEl.scrollHeight - 1,
-      });
-    }
-
-    measure();
-    scrollEl.addEventListener("scroll", measure, { passive: true });
-    const observer = new ResizeObserver(measure);
-    observer.observe(contentEl);
-
-    return () => {
-      scrollEl.removeEventListener("scroll", measure);
-      observer.disconnect();
-    };
-  }, []);
-
-  return { scrollRef, contentRef, edges };
-}
-
-/**
  * "Contas" como seletor, não como item de menu (pedido explícito do
  * usuário): no topo do menu do cliente, troca rapidamente de cliente ou
  * volta à Carteira — mesma busca local de sempre (`filterAgencyTreeClients`,
@@ -478,9 +425,6 @@ function SidebarContent({
   const isAdmin = profile.role === "admin";
   const gestaoItems = GESTAO_ITEMS.filter((item) => !item.adminOnly || isAdmin);
   const initial = profile.name.trim().charAt(0).toUpperCase() || "?";
-  const { scrollRef, contentRef, edges } = useScrollEdges();
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const [search, setSearch] = useState("");
 
   // MITZA ONE — Fase 2.1 (seção 2 do pedido): Agência/Gestão fechados por
   // padrão; abrem automaticamente quando a rota atual já pertence ao
@@ -506,20 +450,26 @@ function SidebarContent({
     }));
   }
 
-  const activeClientId = resolveActiveClientIdFromPathname(pathname);
+  // Bugfix de navegação (pedido explícito do usuário): o menu do cliente
+  // (Dashboard/Campanhas/Anúncios/Metas) é SEMPRE o que a Sidebar mostra —
+  // nunca mais reverte pra Carteira só porque a rota atual não carrega um
+  // cliente na própria URL (`/clients`, `/settings/**`). Prioridade: (1) o
+  // cliente da PRÓPRIA URL, quando existe (nunca ambíguo); (2) o último
+  // cliente visitado, persistido (`SIDEBAR_LAST_CLIENT_STORAGE_KEY`) — só
+  // aceito se ele ainda está na carteira (cliente removido/transferido
+  // nunca deixa a Sidebar apontando pra um id morto); (3) o primeiro da
+  // carteira, só no caso raro de nunca ter existido um "último" (sessão
+  // nova direto numa página administrativa).
+  const pathnameClientId = resolveActiveClientIdFromPathname(pathname);
+  const storedClientId = useSyncExternalStore(subscribeToLastClientId, getLastClientIdSnapshot, getLastClientIdServerSnapshot);
+  const resolvedStoredClientId = storedClientId && walletClients.some((c) => c.id === storedClientId) ? storedClientId : null;
+  const activeClientId = pathnameClientId ?? resolvedStoredClientId ?? walletClients[0]?.id ?? null;
 
-  // Busca local (seção 6 do pedido: "sem chamada Supabase por tecla") —
-  // `walletClients` já veio pronta/ordenada do layout raiz; filtrar um
-  // array de até ~100 itens em memória é instantâneo, nenhum debounce
-  // necessário.
-  const filteredClients = useMemo(() => filterAgencyTreeClients(walletClients, search), [walletClients, search]);
+  useEffect(() => {
+    if (pathnameClientId) setLastActiveClientId(pathnameClientId);
+  }, [pathnameClientId]);
 
   const activeClient = activeClientId ? walletClients.find((c) => c.id === activeClientId) ?? null : null;
-
-  function expandAndFocusSearch() {
-    toggleCollapsed();
-    window.setTimeout(() => searchInputRef.current?.focus(), 0);
-  }
 
   return (
     <div className="flex h-full flex-col">
@@ -535,119 +485,50 @@ function SidebarContent({
         </button>
       </div>
 
-      {activeClientId ? (
-        <>
-          {/* MENU DO CLIENTE — dentro do workspace de um cliente, a
-              Carteira cede lugar a este menu fixo de 4 itens, sempre
-              escopado ao cliente ativo (ver `buildClientNavItems`). O
-              nome/avatar do cliente substitui a marca, e funciona como
-              SELETOR (`ClientSwitcher`, não um item de menu) — "Contas"
-              deixou de ser uma rota pra ser essa troca rápida no topo,
-              pedido explícito do usuário. Só na apresentação expandida;
-              recolhida mostra só o avatar (mesmo seletor, `presentation="compact"`). */}
-          <div className={`flex min-h-0 flex-1 flex-col px-2.5 ${collapsed ? "md:hidden" : ""}`}>
-            {activeClient && (
-              <div className="mb-2 shrink-0 border-b border-sidebar-border pb-2.5">
-                <ClientSwitcher activeClient={activeClient} walletClients={walletClients} month={month} presentation="full" />
-              </div>
-            )}
-            <nav aria-label="Menu do cliente" className="flex flex-col gap-0.5">
-              {buildClientNavItems(activeClientId, month).map((item) => (
-                <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
-              ))}
-            </nav>
+      {/* MENU DO CLIENTE — bugfix de navegação: este é agora o ÚNICO modo
+          de topo da Sidebar em toda a plataforma (nunca mais reverte pra
+          Carteira em rotas sem cliente na própria URL, como `/clients` ou
+          `/settings/**` — ver `activeClientId` acima). Sempre escopado ao
+          cliente ativo (ver `buildClientNavItems`). O nome/avatar do
+          cliente substitui a marca, e funciona como SELETOR
+          (`ClientSwitcher`, não um item de menu). Só na apresentação
+          expandida; recolhida mostra só o avatar (mesmo seletor,
+          `presentation="compact"`). A Carteira completa (lista vertical de
+          todos os clientes) já tem um lugar próprio em `/clients`
+          (`AgencyAccountsTree`) — não precisa duplicar aqui. */}
+      <div className={`flex min-h-0 flex-1 flex-col px-2.5 ${collapsed ? "md:hidden" : ""}`}>
+        {activeClient && (
+          <div className="mb-2 shrink-0 border-b border-sidebar-border pb-2.5">
+            <ClientSwitcher activeClient={activeClient} walletClients={walletClients} month={month} presentation="full" />
           </div>
-
-          <div className={collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"}>
-            {activeClient && <ClientSwitcher activeClient={activeClient} walletClients={walletClients} month={month} presentation="compact" />}
+        )}
+        {activeClientId && (
+          <nav aria-label="Menu do cliente" className="flex flex-col gap-0.5">
             {buildClientNavItems(activeClientId, month).map((item) => (
-              <Tooltip key={item.label} label={item.label}>
-                <Link
-                  href={item.href}
-                  aria-label={item.label}
-                  aria-current={item.isActive(pathname) ? "page" : undefined}
-                  className={`mitza-pressable flex h-7 w-7 items-center justify-center rounded-md ${
-                    item.isActive(pathname) ? ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES : ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES
-                  }`}
-                >
-                  <item.icon className="h-4 w-4" aria-hidden="true" />
-                </Link>
-              </Tooltip>
+              <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
             ))}
-          </div>
-        </>
-      ) : (
-        <>
-          {/* CARTEIRA — seção 1 do pedido. Busca + lista ficam JUNTAS numa
-              região com scroll PRÓPRIO (`flex-1 min-h-0 overflow-y-auto`),
-              separada da área "Agência"/"Gestão"/rodapé abaixo (`shrink-0`,
-              nunca rola com a carteira). `md:hidden` quando `collapsed`:
-              some só no desktop recolhido (mobile sempre mostra tudo,
-              mesmo padrão de sempre — ver `ItemLabel`); o bloco compacto
-              equivalente (abaixo) faz o inverso (`hidden md:flex` quando
-              `collapsed`). Só aparece FORA do workspace de um cliente —
-              dentro dele, o menu do cliente (acima) toma o lugar. */}
-          <div className={`flex min-h-0 flex-1 flex-col px-2.5 ${collapsed ? "md:hidden" : ""}`}>
-            <label className="sr-only" htmlFor="sidebar-client-search">
-              Buscar cliente
-            </label>
-            <div className="relative shrink-0">
-              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground-subtle" aria-hidden="true" />
-              <input
-                ref={searchInputRef}
-                id="sidebar-client-search"
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar cliente..."
-                className="w-full rounded-md bg-sidebar-search-surface py-1.5 pl-7 pr-2 text-[13px] text-sidebar-foreground placeholder:text-sidebar-foreground-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel"
-              />
-            </div>
+          </nav>
+        )}
+      </div>
 
-            <div className="relative mt-2 min-h-0 flex-1">
-              <div ref={scrollRef} className="mitza-scrollbar-hidden h-full overflow-y-auto">
-                <div ref={contentRef}>
-                  <nav aria-label="Carteira de clientes" className="flex flex-col gap-0.5 pb-1">
-                    {filteredClients.map((client) => (
-                      <ClientRow key={client.id} client={client} activeClientId={activeClientId} month={month} collapsed={collapsed} />
-                    ))}
-                  </nav>
-                  {walletClients.length === 0 && <p className="px-0.5 py-2 text-xs text-sidebar-foreground-subtle">Nenhum cliente na carteira ainda.</p>}
-                  {walletClients.length > 0 && filteredClients.length === 0 && (
-                    <p className="px-0.5 py-2 text-xs text-sidebar-foreground-subtle">Nenhum cliente encontrado.</p>
-                  )}
-                </div>
-              </div>
-              <div
-                aria-hidden="true"
-                className={`pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-sidebar-surface to-transparent transition-opacity duration-150 ${edges.top ? "opacity-100" : "opacity-0"}`}
-              />
-              <div
-                aria-hidden="true"
-                className={`pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-sidebar-surface to-transparent transition-opacity duration-150 ${edges.bottom ? "opacity-100" : "opacity-0"}`}
-              />
-            </div>
-          </div>
-
-          {/* Versão compacta pro desktop recolhido (seção 5 do pedido: "sem
-              lista de dezenas de ícones indistinguíveis") — só o cliente
-              ATUAL (se houver) + um gatilho que expande a Sidebar e foca a
-              busca. `hidden md:flex`: nunca aparece no mobile (a carteira
-              completa acima já cobre esse caso) nem no desktop expandido. */}
-          <div className={collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"}>
-            <Tooltip label="Buscar cliente">
-              <button
-                type="button"
-                onClick={expandAndFocusSearch}
-                aria-label="Buscar cliente"
-                className="mitza-pressable flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground-muted hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel"
+      <div className={collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"}>
+        {activeClient && <ClientSwitcher activeClient={activeClient} walletClients={walletClients} month={month} presentation="compact" />}
+        {activeClientId &&
+          buildClientNavItems(activeClientId, month).map((item) => (
+            <Tooltip key={item.label} label={item.label}>
+              <Link
+                href={item.href}
+                aria-label={item.label}
+                aria-current={item.isActive(pathname) ? "page" : undefined}
+                className={`mitza-pressable flex h-7 w-7 items-center justify-center rounded-md ${
+                  item.isActive(pathname) ? ACTIVE_INDICATOR_SIDEBAR_ACTIVE_CLASSES : ACTIVE_INDICATOR_SIDEBAR_INACTIVE_CLASSES
+                }`}
               >
-                <Search className="h-4 w-4" aria-hidden="true" />
-              </button>
+                <item.icon className="h-4 w-4" aria-hidden="true" />
+              </Link>
             </Tooltip>
-          </div>
-        </>
-      )}
+          ))}
+      </div>
 
       {/* AGÊNCIA + GESTÃO — seção 2 do pedido: ferramentas transversais,
           nunca módulos do cliente. Fixo abaixo da carteira, nunca rola

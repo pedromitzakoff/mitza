@@ -59,12 +59,20 @@ console.log("\nB — '/clients' (destino do ClientSwitcher) devolve ao estado de
 }
 
 // ---------------------------------------------------------------------------
-console.log("\nC — checagem estrutural: a Sidebar troca Carteira por menu do cliente, nunca os dois ao mesmo tempo; ClientSwitcher no topo\n");
+console.log("\nC — checagem estrutural: a Sidebar mostra o menu do cliente SEMPRE (bugfix de navegação — nunca mais reverte pra Carteira); ClientSwitcher no topo\n");
 {
   const sidebarSource = loadSource("src", "app", "sidebar.tsx");
   ok(
-    "a troca é condicionada a activeClientId (nunca um estado próprio duplicado) — if/else exclusivo entre menu do cliente e Carteira",
-    /activeClientId \? \(/.test(sidebarSource) && sidebarSource.includes("buildClientNavItems(activeClientId, month)"),
+    "a antiga Carteira (lista vertical completa na própria Sidebar) foi removida — nunca mais reaparece em rotas sem cliente na URL",
+    !/function ClientRow/.test(sidebarSource) && !/function useScrollEdges/.test(sidebarSource),
+  );
+  ok(
+    "o menu do cliente é construído a partir de activeClientId, resolvido com fallback (URL -> último cliente persistido -> primeiro da carteira), nunca condicionado a um if/else com a Carteira",
+    sidebarSource.includes("buildClientNavItems(activeClientId, month)") && sidebarSource.includes("pathnameClientId ?? resolvedStoredClientId ?? walletClients[0]?.id ?? null"),
+  );
+  ok(
+    "o último cliente ativo é persistido (localStorage) pra sobreviver a rotas administrativas sem cliente na URL",
+    sidebarSource.includes("SIDEBAR_LAST_CLIENT_STORAGE_KEY") && sidebarSource.includes("setLastActiveClientId(pathnameClientId)"),
   );
   ok(
     "o ClientSwitcher substitui a marca no topo, nas duas apresentações (expandida e recolhida)",

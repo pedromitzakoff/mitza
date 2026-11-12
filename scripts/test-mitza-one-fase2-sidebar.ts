@@ -154,30 +154,46 @@ console.log("\nE — Destacar o cliente atual, inclusive em rotas antigas/deep l
   check("'/clients' (listagem) -> null, nunca um cliente", resolveActiveClientIdFromPathname("/clients"), null);
   check("'/clients/new' (criação) -> null, nunca tratado como id 'new'", resolveActiveClientIdFromPathname("/clients/new"), null);
   check("'/operation' (rota global) -> null", resolveActiveClientIdFromPathname("/operation"), null);
-  ok("ClientRow compara client.id === activeClientId (seguro com nomes repetidos — nunca compara por nome)", sidebarSource.includes("const active = client.id === activeClientId"));
-  ok("ClientRow usa aria-current='page' quando ativo (acessibilidade, seção 5 do pedido)", sidebarSource.includes('aria-current={active ? "page" : undefined}'));
+  // ClientRow (a linha da antiga Carteira, direto na Sidebar) foi removida
+  // no bugfix de navegação "sidebar nunca mais reverte pra Carteira" — o
+  // menu do cliente (NavLink) é o único modo de topo agora, e o popover do
+  // ClientSwitcher assumiu a comparação por ID (nunca por nome).
+  ok(
+    "o popover do ClientSwitcher compara client.id === activeClient.id (seguro com nomes repetidos — nunca compara por nome)",
+    /client\.id === activeClient\.id/.test(sidebarSource),
+  );
+  ok("NavLink usa aria-current='page' quando ativo (acessibilidade, seção 5 do pedido) — cobre os 4 itens do menu do cliente", sidebarSource.includes('aria-current={item.isActive(pathname) ? "page" : undefined}'));
 }
 
 console.log("\nF — Links vindos de Demandas/Operação/Timeline/Clientes chegam ao cockpit correto; sem loop de redirect\n");
 {
   check("buildWorkspaceHref com suffix vazio sempre monta /clients/[id] (o cockpit)", buildWorkspaceHref("aibou", "", null), "/clients/aibou");
   check("buildWorkspaceHref preserva month quando presente", buildWorkspaceHref("aibou", "", "2026-10"), "/clients/aibou?month=2026-10");
-  ok("ClientRow da Sidebar sempre usa suffix '' (cockpit) ao trocar de cliente — nunca replica uma sub-rota legada (seção 4 do pedido: 'não vazar... estado que não pertençam ao destino')", sidebarSource.includes('const href = buildWorkspaceHref(client.id, "", month)'));
+  ok(
+    "o popover do ClientSwitcher sempre usa suffix '' (cockpit) ao trocar de cliente — nunca replica uma sub-rota legada (seção 4 do pedido: 'não vazar... estado que não pertençam ao destino')",
+    sidebarSource.includes('href={buildWorkspaceHref(client.id, "", month)}'),
+  );
   ok("nenhum redirect novo foi introduzido em sidebar.tsx/client-workspace-header.tsx (sem risco de loop)", !sidebarSource.includes("redirect(") && !headerSource.includes("redirect("));
 }
 
-console.log("\nG — Collapsed/mobile (seção 5 do pedido): recolhida nunca lista dezenas de ícones; mobile sempre mostra tudo\n");
+console.log("\nG — Collapsed/mobile (seção 5 do pedido; bugfix de navegação preserva a mesma convenção): recolhida nunca lista dezenas de ícones; mobile sempre mostra tudo\n");
 {
+  // A Carteira completa (busca+lista) foi removida da Sidebar no bugfix de
+  // navegação — o menu do cliente (expandido) é quem usa 'md:hidden'
+  // quando collapsed agora.
   ok(
-    "carteira completa (busca+lista) usa 'md:hidden' quando collapsed — some SÓ no desktop recolhido, nunca no mobile (mesma convenção de ItemLabel)",
+    "menu do cliente (expandido) usa 'md:hidden' quando collapsed — some SÓ no desktop recolhido, nunca no mobile (mesma convenção de ItemLabel)",
     /flex min-h-0 flex-1 flex-col px-2\.5 \$\{collapsed \? "md:hidden" : ""\}/.test(sidebarSource),
   );
   ok(
-    "versão compacta (desktop recolhido) usa 'hidden md:flex' — nunca aparece no mobile (a carteira completa já cobre esse caso lá)",
+    "versão compacta (desktop recolhido) usa 'hidden md:flex' — nunca aparece no mobile (o menu do cliente expandido já cobre esse caso lá)",
     sidebarSource.includes('collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"'),
   );
   ok("versão compacta mostra o cliente ATUAL (se houver) via ClientAvatar — nunca a lista inteira como ícones", /\{activeClient && \(/.test(sidebarSource));
-  ok("versão compacta tem um gatilho de busca que EXPANDE a sidebar (toggleCollapsed) — acesso à busca preservado mesmo recolhida", sidebarSource.includes("function expandAndFocusSearch"));
+  ok(
+    "versão compacta mostra os mesmos 4 itens do menu do cliente como ícones (nunca a antiga 'busca que expande' — a Carteira saiu da Sidebar, não precisa mais desse atalho)",
+    !sidebarSource.includes("function expandAndFocusSearch") && sidebarSource.includes("buildClientNavItems(activeClientId, month).map((item) => ("),
+  );
   ok("nenhum arquivo de 'mobile sidebar' separado foi criado", !sidebarSource.includes("sidebar-mobile"));
 }
 
@@ -185,7 +201,10 @@ console.log("\nH — Performance (seção 6 do pedido): sem N+1, sem métrica pe
 {
   ok("loadAgencyAccountsTree continua só 2 queries (clients + team_members), nenhuma query por cliente (N+1)", (treeDataSource.match(/requireQuery\(/g) ?? []).length === 2);
   ok("Sidebar NUNCA chama Supabase/fetch diretamente (toda a carteira chega via prop walletClients, já resolvida no layout raiz)", !sidebarSource.includes("createSupabaseClient") && !sidebarSource.includes("fetch("));
-  ok("busca é um filtro em memória (useMemo sobre filterAgencyTreeClients), nenhum debounce/chamada de rede por tecla", sidebarSource.includes("useMemo(() => filterAgencyTreeClients(walletClients, search)"));
+  ok(
+    "busca (agora só dentro do popover do ClientSwitcher, já que a Carteira saiu da Sidebar) é um filtro em memória (useMemo sobre filterAgencyTreeClients), nenhum debounce/chamada de rede por tecla",
+    sidebarSource.includes("useMemo(() => filterAgencyTreeClients(walletClients, query)"),
+  );
   ok("AgencyTree/AgencyTreeClient continuam SEM nenhuma métrica de performance (orçamento/resultado/CPA) — seção 6 do pedido: 'Sidebar é navegação, não dashboard de performance'", !loadSource("src", "lib", "agency-accounts-tree.ts").includes("monthActual") && !loadSource("src", "lib", "agency-accounts-tree.ts").includes("performance_goal"));
 }
 

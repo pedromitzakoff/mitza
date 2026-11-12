@@ -43,22 +43,28 @@ console.log("\n1 — Carteira de clientes (MITZA ONE — Fase 2): busca + lista 
     'grupo "Agência" não existe mais (Demandas, seu último item, foi removida na Etapa 1.6 da reestruturação KOFF Analytics)',
     !sidebarSource.includes('label="Agência"'),
   );
-  ok("Sidebar renderiza um campo de busca de cliente (input controlado, filtro local)", sidebarSource.includes('placeholder="Buscar cliente...') && sidebarSource.includes("onChange={(e) => setSearch(e.target.value)}"));
-  ok("ClientRow usa ClientAvatar (mesmo componente já usado na árvore de contas) — nenhum avatar novo", sidebarSource.includes("<ClientAvatar name={client.name} imageUrl={client.avatarUrl}"));
-  ok("Sidebar recolhida nunca lista todos os clientes como ícones (seção 5 do pedido) — versão compacta só mostra o cliente atual + gatilho de busca", sidebarSource.includes('collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"'));
+  ok(
+    "bugfix de navegação: a antiga Carteira (lista vertical completa de clientes, direto na Sidebar) foi removida — nunca mais reaparece em rotas sem cliente na URL (/clients, /settings/**); o campo de busca que sobrevive é o do popover do ClientSwitcher, nunca um da Carteira",
+    !sidebarSource.includes('id="sidebar-client-search"') && sidebarSource.includes('id="sidebar-client-switcher-search"') && sidebarSource.includes("onChange={(event) => setQuery(event.target.value)}"),
+  );
+  ok("ClientSwitcher usa ClientAvatar (mesmo componente já usado na árvore de contas) — nenhum avatar novo", sidebarSource.includes("<ClientAvatar name={activeClient.name} imageUrl={activeClient.avatarUrl}"));
+  ok("Sidebar recolhida nunca lista todos os clientes como ícones (seção 5 do pedido) — versão compacta só mostra o cliente atual + os 4 itens do menu", sidebarSource.includes('collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"'));
 }
 
-console.log("\n2 — ClientRow reaproveita o núcleo único de navegação do workspace — não reconstrói nada\n");
+console.log("\n2 — ClientSwitcher reaproveita o núcleo único de navegação do workspace — não reconstrói nada\n");
 {
   ok(
-    "ClientRow importa buildWorkspaceHref/resolveActiveClientIdFromPathname de lib/client-workspace-nav (núcleo único, intocado)",
+    "ClientSwitcher importa buildWorkspaceHref/resolveActiveClientIdFromPathname de lib/client-workspace-nav (núcleo único, intocado)",
     sidebarSource.includes('import { buildWorkspaceHref, resolveActiveClientIdFromPathname } from "@/lib/client-workspace-nav"'),
   );
   ok(
-    "ClientRow monta o href SEMPRE com suffix '' (cockpit, nunca replica sub-rota legada) + month preservado — nenhuma segunda forma de montar URL",
-    /const href = buildWorkspaceHref\(client\.id, "", month\)/.test(sidebarSource),
+    "o link de cada cliente no popover do switcher monta o href SEMPRE com suffix '' (cockpit, nunca replica sub-rota legada) + month preservado — nenhuma segunda forma de montar URL",
+    sidebarSource.includes('href={buildWorkspaceHref(client.id, "", month)}'),
   );
-  ok("estado ativo compara o ID do cliente (resolveActiveClientIdFromPathname) contra client.id, nunca contra pathname bruto nem contra o NOME (seguro mesmo com nomes repetidos)", /const active = client\.id === activeClientId/.test(sidebarSource));
+  ok(
+    "estado ativo do item no popover compara o ID do cliente contra activeClient.id, nunca contra o NOME (seguro mesmo com nomes repetidos)",
+    /client\.id === activeClient\.id/.test(sidebarSource),
+  );
 }
 
 console.log("\n3 — Árvore 'Contas da Agência': continua existindo, agora montada em /clients — não removida silenciosamente, nunca deletada\n");
