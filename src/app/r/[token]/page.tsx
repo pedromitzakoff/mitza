@@ -95,7 +95,12 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
  *
  * Sem navegação interna nenhuma — a página raiz (`app/layout.tsx`) só
  * embrulha em `AppShell` quando há sessão, e um visitante deste link nunca
- * tem uma.
+ * tem uma. Por isso o `<main>` do `AppShell` (que aplica
+ * `--authenticated-bg`, o branco oficial da paleta nova) nunca chega até
+ * aqui — sem o `<div className="bg-authenticated-bg">` abaixo, a página
+ * cairia no `--background` do `<body>` (creme, reservado a login/páginas
+ * públicas), fazendo o MESMO Cockpit parecer visualmente desatualizado só
+ * pelo fundo. Reaproveita o token existente, nenhuma cor nova.
  */
 export default async function PublicClientDashboardPage({
   params,
@@ -120,8 +125,10 @@ export default async function PublicClientDashboardPage({
   });
 
   return (
-    <WorkspaceContainer>
-      <CockpitView model={model} today={todayUTC()} />
-    </WorkspaceContainer>
+    <div className="min-h-dvh bg-authenticated-bg">
+      <WorkspaceContainer>
+        <CockpitView model={model} today={todayUTC()} />
+      </WorkspaceContainer>
+    </div>
   );
 }
