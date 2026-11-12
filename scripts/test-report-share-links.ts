@@ -180,9 +180,18 @@ console.log("\n7 — alteração de query/parâmetro nunca muda o cliente autori
   const source = readFileSync(join(__dirname, "..", "src", "app", "r", "[token]", "page.tsx"), "utf8");
 
   ok("resolve o clientId exclusivamente via resolveClientIdFromShareToken(token)", /const clientId = await resolveClientIdFromShareToken\(token\)/.test(source));
-  ok("searchParams desestruturado só pega campos de período, nunca clientId", /const \{ analyticsPreset: presetParam, analyticsStart: startParam, analyticsEnd: endParam \} = await searchParams/.test(source));
+  // Correção da divergência Dashboard interno × link compartilhado: o
+  // link agora abre o Cockpit (CockpitView via buildCockpitViewModel),
+  // cujos únicos parâmetros de URL são mês/filtro — nunca clientId.
+  ok(
+    "searchParams desestruturado só pega campos de mês/filtro do Cockpit, nunca clientId",
+    /const \{ month: monthQueryParam, filtro: filterTextParam, modo: filterModeParam \} = await searchParams/.test(source),
+  );
   ok("nunca lê searchParams.clientId em lugar nenhum do arquivo", !/searchParams\.clientId|searchParams\[.client_?[Ii]d.\]/.test(source));
-  ok("buildPerformanceReportData é chamado com a variável clientId (resolvida pelo token), nunca um literal de query", /buildPerformanceReportData\(supabase, clientId, period\)/.test(source));
+  ok(
+    "buildCockpitViewModel é chamado com a variável clientId (resolvida pelo token), nunca um literal de query",
+    /buildCockpitViewModel\(supabase, clientId, \{/.test(source),
+  );
 }
 
 console.log("\n8 — página pública (/r/*) não exige login — exercitando a função real do middleware\n");

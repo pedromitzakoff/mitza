@@ -40,7 +40,16 @@ function fileExists(...segments: string[]): boolean {
   return existsSync(join(__dirname, "..", ...segments));
 }
 
-const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
+// Correção da divergência Dashboard interno × link compartilhado: a
+// composição do Cockpit passou a viver em 3 arquivos — `[id]/page.tsx`
+// (wrapper fino), `lib/cockpit-view-data.ts` (cálculo) e
+// `app/clients/cockpit-view.tsx` (JSX), reaproveitados também por
+// `/r/[token]`. As checagens abaixo nunca testavam "em qual arquivo", só
+// "o Cockpit ainda faz/renderiza X" — `pageSource` passa a cobrir as três.
+const pageSource =
+  loadSource("src", "app", "clients", "[id]", "page.tsx") +
+  loadSource("src", "lib", "cockpit-view-data.ts") +
+  loadSource("src", "app", "clients", "cockpit-view.tsx");
 const evolutionSource = loadSource("src", "app", "clients", "cockpit-evolution-section.tsx");
 const mergeLibSource = loadSource("src", "lib", "cockpit-evolution-merge.ts");
 const metricCardsSource = loadSource("src", "app", "clients", "cockpit-ad-metric-cards.tsx");

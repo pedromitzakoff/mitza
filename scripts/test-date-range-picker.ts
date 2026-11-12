@@ -227,7 +227,20 @@ console.log("\n9 — checagens estruturais: draft/Cancelar/Aplicar/URL (sem runn
 
   ok("ReportPeriodControl aplica navegando pra URL (`router.push`), nunca outro mecanismo de estado", /router\.push\(/.test(controlSource));
   ok("ReportPeriodControl usa resolveAnalyticsPeriod pra resolver os presets — nunca uma segunda semântica de data", /resolveAnalyticsPeriod\(/.test(controlSource));
-  ok("página pública /r/[token] usa exatamente o mesmo ReportPeriodControl da página interna", /import \{ ReportPeriodControl \} from "@\/app\/clients\/\[id\]\/relatorio\/report-period-control"/.test(publicPageSource));
+  // Correção da divergência Dashboard interno × link compartilhado:
+  // `/r/[token]` deixou de abrir o Relatório de Performance (que usava
+  // ReportPeriodControl/presets de data) — agora abre o Cockpit, cujo
+  // único seletor de período é o mês (`MonthSelect`, MESMO componente da
+  // página interna, via `CockpitView`). `/clients/[id]/relatorio` (rota
+  // separada, intocada) continua usando ReportPeriodControl normalmente.
+  ok(
+    "página pública /r/[token] renderiza o Cockpit (CockpitView) — nunca mais ReportPeriodControl/ReportHeader/ReportBody",
+    /import \{ CockpitView \} from "@\/app\/clients\/cockpit-view"/.test(publicPageSource) && !/ReportPeriodControl|ReportHeader|ReportBody/.test(publicPageSource),
+  );
+  ok(
+    "a navegação de mês do Cockpit compartilhado é a MESMA de MonthSelect (via cockpit-view.tsx), nenhum seletor de período próprio desta rota",
+    /from "@\/lib\/cockpit-view-data"/.test(publicPageSource),
+  );
   ok("página interna /clients/[id]/relatorio usa o ReportPeriodControl local (mesmo componente, nunca duplicado)", /import \{ ReportPeriodControl \} from "\.\/report-period-control"/.test(internalPageSource));
 }
 

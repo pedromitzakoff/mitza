@@ -247,8 +247,8 @@ console.log("\n15 — Isolamento: Dados não importa os núcleos de CÁLCULO de 
     !loadSource("src", "app", "clients", "metas-data.ts").includes("dados-data") && !loadSource("src", "lib", "performance.ts").includes("data-trust"),
   );
   ok(
-    "[id]/page.tsx importa loadDadosPageData (MITZA ONE — Fase 1, seção 13: 'Dados vira alerta') — mesma função oficial de /clients/[id]/dados, nenhuma segunda leitura de import_sources/metric_mappings",
-    loadSource("src", "app", "clients", "[id]", "page.tsx").includes('import { loadDadosPageData } from "../dados-data"'),
+    "lib/cockpit-view-data.ts (núcleo do Cockpit, correção da divergência Dashboard × link compartilhado) importa loadDadosPageData (MITZA ONE — Fase 1, seção 13: 'Dados vira alerta') — mesma função oficial de /clients/[id]/dados, nenhuma segunda leitura de import_sources/metric_mappings",
+    loadSource("src", "lib", "cockpit-view-data.ts").includes('import { loadDadosPageData } from "@/app/clients/dados-data"'),
   );
 }
 

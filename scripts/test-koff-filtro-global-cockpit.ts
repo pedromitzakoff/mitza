@@ -340,7 +340,15 @@ console.log("\nG — buildMetricCardViewModels com filtro ativo: Alcance/Frequê
 // ---------------------------------------------------------------------------
 console.log("\nH — checagens estruturais (UI sem DOM neste ambiente)\n");
 {
-  const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
+  // Correção da divergência Dashboard interno × link compartilhado: o
+  // cálculo mora em `lib/cockpit-view-data.ts` e a JSX em
+  // `app/clients/cockpit-view.tsx` (ambos reaproveitados por `/r/[token]`)
+  // — `pageSource` cobre as três fontes, na mesma ordem relativa (loader
+  // antes da view), preservando as checagens de ORDEM abaixo.
+  const pageSource =
+    loadSource("src", "app", "clients", "[id]", "page.tsx") +
+    loadSource("src", "lib", "cockpit-view-data.ts") +
+    loadSource("src", "app", "clients", "cockpit-view.tsx");
 
   ok(
     "page.tsx filtra as 4 linhas granulares ANTES de montar buildCockpitAdPerformanceData — única passada, nunca um cálculo paralelo",

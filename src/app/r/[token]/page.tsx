@@ -1,24 +1,21 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { todayDateString } from "@/lib/today";
-import { resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
-import { buildPerformanceReportData, GENERAL_REPORT_VIEW } from "@/lib/performance-report/report-data";
-import { buildPerformanceReportDocument } from "@/lib/performance-report/report-document";
+import { todayUTC } from "@/lib/today";
 import { resolveClientIdFromShareToken, resolvePublicShareLinkBaseUrl } from "@/lib/report-share-links";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ReportPeriodControl } from "@/app/clients/[id]/relatorio/report-period-control";
-import { ReportBody } from "@/app/clients/[id]/relatorio/report-body";
-import { ReportHeader } from "@/app/clients/[id]/relatorio/report-header";
+import { buildCockpitViewModel } from "@/lib/cockpit-view-data";
+import { CockpitView } from "@/app/clients/cockpit-view";
+import { WorkspaceContainer } from "@/app/clients/workspace-container";
 import { formatReportPeriodLabel, resolveReportShareClientName, resolveReportShareDefaultPeriod } from "./report-share-metadata";
 
-const REPORT_SHARE_TITLE = "Relatório de Performance";
+const REPORT_SHARE_TITLE = "Dashboard de Performance";
 const REPORT_SHARE_DESCRIPTION_FALLBACK = "Acompanhe os resultados, investimento e principais indicadores da campanha.";
 
 /**
- * Etapa "OG Metadata do Relatório Público": título/descrição/Open
+ * Etapa "OG Metadata do Link Compartilhado": título/descrição/Open
  * Graph/Twitter Card do link enviado ao cliente — hoje o WhatsApp/Google
  * Chat mostravam a identidade genérica da plataforma (`app/layout.tsx`:
- * "Mitza"). NUNCA a pipeline pesada do relatório (`buildPerformanceReportData`),
+ * "Mitza"). NUNCA a pipeline pesada do Cockpit (`buildCockpitViewModel`),
  * só o nome do cliente (`resolveReportShareClientName`, mesma resolução de
  * sempre por token — nunca `clientId` cru, nunca métrica) + o período padrão
  * ("this_month", `resolveReportShareDefaultPeriod`). Token inválido/revogado/
@@ -69,65 +66,60 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
 }
 
 /**
- * Etapa "Link Externo V1" — Performance Report somente leitura, sem login,
- * para envio direto ao cliente (`/r/[token]`). O `client_id` NUNCA vem de
- * query param nem de qualquer entrada do visitante: a única fonte de
- * verdade é `resolveClientIdFromShareToken`, que resolve o token no
- * servidor contra `report_share_links` (token inexistente, revogado, OU
- * cliente já excluído → `null`, tratado aqui como 404 comum, sem distinguir
- * qual dos três casos aconteceu — comportamento neutro).
+ * Correção definitiva da divergência Dashboard interno × link compartilhado
+ * (pedido explícito do usuário): até esta correção, esta rota renderizava o
+ * Relatório de Performance — uma implementação visual inteiramente
+ * separada do Cockpit (`/clients/[id]`), nunca atualizada quando o Cockpit
+ * foi redesenhado. Agora renderiza o MESMO `<CockpitView>` da agência,
+ * alimentado por `buildCockpitViewModel(..., {viewer:{kind:"shared"}})` —
+ * nunca uma segunda implementação, nunca um cálculo próprio desta rota.
  *
- * Reaproveita 100% a Camada 1/2 já existente (`buildPerformanceReportData` →
- * `buildPerformanceReportDocument`, as MESMAS que alimentam
- * `/clients/[id]/relatorio` e o PDF) e o MESMO corpo visual (`ReportBody`) —
- * nenhum cálculo, query ou componente próprio desta rota. A única diferença
- * é o client Supabase: aqui é sempre `createAdminClient()` (sem sessão pra
- * amarrar RLS), seguro porque toda consulta dentro dessa camada já filtra
- * por `clientId` explícito (auditado antes de implementar esta rota) — o
- * `clientId` em si só chega até aqui depois de já resolvido pelo token.
+ * `client_id` NUNCA vem de query param nem de qualquer entrada do
+ * visitante: a única fonte de verdade continua sendo
+ * `resolveClientIdFromShareToken`, resolvida no servidor contra
+ * `report_share_links` (token inexistente, revogado, OU cliente já
+ * excluído → `null`, tratado aqui como 404 comum, sem distinguir qual dos
+ * três casos aconteceu — comportamento neutro, intocado por esta correção).
  *
- * Sem "Baixar PDF" (fora de escopo desta V1) e sem qualquer navegação
- * interna — a página raiz (`app/layout.tsx`) só embrulha em `AppShell`
- * quando há sessão, e um visitante deste link nunca tem uma.
+ * Segurança no servidor (nunca só esconder botão): `buildCockpitViewModel`
+ * com `viewer.kind === "shared"` nunca CALCULA os campos administrativos
+ * (edição de metas/orçamento, saldo da conta Meta, links pra rotas
+ * autenticadas como `/metas` ou `/edit`) — eles chegam `null`/`false` na
+ * origem, nunca apenas ocultos na view (ver `lib/cockpit-view-data.ts`).
+ * `createAdminClient()` continua sendo o ÚNICO client usado aqui (sem
+ * sessão pra amarrar RLS) — seguro porque toda consulta dentro da camada
+ * do Cockpit já filtra por `clientId` explícito, e esse `clientId` só
+ * chega até aqui depois de já resolvido pelo token.
+ *
+ * Sem navegação interna nenhuma — a página raiz (`app/layout.tsx`) só
+ * embrulha em `AppShell` quando há sessão, e um visitante deste link nunca
+ * tem uma.
  */
-export default async function PublicPerformanceReportPage({
+export default async function PublicClientDashboardPage({
   params,
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ analyticsPreset?: string; analyticsStart?: string; analyticsEnd?: string }>;
+  searchParams: Promise<{ month?: string; filtro?: string; modo?: string }>;
 }) {
   const { token } = await params;
   const clientId = await resolveClientIdFromShareToken(token);
   if (!clientId) notFound();
 
-  const { analyticsPreset: presetParam, analyticsStart: startParam, analyticsEnd: endParam } = await searchParams;
+  const { month: monthQueryParam, filtro: filterTextParam, modo: filterModeParam } = await searchParams;
 
   const supabase = createAdminClient();
-  const today = todayDateString();
-  const activePreset = (presetParam ?? "this_month") as AnalyticsPeriodPreset;
-  const period = resolveAnalyticsPeriod(presetParam, today, { start: startParam, end: endParam });
-
-  const data = await buildPerformanceReportData(supabase, clientId, period);
-  const document = buildPerformanceReportDocument(data);
+  const model = await buildCockpitViewModel(supabase, clientId, {
+    monthQueryParam,
+    filterTextParam,
+    filterModeParam,
+    viewer: { kind: "shared" },
+    basePath: `/r/${token}`,
+  });
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 sm:py-6">
-      <ReportHeader
-        clientName={document.clientName}
-        periodControl={
-          <ReportPeriodControl
-            basePath={`/r/${token}`}
-            activePreset={activePreset}
-            customStart={period.start}
-            customEnd={period.end}
-            today={today}
-            view={GENERAL_REPORT_VIEW}
-          />
-        }
-      />
-
-      <ReportBody document={document} />
-    </div>
+    <WorkspaceContainer>
+      <CockpitView model={model} today={todayUTC()} />
+    </WorkspaceContainer>
   );
 }

@@ -104,7 +104,7 @@ console.log(
   const goalCardSource = loadSource("src", "app", "clients", "cockpit-goal-card.tsx");
   const inlineEditorSource = loadSource("src", "app", "clients", "cockpit-inline-goal-editor.tsx");
   const editorSource = loadSource("src", "app", "clients", "channel-plan-editor.tsx");
-  const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
+  const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx") + loadSource("src", "lib", "cockpit-view-data.ts");
 
   ok(
     "o antigo drawer lateral (ChannelPlanEditor com trigger/gatilho) NUNCA MAIS é usado no Cockpit — os arquivos que abriam esse drawer atrás de um lápis (cockpit-goal-edit-trigger.tsx, cockpit-secondary-goal-editor.tsx) foram removidos",
@@ -206,7 +206,7 @@ console.log(
 );
 {
   const clientPlanSource = loadSource("src", "lib", "client-plan.ts");
-  const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
+  const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx") + loadSource("src", "lib", "cockpit-view-data.ts");
 
   ok(
     "client-plan.ts expõe resolveGoalSourceMonth/resolveSourceMonthByChannel e ClientGoalPlan.inheritedFromMonth — infraestrutura ADITIVA (campo opcional), nunca muda o que resolveClientMonthlyPlan/resolveClientMonthlyGoals já retornavam",
@@ -234,7 +234,7 @@ console.log("\nD — Alerta de planejamento pendente (seção 4 do pedido): DELI
 {
   const cardsSource = loadSource("src", "app", "clients", "cockpit-meta-ritmo-section.tsx");
   const goalCardSource = loadSource("src", "app", "clients", "cockpit-goal-card.tsx");
-  const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
+  const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx") + loadSource("src", "lib", "cockpit-view-data.ts");
 
   ok(
     "nenhum banner/alerta novo de 'Planejamento pendente' foi adicionado ao Cockpit — a distinção 'não configurado vs. configurado com zero' que ele dependeria não existe ainda",
@@ -248,7 +248,7 @@ console.log("\nD — Alerta de planejamento pendente (seção 4 do pedido): DELI
 
 console.log("\nE — Preservações obrigatórias (seção 7 do pedido): autenticação, integrações, pipelines, cálculos oficiais, rotas legadas, sidebar, histórico, demandas intocados\n");
 {
-  const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
+  const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx") + loadSource("src", "lib", "cockpit-view-data.ts");
 
   ok("requireAdmin/getCurrentProfile continuam as únicas fontes de permissão — nenhuma segunda checagem de auth inventada por esta etapa", pageSource.includes("getCurrentProfile()"));
   ok("sidebar.tsx não foi tocado por esta etapa", !loadSource("src", "app", "sidebar.tsx").includes("Refinamento do Cockpit"));

@@ -26,7 +26,9 @@ export interface ChannelBreakdownRowView {
   actualSpend: number;
   performanceSummary: PerformanceSummary | null;
   targetCostPerResult: number | null;
-  configureObjectiveHref: string;
+  /** `null` no modo compartilhado — "Configurar objetivo" aponta pra
+   * `/clients/[id]/edit`, rota autenticada (ver `cockpit-view-data.ts`). */
+  configureObjectiveHref: string | null;
   dataIssue?: DashboardChannelDataIssue | null;
 }
 
@@ -69,9 +71,13 @@ export function CockpitChannelBreakdown({ rows }: { rows: ChannelBreakdownRowVie
               ) : (
                 <div className="ml-auto flex items-center gap-2 text-overview-text-secondary">
                   <span className="tabular-nums">{formatCurrency(row.actualSpend)} invest.</span>
-                  <Link href={row.configureObjectiveHref} className="font-medium text-brand hover:underline">
-                    Configurar objetivo
-                  </Link>
+                  {row.configureObjectiveHref ? (
+                    <Link href={row.configureObjectiveHref} className="font-medium text-brand hover:underline">
+                      Configurar objetivo
+                    </Link>
+                  ) : (
+                    <span className="text-overview-text-muted">Objetivo não configurado</span>
+                  )}
                 </div>
               )}
             </div>

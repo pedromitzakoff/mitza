@@ -157,7 +157,10 @@ console.log("\nD — decisão 3: nunca bloqueia a tela (after(), nunca aguardado
 console.log("\nE — wiring: as duas páginas que mostram Anúncios agendam o refresh\n");
 {
   const explorationPageData = loadSource("src", "lib", "cockpit-exploration-page-data.ts");
-  const cockpitPage = loadSource("src", "app", "clients", "[id]", "page.tsx");
+  // Correção da divergência Dashboard interno × link compartilhado: o
+  // agendamento mora agora em `lib/cockpit-view-data.ts` (núcleo único do
+  // Cockpit, reaproveitado por `/clients/[id]` e `/r/[token]`).
+  const cockpitPage = loadSource("src", "lib", "cockpit-view-data.ts");
 
   ok(
     "Campanhas/Anúncios (/clients/[id]/campanhas e /anuncios, camada compartilhada) agenda o refresh",

@@ -34,7 +34,6 @@ export function ReportHeader({
   backHref,
   pdfHref,
   periodControl,
-  copyLinkControl,
   clearsMobileMenuButton = false,
   title = "Relatório de Performance",
   subtitle,
@@ -48,12 +47,6 @@ export function ReportHeader({
    * gera PDF). */
   pdfHref?: string;
   periodControl: React.ReactNode;
-  /** Etapa "Copiar link do cliente no Relatório": ação secundária
-   * (`CopyReportLinkButton`), presente só na página interna — mesma razão
-   * de `pdfHref`, o link público (`/r/[token]`) nunca precisa copiar a si
-   * mesmo. Ordem fixa no header: Período → Copiar link do cliente → Baixar
-   * PDF. */
-  copyLinkControl?: React.ReactNode;
   /** `true` só na página interna (dentro do `AppShell`) — afasta o
    * cabeçalho do botão hambúrguer flutuante da Sidebar em mobile (ver nota
    * acima). `/r/[token]` nunca é renderizada dentro do `AppShell`, então
@@ -88,7 +81,6 @@ export function ReportHeader({
             (`flex-wrap` do container acima) em vez de competir espaço com o
             período, que já ocupa a largura toda na primeira linha. */}
         <div className="flex flex-wrap items-center gap-2 sm:ml-auto sm:gap-2.5">
-          {copyLinkControl}
           {pdfHref && (
             <a
               href={pdfHref}

@@ -5,14 +5,12 @@ import { todayDateString } from "@/lib/today";
 import { resolveAnalyticsPeriod, type AnalyticsPeriodPreset } from "@/lib/analytics";
 import { buildPerformanceReportData } from "@/lib/performance-report/report-data";
 import { buildPerformanceReportDocument } from "@/lib/performance-report/report-document";
-import { getReportShareLinkStatus } from "@/lib/report-share-links";
 import { fetchClientFunnels, listCampaignsForFunnelClassification } from "@/lib/client-funnels-data";
 import { FunnelsSection } from "../../funnels-section";
 import { ReportPeriodControl } from "./report-period-control";
 import { buildReportPdfHref } from "./report-period-nav";
 import { ReportBody } from "./report-body";
 import { ReportHeader } from "./report-header";
-import { CopyReportLinkButton } from "./copy-report-link-button";
 import { ReportFunnelSelector } from "./report-funnel-selector";
 import { WORKSPACE_CONTENT_MAX_WIDTH_CLASS } from "../../workspace-container";
 
@@ -81,13 +79,6 @@ export default async function ClientPerformanceReportPage({
 
   const pdfHref = buildReportPdfHref(client.id, activePreset, { start: period.start, end: period.end });
 
-  // Etapa "Copiar link do cliente no Relatório": mesma infra do link
-  // público de sempre (`lib/report-share-links.ts`) — nenhuma segunda fonte
-  // de status; `getReportShareLinkStatus` não é admin-only em si (só
-  // geração/revogação são), então qualquer gestor com acesso a este
-  // relatório também vê/copia um link já ativo.
-  const reportShareLinkStatus = await getReportShareLinkStatus(id);
-
   const basePath = `/clients/${client.id}/relatorio`;
   const returnTo = basePath;
 
@@ -111,8 +102,11 @@ export default async function ClientPerformanceReportPage({
           (paleta fixa creme/areia/grafite/branco/verde-limão) — preservada
           tal como no HTML/PDF, só sem os elementos exclusivos de documento
           (hero/marca/nav sticky/impressão): dentro da aplicação, o cabeçalho
-          abaixo já cumpre esse papel. Corpo compartilhado com `/r/[token]`
-          (Etapa "Link Externo V1") via `ReportBody`, nunca duplicado. */}
+          abaixo já cumpre esse papel. Correção da divergência Dashboard ×
+          link compartilhado: `/r/[token]` passou a abrir o Cockpit (não mais
+          este Relatório) — "Copiar link do cliente" saiu daqui e vive agora
+          só no painel "Compartilhamento" do cabeçalho do cliente
+          (`account-info-drawer.tsx`), onde o Cockpit também aparece. */}
       <ReportHeader
         clientName={client.name}
         backHref={`/clients/${client.id}`}
@@ -123,7 +117,6 @@ export default async function ClientPerformanceReportPage({
         periodControl={
           <ReportPeriodControl basePath={basePath} activePreset={activePreset} customStart={period.start} customEnd={period.end} today={today} view={view} />
         }
-        copyLinkControl={<CopyReportLinkButton clientId={client.id} initialUrl={reportShareLinkStatus.url} />}
       />
 
       <ReportBody

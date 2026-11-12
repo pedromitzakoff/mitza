@@ -53,7 +53,15 @@ function fileExists(...segments: string[]): boolean {
   return existsSync(join(__dirname, "..", ...segments));
 }
 
-const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
+// Correção da divergência Dashboard interno × link compartilhado: o cálculo
+// que vivia inteiro em `[id]/page.tsx` foi extraído pra
+// `lib/cockpit-view-data.ts` (núcleo único, reaproveitado também por
+// `/r/[token]/page.tsx`) — `page.tsx` virou um wrapper fino (auth +
+// `<CockpitView>`). As checagens estruturais abaixo continuam válidas
+// (nunca testavam "em qual arquivo" o código mora, só "o Cockpit ainda faz
+// X"), então `pageSource` passa a cobrir as DUAS fontes.
+const pageSource =
+  loadSource("src", "app", "clients", "[id]", "page.tsx") + loadSource("src", "lib", "cockpit-view-data.ts");
 const metaRitmoSource = loadSource("src", "app", "clients", "cockpit-meta-ritmo-section.tsx");
 // MITZA ONE — Refinamento do Cockpit (redesenho de edição): RESULTADO/CUSTO
 // moraram pra cockpit-goal-card.tsx ("use client", `isEditing` próprio) —
@@ -259,7 +267,7 @@ console.log("\nD — Performance (essencial + completa)\n");
   // tudo DENTRO desta mesma tela, nenhum link pra fora. `cockpit-performance-section.tsx`
   // (o componente antigo) foi removido; `cockpit-ad-performance-section.tsx`
   // é o novo.
-  ok("Performance Meta Ads reaproveita buildPerformanceReportData (Camada 1 oficial do Relatório) — nenhuma segunda agregação de campanha/conjunto/criativo", pageSource.includes("buildPerformanceReportData(supabase, id,"));
+  ok("Performance Meta Ads reaproveita buildPerformanceReportData (Camada 1 oficial do Relatório) — nenhuma segunda agregação de campanha/conjunto/criativo", pageSource.includes("buildPerformanceReportData(supabase, clientId,"));
   // Etapa posterior "KOFF Analytics — Refinamento de UX e filtros globais
   // do Cockpit" (filtro global) passou essas MESMAS linhas por uma função
   // pura de filtro (`filterCampaignDailyRows` etc., `lib/cockpit-global-filter.ts`)
@@ -323,7 +331,7 @@ console.log("\nG — Regressão (rotas antigas continuam intactas; sem redirects
   // ESTA fase (Fase 1) ter continuado intocados até então; a cobertura
   // dessa mudança passou a viver em test-mitza-one-fase2-sidebar.ts, não
   // duplicada/corrigida aqui pra não reescrever a história desta suite.
-  ok("nenhum redirect novo em [id]/page.tsx", !/redirect\(/.test(pageSource));
+  ok("nenhum redirect novo na composição do Cockpit (page.tsx + cockpit-view-data.ts)", !/redirect\(/.test(pageSource));
   ok("ensureClosedSprintSnapshots continua chamado com primaryBudgetChanges (congelamento nunca depende de qual objetivo o cockpit está destacando)", /ensureClosedSprintSnapshots\(supabase, \{[\s\S]{0,200}primaryBudgetChanges/.test(pageSource));
 }
 

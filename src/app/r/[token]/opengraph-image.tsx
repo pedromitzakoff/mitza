@@ -1,12 +1,12 @@
 import { ImageResponse } from "next/og";
 import { formatReportPeriodLabel, resolveReportShareClientName, resolveReportShareDefaultPeriod } from "./report-share-metadata";
 
-export const alt = "Relatório de Performance";
+export const alt = "Dashboard de Performance";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 /**
- * Etapa "OG Metadata do Relatório Público": imagem pro preview de
+ * Etapa "OG Metadata do Link Compartilhado": imagem pro preview de
  * compartilhamento do link (`/r/[token]`) — antes o WhatsApp/Google Chat
  * caíam no ícone genérico da plataforma (sem `opengraph-image` nenhum
  * existia em lugar algum da app). Paleta exata pedida pra esta peça
@@ -49,7 +49,7 @@ export default async function Image({ params }: { params: Promise<{ token: strin
       >
         <div style={{ display: "flex", flexDirection: "column", gap: "22px" }}>
           <div style={{ display: "flex", fontSize: 66, fontWeight: 700, lineHeight: 1.15, color: GRAPHITE, maxWidth: "920px" }}>
-            Relatório de Performance
+            Dashboard de Performance
           </div>
           {clientName ? (
             <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
@@ -62,7 +62,7 @@ export default async function Image({ params }: { params: Promise<{ token: strin
 
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
           <div style={{ display: "flex", width: 56, height: 4, backgroundColor: LIME }} />
-          <div style={{ display: "flex", fontSize: 20, letterSpacing: "2px", color: MUTED }}>Relatório confidencial</div>
+          <div style={{ display: "flex", fontSize: 20, letterSpacing: "2px", color: MUTED }}>Dashboard confidencial</div>
         </div>
       </div>
     ),

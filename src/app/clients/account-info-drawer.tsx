@@ -184,7 +184,7 @@ export function AccountInfoDrawer({
               {isAdmin && (
                 <Section title="Compartilhamento">
                   <p className="text-[11px] text-overview-text-muted">
-                    Link do cliente — acesso somente leitura ao Relatório de Performance, sem login.
+                    Link do cliente — acesso somente leitura ao Dashboard deste cliente, sem login.
                   </p>
                   <ReportShareLinkPanel
                     clientId={clientId}

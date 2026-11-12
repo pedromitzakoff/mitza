@@ -45,7 +45,16 @@ console.log("\n1 — Rota/link público/PDF intactos — nada renomeado, nenhum 
   ok("nenhuma rota /clients/[id]/performance foi criada nesta fase", !existsSync(join(__dirname, "..", "src", "app", "clients", "[id]", "performance")));
   ok("/relatorio não faz nenhum redirect novo", !/redirect\(/.test(pageSource));
   ok("PDF (buildReportPdfHref) continua chamado exatamente como antes", pageSource.includes("buildReportPdfHref(client.id, activePreset"));
-  ok("/r/[token] continua reaproveitando ReportHeader/ReportBody (mesma Camada 1/2, nenhum componente próprio)", publicPageSource.includes("<ReportHeader") && publicPageSource.includes("<ReportBody"));
+  // Correção da divergência Dashboard interno × link compartilhado
+  // (rodada posterior a esta fase): `/r/[token]` deixou de abrir o
+  // Relatório de Performance — passou a abrir o Cockpit (`CockpitView`),
+  // pra nunca mais divergir visualmente da versão interna da agência.
+  // `/clients/[id]/relatorio` (esta rota, testada no resto deste arquivo)
+  // nunca foi tocada por essa correção.
+  ok(
+    "/r/[token] agora reaproveita o Cockpit (CockpitView via lib/cockpit-view-data.ts), nunca mais ReportHeader/ReportBody",
+    publicPageSource.includes('import { CockpitView } from "@/app/clients/cockpit-view"') && !/ReportHeader|ReportBody/.test(publicPageSource),
+  );
 }
 
 console.log("\n2 — ReportHeader: título/subtítulo novos são opt-in — link público nunca passa as props novas, texto de sempre preservado\n");
@@ -53,7 +62,8 @@ console.log("\n2 — ReportHeader: título/subtítulo novos são opt-in — link
   ok("título tem default = texto de sempre ('Relatório de Performance')", /title = "Relatório de Performance"/.test(headerSource));
   ok("subtitle é opcional, sem default visível (undefined = nada renderizado)", /subtitle\?: string/.test(headerSource));
   ok("subtitle só renderiza quando existe ({subtitle && ...})", /\{subtitle && /.test(headerSource));
-  ok("link público (/r/[token]) NUNCA passa title/subtitle — herda o texto de sempre intocado", !publicPageSource.includes("title=") && !publicPageSource.includes("subtitle="));
+  // /r/[token] não usa mais ReportHeader (ver seção 1) — a asserção de
+  // title/subtitle opt-in se aplica só à página interna agora.
   ok("página interna passa title='Performance' + subtitle", pageSource.includes('title="Performance"') && pageSource.includes("subtitle="));
 }
 
@@ -61,7 +71,7 @@ console.log("\n3 — ReportBody/ReportFilterableTables: 'sectioned' é opt-in, d
 {
   ok("ReportBody aceita 'sectioned' com default false", /sectioned = false/.test(bodySource));
   ok("ReportBody repassa 'sectioned' pra ReportFilterableTables, nunca um segundo estado", /<ReportFilterableTables document=\{document\} sectioned=\{sectioned\}/.test(bodySource));
-  ok("link público (/r/[token]) chama <ReportBody document={document} /> sem 'sectioned' — herda o default (tabelas empilhadas, comportamento de sempre)", /<ReportBody document=\{document\} \/>/.test(publicPageSource));
+  // /r/[token] não chama mais ReportBody (ver seção 1).
   ok("página interna passa sectioned (ativa as abas)", /<ReportBody[\s\S]{0,80}sectioned\b/.test(pageSource));
 }
 

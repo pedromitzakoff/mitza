@@ -32,7 +32,12 @@ function loadSource(...segments: string[]): string {
   return readFileSync(join(__dirname, "..", ...segments), "utf8");
 }
 
-const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
+// Correção da divergência Dashboard interno × link compartilhado: este
+// Promise.all e tudo ao redor dele moraram pra `lib/cockpit-view-data.ts`
+// (núcleo único do Cockpit, reaproveitado por `/r/[token]`) — o parâmetro
+// que era `id` virou `clientId` (mais claro numa função que não é mais um
+// componente de página), daí os literais abaixo usarem `clientId`.
+const pageSource = loadSource("src", "lib", "cockpit-view-data.ts");
 const layoutSource = loadSource("src", "app", "layout.tsx");
 
 // ---------------------------------------------------------------------------
@@ -40,11 +45,11 @@ console.log("\nA — Item 1 (Cockpit): as 5 operações independentes entraram n
 {
   ok(
     "loadClientOperationalStates entra no array do Promise.all principal (antes rodava sozinha, sequencial, ANTES do batch, sem nenhuma dependência real)",
-    /\[\s*clientOperationalState\s*\]\s*,\s*\n\s*performanceReportData,/.test(pageSource) && pageSource.includes("loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, id),"),
+    /\[\s*clientOperationalState\s*\]\s*,\s*\n\s*performanceReportData,/.test(pageSource) && pageSource.includes("loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, clientId),"),
   );
   ok(
     "buildPerformanceReportData entra no mesmo Promise.all (era a chamada mais isolada — só precisa de id/firstDay/lastDay, nenhuma dependência do resto do batch)",
-    pageSource.includes("buildPerformanceReportData(supabase, id, { start: firstDay, end: lastDay }),") && !pageSource.includes("await buildPerformanceReportData("),
+    pageSource.includes("buildPerformanceReportData(supabase, clientId, { start: firstDay, end: lastDay }),") && !pageSource.includes("await buildPerformanceReportData("),
   );
   // Nota (Etapas 1.3/1.5/1.6 da reestruturação KOFF Analytics):
   // fetchClientTimelinePage/historyRows (Seção 6 "Histórico"),
@@ -76,8 +81,8 @@ console.log("\nB — Item 1: dependências reais preservadas — ensureClosedSpr
 
 console.log("\nC — Item 1: nenhuma query/parâmetro/resultado mudou — só a ORDEM de execução (reaproveitamento 100%, nenhuma segunda fonte)\n");
 {
-  ok("loadDadosPageData continua com os MESMOS argumentos de sempre (supabase, id, isAdmin)", pageSource.includes("loadDadosPageData(supabase, id, isAdmin),"));
-  ok("getDailyPerformanceRowsForPeriod continua com os MESMOS argumentos de sempre", pageSource.includes("getDailyPerformanceRowsForPeriod(supabase, id, { firstDay, lastDay }),"));
+  ok("loadDadosPageData continua com os MESMOS argumentos de sempre (supabase, id, isAdmin)", pageSource.includes("loadDadosPageData(supabase, clientId, isAdmin),"));
+  ok("getDailyPerformanceRowsForPeriod continua com os MESMOS argumentos de sempre", pageSource.includes("getDailyPerformanceRowsForPeriod(supabase, clientId, { firstDay, lastDay }),"));
   ok(
     "o Promise.all principal ainda é UM só (nenhum segundo Promise.all concorrente fora de ordem) — todas as 15 posições vêm do MESMO array/await",
     (pageSource.match(/\] = await Promise\.all\(\[/g) ?? []).length === 1,

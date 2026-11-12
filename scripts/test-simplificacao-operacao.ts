@@ -35,7 +35,15 @@ function fileExists(...segments: string[]): boolean {
 }
 
 const sidebarSource = loadSource("src", "app", "sidebar.tsx");
-const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
+// Correção da divergência Dashboard interno × link compartilhado: cálculo
+// em `lib/cockpit-view-data.ts`, JSX em `app/clients/cockpit-view.tsx`
+// (ambos reaproveitados por `/r/[token]`) — `pageSource` cobre as três
+// fontes, na mesma ordem relativa (loader antes da view), preservando as
+// checagens de ORDEM de renderização abaixo.
+const pageSource =
+  loadSource("src", "app", "clients", "[id]", "page.tsx") +
+  loadSource("src", "lib", "cockpit-view-data.ts") +
+  loadSource("src", "app", "clients", "cockpit-view.tsx");
 
 // ---------------------------------------------------------------------------
 console.log("\nA — Sidebar (seção 1 do pedido): Operação removida da área Agência (histórico — Demandas, preservada aqui na época, e o próprio grupo 'Agência' saíram depois, nas Etapas 1.6/1.3 da reestruturação KOFF Analytics)\n");

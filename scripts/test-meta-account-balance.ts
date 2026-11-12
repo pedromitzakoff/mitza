@@ -104,14 +104,26 @@ ok("formatCurrency (uso geral da MITZA) continua sempre BRL, intocado", formatCu
 console.log("\n6 — Checagem estrutural do indicador no cabeçalho (cockpit-ad-account-balance.tsx)\n");
 
 const balanceComponentSource = loadSource("src", "app", "clients", "cockpit-ad-account-balance.tsx");
-const pageSource = loadSource("src", "app", "clients", "[id]", "page.tsx");
+// Correção da divergência Dashboard interno × link compartilhado: cálculo
+// em `lib/cockpit-view-data.ts`, JSX em `app/clients/cockpit-view.tsx`
+// (ambos reaproveitados por `/r/[token]`, que NUNCA busca o saldo — decisão
+// explícita do usuário, ver `viewer.kind === "agency"` abaixo).
+const pageSource =
+  loadSource("src", "app", "clients", "[id]", "page.tsx") +
+  loadSource("src", "lib", "cockpit-view-data.ts") +
+  loadSource("src", "app", "clients", "cockpit-view.tsx");
 const dashboardDataSource = loadSource("src", "lib", "meta-ads-dashboard", "dashboard-data.ts");
 
 ok("status !== 'ok' retorna null — nenhum indicador de erro no cabeçalho (silencioso, mesmo critério do antigo link 'Saldo')", balanceComponentSource.includes('if (snapshot.status !== "ok") return null;'));
 ok("conta pós-paga mostra o rótulo 'Pós-pago', nunca um número", balanceComponentSource.includes("Pós-pago") && balanceComponentSource.includes("!snapshot.isPrepay"));
 ok("conta pré-paga usa formatCurrencyInCurrency (moeda da própria conta), nunca formatCurrency (sempre BRL)", balanceComponentSource.includes("formatCurrencyInCurrency(snapshot.balance, snapshot.currency)"));
 ok("page.tsx renderiza o indicador no cabeçalho, ao lado do DataFreshnessTimer (pedido: 'no topo da tela')", /<CockpitAdAccountBalance[\s\S]{0,120}<DataFreshnessTimer/.test(pageSource));
-ok("saldo buscado em paralelo com o alcance de período — nenhuma chamada sequencial desnecessária", pageSource.includes("fetchAccountBalanceSnapshot(metaAdAccountId)") && /Promise\.all\(\[[\s\S]{0,120}fetchAccountBalanceSnapshot/.test(pageSource));
+ok(
+  "saldo buscado em paralelo com o alcance de período — nenhuma chamada sequencial desnecessária (só pro visitante da agência — 'shared' nunca busca, ver saldo não é informação de cliente)",
+  pageSource.includes("fetchAccountBalanceSnapshot(metaAdAccountId)") &&
+    /Promise\.all\(\[[\s\S]{0,300}fetchAccountBalanceSnapshot/.test(pageSource) &&
+    /viewer\.kind === "agency" \? fetchAccountBalanceSnapshot/.test(pageSource),
+);
 ok(
   "fetchAccountBalanceSnapshot trata balance null (display_string não interpretável) como indisponível — nunca 'R$ null'",
   dashboardDataSource.includes('if (row.balance === null) return { status: "unavailable", reason: "fetch_error" };'),

@@ -50,7 +50,10 @@ console.log('\n3 — auditoria estrutural: generateMetadata nunca usa a pipeline
   ok("generateMetadata resolve o nome via resolveReportShareClientName (nunca expõe clientId)", /resolveReportShareClientName\(token\)/.test(metadataSource));
   ok("generateMetadata nunca declara variável/campo clientId", !/\bclientId\b/.test(metadataSource));
   ok("generateMetadata usa resolvePublicShareLinkBaseUrl (mesma resolução de domínio de produção do painel admin)", /resolvePublicShareLinkBaseUrl\(\)/.test(metadataSource));
-  ok("título fixo 'Relatório de Performance', sem marca da agência (white label)", /REPORT_SHARE_TITLE = "Relatório de Performance"/.test(pageSource));
+  // Correção da divergência Dashboard interno × link compartilhado: o
+  // link agora abre o Cockpit, não mais o Relatório — título atualizado
+  // de propósito, continua sem marca da agência (white label intocado).
+  ok("título fixo 'Dashboard de Performance', sem marca da agência (white label)", /REPORT_SHARE_TITLE = "Dashboard de Performance"/.test(pageSource));
   ok("openGraph nunca declara siteName (nenhum nome neutro pra colocar sem reintroduzir uma marca)", !/siteName/.test(metadataSource));
   ok("robots: noindex/nofollow (link privado do cliente nunca deve ser indexado)", /robots:\s*\{\s*index:\s*false,\s*follow:\s*false\s*\}/.test(metadataSource));
   ok("openGraph e twitter declarados", /openGraph:/.test(metadataSource) && /twitter:/.test(metadataSource));
