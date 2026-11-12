@@ -1,6 +1,7 @@
 import type { PerformanceGoal } from "./performance-goals";
 import type { ChartMetricUnit, ChartSeriesPoint } from "./meta-ads-dashboard/evolution-data";
 import type { CockpitDailyEvolutionPoint } from "./cockpit-daily-evolution";
+import { computeCostPerResult } from "./performance";
 
 /**
  * KOFF Analytics — Redesign definitivo do Cockpit: "Evolução da performance"
@@ -25,6 +26,19 @@ export interface EvolutionSeriesOption {
   label: string;
   unit: ChartMetricUnit;
   current: ChartSeriesPoint[];
+  /** Período anterior equivalente, alinhável por índice/posição (nunca por
+   * data civil) — `undefined` quando a série não tem um período anterior
+   * calculado (hoje: só as séries de métricas Meta Ads, `evolution-data.ts`,
+   * têm; as séries por OBJETIVO, abaixo, nunca tiveram essa segunda busca,
+   * então ficam sem comparação — nunca um cálculo novo/aproximado aqui). */
+  previous?: ChartSeriesPoint[];
+  /** Valor agregado do período inteiro (nunca a média dos pontos diários —
+   * ver `sumDailyAdditiveTotals`/`evolution-data.ts`) — alimenta o
+   * cabeçalho acima do gráfico. `null` sem nenhum dia com dado. */
+  total: number | null;
+  /** Mesmo agregado do período anterior — `undefined` junto com `previous`
+   * (mesma razão: sem período anterior calculado pra séries por objetivo). */
+  previousTotal?: number | null;
 }
 
 interface GoalDailySeriesInput {
@@ -65,27 +79,50 @@ export function resolveDefaultEvolutionSeriesId(series: EvolutionSeriesOption[],
   return series[0]?.id ?? "";
 }
 
+/** Soma spend/resultCount só dos dias com `state === "result"` (zero
+ * confirmado entra; `no_data`/`future` nunca entram) — mesma disciplina de
+ * `sumDailyAdditiveTotals` (`evolution-data.ts`), aqui pros pontos por
+ * OBJETIVO. O custo do período sai de `computeCostPerResult` sobre os
+ * totais somados, nunca da média dos `costPerResult` diários já
+ * calculados. */
+function sumGoalPoints(points: CockpitDailyEvolutionPoint[]): { spend: number | null; resultCount: number; hasAnyRecord: boolean } {
+  let spend: number | null = null;
+  let resultCount = 0;
+  let hasAnyRecord = false;
+  for (const point of points) {
+    if (point.state !== "result") continue;
+    hasAnyRecord = true;
+    resultCount += point.resultCount ?? 0;
+    if (point.spend !== null) spend = (spend ?? 0) + point.spend;
+  }
+  return { spend, resultCount, hasAnyRecord };
+}
+
 export function buildGoalEvolutionSeries(dailySeries: GoalDailySeriesInput[]): EvolutionSeriesOption[] {
   const options: EvolutionSeriesOption[] = [];
   for (const series of dailySeries) {
     const suffix = series.channelsLabel ? ` · ${series.channelsLabel}` : "";
+    const { spend, resultCount, hasAnyRecord } = sumGoalPoints(series.points);
     options.push({
       id: `goal:${series.resultType}:result`,
       label: `${series.resultLabel}${suffix}`,
       unit: "count",
       current: pointsToSeries(series.points, (p) => p.resultCount),
+      total: hasAnyRecord ? resultCount : null,
     });
     options.push({
       id: `goal:${series.resultType}:cost`,
       label: `${series.costLabel}${suffix}`,
       unit: "currency",
       current: pointsToSeries(series.points, (p) => p.costPerResult),
+      total: computeCostPerResult(spend, resultCount, hasAnyRecord),
     });
     options.push({
       id: `goal:${series.resultType}:investment`,
       label: `Investimento${suffix}`,
       unit: "currency",
       current: pointsToSeries(series.points, (p) => p.spend),
+      total: spend,
     });
   }
   return options;

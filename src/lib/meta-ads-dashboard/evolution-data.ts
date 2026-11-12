@@ -182,6 +182,40 @@ export function buildMetricSeries(id: ChartMetricId, days: DailyAdditiveTotals[]
   return days.map((day) => ({ date: day.date, value: computeDailyMetricValue(id, day) }));
 }
 
+/** Soma os totais aditivos de TODOS os dias do período num único "dia"
+ * agregado — nunca uma segunda fórmula: o resultado alimenta
+ * `computeDailyMetricValue` exatamente como um dia normal alimentaria,
+ * então uma métrica de custo (CPL/CPA/CPC/CPM) sai como
+ * soma(numerador)/soma(denominador) do período inteiro, nunca a média das
+ * razões diárias já calculadas (Etapa "Gráficos de Evolução, refinamento
+ * visual", pedido explícito do usuário: "nunca pela média simples de
+ * valores diários"). `hasAnyRecord` true se QUALQUER dia do período tiver
+ * dado — igual a um dia individual, "sem dado nenhum" só quando TODOS os
+ * dias estão vazios. */
+export function sumDailyAdditiveTotals(days: DailyAdditiveTotals[]): DailyAdditiveTotals {
+  const totals: DailyAdditiveTotals = {
+    date: "",
+    hasAnyRecord: false,
+    spend: 0,
+    impressions: 0,
+    clicks: 0,
+    linkClicks: null,
+    resultCount: 0,
+    revenue: null,
+  };
+  for (const day of days) {
+    if (!day.hasAnyRecord) continue;
+    totals.hasAnyRecord = true;
+    totals.spend += day.spend;
+    totals.impressions += day.impressions;
+    totals.clicks += day.clicks;
+    if (day.linkClicks !== null) totals.linkClicks = (totals.linkClicks ?? 0) + day.linkClicks;
+    totals.resultCount += day.resultCount;
+    if (day.revenue !== null) totals.revenue = (totals.revenue ?? 0) + day.revenue;
+  }
+  return totals;
+}
+
 export interface ChartMetricSeries extends ChartMetricDef {
   current: ChartSeriesPoint[];
   /** Mesma quantidade de pontos de `current` (`previousEquivalentPeriod`
@@ -189,6 +223,13 @@ export interface ChartMetricSeries extends ChartMetricDef {
    * período atual com dia 1 do período anterior), nunca por data civil
    * (datas diferentes entre os dois períodos). */
   previous: ChartSeriesPoint[];
+  /** Valor agregado do período inteiro (nunca a média dos pontos diários de
+   * `current` — ver `sumDailyAdditiveTotals`) — alimenta o cabeçalho acima
+   * do gráfico ("valor total do período"). `null` sem nenhum dia com dado. */
+  total: number | null;
+  /** Mesmo agregado, mas do período anterior equivalente — alimenta a
+   * variação % no cabeçalho. `null` sem nenhum dia com dado nesse período. */
+  previousTotal: number | null;
 }
 
 /**
@@ -213,5 +254,7 @@ export function buildEvolutionSeries(
     ...def,
     current: buildMetricSeries(def.id, currentDays),
     previous: buildMetricSeries(def.id, previousDays),
+    total: computeDailyMetricValue(def.id, sumDailyAdditiveTotals(currentDays)),
+    previousTotal: computeDailyMetricValue(def.id, sumDailyAdditiveTotals(previousDays)),
   }));
 }

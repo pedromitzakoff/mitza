@@ -270,9 +270,9 @@ console.log("\nE — resolveFilteredExecutiveCardOverride: Resultado/Custo recal
 console.log("\nF — resolveDefaultEvolutionSeriesId: defaults resilientes (nunca um id fixo que pode não existir pro cliente/escopo)\n");
 {
   const series: EvolutionSeriesOption[] = [
-    { id: "goal:leads:result", label: "Leads", unit: "count", current: [] },
-    { id: "results", label: "Resultados", unit: "count", current: [] },
-    { id: "investment", label: "Investimento", unit: "currency", current: [] },
+    { id: "goal:leads:result", label: "Leads", unit: "count", current: [], total: null },
+    { id: "results", label: "Resultados", unit: "count", current: [], total: null },
+    { id: "investment", label: "Investimento", unit: "currency", current: [], total: null },
   ];
   ok("primeiro id preferido presente é escolhido", resolveDefaultEvolutionSeriesId(series, ["goal:leads:result", "results"]) === "goal:leads:result");
   ok("cai pro segundo preferido quando o primeiro não existe nesta lista", resolveDefaultEvolutionSeriesId(series, ["goal:sales:result", "results"]) === "results");

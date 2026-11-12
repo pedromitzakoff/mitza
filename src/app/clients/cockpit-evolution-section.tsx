@@ -18,9 +18,16 @@ import type { EvolutionSeriesOption } from "@/lib/cockpit-evolution-merge";
  * com o contexto completo de quais séries existem): esquerda = resultados,
  * direita = investimento.
  *
- * Motor Recharts da antiga `cockpit-ad-evolution-section.tsx` preservado
- * integralmente (mesmas escalas/unidades/tooltip) — só a composição ao
- * redor mudou (2 painéis fixos em vez de 1-2 condicionais).
+ * Etapa "Gráficos de Evolução, refinamento visual" (pedido explícito do
+ * usuário: "ferramentas de análise visual claras, elegantes e interativas"):
+ * cabeçalho com valor agregado do período + variação % (nunca calculado por
+ * média simples de pontos diários — `total`/`previousTotal` já vêm prontos
+ * de `evolution-data.ts`/`cockpit-evolution-merge.ts`), tooltip com
+ * comparação ao período anterior por posição, eixo X cortado no último dia
+ * com dado real (nunca estendido até o fim do mês), e linha pontilhada
+ * opcional do período anterior. Nenhum cálculo novo de agregação aqui —
+ * este arquivo só formata/compõe o que os dois módulos de dados já
+ * calculam.
  */
 
 function formatMetricValue(unit: ChartMetricUnit, value: number): string {
@@ -36,10 +43,50 @@ function formatMetricValue(unit: ChartMetricUnit, value: number): string {
   }
 }
 
-type ChartRow = Record<string, string | number | null>;
+/** Variação % entre dois valores — `null` sem base confiável pra comparar
+ * (período anterior ausente, ou zero: "variação sobre zero" não é um
+ * percentual, nunca `Infinity`/`NaN` exibido). Mesma convenção de
+ * `safeDivide` (`lib/performance.ts`): denominador zero/ausente → `null`. */
+export function computeVariationFraction(current: number | null, previous: number | null | undefined): number | null {
+  if (current === null || previous === null || previous === undefined || previous === 0) return null;
+  return (current - previous) / Math.abs(previous);
+}
 
-function buildRows(points: EvolutionSeriesOption["current"]): ChartRow[] {
-  return points.map((point) => ({ date: point.date, value: point.value }));
+export function formatSignedPercent(fraction: number): string {
+  const sign = fraction > 0 ? "+" : fraction < 0 ? "−" : "";
+  return `${sign}${formatPercent(Math.abs(fraction) * 100)}`;
+}
+
+export type ChartRow = { date: string; value: number | null; previousValue?: number | null };
+
+/** Monta as linhas do gráfico — período atual sempre; período anterior
+ * (quando existe e o toggle está ligado) entra alinhado por ÍNDICE/posição,
+ * nunca por data civil (datas diferentes entre os dois períodos, mesma
+ * convenção já documentada em `evolution-data.ts`). */
+export function buildRows(current: EvolutionSeriesOption["current"], previous: EvolutionSeriesOption["previous"] | undefined, showPrevious: boolean): ChartRow[] {
+  return current.map((point, index) => ({
+    date: point.date,
+    value: point.value,
+    previousValue: showPrevious && previous ? (previous[index]?.value ?? null) : undefined,
+  }));
+}
+
+/** Corta a cauda de dias sem nenhum dado (fim do mês corrente ainda não
+ * vivido, ou sincronização ainda não chegou) — pedido explícito do usuário:
+ * "não estender a linha artificialmente até o fim do mês". Só a CAUDA:
+ * um vão no MEIO da série (dia sem dado entre dois dias com dado) continua
+ * intocado — isso é informação real (dia sem sincronizar), nunca escondida.
+ * Série inteiramente vazia fica como está (nada pra cortar). */
+export function trimTrailingEmptyRows(rows: ChartRow[]): ChartRow[] {
+  let lastWithData = -1;
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (rows[i].value !== null) {
+      lastWithData = i;
+      break;
+    }
+  }
+  if (lastWithData === -1) return rows;
+  return rows.slice(0, lastWithData + 1);
 }
 
 const SELECT_CLASS = "min-h-9 w-full rounded-lg border border-overview-border bg-overview-surface px-2 text-xs text-overview-text-primary";
@@ -63,12 +110,66 @@ function saveStoredMetricId(clientId: string, side: Side, id: string) {
   }
 }
 
-function EvolutionChartPanel({ title, unit, rows }: { title: string; unit: ChartMetricUnit; rows: ChartRow[] }) {
+/** Tooltip próprio — igual acessível por toque no celular (Recharts ativa
+ * no toque por padrão, mesmo componente/sem lib nova) — mostra a data, o
+ * valor exato do dia e, quando o período anterior está sendo comparado, o
+ * valor equivalente + variação daquele dia específico (não a do período
+ * inteiro, que já vive no cabeçalho). */
+interface EvolutionTooltipProps {
+  active?: boolean;
+  label?: string | number;
+  payload?: readonly { payload?: ChartRow }[];
+  unit: ChartMetricUnit;
+}
+
+function EvolutionTooltip({ active, payload, label, unit }: EvolutionTooltipProps) {
+  if (!active || !payload || payload.length === 0) return null;
+  const row = payload[0]?.payload;
+  if (!row || row.value === null) return null;
+
+  const dayVariation = computeVariationFraction(row.value, row.previousValue);
+
+  return (
+    <div className="rounded-lg border border-overview-border bg-overview-surface px-3 py-2 text-xs text-overview-text-primary shadow-sm">
+      <p className="font-medium">{typeof label === "string" ? formatShortDate(label) : label}</p>
+      <p className="mt-1 tabular-nums">{formatMetricValue(unit, row.value)}</p>
+      {row.previousValue !== undefined && row.previousValue !== null && (
+        <p className="mt-0.5 text-overview-text-muted tabular-nums">
+          Período anterior: {formatMetricValue(unit, row.previousValue)}
+          {dayVariation !== null && <span> ({formatSignedPercent(dayVariation)})</span>}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function EvolutionChartHeader({ metric }: { metric: EvolutionSeriesOption }) {
+  const variation = computeVariationFraction(metric.total, metric.previousTotal);
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <p className="text-xs font-medium text-overview-text-secondary">{metric.label}</p>
+      <div className="flex items-baseline gap-1.5">
+        <p className="text-lg font-semibold tabular-nums text-overview-text-primary">
+          {metric.total !== null ? formatMetricValue(metric.unit, metric.total) : "—"}
+        </p>
+        {variation !== null && (
+          <span className={`text-xs font-medium tabular-nums ${variation > 0 ? "text-emerald-600" : variation < 0 ? "text-red-600" : "text-overview-text-muted"}`}>
+            {formatSignedPercent(variation)}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EvolutionChartPanel({ unit, rows }: { unit: ChartMetricUnit; rows: ChartRow[] }) {
+  const hasPrevious = rows.some((r) => r.previousValue !== undefined);
+
   return (
     <div className="h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={rows} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
-          <CartesianGrid stroke="var(--overview-border)" vertical={false} />
+          <CartesianGrid stroke="var(--overview-border)" strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="date"
             tickFormatter={(value: string) => formatShortDate(value)}
@@ -84,27 +185,29 @@ function EvolutionChartPanel({ title, unit, rows }: { title: string; unit: Chart
             tickLine={false}
             width={72}
           />
-          <Tooltip
-            formatter={(value) => (typeof value === "number" ? formatMetricValue(unit, value) : value)}
-            labelFormatter={(label) => (typeof label === "string" ? formatShortDate(label) : label)}
-            contentStyle={{
-              borderRadius: 8,
-              borderColor: "var(--overview-border)",
-              backgroundColor: "var(--overview-surface)",
-              color: "var(--overview-text-primary)",
-              fontSize: 12,
-            }}
-          />
+          <Tooltip content={(props) => <EvolutionTooltip {...props} unit={unit} />} trigger="hover" />
           <Line
             type="monotone"
             dataKey="value"
-            name={title}
             stroke="var(--brand)"
             strokeWidth={2}
-            dot={false}
+            dot={{ r: 2, strokeWidth: 0, fill: "var(--brand)" }}
+            activeDot={{ r: 4 }}
             connectNulls={false}
             isAnimationActive={false}
           />
+          {hasPrevious && (
+            <Line
+              type="monotone"
+              dataKey="previousValue"
+              stroke="var(--overview-text-muted)"
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+              dot={false}
+              connectNulls={false}
+              isAnimationActive={false}
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -124,26 +227,41 @@ function EvolutionChartSlot({
 }) {
   const formId = useId();
   const metric = series.find((s) => s.id === selectedId) ?? series[0];
+  const [showPrevious, setShowPrevious] = useState(false);
+  const canComparePrevious = Boolean(metric?.previous && metric.previous.length > 0);
 
   return (
     <div className="rounded-lg border border-overview-border bg-overview-surface p-3">
-      <select
-        aria-label={side === "left" ? "Métrica do gráfico esquerdo" : "Métrica do gráfico direito"}
-        id={`${formId}-metric`}
-        value={metric?.id ?? ""}
-        onChange={(event) => onSelect(event.target.value)}
-        className={SELECT_CLASS}
-      >
-        {series.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.label}
-          </option>
-        ))}
-      </select>
+      <div className="flex items-center gap-2">
+        <select
+          aria-label={side === "left" ? "Métrica do gráfico esquerdo" : "Métrica do gráfico direito"}
+          id={`${formId}-metric`}
+          value={metric?.id ?? ""}
+          onChange={(event) => onSelect(event.target.value)}
+          className={SELECT_CLASS}
+        >
+          {series.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+        {canComparePrevious && (
+          <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-overview-text-secondary">
+            <input type="checkbox" checked={showPrevious} onChange={(event) => setShowPrevious(event.target.checked)} className="h-3.5 w-3.5" />
+            Período anterior
+          </label>
+        )}
+      </div>
       {metric ? (
-        <div className="mt-3">
-          <EvolutionChartPanel title={metric.label} unit={metric.unit} rows={buildRows(metric.current)} />
-        </div>
+        <>
+          <div className="mt-3">
+            <EvolutionChartHeader metric={metric} />
+          </div>
+          <div className="mt-2">
+            <EvolutionChartPanel unit={metric.unit} rows={trimTrailingEmptyRows(buildRows(metric.current, metric.previous, showPrevious && canComparePrevious))} />
+          </div>
+        </>
       ) : (
         <p className="mt-3 text-sm text-overview-text-secondary">Nenhuma métrica disponível.</p>
       )}
