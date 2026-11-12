@@ -849,6 +849,11 @@ export default async function ClientPage({
   ].filter((link): link is { label: string; href: string } => Boolean(link));
 
   const metasHref = buildMetasHref(client.id, { month: monthParam }, {});
+  // Refinamento visual do Dashboard (pedido do usuário, referência "Versão
+  // 1") — subtítulo dinâmico do título "Visão executiva": nome do cliente +
+  // canal(is) de mídia realmente conectados, nunca hardcoded "Meta Ads"
+  // (um cliente com Meta + Google mostra os dois).
+  const headerChannelsLabel = clientChannels.map((c) => TRAFFIC_CHANNELS[c].label).join(" + ");
 
   return (
     <WorkspaceContainer>
@@ -874,12 +879,51 @@ export default async function ClientPage({
         </div>
       )}
 
-      {/* CONTEXTO — seção 4 do pedido: "DASHBOARD / [Mês]". Mês continua
-          sendo o único seletor de contexto no topo (nunca mais canal/
-          objetivo — Meta Ads e Google Ads sempre simultâneos abaixo). */}
-      <h1 className="mt-4 text-sm font-semibold uppercase tracking-wide text-overview-text-muted">Dashboard</h1>
+      {/* Refinamento visual do Dashboard (pedido do usuário, referência
+          "Versão 1") — hierarquia: linha de saldo/atualização/links
+          (continuação compacta do cabeçalho persistente do cliente,
+          `ClientWorkspaceHeader` em `layout.tsx`) → título grande "Visão
+          executiva" + subtítulo com nome/canal → filtros compactos (mês +
+          campanha) numa linha só → cards principais → alertas (movidos pra
+          depois dos cards, nunca mais acima). Nenhuma lógica mudou, só
+          posição/estilo. */}
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+        <CockpitAdAccountBalance snapshot={adBalance} />
+        <DataFreshnessTimer lastSuccessAt={dadosData?.health.latestSuccessAt ?? null} />
+        {externalLinks.length > 0 && (
+          <div className="ml-auto flex items-center gap-3">
+            {externalLinks.map((link) => (
+              <a
+                key={link.label}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-medium text-overview-text-secondary hover:underline"
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-2 border-b border-overview-border pb-3 text-sm">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold text-overview-text-primary">Visão executiva</h1>
+          <p className="mt-0.5 text-sm text-overview-text-secondary">
+            {client.name}
+            {headerChannelsLabel ? ` · ${headerChannelsLabel}` : ""}
+          </p>
+        </div>
+        <Link href={metasHref} className="shrink-0 text-xs font-medium text-brand hover:underline">
+          Ver Metas →
+        </Link>
+      </div>
+
+      {/* Filtros compactos: período (mês) + campanha, mesma linha — mesma
+          lógica/estado de sempre (`cockpitFilter`, `lib/cockpit-global-filter.ts`),
+          só reorganizado visualmente. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-0.5">
           <IconButton href={prevMonthHref} aria-label="Mês anterior" variant="ghost" size="sm">
             &lsaquo;
@@ -889,49 +933,7 @@ export default async function ClientPage({
             &rsaquo;
           </IconButton>
         </div>
-        <div className="ml-auto flex items-center gap-3">
-          <CockpitAdAccountBalance snapshot={adBalance} />
-          <DataFreshnessTimer lastSuccessAt={dadosData?.health.latestSuccessAt ?? null} />
-          {externalLinks.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs font-medium text-overview-text-secondary hover:underline"
-            >
-              {link.label}
-            </a>
-          ))}
-        </div>
-      </div>
-
-      {/* KOFF Analytics — "Filtro global de performance": local visível
-          ACIMA da Visão executiva (pedido explícito do usuário) — rege a
-          página inteira a partir daqui (searchParams `filtro`/`modo`,
-          única definição de escopo em `lib/cockpit-global-filter.ts`). */}
-      <div className="mt-6">
         <CockpitGlobalFilterBar initialText={cockpitFilter.text} initialMode={cockpitFilter.mode} />
-      </div>
-
-      {/* ÁREA 1 — VISÃO EXECUTIVA (KOFF Analytics, Redesign definitivo):
-          "entender rapidamente resultados e situação de orçamento" — um
-          único bloco, nunca mais Meta & Ritmo / Diagnóstico / Canais /
-          Indicadores Meta Ads como seções separadas e repetindo número.
-          "Ver Metas →" aponta pro planejamento completo por canal
-          (`ChannelPlanEditor`). */}
-      <div className="mt-6 flex items-center justify-between gap-3">
-        <h2 className="text-base font-medium text-overview-text-primary">Visão executiva</h2>
-        <Link href={metasHref} className="shrink-0 text-xs font-medium text-brand hover:underline">
-          Ver Metas →
-        </Link>
-      </div>
-
-      {/* Diagnóstico: discreto e contextual — `CockpitDiagnosticsCard`
-          devolve `null` sozinho quando não há ponto de atenção nenhum,
-          nunca ocupa espaço à toa. */}
-      <div className="mt-2">
-        <CockpitDiagnosticsCard insights={insights} />
       </div>
 
       {/* Ordem obrigatória (pedido explícito do usuário): Investimento →
@@ -954,6 +956,15 @@ export default async function ClientPage({
             <CockpitCostCard view={cost} />
           </Fragment>
         ))}
+      </div>
+
+      {/* Alertas executivos — refinamento visual (pedido do usuário): movidos
+          pra DEPOIS dos cards principais (antes vinham antes), numa faixa
+          compacta lado a lado em vez de bloco acima. `CockpitDiagnosticsCard`
+          continua devolvendo `null` sozinho sem nenhum ponto de atenção —
+          mesma lógica/dados de sempre, só reposicionado. */}
+      <div className="mt-3">
+        <CockpitDiagnosticsCard insights={insights} />
       </div>
 
       {/* Quebra por canal — só aparece com mais de um canal (ver

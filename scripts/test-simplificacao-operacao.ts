@@ -122,19 +122,24 @@ console.log("\nD — Navegação (seção 4 do pedido): estrutura final exata, n
   // "Campanhas, conjuntos e anúncios". A checagem de ordem abaixo foi
   // atualizada pra essa estrutura atual — ver `test-cockpit-redesign.ts`
   // pra cobertura completa do redesign.
+  //
+  // Refinamento visual (etapa posterior, "Versão 1"): alertas/diagnóstico
+  // saíram de ANTES dos cards principais pra DEPOIS deles (pedido
+  // explícito: cards logo após os filtros, sem espaço vazio antes) — ordem
+  // atualizada de novo aqui pra refletir isso.
   ok(
-    "áreas do Cockpit, na ordem: Visão executiva (Diagnóstico + Resultado/Custo/Orçamento), Evolução da performance, Campanhas/Conjuntos/Anúncios",
+    "áreas do Cockpit, na ordem: Visão executiva (título) → Resultado/Custo/Orçamento → Diagnóstico → Evolução da performance → Campanhas/Conjuntos/Anúncios",
     (() => {
       const visaoExecutivaIdx = pageSource.indexOf("Visão executiva");
-      const diagnosticoIdx = pageSource.indexOf("<CockpitDiagnosticsCard");
       const resultCardIdx = pageSource.indexOf("<CockpitResultCard");
+      const diagnosticoIdx = pageSource.indexOf("<CockpitDiagnosticsCard");
       const evolucaoIdx = pageSource.indexOf("<CockpitEvolutionSection");
       const explorationIdx = pageSource.indexOf("<CockpitAdExplorationSection");
       return (
-        [visaoExecutivaIdx, diagnosticoIdx, resultCardIdx, evolucaoIdx, explorationIdx].every((i) => i !== -1) &&
-        visaoExecutivaIdx < diagnosticoIdx &&
-        diagnosticoIdx < resultCardIdx &&
-        resultCardIdx < evolucaoIdx &&
+        [visaoExecutivaIdx, resultCardIdx, diagnosticoIdx, evolucaoIdx, explorationIdx].every((i) => i !== -1) &&
+        visaoExecutivaIdx < resultCardIdx &&
+        resultCardIdx < diagnosticoIdx &&
+        diagnosticoIdx < evolucaoIdx &&
         evolucaoIdx < explorationIdx
       );
     })(),

@@ -20,6 +20,12 @@ const DEBOUNCE_MS = 400;
  *
  * Preserva TODOS os outros parâmetros da URL (mês etc.) ao atualizar —
  * lê `useSearchParams()` em vez de reconstruir a URL do zero.
+ *
+ * Refinamento visual (pedido do usuário, referência "Versão 1"): controles
+ * soltos (sem container com borda/fundo/rótulo maiúsculo envolvendo tudo) —
+ * pensado pra viver na MESMA linha do seletor de mês em `page.tsx`, nunca
+ * mais sua própria caixa horizontal grande. Mesma lógica de sempre, só o
+ * visual mudou.
  */
 export function CockpitGlobalFilterBar({ initialText, initialMode }: { initialText: string; initialMode: NameFilterMode }) {
   const router = useRouter();
@@ -76,30 +82,29 @@ export function CockpitGlobalFilterBar({ initialText, initialMode }: { initialTe
   const isActive = text.trim() !== "";
 
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-overview-border bg-overview-surface p-2.5">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Filtro de campanhas</span>
+    <div className="flex flex-wrap items-center gap-2">
       <select
-        aria-label="Operador do filtro"
+        aria-label="Operador do filtro de campanhas"
         value={mode}
         onChange={(event) => handleModeChange(event.target.value as NameFilterMode)}
-        className="min-h-9 rounded-lg border border-overview-border bg-overview-surface px-2 text-xs text-overview-text-primary"
+        className="min-h-9 rounded-full border border-overview-border bg-overview-surface px-3 text-xs text-overview-text-primary"
       >
-        <option value="contains">contém</option>
-        <option value="not_contains">não contém</option>
+        <option value="contains">Campanhas que contêm</option>
+        <option value="not_contains">Campanhas que não contêm</option>
       </select>
       <input
         type="text"
         value={text}
         onChange={(event) => handleTextChange(event.target.value)}
-        placeholder="Buscar por nome da campanha"
+        placeholder="Buscar campanha…"
         aria-label="Texto do filtro de campanhas"
-        className="min-h-9 min-w-0 flex-1 rounded-lg border border-overview-border bg-overview-surface px-2.5 text-xs text-overview-text-primary placeholder:text-overview-text-muted sm:w-64 sm:flex-none"
+        className="min-h-9 min-w-0 flex-1 rounded-full border border-overview-border bg-overview-surface px-3 text-xs text-overview-text-primary placeholder:text-overview-text-muted sm:w-56 sm:flex-none"
       />
       {isActive && (
         <button
           type="button"
           onClick={handleClear}
-          className="mitza-pressable rounded-lg border border-overview-border px-2.5 py-1.5 text-xs font-medium text-overview-text-secondary hover:bg-overview-surface-hover hover:text-overview-text-primary"
+          className="mitza-pressable rounded-full border border-overview-border px-2.5 py-1.5 text-xs font-medium text-overview-text-secondary hover:bg-overview-surface-hover hover:text-overview-text-primary"
         >
           Limpar
         </button>

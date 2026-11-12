@@ -352,9 +352,8 @@ console.log("\nH — checagens estruturais (UI sem DOM neste ambiente)\n");
   );
 
   ok(
-    "a barra de filtro global é renderizada ANTES da Visão executiva (pedido explícito: 'local visível acima')",
-    pageSource.indexOf("<CockpitGlobalFilterBar") > 0 &&
-      pageSource.indexOf("<CockpitGlobalFilterBar") < pageSource.indexOf('text-overview-text-primary">Visão executiva'),
+    "a barra de filtro global é renderizada ANTES dos cards de Resultado/Custo (refinamento visual: agora faz parte da linha de filtros, logo abaixo do título 'Visão executiva', mas sempre antes dos cards que ela rege)",
+    pageSource.indexOf("<CockpitGlobalFilterBar") > 0 && pageSource.indexOf("<CockpitGlobalFilterBar") < pageSource.indexOf("<CockpitBudgetCard"),
   );
 
   ok(
