@@ -197,6 +197,100 @@ function ExplorationTable({
   );
 }
 
+/**
+ * Etapa "Otimizacao mobile - Fase 2" (pedido explicito do usuario, achado
+ * da auditoria da Fase 1): `ExplorationTable` forca rolagem horizontal em
+ * qualquer celular (`min-w-[640px]`) mesmo mostrando so 2-3 colunas - aqui
+ * embaixo de `lg:` essa mesma lista de linhas vira cards empilhados (MESMO
+ * dado/ordenacao/colunas visiveis de sempre, nenhuma segunda logica) -
+ * mesma linguagem visual que `AdCardGrid` ja usa pra Anuncios, reaproveitada
+ * em vez de inventada. Sort por toque: mesmos pills de "Ordenar por" do
+ * AdCardGrid, mas chamando o MESMO `onSortChange`/ciclo asc-desc-off da
+ * tabela (nunca uma segunda regra de ordenacao).
+ */
+function ExplorationCardList({
+  rows,
+  columns,
+  visibleColumnIds,
+  sort,
+  onSortChange,
+  onRowClick,
+  emptyMessage,
+  showCampaignNames,
+}: {
+  rows: ExplorationRow[];
+  columns: ReturnType<typeof buildExplorationColumns>;
+  visibleColumnIds: ExplorationColumnId[];
+  sort: SortState;
+  onSortChange: (columnId: ExplorationColumnId) => void;
+  onRowClick?: (row: ExplorationRow) => void;
+  emptyMessage: string;
+  showCampaignNames: boolean;
+}) {
+  const columnsById = new Map(columns.map((col) => [col.id, col]));
+  const visibleColumns = visibleColumnIds.map((id) => columnsById.get(id)).filter((col): col is NonNullable<typeof col> => col !== undefined);
+  const metricColumns = visibleColumns.filter((col) => col.id !== "name");
+  const sortedRows = sortRows(rows, sort);
+
+  if (rows.length === 0) {
+    return (
+      <p className="rounded-lg border border-dashed border-overview-border px-4 py-6 text-center text-sm text-overview-text-secondary">
+        {emptyMessage}
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      {metricColumns.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-medium text-overview-text-muted">Ordenar por</span>
+          {metricColumns.map((col) => {
+            const active = sort?.columnId === col.id;
+            return (
+              <button
+                key={col.id}
+                type="button"
+                onClick={() => onSortChange(col.id)}
+                className={`mitza-pressable rounded-full px-2.5 py-1 text-xs font-medium ${
+                  active ? "bg-brand text-white" : "border border-overview-border text-overview-text-secondary hover:text-overview-text-primary"
+                }`}
+              >
+                {col.label}
+                {active && (sort.direction === "desc" ? " ↓" : " ↑")}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div className={`flex flex-col gap-2 ${metricColumns.length > 0 ? "mt-3" : ""}`}>
+        {sortedRows.map((row) => (
+          <div
+            key={row.id}
+            onClick={onRowClick ? () => onRowClick(row) : undefined}
+            className={`rounded-lg border border-overview-border bg-overview-surface p-3 ${onRowClick ? "mitza-pressable cursor-pointer hover:bg-overview-surface-hover" : ""}`}
+          >
+            <p className="truncate text-sm font-medium text-overview-text-primary">{row.name}</p>
+            {showCampaignNames && row.campaignNames && row.campaignNames.length > 0 && (
+              <p className="truncate text-xs text-overview-text-muted">{row.campaignNames.join(" · ")}</p>
+            )}
+            {metricColumns.length > 0 && (
+              <div className="mt-2 flex flex-col gap-1 border-t border-overview-border pt-2">
+                {metricColumns.map((col) => (
+                  <div key={col.id} className="flex items-baseline justify-between gap-2">
+                    <p className="text-[11px] font-medium text-overview-text-muted">{col.label}</p>
+                    <p className="text-sm font-semibold tabular-nums text-overview-text-primary">{formatExplorationCell(col.id, row)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ColumnPicker({
   columns,
   visibleColumnIds,
@@ -223,7 +317,10 @@ function ColumnPicker({
       </button>
 
       {isOpen && (
-        <div id={panelId} className="absolute z-20 mt-2 max-w-xs rounded-lg border border-overview-border bg-overview-surface p-3 shadow-[var(--shadow-float)]">
+        <div
+          id={panelId}
+          className="absolute right-0 z-20 mt-2 w-56 max-w-[85vw] rounded-lg border border-overview-border bg-overview-surface p-3 shadow-[var(--shadow-float)]"
+        >
           <ul className="flex flex-col gap-0.5">
             {columns.map((col) => (
               <li key={col.id}>
@@ -248,12 +345,12 @@ function ColumnPicker({
 
 function SearchInput({ value, mode, onValueChange, onModeChange }: { value: string; mode: NameFilterMode; onValueChange: (v: string) => void; onModeChange: (m: NameFilterMode) => void }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <select
         aria-label="Modo da busca"
         value={mode}
         onChange={(event) => onModeChange(event.target.value as NameFilterMode)}
-        className="min-h-9 rounded-lg border border-overview-border bg-overview-surface px-2 text-xs text-overview-text-primary"
+        className="min-h-9 shrink-0 rounded-lg border border-overview-border bg-overview-surface px-2 text-xs text-overview-text-primary"
       >
         <option value="contains">contém</option>
         <option value="not_contains">não contém</option>
@@ -264,7 +361,7 @@ function SearchInput({ value, mode, onValueChange, onModeChange }: { value: stri
         onChange={(event) => onValueChange(event.target.value)}
         placeholder="Buscar por nome"
         aria-label="Buscar por nome"
-        className="min-h-9 min-w-0 flex-1 rounded-lg border border-overview-border bg-overview-surface px-2.5 text-xs text-overview-text-primary placeholder:text-overview-text-muted sm:w-56 sm:flex-none"
+        className="min-h-9 min-w-[140px] flex-1 basis-full rounded-lg border border-overview-border bg-overview-surface px-2.5 text-xs text-overview-text-primary placeholder:text-overview-text-muted sm:w-56 sm:basis-auto sm:flex-none"
       />
     </div>
   );
@@ -433,7 +530,7 @@ export function CockpitAdExplorationSection({
             diferentes"): Anúncios vira grade de cards, sem conceito de
             "colunas" pra escolher — o seletor some só nesse nível. */}
         {level !== "ads" && (
-          <div className="relative">
+          <div className="relative ml-auto">
             <ColumnPicker columns={columns} visibleColumnIds={visibleColumnIds} onToggle={toggleColumn} />
           </div>
         )}
@@ -453,24 +550,48 @@ export function CockpitAdExplorationSection({
             }
           />
         ) : (
-          <ExplorationTable
-            rows={filteredRows}
-            columns={columns}
-            visibleColumnIds={visibleColumnIds}
-            sort={sort}
-            onSortChange={handleSortChange}
-            onRowClick={level === "campaigns" ? handleSelectCampaign : undefined}
-            showCampaignNames={level !== "campaigns" && !isScopedByCampaign}
-            emptyMessage={
-              normalizedSearch !== ""
-                ? "Nenhum resultado para esse filtro."
-                : level === "campaigns"
-                  ? "Nenhuma campanha com investimento neste período."
-                  : isScopedByCampaign
-                    ? "Nenhum conjunto de anúncios encontrado para esta campanha no período."
-                    : "Nenhum conjunto de anúncios encontrado no período."
-            }
-          />
+          <>
+            <div className="hidden lg:block">
+              <ExplorationTable
+                rows={filteredRows}
+                columns={columns}
+                visibleColumnIds={visibleColumnIds}
+                sort={sort}
+                onSortChange={handleSortChange}
+                onRowClick={level === "campaigns" ? handleSelectCampaign : undefined}
+                showCampaignNames={level !== "campaigns" && !isScopedByCampaign}
+                emptyMessage={
+                  normalizedSearch !== ""
+                    ? "Nenhum resultado para esse filtro."
+                    : level === "campaigns"
+                      ? "Nenhuma campanha com investimento neste período."
+                      : isScopedByCampaign
+                        ? "Nenhum conjunto de anúncios encontrado para esta campanha no período."
+                        : "Nenhum conjunto de anúncios encontrado no período."
+                }
+              />
+            </div>
+            <div className="lg:hidden">
+              <ExplorationCardList
+                rows={filteredRows}
+                columns={columns}
+                visibleColumnIds={visibleColumnIds}
+                sort={sort}
+                onSortChange={handleSortChange}
+                onRowClick={level === "campaigns" ? handleSelectCampaign : undefined}
+                showCampaignNames={level !== "campaigns" && !isScopedByCampaign}
+                emptyMessage={
+                  normalizedSearch !== ""
+                    ? "Nenhum resultado para esse filtro."
+                    : level === "campaigns"
+                      ? "Nenhuma campanha com investimento neste período."
+                      : isScopedByCampaign
+                        ? "Nenhum conjunto de anúncios encontrado para esta campanha no período."
+                        : "Nenhum conjunto de anúncios encontrado no período."
+                }
+              />
+            </div>
+          </>
         )}
       </div>
 

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { ClientWorkspaceHeader } from "../client-workspace-header";
 import { ActiveClientSidebarName } from "../client-workspace-context";
+import { MobileTabBar } from "../mobile-tab-bar";
 
 // `maxDuration` de um route segment vale pras Server Actions disparadas de
 // dentro dele (ver Next.js docs) — o header persistente deste layout é quem
@@ -42,10 +43,11 @@ export default async function ClientWorkspaceLayout({
   if (!client) notFound();
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex min-h-full flex-col pb-16 md:pb-0">
       <ActiveClientSidebarName name={client.name} />
       <ClientWorkspaceHeader client={{ id: client.id, name: client.name, avatarUrl: client.avatar_url, status: client.status }} />
       {children}
+      <MobileTabBar clientId={client.id} />
     </div>
   );
 }
