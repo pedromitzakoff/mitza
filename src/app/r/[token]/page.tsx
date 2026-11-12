@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { todayUTC } from "@/lib/today";
-import { resolveClientIdFromShareToken, resolvePublicShareLinkBaseUrl } from "@/lib/report-share-links";
+import { resolveClientIdFromShareSlug, resolveClientIdFromShareToken, resolvePublicShareLinkBaseUrl } from "@/lib/report-share-links";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildCockpitViewModel } from "@/lib/cockpit-view-data";
 import { CockpitView } from "@/app/clients/cockpit-view";
@@ -75,11 +75,13 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
  * nunca uma segunda implementação, nunca um cálculo próprio desta rota.
  *
  * `client_id` NUNCA vem de query param nem de qualquer entrada do
- * visitante: a única fonte de verdade continua sendo
- * `resolveClientIdFromShareToken`, resolvida no servidor contra
- * `report_share_links` (token inexistente, revogado, OU cliente já
+ * visitante: a única fonte de verdade é `resolveClientIdFromShareSlug`
+ * (Etapa "Link legível por cliente", tentada PRIMEIRO) ou
+ * `resolveClientIdFromShareToken` (fallback — links gerados antes dessa
+ * etapa, sem slug), ambas resolvidas no servidor contra
+ * `report_share_links` (identificador inexistente, revogado, OU cliente já
  * excluído → `null`, tratado aqui como 404 comum, sem distinguir qual dos
- * três casos aconteceu — comportamento neutro, intocado por esta correção).
+ * casos aconteceu — comportamento neutro, intocado por esta correção).
  *
  * Segurança no servidor (nunca só esconder botão): `buildCockpitViewModel`
  * com `viewer.kind === "shared"` nunca CALCULA os campos administrativos
@@ -103,7 +105,7 @@ export default async function PublicClientDashboardPage({
   searchParams: Promise<{ month?: string; filtro?: string; modo?: string }>;
 }) {
   const { token } = await params;
-  const clientId = await resolveClientIdFromShareToken(token);
+  const clientId = (await resolveClientIdFromShareSlug(token)) ?? (await resolveClientIdFromShareToken(token));
   if (!clientId) notFound();
 
   const { month: monthQueryParam, filtro: filterTextParam, modo: filterModeParam } = await searchParams;

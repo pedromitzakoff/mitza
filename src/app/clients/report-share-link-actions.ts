@@ -15,25 +15,26 @@ import { rotateReportShareLink, revokeReportShareLink, resolvePublicShareLinkBas
  * mesmo padrão de `meta-api-sync-actions.ts` — nunca confia só no `clientId`
  * recebido como argumento.
  */
-async function assertAdminCanAccessClient(clientId: string): Promise<void> {
+async function assertAdminCanAccessClient(clientId: string): Promise<{ name: string }> {
   const profile = await getCurrentProfile();
   if (!profile || profile.role !== "admin") {
     throw new Error("Sem permissão para gerenciar o link externo deste cliente.");
   }
 
   const supabase = await createSupabaseClient();
-  const { data: client } = await supabase.from("clients").select("id").eq("id", clientId).is("deleted_at", null).maybeSingle();
+  const { data: client } = await supabase.from("clients").select("id, name").eq("id", clientId).is("deleted_at", null).maybeSingle();
   if (!client) {
     throw new Error("Cliente não encontrado.");
   }
+  return { name: client.name };
 }
 
 export async function generateReportShareLinkAction(clientId: string): Promise<{ url: string } | { error: string }> {
   try {
-    await assertAdminCanAccessClient(clientId);
-    const token = await rotateReportShareLink(clientId);
+    const { name } = await assertAdminCanAccessClient(clientId);
+    const slug = await rotateReportShareLink(clientId, name);
     revalidatePath(`/clients/${clientId}`);
-    return { url: `${resolvePublicShareLinkBaseUrl()}/r/${token}` };
+    return { url: `${resolvePublicShareLinkBaseUrl()}/r/${slug}` };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Não foi possível gerar o link." };
   }

@@ -3201,6 +3201,7 @@ export interface Database {
           client_id: string;
           token: string | null;
           token_hash: string;
+          slug: string | null;
           created_at: string;
           revoked_at: string | null;
         };
@@ -3209,6 +3210,7 @@ export interface Database {
           client_id: string;
           token?: string | null;
           token_hash: string;
+          slug?: string | null;
           created_at?: string;
           revoked_at?: string | null;
         };
@@ -3217,6 +3219,7 @@ export interface Database {
           client_id?: string;
           token?: string | null;
           token_hash?: string;
+          slug?: string | null;
           created_at?: string;
           revoked_at?: string | null;
         };

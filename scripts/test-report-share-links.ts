@@ -1,9 +1,20 @@
 /**
- * Etapa "Link Externo V1" — `/r/[token]` (Performance Report público, sem
- * login) e o painel "Link do cliente" (`report-share-link-panel.tsx`).
+ * Etapa "Link Externo V1" — `/r/[token]` (Dashboard público, sem login) e o
+ * painel "Link do cliente" (`report-share-link-panel.tsx`).
  *
- * Este ambiente não tem Supabase real: a resolução de token/autorização é
- * testada injetando `InMemoryReportShareLinkStore` no lugar do Supabase
+ * Etapa "Link legível por cliente" (pedido explícito do usuário, decisão
+ * consciente de aceitar o trade-off de segurança via `AskUserQuestion`):
+ * `rotateReportShareLink` passou a devolver um SLUG legível (ex.:
+ * "DanielleSaqui"), não mais o token aleatório — resolvido primeiro por
+ * `resolveClientIdFromShareSlug`. O token/hash continuam gerados e
+ * persistidos junto (compat com link antigo, `resolveClientIdFromShareToken`
+ * como fallback) — as seções 1-6 abaixo passaram a testar o caminho do
+ * slug (o novo padrão); a seção 6b prova que o caminho antigo (token/hash)
+ * continua funcionando independentemente, pra link já enviado antes desta
+ * etapa nunca quebrar.
+ *
+ * Este ambiente não tem Supabase real: a resolução de token/slug/autorização
+ * é testada injetando `InMemoryReportShareLinkStore` no lugar do Supabase
  * (`__setReportShareLinkStoreForTests`, mesma abstração de
  * `RateLimitBackend`/`__setRateLimitBackendForTests` em `lib/rate-limit.ts`).
  * O rate limit do `/r/*` é testado do mesmo jeito, via
@@ -21,6 +32,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   resolveClientIdFromShareToken,
+  resolveClientIdFromShareSlug,
+  slugifyClientName,
   rotateReportShareLink,
   revokeReportShareLink,
   getReportShareLinkStatus,
@@ -46,6 +59,9 @@ interface StoredLink {
    * Externo — token recuperável"), que nunca tinha essa coluna preenchida. */
   token: string | null;
   tokenHash: string;
+  /** Nullable de propósito — modela a linha antiga (anterior à Etapa "Link
+   * legível por cliente"), que nunca tinha essa coluna preenchida. */
+  slug: string | null;
   createdAt: string;
   revokedAt: string | null;
 }
@@ -68,6 +84,15 @@ class InMemoryReportShareLinkStore implements ReportShareLinkStore {
     return link ? { clientId: link.clientId } : null;
   }
 
+  async findActiveBySlug(slug: string): Promise<{ clientId: string } | null> {
+    const link = this.links.find((l) => l.slug === slug && l.revokedAt === null);
+    return link ? { clientId: link.clientId } : null;
+  }
+
+  async isSlugActive(slug: string): Promise<boolean> {
+    return this.links.some((l) => l.slug === slug && l.revokedAt === null);
+  }
+
   async isClientLive(clientId: string): Promise<boolean> {
     return this.liveClientIds.has(clientId);
   }
@@ -76,7 +101,7 @@ class InMemoryReportShareLinkStore implements ReportShareLinkStore {
     const link = this.links
       .filter((l) => l.clientId === clientId && l.revokedAt === null)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-    return link ? { clientId: link.clientId, createdAt: link.createdAt, token: link.token } : null;
+    return link ? { clientId: link.clientId, createdAt: link.createdAt, token: link.token, slug: link.slug } : null;
   }
 
   async revokeActiveForClient(clientId: string): Promise<void> {
@@ -86,9 +111,9 @@ class InMemoryReportShareLinkStore implements ReportShareLinkStore {
     }
   }
 
-  async insert(clientId: string, token: string, tokenHash: string): Promise<void> {
+  async insert(clientId: string, token: string, tokenHash: string, slug: string): Promise<void> {
     this.insertedTokenHashes.push(tokenHash);
-    this.links.push({ clientId, token, tokenHash, createdAt: new Date().toISOString(), revokedAt: null });
+    this.links.push({ clientId, token, tokenHash, slug, createdAt: new Date().toISOString(), revokedAt: null });
   }
 }
 
@@ -96,55 +121,65 @@ function freshRateLimitBackend() {
   __setRateLimitBackendForTests(new InMemorySlidingWindowRateLimitBackend());
 }
 
+/** Pega o token BRUTO do link ativo mais recente de um cliente — só pra
+ * testar o caminho legado (hash), que continua existindo junto do slug em
+ * todo link novo. */
+function rawTokenFor(store: InMemoryReportShareLinkStore, clientId: string): string {
+  const link = store.links.filter((l) => l.clientId === clientId && l.revokedAt === null).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  if (!link?.token) throw new Error(`nenhum token ativo encontrado pra ${clientId}`);
+  return link.token;
+}
+
 async function main() {
 
-console.log("\n1 — token válido resolve para o cliente correto, e só ele\n");
+console.log("\n1 — slug válido resolve para o cliente correto, e só ele\n");
 {
   const store = new InMemoryReportShareLinkStore(["client-a", "client-b"]);
   __setReportShareLinkStoreForTests(store);
 
-  const tokenA = await rotateReportShareLink("client-a");
-  const resolved = await resolveClientIdFromShareToken(tokenA);
-  ok("token de client-a resolve pra client-a", resolved === "client-a");
+  const slugA = await rotateReportShareLink("client-a", "Client A");
+  ok("slug derivado do nome ('Client A' -> 'ClientA')", slugA === "ClientA");
+  const resolved = await resolveClientIdFromShareSlug(slugA);
+  ok("slug de client-a resolve pra client-a", resolved === "client-a");
 }
 
-console.log("\n2 — token inválido (nunca existiu) → negado (null)\n");
+console.log("\n2 — slug inválido (nunca existiu) → negado (null)\n");
 {
   const store = new InMemoryReportShareLinkStore(["client-a"]);
   __setReportShareLinkStoreForTests(store);
-  await rotateReportShareLink("client-a");
+  await rotateReportShareLink("client-a", "Client A");
 
-  const resolved = await resolveClientIdFromShareToken("token-que-nunca-foi-gerado");
-  ok("token inexistente: null", resolved === null);
+  const resolved = await resolveClientIdFromShareSlug("SlugQueNuncaFoiGerado");
+  ok("slug inexistente: null", resolved === null);
 
-  const resolvedEmpty = await resolveClientIdFromShareToken("");
-  ok("token vazio: null, sem nem consultar o store", resolvedEmpty === null);
+  const resolvedEmpty = await resolveClientIdFromShareSlug("");
+  ok("slug vazio: null, sem nem consultar o store", resolvedEmpty === null);
 }
 
-console.log("\n3 — token revogado → negado (null), mesmo existindo\n");
+console.log("\n3 — slug revogado → negado (null), mesmo existindo\n");
 {
   const store = new InMemoryReportShareLinkStore(["client-a"]);
   __setReportShareLinkStoreForTests(store);
 
-  const token = await rotateReportShareLink("client-a");
-  ok("antes de revogar: resolve normalmente", (await resolveClientIdFromShareToken(token)) === "client-a");
+  const slug = await rotateReportShareLink("client-a", "Client A");
+  ok("antes de revogar: resolve normalmente", (await resolveClientIdFromShareSlug(slug)) === "client-a");
 
   await revokeReportShareLink("client-a");
-  ok("depois de revogar: null", (await resolveClientIdFromShareToken(token)) === null);
+  ok("depois de revogar: null", (await resolveClientIdFromShareSlug(slug)) === null);
 }
 
-console.log("\n4 — token do cliente A nunca resolve para o cliente B\n");
+console.log("\n4 — slug do cliente A nunca resolve para o cliente B\n");
 {
   const store = new InMemoryReportShareLinkStore(["client-a", "client-b"]);
   __setReportShareLinkStoreForTests(store);
 
-  const tokenA = await rotateReportShareLink("client-a");
-  const tokenB = await rotateReportShareLink("client-b");
+  const slugA = await rotateReportShareLink("client-a", "Client A");
+  const slugB = await rotateReportShareLink("client-b", "Client B");
 
-  ok("token A → client-a", (await resolveClientIdFromShareToken(tokenA)) === "client-a");
-  ok("token A NUNCA resolve pra client-b", (await resolveClientIdFromShareToken(tokenA)) !== "client-b");
-  ok("token B → client-b", (await resolveClientIdFromShareToken(tokenB)) === "client-b");
-  ok("token B NUNCA resolve pra client-a", (await resolveClientIdFromShareToken(tokenB)) !== "client-a");
+  ok("slug A → client-a", (await resolveClientIdFromShareSlug(slugA)) === "client-a");
+  ok("slug A NUNCA resolve pra client-b", (await resolveClientIdFromShareSlug(slugA)) !== "client-b");
+  ok("slug B → client-b", (await resolveClientIdFromShareSlug(slugB)) === "client-b");
+  ok("slug B NUNCA resolve pra client-a", (await resolveClientIdFromShareSlug(slugB)) !== "client-a");
 }
 
 console.log("\n5 — 'Gerar novo link' rotaciona: revoga o anterior, o antigo para de funcionar\n");
@@ -152,34 +187,101 @@ console.log("\n5 — 'Gerar novo link' rotaciona: revoga o anterior, o antigo pa
   const store = new InMemoryReportShareLinkStore(["client-a"]);
   __setReportShareLinkStoreForTests(store);
 
-  const firstToken = await rotateReportShareLink("client-a");
-  const secondToken = await rotateReportShareLink("client-a");
+  // Nomes diferentes de propósito (slug muda de verdade) — prova que
+  // rotacionar revoga o link anterior, não só que o novo também resolve.
+  const firstSlug = await rotateReportShareLink("client-a", "Client A");
+  const secondSlug = await rotateReportShareLink("client-a", "Client A Renomeada");
 
-  ok("token antigo parou de resolver", (await resolveClientIdFromShareToken(firstToken)) === null);
-  ok("token novo resolve normalmente", (await resolveClientIdFromShareToken(secondToken)) === "client-a");
+  ok("slug antigo parou de resolver", (await resolveClientIdFromShareSlug(firstSlug)) === null);
+  ok("slug novo resolve normalmente", (await resolveClientIdFromShareSlug(secondSlug)) === "client-a");
 
   const status = await getReportShareLinkStatus("client-a");
   ok("status reporta exatamente 1 link ativo (nunca acumula)", status.active === true);
 }
 
-console.log("\n6 — cliente excluído (soft-delete): token existente para de resolver\n");
+console.log("\n5b — rotacionar com o MESMO nome reaproveita o MESMO slug base (revoga antes de checar colisão — nunca um sufixo numérico desnecessário contra si mesmo)\n");
+{
+  const store = new InMemoryReportShareLinkStore(["client-a"]);
+  __setReportShareLinkStoreForTests(store);
+
+  const firstSlug = await rotateReportShareLink("client-a", "Client A");
+  const secondSlug = await rotateReportShareLink("client-a", "Client A");
+
+  ok("mesmo nome -> mesmo slug base de novo", firstSlug === secondSlug);
+  ok("o link ATIVO (o segundo) continua resolvendo pro cliente certo", (await resolveClientIdFromShareSlug(secondSlug)) === "client-a");
+}
+
+console.log("\n6 — cliente excluído (soft-delete): slug existente para de resolver\n");
 {
   const store = new InMemoryReportShareLinkStore(["client-a"]); // client-b nunca "live"
   __setReportShareLinkStoreForTests(store);
 
-  const token = await rotateReportShareLink("client-b");
-  ok("link existe e não foi revogado, mas o cliente não está 'live': null", (await resolveClientIdFromShareToken(token)) === null);
+  const slug = await rotateReportShareLink("client-b", "Client B");
+  ok("link existe e não foi revogado, mas o cliente não está 'live': null", (await resolveClientIdFromShareSlug(slug)) === null);
+}
+
+console.log("\n6a — colisão de slug entre clientes com o MESMO nome: sufixo numérico, nunca sobrescreve o link do outro\n");
+{
+  const store = new InMemoryReportShareLinkStore(["client-a", "client-b"]);
+  __setReportShareLinkStoreForTests(store);
+
+  const slugA = await rotateReportShareLink("client-a", "João Silva");
+  const slugB = await rotateReportShareLink("client-b", "João Silva");
+
+  ok("primeiro cliente fica com o slug base", slugA === "JoaoSilva");
+  ok("segundo cliente (mesmo nome) ganha sufixo numérico, nunca o mesmo slug", slugB === "JoaoSilva2" && slugB !== slugA);
+  ok("cada slug resolve só pro próprio cliente", (await resolveClientIdFromShareSlug(slugA)) === "client-a" && (await resolveClientIdFromShareSlug(slugB)) === "client-b");
+}
+
+console.log("\n6b — caminho legado (token/hash) continua funcionando independentemente — link enviado antes da Etapa \"Link legível por cliente\" nunca quebra\n");
+{
+  const store = new InMemoryReportShareLinkStore(["client-a"]);
+  __setReportShareLinkStoreForTests(store);
+
+  // Link novo tem slug E token — simula o visitante usando a URL antiga
+  // (token), nunca a nova (slug), mesmo cenário real de um link já enviado.
+  await rotateReportShareLink("client-a", "Client A");
+  const rawToken = rawTokenFor(store, "client-a");
+  ok("token bruto resolve normalmente pelo caminho antigo (hash)", (await resolveClientIdFromShareToken(rawToken)) === "client-a");
+
+  // Linha simulando uma geração ANTERIOR a esta etapa (slug nunca existiu).
+  store.links.push({
+    clientId: "client-a",
+    token: "token-legado-bruto",
+    tokenHash: __testing.hashShareToken("token-legado-bruto"),
+    slug: null,
+    createdAt: new Date(0).toISOString(),
+    revokedAt: null,
+  });
+  ok(
+    "resolveClientIdFromShareSlug nunca confunde um token bruto antigo com um slug (slug é null nessa linha)",
+    (await resolveClientIdFromShareSlug("token-legado-bruto")) === null,
+  );
+  ok("mas resolveClientIdFromShareToken resolve normalmente esse link antigo", (await resolveClientIdFromShareToken("token-legado-bruto")) === "client-a");
+}
+
+console.log('\n6c — slugifyClientName: normalização pura (acentos, espaços, símbolos) — nunca uma URL vazia/quebrada\n');
+{
+  ok('"Danielle Saqui" -> "DanielleSaqui"', slugifyClientName("Danielle Saqui") === "DanielleSaqui");
+  ok('acento nunca sobrevive: "José" -> "Jose"', slugifyClientName("José") === "Jose");
+  ok('múltiplos espaços/hífen colapsam em limite de palavra: "Pet  Fast-Food" -> "PetFastFood"', slugifyClientName("Pet  Fast-Food") === "PetFastFood");
+  ok('nome vazio nunca produz slug vazio (fallback explícito)', slugifyClientName("") === "Cliente");
+  ok('nome só com símbolos cai no mesmo fallback', slugifyClientName("***") === "Cliente");
 }
 
 console.log("\n7 — alteração de query/parâmetro nunca muda o cliente autorizado (auditoria da rota pública)\n");
 {
-  // A rota /r/[token] só tem UMA fonte de client_id: resolveClientIdFromShareToken(token).
-  // Prova estrutural: o código-fonte da página nunca lê um clientId de
-  // searchParams/query, e o único identificador usado nas chamadas de dado
-  // é a variável resolvida pelo token.
+  // A rota /r/[token] tem DUAS fontes possíveis de client_id — slug
+  // primeiro (Etapa "Link legível por cliente"), token como fallback —
+  // nunca uma terceira fonte. Prova estrutural: o código-fonte da página
+  // nunca lê um clientId de searchParams/query, e o único identificador
+  // usado nas chamadas de dado é a variável resolvida por slug/token.
   const source = readFileSync(join(__dirname, "..", "src", "app", "r", "[token]", "page.tsx"), "utf8");
 
-  ok("resolve o clientId exclusivamente via resolveClientIdFromShareToken(token)", /const clientId = await resolveClientIdFromShareToken\(token\)/.test(source));
+  ok(
+    "resolve o clientId via resolveClientIdFromShareSlug PRIMEIRO, resolveClientIdFromShareToken como fallback — nunca uma terceira fonte",
+    /const clientId = \(await resolveClientIdFromShareSlug\(token\)\) \?\? \(await resolveClientIdFromShareToken\(token\)\)/.test(source),
+  );
   // Correção da divergência Dashboard interno × link compartilhado: o
   // link agora abre o Cockpit (CockpitView via buildCockpitViewModel),
   // cujos únicos parâmetros de URL são mês/filtro — nunca clientId.
@@ -245,41 +347,55 @@ console.log("\n12 — rate limit: rotas fora de /r/* nunca são checadas por est
 }
 
 console.log(
-  "\n13 — Etapa \"Link Externo — token recuperável\": token bruto agora É persistido (decisão consciente), mas /r/[token] continua resolvendo só pelo hash\n",
+  "\n13 — Etapa \"Link Externo — token recuperável\": token bruto continua persistido mesmo com o slug virando a URL exibida; hash/token continuam corretos\n",
 );
 {
   const store = new InMemoryReportShareLinkStore(["client-a"]);
   __setReportShareLinkStoreForTests(store);
 
-  const token = await rotateReportShareLink("client-a");
+  const slug = await rotateReportShareLink("client-a", "Client A");
+  const rawToken = rawTokenFor(store, "client-a");
 
   ok("exatamente 1 hash foi inserido no store", store.insertedTokenHashes.length === 1);
   const [persistedHash] = store.insertedTokenHashes;
-  ok("token_hash continua sendo o sha256 hex do token (64 caracteres hex)", persistedHash === __testing.hashShareToken(token));
+  ok("token_hash continua sendo o sha256 hex do token bruto (64 caracteres hex)", persistedHash === __testing.hashShareToken(rawToken));
   ok("token_hash tem formato de hash hex (64 chars, só [0-9a-f])", /^[0-9a-f]{64}$/.test(persistedHash));
-  ok("token_hash NUNCA é igual ao token bruto", persistedHash !== token);
+  ok("token_hash NUNCA é igual ao token bruto", persistedHash !== rawToken);
 
   // Decisão desta etapa: o valor BRUTO também fica salvo, pra o painel
   // "Link do cliente" poder reexibi-lo a qualquer momento (nunca mais só
-  // uma vez, na tela, no instante da geração).
+  // uma vez, na tela, no instante da geração) — continua valendo mesmo
+  // depois da Etapa "Link legível por cliente" ter trocado a URL exibida.
   ok("exatamente 1 link foi salvo no store", store.links.length === 1);
-  ok("o token bruto foi persistido junto (Etapa 'token recuperável')", store.links[0].token === token);
+  ok("o token bruto foi persistido junto (Etapa 'token recuperável')", store.links[0].token === rawToken);
+  ok("o slug também foi persistido junto (Etapa 'Link legível por cliente')", store.links[0].slug === slug);
 
   const status = await getReportShareLinkStatus("client-a");
-  ok("getReportShareLinkStatus devolve a URL completa reconstruída a partir do token persistido", status.url === `http://localhost:3000/r/${token}`);
+  ok("getReportShareLinkStatus devolve a URL do SLUG (não mais o token), reconstruída a partir do valor persistido", status.url === `http://localhost:3000/r/${slug}`);
 }
 
-console.log('\n13b — status de um link ativo criado ANTES da Etapa "token recuperável" (sem token persistido) cai pro caso "sem valor reexibível"\n');
+console.log('\n13b — status de um link ativo criado ANTES da Etapa "Link legível por cliente" (sem slug persistido) cai pro token, mesmo comportamento de sempre\n');
 {
   const store = new InMemoryReportShareLinkStore(["client-a"]);
   __setReportShareLinkStoreForTests(store);
   // Simula uma linha antiga: insere direto no array, sem passar por
-  // rotateReportShareLink (que sempre grava o token desde esta etapa).
-  store.links.push({ clientId: "client-a", token: null, tokenHash: "hash-antigo", createdAt: new Date().toISOString(), revokedAt: null });
+  // rotateReportShareLink (que sempre grava slug desde esta etapa).
+  store.links.push({ clientId: "client-a", token: "token-antigo-sem-slug", tokenHash: "hash-antigo", slug: null, createdAt: new Date().toISOString(), revokedAt: null });
 
   const status = await getReportShareLinkStatus("client-a");
   ok("link ainda é reportado como ativo", status.active === true);
-  ok("sem token bruto salvo (linha anterior a esta etapa), a URL não é montada", status.url === null);
+  ok("sem slug: a URL cai pro token (mesmo comportamento de antes desta etapa, nunca quebra)", status.url === "http://localhost:3000/r/token-antigo-sem-slug");
+}
+
+console.log('\n13c — status de um link ativo criado ANTES da Etapa "token recuperável" (nem token nem slug persistidos) cai pro caso "sem valor reexibível"\n');
+{
+  const store = new InMemoryReportShareLinkStore(["client-a"]);
+  __setReportShareLinkStoreForTests(store);
+  store.links.push({ clientId: "client-a", token: null, tokenHash: "hash-antigo", slug: null, createdAt: new Date().toISOString(), revokedAt: null });
+
+  const status = await getReportShareLinkStatus("client-a");
+  ok("link ainda é reportado como ativo", status.active === true);
+  ok("sem token nem slug salvos (linha anterior a ambas as etapas), a URL não é montada", status.url === null);
 }
 
 
@@ -334,8 +450,8 @@ console.log("\n16 — URL do link é montada no servidor via VERCEL_PROJECT_PROD
       !/VERCEL_PROJECT_PRODUCTION_URL/.test(actionsSource),
   );
   ok(
-    "a Server Action retorna a URL completa (`url`), não só um path pro cliente montar",
-    /return \{ url: `\$\{resolvePublicShareLinkBaseUrl\(\)\}\/r\/\$\{token\}` \}/.test(actionsSource),
+    "a Server Action retorna a URL completa (`url`), não só um path pro cliente montar — desde a Etapa 'Link legível por cliente', montada a partir do slug",
+    /return \{ url: `\$\{resolvePublicShareLinkBaseUrl\(\)\}\/r\/\$\{slug\}` \}/.test(actionsSource),
   );
   ok("painel client nunca usa window.location.origin pra montar a URL do link", !/window\.location\.origin/.test(panelSource));
   ok("painel client usa result.url diretamente (a URL já vem pronta do servidor)", /setUrl\(result\.url\)/.test(panelSource));

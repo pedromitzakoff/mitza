@@ -53,6 +53,7 @@ interface StoredLink {
   clientId: string;
   token: string | null;
   tokenHash: string;
+  slug: string | null;
   createdAt: string;
   revokedAt: string | null;
 }
@@ -72,6 +73,15 @@ class InMemoryReportShareLinkStore implements ReportShareLinkStore {
     return link ? { clientId: link.clientId } : null;
   }
 
+  async findActiveBySlug(slug: string): Promise<{ clientId: string } | null> {
+    const link = this.links.find((l) => l.slug === slug && l.revokedAt === null);
+    return link ? { clientId: link.clientId } : null;
+  }
+
+  async isSlugActive(slug: string): Promise<boolean> {
+    return this.links.some((l) => l.slug === slug && l.revokedAt === null);
+  }
+
   async isClientLive(clientId: string): Promise<boolean> {
     return this.liveClientIds.has(clientId);
   }
@@ -80,7 +90,7 @@ class InMemoryReportShareLinkStore implements ReportShareLinkStore {
     const link = this.links
       .filter((l) => l.clientId === clientId && l.revokedAt === null)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-    return link ? { clientId: link.clientId, createdAt: link.createdAt, token: link.token } : null;
+    return link ? { clientId: link.clientId, createdAt: link.createdAt, token: link.token, slug: link.slug } : null;
   }
 
   async revokeActiveForClient(clientId: string): Promise<void> {
@@ -90,8 +100,8 @@ class InMemoryReportShareLinkStore implements ReportShareLinkStore {
     }
   }
 
-  async insert(clientId: string, token: string, tokenHash: string): Promise<void> {
-    this.links.push({ clientId, token, tokenHash, createdAt: new Date().toISOString(), revokedAt: null });
+  async insert(clientId: string, token: string, tokenHash: string, slug: string): Promise<void> {
+    this.links.push({ clientId, token, tokenHash, slug, createdAt: new Date().toISOString(), revokedAt: null });
   }
 }
 
@@ -116,11 +126,11 @@ console.log('\n2 — com link ativo, "initialUrl" é a MESMA URL pública recons
   const store = new InMemoryReportShareLinkStore(["client-a"]);
   __setReportShareLinkStoreForTests(store);
 
-  const token = await rotateReportShareLink("client-a");
+  const slug = await rotateReportShareLink("client-a", "Client A");
   const status = await getReportShareLinkStatus("client-a");
 
   ok("status.active === true", status.active === true);
-  ok("status.url é a URL completa com o token (nunca client-a/clientId em lugar do token)", status.url === `http://localhost:3000/r/${token}`);
+  ok("status.url é a URL completa com o slug (nunca client-a/clientId em lugar dele)", status.url === `http://localhost:3000/r/${slug}`);
   ok("status.url nunca contém o clientId literal", !status.url?.includes("client-a"));
 }
 
@@ -128,7 +138,7 @@ console.log("\n3 — depois de revogado, initialUrl volta a ser null (mesmo esta
 {
   const store = new InMemoryReportShareLinkStore(["client-a"]);
   __setReportShareLinkStoreForTests(store);
-  await rotateReportShareLink("client-a");
+  await rotateReportShareLink("client-a", "Client A");
   await store.revokeActiveForClient("client-a");
 
   const status = await getReportShareLinkStatus("client-a");

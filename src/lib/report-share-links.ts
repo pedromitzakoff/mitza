@@ -25,15 +25,31 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * conseguir ver o link de qualquer cliente — aceito deliberadamente, não
  * um descuido.
  *
+ * Etapa "Link legível por cliente" (pedido explícito do usuário: "tem como
+ * o link de cada cliente de dash ter o nome dele ao invés desse código
+ * estranho?", decisão consciente do usuário via `AskUserQuestion` — aceitou
+ * o risco de perder a imprevisibilidade do token depois de avisado
+ * explicitamente): todo link ROTACIONADO a partir desta etapa também ganha
+ * um `slug` legível (`report_share_links.slug`, ver
+ * `supabase/report-share-links-slug.sql`), derivado do nome do cliente
+ * (`slugifyClientName`) — `/r/DanielleSaqui` em vez de `/r/<token aleatório>`.
+ * `resolveClientIdFromShareSlug` tenta resolver por slug PRIMEIRO
+ * (`/r/[token]/page.tsx`), caindo pro hash do token antigo só se não achar
+ * — um link já enviado antes desta etapa (sem slug) continua funcionando
+ * exatamente como antes, nunca invalidado. O token aleatório/hash continuam
+ * gerados e persistidos junto (defesa em profundidade, zero custo) mesmo
+ * que a URL exibida agora seja a do slug.
+ *
  * `ReportShareLinkStore` isola toda leitura/escrita em `report_share_links`/
  * `clients` — mesma razão de `RateLimitBackend` em `lib/rate-limit.ts`: este
  * ambiente de teste não tem Supabase real, então a lógica de
- * autorização (qual token resolve pra qual cliente, revogado nunca resolve,
- * cliente excluído nunca resolve) precisa ser testável injetando um store em
- * memória (`__setReportShareLinkStoreForTests`), sem tocar rede/banco real.
- * A implementação de produção (`SupabaseReportShareLinkStore`) sempre usa
- * `createAdminClient()` (service role) — `report_share_links` não tem
- * NENHUMA policy de RLS, nunca é lida por um client comum do browser.
+ * autorização (qual token/slug resolve pra qual cliente, revogado nunca
+ * resolve, cliente excluído nunca resolve) precisa ser testável injetando
+ * um store em memória (`__setReportShareLinkStoreForTests`), sem tocar
+ * rede/banco real. A implementação de produção
+ * (`SupabaseReportShareLinkStore`) sempre usa `createAdminClient()`
+ * (service role) — `report_share_links` não tem NENHUMA policy de RLS,
+ * nunca é lida por um client comum do browser.
  */
 
 const TOKEN_BYTES = 32;
@@ -46,6 +62,21 @@ function hashShareToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/**
+ * "Danielle Saqui" -> "DanielleSaqui"; acentos nunca sobrevivem (NFD +
+ * descarte dos diacríticos combinantes — Unicode range ̀-ͯ),
+ * qualquer separador (espaço, hífen, apóstrofo...) vira limite de palavra,
+ * cada palavra PascalCase. Nome vazio/só símbolos (nunca deveria acontecer,
+ * `clients.name` é obrigatório) cai num fallback explícito, nunca uma URL
+ * vazia.
+ */
+export function slugifyClientName(name: string): string {
+  const normalized = name.normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const words = normalized.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+  const base = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join("");
+  return base || "Cliente";
+}
+
 export interface ActiveReportShareLink {
   clientId: string;
   createdAt: string;
@@ -54,18 +85,28 @@ export interface ActiveReportShareLink {
    * visível, gere novamente" só daquela vez; qualquer link novo sempre tem
    * valor. */
   token: string | null;
+  /** `null` pra link ativo gerado ANTES da Etapa "Link legível por
+   * cliente" — a URL pública cai pro token nesse caso (ver
+   * `getReportShareLinkStatus`). Link novo sempre tem slug. */
+  slug: string | null;
 }
 
 export interface ReportShareLinkStore {
   /** `null` = token inexistente OU revogado — as duas situações nunca se
    * distinguem pra quem chama. */
   findActiveByTokenHash(tokenHash: string): Promise<{ clientId: string } | null>;
+  /** `null` = slug inexistente OU revogado — mesma garantia de
+   * `findActiveByTokenHash`, nunca distinguível pra quem chama. */
+  findActiveBySlug(slug: string): Promise<{ clientId: string } | null>;
+  /** Usado só na geração, pra nunca colidir com outro link ATIVO (de
+   * qualquer cliente) — um slug revogado está livre pra reuso. */
+  isSlugActive(slug: string): Promise<boolean>;
   /** `false` também cobre "cliente não existe" — mesmo critério do resto da
    * plataforma (`clients...is("deleted_at", null)`). */
   isClientLive(clientId: string): Promise<boolean>;
   findActiveForClient(clientId: string): Promise<ActiveReportShareLink | null>;
   revokeActiveForClient(clientId: string): Promise<void>;
-  insert(clientId: string, token: string, tokenHash: string): Promise<void>;
+  insert(clientId: string, token: string, tokenHash: string, slug: string): Promise<void>;
 }
 
 class SupabaseReportShareLinkStore implements ReportShareLinkStore {
@@ -85,6 +126,28 @@ class SupabaseReportShareLinkStore implements ReportShareLinkStore {
     return data ? { clientId: data.client_id } : null;
   }
 
+  async findActiveBySlug(slug: string): Promise<{ clientId: string } | null> {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase.from("report_share_links").select("client_id").eq("slug", slug).is("revoked_at", null).maybeSingle();
+
+    if (error) {
+      console.error("[report-share-links] falha ao resolver slug", error);
+      return null;
+    }
+    return data ? { clientId: data.client_id } : null;
+  }
+
+  async isSlugActive(slug: string): Promise<boolean> {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase.from("report_share_links").select("id").eq("slug", slug).is("revoked_at", null).maybeSingle();
+
+    if (error) {
+      console.error("[report-share-links] falha ao checar slug", error);
+      return true; // conservador: em dúvida, trata como ocupado (nunca arrisca colisão)
+    }
+    return Boolean(data);
+  }
+
   async isClientLive(clientId: string): Promise<boolean> {
     const supabase = createAdminClient();
     const { data, error } = await supabase.from("clients").select("id").eq("id", clientId).is("deleted_at", null).maybeSingle();
@@ -100,7 +163,7 @@ class SupabaseReportShareLinkStore implements ReportShareLinkStore {
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("report_share_links")
-      .select("client_id, created_at, token")
+      .select("client_id, created_at, token, slug")
       .eq("client_id", clientId)
       .is("revoked_at", null)
       .order("created_at", { ascending: false })
@@ -111,7 +174,7 @@ class SupabaseReportShareLinkStore implements ReportShareLinkStore {
       console.error("[report-share-links] falha ao consultar status do link", error);
       return null;
     }
-    return data ? { clientId: data.client_id, createdAt: data.created_at, token: data.token } : null;
+    return data ? { clientId: data.client_id, createdAt: data.created_at, token: data.token, slug: data.slug } : null;
   }
 
   async revokeActiveForClient(clientId: string): Promise<void> {
@@ -128,9 +191,9 @@ class SupabaseReportShareLinkStore implements ReportShareLinkStore {
     }
   }
 
-  async insert(clientId: string, token: string, tokenHash: string): Promise<void> {
+  async insert(clientId: string, token: string, tokenHash: string, slug: string): Promise<void> {
     const supabase = createAdminClient();
-    const { error } = await supabase.from("report_share_links").insert({ client_id: clientId, token, token_hash: tokenHash });
+    const { error } = await supabase.from("report_share_links").insert({ client_id: clientId, token, token_hash: tokenHash, slug });
 
     if (error) {
       console.error("[report-share-links] falha ao criar link", error);
@@ -169,16 +232,33 @@ export async function resolveClientIdFromShareToken(token: string): Promise<stri
   return isLive ? link.clientId : null;
 }
 
+/**
+ * Etapa "Link legível por cliente" — `/r/[token]` tenta isto PRIMEIRO (ver
+ * `resolveClientIdFromShareSlug` vs. `resolveClientIdFromShareToken` no
+ * route handler). Mesma garantia de neutralidade de sempre: slug
+ * inexistente, revogado, ou cliente já excluído são todos `null`,
+ * indistinguíveis pra quem chama.
+ */
+export async function resolveClientIdFromShareSlug(slug: string): Promise<string | null> {
+  if (!slug) return null;
+
+  const link = await store.findActiveBySlug(slug);
+  if (!link) return null;
+
+  const isLive = await store.isClientLive(link.clientId);
+  return isLive ? link.clientId : null;
+}
+
 export interface ReportShareLinkStatus {
   active: boolean;
   createdAt: string | null;
-  /** URL pública completa (`https://.../r/<token>`) do link ativo, sempre
-   * que existir um — Etapa "Link Externo — token recuperável": o token
-   * bruto fica persistido desde a geração (ver `ActiveReportShareLink.token`),
-   * então esta função consegue reconstruir a URL a qualquer momento, não só
-   * no instante em que o link foi gerado. `null` sem link ativo, ou pra um
-   * link ativo criado antes desta etapa (sem valor persistido — nesse caso
-   * peça pra gerar um novo). */
+  /** URL pública completa do link ativo, sempre que existir um — desde a
+   * Etapa "Link legível por cliente", `https://.../r/<slug>` (ex.:
+   * "DanielleSaqui") pra qualquer link gerado a partir dela; um link mais
+   * antigo (sem slug persistido) cai pra `https://.../r/<token>`, mesmo
+   * comportamento de sempre. `null` sem link ativo, ou pra um link ativo
+   * criado antes da Etapa "Link Externo — token recuperável" (nem token nem
+   * slug persistidos — peça pra gerar um novo). */
   url: string | null;
 }
 
@@ -213,24 +293,43 @@ export function resolvePublicShareLinkBaseUrl(): string {
  * arquivo sobre o trade-off). */
 export async function getReportShareLinkStatus(clientId: string): Promise<ReportShareLinkStatus> {
   const active = await store.findActiveForClient(clientId);
-  const url = active?.token ? `${resolvePublicShareLinkBaseUrl()}/r/${active.token}` : null;
+  const identifier = active?.slug ?? active?.token ?? null;
+  const url = identifier ? `${resolvePublicShareLinkBaseUrl()}/r/${identifier}` : null;
   return { active: Boolean(active), createdAt: active?.createdAt ?? null, url };
+}
+
+/** Deriva um slug único entre links ATIVOS (de qualquer cliente) a partir
+ * do nome — primeira tentativa é o nome puro; colisão (ex.: dois clientes
+ * "João Silva") recebe um sufixo numérico incremental, nunca trava a
+ * geração do link em si. */
+async function generateUniqueSlug(clientName: string): Promise<string> {
+  const base = slugifyClientName(clientName);
+  let candidate = base;
+  let suffix = 2;
+  while (await store.isSlugActive(candidate)) {
+    candidate = `${base}${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
 }
 
 /**
  * Gera um novo link, revogando primeiro qualquer link ativo anterior do
  * MESMO cliente — nunca mais de um link ativo por cliente ao mesmo tempo
  * (a UI só tem um estado "ativo" por vez: "Gerar novo link" sempre rotaciona
- * o anterior, nunca acumula). Retorna o token bruto — desde a Etapa "Link
- * Externo — token recuperável" ele também fica persistido (nunca só nesta
- * chamada), então `getReportShareLinkStatus` consegue devolvê-lo de novo
- * depois, a qualquer momento.
+ * o anterior, nunca acumula; revogar primeiro também libera o slug antigo
+ * deste cliente pra reuso imediato, nunca uma falsa colisão contra si
+ * mesmo). Token/hash continuam gerados e persistidos (defesa em
+ * profundidade, compat com `/r/[token]` antigo) — mas o identificador
+ * devolvido e exibido agora é o slug legível (Etapa "Link legível por
+ * cliente"), derivado de `clientName`.
  */
-export async function rotateReportShareLink(clientId: string): Promise<string> {
+export async function rotateReportShareLink(clientId: string, clientName: string): Promise<string> {
   await store.revokeActiveForClient(clientId);
   const token = generateShareToken();
-  await store.insert(clientId, token, hashShareToken(token));
-  return token;
+  const slug = await generateUniqueSlug(clientName);
+  await store.insert(clientId, token, hashShareToken(token), slug);
+  return slug;
 }
 
 /** Revoga qualquer link ativo do cliente — idempotente (sem link ativo, é

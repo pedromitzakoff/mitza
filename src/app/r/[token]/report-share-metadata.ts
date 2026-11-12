@@ -1,24 +1,24 @@
 import { cache } from "react";
 import { resolveAnalyticsPeriod, type AnalyticsPeriod } from "@/lib/analytics";
-import { resolveClientIdFromShareToken } from "@/lib/report-share-links";
+import { resolveClientIdFromShareSlug, resolveClientIdFromShareToken } from "@/lib/report-share-links";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { todayDateString } from "@/lib/today";
 
 /**
- * Etapa "OG Metadata do Relatório Público": dado mínimo e seguro pra
+ * Etapa "OG Metadata do Link Compartilhado": dado mínimo e seguro pra
  * alimentar o preview de compartilhamento (`generateMetadata`/
- * `opengraph-image.tsx`) — NUNCA a pipeline pesada do relatório
- * (`buildPerformanceReportData`/`buildPerformanceReportDocument`, que
- * carrega métrica), só o nome do cliente. Resolve o token pela MESMA
- * função de sempre (`resolveClientIdFromShareToken`) — token inexistente,
- * revogado ou cliente já excluído seguem indistinguíveis (`null`), mesmo
- * comportamento neutro de sempre. `cache()` evita repetir a consulta
- * quando `generateMetadata` e a página chamam com o mesmo token dentro do
+ * `opengraph-image.tsx`) — NUNCA a pipeline pesada do Cockpit
+ * (`buildCockpitViewModel`), só o nome do cliente. Resolve o identificador
+ * pelas MESMAS funções de sempre — slug primeiro (Etapa "Link legível por
+ * cliente"), token como fallback — identificador inexistente, revogado ou
+ * cliente já excluído seguem indistinguíveis (`null`), mesmo comportamento
+ * neutro de sempre. `cache()` evita repetir a consulta quando
+ * `generateMetadata` e a página chamam com o mesmo identificador dentro do
  * mesmo request (padrão recomendado pelo Next.js pra dado usado nos dois
  * lugares).
  */
 export const resolveReportShareClientName = cache(async (token: string): Promise<string | null> => {
-  const clientId = await resolveClientIdFromShareToken(token);
+  const clientId = (await resolveClientIdFromShareSlug(token)) ?? (await resolveClientIdFromShareToken(token));
   if (!clientId) return null;
 
   const supabase = createAdminClient();
