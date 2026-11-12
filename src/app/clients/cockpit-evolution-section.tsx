@@ -301,6 +301,13 @@ export function CockpitEvolutionSection({
 }) {
   const [leftId, setLeftId] = useState(defaultLeftId);
   const [rightId, setRightId] = useState(defaultRightId);
+  // Etapa "Otimizacao mobile - Fase 1" (pedido explicito do usuario): no
+  // celular, mostrar UM grafico por vez (menos rolagem, mais foco) com uma
+  // aba pra alternar - nunca uma segunda logica de dados/selecao, so um
+  // "qual dos dois paineis ja montados esta visivel agora" puramente
+  // visual (CSS `hidden`/`block`); no desktop (`lg:`) os dois continuam
+  // sempre visiveis lado a lado, like antes.
+  const [mobileActiveSide, setMobileActiveSide] = useState<Side>("left");
 
   // Mesmo cuidado de hidratação de sempre (CockpitAdMetricCards): a
   // primeira renderização usa sempre o default (idêntico servidor/cliente),
@@ -338,10 +345,37 @@ export function CockpitEvolutionSection({
       {series.length === 0 ? (
         <p className="mt-3 text-sm text-overview-text-secondary">{emptyMessage}</p>
       ) : (
-        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <EvolutionChartSlot side="left" series={series} selectedId={leftId} onSelect={(id) => handleSelect("left", id)} />
-          <EvolutionChartSlot side="right" series={series} selectedId={rightId} onSelect={(id) => handleSelect("right", id)} />
-        </div>
+        <>
+          <div className="mt-3 flex gap-2 lg:hidden">
+            {(["left", "right"] as const).map((side) => {
+              const sideMetric = series.find((s) => s.id === (side === "left" ? leftId : rightId)) ?? series[0];
+              const isActive = mobileActiveSide === side;
+              return (
+                <button
+                  key={side}
+                  type="button"
+                  onClick={() => setMobileActiveSide(side)}
+                  aria-pressed={isActive}
+                  className={`min-h-9 flex-1 rounded-full border px-3 text-xs font-medium ${
+                    isActive
+                      ? "border-brand bg-brand/10 text-brand"
+                      : "border-overview-border text-overview-text-secondary hover:bg-overview-surface-hover"
+                  }`}
+                >
+                  {sideMetric?.label ?? (side === "left" ? "Gráfico 1" : "Gráfico 2")}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <div className={mobileActiveSide === "left" ? "block" : "hidden lg:block"}>
+              <EvolutionChartSlot side="left" series={series} selectedId={leftId} onSelect={(id) => handleSelect("left", id)} />
+            </div>
+            <div className={mobileActiveSide === "right" ? "block" : "hidden lg:block"}>
+              <EvolutionChartSlot side="right" series={series} selectedId={rightId} onSelect={(id) => handleSelect("right", id)} />
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

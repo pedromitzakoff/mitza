@@ -17,6 +17,7 @@ import { DataFreshnessTimer } from "./data-freshness-timer";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import { CLIENT_STATUS_LABEL, CLIENT_STATUS_BADGE_CLASSES } from "@/lib/client-fields";
 import { AccountInfoDrawerLauncher } from "./account-info-drawer-launcher";
+import { CockpitMobileFilterToggle } from "./cockpit-mobile-filter-toggle";
 
 /** Glifo "infinito" da Meta — identifica o canal no cabeçalho unificado
  * (ao lado do rótulo "Meta Ads"), sempre junto do MESMO critério que já
@@ -93,13 +94,17 @@ export function CockpitView({ model, today }: { model: CockpitViewModel; today: 
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-overview-text-muted">
+          {/* Etapa "Otimizacao mobile - Fase 1": o canal ja aparece no
+              subtitulo (nome + canal, sempre visivel) - este chip so
+              repetiria a mesma informacao num celular que precisa do
+              minimo de altura possivel, por isso fica so no desktop. */}
           {model.showMetaSection && (
-            <span className="flex items-center gap-1.5 font-medium text-overview-text-secondary">
+            <span className="hidden items-center gap-1.5 font-medium text-overview-text-secondary lg:flex">
               <MetaGlyph />
               Meta Ads
             </span>
           )}
-          <span className="flex items-center gap-1.5 border-l border-overview-border pl-4">
+          <span className="flex items-center gap-1.5 lg:border-l lg:border-overview-border lg:pl-4">
             {model.adBalance && <CockpitAdAccountBalance snapshot={model.adBalance} />}
             <DataFreshnessTimer lastSuccessAt={model.dataFreshness.lastSuccessAt} />
           </span>
@@ -111,10 +116,22 @@ export function CockpitView({ model, today }: { model: CockpitViewModel; today: 
             ))}
           {model.accountInfoClientId && (
             <span className="border-l border-overview-border pl-4">
-              <AccountInfoDrawerLauncher
-                clientId={model.accountInfoClientId}
-                triggerClassName="rounded-full border border-overview-border px-3 py-1.5 font-medium text-overview-text-secondary hover:bg-overview-surface-hover hover:text-overview-text-primary"
-              />
+              {/* Desktop: pill com texto (layout ja aprovado, intocado).
+                  Mobile: so o icone (mesmo gatilho/drawer), pra nao
+                  adicionar mais uma linha inteira ao cabecalho compacto. */}
+              <span className="hidden lg:inline">
+                <AccountInfoDrawerLauncher
+                  clientId={model.accountInfoClientId}
+                  triggerClassName="rounded-full border border-overview-border px-3 py-1.5 font-medium text-overview-text-secondary hover:bg-overview-surface-hover hover:text-overview-text-primary"
+                />
+              </span>
+              <span className="lg:hidden">
+                <AccountInfoDrawerLauncher
+                  clientId={model.accountInfoClientId}
+                  iconOnly
+                  triggerClassName="mitza-pressable flex h-8 w-8 items-center justify-center rounded-full border border-overview-border text-overview-text-secondary hover:bg-overview-surface-hover hover:text-overview-text-primary"
+                />
+              </span>
             </span>
           )}
         </div>
@@ -130,7 +147,10 @@ export function CockpitView({ model, today }: { model: CockpitViewModel; today: 
             &rsaquo;
           </IconButton>
         </div>
-        <CockpitGlobalFilterBar initialText={model.filterText} initialMode={model.filterMode} />
+        <div className="hidden lg:block">
+          <CockpitGlobalFilterBar initialText={model.filterText} initialMode={model.filterMode} />
+        </div>
+        <CockpitMobileFilterToggle initialText={model.filterText} initialMode={model.filterMode} isFilterActive={model.isFilterActive} />
         {model.metasHref && (
           <Link href={model.metasHref} className="ml-auto shrink-0 text-xs font-medium text-brand hover:underline">
             Ver Metas →
@@ -138,15 +158,22 @@ export function CockpitView({ model, today }: { model: CockpitViewModel; today: 
         )}
       </div>
 
-      <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <CockpitBudgetCard
-          headline={model.budget.headline}
-          clientId={model.clientId}
-          monthParam={model.monthParam}
-          channels={model.budget.channels}
-          canEdit={model.budget.canEdit}
-          isGlobalFilterActive={model.isFilterActive}
-        />
+      {/* Etapa "Otimizacao mobile - Fase 1" (pedido explicito do usuario):
+          Investimento ocupa a largura toda, Resultado+Custo formam um par
+          lado a lado logo abaixo - ja a partir do menor celular (375px),
+          nunca so a partir de tablet. `grid-cols-2` e a base (mobile/
+          tablet); o desktop aprovado (3 colunas) fica intocado em `lg:`. */}
+      <div className="mt-2 grid grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-4">
+        <div className="col-span-2 lg:col-span-1">
+          <CockpitBudgetCard
+            headline={model.budget.headline}
+            clientId={model.clientId}
+            monthParam={model.monthParam}
+            channels={model.budget.channels}
+            canEdit={model.budget.canEdit}
+            isGlobalFilterActive={model.isFilterActive}
+          />
+        </div>
         {model.resultCards.map(({ result, status, cost }) => (
           <Fragment key={`group-${result.resultType}-${result.channelsLabel ?? "all"}`}>
             <CockpitResultCard view={result} status={status} />

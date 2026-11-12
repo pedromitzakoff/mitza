@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Info } from "lucide-react";
 import { AccountInfoDrawer, type AccountInfoSyncRun } from "./account-info-drawer";
 import { getAccountInfoDrawerDataAction } from "./account-info-actions";
 import { syncClientMetaApiSourcesAction } from "./meta-api-sync-actions";
@@ -28,8 +29,21 @@ interface DrawerData {
  * trigger/estado próprio) justamente pra este componente ser o único a
  * decidir quando ele existe. Renderizado uma vez no header persistente do
  * workspace (`client-workspace-header.tsx`), nunca em cada aba.
+ *
+ * Etapa "Otimizacao mobile - Fase 1": `iconOnly` (opt-in, cabecalho
+ * compacto do Cockpit no celular) troca o rotulo por so o icone - MESMO
+ * gatilho/estado/drawer, nunca uma segunda implementacao; so a
+ * apresentacao do botao muda.
  */
-export function AccountInfoDrawerLauncher({ clientId, triggerClassName }: { clientId: string; triggerClassName: string }) {
+export function AccountInfoDrawerLauncher({
+  clientId,
+  triggerClassName,
+  iconOnly = false,
+}: {
+  clientId: string;
+  triggerClassName: string;
+  iconOnly?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<DrawerData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,8 +61,8 @@ export function AccountInfoDrawerLauncher({ clientId, triggerClassName }: { clie
 
   return (
     <>
-      <button type="button" onClick={handleOpen} className={triggerClassName}>
-        Informações da conta
+      <button type="button" onClick={handleOpen} aria-label={iconOnly ? "Informações da conta" : undefined} className={triggerClassName}>
+        {iconOnly ? <Info className="h-4 w-4" aria-hidden="true" /> : "Informações da conta"}
       </button>
 
       {open &&
