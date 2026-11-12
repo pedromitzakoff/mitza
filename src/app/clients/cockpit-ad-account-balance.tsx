@@ -19,21 +19,22 @@ import type { MetaAdAccountBalanceSnapshot } from "@/lib/meta-ads-dashboard/dash
  * "Saldo" (`client.balance_url`): a maioria dos clientes não tem conta
  * Meta direta configurada, e um indicador de erro no cabeçalho pra todo
  * mundo seria ruído, não informação.
+ *
+ * Etapa "Cabeçalho unificado": o prefixo "Meta Ads" saiu do texto — o
+ * cabeçalho já identifica o canal uma vez (ícone + rótulo), separado deste
+ * indicador por um divisor; repeti-lo aqui era a MESMA duplicação visual
+ * que esta etapa existe pra eliminar.
  */
 export function CockpitAdAccountBalance({ snapshot }: { snapshot: MetaAdAccountBalanceSnapshot }) {
   if (snapshot.status !== "ok") return null;
 
   if (!snapshot.isPrepay) {
-    return (
-      <p className="text-xs text-overview-text-muted">
-        Meta Ads <span className="font-medium text-overview-text-secondary">Pós-pago</span>
-      </p>
-    );
+    return <span className="font-medium text-overview-text-secondary">Pós-pago</span>;
   }
 
   return (
-    <p className="text-xs text-overview-text-muted">
-      Saldo Meta Ads <span className="font-medium tabular-nums text-overview-text-primary">{formatCurrencyInCurrency(snapshot.balance, snapshot.currency)}</span>
-    </p>
+    <span className="text-overview-text-muted">
+      Saldo: <span className="font-medium tabular-nums text-overview-text-primary">{formatCurrencyInCurrency(snapshot.balance, snapshot.currency)}</span>
+    </span>
   );
 }

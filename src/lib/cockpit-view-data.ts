@@ -35,6 +35,7 @@ import { computePerformanceSummary } from "@/lib/performance";
 import { resolvePerformanceRowsForSprints, getDailyPerformanceRowsForPeriod } from "@/lib/performance-queries";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { AVAILABLE_TRAFFIC_CHANNELS, resolveClientMediaChannels, TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+import type { ClientContractStatus } from "@/lib/supabase/database.types";
 import type { DashboardChannelDataIssue } from "@/app/clients/channel-data-issue";
 import type { DataAttention } from "@/lib/data-trust";
 import { buildMetasHref } from "@/app/clients/[id]/metas/page";
@@ -107,6 +108,18 @@ export interface CockpitBanner {
 export interface CockpitViewModel {
   clientId: string;
   clientName: string;
+  /** Logo do cliente (cabeçalho unificado) — mesmo campo que já alimentava
+   * `ClientWorkspaceHeader`/`ClientAvatar`, nenhuma segunda fonte. */
+  clientAvatarUrl: string | null;
+  /** Status CONTRATUAL (nunca confundido com saúde de performance) — mesmo
+   * registro (`CLIENT_STATUS_LABEL`/`CLIENT_STATUS_BADGE_CLASSES`) que já
+   * exibia o badge "Ativo" no header antigo; seguro pros dois visitantes
+   * (o próprio cliente já sabe se seu contrato está ativo). */
+  clientStatus: ClientContractStatus;
+  /** `null` no modo compartilhado — o drawer "Informações da conta"
+   * (sincronização, link de compartilhamento, histórico) é só da agência;
+   * presente = `clientId` pra `AccountInfoDrawerLauncher`. */
+  accountInfoClientId: string | null;
   /** Raiz da rota que está exibindo este modelo (`/clients/{id}` na agência,
    * `/r/{token}` no link compartilhado) — usada só pra montar hrefs de
    * navegação de mês (`MonthSelect`), nunca pra decidir permissão. */
@@ -674,6 +687,9 @@ export async function buildCockpitViewModel(
   return {
     clientId: client.id,
     clientName: client.name,
+    clientAvatarUrl: client.avatar_url,
+    clientStatus: client.status,
+    accountInfoClientId: viewer.kind === "agency" ? client.id : null,
     basePath,
     headerChannelsLabel,
     metasHref,

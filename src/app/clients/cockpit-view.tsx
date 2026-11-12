@@ -14,6 +14,22 @@ import { CockpitAdExplorationSection } from "./cockpit-ad-exploration-section";
 import { CockpitChannelBreakdown } from "./cockpit-channel-breakdown";
 import { DashboardMetricsCards } from "./dashboard-metrics-cards";
 import { DataFreshnessTimer } from "./data-freshness-timer";
+import { ClientAvatar } from "@/components/workspace/client-avatar";
+import { CLIENT_STATUS_LABEL, CLIENT_STATUS_BADGE_CLASSES } from "@/lib/client-fields";
+import { AccountInfoDrawerLauncher } from "./account-info-drawer-launcher";
+
+/** Glifo "infinito" da Meta — identifica o canal no cabeçalho unificado
+ * (ao lado do rótulo "Meta Ads"), sempre junto do MESMO critério que já
+ * decide `showMetaSection` (nunca um ícone genérico por canal — só a Meta
+ * tem integração automática nesta etapa). */
+function MetaGlyph() {
+  return (
+    <svg viewBox="0 0 24 16" aria-hidden="true" className="h-3.5 w-5 shrink-0">
+      <circle cx="7" cy="8" r="5.5" fill="none" stroke="#0866FF" strokeWidth="3" />
+      <circle cx="17" cy="8" r="5.5" fill="none" stroke="#0866FF" strokeWidth="3" />
+    </svg>
+  );
+}
 
 /**
  * Correção definitiva da divergência Dashboard interno × link compartilhado
@@ -51,39 +67,57 @@ export function CockpitView({ model, today }: { model: CockpitViewModel; today: 
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-        {model.adBalance && <CockpitAdAccountBalance snapshot={model.adBalance} />}
-        <DataFreshnessTimer lastSuccessAt={model.dataFreshness.lastSuccessAt} />
-        {model.externalLinks.length > 0 && (
-          <div className="ml-auto flex items-center gap-3">
-            {model.externalLinks.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-medium text-overview-text-secondary hover:underline"
-              >
+      {/* Cabeçalho unificado (Etapa "Cabeçalho unificado"): única faixa, nunca
+          mais duas (antes: uma linha com saldo/frescor/links + outra, abaixo,
+          com título/nome/Ver Metas — a MESMA informação espalhada em dois
+          lugares). Reaproveita 100% dos dados já existentes no
+          `CockpitViewModel` — nenhum cálculo novo, só reorganização visual.
+          Compartilhada por `/clients/[id]` e `/r/[token]` (este componente é
+          o mesmo nos dois), então a atualização chega automaticamente nos
+          dois no mesmo deploy. */}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-overview-border pb-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <ClientAvatar name={model.clientName} imageUrl={model.clientAvatarUrl} size="md" />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-semibold text-overview-text-primary">Visão executiva</h1>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${CLIENT_STATUS_BADGE_CLASSES[model.clientStatus]}`}>
+                {CLIENT_STATUS_LABEL[model.clientStatus]}
+              </span>
+            </div>
+            <p className="mt-0.5 truncate text-sm text-overview-text-secondary">
+              {model.clientName}
+              {model.headerChannelsLabel ? ` · ${model.headerChannelsLabel}` : ""}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-overview-text-muted">
+          {model.showMetaSection && (
+            <span className="flex items-center gap-1.5 font-medium text-overview-text-secondary">
+              <MetaGlyph />
+              Meta Ads
+            </span>
+          )}
+          <span className="flex items-center gap-1.5 border-l border-overview-border pl-4">
+            {model.adBalance && <CockpitAdAccountBalance snapshot={model.adBalance} />}
+            <DataFreshnessTimer lastSuccessAt={model.dataFreshness.lastSuccessAt} />
+          </span>
+          {model.externalLinks.length > 0 &&
+            model.externalLinks.map((link) => (
+              <a key={link.label} href={link.href} target="_blank" rel="noopener noreferrer" className="font-medium hover:underline">
                 {link.label}
               </a>
             ))}
-          </div>
-        )}
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold text-overview-text-primary">Visão executiva</h1>
-          <p className="mt-0.5 text-sm text-overview-text-secondary">
-            {model.clientName}
-            {model.headerChannelsLabel ? ` · ${model.headerChannelsLabel}` : ""}
-          </p>
+          {model.accountInfoClientId && (
+            <span className="border-l border-overview-border pl-4">
+              <AccountInfoDrawerLauncher
+                clientId={model.accountInfoClientId}
+                triggerClassName="rounded-full border border-overview-border px-3 py-1.5 font-medium text-overview-text-secondary hover:bg-overview-surface-hover hover:text-overview-text-primary"
+              />
+            </span>
+          )}
         </div>
-        {model.metasHref && (
-          <Link href={model.metasHref} className="shrink-0 text-xs font-medium text-brand hover:underline">
-            Ver Metas →
-          </Link>
-        )}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -97,6 +131,11 @@ export function CockpitView({ model, today }: { model: CockpitViewModel; today: 
           </IconButton>
         </div>
         <CockpitGlobalFilterBar initialText={model.filterText} initialMode={model.filterMode} />
+        {model.metasHref && (
+          <Link href={model.metasHref} className="ml-auto shrink-0 text-xs font-medium text-brand hover:underline">
+            Ver Metas →
+          </Link>
+        )}
       </div>
 
       <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

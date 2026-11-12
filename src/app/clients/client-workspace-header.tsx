@@ -48,6 +48,15 @@ import { AccountInfoDrawerLauncher } from "./account-info-drawer-launcher";
  * próprio cliente destacado na Sidebar exige achar a linha certa (pode
  * estar fora da área visível com ~100 clientes), enquanto o avatar está
  * sempre à mão.
+ *
+ * Etapa "Cabeçalho unificado" (pedido explícito do usuário): no Cockpit
+ * (`isOnCockpit`), este header não renderiza mais nada — `CockpitView`
+ * (`app/clients/cockpit-view.tsx`) passou a mostrar a MESMA identidade
+ * (avatar/nome/status/Informações da conta) dentro do seu próprio
+ * cabeçalho único, pra nunca mais existirem duas faixas sobrepostas na
+ * mesma tela. Nas demais sub-rotas (`/metas`, `/relatorio`, `/dados`,
+ * `/edit`, que não têm esse cabeçalho próprio) este continua exatamente
+ * como antes.
  */
 export function ClientWorkspaceHeader({
   client,
@@ -56,6 +65,8 @@ export function ClientWorkspaceHeader({
 }) {
   const pathname = usePathname();
   const isOnCockpit = resolveCurrentSuffix(pathname, client.id) === "";
+
+  if (isOnCockpit) return null;
 
   return (
     <div className="border-b border-overview-border bg-overview-surface">
