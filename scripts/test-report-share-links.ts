@@ -284,10 +284,14 @@ console.log("\n7 — alteração de query/parâmetro nunca muda o cliente autori
   );
   // Correção da divergência Dashboard interno × link compartilhado: o
   // link agora abre o Cockpit (CockpitView via buildCockpitViewModel),
-  // cujos únicos parâmetros de URL são mês/filtro — nunca clientId.
+  // cujos únicos parâmetros de URL são mês/filtro/canal — nunca clientId.
+  // Etapa "Visualizações independentes por canal" acrescentou `canal`
+  // (mesmo padrão: nunca um identificador de cliente/autorização).
   ok(
-    "searchParams desestruturado só pega campos de mês/filtro do Cockpit, nunca clientId",
-    /const \{ month: monthQueryParam, filtro: filterTextParam, modo: filterModeParam \} = await searchParams/.test(source),
+    "searchParams desestruturado só pega campos de mês/filtro/canal do Cockpit, nunca clientId",
+    /const \{ month: monthQueryParam, filtro: filterTextParam, modo: filterModeParam, canal: channelScopeParam \} = await searchParams/.test(
+      source,
+    ),
   );
   ok("nunca lê searchParams.clientId em lugar nenhum do arquivo", !/searchParams\.clientId|searchParams\[.client_?[Ii]d.\]/.test(source));
   ok(

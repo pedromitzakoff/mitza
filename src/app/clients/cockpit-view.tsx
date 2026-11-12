@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Fragment } from "react";
-import { buildCockpitMonthHref, type CockpitViewModel } from "@/lib/cockpit-view-data";
+import { buildCockpitMonthHref, buildCockpitChannelHref, type CockpitViewModel } from "@/lib/cockpit-view-data";
+import { VisaoGeralChannelSwitch } from "./visao-geral-channel-switch";
 import { MonthSelect } from "./month-select";
 import { IconButton } from "@/components/workspace/button";
 import { CockpitBudgetCard } from "./cockpit-meta-ritmo-section";
@@ -147,6 +148,17 @@ export function CockpitView({ model, today }: { model: CockpitViewModel; today: 
             &rsaquo;
           </IconButton>
         </div>
+        {/* Etapa "Visualizações independentes por canal" (pedido explícito
+            do usuário): só aparece quando há de fato mais de 1 canal pra
+            escolher pra este cliente — a grande maioria (1 canal só) nunca
+            vê isto, o nome do canal já está no subtítulo do cabeçalho. */}
+        {model.channelScopeOptions.length > 1 && (
+          <VisaoGeralChannelSwitch
+            options={model.channelScopeOptions}
+            active={model.channelScope}
+            buildHref={(channel) => buildCockpitChannelHref(model.basePath, model.monthParam, channel)}
+          />
+        )}
         <div className="hidden lg:block">
           <CockpitGlobalFilterBar initialText={model.filterText} initialMode={model.filterMode} />
         </div>

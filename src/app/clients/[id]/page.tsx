@@ -58,10 +58,11 @@ export default async function ClientPage({
     month?: string;
     filtro?: string;
     modo?: string;
+    canal?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, synced, saved, month: monthQueryParam, filtro: filterTextParam, modo: filterModeParam } = await searchParams;
+  const { error, synced, saved, month: monthQueryParam, filtro: filterTextParam, modo: filterModeParam, canal: channelScopeParam } = await searchParams;
 
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
@@ -78,6 +79,7 @@ export default async function ClientPage({
     monthQueryParam,
     filterTextParam,
     filterModeParam,
+    channelScopeParam,
     viewer: { kind: "agency", isAdmin },
     basePath: `/clients/${id}`,
     extraBanners,

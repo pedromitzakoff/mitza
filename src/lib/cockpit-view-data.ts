@@ -34,7 +34,15 @@ import { listClientGoals, resolvePrimaryGoal, resolveChannelGoal, type ClientGoa
 import { computePerformanceSummary } from "@/lib/performance";
 import { resolvePerformanceRowsForSprints, getDailyPerformanceRowsForPeriod } from "@/lib/performance-queries";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
-import { AVAILABLE_TRAFFIC_CHANNELS, resolveClientMediaChannels, TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
+import {
+  AVAILABLE_TRAFFIC_CHANNELS,
+  resolveClientMediaChannels,
+  resolveClientChannelScopeOptions,
+  resolveSelectedChannelScope,
+  TRAFFIC_CHANNELS,
+  type ChannelScope,
+  type TrafficChannel,
+} from "@/lib/traffic-channels";
 import type { ClientContractStatus } from "@/lib/supabase/database.types";
 import type { DashboardChannelDataIssue } from "@/app/clients/channel-data-issue";
 import type { DataAttention } from "@/lib/data-trust";
@@ -125,6 +133,14 @@ export interface CockpitViewModel {
    * navegação de mês (`MonthSelect`), nunca pra decidir permissão. */
   basePath: string;
   headerChannelsLabel: string;
+  /** Etapa "Visualizações independentes por canal": opções do seletor já na
+   * ordem certa pra ESTE cliente (`resolveClientChannelScopeOptions`) —
+   * comprimento 1 (ou 0) = nada pra selecionar, seletor não aparece
+   * (ver `cockpit-view.tsx`). */
+  channelScopeOptions: ChannelScope[];
+  /** Canal efetivamente em exibição agora — já resolvido/validado pra este
+   * cliente (`resolveSelectedChannelScope`), nunca o parâmetro bruto da URL. */
+  channelScope: ChannelScope;
   /** `null` no modo compartilhado — `/metas` é uma rota autenticada,
    * inacessível a um visitante sem login. */
   metasHref: string | null;
@@ -184,6 +200,19 @@ export function buildCockpitMonthHref(basePath: string, month: string | null): s
   return `${basePath}${month ? `?month=${month}` : ""}`;
 }
 
+/** Mesmo padrão de `buildCockpitMonthHref` — preserva o mês selecionado
+ * junto da troca de canal (`?month=...&canal=...`), nunca reseta um ao
+ * trocar o outro. `canal` sempre explícito na URL (inclusive
+ * "consolidated") pra sobreviver a um refresh/link compartilhado sem
+ * voltar pro default (`resolveSelectedChannelScope` só cai no default
+ * quando o parâmetro está AUSENTE). */
+export function buildCockpitChannelHref(basePath: string, month: string | null, channel: ChannelScope): string {
+  const params = new URLSearchParams();
+  if (month) params.set("month", month);
+  params.set("canal", channel);
+  return `${basePath}?${params.toString()}`;
+}
+
 export async function buildCockpitViewModel(
   supabase: SupabaseClient,
   clientId: string,
@@ -191,12 +220,13 @@ export async function buildCockpitViewModel(
     monthQueryParam: string | undefined;
     filterTextParam: string | undefined;
     filterModeParam: string | undefined;
+    channelScopeParam: string | undefined;
     viewer: CockpitViewer;
     basePath: string;
     extraBanners?: CockpitBanner[];
   },
 ): Promise<CockpitViewModel> {
-  const { monthQueryParam, filterTextParam, filterModeParam, viewer, basePath, extraBanners = [] } = options;
+  const { monthQueryParam, filterTextParam, filterModeParam, channelScopeParam, viewer, basePath, extraBanners = [] } = options;
   const isAdmin = viewer.kind === "agency" && viewer.isAdmin;
   const cockpitFilter = resolveCockpitFilterState(filterTextParam, filterModeParam);
 
@@ -218,7 +248,29 @@ export async function buildCockpitViewModel(
   const hasConfiguredDashboardMetrics = (client.dashboard_metrics ?? []).length > 0;
   const effectiveDashboardMetrics = resolveEffectiveDashboardMetrics(client.dashboard_metrics ?? [], client.performance_goal);
 
-  const clientChannels = AVAILABLE_TRAFFIC_CHANNELS.filter((c) => resolveClientMediaChannels(client.media_channels).includes(c));
+  const allClientChannels = AVAILABLE_TRAFFIC_CHANNELS.filter((c) => resolveClientMediaChannels(client.media_channels).includes(c));
+
+  /**
+   * Etapa "Visualizações independentes por canal" (pedido explícito do
+   * usuário: "não faz sentido somar os dois... quero visualizações
+   * independentes"): `channelScope` é a ÚNICA fonte de verdade de "qual(is)
+   * canal(is) esta renderização enxerga" — reaproveita 100% de
+   * `lib/traffic-channels.ts` (`resolveClientChannelScopeOptions`/
+   * `resolveSelectedChannelScope`, construídas numa etapa anterior pra essa
+   * MESMA finalidade mas nunca ligadas ao Cockpit). `clientChannels` (nome
+   * mantido — é o único identificador que todo o resto da função já usa
+   * pra decidir "quais canais entram no cálculo") vira o recorte efetivo: o
+   * MESMO array de sempre em "Consolidado" (nenhuma mudança pra cliente de
+   * 1 canal só, a grande maioria), ou só o canal escolhido quando o usuário
+   * seleciona um — toda a cascata downstream (orçamento, grupos de
+   * resultado, saldo/indicadores/exploração Meta, quebra por canal) já é
+   * inteiramente escrita em cima de `clientChannels`, então filtrar aqui
+   * nesta única linha propaga pra tudo, sem precisar repetir a lógica em
+   * cada seção.
+   */
+  const channelScopeOptions = resolveClientChannelScopeOptions(client.media_channels);
+  const channelScope = resolveSelectedChannelScope(channelScopeParam, client.media_channels);
+  const clientChannels: TrafficChannel[] = channelScope === "consolidated" ? allClientChannels : allClientChannels.filter((c) => c === channelScope);
 
   const today = todayUTC();
   const todayStr = todayDateString();
@@ -692,6 +744,8 @@ export async function buildCockpitViewModel(
     accountInfoClientId: viewer.kind === "agency" ? client.id : null,
     basePath,
     headerChannelsLabel,
+    channelScopeOptions,
+    channelScope,
     metasHref,
     prevMonthHref,
     nextMonthHref,
