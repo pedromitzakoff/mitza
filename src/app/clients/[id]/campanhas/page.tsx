@@ -1,7 +1,6 @@
 import { todayUTC } from "@/lib/today";
 import { loadCockpitExplorationPageData } from "@/lib/cockpit-exploration-page-data";
-import { MonthSelect } from "../../month-select";
-import { IconButton } from "@/components/workspace/button";
+import { PeriodRangePicker } from "../../period-range-picker";
 import { WorkspaceContainer } from "../../workspace-container";
 import { CockpitGlobalFilterBar } from "../../cockpit-global-filter-bar";
 import { CockpitAdExplorationSection } from "../../cockpit-ad-exploration-section";
@@ -18,7 +17,7 @@ export default async function ClientCampanhasPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ month?: string; filtro?: string; modo?: string }>;
+  searchParams: Promise<{ month?: string; period?: string; start?: string; end?: string; filtro?: string; modo?: string }>;
 }) {
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
@@ -29,15 +28,7 @@ export default async function ClientCampanhasPage({
   return (
     <WorkspaceContainer>
       <div className="mt-2 flex flex-wrap items-center gap-2 border-b border-overview-border pb-3 text-sm">
-        <div className="flex items-center gap-0.5">
-          <IconButton href={data.prevMonthHref} aria-label="Mês anterior" variant="ghost" size="sm">
-            &lsaquo;
-          </IconButton>
-          <MonthSelect today={today} selectedMonthParam={data.monthParam} buildHref={(month) => `/clients/${id}/campanhas?month=${month}`} />
-          <IconButton href={data.nextMonthHref} aria-label="Próximo mês" variant="ghost" size="sm">
-            &rsaquo;
-          </IconButton>
-        </div>
+        <PeriodRangePicker basePath={data.basePath} resolved={data.periodResolved} today={today.toISOString().slice(0, 10)} />
       </div>
 
       <h1 className="mt-6 text-base font-medium text-overview-text-primary">Campanhas</h1>

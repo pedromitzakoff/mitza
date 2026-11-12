@@ -56,13 +56,27 @@ export default async function ClientPage({
     synced?: string;
     saved?: string;
     month?: string;
+    period?: string;
+    start?: string;
+    end?: string;
     filtro?: string;
     modo?: string;
     canal?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, synced, saved, month: monthQueryParam, filtro: filterTextParam, modo: filterModeParam, canal: channelScopeParam } = await searchParams;
+  const {
+    error,
+    synced,
+    saved,
+    month: monthQueryParam,
+    period: periodParam,
+    start: startParam,
+    end: endParam,
+    filtro: filterTextParam,
+    modo: filterModeParam,
+    canal: channelScopeParam,
+  } = await searchParams;
 
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
@@ -77,6 +91,9 @@ export default async function ClientPage({
 
   const model = await buildCockpitViewModel(supabase, id, {
     monthQueryParam,
+    periodParam,
+    startParam,
+    endParam,
     filterTextParam,
     filterModeParam,
     channelScopeParam,

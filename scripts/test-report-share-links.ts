@@ -284,12 +284,14 @@ console.log("\n7 — alteração de query/parâmetro nunca muda o cliente autori
   );
   // Correção da divergência Dashboard interno × link compartilhado: o
   // link agora abre o Cockpit (CockpitView via buildCockpitViewModel),
-  // cujos únicos parâmetros de URL são mês/filtro/canal — nunca clientId.
-  // Etapa "Visualizações independentes por canal" acrescentou `canal`
-  // (mesmo padrão: nunca um identificador de cliente/autorização).
+  // cujos únicos parâmetros de URL são mês/período/filtro/canal — nunca
+  // clientId. Etapas "Visualizações independentes por canal" (`canal`) e
+  // "Seletor global de período" (`period`/`start`/`end`) acrescentaram
+  // campos, sempre no mesmo padrão: nenhum identificador de cliente/
+  // autorização desestruturado daqui.
   ok(
-    "searchParams desestruturado só pega campos de mês/filtro/canal do Cockpit, nunca clientId",
-    /const \{ month: monthQueryParam, filtro: filterTextParam, modo: filterModeParam, canal: channelScopeParam \} = await searchParams/.test(
+    "searchParams desestruturado só pega campos de mês/período/filtro/canal do Cockpit, nunca clientId",
+    /const \{\s*month: monthQueryParam,\s*period: periodParam,\s*start: startParam,\s*end: endParam,\s*filtro: filterTextParam,\s*modo: filterModeParam,\s*canal: channelScopeParam,?\s*\} = await searchParams/.test(
       source,
     ),
   );

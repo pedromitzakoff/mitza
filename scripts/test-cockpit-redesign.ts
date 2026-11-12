@@ -134,7 +134,11 @@ console.log("\n6 — Preservação: nada essencial foi removido\n");
 
 ok("saldo Meta Ads continua no cabeçalho", pageSource.includes("<CockpitAdAccountBalance"));
 ok("atualização de dados (DataFreshnessTimer) continua no cabeçalho", pageSource.includes("<DataFreshnessTimer"));
-ok("MonthSelect continua a única fonte de período", pageSource.includes("<MonthSelect"));
+// Etapa "Seletor global de período" (pedido explícito do usuário):
+// MonthSelect (trio seta/select/seta) foi substituído por um único
+// PeriodRangePicker — mesmo componente/estado em qualquer tela/dispositivo
+// (ver scripts/test-koff-seletor-periodo.ts pra cobertura completa).
+ok("PeriodRangePicker é a única fonte de período (substituiu o antigo MonthSelect)", pageSource.includes("<PeriodRangePicker") && !pageSource.includes("<MonthSelect"));
 ok("Ver Metas -> continua apontando pro planejamento completo", pageSource.includes("Ver Metas"));
 ok("/clients/[id]/relatorio (Integrações Meta Ads e Stract, Relatórios) continua existindo, intocado", loadSource("src", "app", "clients", "[id]", "relatorio", "page.tsx").length > 0);
 ok("nenhum número/gráfico fictício — view-models continuam vindo 100% do servidor, nenhum Math.random/valor mockado no componente", !evolutionSource.includes("Math.random") && !channelBreakdownSource.includes("Math.random"));

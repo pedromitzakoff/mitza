@@ -82,6 +82,7 @@ import { resolveDashboardMetricViews } from "@/lib/dashboard-metrics-resolver";
 import { loadDashboardGoalPerformanceData } from "@/lib/dashboard-metrics-data";
 import { buildCockpitDailyEvolutionPoints } from "@/lib/cockpit-daily-evolution";
 import { buildGoalEvolutionSeries, resolveDefaultEvolutionSeriesId, type EvolutionSeriesOption } from "@/lib/cockpit-evolution-merge";
+import { resolvePeriod, type ResolvedPeriod } from "@/lib/date-range";
 
 /**
  * Correção definitiva da divergência Dashboard interno × link compartilhado
@@ -147,6 +148,11 @@ export interface CockpitViewModel {
   prevMonthHref: string;
   nextMonthHref: string;
   monthParam: string;
+  /** Etapa "Seletor global de período" — único estado que `PeriodRangePicker`
+   * precisa pra se desenhar/reabrir (atalho ativo, intervalo consultado).
+   * `monthParam`/`prevMonthHref`/`nextMonthHref` acima continuam existindo
+   * só pro "Ver Metas"/editor inline (sempre mensais, estrutura intocada). */
+  periodResolved: ResolvedPeriod;
   filterText: string;
   filterMode: ReturnType<typeof resolveCockpitFilterState>["mode"];
   isFilterActive: boolean;
@@ -218,6 +224,13 @@ export async function buildCockpitViewModel(
   clientId: string,
   options: {
     monthQueryParam: string | undefined;
+    /** Etapa "Seletor global de período": atalho ativo (`?period=`) + datas
+     * personalizadas (`?start=`/`?end=`) — `monthQueryParam` continua lido
+     * SÓ como fallback de link antigo (ver `resolvePeriod`,
+     * `lib/date-range.ts`), nunca mais escrito por esta tela. */
+    periodParam: string | undefined;
+    startParam: string | undefined;
+    endParam: string | undefined;
     filterTextParam: string | undefined;
     filterModeParam: string | undefined;
     channelScopeParam: string | undefined;
@@ -226,7 +239,18 @@ export async function buildCockpitViewModel(
     extraBanners?: CockpitBanner[];
   },
 ): Promise<CockpitViewModel> {
-  const { monthQueryParam, filterTextParam, filterModeParam, channelScopeParam, viewer, basePath, extraBanners = [] } = options;
+  const {
+    monthQueryParam,
+    periodParam,
+    startParam,
+    endParam,
+    filterTextParam,
+    filterModeParam,
+    channelScopeParam,
+    viewer,
+    basePath,
+    extraBanners = [],
+  } = options;
   const isAdmin = viewer.kind === "agency" && viewer.isAdmin;
   const cockpitFilter = resolveCockpitFilterState(filterTextParam, filterModeParam);
 
@@ -274,7 +298,32 @@ export async function buildCockpitViewModel(
 
   const today = todayUTC();
   const todayStr = todayDateString();
-  const { firstDay, lastDay } = monthRangeFromParam(monthQueryParam, today);
+
+  /**
+   * Etapa "Seletor global de período" (pedido explícito do usuário):
+   * `resolvePeriod` (núcleo puro, `lib/date-range.ts`) é a ÚNICA resolução
+   * de período — nunca uma segunda lógica de datas por tela. Dois conceitos
+   * nunca confundidos (ver doc-comment do módulo):
+   *
+   * - `{firstDay,lastDay}` (ANCHOR, mês de referência) — ESTRUTURA DE METAS
+   *   100% intocada: sprints, orçamento planejado, editor inline, "Ver
+   *   Metas" continuam exatamente como sempre, só que agora o "mês"
+   *   vem de `periodResolved.monthParam` em vez de só `?month=` cru.
+   * - `{queryFirstDay,queryLastDay}` (intervalo CONSULTADO) — rege
+   *   indicadores Meta Ads, evolução, Campanhas/Anúncios (seção 5 do
+   *   pedido: "respeitar exatamente o intervalo selecionado").
+   * - `isMonthAligned` — `false` pra Hoje/Ontem/Últimos 7/30 dias/
+   *   Personalizado: ritmo/barra/edição de meta não fazem sentido pra uma
+   *   janela que não é "o mês inteiro" (decisão explícita do usuário) —
+   *   os 3 cards principais mostram os números REAIS do intervalo, sem
+   *   veredito de ritmo fabricado contra uma meta mensal incompatível.
+   */
+  const periodResolved = resolvePeriod({ period: periodParam, start: startParam, end: endParam, month: monthQueryParam }, today);
+  const isMonthAligned = periodResolved.isMonthAligned;
+  const queryFirstDay = periodResolved.range.firstDay;
+  const queryLastDay = periodResolved.range.lastDay;
+
+  const { firstDay, lastDay } = monthRangeFromParam(periodResolved.monthParam, today);
   const isCurrentMonth = firstDay === currentMonthRange(today).firstDay;
 
   const monthParam = firstDay.slice(0, 7);
@@ -292,6 +341,7 @@ export async function buildCockpitViewModel(
     allClientGoals,
     dadosData,
     dailyPerformanceRowsForEvolution,
+    queryDailySpendRows,
     [clientOperationalState],
     performanceReportData,
     metaAdAccountId,
@@ -344,9 +394,20 @@ export async function buildCockpitViewModel(
     getClientMonthHorizon(supabase, clientId, firstDay),
     listClientGoals(supabase, clientId),
     loadDadosPageData(supabase, clientId, isAdmin),
-    getDailyPerformanceRowsForPeriod(supabase, clientId, { firstDay, lastDay }),
+    // Etapa "Seletor global de período": evolução/indicadores respeitam o
+    // intervalo CONSULTADO (seção 5 do pedido), nunca o mês de referência —
+    // os dois só coincidem quando `isMonthAligned`.
+    getDailyPerformanceRowsForPeriod(supabase, clientId, { firstDay: queryFirstDay, lastDay: queryLastDay }),
+    // `dailySpend` acima fica reservado ao mês de referência (orçamento,
+    // intocado) — este é o MESMO dado (`daily_spend`), só com os limites do
+    // intervalo consultado, pra nunca faltar dia quando o intervalo
+    // atravessa o mês (ex.: "Últimos 30 dias" perto da virada do mês).
+    requireQuery(
+      supabase.from("daily_spend").select("date, spend, channel").eq("client_id", clientId).gte("date", queryFirstDay).lte("date", queryLastDay),
+      "daily_spend:query-range",
+    ),
     loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, clientId),
-    buildPerformanceReportData(supabase, clientId, { start: firstDay, end: lastDay }),
+    buildPerformanceReportData(supabase, clientId, { start: queryFirstDay, end: queryLastDay }),
     clientChannels.includes("meta") ? resolveMetaAdAccountId(supabase, clientId) : Promise.resolve(null),
   ]);
 
@@ -474,9 +535,31 @@ export async function buildCockpitViewModel(
     consolidateAdditive(clientChannels, (channel) => dashboardChannels.find((c) => c.channel === channel)?.planned ?? null) ??
     sumPlannedForMonth(monthPlannedAllocationRows, { firstDay, lastDay });
 
-  const monthPlanned = totalPlannedAcrossChannels;
-  const monthExpectedToDate = computeMonthlyExpectedToDateByCalendar(monthPlanned, planningHorizon, todayStr).expectedToDate;
-  const monthStatus = classifySpendStatus(monthActual, monthExpectedToDate, monthPlanned);
+  /**
+   * Etapa "Seletor global de período" (seção 5 do pedido: "Investimento...
+   * deve respeitar exatamente o intervalo selecionado"; seção 6: "não
+   * apresentar uma meta proporcional como se fosse a meta oficial"):
+   * card de Orçamento mostra o GASTO REAL do intervalo consultado (nunca
+   * o do mês inteiro) quando o período não é "o mês inteiro" — sem
+   * ritmo/barra fabricados contra uma meta mensal que não corresponde a
+   * essa janela mais curta. `monthPlanned = 0` reaproveita o branch JÁ
+   * EXISTENTE de `CockpitBudgetCard` ("Sem planejamento configurado"),
+   * `monthStatus = "sem_meta"` reaproveita o badge neutro já existente
+   * ("SEM PLANEJAMENTO") — nenhum componente/veredito novo, só os NÚMEROS
+   * certos pra este caso.
+   */
+  const queryRangeDailySpendRows = (queryDailySpendRows ?? []).map((row) => ({ date: row.date, channel: row.channel as TrafficChannel, spend: row.spend }));
+  const queryRangeDailyPerformanceRows = dailyPerformanceRowsForEvolution.map((row) => ({
+    date: row.date,
+    channel: row.channel as TrafficChannel,
+    resultType: row.resultType as PerformanceGoal,
+    resultCount: row.resultCount,
+  }));
+  const queryRangeActualSpend = sumDailySpendForRange(queryRangeDailySpendRows, clientChannels, queryFirstDay, queryLastDay);
+  const monthPlanned = isMonthAligned ? totalPlannedAcrossChannels : 0;
+  const monthActualForHeadline = isMonthAligned ? monthActual : queryRangeActualSpend;
+  const monthExpectedToDate = isMonthAligned ? computeMonthlyExpectedToDateByCalendar(monthPlanned, planningHorizon, todayStr).expectedToDate : 0;
+  const monthStatus = isMonthAligned ? classifySpendStatus(monthActual, monthExpectedToDate, monthPlanned) : "sem_meta";
 
   const { effectiveDate, isClosedMonth } = resolveBudgetEffectiveDate(planningHorizon, todayStr);
   // Correção da divergência Dashboard × link compartilhado: a edição
@@ -485,7 +568,12 @@ export async function buildCockpitViewModel(
   // acima). É este boolean, nunca calculado para o visitante público, que
   // garante (na ORIGEM, não só na view) que nenhum `goalEdit`/`canEdit`
   // chega ao payload de um link compartilhado.
-  const canEditBudgetInline = isAdmin && !isClosedMonth && Boolean(effectiveDate);
+  // Etapa "Seletor global de período" (seção 6 do pedido, decisão explícita
+  // do usuário): editar "a meta do mês" só faz sentido olhando o mês
+  // inteiro — fora disso (Hoje/Ontem/Últimos 7/30 dias/Personalizado) a
+  // edição fica indisponível, nunca ambígua sobre qual período está sendo
+  // editado.
+  const canEditBudgetInline = isAdmin && !isClosedMonth && Boolean(effectiveDate) && isMonthAligned;
 
   const hasBudgetPace = monthPlanned > 0 && !isClosedMonth && isCurrentMonth && Boolean(effectiveDate);
   const budgetNeededDailyRate = hasBudgetPace
@@ -508,6 +596,77 @@ export async function buildCockpitViewModel(
   const cockpitReturnTo = buildContextHref({});
 
   const resultCards: { result: CockpitResultCardView; status: SpendStatus | null; cost: CockpitCostCardView }[] = resultGroups.map((group) => {
+    const channelsLabel = resultGroups.length > 1 ? group.channels.map((c) => TRAFFIC_CHANNELS[c].label).join(" + ") : null;
+
+    /**
+     * Etapa "Seletor global de período" (seções 5-6 do pedido, decisão
+     * explícita do usuário): fora de "o mês inteiro" (Hoje/Ontem/Últimos
+     * 7/30 dias/Personalizado), os cards de Resultado/Custo mostram o
+     * NÚMERO REAL do intervalo consultado — somado direto das tabelas
+     * diárias (`daily_performance`/`daily_spend`, confirmado na auditoria:
+     * granularidade diária, cobertura completa), NUNCA via o mecanismo de
+     * sprints (que só existe em granularidade mensal/semanal, não serve
+     * pra "Hoje" ou "Últimos 7 dias"). Sem meta/ritmo/edição — comparar
+     * com a meta MENSAL seria enganoso pra uma janela mais curta (mesmo
+     * raciocínio do card de Orçamento, acima).
+     *
+     * Filtro global de texto (campanha) ativo ao mesmo tempo: as tabelas
+     * diárias não têm dimensão de campanha (só `daily_performance`/
+     * `daily_spend`, por cliente+canal+dia) — recalcular o filtrado exigiria
+     * a tabela de campanhas (Meta-only, não cobre Google), então este caso
+     * combinado fica `unavailableReason`, nunca um número fabricado.
+     */
+    if (!isMonthAligned) {
+      if (cockpitFilter.isActive) {
+        const unavailableReason = "Filtro de campanha indisponível em períodos personalizados — volte para 'Este mês' ou limpe o filtro.";
+        return {
+          result: {
+            resultType: group.resultType,
+            channelsLabel,
+            resultCount: 0,
+            targetResultCount: null,
+            expectedResultsToDate: null,
+            neededDailyRate: null,
+            edit: null,
+            unavailableReason,
+          },
+          status: null,
+          cost: {
+            resultType: group.resultType,
+            costPerResult: null,
+            targetCostPerResult: null,
+            deviationPct: null,
+            tone: "normal",
+            edit: null,
+            unavailableReason,
+          },
+        };
+      }
+      const rangeResultCount = sumDailyResultCountForRange(queryRangeDailyPerformanceRows, group.resultType, group.channels, queryFirstDay, queryLastDay);
+      const rangeSpend = sumDailySpendForRange(queryRangeDailySpendRows, group.channels, queryFirstDay, queryLastDay);
+      const rangeCostPerResult = rangeResultCount > 0 ? rangeSpend / rangeResultCount : null;
+      return {
+        result: {
+          resultType: group.resultType,
+          channelsLabel,
+          resultCount: rangeResultCount,
+          targetResultCount: null,
+          expectedResultsToDate: null,
+          neededDailyRate: null,
+          edit: null,
+        },
+        status: null,
+        cost: {
+          resultType: group.resultType,
+          costPerResult: rangeCostPerResult,
+          targetCostPerResult: null,
+          deviationPct: null,
+          tone: "normal",
+          edit: null,
+        },
+      };
+    }
+
     const groupActualSpend = group.channels.reduce((sum, channel) => sum + (dashboardChannels.find((c) => c.channel === channel)?.actualSpend ?? 0), 0);
     const goalPlan = clientGoalsPlan.goals.find((g) => g.resultType === group.resultType) ?? EMPTY_GOAL_PLAN;
     const goalEdit: CockpitGoalEditAffordance | null = canEditBudgetInline
@@ -556,7 +715,7 @@ export async function buildCockpitViewModel(
     return {
       result: {
         resultType: group.resultType,
-        channelsLabel: resultGroups.length > 1 ? group.channels.map((c) => TRAFFIC_CHANNELS[c].label).join(" + ") : null,
+        channelsLabel,
         resultCount: filteredOverride ? filteredOverride.resultCount ?? 0 : performanceSummary.resultCount,
         targetResultCount: filteredOverride ? null : targetResultCount,
         expectedResultsToDate: filteredOverride ? null : expectedResultsToDate,
@@ -580,14 +739,9 @@ export async function buildCockpitViewModel(
   });
 
   const hasDailyIntegration = Boolean(dadosData?.sources.some((s) => s.enabled));
-  const evolutionWindowDates = listDatesInclusive(firstDay, lastDay);
-  const evolutionDailyPerformanceRows = dailyPerformanceRowsForEvolution.map((row) => ({
-    date: row.date,
-    channel: row.channel as TrafficChannel,
-    resultType: row.resultType as PerformanceGoal,
-    resultCount: row.resultCount,
-  }));
-  const evolutionDailySpendRows = (dailySpend ?? []).map((row) => ({ date: row.date, channel: row.channel as TrafficChannel, spend: row.spend }));
+  const evolutionWindowDates = listDatesInclusive(queryFirstDay, queryLastDay);
+  const evolutionDailyPerformanceRows = queryRangeDailyPerformanceRows;
+  const evolutionDailySpendRows = queryRangeDailySpendRows;
 
   const goalEvolutionSeries: EvolutionSeriesOption[] = hasDailyIntegration
     ? buildGoalEvolutionSeries(
@@ -636,7 +790,7 @@ export async function buildCockpitViewModel(
   // pra um visitante compartilhado.
   const [adReach, adBalance] = clientChannels.includes("meta")
     ? await Promise.all([
-        fetchAccountPeriodReachSnapshot(metaAdAccountId, { start: firstDay, end: lastDay }),
+        fetchAccountPeriodReachSnapshot(metaAdAccountId, { start: queryFirstDay, end: queryLastDay }),
         viewer.kind === "agency" ? fetchAccountBalanceSnapshot(metaAdAccountId) : Promise.resolve(null),
       ])
     : ([{ status: "unavailable", reason: "not_configured" } as const, null] as const);
@@ -649,7 +803,7 @@ export async function buildCockpitViewModel(
   const adPerformanceData = buildCockpitAdPerformanceData({
     client: { id: client.id, name: client.name },
     metaAdAccountId,
-    period: { start: firstDay, end: lastDay },
+    period: { start: queryFirstDay, end: queryLastDay },
     campaignDailyRows: filteredCampaignDailyRows,
     explorationCampaigns: filteredExplorationCampaigns,
     explorationAdSetRows: filteredAdSetDailyRows,
@@ -750,12 +904,13 @@ export async function buildCockpitViewModel(
     prevMonthHref,
     nextMonthHref,
     monthParam,
+    periodResolved,
     filterText: cockpitFilter.text,
     filterMode: cockpitFilter.mode,
     isFilterActive: cockpitFilter.isActive,
     banners,
     budget: {
-      headline: { monthActual, monthPlanned, monthExpectedToDate, monthStatus, neededDailyRate: budgetNeededDailyRate },
+      headline: { monthActual: monthActualForHeadline, monthPlanned, monthExpectedToDate, monthStatus, neededDailyRate: budgetNeededDailyRate },
       channels: dashboardChannels.map((c) => ({ channel: c.channel, planned: c.planned })),
       canEdit: canEditBudgetInline,
     },
@@ -803,4 +958,37 @@ export function findChannelDataIssue(attentions: DataAttention[], channelLabel: 
   const match = attentions.find((a) => a.message.includes(channelLabel));
   if (!match) return null;
   return { severity: match.severity, label: match.severity === "error" ? "Erro de sincronização" : "Sem dados recebidos" };
+}
+
+/**
+ * Etapa "Seletor global de período": soma ADITIVA pura de `daily_spend`
+ * pro intervalo CONSULTADO (nunca o mês de referência) — usada só quando
+ * `!isMonthAligned`, onde os cards principais precisam do gasto/resultado
+ * REAL do período exato (seção 5 do pedido), sem passar pelo mecanismo de
+ * sprints (que só existe em granularidade mensal/semanal). Soma direta de
+ * linhas diárias já existentes — nenhum dado novo, nenhuma aproximação.
+ */
+export function sumDailySpendForRange(
+  rows: { date: string; channel: TrafficChannel; spend: number }[],
+  channels: TrafficChannel[],
+  firstDay: string,
+  lastDay: string,
+): number {
+  return rows.reduce((sum, row) => (channels.includes(row.channel) && row.date >= firstDay && row.date <= lastDay ? sum + row.spend : sum), 0);
+}
+
+/** Mesma lógica de `sumDailySpendForRange`, pro resultado (`daily_performance`)
+ * de um objetivo específico — núcleo puro, mesma convenção. */
+export function sumDailyResultCountForRange(
+  rows: { date: string; channel: TrafficChannel; resultType: PerformanceGoal; resultCount: number }[],
+  resultType: PerformanceGoal,
+  channels: TrafficChannel[],
+  firstDay: string,
+  lastDay: string,
+): number {
+  return rows.reduce(
+    (sum, row) =>
+      row.resultType === resultType && channels.includes(row.channel) && row.date >= firstDay && row.date <= lastDay ? sum + row.resultCount : sum,
+    0,
+  );
 }

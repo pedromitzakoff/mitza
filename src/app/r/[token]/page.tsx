@@ -107,17 +107,28 @@ export default async function PublicClientDashboardPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ month?: string; filtro?: string; modo?: string; canal?: string }>;
+  searchParams: Promise<{ month?: string; period?: string; start?: string; end?: string; filtro?: string; modo?: string; canal?: string }>;
 }) {
   const { token } = await params;
   const clientId = (await resolveClientIdFromShareSlug(token)) ?? (await resolveClientIdFromShareToken(token));
   if (!clientId) notFound();
 
-  const { month: monthQueryParam, filtro: filterTextParam, modo: filterModeParam, canal: channelScopeParam } = await searchParams;
+  const {
+    month: monthQueryParam,
+    period: periodParam,
+    start: startParam,
+    end: endParam,
+    filtro: filterTextParam,
+    modo: filterModeParam,
+    canal: channelScopeParam,
+  } = await searchParams;
 
   const supabase = createAdminClient();
   const model = await buildCockpitViewModel(supabase, clientId, {
     monthQueryParam,
+    periodParam,
+    startParam,
+    endParam,
     filterTextParam,
     filterModeParam,
     channelScopeParam,

@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { monthRangeFromParam, shiftMonthParam } from "@/lib/sprint-financials";
+import { shiftMonthParam } from "@/lib/sprint-financials";
 import { todayUTC } from "@/lib/today";
+import { resolvePeriod, type ResolvedPeriod } from "@/lib/date-range";
 import { resolveClientMediaChannels } from "@/lib/traffic-channels";
 import { resolveMetaAdAccountId } from "@/lib/meta-ads-dashboard/dashboard-data";
 import { scheduleCreativePreviewRefreshIfStale } from "@/lib/creative-preview-refresh";
@@ -33,9 +34,16 @@ import {
 export interface CockpitExplorationPageData {
   clientId: string;
   clientName: string;
+  basePath: string;
   monthParam: string;
   prevMonthHref: string;
   nextMonthHref: string;
+  /** Etapa "Seletor global de período" — mesmo estado que o Dashboard,
+   * alimenta o MESMO `<PeriodRangePicker>` aqui (nenhum seletor próprio).
+   * Campanhas/Anúncios não têm orçamento/metas — nenhum "mês de
+   * referência" separado aqui, o intervalo consultado é o único período
+   * que esta página conhece. */
+  periodResolved: ResolvedPeriod;
   hasMetaChannel: boolean;
   resultType: PerformanceGoal | null;
   campaigns: ExplorationRow[];
@@ -50,7 +58,7 @@ export async function loadCockpitExplorationPageData(
    * mês ficam NA MESMA página (nunca redirecionam pro Dashboard), mesma
    * convenção de `buildWorkspaceHref`. */
   pageSuffix: string,
-  searchParams: { month?: string; filtro?: string; modo?: string },
+  searchParams: { month?: string; period?: string; start?: string; end?: string; filtro?: string; modo?: string },
 ): Promise<CockpitExplorationPageData> {
   const supabase = await createSupabaseClient();
 
@@ -65,11 +73,16 @@ export async function loadCockpitExplorationPageData(
   if (!client) notFound();
 
   const today = todayUTC();
-  const { firstDay, lastDay } = monthRangeFromParam(searchParams.month, today);
+  const basePath = `/clients/${clientId}${pageSuffix}`;
+  const periodResolved = resolvePeriod(
+    { period: searchParams.period, start: searchParams.start, end: searchParams.end, month: searchParams.month },
+    today,
+  );
+  const { firstDay, lastDay } = periodResolved.range;
   const monthParam = firstDay.slice(0, 7);
 
   function buildMonthHref(month: string): string {
-    return `/clients/${clientId}${pageSuffix}?month=${month}`;
+    return `${basePath}?month=${month}`;
   }
   const prevMonthHref = buildMonthHref(shiftMonthParam({ firstDay }, -1));
   const nextMonthHref = buildMonthHref(shiftMonthParam({ firstDay }, 1));
@@ -81,9 +94,11 @@ export async function loadCockpitExplorationPageData(
     return {
       clientId: client.id,
       clientName: client.name,
+      basePath,
       monthParam,
       prevMonthHref,
       nextMonthHref,
+      periodResolved,
       hasMetaChannel: false,
       resultType: null,
       campaigns: [],
@@ -109,9 +124,11 @@ export async function loadCockpitExplorationPageData(
   return {
     clientId: client.id,
     clientName: client.name,
+    basePath,
     monthParam,
     prevMonthHref,
     nextMonthHref,
+    periodResolved,
     hasMetaChannel: true,
     resultType: performanceReportData.performanceGoal,
     campaigns: filteredCampaigns.map(campaignSummaryToRow),

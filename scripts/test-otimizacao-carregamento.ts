@@ -48,8 +48,8 @@ console.log("\nA — Item 1 (Cockpit): as 5 operações independentes entraram n
     /\[\s*clientOperationalState\s*\]\s*,\s*\n\s*performanceReportData,/.test(pageSource) && pageSource.includes("loadClientOperationalStates(supabase, currentMonthRange(today).firstDay, clientId),"),
   );
   ok(
-    "buildPerformanceReportData entra no mesmo Promise.all (era a chamada mais isolada — só precisa de id/firstDay/lastDay, nenhuma dependência do resto do batch)",
-    pageSource.includes("buildPerformanceReportData(supabase, clientId, { start: firstDay, end: lastDay }),") && !pageSource.includes("await buildPerformanceReportData("),
+    "buildPerformanceReportData entra no mesmo Promise.all (era a chamada mais isolada — só precisa de id/período, nenhuma dependência do resto do batch) — Etapa 'Seletor global de período' trocou firstDay/lastDay por queryFirstDay/queryLastDay (o intervalo CONSULTADO, não mais o mês de referência), mas continua dentro do MESMO Promise.all",
+    pageSource.includes("buildPerformanceReportData(supabase, clientId, { start: queryFirstDay, end: queryLastDay }),") && !pageSource.includes("await buildPerformanceReportData("),
   );
   // Nota (Etapas 1.3/1.5/1.6 da reestruturação KOFF Analytics):
   // fetchClientTimelinePage/historyRows (Seção 6 "Histórico"),
@@ -82,7 +82,15 @@ console.log("\nB — Item 1: dependências reais preservadas — ensureClosedSpr
 console.log("\nC — Item 1: nenhuma query/parâmetro/resultado mudou — só a ORDEM de execução (reaproveitamento 100%, nenhuma segunda fonte)\n");
 {
   ok("loadDadosPageData continua com os MESMOS argumentos de sempre (supabase, id, isAdmin)", pageSource.includes("loadDadosPageData(supabase, clientId, isAdmin),"));
-  ok("getDailyPerformanceRowsForPeriod continua com os MESMOS argumentos de sempre", pageSource.includes("getDailyPerformanceRowsForPeriod(supabase, clientId, { firstDay, lastDay }),"));
+  // Etapa "Seletor global de período": o argumento virou o intervalo
+  // CONSULTADO (`queryFirstDay`/`queryLastDay`), nunca mais o mês de
+  // referência (`firstDay`/`lastDay`, que continua existindo só pro
+  // orçamento/metas) — mesma posição no MESMO Promise.all, só o valor
+  // passado mudou de sentido (seção 5 do pedido).
+  ok(
+    "getDailyPerformanceRowsForPeriod continua no MESMO Promise.all, agora com o intervalo consultado (não mais o mês de referência)",
+    pageSource.includes("getDailyPerformanceRowsForPeriod(supabase, clientId, { firstDay: queryFirstDay, lastDay: queryLastDay }),"),
+  );
   ok(
     "o Promise.all principal ainda é UM só (nenhum segundo Promise.all concorrente fora de ordem) — todas as 15 posições vêm do MESMO array/await",
     (pageSource.match(/\] = await Promise\.all\(\[/g) ?? []).length === 1,

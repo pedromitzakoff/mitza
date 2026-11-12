@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { Fragment } from "react";
-import { buildCockpitMonthHref, buildCockpitChannelHref, type CockpitViewModel } from "@/lib/cockpit-view-data";
+import { buildCockpitChannelHref, type CockpitViewModel } from "@/lib/cockpit-view-data";
 import { VisaoGeralChannelSwitch } from "./visao-geral-channel-switch";
-import { MonthSelect } from "./month-select";
-import { IconButton } from "@/components/workspace/button";
+import { PeriodRangePicker } from "./period-range-picker";
 import { CockpitBudgetCard } from "./cockpit-meta-ritmo-section";
 import { CockpitResultCard, CockpitCostCard } from "./cockpit-goal-card";
 import { CockpitDiagnosticsCard } from "./cockpit-diagnostics-card";
@@ -139,15 +138,11 @@ export function CockpitView({ model, today }: { model: CockpitViewModel; today: 
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-0.5">
-          <IconButton href={model.prevMonthHref} aria-label="Mês anterior" variant="ghost" size="sm">
-            &lsaquo;
-          </IconButton>
-          <MonthSelect today={today} selectedMonthParam={model.monthParam} buildHref={(value) => buildCockpitMonthHref(model.basePath, value)} />
-          <IconButton href={model.nextMonthHref} aria-label="Próximo mês" variant="ghost" size="sm">
-            &rsaquo;
-          </IconButton>
-        </div>
+        {/* Etapa "Seletor global de período" (pedido explícito do usuário):
+            substitui o antigo trio seta/MonthSelect/seta por um único
+            botão — mesmo componente/estado em qualquer tela/dispositivo
+            (ver `period-range-picker.tsx`). */}
+        <PeriodRangePicker basePath={model.basePath} resolved={model.periodResolved} today={today.toISOString().slice(0, 10)} />
         {/* Etapa "Visualizações independentes por canal" (pedido explícito
             do usuário): só aparece quando há de fato mais de 1 canal pra
             escolher pra este cliente — a grande maioria (1 canal só) nunca
