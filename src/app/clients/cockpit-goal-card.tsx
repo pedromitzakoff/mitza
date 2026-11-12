@@ -9,7 +9,7 @@ import { formatCurrency, formatCount } from "@/lib/format";
 import { PERFORMANCE_GOALS } from "@/lib/performance-goals";
 import {
   PACE_VERDICT_LABEL,
-  PACE_VERDICT_TONE,
+  RESULT_PACE_VERDICT_TONE,
   costVerdictLabel,
   COST_VERDICT_TONE,
   COCKPIT_CARD_CLASSES,
@@ -40,9 +40,17 @@ import type { CockpitResultCardView, CockpitCostCardView, CockpitGoalEditAfforda
  * rótulo (`PaceVerdictBadge`/`CostVerdictBadge`). Valor principal com mais
  * peso tipográfico (`text-2xl`); meta/progresso ficam visualmente em
  * segundo plano (`text-overview-text-muted`, nunca mais a cor primária).
+ *
+ * Correção de UX (achado real, Helping Hand: Leads "RITMO ACIMA" aparecia
+ * em vermelho): este badge é SÓ do card de Resultado, nunca do Orçamento
+ * (que tem o próprio em `cockpit-meta-ritmo-section.tsx`, usando
+ * `PACE_VERDICT_TONE`) — por isso usa `RESULT_PACE_VERDICT_TONE`, onde
+ * "acima" é `success` (mais Leads/Vendas que o esperado é bom), nunca
+ * `danger` (que faz sentido pra dinheiro gasto além do esperado, não pra
+ * resultado entregue além do esperado).
  */
 function PaceVerdictBadge({ status }: { status: SpendStatus }) {
-  const tone = PACE_VERDICT_TONE[status];
+  const tone = RESULT_PACE_VERDICT_TONE[status];
   return (
     <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide">
       <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${COCKPIT_TONE_DOT_CLASSES[tone]}`} />

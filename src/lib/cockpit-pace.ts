@@ -27,9 +27,33 @@ export const PACE_VERDICT_LABEL: Record<SpendStatus, string> = {
   em_andamento: "EM ANDAMENTO",
 };
 
+/** Cards onde "ritmo" é DINHEIRO (Orçamento) — gastar ACIMA do esperado é
+ * risco real de estourar o mês, por isso "acima" é `danger`. Nunca usado
+ * pelo card de Resultado (ver `RESULT_PACE_VERDICT_TONE` — ali "acima" é o
+ * oposto: mais Leads/Vendas que o esperado é bom, não um alerta). */
 export const PACE_VERDICT_TONE: Record<SpendStatus, CockpitPaceTone> = {
   dentro: "success",
   acima: "danger",
+  abaixo: "warning",
+  sem_meta: "neutral",
+  nao_iniciado: "neutral",
+  em_andamento: "neutral",
+};
+
+/**
+ * KOFF Analytics — correção de UX (pedido explícito do usuário, achado
+ * real: Helping Hand com Leads "RITMO ACIMA" aparecendo em vermelho —
+ * "gerar mais lead não é ruim"): card de RESULTADO (Leads/Vendas/
+ * Seguidores...) nunca reaproveita `PACE_VERDICT_TONE` — lá "acima" é
+ * DINHEIRO gasto além do esperado (risco), aqui é RESULTADO entregue além
+ * do esperado (ótimo). Mesma label (`PACE_VERDICT_LABEL`, "RITMO ACIMA"
+ * continua descrevendo o fato), só a cor muda pra refletir que mais
+ * resultado nunca é um alerta. "abaixo" continua `warning` — menos
+ * resultado que o esperado é, sim, motivo de atenção.
+ */
+export const RESULT_PACE_VERDICT_TONE: Record<SpendStatus, CockpitPaceTone> = {
+  dentro: "success",
+  acima: "success",
   abaixo: "warning",
   sem_meta: "neutral",
   nao_iniciado: "neutral",
