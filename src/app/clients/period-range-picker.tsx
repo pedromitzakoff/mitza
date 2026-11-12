@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Calendar } from "lucide-react";
 import { IconButton } from "@/components/workspace/button";
+import { formatMonthLabel } from "@/lib/format";
 import {
   type PeriodShortcut,
   type DateRange,
@@ -79,7 +80,11 @@ function CalendarGrid({
   onNextMonth: () => void;
 }) {
   const cells = buildMonthCells(monthStart);
-  const monthLabel = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${monthStart}T00:00:00Z`));
+  // `formatMonthLabel` (mesma função do cabeçalho do Cockpit) capitaliza só
+  // a primeira letra do mês — nunca `capitalize` via CSS, que também
+  // maiusculiza a preposição "de" ("Novembro De 2026", errado em
+  // português).
+  const monthLabel = formatMonthLabel(monthStart);
 
   return (
     <div className="w-64">
@@ -87,7 +92,7 @@ function CalendarGrid({
         <IconButton aria-label="Mês anterior" variant="ghost" size="sm" onClick={onPrevMonth}>
           &lsaquo;
         </IconButton>
-        <p className="text-xs font-semibold capitalize text-overview-text-primary">{monthLabel}</p>
+        <p className="text-xs font-semibold text-overview-text-primary">{monthLabel}</p>
         <IconButton aria-label="Próximo mês" variant="ghost" size="sm" onClick={onNextMonth}>
           &rsaquo;
         </IconButton>
