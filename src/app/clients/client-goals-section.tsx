@@ -109,7 +109,14 @@ export function ClientGoalsSection({
 
           return (
             <div key={goal.id} className="rounded-md border border-overview-border bg-overview-surface p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              {/* Etapa "Configurações do Cliente": `items-start` (era
+                  `items-center`) + `flex-wrap` nas ações (era só `flex`,
+                  sem quebra) — no card secundário (com 3 ações de texto),
+                  largura estreita de mobile fazia CADA RÓTULO quebrar
+                  palavra a palavra dentro do próprio item flex, em vez de
+                  cada ação ficar numa linha própria; puramente visual,
+                  nenhuma ação/rota mudou. */}
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-overview-text-primary">{config.label}</span>
                   {goal.isPrimary && (
@@ -118,7 +125,7 @@ export function ClientGoalsSection({
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   {!goal.isPrimary && (
                     <form action={setClientGoalPrimaryAction.bind(null, goal.resultType, clientId, returnTo)}>
                       <SubmitButton pendingChildren="..." className="text-xs text-overview-text-secondary hover:text-brand">
