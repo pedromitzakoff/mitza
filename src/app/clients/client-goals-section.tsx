@@ -18,6 +18,7 @@ import {
 import { SubmitButton } from "@/app/submit-button";
 import { ActionTypePicker } from "@/app/settings/meta-connections/action-type-picker";
 import { saveMetricMappingAction } from "@/app/settings/meta-connections/actions";
+import { CLIENT_SETTINGS_SAVE_BUTTON_CLASSES } from "./client-settings-ui";
 
 export interface RecentSprintOption {
   id: string;
@@ -217,7 +218,7 @@ export function ClientGoalsSection({
                       ))}
                     </div>
                   </div>
-                  <SubmitButton pendingChildren="Salvando..." className="rounded-md border border-overview-border px-2.5 py-1 text-xs font-medium text-overview-text-primary hover:bg-overview-surface-hover">
+                  <SubmitButton pendingChildren="Salvando..." className={CLIENT_SETTINGS_SAVE_BUTTON_CLASSES}>
                     Salvar
                   </SubmitButton>
                 </form>
@@ -259,7 +260,7 @@ export function ClientGoalsSection({
                           className="w-28 rounded-md border border-overview-border bg-transparent px-2 py-1 text-sm text-overview-text-primary"
                         />
                       </div>
-                      <SubmitButton pendingChildren="Salvando..." className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover">
+                      <SubmitButton pendingChildren="Salvando..." className={CLIENT_SETTINGS_SAVE_BUTTON_CLASSES}>
                         Registrar
                       </SubmitButton>
                     </form>
@@ -287,7 +288,7 @@ export function ClientGoalsSection({
               ))}
             </select>
           </div>
-          <SubmitButton pendingChildren="Adicionando..." className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover">
+          <SubmitButton pendingChildren="Adicionando..." className={CLIENT_SETTINGS_SAVE_BUTTON_CLASSES}>
             + Adicionar objetivo
           </SubmitButton>
         </form>

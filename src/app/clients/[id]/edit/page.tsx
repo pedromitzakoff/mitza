@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { requireClientManagerAccess } from "@/lib/auth";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
 import { deleteClientAction, updateClientAction } from "../../actions";
-import { Block, ClientForm } from "../../client-form";
+import { ClientForm } from "../../client-form";
 import { DeleteClientButton } from "../../delete-client-button";
+import { AdminActionsMenu } from "../../admin-actions-menu";
+import { ClientSettingsTabsProvider, ClientSettingsTabPanel } from "../../client-settings-tabs";
 import { fetchGoalDisplaySummaries, listClientGoals } from "@/lib/client-goals";
 import { listCampaignsForAssignment } from "@/lib/campaign-goal-assignments";
 import { resolveClientMetaMappingSource, listActiveMetricMappingsByGoal } from "@/lib/client-metric-mapping-source";
@@ -15,27 +18,16 @@ import { ClientGoalsSection } from "../../client-goals-section";
 import { DashboardMetricsSection } from "../../dashboard-metrics-section";
 
 /**
- * Etapa "Simplificação do Cadastro do Cliente": este cadastro deixou de
- * carregar KPIs do Relatório Mensal e Cadência de Revisões — auditoria de
- * uso real confirmou os dois sem consumidor vivo relevante hoje:
- *
- * - "KPIs do Relatório Mensal" (`client_kpi_definitions`) alimentava um
- *   snapshot (`monthly_reports.snapshot`) que nenhuma tela lê mais — o
- *   Relatório Mensal de verdade (`/clients/[id]/relatorio`) usa um sistema
- *   de KPI totalmente diferente, calculado de dados de campanha.
- * - "Cadência de Revisões" (`account_review_cadences`) teve sua influência
- *   sobre saúde/prioridade operacional removida (`lib/account-health-engine.ts`,
- *   `lib/attention-alerts.ts`) — decisão de produto explícita ("a KOFF não
- *   usa mais Cadência de Revisões como processo operacional"). Sem UI pra
- *   configurar, essa cadência não podia continuar influenciando nada.
- *
- * Nenhuma tabela/coluna foi apagada — só as Server Actions de escrita que
- * ficaram genuinamente órfãs (`addClientKpiAction`/`deleteClientKpiAction`,
- * `report-actions.ts`; `updateAccountReviewCadenceAction`,
- * `account-review-actions.ts`) foram removidas, confirmado por busca
- * exaustiva de que não tinham mais nenhum chamador. `client_kpi_definitions`/
- * `account_review_cadences` continuam sendo LIDAS normalmente por quem já
- * as lia antes desta etapa.
+ * "Configurações do cliente" (redesign de "Cadastro do Cliente", pedido
+ * explícito do usuário) — 4 abas (Geral/Mídia/Métricas/Links) sobre os
+ * MESMOS dados/Server Actions de sempre, nenhuma regra de negócio nova
+ * além da confirmação de exclusão (ponto 3 do pedido, ver
+ * `delete-client-button.tsx`). Cabeçalho próprio só com o que o cabeçalho
+ * GLOBAL do workspace (`ClientWorkspaceHeader`, montado no `layout.tsx`
+ * desta rota) ainda não mostra aqui — avatar/nome/status/"Informações da
+ * conta" já vêm de lá; "Não duplicar o cabeçalho global existente" (pedido
+ * explícito) é por isso que este cabeçalho é só: voltar, título da tela e,
+ * pra admin, o menu administrativo (Excluir cliente).
  */
 export default async function EditClientPage({
   params,
@@ -45,13 +37,6 @@ export default async function EditClientPage({
   searchParams: Promise<{ error?: string; return_to?: string }>;
 }) {
   const { id } = await params;
-  // Habilitar Gestores 3.0: Cadastro do Cliente deixou de ser admin-only —
-  // qualquer usuário interno autorizado da KOFF também pode editar (Etapa
-  // "Correção do Modelo de Autorização — Acesso Amplo Interno":
-  // `requireClientManagerAccess` não exige mais ser o gestor principal
-  // deste cliente — ver `lib/auth.ts`). "Gestor de apoio" (`client_managers`)
-  // continua fora da decisão. "Excluir cliente", abaixo, continua restrito
-  // a admin (ação destrutiva, fora do pedido).
   const profile = await requireClientManagerAccess(id);
   const isAdmin = profile.role === "admin";
   const { error, return_to } = await searchParams;
@@ -59,19 +44,10 @@ export default async function EditClientPage({
 
   const supabase = await createSupabaseClient();
   const [{ data: client }, allManagers, clientGoals, campaignsForAssignment, recentSprints] = await Promise.all([
-    // `.single()` já conflita "cliente não encontrado" (RLS filtrou, ou id
-    // inexistente) com "consulta falhou" — mesmo assim, distinção
-    // deliberada e pré-existente (não é o bug de ignorar erro): aqui não
-    // trocamos por `requireQuery`, senão um 404 legítimo viraria uma tela
-    // de erro genérica.
     supabase.from("clients").select("*").eq("id", id).is("deleted_at", null).single(),
     requireQuery(supabase.from("team_members").select("id, name").eq("status", "ativo").order("name"), "team_members"),
     listClientGoals(supabase, id),
     listCampaignsForAssignment(supabase, id, todayDateString()),
-    // Sprints recentes (últimas 8) pro lançamento manual de resultado por
-    // objetivo secundário (ex.: Seguidores) — reaproveita a sprint como
-    // unidade do lançamento (ver goal-actions.ts), então o formulário
-    // precisa oferecer qual sprint escolher.
     requireQuery(
       supabase
         .from("sprints")
@@ -88,93 +64,90 @@ export default async function EditClientPage({
 
   const goalSummaries = await fetchGoalDisplaySummaries(supabase, id, clientGoals, `${todayDateString().slice(0, 7)}-01`);
 
-  // "Métricas de performance" (Etapa "Configuração inteligente de métricas
-  // por cliente"): resolve a fonte Meta deste cliente uma vez só — os
-  // mapeamentos ativos (2ª consulta) dependem do id dela, por isso roda
-  // depois, não dentro do `Promise.all` acima. `null`/mapa vazio quando o
-  // cliente ainda não tem conta Meta conectada (nunca um erro — só nada
-  // pra mostrar na seção de evento).
   const metaMappingSource = isAdmin ? await resolveClientMetaMappingSource(supabase, id) : null;
-  const metaMappingsByGoal: Awaited<ReturnType<typeof listActiveMetricMappingsByGoal>> = metaMappingSource
+  const metaMappingsByGoal = metaMappingSource
     ? await listActiveMetricMappingsByGoal(supabase, metaMappingSource.importSourceId)
     : new Map();
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-12">
-      <Link href={returnTo} className="text-sm text-overview-text-secondary hover:underline">
-        &larr; Voltar
-      </Link>
-
-      <h1 className="mt-4 text-2xl font-semibold text-overview-text-primary">
-        Cadastro do Cliente
-      </h1>
-      <p className="mt-1 text-sm text-overview-text-secondary">
-        Identidade, canais e links deste cliente. Planejamento fica no Planejamento Mensal, performance nas telas
-        de performance/relatório, acompanhamento na Operação.
-      </p>
-
-      {/* Revisão visual pós-simplificação: `ClientForm` e os dois blocos
-          abaixo são irmãos diretos (nunca estiveram dentro do mesmo
-          container de espaçamento) — sem este wrapper, "Objetivos da conta"/
-          "Administração" ficavam colados embaixo do botão Salvar, sem
-          nenhum respiro (só o `<form>` interno do ClientForm tinha `gap-6`,
-          que não alcançava irmãos externos a ele). `/clients/new` não é
-          afetado — continua renderizando só `<ClientForm>`, sem nada depois. */}
-      <div className="flex flex-col gap-6">
-        <ClientForm
-          action={updateClientAction.bind(null, id, returnTo)}
-          managers={allManagers ?? []}
-          error={error}
-          defaultName={client.name}
-          defaultMetaAdAccountId={client.meta_ad_account_id}
-          defaults={client}
-          submitLabel="Salvar"
-          cancelHref={returnTo}
-        />
-
-        {isAdmin && (
-          <Block
-            title="Métricas de performance"
-            description="O que este cliente acompanha como resultado — um objetivo pode ter mais de um ao mesmo tempo (ex.: Leads + Seguidores). Cada objetivo tem sua própria meta, canais, campanhas classificadas e evento da Meta — o custo por resultado só é calculado quando há investimento real e atribuível às campanhas daquele objetivo."
+    <div className="mx-auto max-w-4xl px-6 py-8">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Link
+            href={returnTo}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-overview-text-secondary hover:text-overview-text-primary"
           >
-            <ClientGoalsSection
-              clientId={id}
-              returnTo={`/clients/${id}/edit`}
-              goals={clientGoals}
-              summaries={goalSummaries}
-              campaigns={campaignsForAssignment}
-              recentSprints={(recentSprints ?? []).map((s) => ({ id: s.id, startDate: s.start_date, endDate: s.end_date }))}
-              metaMappingSource={metaMappingSource}
-              metaMappingsByGoal={metaMappingsByGoal}
-            />
-          </Block>
-        )}
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            Voltar
+          </Link>
+          <h1 className="mt-2 text-xl font-semibold text-overview-text-primary">Configurações do cliente</h1>
+          <p className="mt-0.5 text-sm text-overview-text-secondary">Identidade, mídia, métricas e links.</p>
+        </div>
 
         {isAdmin && (
-          <Block
-            title="Métricas exibidas"
-            description="Quais cards de resultado, eficiência e entrega aparecem no Dashboard e nas tabelas deste cliente — independente de ter um objetivo configurado em Métricas de performance. Uma métrica sem evento da Meta configurado nunca mostra um número, só avisa que falta configurar."
-          >
-            <DashboardMetricsSection
-              clientId={id}
-              returnTo={`/clients/${id}/edit`}
-              selected={resolveEffectiveDashboardMetrics(client.dashboard_metrics ?? [], client.performance_goal)}
-            />
-          </Block>
+          <AdminActionsMenu>
+            <DeleteClientButton action={deleteClientAction.bind(null, id)} clientName={client.name} />
+          </AdminActionsMenu>
         )}
+      </div>
 
-        {isAdmin && (
-          <Block title="Administração" description="Ações administrativas sobre este cliente.">
-            <div className="flex flex-col gap-3">
-              <p className="text-xs text-overview-text-secondary">
-                O cliente some das listagens e para de sincronizar com o Meta, mas sprints, tarefas e
-                comentários ficam preservados. Dá pra restaurar depois em Configurações &gt; Clientes
-                excluídos.
-              </p>
-              <DeleteClientButton action={deleteClientAction.bind(null, id)} />
-            </div>
-          </Block>
-        )}
+      <div className="mt-6">
+        <ClientSettingsTabsProvider showMetricsTab={isAdmin}>
+          <ClientForm
+            tabbed
+            action={updateClientAction.bind(null, id, returnTo)}
+            managers={allManagers ?? []}
+            error={error}
+            defaultName={client.name}
+            defaultMetaAdAccountId={client.meta_ad_account_id}
+            defaults={client}
+            submitLabel="Salvar"
+            cancelHref={returnTo}
+          />
+
+          {isAdmin && (
+            <ClientSettingsTabPanel tab="metricas">
+              {/* Ponto 2 do pedido (reforçado pelo usuário): Objetivos de
+                  performance (com Eventos da Meta e Campanhas vinculadas por
+                  dentro de cada card) e Indicadores exibidos continuam
+                  Server Actions 100% independentes — só ganham um separador
+                  visual + rótulo próprio aqui, nunca uma lógica unificada. */}
+              <section className="flex flex-col gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-overview-text-primary">Objetivos de performance</h2>
+                  <p className="mt-0.5 text-xs text-overview-text-secondary">
+                    Como os resultados deste cliente são rastreados — inclui evento da Meta e campanhas vinculadas por
+                    objetivo. Meta mensal é só leitura aqui; edite em Metas.
+                  </p>
+                </div>
+                <ClientGoalsSection
+                  clientId={id}
+                  returnTo={`/clients/${id}/edit`}
+                  goals={clientGoals}
+                  summaries={goalSummaries}
+                  campaigns={campaignsForAssignment}
+                  recentSprints={(recentSprints ?? []).map((s) => ({ id: s.id, startDate: s.start_date, endDate: s.end_date }))}
+                  metaMappingSource={metaMappingSource}
+                  metaMappingsByGoal={metaMappingsByGoal}
+                />
+              </section>
+
+              <section className="flex flex-col gap-3 border-t border-overview-border pt-6">
+                <div>
+                  <h2 className="text-sm font-semibold text-overview-text-primary">Indicadores exibidos no Dashboard</h2>
+                  <p className="mt-0.5 text-xs text-overview-text-secondary">
+                    O que aparece no Dashboard — nunca cria nem depende de um objetivo acima.
+                  </p>
+                </div>
+                <DashboardMetricsSection
+                  clientId={id}
+                  returnTo={`/clients/${id}/edit`}
+                  selected={resolveEffectiveDashboardMetrics(client.dashboard_metrics ?? [], client.performance_goal)}
+                />
+              </section>
+            </ClientSettingsTabPanel>
+          )}
+        </ClientSettingsTabsProvider>
       </div>
     </div>
   );

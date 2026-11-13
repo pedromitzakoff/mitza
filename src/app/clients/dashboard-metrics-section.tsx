@@ -3,6 +3,7 @@
 import { DASHBOARD_METRIC_CATALOG, type DashboardMetricGroup, type DashboardMetricKey } from "@/lib/dashboard-metrics";
 import { updateClientDashboardMetricsAction } from "./dashboard-metrics-actions";
 import { SubmitButton } from "@/app/submit-button";
+import { CLIENT_SETTINGS_SAVE_BUTTON_CLASSES } from "./client-settings-ui";
 
 const GROUP_LABEL: Record<DashboardMetricGroup, string> = {
   resultado: "Resultados",
@@ -56,7 +57,7 @@ export function DashboardMetricsSection({
         </div>
       ))}
 
-      <SubmitButton pendingChildren="Salvando..." className="self-start rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover">
+      <SubmitButton pendingChildren="Salvando..." className={`self-start ${CLIENT_SETTINGS_SAVE_BUTTON_CLASSES}`}>
         Salvar métricas exibidas
       </SubmitButton>
     </form>

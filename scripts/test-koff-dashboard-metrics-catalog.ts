@@ -110,7 +110,10 @@ console.log("\nD — Wiring: seção nova em /clients/[id]/edit, independente de
   const actionsSource = loadSource("src", "app", "clients", "dashboard-metrics-actions.ts");
   const migrationSql = loadSource("supabase", "dashboard-metrics-catalog.sql");
 
-  ok('seção "Métricas exibidas" presente em /clients/[id]/edit', editPageSource.includes('title="Métricas exibidas"'));
+  // Etapa "Configurações do Cliente": renomeada pra diferenciar claramente
+  // de "Objetivos de performance" (ponto 2 do pedido) — mesmo componente
+  // (DashboardMetricsSection), agora na aba Métricas.
+  ok('seção "Indicadores exibidos no Dashboard" presente em /clients/[id]/edit', editPageSource.includes(">Indicadores exibidos no Dashboard<"));
   ok(
     "usa resolveEffectiveDashboardMetrics com o valor real da coluna + objetivo legado (nunca hardcoded)",
     editPageSource.includes("resolveEffectiveDashboardMetrics(client.dashboard_metrics ?? [], client.performance_goal)"),

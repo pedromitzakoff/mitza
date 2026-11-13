@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ClientAvatar } from "@/components/workspace/client-avatar";
 import type { Database } from "@/lib/supabase/database.types";
 import { AVAILABLE_TRAFFIC_CHANNELS, TRAFFIC_CHANNELS } from "@/lib/traffic-channels";
 import { PERFORMANCE_GOAL_OPTIONS, PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import { SETTINGS_SECONDARY_BUTTON_CLASSES } from "../settings/settings-shell";
 import { SubmitButton } from "@/app/submit-button";
+import { useClientSettingsTab } from "./client-settings-tabs";
+import { CLIENT_SETTINGS_SAVE_BUTTON_CLASSES_LG } from "./client-settings-ui";
 
 type Manager = { id: string; name: string };
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
@@ -90,6 +92,7 @@ export function ClientForm({
   submitLabel,
   submitPendingLabel = "Salvando...",
   cancelHref,
+  tabbed = false,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   managers: Manager[];
@@ -106,6 +109,13 @@ export function ClientForm({
    * "Criar cliente". */
   submitPendingLabel?: string;
   cancelHref: string;
+  /** Etapa "Configurações do Cliente": `/clients/[id]/edit` passa `true` —
+   * os 3 blocos (Cliente/Mídia/Links) viram 3 abas da MESMA árvore/form
+   * (`useClientSettingsTab`, lido de um `ClientSettingsTabsProvider`
+   * ancestral), em vez de empilhados com título de card repetido. Omitido
+   * (padrão `false`) em `/clients/new` — nenhuma mudança visual ali, os 3
+   * blocos continuam empilhados exatamente como antes. */
+  tabbed?: boolean;
 }) {
   // Etapa "Canais Ativos por Cliente": cliente novo (`defaults === undefined`)
   // nasce com "Meta Ads" pré-marcado — o gestor pode desmarcar se este for
@@ -136,6 +146,24 @@ export function ClientForm({
   // regra).
   const [metaChannelChecked, setMetaChannelChecked] = useState(mediaChannels.has("meta"));
 
+  // Etapa "Configurações do Cliente": lido mesmo quando `tabbed` é `false`
+  // (new-client) — sem `ClientSettingsTabsProvider` ancestral, o contexto
+  // devolve o valor padrão ("geral"), nunca lança erro; `tabbed` é quem de
+  // fato decide se isto importa pra visibilidade dos blocos abaixo.
+  const activeSettingsTab = useClientSettingsTab();
+  const isTabVisible = (tab: "geral" | "midia" | "links") => !tabbed || activeSettingsTab === tab;
+
+  // Guarda de validação pra "Nome" (ponto 6 do pedido — nenhuma aba pode
+  // perder dado em silêncio): um campo `required` dentro de um `<div
+  // hidden>` (`display: none`) fica ISENTO de validação nativa do
+  // formulário (ver WHATWG, "barred from constraint validation") — sem
+  // isto, salvar com a aba Mídia/Links aberta enquanto "Nome" (na aba
+  // Geral) estivesse vazio passaria pela validação do navegador sem avisar
+  // nada. Só entra em jogo no modo `tabbed`; em `/clients/new` o campo
+  // nunca fica escondido, então o `required` nativo já basta.
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const [nameError, setNameError] = useState(false);
+
   // Confirmação "simples" antes de sair (só fecha aba/recarrega — o App
   // Router navega sem descarregar a página, então isso não cobre clique em
   // outro link/menu, só o caso realmente simples de fechar/recarregar).
@@ -152,238 +180,259 @@ export function ClientForm({
     <form
       action={action}
       onChange={() => setDirty(true)}
-      onSubmit={() => setDirty(false)}
+      onSubmit={(event) => {
+        if (tabbed && !nameInputRef.current?.value.trim()) {
+          event.preventDefault();
+          setNameError(true);
+          return;
+        }
+        setDirty(false);
+      }}
       className="mt-6 flex flex-col gap-6"
     >
-      {error && (
-        <p className="rounded-md bg-overview-danger-subtle px-3 py-2 text-sm text-overview-danger">{error}</p>
+      {(error || nameError) && (
+        <p className="rounded-md bg-overview-danger-subtle px-3 py-2 text-sm text-overview-danger">
+          {nameError ? "Informe o nome do cliente (aba Geral)." : error}
+        </p>
       )}
 
-      <Block title="Cliente" description="Identidade e responsabilidade — o que não muda todo mês.">
-        <div className="flex items-center gap-4">
-          {photoPreview ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={photoPreview} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" />
-          ) : (
-            <ClientAvatar name={defaultName || "Cliente"} imageUrl={defaults?.avatar_url ?? null} size="lg" />
-          )}
-          <div className="flex flex-col gap-1">
-            <input
-              type="file"
-              name="photo"
-              accept="image/*"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                setPhotoPreview(file ? URL.createObjectURL(file) : null);
-              }}
-              className="text-sm text-overview-text-secondary file:mr-3 file:rounded-md file:border-0 file:bg-overview-surface-subtle file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-overview-text-primary hover:file:bg-overview-surface-hover"
-            />
-            <span className="text-xs text-overview-text-secondary">Sem foto, mostramos as iniciais do cliente.</span>
+      <div className={isTabVisible("geral") ? "flex flex-col gap-6" : "hidden"}>
+        <Block title="Cliente" description={tabbed ? undefined : "Identidade e responsabilidade — o que não muda todo mês."}>
+          <div className="flex items-center gap-4">
+            {photoPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={photoPreview} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" />
+            ) : (
+              <ClientAvatar name={defaultName || "Cliente"} imageUrl={defaults?.avatar_url ?? null} size="lg" />
+            )}
+            <div className="flex flex-col gap-1">
+              <input
+                type="file"
+                name="photo"
+                accept="image/*"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  setPhotoPreview(file ? URL.createObjectURL(file) : null);
+                }}
+                className="text-sm text-overview-text-secondary file:mr-3 file:rounded-md file:border-0 file:bg-overview-surface-subtle file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-overview-text-primary hover:file:bg-overview-surface-hover"
+              />
+              <span className="text-xs text-overview-text-secondary">Sem foto, mostramos as iniciais do cliente.</span>
+            </div>
           </div>
-        </div>
 
-        <label className={labelClasses}>
-          <span>
-            Nome <span className="text-overview-danger">*</span>
-          </span>
-          <input name="name" required defaultValue={defaultName} className={inputClasses} />
-        </label>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className={labelClasses}>
-            Status contratual
-            <select name="status" defaultValue={defaults?.status ?? "ativo"} className={inputClasses}>
-              <option value="ativo">Ativo</option>
-              <option value="pausado">Pausado</option>
-              <option value="encerrado">Encerrado</option>
-            </select>
+            <span>
+              Nome <span className="text-overview-danger">*</span>
+            </span>
+            <input
+              ref={nameInputRef}
+              name="name"
+              required
+              defaultValue={defaultName}
+              onChange={() => setNameError(false)}
+              className={inputClasses}
+            />
+          </label>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className={labelClasses}>
+              Status contratual
+              <select name="status" defaultValue={defaults?.status ?? "ativo"} className={inputClasses}>
+                <option value="ativo">Ativo</option>
+                <option value="pausado">Pausado</option>
+                <option value="encerrado">Encerrado</option>
+              </select>
+            </label>
+
+            <label className={labelClasses}>
+              <span>
+                Gestor principal <span className="text-xs text-overview-text-secondary">(opcional)</span>
+              </span>
+              <select
+                name="primary_manager_id"
+                defaultValue={defaults?.primary_manager_id ?? ""}
+                className={inputClasses}
+              >
+                <option value="">Sem gestor principal</option>
+                {managers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {/* Etapa "Simplificação do Cadastro do Cliente": CNPJ, início de
+              contrato, e-mail principal e mensalidade saíram desta tela —
+              Settings > Clientes já é o lugar canônico deles (coluna própria,
+              edição inline direto na tabela), manter os dois lugares editando
+              o mesmo dado duplicaria informação sem necessidade. */}
+          <p className="text-xs text-overview-text-secondary">
+            CNPJ, início de contrato, e-mail principal e mensalidade da agência são editados em{" "}
+            <Link href="/settings/clients" className="underline hover:text-overview-text-primary">
+              Configurações → Clientes
+            </Link>
+            .
+          </p>
+        </Block>
+      </div>
+
+      <div className={isTabVisible("midia") ? "flex flex-col gap-6" : "hidden"}>
+        <Block title="Mídia" description={tabbed ? undefined : "Canais que este cliente opera e como medimos o resultado."}>
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-xs font-medium uppercase tracking-wide text-overview-text-secondary">
+              Canais de mídia <span className="text-overview-danger">*</span>
+            </legend>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {AVAILABLE_TRAFFIC_CHANNELS.map((channel) => (
+                <label key={channel} className="flex items-center gap-2 text-sm text-overview-text-primary">
+                  <input
+                    type="checkbox"
+                    name="media_channels"
+                    value={channel}
+                    defaultChecked={mediaChannels.has(channel)}
+                    onChange={(event) => {
+                      if (channel === "meta") setMetaChannelChecked(event.target.checked);
+                    }}
+                    className="h-4 w-4 rounded border-overview-border"
+                  />
+                  {TRAFFIC_CHANNELS[channel].label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <label className={labelClasses}>
+            <span>
+              Conta de anúncios (Meta) {metaChannelChecked && <span className="text-overview-danger">*</span>}
+            </span>
+            <input
+              name="meta_ad_account_id"
+              placeholder="act_1234567890"
+              pattern="act_[0-9]+"
+              title="Formato: act_ seguido de números"
+              defaultValue={defaultMetaAdAccountId ?? ""}
+              className={`${inputClasses} font-mono`}
+            />
+            <span className="text-xs text-overview-text-secondary">
+              {metaChannelChecked
+                ? "Obrigatória enquanto Meta Ads estiver marcado acima."
+                : "Só necessária se Meta Ads estiver marcado acima — cliente Google-only pode deixar em branco."}
+            </span>
           </label>
 
           <label className={labelClasses}>
             <span>
-              Gestor principal <span className="text-xs text-overview-text-secondary">(opcional)</span>
+              Objetivo principal de performance {isNewClient && <span className="text-overview-danger">*</span>}
             </span>
             <select
-              name="primary_manager_id"
-              defaultValue={defaults?.primary_manager_id ?? ""}
+              name="performance_goal"
+              required={isNewClient}
+              value={performanceGoal}
+              onChange={(event) => setPerformanceGoal(event.target.value as PerformanceGoal | "")}
               className={inputClasses}
             >
-              <option value="">Sem gestor principal</option>
-              {managers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
+              <option value="" disabled={isNewClient}>
+                {isNewClient ? "Selecione um objetivo" : "Não configurado"}
+              </option>
+              {PERFORMANCE_GOAL_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
+            <span className="text-xs text-overview-text-secondary">
+              Define se os resultados desta conta são acompanhados como leads, vendas ou seguidores.
+            </span>
           </label>
-        </div>
 
-        {/* Etapa "Simplificação do Cadastro do Cliente": CNPJ, início de
-            contrato, e-mail principal e mensalidade saíram desta tela —
-            Settings > Clientes já é o lugar canônico deles (coluna própria,
-            edição inline direto na tabela), manter os dois lugares editando
-            o mesmo dado duplicaria informação sem necessidade. */}
-        <p className="text-xs text-overview-text-secondary">
-          CNPJ, início de contrato, e-mail principal e mensalidade da agência são editados em{" "}
-          <Link href="/settings/clients" className="underline hover:text-overview-text-primary">
-            Configurações → Clientes
-          </Link>
-          .
-        </p>
-      </Block>
-
-      <Block title="Mídia" description="Canais que este cliente opera e como medimos o resultado.">
-        <fieldset className="flex flex-col gap-2">
-          <legend className="text-xs font-medium uppercase tracking-wide text-overview-text-secondary">
-            Canais de mídia <span className="text-overview-danger">*</span>
-          </legend>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {AVAILABLE_TRAFFIC_CHANNELS.map((channel) => (
-              <label key={channel} className="flex items-center gap-2 text-sm text-overview-text-primary">
+          {/* Configuração avançada/fallback — mesmo padrão visual de
+              <details>/<summary> já usado em `client-goals-section.tsx`
+              ("Configuração avançada" de um objetivo). `target_cost_per_result`
+              não pode sair (auditoria confirmou: é o último elo da cadeia de
+              fallback canal → consolidado → este campo, `resolveTargetCostPerResult`,
+              lib/client-plan.ts — regra intocada), só perde peso visual: quem
+              já configurou meta por canal no Planejamento Mensal raramente
+              precisa abrir isto. */}
+          <details className="rounded-md border border-overview-border px-3 py-2">
+            <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-overview-text-secondary">
+              Configuração avançada
+            </summary>
+            <div className="mt-3 flex flex-col gap-1">
+              <label className={labelClasses}>
+                <span>
+                  Meta padrão de {costMetricLabel.toLowerCase()}{" "}
+                  <span className="text-xs text-overview-text-secondary">(opcional)</span>
+                </span>
                 <input
-                  type="checkbox"
-                  name="media_channels"
-                  value={channel}
-                  defaultChecked={mediaChannels.has(channel)}
-                  onChange={(event) => {
-                    if (channel === "meta") setMetaChannelChecked(event.target.checked);
-                  }}
-                  className="h-4 w-4 rounded border-overview-border"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  name="target_cost_per_result"
+                  defaultValue={defaults?.target_cost_per_result ?? ""}
+                  className={`${inputClasses} max-w-xs`}
                 />
-                {TRAFFIC_CHANNELS[channel].label}
               </label>
-            ))}
-          </div>
-        </fieldset>
-
-        <label className={labelClasses}>
-          <span>
-            Conta de anúncios (Meta) {metaChannelChecked && <span className="text-overview-danger">*</span>}
-          </span>
-          <input
-            name="meta_ad_account_id"
-            placeholder="act_1234567890"
-            pattern="act_[0-9]+"
-            title="Formato: act_ seguido de números"
-            defaultValue={defaultMetaAdAccountId ?? ""}
-            className={`${inputClasses} font-mono`}
-          />
-          <span className="text-xs text-overview-text-secondary">
-            {metaChannelChecked
-              ? "Obrigatória enquanto Meta Ads estiver marcado acima."
-              : "Só necessária se Meta Ads estiver marcado acima — cliente Google-only pode deixar em branco."}
-          </span>
-        </label>
-
-        <label className={labelClasses}>
-          <span>
-            Objetivo principal de performance {isNewClient && <span className="text-overview-danger">*</span>}
-          </span>
-          <select
-            name="performance_goal"
-            required={isNewClient}
-            value={performanceGoal}
-            onChange={(event) => setPerformanceGoal(event.target.value as PerformanceGoal | "")}
-            className={inputClasses}
-          >
-            <option value="" disabled={isNewClient}>
-              {isNewClient ? "Selecione um objetivo" : "Não configurado"}
-            </option>
-            {PERFORMANCE_GOAL_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <span className="text-xs text-overview-text-secondary">
-            Define se os resultados desta conta são acompanhados como leads, vendas ou seguidores.
-          </span>
-        </label>
-
-        {/* Configuração avançada/fallback — mesmo padrão visual de
-            <details>/<summary> já usado em `client-goals-section.tsx`
-            ("Configuração avançada" de um objetivo). `target_cost_per_result`
-            não pode sair (auditoria confirmou: é o último elo da cadeia de
-            fallback canal → consolidado → este campo, `resolveTargetCostPerResult`,
-            lib/client-plan.ts — regra intocada), só perde peso visual: quem
-            já configurou meta por canal no Planejamento Mensal raramente
-            precisa abrir isto. */}
-        <details className="rounded-md border border-overview-border px-3 py-2">
-          <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-overview-text-secondary">
-            Configuração avançada
-          </summary>
-          <div className="mt-3 flex flex-col gap-1">
-            <label className={labelClasses}>
-              <span>
-                Meta padrão de {costMetricLabel.toLowerCase()}{" "}
-                <span className="text-xs text-overview-text-secondary">(opcional)</span>
+              <span className="text-xs text-overview-text-secondary">
+                Fallback usado só quando nenhum canal tem meta própria no Planejamento Mensal — nunca a meta vigente
+                de verdade (essa é sempre definida mês a mês, por canal, na própria página do cliente).
               </span>
+            </div>
+          </details>
+        </Block>
+      </div>
+
+      <div className={isTabVisible("links") ? "flex flex-col gap-6" : "hidden"}>
+        <Block title="Links" description={tabbed ? undefined : "Atalhos usados no dia a dia deste cliente."}>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className={labelClasses}>
+              Link do Dashboard (Looker Studio)
               <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                name="target_cost_per_result"
-                defaultValue={defaults?.target_cost_per_result ?? ""}
-                className={`${inputClasses} max-w-xs`}
+                type="url"
+                name="dashboard_url"
+                placeholder="https://lookerstudio.google.com/..."
+                defaultValue={defaults?.dashboard_url ?? ""}
+                className={inputClasses}
               />
             </label>
-            <span className="text-xs text-overview-text-secondary">
-              Fallback usado só quando nenhum canal tem meta própria no Planejamento Mensal — nunca a meta vigente
-              de verdade (essa é sempre definida mês a mês, por canal, na própria página do cliente).
-            </span>
+            <label className={labelClasses}>
+              Link da página de Saldo
+              <input
+                type="url"
+                name="balance_url"
+                placeholder="https://..."
+                defaultValue={defaults?.balance_url ?? ""}
+                className={inputClasses}
+              />
+            </label>
+            <label className={labelClasses}>
+              Planilha de fechamento mensal
+              <input
+                type="url"
+                name="monthly_closing_sheet_url"
+                placeholder="https://docs.google.com/spreadsheets/..."
+                defaultValue={defaults?.monthly_closing_sheet_url ?? ""}
+                className={inputClasses}
+              />
+            </label>
           </div>
-        </details>
-      </Block>
-
-      <Block title="Links" description="Atalhos usados no dia a dia deste cliente.">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <label className={labelClasses}>
-            Link do Dashboard (Looker Studio)
-            <input
-              type="url"
-              name="dashboard_url"
-              placeholder="https://lookerstudio.google.com/..."
-              defaultValue={defaults?.dashboard_url ?? ""}
-              className={inputClasses}
-            />
-          </label>
-          <label className={labelClasses}>
-            Link da página de Saldo
-            <input
-              type="url"
-              name="balance_url"
-              placeholder="https://..."
-              defaultValue={defaults?.balance_url ?? ""}
-              className={inputClasses}
-            />
-          </label>
-          <label className={labelClasses}>
-            Planilha de fechamento mensal
-            <input
-              type="url"
-              name="monthly_closing_sheet_url"
-              placeholder="https://docs.google.com/spreadsheets/..."
-              defaultValue={defaults?.monthly_closing_sheet_url ?? ""}
-              className={inputClasses}
-            />
-          </label>
-        </div>
-      </Block>
-
-      <div className="flex items-center gap-3">
-        <SubmitButton
-          pendingChildren={submitPendingLabel}
-          className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
-        >
-          {submitLabel}
-        </SubmitButton>
-        <Link href={cancelHref} className={`px-4 py-2 text-sm ${SETTINGS_SECONDARY_BUTTON_CLASSES}`}>
-          Cancelar
-        </Link>
-        <span className="text-xs text-overview-text-secondary">
-          <span className="text-overview-danger">*</span> campos obrigatórios
-        </span>
+        </Block>
       </div>
+
+      {(!tabbed || activeSettingsTab !== "metricas") && (
+        <div className="flex items-center gap-3">
+          <SubmitButton pendingChildren={submitPendingLabel} className={CLIENT_SETTINGS_SAVE_BUTTON_CLASSES_LG}>
+            {submitLabel}
+          </SubmitButton>
+          <Link href={cancelHref} className={`px-4 py-2 text-sm ${SETTINGS_SECONDARY_BUTTON_CLASSES}`}>
+            Cancelar
+          </Link>
+          <span className="text-xs text-overview-text-secondary">
+            <span className="text-overview-danger">*</span> campos obrigatórios
+          </span>
+        </div>
+      )}
     </form>
   );
 }

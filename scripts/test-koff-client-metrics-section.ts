@@ -111,7 +111,13 @@ console.log("\nE — /clients/[id]/edit: seção renomeada no lugar pedido, nenh
 {
   const editPageSource = loadSource("src", "app", "clients", "[id]", "edit", "page.tsx");
 
-  ok('título da seção é "Métricas de performance" (pedido explícito do usuário)', editPageSource.includes('title="Métricas de performance"'));
+  // Etapa "Configurações do Cliente": a seção foi renomeada de novo, pra
+  // diferenciar claramente de "Indicadores exibidos no Dashboard" (ponto 2
+  // do pedido) — mesmo wrapper (ClientGoalsSection), mesma aba Métricas.
+  ok(
+    'título da seção é "Objetivos de performance" (ponto 2 do pedido — diferenciação de Indicadores exibidos)',
+    editPageSource.includes(">Objetivos de performance<"),
+  );
   ok("continua dentro de /clients/[id]/edit — nenhuma rota nova criada", editPageSource.includes("<ClientGoalsSection"));
   ok(
     "passa metaMappingSource/metaMappingsByGoal pro componente reaproveitado",
