@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Settings,
   Target,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
@@ -256,6 +257,7 @@ function AccordionGroup({
   collapsed,
   open,
   onToggle,
+  children,
 }: {
   groupId: string;
   label: string;
@@ -265,6 +267,11 @@ function AccordionGroup({
   collapsed: boolean;
   open: boolean;
   onToggle: () => void;
+  /** Etapa "Otimização do menu lateral mobile": conteúdo extra mostrado
+   * logo abaixo dos itens de navegação, dentro do MESMO painel revelado ao
+   * expandir — usado pra embutir "Atualizar Meta (todos)" dentro de
+   * "Gestão" no mobile, sem duplicar a estrutura de abrir/fechar. */
+  children?: React.ReactNode;
 }) {
   const panelId = `sidebar-group-panel-${groupId}`;
 
@@ -285,6 +292,7 @@ function AccordionGroup({
           {items.map((item) => (
             <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
           ))}
+          {children}
         </nav>
       )}
     </div>
@@ -414,6 +422,7 @@ function SidebarContent({
   walletClients,
   collapsed,
   toggleCollapsed,
+  onClose,
 }: {
   profile: { name: string; role: UserRole };
   pathname: string;
@@ -421,6 +430,10 @@ function SidebarContent({
   walletClients: AgencyTreeClient[];
   collapsed: boolean;
   toggleCollapsed: () => void;
+  /** Etapa "Otimização do menu lateral mobile": só usado pelo botão X
+   * mobile abaixo — no desktop o drawer não existe, então não há o que
+   * fechar (o botão correspondente nem renderiza ali, `md:hidden`). */
+  onClose: () => void;
 }) {
   const isAdmin = profile.role === "admin";
   const gestaoItems = GESTAO_ITEMS.filter((item) => !item.adminOnly || isAdmin);
@@ -496,14 +509,76 @@ function SidebarContent({
           `presentation="compact"`). A Carteira completa (lista vertical de
           todos os clientes) já tem um lugar próprio em `/clients`
           (`AgencyAccountsTree`) — não precisa duplicar aqui. */}
-      <div className={`flex min-h-0 flex-1 flex-col px-2.5 ${collapsed ? "md:hidden" : ""}`}>
+      <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 md:overflow-visible ${collapsed ? "md:hidden" : ""}`}>
         {activeClient && (
-          <div className="mb-2 shrink-0 border-b border-sidebar-border pb-2.5">
-            <ClientSwitcher activeClient={activeClient} walletClients={walletClients} month={month} presentation="full" />
+          <div className="mb-2 flex shrink-0 items-center gap-2 border-b border-sidebar-border pb-2.5">
+            <div className="min-w-0 flex-1">
+              <ClientSwitcher activeClient={activeClient} walletClients={walletClients} month={month} presentation="full" />
+            </div>
+            {/* Etapa "Otimização do menu lateral mobile" (ponto 1 do pedido):
+                botão X só existe no drawer mobile — no desktop a Sidebar é
+                fixa, não há "fechar". Mesmo `onClose` que já fecha no toque
+                fora do painel (ver `Sidebar`, backdrop abaixo), nunca uma
+                segunda forma de fechar. */}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Fechar menu"
+              className="mitza-pressable flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground-muted hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel md:hidden"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
           </div>
         )}
+
+        {/* Etapa "Otimização do menu lateral mobile" (pontos 2 e 3 do
+            pedido): no mobile, "Gestão" fica logo abaixo do seletor de
+            cliente (nunca no fim de uma lista com um vão grande acima
+            dela) e passa a incluir "Atualizar Meta (todos)" como um item
+            dela — MESMO estado (`openGroups.gestao`), MESMA permissão
+            (`isAdmin`) e MESMA Server Action (`syncAllMetaAction`) do
+            bloco "Agência" de sempre, só reposicionado e sem duplicar o
+            toggle (`md:hidden`: no desktop, Gestão continua só no lugar de
+            sempre, mais abaixo — ver bloco "AGÊNCIA + GESTÃO"). */}
+        {gestaoItems.length > 0 && (
+          <div className="shrink-0 pb-2 md:hidden">
+            <AccordionGroup
+              groupId="gestao-mobile"
+              label="Gestão"
+              navLabel="Gestão da agência"
+              items={gestaoItems}
+              pathname={pathname}
+              collapsed={collapsed}
+              open={openGroups.gestao}
+              onToggle={() => setOpenGroups((prev) => ({ ...prev, gestao: !prev.gestao }))}
+            >
+              {isAdmin && (
+                <form action={syncAllMetaAction}>
+                  <SubmitButton
+                    pendingChildren={
+                      <>
+                        <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        Atualizando...
+                      </>
+                    }
+                    className="flex w-full items-center gap-2 rounded-md py-1 pl-2 pr-2.5 text-left text-[13px] font-normal text-sidebar-foreground-secondary transition-colors duration-[var(--motion-fast)] ease-[var(--ease-enter)] hover:bg-sidebar-hover hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-steel"
+                  >
+                    <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    Atualizar Meta (todos)
+                  </SubmitButton>
+                </form>
+              )}
+            </AccordionGroup>
+          </div>
+        )}
+
+        {/* Etapa "Otimização do menu lateral mobile" (ponto 3 do pedido):
+            no mobile estes 4 atalhos já vivem na barra inferior
+            (`MobileTabBar`, mesma `buildClientNavItems`) — repeti-los aqui
+            era a duplicação que o pedido aponta. `md:flex`: no desktop
+            continuam exatamente como sempre. */}
         {activeClientId && (
-          <nav aria-label="Menu do cliente" className="flex flex-col gap-0.5">
+          <nav aria-label="Menu do cliente" className="hidden flex-col gap-0.5 md:flex">
             {buildClientNavItems(activeClientId, month).map((item) => (
               <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
             ))}
@@ -538,7 +613,7 @@ function SidebarContent({
           apresentação com rótulos (mobile sempre; desktop expandido).
           `md:hidden` quando `collapsed`: some só no desktop recolhido,
           mesma convenção da carteira (ver comentário acima). */}
-      <div className={`mt-2 shrink-0 space-y-1.5 px-2.5 pb-2 ${collapsed ? "md:hidden" : ""}`}>
+      <div className={`mt-2 hidden shrink-0 space-y-1.5 px-2.5 pb-2 ${collapsed ? "" : "md:block"}`}>
         {gestaoItems.length > 0 && (
           <AccordionGroup
             groupId="gestao"
@@ -566,12 +641,26 @@ function SidebarContent({
         ))}
       </div>
 
-      {/* RODAPÉ — sempre visível, uma borda sutil separando do resto. */}
-      <div className="shrink-0 space-y-1.5 border-t border-sidebar-border p-2.5">
-        <SidebarClock collapsed={collapsed} />
+      {/* RODAPÉ — sempre visível, uma borda sutil separando do resto.
+          `flex flex-col gap-1.5` (era `space-y-1.5`): `gap` nunca reserva
+          espaço pra um filho `hidden` (display:none sai do layout por
+          completo), enquanto `space-y-*` aplicaria a margem mesmo assim —
+          necessário agora que o relógio abaixo só aparece no desktop. */}
+      <div className="flex shrink-0 flex-col gap-1.5 border-t border-sidebar-border p-2.5">
+        {/* Etapa "Otimização do menu lateral mobile" (ponto 4 do pedido):
+            data/hora saem do menu mobile — no desktop continuam exatamente
+            como sempre. */}
+        <div className="hidden md:block">
+          <SidebarClock collapsed={collapsed} />
+        </div>
 
+        {/* Etapa "Otimização do menu lateral mobile" (ponto 2 do pedido):
+            "Atualizar Meta (todos)" saiu do rodapé mobile — mora agora
+            dentro de "Gestão", logo abaixo do seletor de cliente (ver
+            bloco acima). No desktop continua exatamente aqui, como
+            sempre. */}
         {isAdmin && (
-          <form action={syncAllMetaAction}>
+          <form action={syncAllMetaAction} className="hidden md:block">
             <Tooltip label="Atualizar Meta (todos)">
               <SubmitButton
                 pendingChildren={
@@ -681,12 +770,28 @@ export function Sidebar({
       >
         <Suspense
           fallback={
-            <SidebarContent profile={profile} pathname={pathname} month={null} walletClients={walletClients} collapsed={collapsed} toggleCollapsed={toggleCollapsed} />
+            <SidebarContent
+              profile={profile}
+              pathname={pathname}
+              month={null}
+              walletClients={walletClients}
+              collapsed={collapsed}
+              toggleCollapsed={toggleCollapsed}
+              onClose={onClose}
+            />
           }
         >
           <SidebarMonthParam
             onMonth={(month) => (
-              <SidebarContent profile={profile} pathname={pathname} month={month} walletClients={walletClients} collapsed={collapsed} toggleCollapsed={toggleCollapsed} />
+              <SidebarContent
+                profile={profile}
+                pathname={pathname}
+                month={month}
+                walletClients={walletClients}
+                collapsed={collapsed}
+                toggleCollapsed={toggleCollapsed}
+                onClose={onClose}
+              />
             )}
           />
         </Suspense>

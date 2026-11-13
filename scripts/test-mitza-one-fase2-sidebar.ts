@@ -180,10 +180,14 @@ console.log("\nG — Collapsed/mobile (seção 5 do pedido; bugfix de navegaçã
 {
   // A Carteira completa (busca+lista) foi removida da Sidebar no bugfix de
   // navegação — o menu do cliente (expandido) é quem usa 'md:hidden'
-  // quando collapsed agora.
+  // quando collapsed agora. Etapa "Otimização do menu lateral mobile"
+  // acrescentou `overflow-y-auto`/`md:overflow-visible` (scroll só no
+  // drawer mobile, zero efeito no desktop) à mesma div — o regex só
+  // precisa continuar pegando o `${collapsed ? "md:hidden" : ""}` no
+  // final, não mais o início exato da string inteira.
   ok(
     "menu do cliente (expandido) usa 'md:hidden' quando collapsed — some SÓ no desktop recolhido, nunca no mobile (mesma convenção de ItemLabel)",
-    /flex min-h-0 flex-1 flex-col px-2\.5 \$\{collapsed \? "md:hidden" : ""\}/.test(sidebarSource),
+    /flex min-h-0 flex-1 flex-col overflow-y-auto px-2\.5 md:overflow-visible \$\{collapsed \? "md:hidden" : ""\}/.test(sidebarSource),
   );
   ok(
     "versão compacta (desktop recolhido) usa 'hidden md:flex' — nunca aparece no mobile (o menu do cliente expandido já cobre esse caso lá)",
@@ -294,11 +298,19 @@ console.log("\nL — MITZA ONE — Fase 2.1: altura da carteira priorizada (seç
   );
   ok(
     "margem/espaçamento de Agência+Gestão foi reduzido (mt-3/space-y-3 -> mt-2/space-y-1.5) sem tocar no padding das linhas (NavLink/ClientRow continuam py-1) nem no tamanho do avatar (ClientAvatar continua size=\"xs\")",
-    sidebarSource.includes('mt-2 shrink-0 space-y-1.5 px-2.5 pb-2') && sidebarSource.includes('py-1 pl-2 pr-2.5') && sidebarSource.includes('size="xs"'),
+    // Etapa "Otimização do menu lateral mobile": este bloco ganhou `hidden`
+    // (some no mobile — Gestão foi reposicionada pra logo abaixo do
+    // seletor de cliente nessa largura, ver seção M abaixo) — o mt-2/
+    // space-y-1.5/px-2.5/pb-2 original continua intocado, só não mais no
+    // início absoluto da string de classe.
+    sidebarSource.includes('mt-2 hidden shrink-0 space-y-1.5 px-2.5 pb-2') && sidebarSource.includes('py-1 pl-2 pr-2.5') && sidebarSource.includes('size="xs"'),
   );
   ok(
     "a região da carteira continua 'flex-1 min-h-0' (ocupa toda altura disponível, scroll próprio) — nenhuma mudança nessa mecânica, só menos espaço perdido ao redor dela",
-    sidebarSource.includes("flex min-h-0 flex-1 flex-col px-2.5"),
+    // Etapa "Otimização do menu lateral mobile": ganhou `overflow-y-auto`/
+    // `md:overflow-visible` (scroll só no drawer mobile) — `flex-1 min-h-0`
+    // continua exatamente a mesma mecânica de sempre.
+    sidebarSource.includes("flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 md:overflow-visible"),
   );
   ok("rodapé (relógio/Atualizar Meta/identidade/sair) continua intocado, mesma estrutura", sidebarSource.includes('border-t border-sidebar-border p-2.5'));
 }
