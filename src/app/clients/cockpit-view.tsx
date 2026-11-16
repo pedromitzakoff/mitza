@@ -179,6 +179,7 @@ export function CockpitView({ model, today }: { model: CockpitViewModel; today: 
             channels={model.budget.channels}
             canEdit={model.budget.canEdit}
             isGlobalFilterActive={model.isFilterActive}
+            isMonthAligned={model.periodResolved.isMonthAligned}
           />
         </div>
         {model.resultCards.map(({ result, status, cost }) => (

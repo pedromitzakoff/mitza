@@ -160,6 +160,16 @@ export function CockpitBudgetCard({
    * cliente inteiro — nunca mistura silenciosamente dado global com
    * filtrado. */
   isGlobalFilterActive = false,
+  /** Etapa "Correção do rótulo de Investimento fora do mês" (bug
+   * reportado pelo usuário): `headline.monthActual` já vinha certo fora de
+   * "Este mês" (Hoje/Ontem/Últimos 7/30 dias/Personalizado) — era sempre o
+   * gasto do INTERVALO CONSULTADO, nunca do mês (`monthActualForHeadline`,
+   * `lib/cockpit-view-data.ts`); só o RÓTULO ficava hardcoded "no mês",
+   * uma falha de comunicação real (o número certo com a legenda errada).
+   * `monthPlanned` já vem forçado a `0` fora do mês (nenhuma meta mensal
+   * faz sentido pra comparar contra uma janela de poucos dias) — por isso
+   * o texto do estado vazio também precisa deixar de mencionar "o mês". */
+  isMonthAligned = true,
 }: {
   headline: CockpitBudgetHeadlineView;
   clientId: string;
@@ -167,6 +177,7 @@ export function CockpitBudgetCard({
   channels: DashboardBudgetChannel[];
   canEdit: boolean;
   isGlobalFilterActive?: boolean;
+  isMonthAligned?: boolean;
 }) {
   const summary = resolveMonthPeriodSummary(
     {
@@ -184,7 +195,8 @@ export function CockpitBudgetCard({
       <PaceVerdictBadge status={headline.monthStatus} />
       <p className="mt-1 text-2xl font-bold tracking-tight text-overview-text-primary tabular-nums">{formatCurrency(headline.monthActual)}</p>
       <p className="text-xs text-overview-text-secondary">
-        investido no mês{isGlobalFilterActive && <span className="text-overview-text-muted"> · cliente inteiro, não filtrado</span>}
+        investido {isMonthAligned ? "no mês" : "no período"}
+        {isGlobalFilterActive && <span className="text-overview-text-muted"> · cliente inteiro, não filtrado</span>}
       </p>
       {headline.monthPlanned > 0 ? (
         <div className="mt-1.5 flex flex-col gap-0.5 text-[11px] text-overview-text-muted">
@@ -197,7 +209,9 @@ export function CockpitBudgetCard({
           <AgencyInvestmentBar summary={summary} showLegend={false} />
         </div>
       ) : (
-        <p className="mt-1.5 text-[11px] text-overview-text-muted">Sem planejamento configurado para o mês.</p>
+        <p className="mt-1.5 text-[11px] text-overview-text-muted">
+          {isMonthAligned ? "Sem planejamento configurado para o mês." : "Sem planejamento mensal comparável neste período."}
+        </p>
       )}
 
       {/* `compact`: `DashboardBudget` mostra "Planejado" (pencil + composição
