@@ -218,9 +218,19 @@ console.log("\n7 — Arquitetura: mês de referência (orçamento/metas, intocad
     "fora de isMonthAligned, Resultado/Custo somam direto das tabelas diárias (sumDailyResultCountForRange/sumDailySpendForRange) — nunca o mecanismo de sprints (mensal/semanal, não serve pra 'Hoje')",
     source.includes("sumDailyResultCountForRange(queryRangeDailyPerformanceRows, group.resultType, group.channels, queryFirstDay, queryLastDay)"),
   );
+  // Etapa "Correção do filtro de campanha em períodos personalizados":
+  // o bloqueio total ("Filtro de campanha indisponível em períodos
+  // personalizados") foi substituído por um recálculo real, reaproveitando
+  // a MESMA função já usada por "Este mês" (resolveFilteredExecutiveCardOverride)
+  // sobre performanceReportData.campaignDailyRows — que já vem buscada no
+  // intervalo CONSULTADO (queryFirstDay/queryLastDay), nunca o mês inteiro.
+  // Continua Meta-only/sem número fabricado (a própria função decide
+  // unavailableReason quando o grupo não tem granularidade de campanha).
   ok(
-    "filtro de campanha + período personalizado simultâneos: unavailableReason explícito (tabelas diárias não têm dimensão de campanha), nunca um número fabricado",
-    source.includes('if (!isMonthAligned) {') && source.includes("Filtro de campanha indisponível em períodos personalizados"),
+    "filtro de campanha + período personalizado simultâneos: reaproveita resolveFilteredExecutiveCardOverride sobre performanceReportData.campaignDailyRows (já no intervalo consultado), nunca mais um bloqueio total",
+    source.includes('if (!isMonthAligned) {') &&
+      source.includes("resolveFilteredExecutiveCardOverride(\n          group.resultType,\n          group.channels,\n          performanceReportData.campaignDailyRows,\n          cockpitFilter,") &&
+      !source.includes("Filtro de campanha indisponível em períodos personalizados"),
   );
   ok(
     "indicadores Meta Ads/evolução/campanhas-anúncios (buildPerformanceReportData, fetchAccountPeriodReachSnapshot, buildCockpitAdPerformanceData) todos no intervalo CONSULTADO — seção 5: 'respeitar exatamente o intervalo selecionado'",

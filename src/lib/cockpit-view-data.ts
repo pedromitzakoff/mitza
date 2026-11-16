@@ -611,34 +611,49 @@ export async function buildCockpitViewModel(
      * raciocínio do card de Orçamento, acima).
      *
      * Filtro global de texto (campanha) ativo ao mesmo tempo: as tabelas
-     * diárias não têm dimensão de campanha (só `daily_performance`/
-     * `daily_spend`, por cliente+canal+dia) — recalcular o filtrado exigiria
-     * a tabela de campanhas (Meta-only, não cobre Google), então este caso
-     * combinado fica `unavailableReason`, nunca um número fabricado.
+     * diárias (`daily_performance`/`daily_spend`) não têm dimensão de
+     * campanha, mas `performanceReportData.campaignDailyRows` tem — e já
+     * vem buscada no intervalo CONSULTADO (`buildPerformanceReportData(...,
+     * { start: queryFirstDay, end: queryLastDay })`, nunca o mês inteiro),
+     * então recalcular o filtrado aqui é só reaproveitar a MESMA função já
+     * usada no caminho "Este mês" (`resolveFilteredExecutiveCardOverride`),
+     * nunca uma segunda fórmula. Continua Meta-only (ela mesma decide
+     * `unavailableReason` quando o grupo combina canais sem granularidade
+     * de campanha, ou quando não há linha nenhuma no intervalo) — nunca um
+     * número fabricado, só não bloqueia mais em bloco todo período fora do
+     * mês só por existir um filtro ativo.
      */
     if (!isMonthAligned) {
       if (cockpitFilter.isActive) {
-        const unavailableReason = "Filtro de campanha indisponível em períodos personalizados — volte para 'Este mês' ou limpe o filtro.";
+        const filteredOverride = resolveFilteredExecutiveCardOverride(
+          group.resultType,
+          group.channels,
+          performanceReportData.campaignDailyRows,
+          cockpitFilter,
+          "Escopo filtrado por campanha — números do período selecionado, não do mês.",
+        );
         return {
           result: {
             resultType: group.resultType,
             channelsLabel,
-            resultCount: 0,
+            resultCount: filteredOverride.resultCount ?? 0,
             targetResultCount: null,
             expectedResultsToDate: null,
             neededDailyRate: null,
             edit: null,
-            unavailableReason,
+            filteredNotice: filteredOverride.filteredNotice,
+            unavailableReason: filteredOverride.unavailableReason,
           },
           status: null,
           cost: {
             resultType: group.resultType,
-            costPerResult: null,
+            costPerResult: filteredOverride.costPerResult,
             targetCostPerResult: null,
             deviationPct: null,
             tone: "normal",
             edit: null,
-            unavailableReason,
+            filteredNotice: filteredOverride.filteredNotice,
+            unavailableReason: filteredOverride.unavailableReason,
           },
         };
       }

@@ -153,6 +153,15 @@ export function resolveFilteredExecutiveCardOverride(
   channels: TrafficChannel[],
   allCampaignDailyRows: CampaignDailyMetricRow[],
   filter: CockpitFilterState,
+  /** Etapa "Correção do filtro de campanha em períodos personalizados":
+   * o texto padrão fala de "meta do mês" porque nasceu só pra "Este mês"
+   * (único caso em que havia meta mensal pra explicar que ficou
+   * indisponível). Fora do mês (Hoje/Ontem/Últimos 7/30 dias/
+   * Personalizado) nunca existiu meta mensal pra comparar em primeiro
+   * lugar — `cockpit-view-data.ts` passa um texto próprio pra esse caso,
+   * nunca o padrão (que soaria confuso, mencionando uma meta que nunca
+   * apareceria de qualquer forma). */
+  filteredNoticeText: string = "Escopo filtrado — meta do mês não é comparável aqui.",
 ): FilteredExecutiveCardOverride {
   if (!isResultGroupFilterable(channels)) {
     return {
@@ -173,6 +182,6 @@ export function resolveFilteredExecutiveCardOverride(
   return {
     resultCount: result.summary.resultCount,
     costPerResult: result.summary.costPerResult,
-    filteredNotice: "Escopo filtrado — meta do mês não é comparável aqui.",
+    filteredNotice: filteredNoticeText,
   };
 }
