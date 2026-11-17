@@ -9,6 +9,7 @@ import type { PerformanceGoal } from "@/lib/performance-goals";
 import {
   adSetSummaryToRow,
   buildExplorationColumns,
+  buildExplorationTotals,
   creativeSummaryToRow,
   explorationSortValue,
   formatExplorationCell,
@@ -144,6 +145,12 @@ function ExplorationTable({
     );
   }
 
+  // Etapa "Linha resumo consolidada" (pedido explícito do usuário): totais
+  // do MESMO conjunto exibido (já com busca/filtro aplicados por quem
+  // chama — `rows` aqui já é `filteredRows`) — nunca uma segunda consulta,
+  // reaproveita só os campos que as próprias linhas já carregam.
+  const totals = buildExplorationTotals(rows);
+
   return (
     <div className="max-h-[520px] overflow-auto rounded-lg border border-overview-border">
       <table className="w-full min-w-[640px] border-collapse text-sm">
@@ -192,6 +199,18 @@ function ExplorationTable({
             </tr>
           ))}
         </tbody>
+        <tfoot>
+          <tr className="sticky bottom-0 border-t-2 border-overview-border bg-overview-surface-subtle font-semibold">
+            {visibleColumns.map((col) => (
+              <td
+                key={col.id}
+                className={`whitespace-nowrap px-3.5 py-2.5 tabular-nums text-overview-text-primary ${col.align === "right" ? "text-right" : "text-left"}`}
+              >
+                {col.id === "name" ? "Total" : (totals.get(col.id) ?? "—")}
+              </td>
+            ))}
+          </tr>
+        </tfoot>
       </table>
     </div>
   );
@@ -240,6 +259,10 @@ function ExplorationCardList({
     );
   }
 
+  // Etapa "Linha resumo consolidada": mesmo total de `ExplorationTable`
+  // (desktop), só reapresentado como card — nunca um segundo cálculo.
+  const totals = buildExplorationTotals(rows);
+
   return (
     <div>
       {metricColumns.length > 0 && (
@@ -264,6 +287,19 @@ function ExplorationCardList({
         </div>
       )}
       <div className={`flex flex-col gap-2 ${metricColumns.length > 0 ? "mt-3" : ""}`}>
+        {metricColumns.length > 0 && (
+          <div className="rounded-lg border border-overview-border bg-overview-surface-subtle p-3">
+            <p className="text-sm font-semibold text-overview-text-primary">Total</p>
+            <div className="mt-2 flex flex-col gap-1 border-t border-overview-border pt-2">
+              {metricColumns.map((col) => (
+                <div key={col.id} className="flex items-baseline justify-between gap-2">
+                  <p className="text-[11px] font-medium text-overview-text-muted">{col.label}</p>
+                  <p className="text-sm font-semibold tabular-nums text-overview-text-primary">{totals.get(col.id) ?? "—"}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {sortedRows.map((row) => (
           <div
             key={row.id}

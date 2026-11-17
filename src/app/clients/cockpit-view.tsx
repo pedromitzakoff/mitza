@@ -3,7 +3,7 @@ import { Fragment } from "react";
 import { buildCockpitChannelHref, type CockpitViewModel } from "@/lib/cockpit-view-data";
 import { VisaoGeralChannelSwitch } from "./visao-geral-channel-switch";
 import { PeriodRangePicker } from "./period-range-picker";
-import { CockpitBudgetCard } from "./cockpit-meta-ritmo-section";
+import { CockpitBudgetCard, CockpitRevenueCard, CockpitRoasCard } from "./cockpit-meta-ritmo-section";
 import { CockpitResultCard, CockpitCostCard } from "./cockpit-goal-card";
 import { CockpitDiagnosticsCard } from "./cockpit-diagnostics-card";
 import { CockpitEvolutionSection } from "./cockpit-evolution-section";
@@ -182,10 +182,20 @@ export function CockpitView({ model, today }: { model: CockpitViewModel; today: 
             isMonthAligned={model.periodResolved.isMonthAligned}
           />
         </div>
-        {model.resultCards.map(({ result, status, cost }) => (
+        {model.resultCards.map(({ result, status, cost, sales }) => (
           <Fragment key={`group-${result.resultType}-${result.channelsLabel ?? "all"}`}>
             <CockpitResultCard view={result} status={status} />
             <CockpitCostCard view={cost} />
+            {/* Etapa "Faturamento e ROAS nos cards principais" (pedido
+                explícito do usuário): só aparece pro grupo de objetivo
+                "vendas" — `sales` já vem `null` pra qualquer outro
+                objetivo (ver `cockpit-view-data.ts`). */}
+            {sales && (
+              <>
+                <CockpitRevenueCard view={sales} />
+                <CockpitRoasCard view={sales} />
+              </>
+            )}
           </Fragment>
         ))}
       </div>

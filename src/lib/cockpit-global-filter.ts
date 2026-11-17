@@ -129,6 +129,15 @@ export interface FilteredExecutiveCardOverride {
    * número global disfarçado de filtrado. */
   resultCount: number | null;
   costPerResult: number | null;
+  /** Etapa "Faturamento e ROAS nos cards principais": `PerformanceSummary`
+   * (`buildFilteredExecutiveSummary`) já trazia `revenue`/`roas` calculados
+   * no escopo filtrado — só não eram expostos aqui porque nenhum
+   * consumidor precisava ainda. `null` cobre os MESMOS dois casos de
+   * sempre (objetivo não é vendas, ou sem `value_column` configurado) —
+   * nunca um valor fabricado; quem chama só lê isto quando
+   * `resultType === "sales"`. */
+  revenue?: number | null;
+  roas?: number | null;
   /** Presente (card calculável, mas sem meta comparável — ver
    * `CockpitResultCardView.filteredNotice`) OU... */
   filteredNotice?: string;
@@ -167,6 +176,8 @@ export function resolveFilteredExecutiveCardOverride(
     return {
       resultCount: null,
       costPerResult: null,
+      revenue: null,
+      roas: null,
       unavailableReason: "Indisponível no escopo filtrado — este objetivo combina canais sem granularidade de campanha.",
     };
   }
@@ -175,6 +186,8 @@ export function resolveFilteredExecutiveCardOverride(
   if (result.status === "unavailable") {
     return {
       resultCount: null,
+      revenue: null,
+      roas: null,
       costPerResult: null,
       unavailableReason: "Indisponível no escopo filtrado — sem dados de campanha para este objetivo.",
     };
@@ -182,6 +195,8 @@ export function resolveFilteredExecutiveCardOverride(
   return {
     resultCount: result.summary.resultCount,
     costPerResult: result.summary.costPerResult,
+    revenue: result.summary.revenue,
+    roas: result.summary.roas,
     filteredNotice: filteredNoticeText,
   };
 }

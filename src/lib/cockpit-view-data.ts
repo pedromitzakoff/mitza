@@ -31,7 +31,7 @@ import { contractStatusBannerText } from "@/lib/client-fields";
 import { loadClientOperationalStates } from "@/lib/client-operational-state-data";
 import { evaluateCpaDiagnostic } from "@/lib/metric-diagnostics";
 import { listClientGoals, resolvePrimaryGoal, resolveChannelGoal, type ClientGoal } from "@/lib/client-goals";
-import { computePerformanceSummary } from "@/lib/performance";
+import { computePerformanceSummary, computeRoas } from "@/lib/performance";
 import { resolvePerformanceRowsForSprints, getDailyPerformanceRowsForPeriod } from "@/lib/performance-queries";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import {
@@ -56,6 +56,7 @@ import {
   type CockpitResultCardView,
   type CockpitCostCardView,
   type CockpitGoalEditAffordance,
+  type CockpitSalesExtraCardView,
 } from "@/app/clients/cockpit-meta-ritmo-section";
 import {
   resolveCockpitFilterState,
@@ -170,7 +171,14 @@ export interface CockpitViewModel {
      * `isAdmin` nesse caso (ver nota de segurança acima). */
     canEdit: boolean;
   };
-  resultCards: { result: CockpitResultCardView; status: SpendStatus | null; cost: CockpitCostCardView }[];
+  resultCards: {
+    result: CockpitResultCardView;
+    status: SpendStatus | null;
+    cost: CockpitCostCardView;
+    /** Etapa "Faturamento e ROAS nos cards principais": `null` pra
+     * qualquer grupo que não seja "vendas" — ver `CockpitSalesExtraCardView`. */
+    sales: CockpitSalesExtraCardView | null;
+  }[];
   insights: CockpitInsight[];
   channelBreakdownRows: ChannelBreakdownRowView[];
   showMetaSection: boolean;
@@ -554,6 +562,10 @@ export async function buildCockpitViewModel(
     channel: row.channel as TrafficChannel,
     resultType: row.resultType as PerformanceGoal,
     resultCount: row.resultCount,
+    // Etapa "Faturamento e ROAS nos cards principais": já vinha da query
+    // (`daily_performance.revenue`, mesma coluna de sempre), só não era
+    // repassado nesta projeção porque nenhum consumidor precisava ainda.
+    revenue: row.revenue,
   }));
   const queryRangeActualSpend = sumDailySpendForRange(queryRangeDailySpendRows, clientChannels, queryFirstDay, queryLastDay);
   const monthPlanned = isMonthAligned ? totalPlannedAcrossChannels : 0;
@@ -595,8 +607,10 @@ export async function buildCockpitViewModel(
   const monthLabel = formatMonthLabel(firstDay);
   const cockpitReturnTo = buildContextHref({});
 
-  const resultCards: { result: CockpitResultCardView; status: SpendStatus | null; cost: CockpitCostCardView }[] = resultGroups.map((group) => {
+  const resultCards: { result: CockpitResultCardView; status: SpendStatus | null; cost: CockpitCostCardView; sales: CockpitSalesExtraCardView | null }[] =
+    resultGroups.map((group) => {
     const channelsLabel = resultGroups.length > 1 ? group.channels.map((c) => TRAFFIC_CHANNELS[c].label).join(" + ") : null;
+    const isSalesGoal = group.resultType === "sales";
 
     /**
      * Etapa "Seletor global de período" (seções 5-6 do pedido, decisão
@@ -655,11 +669,26 @@ export async function buildCockpitViewModel(
             filteredNotice: filteredOverride.filteredNotice,
             unavailableReason: filteredOverride.unavailableReason,
           },
+          sales: isSalesGoal
+            ? {
+                revenue: filteredOverride.revenue ?? null,
+                roas: filteredOverride.roas ?? null,
+                filteredNotice: filteredOverride.filteredNotice,
+                unavailableReason: filteredOverride.unavailableReason,
+              }
+            : null,
         };
       }
       const rangeResultCount = sumDailyResultCountForRange(queryRangeDailyPerformanceRows, group.resultType, group.channels, queryFirstDay, queryLastDay);
       const rangeSpend = sumDailySpendForRange(queryRangeDailySpendRows, group.channels, queryFirstDay, queryLastDay);
       const rangeCostPerResult = rangeResultCount > 0 ? rangeSpend / rangeResultCount : null;
+      // Etapa "Faturamento e ROAS nos cards principais": mesma régua de
+      // `rangeResultCount`/`rangeSpend` acima, só pro objetivo "vendas" —
+      // nunca calculado pra outro objetivo (sem sentido perguntar "ROAS de
+      // leads").
+      const rangeRevenue = isSalesGoal
+        ? sumDailyRevenueForRange(queryRangeDailyPerformanceRows, group.resultType, group.channels, queryFirstDay, queryLastDay)
+        : null;
       return {
         result: {
           resultType: group.resultType,
@@ -671,6 +700,7 @@ export async function buildCockpitViewModel(
           edit: null,
         },
         status: null,
+        sales: isSalesGoal ? { revenue: rangeRevenue, roas: computeRoas(rangeRevenue, rangeSpend) } : null,
         cost: {
           resultType: group.resultType,
           costPerResult: rangeCostPerResult,
@@ -750,6 +780,14 @@ export async function buildCockpitViewModel(
         filteredNotice: filteredOverride?.filteredNotice,
         unavailableReason: filteredOverride?.unavailableReason,
       },
+      sales: isSalesGoal
+        ? {
+            revenue: filteredOverride ? filteredOverride.revenue ?? null : performanceSummary.revenue,
+            roas: filteredOverride ? filteredOverride.roas ?? null : performanceSummary.roas,
+            filteredNotice: filteredOverride?.filteredNotice,
+            unavailableReason: filteredOverride?.unavailableReason,
+          }
+        : null,
     };
   });
 
@@ -1006,4 +1044,26 @@ export function sumDailyResultCountForRange(
       row.resultType === resultType && channels.includes(row.channel) && row.date >= firstDay && row.date <= lastDay ? sum + row.resultCount : sum,
     0,
   );
+}
+
+/**
+ * Etapa "Faturamento e ROAS nos cards principais": mesma convenção de
+ * `sumDailyResultCountForRange`, pro faturamento (`daily_performance.
+ * revenue`) — só chamada pro objetivo "vendas". `null` quando NENHUMA
+ * linha do escopo tem `revenue` (nunca fabrica `0`: "sem faturamento
+ * registrado" é um estado diferente de "faturou zero", mesma distinção já
+ * documentada em `aggregatePerformanceResults`, lib/performance.ts).
+ */
+export function sumDailyRevenueForRange(
+  rows: { date: string; channel: TrafficChannel; resultType: PerformanceGoal; revenue: number | null }[],
+  resultType: PerformanceGoal,
+  channels: TrafficChannel[],
+  firstDay: string,
+  lastDay: string,
+): number | null {
+  const relevant = rows.filter(
+    (row) => row.resultType === resultType && channels.includes(row.channel) && row.date >= firstDay && row.date <= lastDay && row.revenue !== null,
+  );
+  if (relevant.length === 0) return null;
+  return relevant.reduce((sum, row) => sum + (row.revenue ?? 0), 0);
 }

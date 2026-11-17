@@ -47,13 +47,17 @@ console.log("\nA — Cards compactos (seção 1 do pedido): paddings/gaps reduzi
   // CUSTO moraram pra cockpit-goal-card.tsx (precisam de `isEditing`
   // próprio); ORÇAMENTO continua em cockpit-meta-ritmo-section.tsx — a
   // checagem soma as classes das DUAS fontes, nunca uma só.
+  // Etapa "Faturamento e ROAS nos cards principais": CockpitRevenueCard/
+  // CockpitRoasCard (novos, só pro objetivo "vendas") reaproveitam a MESMA
+  // constante — a contagem subiu de 3 pra 5, mas a checagem real ("todos
+  // compartilham a MESMA classe, nenhum corte de conteúdo") continua.
   const paddingClasses = [
     ...(cardsSource.match(/rounded-lg border p-\S+ \$\{COCKPIT_CARD_CLASSES/g) ?? []),
     ...(goalCardSource.match(/rounded-lg border p-\S+ \$\{COCKPIT_CARD_CLASSES/g) ?? []),
   ];
   ok(
-    "os 3 cards de Meta & Ritmo continuam com a MESMA classe de moldura/padding entre si (compactação consistente, sem corte de conteúdo)",
-    new Set(paddingClasses.map((m) => m.split(" ")[2])).size === 1 && paddingClasses.length === 3,
+    "os cards de Meta & Ritmo (Orçamento/Resultado/Custo + Faturamento/ROAS quando aplicável) continuam com a MESMA classe de moldura/padding entre si (compactação consistente, sem corte de conteúdo)",
+    new Set(paddingClasses.map((m) => m.split(" ")[2])).size === 1 && paddingClasses.length === 5,
   );
   ok(
     "card RESULTADO continua com todos os dados exigidos: status de ritmo, valor, meta, necessário/dia, barra",

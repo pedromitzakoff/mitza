@@ -281,6 +281,76 @@ const COUNT_COLUMNS = new Set<StaticExplorationColumnId>(["impressions", "clicks
  * coluna (pedido do usuário: "valores e unidades formatados corretamente"),
  * `"—"` quando o valor é `null` OU a linha não é deste objetivo (nunca `0`
  * fabricado, nunca o número de um objetivo aparecendo na coluna de outro). */
+/** Soma pura, ignorando `null` (nunca trata ausência como zero) — `null`
+ * de volta só quando NENHUMA linha do escopo tem o campo, mesma convenção
+ * de `aggregatePerformanceResults` (lib/performance.ts). */
+function sumColumn(rows: ExplorationRow[], pick: (row: ExplorationRow) => number | null): number | null {
+  const values = rows.map(pick).filter((v): v is number => v !== null);
+  return values.length > 0 ? values.reduce((sum, v) => sum + v, 0) : null;
+}
+
+/**
+ * Etapa "Linha resumo consolidada" (pedido explícito do usuário, nas
+ * tabelas de Campanhas/Conjuntos): totais de UMA coluna, pro conjunto de
+ * linhas atualmente visível (já filtrado/pesquisado — quem chama decide o
+ * escopo, esta função nunca sabe de busca/filtro). Métricas ADITIVAS
+ * (Investimento/Impressões/Cliques/Receita/Resultado por objetivo) somam
+ * direto; métricas DERIVADAS (CTR/CPC/CPM/ROAS/Custo por resultado) são
+ * SEMPRE recalculadas a partir dos totais somados — nunca a média das
+ * razões de cada linha, que produziria um número tecnicamente errado
+ * sempre que as linhas têm volumes diferentes (mesma disciplina de
+ * `lib/performance.ts`: toda métrica derivada nasce de uma divisão seguinda
+ * sobre totais, nunca de uma média de proporções).
+ */
+export function buildExplorationTotals(rows: ExplorationRow[]): Map<ExplorationColumnId, string> {
+  const cells = new Map<ExplorationColumnId, string>();
+  if (rows.length === 0) return cells;
+
+  const totalSpend = sumColumn(rows, (r) => r.spend);
+  const totalImpressions = sumColumn(rows, (r) => r.impressions);
+  const totalClicks = sumColumn(rows, (r) => r.clicks);
+  const totalLinkClicks = sumColumn(rows, (r) => r.linkClicks);
+  const totalRevenue = sumColumn(rows, (r) => r.revenue);
+
+  cells.set("spend", totalSpend !== null ? formatCurrency(totalSpend) : "—");
+  cells.set("impressions", totalImpressions !== null ? formatCount(totalImpressions) : "—");
+  cells.set("clicks", totalClicks !== null ? formatCount(totalClicks) : "—");
+  cells.set("linkClicks", totalLinkClicks !== null ? formatCount(totalLinkClicks) : "—");
+  cells.set("revenue", totalRevenue !== null ? formatCurrency(totalRevenue) : "—");
+
+  cells.set(
+    "ctr",
+    totalImpressions !== null && totalImpressions > 0 && totalClicks !== null ? formatPercent((totalClicks / totalImpressions) * 100) : "—",
+  );
+  cells.set(
+    "linkCtr",
+    totalImpressions !== null && totalImpressions > 0 && totalLinkClicks !== null ? formatPercent((totalLinkClicks / totalImpressions) * 100) : "—",
+  );
+  cells.set("cpc", totalClicks !== null && totalClicks > 0 && totalSpend !== null ? formatCurrency(totalSpend / totalClicks) : "—");
+  cells.set("linkCpc", totalLinkClicks !== null && totalLinkClicks > 0 && totalSpend !== null ? formatCurrency(totalSpend / totalLinkClicks) : "—");
+  cells.set(
+    "cpm",
+    totalImpressions !== null && totalImpressions > 0 && totalSpend !== null ? formatCurrency((totalSpend / totalImpressions) * 1000) : "—",
+  );
+  cells.set("roas", totalRevenue !== null && totalSpend !== null && totalSpend > 0 ? `${(totalRevenue / totalSpend).toFixed(2)}x` : "—");
+
+  // Colunas por objetivo (Resultado/Custo): cada linha tem NO MÁXIMO 1
+  // objetivo (`resultType`) — total de um objetivo soma só as linhas DESSE
+  // objetivo, nunca mistura contagem/investimento de objetivos diferentes
+  // (mesma garantia de `goalColumnValue` acima).
+  const goalsPresent = new Set<PerformanceGoal>();
+  for (const row of rows) if (row.resultType) goalsPresent.add(row.resultType);
+  for (const goal of goalsPresent) {
+    const goalRows = rows.filter((r) => r.resultType === goal);
+    const totalCount = sumColumn(goalRows, (r) => r.resultByGoal[goal]?.count ?? null);
+    const goalSpend = goalRows.reduce((sum, r) => sum + r.spend, 0);
+    cells.set(goalResultColumnId(goal), totalCount !== null ? formatCount(totalCount) : "—");
+    cells.set(goalCostColumnId(goal), totalCount !== null && totalCount > 0 ? formatCurrency(goalSpend / totalCount) : "—");
+  }
+
+  return cells;
+}
+
 export function formatExplorationCell(id: ExplorationColumnId, row: ExplorationRow): string {
   if (id === "name") return row.name;
 

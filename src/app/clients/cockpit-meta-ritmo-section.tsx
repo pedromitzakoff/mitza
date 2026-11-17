@@ -128,6 +128,26 @@ export interface CockpitCostCardView {
   unavailableReason?: string;
 }
 
+/**
+ * Etapa "Faturamento e ROAS nos cards principais" (pedido explícito do
+ * usuário): só existe (não-`null`) pro grupo de objetivo "vendas" — nenhum
+ * cliente com Leads/Conversas/Cadastros/Seguidores ganha estes cards.
+ * `revenue`/`roas` nunca são metas com meta/progresso/edição — não existe
+ * "meta de faturamento" nesta plataforma, por isso esta view é só leitura
+ * (`PerformanceSummary.revenue`/`.roas`, `lib/performance.ts`, já
+ * calculados há muito tempo — só não eram exibidos ainda). `null` é sempre
+ * "sem faturamento registrado" (objetivo vendas sem o evento de valor
+ * configurado no mapeamento Meta, ou cliente manual sem receita lançada) —
+ * nunca `0` fabricado. */
+export interface CockpitSalesExtraCardView {
+  revenue: number | null;
+  roas: number | null;
+  /** Ver `CockpitResultCardView.filteredNotice` — mesma regra. */
+  filteredNotice?: string;
+  /** Ver `CockpitResultCardView.unavailableReason` — mesma regra. */
+  unavailableReason?: string;
+}
+
 export interface CockpitBudgetHeadlineView {
   monthActual: number;
   monthPlanned: number;
@@ -222,6 +242,55 @@ export function CockpitBudgetCard({
       <div className="mt-2 border-t border-overview-border/60 pt-2">
         <DashboardBudget clientId={clientId} monthParam={monthParam} total={headline.monthPlanned} channels={channels} canEdit={canEdit} compact />
       </div>
+    </div>
+  );
+}
+
+/** Nota compartilhada por `CockpitRevenueCard`/`CockpitRoasCard` abaixo do
+ * valor principal — mesma hierarquia de prioridade que Resultado/Custo já
+ * usam (indisponível no escopo filtrado > nota de escopo filtrado > sem
+ * dado real). Nunca os três ao mesmo tempo. */
+function SalesExtraCardNote({ view, valueIsNull, emptyText }: { view: CockpitSalesExtraCardView; valueIsNull: boolean; emptyText: string }) {
+  if (view.unavailableReason) return <p className="mt-1.5 text-[11px] text-overview-text-muted">{view.unavailableReason}</p>;
+  if (view.filteredNotice) return <p className="mt-1.5 text-[11px] text-overview-text-muted">{view.filteredNotice}</p>;
+  if (valueIsNull) return <p className="mt-1.5 text-[11px] text-overview-text-muted">{emptyText}</p>;
+  return null;
+}
+
+/** Card "VALOR GERADO" — só existe pro grupo de objetivo "vendas" (ver
+ * `CockpitSalesExtraCardView`). Sem meta/progresso/edição: faturamento não
+ * tem meta planejada nesta plataforma, só o realizado. */
+export function CockpitRevenueCard({ view }: { view: CockpitSalesExtraCardView }) {
+  return (
+    <div className={`rounded-lg border p-2.5 ${COCKPIT_CARD_CLASSES}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-secondary">VALOR GERADO</p>
+      <p className="mt-1 text-2xl font-bold tracking-tight text-overview-text-primary tabular-nums">
+        {view.unavailableReason || view.revenue === null ? "—" : formatCurrency(view.revenue)}
+      </p>
+      <p className="text-xs text-overview-text-secondary">Faturamento em vendas</p>
+      <SalesExtraCardNote
+        view={view}
+        valueIsNull={view.revenue === null}
+        emptyText="Sem faturamento registrado — configure o evento de valor no mapeamento Meta."
+      />
+    </div>
+  );
+}
+
+/** Card "ROAS" — mesmo par ("VALOR GERADO"/"ROAS") sempre juntos, mesma
+ * fonte (`PerformanceSummary.roas = revenue ÷ investimento`,
+ * `computeRoas`, lib/performance.ts). Formato "x,xx" — mesma convenção já
+ * usada pelo ROAS de "Indicadores Meta Ads" (`meta-ads-dashboard/metric-
+ * cards.ts`), nunca uma segunda formatação pro mesmo tipo de métrica. */
+export function CockpitRoasCard({ view }: { view: CockpitSalesExtraCardView }) {
+  return (
+    <div className={`rounded-lg border p-2.5 ${COCKPIT_CARD_CLASSES}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-secondary">ROAS</p>
+      <p className="mt-1 text-2xl font-bold tracking-tight text-overview-text-primary tabular-nums">
+        {view.unavailableReason || view.roas === null ? "—" : `${view.roas.toFixed(2)}x`}
+      </p>
+      <p className="text-xs text-overview-text-secondary">Retorno sobre investimento</p>
+      <SalesExtraCardNote view={view} valueIsNull={view.roas === null} emptyText="Sem faturamento registrado pra calcular ROAS." />
     </div>
   );
 }
