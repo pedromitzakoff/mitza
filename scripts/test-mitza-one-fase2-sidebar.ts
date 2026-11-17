@@ -182,12 +182,14 @@ console.log("\nG — Collapsed/mobile (seção 5 do pedido; bugfix de navegaçã
   // navegação — o menu do cliente (expandido) é quem usa 'md:hidden'
   // quando collapsed agora. Etapa "Otimização do menu lateral mobile"
   // acrescentou `overflow-y-auto`/`md:overflow-visible` (scroll só no
-  // drawer mobile, zero efeito no desktop) à mesma div — o regex só
-  // precisa continuar pegando o `${collapsed ? "md:hidden" : ""}` no
-  // final, não mais o início exato da string inteira.
+  // drawer mobile, zero efeito no desktop) à mesma div, e um achado
+  // seguinte (seletor de cliente colado no topo do drawer mobile)
+  // acrescentou `pt-3 md:pt-0` — o regex só precisa continuar pegando o
+  // `${collapsed ? "md:hidden" : ""}` no final, não mais o início exato
+  // da string inteira.
   ok(
     "menu do cliente (expandido) usa 'md:hidden' quando collapsed — some SÓ no desktop recolhido, nunca no mobile (mesma convenção de ItemLabel)",
-    /flex min-h-0 flex-1 flex-col overflow-y-auto px-2\.5 md:overflow-visible \$\{collapsed \? "md:hidden" : ""\}/.test(sidebarSource),
+    /flex min-h-0 flex-1 flex-col overflow-y-auto px-2\.5 pt-3 md:overflow-visible md:pt-0 \$\{collapsed \? "md:hidden" : ""\}/.test(sidebarSource),
   );
   ok(
     "versão compacta (desktop recolhido) usa 'hidden md:flex' — nunca aparece no mobile (o menu do cliente expandido já cobre esse caso lá)",
@@ -308,9 +310,10 @@ console.log("\nL — MITZA ONE — Fase 2.1: altura da carteira priorizada (seç
   ok(
     "a região da carteira continua 'flex-1 min-h-0' (ocupa toda altura disponível, scroll próprio) — nenhuma mudança nessa mecânica, só menos espaço perdido ao redor dela",
     // Etapa "Otimização do menu lateral mobile": ganhou `overflow-y-auto`/
-    // `md:overflow-visible` (scroll só no drawer mobile) — `flex-1 min-h-0`
+    // `md:overflow-visible` (scroll só no drawer mobile) e, depois,
+    // `pt-3 md:pt-0` (respiro no topo só no mobile) — `flex-1 min-h-0`
     // continua exatamente a mesma mecânica de sempre.
-    sidebarSource.includes("flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 md:overflow-visible"),
+    sidebarSource.includes("flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 pt-3 md:overflow-visible md:pt-0"),
   );
   ok("rodapé (relógio/Atualizar Meta/identidade/sair) continua intocado, mesma estrutura", sidebarSource.includes('border-t border-sidebar-border p-2.5'));
 }

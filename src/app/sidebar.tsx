@@ -509,7 +509,15 @@ function SidebarContent({
           `presentation="compact"`). A Carteira completa (lista vertical de
           todos os clientes) já tem um lugar próprio em `/clients`
           (`AgencyAccountsTree`) — não precisa duplicar aqui. */}
-      <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 md:overflow-visible ${collapsed ? "md:hidden" : ""}`}>
+      <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 pt-3 md:overflow-visible md:pt-0 ${collapsed ? "md:hidden" : ""}`}>
+        {/* Etapa "Otimização do menu lateral mobile" (achado real, ponto 1
+            do pedido original): no desktop, a linha de recolher/expandir
+            (acima) já dá respiro no topo (`pb-1 pt-1.5`) — mas ela é
+            `hidden` no mobile (ocupa altura zero), então sem este `pt-3`
+            aqui o seletor de cliente ficava colado na borda superior do
+            drawer, quase encostando na barra de endereço do navegador.
+            `md:pt-0`: no desktop o espaçamento continua vindo só da linha
+            de cima, nunca dobrado. */}
         {activeClient && (
           <div className="mb-2 flex shrink-0 items-center gap-2 border-b border-sidebar-border pb-2.5">
             <div className="min-w-0 flex-1">
