@@ -1,26 +1,39 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ALERT_SEVERITY_LABEL, ALERT_STATUS_LABEL, ALERT_TYPE_LABEL } from "@/lib/alerts/alert-labels";
+import { ALERT_SEVERITY_LABEL, ALERT_TYPE_LABEL } from "@/lib/alerts/alert-labels";
 import { IMPLEMENTED_ALERT_TYPES } from "@/lib/alerts/alert-types";
 import type { AlertListFilters } from "@/app/alerts/alerts-data";
+import type { AlertStatus } from "@/lib/alerts/alert-types";
 
 /**
- * Aba "Alertas" (pedido, seção 1: "Filtros por: Cliente / Gravidade / Tipo
- * / Situação"). Mesmo padrão de `ClientsFilters` (`<select>` navega direto
- * no `onChange`, sem botão "Filtrar") — `<select>`s aqui nunca precisam de
+ * Aba "Alertas" (melhoria visual, pedido do usuário: "mantenha os
+ * filtros de cliente, gravidade e tipo. Use a aba para filtrar por
+ * situação") — "Situação" SAIU daqui, virou `AlertsTabs`; estes 3
+ * filtros preservam a aba ativa na URL (`?aba=...`) ao navegar, nunca
+ * voltam pra "Precisa de atenção" só porque o gestor trocou o cliente.
+ * Mesmo padrão de `ClientsFilters` (`<select>` navega direto no
+ * `onChange`, sem botão "Filtrar") — `<select>`s aqui nunca precisam de
  * debounce (não há campo de texto livre nesta tela).
  */
-export function AlertsFilters({ filters, clients }: { filters: AlertListFilters; clients: { id: string; name: string }[] }) {
+export function AlertsFilters({
+  filters,
+  activeTab,
+  clients,
+}: {
+  filters: AlertListFilters;
+  activeTab: AlertStatus;
+  clients: { id: string; name: string }[];
+}) {
   const router = useRouter();
 
   function buildUrl(overrides: Partial<AlertListFilters>) {
     const next: AlertListFilters = { ...filters, ...overrides };
     const params = new URLSearchParams();
+    if (activeTab !== "precisa_atencao") params.set("aba", activeTab);
     if (next.clientId) params.set("cliente", next.clientId);
     if (next.severity !== "problemas") params.set("gravidade", next.severity);
     if (next.alertType !== "todos") params.set("tipo", next.alertType);
-    if (next.status !== "todos") params.set("situacao", next.status);
     const query = params.toString();
     return query ? `/alerts?${query}` : "/alerts";
   }
@@ -29,7 +42,7 @@ export function AlertsFilters({ filters, clients }: { filters: AlertListFilters;
     router.push(buildUrl(overrides), { scroll: false });
   }
 
-  const hasAnyFilter = Boolean(filters.clientId) || filters.severity !== "problemas" || filters.alertType !== "todos" || filters.status !== "todos";
+  const hasAnyFilter = Boolean(filters.clientId) || filters.severity !== "problemas" || filters.alertType !== "todos";
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-card p-2">
@@ -70,21 +83,10 @@ export function AlertsFilters({ filters, clients }: { filters: AlertListFilters;
         ))}
       </select>
 
-      <select
-        value={filters.status}
-        onChange={(event) => navigate({ status: event.target.value as AlertListFilters["status"] })}
-        className="rounded-md border border-border bg-transparent px-2 py-1 text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-      >
-        <option value="todos">Situação: todas</option>
-        <option value="precisa_atencao">{ALERT_STATUS_LABEL.precisa_atencao}</option>
-        <option value="acompanhamento">{ALERT_STATUS_LABEL.acompanhamento}</option>
-        <option value="resolvido">{ALERT_STATUS_LABEL.resolvido}</option>
-      </select>
-
       {hasAnyFilter && (
         <button
           type="button"
-          onClick={() => router.push("/alerts", { scroll: false })}
+          onClick={() => navigate({ clientId: "", severity: "problemas", alertType: "todos" })}
           className="rounded text-xs text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
           Limpar filtros

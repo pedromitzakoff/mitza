@@ -4,7 +4,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import { requireQuery } from "@/lib/require-query";
 import { todayDateString } from "@/lib/today";
 import { shiftDays, startOfMonth, endOfMonth } from "@/lib/date-range";
-import { listDatesInclusive } from "@/lib/monthly-budget";
+import { listDatesInclusive, computeMonthlyExpectedToDateByCalendar } from "@/lib/monthly-budget";
 import { resolveClientMonthlyPlan, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
 import type { TrafficChannel } from "@/lib/traffic-channels";
 import { resolveDailySpendReference, detectSpendPaceAlert } from "@/lib/alerts/spend-pace-detection";
@@ -55,7 +55,15 @@ interface DailySpendPoint {
 export async function evaluateSpendPaceAlerts(now: Date = new Date(), supabase: AdminSupabase = createAdminClient()): Promise<SpendPaceEvaluationSummary> {
   const today = todayDateString(now);
   const yesterday = shiftDays(today, -1);
-  const windowStart = shiftDays(today, -(SPEND_PACE_HISTORY_WINDOW_DAYS + 1));
+  // Tela de Alertas (pedido do usuário, melhoria visual): "mostre também o
+  // acumulado do mês versus o previsto até a mesma data" — a janela
+  // precisa cobrir desde o INÍCIO do mês (de ontem, pra nunca ficar curta
+  // num dia 25 do mês, por exemplo), não só os `SPEND_PACE_HISTORY_WINDOW_DAYS`
+  // de sempre (comparação lexicográfica de "YYYY-MM-DD" funciona direto
+  // como comparação de data).
+  const historyWindowStart = shiftDays(today, -(SPEND_PACE_HISTORY_WINDOW_DAYS + 1));
+  const monthToDateWindowStart = startOfMonth(yesterday);
+  const windowStart = historyWindowStart < monthToDateWindowStart ? historyWindowStart : monthToDateWindowStart;
   const nowIso = now.toISOString();
 
   const [clients, dailySpendRows, planChangeRows] = await Promise.all([
@@ -182,6 +190,26 @@ async function evaluateAndPersist(
     dailyReference: reference,
     isPeriodInProgress,
   });
+
+  // Tela de Alertas (pedido do usuário): contexto de "mês até aqui" pra
+  // triagem — nunca um critério de detecção/gravidade novo (esses
+  // continuam só em `detectSpendPaceAlert`), só dado extra guardado em
+  // `detail` pro card mostrar. `monthExpectedToDate` reaproveita a MESMA
+  // função canônica de "Esperado até hoje" (`computeMonthlyExpectedToDateByCalendar`,
+  // `lib/monthly-budget.ts`) usada pelo resto da plataforma — é
+  // exatamente a "divisão simples do orçamento mensal pelos dias do mês",
+  // por isso sempre estimativa quando vem dela; `null` quando não há
+  // orçamento mensal configurado (nunca fabrica uma referência).
+  if (candidate) {
+    const monthActual = points
+      .filter((p) => p.date >= monthStart && p.date <= evaluatedDate)
+      .reduce((sum, p) => sum + p.spend, 0);
+    const monthExpectedToDate =
+      monthlyBudget !== null && monthlyBudget > 0
+        ? computeMonthlyExpectedToDateByCalendar(monthlyBudget, { firstDay: monthStart, lastDay: monthEnd }, evaluatedDate).expectedToDate
+        : null;
+    candidate.detail = { ...candidate.detail, monthActual, monthExpectedToDate, monthlyBudget };
+  }
 
   return persistAlertEvaluation(supabase, { clientId, channel, alertType: "spend_pace", periodKind }, candidate, nowIso);
 }

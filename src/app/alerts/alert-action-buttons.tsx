@@ -4,29 +4,30 @@ import { useState, useTransition } from "react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/app/toast-provider";
 import { followUpAlertTomorrowAction, resolveAlertManuallyAction } from "@/app/alerts/actions";
+import { ALERT_STATUS_BADGE_CLASSES } from "@/lib/alerts/alert-labels";
 import type { AlertStatus } from "@/lib/alerts/alert-types";
 
 /**
- * Aba "Alertas" (pedido, seção 3) — as 2 ações sobre UM alerta, no mesmo
- * menu "•••" já usado em Clientes/Equipe (`AdminActionsMenu`/`team-table.tsx`),
- * só que sem o `adminOnly` (qualquer membro ativo pode agir aqui, ver
- * `actions.ts`). Um alerta "resolvido" não mostra mais nenhuma ação — nada
- * a fazer com ele até reabrir automaticamente, se reaparecer.
+ * Aba "Alertas" — as 2 ações sobre UM alerta, agora direto no card
+ * (pedido da melhoria visual, seção 4: "mostre Acompanhar e Resolver
+ * diretamente nos cards abertos", nunca mais escondidas atrás do menu
+ * "•••" — só 2 ações hoje, um menu seria só um clique extra sem
+ * necessidade). Sem `adminOnly` (qualquer membro ativo pode agir aqui,
+ * ver `actions.ts`). Um alerta "resolvido" não mostra mais nenhuma ação —
+ * nada a fazer com ele até reabrir automaticamente, se reaparecer.
  *
- * "Marcar como revisado" existia aqui como uma 3ª ação (sem observação,
- * sem mudar situação) — removida a pedido do usuário ("esse revisado pode
+ * "Marcar como revisado" existia como uma 3ª ação (sem observação, sem
+ * mudar situação) — removida a pedido do usuário ("esse revisado pode
  * ser em acompanhamento então"): `actions.ts` explica o porquê.
  *
  * Rótulos dos botões (pedido do usuário: "em acompanhamento e ver amanha
  * sao as mesmas coisas... podemos mudar pra Em acompanhamento e
- * Resolvido"): nomeados pelo ESTADO que produzem ("Em acompanhamento"/
- * "Resolvido"), nunca mais pelo verbo da ação ("Acompanhar amanhã"/
- * "Resolver manualmente") — um único vocabulário, o mesmo das colunas do
- * Kanban e dos badges de situação, em vez de dois jeitos de dizer a mesma
- * coisa. A MECÂNICA por trás (nota opcional/obrigatória, `follow_up_until`,
- * `resolved_at`) continua exatamente a mesma — só o texto mudou.
+ * Resolvido"): nomeados pelo ESTADO que produzem, nunca mais pelo verbo
+ * da ação — mesmo vocabulário das abas/badges de situação. Cor de cada
+ * botão reaproveita a MESMA classe do badge de status que ele produz
+ * (`ALERT_STATUS_BADGE_CLASSES`) — nunca uma 2ª paleta inventada aqui.
  */
-export function AlertActionsMenu({ alertId, status }: { alertId: string; status: AlertStatus }) {
+export function AlertActionButtons({ alertId, status }: { alertId: string; status: AlertStatus }) {
   const [dialog, setDialog] = useState<"follow_up" | "resolve" | null>(null);
   const [note, setNote] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -55,29 +56,24 @@ export function AlertActionsMenu({ alertId, status }: { alertId: string; status:
 
   return (
     <>
-      <details className="relative">
-        <summary className="mitza-pressable flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-full border border-overview-border text-overview-text-secondary hover:bg-overview-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand [&::-webkit-details-marker]:hidden">
-          •••
-        </summary>
-        <div className="mitza-menu-in absolute right-0 z-10 mt-1 flex w-52 flex-col gap-0.5 rounded-md border border-overview-border bg-overview-surface p-1 shadow-[var(--shadow-float)]">
-          {status !== "acompanhamento" && (
-            <button
-              type="button"
-              onClick={() => setDialog("follow_up")}
-              className="w-full rounded-md px-2 py-1.5 text-left text-sm text-overview-text-secondary hover:bg-overview-surface-hover"
-            >
-              Em acompanhamento
-            </button>
-          )}
+      <div className="flex items-center gap-2">
+        {status !== "acompanhamento" && (
           <button
             type="button"
-            onClick={() => setDialog("resolve")}
-            className="w-full rounded-md px-2 py-1.5 text-left text-sm text-overview-text-secondary hover:bg-overview-surface-hover"
+            onClick={() => setDialog("follow_up")}
+            className={`mitza-pressable flex-1 rounded-md px-3 py-2 text-center text-sm font-medium transition-opacity hover:opacity-80 ${ALERT_STATUS_BADGE_CLASSES.acompanhamento}`}
           >
-            Resolvido
+            Em acompanhamento
           </button>
-        </div>
-      </details>
+        )}
+        <button
+          type="button"
+          onClick={() => setDialog("resolve")}
+          className={`mitza-pressable flex-1 rounded-md px-3 py-2 text-center text-sm font-medium transition-opacity hover:opacity-80 ${ALERT_STATUS_BADGE_CLASSES.resolvido}`}
+        >
+          Resolvido
+        </button>
+      </div>
 
       {dialog === "follow_up" && (
         <ConfirmDialog
@@ -95,7 +91,7 @@ export function AlertActionsMenu({ alertId, status }: { alertId: string; status:
       {dialog === "resolve" && (
         <ConfirmDialog
           title="Resolvido"
-          description="Marca este alerta como resolvido. Se a condição reaparecer, o mesmo alerta é reaberto automaticamente (histórico preservado)."
+          description="Marca este alerta como resolvido. Se o aumento de gasto foi um orçamento planejado maior, ajuste a previsão em 'Editar orçamento' (atalho no rodapé do card) — o ajuste de orçamento é sempre uma ação separada e explícita, nunca disparada por aqui. Se a condição reaparecer, o mesmo alerta é reaberto automaticamente (histórico preservado)."
           note={{ value: note, onChange: setNote, label: "Por que está sendo resolvido?", placeholder: "Observação curta obrigatória", required: true }}
           confirmLabel="Resolvido"
           confirmPendingLabel="Resolvendo..."

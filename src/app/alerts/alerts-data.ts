@@ -1,26 +1,29 @@
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { requireQuery } from "@/lib/require-query";
+import { compareAlertsByPriority, countAlertsByStatus } from "@/lib/alerts/alert-list-view";
 import type { AlertPeriodKind, AlertReferenceSource, AlertSeverity, AlertStatus, AlertType } from "@/lib/alerts/alert-types";
 import type { TrafficChannel } from "@/lib/traffic-channels";
 
 /**
- * Aba "Alertas" (pedido, seção 1) — leitura/filtro da lista. "Gravidade"
- * tem um 4º valor de filtro além dos 3 do pedido: `"problemas"` (padrão) —
- * crítico + atenção juntos, SEM oportunidade. É exatamente o requisito
- * "melhorias de performance devem aparecer no filtro 'Oportunidades', sem
- * competir com os problemas na visualização inicial": oportunidade nunca
- * aparece misturada por padrão, só quando o gestor escolhe esse filtro
- * explicitamente.
+ * Aba "Alertas" (pedido, seção 1 da melhoria visual) — leitura/filtro.
+ * "Situação" VIROU abas (`AlertsTabs`), não mais um filtro de `<select>`
+ * — `AlertListFilters` agora só tem cliente/gravidade/tipo; a aba ativa é
+ * um parâmetro separado de `loadAlertList`, nunca misturado aqui.
+ *
+ * "Gravidade" tem um 4º valor de filtro além dos 3 do pedido original:
+ * `"problemas"` (padrão) — crítico + atenção juntos, SEM oportunidade. É
+ * exatamente o requisito "melhorias de performance devem aparecer no
+ * filtro 'Oportunidades', sem competir com os problemas na visualização
+ * inicial": oportunidade nunca aparece misturada por padrão, só quando o
+ * gestor escolhe esse filtro explicitamente.
  */
 export type SeverityFilter = "problemas" | AlertSeverity;
-export type StatusFilter = "todos" | AlertStatus;
 export type AlertTypeFilter = "todos" | AlertType;
 
 export interface AlertListFilters {
   clientId: string; // "" = todos
   severity: SeverityFilter;
   alertType: AlertTypeFilter;
-  status: StatusFilter;
 }
 
 export interface AlertListItem {
@@ -43,8 +46,23 @@ export interface AlertListItem {
   observedValue: number | null;
   referenceValue: number | null;
   diffPercent: number | null;
+  /** Desvio em reais, com sinal (`observado - referência`) — pedido:
+   * "destaque... a diferença em reais e percentual". Extraído de
+   * `detail.diffReais` (gravado por `detectSpendPaceAlert`); `null` num
+   * alerta antigo gravado antes dessa chave existir, nunca recalculado
+   * aqui (card trata como "sem desvio conhecido", não como erro). */
+  diffReais: number | null;
   referenceIsEstimate: boolean;
   referenceSource: AlertReferenceSource | null;
+  /** Acumulado do mês (até a data avaliada) e o previsto até essa mesma
+   * data (pedido, seção 2: "mostre também o acumulado do mês versus o
+   * previsto até a mesma data, quando houver dados confiáveis"). Extraído
+   * de `detail.monthActual`/`detail.monthExpectedToDate` (gravados pela
+   * orquestração, `evaluate-spend-pace.ts`) — `monthExpectedToDate: null`
+   * = sem orçamento mensal configurado pra este canal/mês (nunca
+   * fabricado); um alerta antigo sem essas chaves também cai em `null`. */
+  monthActual: number | null;
+  monthExpectedToDate: number | null;
   explanation: string;
   firstDetectedAt: string;
   lastEvaluatedAt: string;
@@ -60,38 +78,43 @@ export interface AlertListItem {
   latestNoteAt: string | null;
 }
 
-/** Ordem de prioridade da lista (pedido: "lista ordenada por gravidade e
- * relevância") — crítico primeiro, depois atenção, oportunidade por
- * último; dentro da mesma gravidade, "precisa de atenção" antes de
- * "acompanhamento" antes de "resolvido"; por fim, mais recente primeiro. */
-const SEVERITY_ORDER: Record<AlertSeverity, number> = { critico: 0, atencao: 1, oportunidade: 2 };
-const STATUS_ORDER: Record<AlertStatus, number> = { precisa_atencao: 0, acompanhamento: 1, resolvido: 2 };
-
-export async function loadAlertList(filters: AlertListFilters): Promise<{
+export async function loadAlertList(
+  filters: AlertListFilters,
+  /** Aba ativa (pedido: "abas com contagem... Precisa de atenção por
+   * padrão") — decide só QUAIS itens entram em `items` (pro card-list da
+   * tela), nunca afeta `counts` (que é sempre as 3 situações, com os
+   * MESMOS filtros de cliente/gravidade/tipo, pra alimentar o número de
+   * cada aba mesmo quando ela não está ativa). */
+  activeTab: AlertStatus,
+): Promise<{
   items: AlertListItem[];
+  counts: Record<AlertStatus, number>;
   clients: { id: string; name: string }[];
   attentionCount: number;
 }> {
   const supabase = await createSupabaseClient();
 
+  // Nunca filtra por `status` aqui (seção 1: "situação" virou aba, não
+  // filtro de busca) — busca as 3 situações de uma vez, com os MESMOS
+  // filtros de cliente/gravidade/tipo, pra `counts` refletir as 3 abas.
   let query = supabase
     .from("alerts")
     .select(
-      "id, display_number, client_id, channel, alert_type, period_kind, severity, status, period_start, period_end, observed_value, reference_value, diff_percent, reference_is_estimate, reference_source, explanation, first_detected_at, last_evaluated_at, follow_up_until, clients(name)",
+      "id, display_number, client_id, channel, alert_type, period_kind, severity, status, period_start, period_end, observed_value, reference_value, diff_percent, reference_is_estimate, reference_source, detail, explanation, first_detected_at, last_evaluated_at, follow_up_until, clients(name)",
     );
 
   if (filters.clientId) query = query.eq("client_id", filters.clientId);
   if (filters.alertType !== "todos") query = query.eq("alert_type", filters.alertType);
-  if (filters.status !== "todos") query = query.eq("status", filters.status);
 
   if (filters.severity === "problemas") query = query.in("severity", ["critico", "atencao"]);
   else query = query.eq("severity", filters.severity);
 
-  // Contador do nav (seção 1 do pedido) — sempre a contagem REAL de
-  // "precisa de atenção", nunca escopada pelos filtros da tela atual, e
-  // nunca conta oportunidade (não é um problema pendente). `head: true`
-  // devolve só `count` (`data` vem `null`) — por isso nunca passa por
-  // `requireQuery` (feito pra resultados em linha, não contagem).
+  // Contador do nav (seção 1 do pedido original) — sempre a contagem REAL
+  // de "precisa de atenção" da AGÊNCIA INTEIRA, nunca escopada pelos
+  // filtros da tela atual (diferente de `counts`, que É escopado pelos
+  // filtros), e nunca conta oportunidade (não é um problema pendente).
+  // `head: true` devolve só `count` (`data` vem `null`) — por isso nunca
+  // passa por `requireQuery` (feito pra resultados em linha, não contagem).
   const [alertRows, clients, attentionCountResult] = await Promise.all([
     requireQuery(query, "alerts:list"),
     requireQuery(supabase.from("clients").select("id, name").is("deleted_at", null).order("name"), "clients:alerts-filter"),
@@ -128,10 +151,18 @@ export async function loadAlertList(filters: AlertListFilters): Promise<{
     }
   }
 
-  const items: AlertListItem[] = alertRows
+  const allItems: AlertListItem[] = alertRows
     .map((row): AlertListItem => {
       const latestEvent = latestEventByAlertId.get(row.id);
       const hasNote = Boolean(latestEvent?.note);
+      // `detail` é um jsonb livre (seção 2 da melhoria visual) — alertas
+      // antigos, gravados antes dessas 3 chaves existirem, simplesmente
+      // não as têm; lido como `null`/`undefined` ali vira `null` aqui,
+      // nunca um erro (ver comentário no `AlertListItem`).
+      const detail = row.detail as Record<string, unknown>;
+      const diffReais = typeof detail.diffReais === "number" ? detail.diffReais : null;
+      const monthActual = typeof detail.monthActual === "number" ? detail.monthActual : null;
+      const monthExpectedToDate = typeof detail.monthExpectedToDate === "number" ? detail.monthExpectedToDate : null;
       return {
         id: row.id,
         displayNumber: row.display_number,
@@ -147,8 +178,11 @@ export async function loadAlertList(filters: AlertListFilters): Promise<{
         observedValue: row.observed_value,
         referenceValue: row.reference_value,
         diffPercent: row.diff_percent,
+        diffReais,
         referenceIsEstimate: row.reference_is_estimate,
         referenceSource: row.reference_source,
+        monthActual,
+        monthExpectedToDate,
         explanation: row.explanation,
         firstDetectedAt: row.first_detected_at,
         lastEvaluatedAt: row.last_evaluated_at,
@@ -158,13 +192,12 @@ export async function loadAlertList(filters: AlertListFilters): Promise<{
         latestNoteAt: hasNote ? latestEvent!.createdAt : null,
       };
     })
-    .sort((a, b) => {
-      if (SEVERITY_ORDER[a.severity] !== SEVERITY_ORDER[b.severity]) return SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
-      if (STATUS_ORDER[a.status] !== STATUS_ORDER[b.status]) return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
-      return b.lastEvaluatedAt.localeCompare(a.lastEvaluatedAt);
-    });
+    .sort(compareAlertsByPriority);
 
-  return { items, clients, attentionCount: attentionCountResult.count ?? 0 };
+  const counts = countAlertsByStatus(allItems);
+  const items = allItems.filter((item) => item.status === activeTab);
+
+  return { items, counts, clients, attentionCount: attentionCountResult.count ?? 0 };
 }
 
 /** Versão leve só do contador — usada pela Sidebar (renderizada em toda

@@ -3,47 +3,57 @@ import { COCKPIT_CARD_CLASSES } from "@/lib/cockpit-pace";
 import { formatCurrency, formatRelativeDateTime } from "@/lib/format";
 import { getTrafficChannelConfig } from "@/lib/traffic-channels";
 import { buildWorkspaceHref } from "@/lib/client-workspace-nav";
-import { ALERT_SEVERITY_BADGE_CLASSES, ALERT_SEVERITY_LABEL, ALERT_STATUS_BADGE_CLASSES, ALERT_STATUS_LABEL, ALERT_TYPE_LABEL } from "@/lib/alerts/alert-labels";
-import { AlertActionsMenu } from "@/app/alerts/alert-actions-menu";
+import { ALERT_SEVERITY_BADGE_CLASSES, ALERT_SEVERITY_LABEL, ALERT_TYPE_LABEL } from "@/lib/alerts/alert-labels";
+import { AlertActionButtons } from "@/app/alerts/alert-action-buttons";
 import type { AlertListItem } from "@/app/alerts/alerts-data";
+import type { AlertSeverity } from "@/lib/alerts/alert-types";
+
+/** Cor do desvio em reais/% — segue a GRAVIDADE do alerta (não a direção
+ * acima/abaixo), mesmo tom de `DANGER`/`WARNING` já usado no Status
+ * Registry (`lib/status-registry.ts`), só que como texto solto (o
+ * registry só expõe classe de BADGE completa, pill+fundo, errada pra uma
+ * ênfase inline no meio de uma frase). */
+const SEVERITY_TEXT_CLASSES: Record<AlertSeverity, string> = {
+  critico: "text-red-600 dark:text-red-400",
+  atencao: "text-amber-600 dark:text-amber-400",
+  oportunidade: "text-green-600 dark:text-green-400",
+};
+
+function formatSignedCurrency(value: number): string {
+  return `${value > 0 ? "+" : ""}${formatCurrency(value)}`;
+}
+
+function formatSignedPercent(value: number): string {
+  return `${value > 0 ? "+" : ""}${Math.round(value)}%`;
+}
 
 /**
- * Aba "Alertas" (pedido, seção 1 — "Cada alerta deve apresentar..."):
- * cliente+conta, tipo+gravidade, período+última atualização, valor
- * observado+referência+diferença %, explicação curta, acesso ao detalhe
- * do cliente/campanhas. `spend_pace` é no nível de CONTA (não existe
- * granularidade de campanha pra orçamento), então "campanhas relacionadas"
- * aqui é o link pra Campanhas do cliente nesse canal — "quando os dados
- * permitirem" (pedido) já é satisfeito por esse link sempre existir.
+ * Melhoria visual da aba "Alertas" (pedido do usuário) — card compacto,
+ * pra "bater o olho, entender qual conta precisa de atenção primeiro e
+ * agir no próprio painel". Mantém os campos/fluxos já existentes
+ * (gravidade/tipo/período/links/histórico) — só reorganiza e REALÇA o que
+ * importa pra triagem rápida (valor observado/previsto/diferença em
+ * destaque, explicação do cálculo movida pra dentro de "Ver detalhes").
  */
-export function AlertCard({
-  alert,
-  /** Kanban (pedido do usuário): a coluna já diz a situação — o badge de
-   * status no card viraria redundante (e some espaço que o card precisa).
-   * Default `false` pra qualquer uso fora do Kanban continuar idêntico. */
-  hideStatusBadge = false,
-}: {
-  alert: AlertListItem;
-  hideStatusBadge?: boolean;
-}) {
+export function AlertCard({ alert }: { alert: AlertListItem }) {
   const channelConfig = getTrafficChannelConfig(alert.channel);
   const isToday = alert.periodKind === "in_progress";
   const periodLabel = isToday
-    ? "Hoje — dia em andamento"
+    ? "Hoje"
     : alert.periodStart === alert.periodEnd
       ? new Date(`${alert.periodStart}T00:00:00Z`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
       : `${alert.periodStart} a ${alert.periodEnd}`;
 
   const referenceLabel = alert.referenceSource === "monthly_budget" ? "orçamento mensal ÷ dias do mês" : alert.referenceSource === "historical_average" ? "média do histórico recente" : null;
 
+  const hasAmounts = alert.observedValue !== null && alert.referenceValue !== null;
+  // Mês (pedido, seção 2): só mostra quando há referência confiável —
+  // `monthExpectedToDate === null` normalmente significa "sem orçamento
+  // mensal configurado pra este canal", nunca um 0 fabricado.
+  const hasMonthContext = alert.monthActual !== null && alert.monthExpectedToDate !== null;
+
   return (
     <div className={`flex flex-col gap-2.5 rounded-lg border p-3.5 ${COCKPIT_CARD_CLASSES}`}>
-      {/* Achado da QA visual: no mobile (390px), manter badges+menu na MESMA
-          linha do nome (sem quebra) espremia o nome do cliente até truncar
-          demais ("Pet Fast Acti…"), mesmo havendo espaço de sobra embaixo.
-          `flex-col md:flex-row`: empilha (nome em cima, badges+menu abaixo,
-          alinhados à direita) só até `md`, onde volta a ser uma única
-          linha como antes — nenhuma mudança no desktop. */}
       <div className="flex flex-col gap-1.5 md:flex-row md:items-start md:justify-between md:gap-2">
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -51,8 +61,7 @@ export function AlertCard({
               {/* Pedido do usuário: "um número do alerta antes do nome do
                   cliente... como se fosse um número do código do alerta" —
                   `displayNumber` nunca muda (nem reaberto, nem reordenado
-                  por filtro), ao contrário de uma posição calculada na
-                  lista. */}
+                  por filtro). */}
               {String(alert.displayNumber).padStart(2, "0")} - {alert.clientName}
             </Link>
             <span className="rounded-full bg-overview-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">{channelConfig.shortLabel}</span>
@@ -61,56 +70,84 @@ export function AlertCard({
         </div>
         <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-1.5 md:w-auto">
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ALERT_SEVERITY_BADGE_CLASSES[alert.severity]}`}>{ALERT_SEVERITY_LABEL[alert.severity]}</span>
-          {!hideStatusBadge && (
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ALERT_STATUS_BADGE_CLASSES[alert.status]}`}>{ALERT_STATUS_LABEL[alert.status]}</span>
+          {/* "Dia em andamento" (pedido, seção 3: "indique que o dado é
+              parcial") — nunca comparamos com uma previsão até o mesmo
+              horário (não existe referência intradiária confiável hoje),
+              só sinalizamos que o número ainda está se formando. */}
+          {isToday && (
+            <span className="rounded-full bg-overview-surface-hover px-2 py-0.5 text-[11px] font-medium text-overview-text-muted">Dado parcial</span>
           )}
-          <AlertActionsMenu alertId={alert.id} status={alert.status} />
         </div>
       </div>
 
-      <p className="text-sm text-overview-text-primary">{alert.explanation}</p>
-
-      {/* Achado do usuário ("o texto que eu escrevo sobre o que houve na
-          hora de resolver... onde que eu leio depois?") — antes a
-          observação de "Acompanhar amanhã"/"Resolver manualmente" ficava
-          só no banco, sem aparecer em lugar nenhum da tela. Mostra a nota
-          do evento mais recente — nunca uma nota antiga de uma ocorrência
-          já superada (ver comentário em `alerts-data.ts`). */}
-      {alert.latestNote && (
-        <p className="rounded-md bg-overview-surface-hover px-2.5 py-1.5 text-xs text-overview-text-secondary">
-          “{alert.latestNote}”
-          {(alert.latestNoteByName || alert.latestNoteAt) && (
-            <span className="text-overview-text-muted">
-              {" "}
-              — {alert.latestNoteByName ?? "alguém"}
-              {alert.latestNoteAt ? `, ${formatRelativeDateTime(alert.latestNoteAt, new Date())}` : ""}
-            </span>
+      {/* Valor observado/previsto/diferença (pedido, seção 2 — exemplo:
+          "Byma · R$ 234,60 gastos · R$ 120,00 previstos · +R$ 114,60
+          (+95%)") — a linha mais importante do card, por isso em destaque
+          logo no topo, antes de qualquer outro detalhe. */}
+      {hasAmounts && (
+        <p className="text-sm text-overview-text-primary">
+          <span className="font-semibold">{formatCurrency(alert.observedValue!)}</span> gastos · {formatCurrency(alert.referenceValue!)} previstos
+          {alert.diffReais !== null && (
+            <>
+              {" · "}
+              <span className={`font-semibold ${SEVERITY_TEXT_CLASSES[alert.severity]}`}>
+                {formatSignedCurrency(alert.diffReais)}
+                {alert.diffPercent !== null && ` (${formatSignedPercent(alert.diffPercent)})`}
+              </span>
+            </>
           )}
+          {referenceLabel && <span className="text-xs text-overview-text-muted"> · {referenceLabel}, estimativa</span>}
         </p>
       )}
 
-      {alert.observedValue !== null && alert.referenceValue !== null && (
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-overview-text-secondary">
-          <span>
-            Observado: <span className="font-medium text-overview-text-primary">{formatCurrency(alert.observedValue)}</span>
-          </span>
-          <span>
-            Referência: <span className="font-medium text-overview-text-primary">{formatCurrency(alert.referenceValue)}</span>
-            {referenceLabel && <span className="text-overview-text-muted"> ({referenceLabel}, estimativa)</span>}
-          </span>
-          {alert.diffPercent !== null && (
-            <span>
-              Diferença: <span className="font-medium text-overview-text-primary">{alert.diffPercent > 0 ? "+" : ""}{Math.round(alert.diffPercent)}%</span>
-            </span>
-          )}
+      {/* Acumulado do mês vs. previsto até a mesma data (pedido, seção 2) —
+          contexto de ritmo mensal pra triagem, nunca um critério de
+          detecção novo (isso continua só no motor, seção 3 do pedido:
+          "preserve os critérios atuais de detecção e gravidade"). */}
+      {hasMonthContext && (
+        <p className="text-xs text-overview-text-secondary">
+          Mês: {formatCurrency(alert.monthActual!)} de {formatCurrency(alert.monthExpectedToDate!)} previsto até hoje
+          <span className="text-overview-text-muted"> (estimativa — orçamento mensal ÷ dias do mês)</span>
+        </p>
+      )}
+
+      {/* Responsável/próxima checagem ("Em acompanhamento") ou motivo/
+          autor/data ("Resolvido") — pedido, seção 4: reaproveita os
+          campos já existentes (`latestNote*`, `followUpUntil`), nenhum
+          campo novo precisou ser criado. */}
+      {alert.status === "acompanhamento" && (
+        <div className="rounded-md bg-overview-surface-hover px-2.5 py-1.5 text-xs text-overview-text-secondary">
+          <p className="font-medium text-overview-text-primary">
+            Em acompanhamento
+            {alert.latestNoteByName && ` · Responsável: ${alert.latestNoteByName}`}
+            {alert.followUpUntil && ` · Próxima checagem: ${alert.followUpUntil}`}
+          </p>
+          {alert.latestNote && <p className="mt-1">“{alert.latestNote}”</p>}
         </div>
       )}
+      {alert.status === "resolvido" && (
+        <div className="rounded-md bg-overview-surface-hover px-2.5 py-1.5 text-xs text-overview-text-secondary">
+          <p className="font-medium text-overview-text-primary">
+            {alert.latestNoteByName
+              ? `Resolvido por ${alert.latestNoteByName}${alert.latestNoteAt ? ` · ${formatRelativeDateTime(alert.latestNoteAt, new Date())}` : ""}`
+              : "Resolvido automaticamente — o gasto normalizou sozinho"}
+          </p>
+          {alert.latestNote && <p className="mt-1">“{alert.latestNote}”</p>}
+        </div>
+      )}
+
+      {/* Explicação do cálculo (pedido, seção 2: "deixe a explicação do
+          cálculo nos detalhes do alerta") — nunca mais sempre visível,
+          card fica mais compacto/fácil de comparar vários de uma vez. */}
+      <details className="text-xs text-overview-text-secondary">
+        <summary className="cursor-pointer select-none text-overview-text-muted hover:text-overview-text-secondary">Ver detalhes do cálculo</summary>
+        <p className="mt-1">{alert.explanation}</p>
+      </details>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-overview-border pt-2 text-[11px] text-overview-text-muted">
         <div className="flex flex-wrap items-center gap-3">
           <span>Período: {periodLabel}</span>
           <span>Atualizado: {formatRelativeDateTime(alert.lastEvaluatedAt, new Date())}</span>
-          {alert.status === "acompanhamento" && alert.followUpUntil && <span>Acompanhando até {alert.followUpUntil}</span>}
         </div>
         <div className="flex items-center gap-2">
           <Link href={buildWorkspaceHref(alert.clientId, "", null)} className="text-brand hover:underline">
@@ -119,8 +156,22 @@ export function AlertCard({
           <Link href={buildWorkspaceHref(alert.clientId, "/campanhas", null)} className="text-brand hover:underline">
             Ver campanhas
           </Link>
+          {/* Pedido, seção 4: "quando a resolução for por aumento
+              planejado e já houver uma tela de edição de previsão,
+              ofereça um atalho para ela" — a tela de orçamento/metas já
+              existe (`/clients/[id]/metas`), nunca uma ação automática:
+              o ajuste em si continua uma decisão explícita do gestor
+              naquela tela, nunca disparado daqui. */}
+          <Link href={buildWorkspaceHref(alert.clientId, "/metas", null)} className="text-brand hover:underline">
+            Editar orçamento
+          </Link>
         </div>
       </div>
+
+      {/* Ações principais à vista (pedido, seção 4: "mostre Acompanhar e
+          Resolver diretamente nos cards abertos") — nunca mais escondidas
+          atrás de um menu "•••" (só 2 ações hoje, não precisa de menu). */}
+      <AlertActionButtons alertId={alert.id} status={alert.status} />
     </div>
   );
 }
