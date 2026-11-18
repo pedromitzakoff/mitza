@@ -205,11 +205,12 @@ console.log("\nG — Collapsed/mobile (seção 5 do pedido; bugfix de navegaçã
     sidebarSource.includes('collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"'),
   );
   ok("versão compacta mostra o cliente ATUAL (se houver) via ClientAvatar — nunca a lista inteira como ícones", /\{activeClient && \(/.test(sidebarSource));
-  // Etapa "Alertas" (pedido do usuário, posterior a esta fase): a versão
-  // compacta passou a usar `clientNavItemsWithBadge` (wrapper fino sobre
-  // `buildClientNavItems`, só pra anexar o selo de contagem — ver
-  // test-koff-adaptar-sistema-menu-cliente.ts), agora com 5 itens (Alertas
-  // somado), nunca mais a chamada direta de `buildClientNavItems` aqui.
+  // Etapa "Alertas"/"Reports" (pedidos do usuário, posteriores a esta
+  // fase): a versão compacta passou a usar `clientNavItemsWithBadge`
+  // (wrapper fino sobre `buildClientNavItems`, só pra anexar o selo de
+  // contagem — ver test-koff-adaptar-sistema-menu-cliente.ts), agora com
+  // 6 itens (Alertas + Reports somados), nunca mais a chamada direta de
+  // `buildClientNavItems` aqui.
   ok(
     "versão compacta mostra os mesmos itens do menu do cliente como ícones (nunca a antiga 'busca que expande' — a Carteira saiu da Sidebar, não precisa mais desse atalho)",
     !sidebarSource.includes("function expandAndFocusSearch") && sidebarSource.includes("clientNavItemsWithBadge(activeClientId).map((item) => ("),

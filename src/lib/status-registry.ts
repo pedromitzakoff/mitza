@@ -6,6 +6,7 @@ import type {
   ReportActionItemStatus,
   TeamInvitationStatus,
   TeamMemberStatus,
+  WeeklyReportStatusDb,
 } from "@/lib/supabase/database.types";
 import type { SpendStatus } from "@/lib/spend-status";
 import type { KpiTargetStatus } from "@/lib/monthly-reports";
@@ -137,6 +138,14 @@ export const ALERT_STATUS_REGISTRY: Record<`alert_status.${AlertStatusDb}`, Stat
   "alert_status.resolvido": { label: "Resolvido", badgeClassName: SUCCESS, tone: "success", order: 2 },
 };
 
+/** Aba "Reports" — situação de cada report (pedido, seção 4: "organize os
+ * cards em três estados: Aguardando dados, Pronto para enviar e Enviado"). */
+export const WEEKLY_REPORT_STATUS_REGISTRY: Record<`weekly_report.${WeeklyReportStatusDb}`, StatusEntry> = {
+  "weekly_report.aguardando_dados": { label: "Aguardando dados", badgeClassName: NEUTRAL_MUTED, tone: "neutral", order: 0 },
+  "weekly_report.pronto_para_enviar": { label: "Pronto para enviar", badgeClassName: INFO, tone: "info", order: 1 },
+  "weekly_report.enviado": { label: "Enviado", badgeClassName: SUCCESS, tone: "success", order: 2 },
+};
+
 /** Todos os registries num só objeto, só pra quem precisar iterar sobre
  * todos os domínios de uma vez (ex.: uma futura tela de auditoria viva) —
  * consumo normal continua sendo direto pelo registry do próprio domínio. */
@@ -150,4 +159,5 @@ export const STATUS_REGISTRIES = {
   kpi_target: KPI_TARGET_STATUS_REGISTRY,
   alert_severity: ALERT_SEVERITY_REGISTRY,
   alert_status: ALERT_STATUS_REGISTRY,
+  weekly_report: WEEKLY_REPORT_STATUS_REGISTRY,
 } as const;

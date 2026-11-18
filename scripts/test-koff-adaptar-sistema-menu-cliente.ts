@@ -39,9 +39,13 @@ console.log("\nA — buildClientNavItems: os 4 itens, na ordem certa, escopados 
   // Aba "Alertas" (pedido do usuário, posterior a esta etapa — "coloque o
   // alertas ali junto com os outros menus"): 5º item, cross-cliente (href
   // sempre "/alerts", nunca escopado por clientId) — "Contas" continua
-  // fora (virou o ClientSwitcher).
-  ok("exatamente 5 itens — 'Contas' não é mais item de menu, Alertas somado depois desta etapa", items.length === 5);
-  ok("ordem: Dashboard, Campanhas, Anúncios, Metas, Alertas", items.map((i) => i.label).join(",") === "Dashboard,Campanhas,Anúncios,Metas,Alertas");
+  // fora (virou o ClientSwitcher). "Reports" (pedido posterior, aba
+  // "Reports"): 6º item, mesmo padrão cross-cliente do "Alertas".
+  ok("exatamente 6 itens — 'Contas' não é mais item de menu, Alertas/Reports somados depois desta etapa", items.length === 6);
+  ok(
+    "ordem: Dashboard, Campanhas, Anúncios, Metas, Alertas, Reports",
+    items.map((i) => i.label).join(",") === "Dashboard,Campanhas,Anúncios,Metas,Alertas,Reports",
+  );
   ok("Dashboard aponta pra raiz do workspace do cliente, preservando o mês", items[0].href === "/clients/client-1?month=2026-11");
   ok("Campanhas aponta pra /clients/client-1/campanhas", items[1].href === "/clients/client-1/campanhas?month=2026-11");
   ok("Anúncios aponta pra /clients/client-1/anuncios", items[2].href === "/clients/client-1/anuncios?month=2026-11");

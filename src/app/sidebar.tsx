@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ChevronsUpDown,
   Clock,
+  FileText,
   Image as ImageIcon,
   LayoutDashboard,
   LogOut,
@@ -200,6 +201,11 @@ const GESTAO_ITEMS: NavItem[] = [
  * da agência inteira?". Reaproveita a MESMA função pra alimentar tanto a
  * Sidebar (desktop) quanto `MobileTabBar` (`mobile-tab-bar.tsx`, que já usa
  * `flex-1` por item — comporta o 5º item sem precisar de ajuste de layout).
+ *
+ * "Reports" (pedido do usuário) entra pelo mesmo motivo — `href` sempre
+ * `/reports`, cross-cliente, mesma posição do "Alertas" na hierarquia.
+ * `MobileTabBar` passa a ter 6 itens; validado visualmente que ainda cabe
+ * sem rolagem horizontal (ver QA desta entrega).
  */
 export function buildClientNavItems(clientId: string, month: string | null): NavItem[] {
   return [
@@ -218,6 +224,7 @@ export function buildClientNavItems(clientId: string, month: string | null): Nav
     },
     { label: "Metas", href: buildWorkspaceHref(clientId, "/metas", month), icon: Target, isActive: (p) => p.startsWith(`/clients/${clientId}/metas`) },
     { label: "Alertas", href: "/alerts", icon: Bell, isActive: (p) => p.startsWith("/alerts") },
+    { label: "Reports", href: "/reports", icon: FileText, isActive: (p) => p.startsWith("/reports") },
   ];
 }
 

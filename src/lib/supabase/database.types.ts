@@ -77,6 +77,13 @@ export type AlertEventTypeDb =
   | "retomado_atencao";
 export type PerformanceSourceDb = "manual" | "meta" | "google";
 
+/** Aba "Reports" — ver `supabase/weekly-reports.sql` pro comentário
+ * completo. Único ponto de definição desses enums em TS — `src/lib/weekly-
+ * reports/` nunca redeclara, sempre importa daqui. */
+export type WeeklyReportPeriodKindDb = "segunda" | "sexta";
+export type WeeklyReportStatusDb = "aguardando_dados" | "pronto_para_enviar" | "enviado";
+export type WeeklyReportEventTypeDb = "gerado" | "pronto_para_enviar" | "texto_editado" | "marcado_enviado" | "envio_desfeito";
+
 /** Integração Stract → Supabase → MITZA — provider é o único suportado
  * nesta primeira versão (Google/TikTok/LinkedIn ficam preparados
  * conceitualmente pelo `channel`, sem exigir nova migration quando chegarem). */
@@ -3418,6 +3425,123 @@ export interface Database {
             columns: ["actor_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      weekly_reports: {
+        Row: {
+          id: string;
+          client_id: string;
+          period_kind: WeeklyReportPeriodKindDb;
+          period_start: string;
+          period_end: string;
+          status: WeeklyReportStatusDb;
+          performance_goal: PerformanceGoalDb | null;
+          metrics: Record<string, unknown>;
+          next_step: string | null;
+          body_text: string;
+          text_edited_at: string | null;
+          sent_by: string | null;
+          sent_at: string | null;
+          sent_text: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          period_kind: WeeklyReportPeriodKindDb;
+          period_start: string;
+          period_end: string;
+          status?: WeeklyReportStatusDb;
+          performance_goal?: PerformanceGoalDb | null;
+          metrics?: Record<string, unknown>;
+          next_step?: string | null;
+          body_text?: string;
+          text_edited_at?: string | null;
+          sent_by?: string | null;
+          sent_at?: string | null;
+          sent_text?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          period_kind?: WeeklyReportPeriodKindDb;
+          period_start?: string;
+          period_end?: string;
+          status?: WeeklyReportStatusDb;
+          performance_goal?: PerformanceGoalDb | null;
+          metrics?: Record<string, unknown>;
+          next_step?: string | null;
+          body_text?: string;
+          text_edited_at?: string | null;
+          sent_by?: string | null;
+          sent_at?: string | null;
+          sent_text?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "weekly_reports_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "weekly_reports_sent_by_fkey";
+            columns: ["sent_by"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      weekly_report_events: {
+        Row: {
+          id: string;
+          report_id: string;
+          event_type: WeeklyReportEventTypeDb;
+          actor_id: string | null;
+          note: string | null;
+          text_snapshot: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          report_id: string;
+          event_type: WeeklyReportEventTypeDb;
+          actor_id?: string | null;
+          note?: string | null;
+          text_snapshot?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          report_id?: string;
+          event_type?: WeeklyReportEventTypeDb;
+          actor_id?: string | null;
+          note?: string | null;
+          text_snapshot?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "weekly_report_events_report_id_fkey";
+            columns: ["report_id"];
+            isOneToOne: false;
+            referencedRelation: "weekly_reports";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "weekly_report_events_actor_id_fkey";
+            columns: ["actor_id"];
+            isOneToOne: false;
+            referencedRelation: "team_members";
             referencedColumns: ["id"];
           },
         ];
