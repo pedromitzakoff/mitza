@@ -45,9 +45,24 @@ export function AlertCard({ alert }: { alert: AlertListItem }) {
           </div>
           <p className="text-xs font-medium text-overview-text-secondary">{ALERT_TYPE_LABEL[alert.alertType]}</p>
         </div>
-        <div className="flex w-full shrink-0 items-center justify-end gap-1.5 md:w-auto">
+        <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-1.5 md:w-auto">
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ALERT_SEVERITY_BADGE_CLASSES[alert.severity]}`}>{ALERT_SEVERITY_LABEL[alert.severity]}</span>
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ALERT_STATUS_BADGE_CLASSES[alert.status]}`}>{ALERT_STATUS_LABEL[alert.status]}</span>
+          {/* Achado real do usuário ("cliquei em Marcar como revisado e nada
+              aconteceu"): a ação nunca mudava status/severidade (por
+              desenho — "sem considerá-lo resolvido"), então a ÚNICA
+              confirmação era um toast de poucos segundos. Este selo fica
+              visível enquanto 'revisado' for o evento mais recente do
+              alerta (some sozinho quando uma nova avaliação automática
+              acontecer, pedindo revisão de novo). */}
+          {alert.lastReviewedAt && (
+            <span
+              className="rounded-full bg-overview-surface-hover px-2 py-0.5 text-[11px] font-medium text-overview-text-secondary"
+              title={`Revisado${alert.lastReviewedByName ? ` por ${alert.lastReviewedByName}` : ""} · ${formatRelativeDateTime(alert.lastReviewedAt, new Date())}`}
+            >
+              ✓ Revisado
+            </span>
+          )}
           <AlertActionsMenu alertId={alert.id} status={alert.status} />
         </div>
       </div>
@@ -76,6 +91,13 @@ export function AlertCard({ alert }: { alert: AlertListItem }) {
           <span>Período: {periodLabel}</span>
           <span>Atualizado: {formatRelativeDateTime(alert.lastEvaluatedAt, new Date())}</span>
           {alert.status === "acompanhamento" && alert.followUpUntil && <span>Acompanhando até {alert.followUpUntil}</span>}
+          {/* Mesmo texto do selo acima, só que sempre visível (não depende
+              de hover — o selo usa `title`, que não existe em touch). */}
+          {alert.lastReviewedAt && (
+            <span>
+              Revisado{alert.lastReviewedByName ? ` por ${alert.lastReviewedByName}` : ""} · {formatRelativeDateTime(alert.lastReviewedAt, new Date())}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Link href={buildWorkspaceHref(alert.clientId, "", null)} className="text-brand hover:underline">

@@ -43,6 +43,16 @@ export interface AlertListItem {
   firstDetectedAt: string;
   lastEvaluatedAt: string;
   followUpUntil: string | null;
+  /** "Marcar como revisado" (pedido, seção 3: "registra que alguém
+   * analisou... sem considerá-lo resolvido") nunca muda status/severidade
+   * — sem isto, a ÚNICA confirmação da ação era um toast de alguns
+   * segundos (achado real do usuário: "cliquei e nada aconteceu"). Não
+   * nulo só quando o evento MAIS RECENTE do alerta é 'revisado' — uma
+   * reavaliação automática posterior (evento 'avaliado'/'retomado_atencao'/
+   * etc.) some com o selo de novo, pedindo revisão nova (estado correto:
+   * "revisado" é sobre o estado de ONTEM/agora, não permanente). */
+  lastReviewedAt: string | null;
+  lastReviewedByName: string | null;
 }
 
 /** Ordem de prioridade da lista (pedido: "lista ordenada por gravidade e
@@ -84,28 +94,59 @@ export async function loadAlertList(filters: AlertListFilters): Promise<{
   ]);
   if (attentionCountResult.error) throw new Error(`[alerts:attention-count] ${attentionCountResult.error.message}`);
 
+  // "Revisado" só é um selo visível enquanto for o evento MAIS RECENTE de
+  // cada alerta — busca todo o histórico relevante de uma vez (nunca uma
+  // query por linha) e fica só com o 1º eventual de cada `alert_id`
+  // (ordenado desc, então o 1º encontrado é sempre o mais recente).
+  const alertIds = alertRows.map((row) => row.id);
+  const latestEventByAlertId = new Map<string, { eventType: string; createdAt: string; actorName: string | null }>();
+  if (alertIds.length > 0) {
+    const eventRows = await requireQuery(
+      supabase
+        .from("alert_events")
+        .select("alert_id, event_type, created_at, profiles(name)")
+        .in("alert_id", alertIds)
+        .order("created_at", { ascending: false }),
+      "alert_events:latest-per-alert",
+    );
+    for (const row of eventRows) {
+      if (latestEventByAlertId.has(row.alert_id)) continue;
+      latestEventByAlertId.set(row.alert_id, {
+        eventType: row.event_type,
+        createdAt: row.created_at,
+        actorName: (row.profiles as { name: string } | null)?.name ?? null,
+      });
+    }
+  }
+
   const items: AlertListItem[] = alertRows
-    .map((row): AlertListItem => ({
-      id: row.id,
-      clientId: row.client_id,
-      clientName: (row.clients as { name: string } | null)?.name ?? "Cliente desconhecido",
-      channel: row.channel,
-      alertType: row.alert_type,
-      periodKind: row.period_kind,
-      severity: row.severity,
-      status: row.status,
-      periodStart: row.period_start,
-      periodEnd: row.period_end,
-      observedValue: row.observed_value,
-      referenceValue: row.reference_value,
-      diffPercent: row.diff_percent,
-      referenceIsEstimate: row.reference_is_estimate,
-      referenceSource: row.reference_source,
-      explanation: row.explanation,
-      firstDetectedAt: row.first_detected_at,
-      lastEvaluatedAt: row.last_evaluated_at,
-      followUpUntil: row.follow_up_until,
-    }))
+    .map((row): AlertListItem => {
+      const latestEvent = latestEventByAlertId.get(row.id);
+      const isReviewed = latestEvent?.eventType === "revisado";
+      return {
+        id: row.id,
+        clientId: row.client_id,
+        clientName: (row.clients as { name: string } | null)?.name ?? "Cliente desconhecido",
+        channel: row.channel,
+        alertType: row.alert_type,
+        periodKind: row.period_kind,
+        severity: row.severity,
+        status: row.status,
+        periodStart: row.period_start,
+        periodEnd: row.period_end,
+        observedValue: row.observed_value,
+        referenceValue: row.reference_value,
+        diffPercent: row.diff_percent,
+        referenceIsEstimate: row.reference_is_estimate,
+        referenceSource: row.reference_source,
+        explanation: row.explanation,
+        firstDetectedAt: row.first_detected_at,
+        lastEvaluatedAt: row.last_evaluated_at,
+        followUpUntil: row.follow_up_until,
+        lastReviewedAt: isReviewed ? latestEvent!.createdAt : null,
+        lastReviewedByName: isReviewed ? latestEvent!.actorName : null,
+      };
+    })
     .sort((a, b) => {
       if (SEVERITY_ORDER[a.severity] !== SEVERITY_ORDER[b.severity]) return SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
       if (STATUS_ORDER[a.status] !== STATUS_ORDER[b.status]) return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
