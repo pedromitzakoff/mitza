@@ -29,7 +29,13 @@ export function AlertCard({ alert }: { alert: AlertListItem }) {
 
   return (
     <div className={`flex flex-col gap-2.5 rounded-lg border p-3.5 ${COCKPIT_CARD_CLASSES}`}>
-      <div className="flex items-start justify-between gap-2">
+      {/* Achado da QA visual: no mobile (390px), manter badges+menu na MESMA
+          linha do nome (sem quebra) espremia o nome do cliente até truncar
+          demais ("Pet Fast Acti…"), mesmo havendo espaço de sobra embaixo.
+          `flex-col md:flex-row`: empilha (nome em cima, badges+menu abaixo,
+          alinhados à direita) só até `md`, onde volta a ser uma única
+          linha como antes — nenhuma mudança no desktop. */}
+      <div className="flex flex-col gap-1.5 md:flex-row md:items-start md:justify-between md:gap-2">
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <Link href={buildWorkspaceHref(alert.clientId, "", null)} className="truncate text-sm font-semibold text-overview-text-primary hover:underline">
@@ -39,7 +45,7 @@ export function AlertCard({ alert }: { alert: AlertListItem }) {
           </div>
           <p className="text-xs font-medium text-overview-text-secondary">{ALERT_TYPE_LABEL[alert.alertType]}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex w-full shrink-0 items-center justify-end gap-1.5 md:w-auto">
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ALERT_SEVERITY_BADGE_CLASSES[alert.severity]}`}>{ALERT_SEVERITY_LABEL[alert.severity]}</span>
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ALERT_STATUS_BADGE_CLASSES[alert.status]}`}>{ALERT_STATUS_LABEL[alert.status]}</span>
           <AlertActionsMenu alertId={alert.id} status={alert.status} />
