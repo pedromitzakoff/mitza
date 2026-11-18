@@ -3277,6 +3277,11 @@ export interface Database {
       alerts: {
         Row: {
           id: string;
+          /** `generated always as identity` (`supabase/alerts-display-number.sql`)
+           * — número legível pro gestor referenciar um alerta (pedido do
+           * usuário), nunca gravado pela aplicação, sempre atribuído pelo
+           * banco na criação da linha. */
+          display_number: number;
           client_id: string;
           channel: TrafficChannelDb;
           alert_type: AlertTypeDb;

@@ -48,7 +48,12 @@ export function AlertCard({
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <Link href={buildWorkspaceHref(alert.clientId, "", null)} className="truncate text-sm font-semibold text-overview-text-primary hover:underline">
-              {alert.clientName}
+              {/* Pedido do usuário: "um número do alerta antes do nome do
+                  cliente... como se fosse um número do código do alerta" —
+                  `displayNumber` nunca muda (nem reaberto, nem reordenado
+                  por filtro), ao contrário de uma posição calculada na
+                  lista. */}
+              {String(alert.displayNumber).padStart(2, "0")} - {alert.clientName}
             </Link>
             <span className="rounded-full bg-overview-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-overview-text-muted">{channelConfig.shortLabel}</span>
           </div>

@@ -25,6 +25,12 @@ export interface AlertListFilters {
 
 export interface AlertListItem {
   id: string;
+  /** Pedido do usuário ("um número do código do alerta que cada um tem
+   * um") — sequencial, atribuído uma vez na criação da linha
+   * (`alerts.display_number`, `generated always as identity`), nunca
+   * recalculado a partir da posição na lista (que mudaria a cada filtro/
+   * ordenação — exatamente o que o pedido quer evitar). */
+  displayNumber: number;
   clientId: string;
   clientName: string;
   channel: TrafficChannel;
@@ -71,7 +77,7 @@ export async function loadAlertList(filters: AlertListFilters): Promise<{
   let query = supabase
     .from("alerts")
     .select(
-      "id, client_id, channel, alert_type, period_kind, severity, status, period_start, period_end, observed_value, reference_value, diff_percent, reference_is_estimate, reference_source, explanation, first_detected_at, last_evaluated_at, follow_up_until, clients(name)",
+      "id, display_number, client_id, channel, alert_type, period_kind, severity, status, period_start, period_end, observed_value, reference_value, diff_percent, reference_is_estimate, reference_source, explanation, first_detected_at, last_evaluated_at, follow_up_until, clients(name)",
     );
 
   if (filters.clientId) query = query.eq("client_id", filters.clientId);
@@ -128,6 +134,7 @@ export async function loadAlertList(filters: AlertListFilters): Promise<{
       const hasNote = Boolean(latestEvent?.note);
       return {
         id: row.id,
+        displayNumber: row.display_number,
         clientId: row.client_id,
         clientName: (row.clients as { name: string } | null)?.name ?? "Cliente desconhecido",
         channel: row.channel,
