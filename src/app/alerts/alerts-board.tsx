@@ -63,7 +63,14 @@ export function AlertsBoard({ items, statusFilter }: { items: AlertListItem[]; s
             <div
               key={status}
               id={`board-col-${status}`}
-              className={singleColumn ? "w-full min-w-0" : "min-w-[85%] shrink-0 snap-center scroll-mt-2 sm:min-w-[22rem] md:min-w-0 md:flex-1 md:shrink"}
+              // Achado real da QA visual: `min-w-*` é um PISO, não um teto —
+              // com conteúdo largo (texto da explicação, linha de métricas),
+              // o item flex crescia além dos 85%/22rem pedidos (flexbox só
+              // respeita um mínimo menor que o conteúdo intrínseco quando
+              // `min-width: 0` está explícito). `w-*` (fixo) + `min-w-0`
+              // força a coluna a ficar na largura pedida de verdade,
+              // deixando o CONTEÚDO (não a coluna) se ajustar por dentro.
+              className={singleColumn ? "w-full min-w-0" : "w-[85%] min-w-0 shrink-0 snap-center scroll-mt-2 sm:w-[22rem] md:w-auto md:min-w-0 md:flex-1 md:shrink"}
             >
               <div className="mb-2 flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-overview-text-primary">{ALERT_STATUS_LABEL[status]}</h2>
