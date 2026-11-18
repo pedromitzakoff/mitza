@@ -28,6 +28,11 @@ export const ALERT_STATUS_BADGE_CLASSES: Record<AlertStatus, string> = {
   resolvido: ALERT_STATUS_REGISTRY["alert_status.resolvido"].badgeClassName,
 };
 
+/** Ordem canônica das 3 colunas do Kanban (pedido do usuário) — mesma
+ * ordem já usada pro `order` do Status Registry; única fonte, nunca uma
+ * 2ª lista hardcoded em `alerts-board.tsx`. */
+export const ALERT_STATUS_COLUMN_ORDER: AlertStatus[] = ["precisa_atencao", "acompanhamento", "resolvido"];
+
 /** Pedido, seção 2: rótulo de cada tipo — só "spend_pace" tem avaliador
  * implementado nesta fase (`IMPLEMENTED_ALERT_TYPES`), os demais existem
  * aqui pro filtro "Tipo" e pra UI nunca precisar de um `?? "Tipo desconhecido"`

@@ -2,7 +2,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { requireActiveProfile } from "@/lib/auth";
 import { loadAlertList, type AlertListFilters, type AlertTypeFilter, type SeverityFilter, type StatusFilter } from "@/app/alerts/alerts-data";
 import { AlertsFilters } from "@/app/alerts/alerts-filters";
-import { AlertCard } from "@/app/alerts/alert-card";
+import { AlertsBoard } from "@/app/alerts/alerts-board";
 import { IMPLEMENTED_ALERT_TYPES, type AlertType } from "@/lib/alerts/alert-types";
 
 /**
@@ -43,11 +43,7 @@ export default async function AlertsPage({
       {items.length === 0 ? (
         <EmptyState className="bg-card p-4">Nenhum alerta encontrado com os filtros atuais.</EmptyState>
       ) : (
-        <div className="flex flex-col gap-2.5">
-          {items.map((alert) => (
-            <AlertCard key={alert.id} alert={alert} />
-          ))}
-        </div>
+        <AlertsBoard items={items} statusFilter={filters.status} />
       )}
     </div>
   );

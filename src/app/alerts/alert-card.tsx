@@ -16,7 +16,16 @@ import type { AlertListItem } from "@/app/alerts/alerts-data";
  * aqui é o link pra Campanhas do cliente nesse canal — "quando os dados
  * permitirem" (pedido) já é satisfeito por esse link sempre existir.
  */
-export function AlertCard({ alert }: { alert: AlertListItem }) {
+export function AlertCard({
+  alert,
+  /** Kanban (pedido do usuário): a coluna já diz a situação — o badge de
+   * status no card viraria redundante (e some espaço que o card precisa).
+   * Default `false` pra qualquer uso fora do Kanban continuar idêntico. */
+  hideStatusBadge = false,
+}: {
+  alert: AlertListItem;
+  hideStatusBadge?: boolean;
+}) {
   const channelConfig = getTrafficChannelConfig(alert.channel);
   const isToday = alert.periodKind === "in_progress";
   const periodLabel = isToday
@@ -47,7 +56,9 @@ export function AlertCard({ alert }: { alert: AlertListItem }) {
         </div>
         <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-1.5 md:w-auto">
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ALERT_SEVERITY_BADGE_CLASSES[alert.severity]}`}>{ALERT_SEVERITY_LABEL[alert.severity]}</span>
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ALERT_STATUS_BADGE_CLASSES[alert.status]}`}>{ALERT_STATUS_LABEL[alert.status]}</span>
+          {!hideStatusBadge && (
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ALERT_STATUS_BADGE_CLASSES[alert.status]}`}>{ALERT_STATUS_LABEL[alert.status]}</span>
+          )}
           {/* Achado real do usuário ("cliquei em Marcar como revisado e nada
               aconteceu"): a ação nunca mudava status/severidade (por
               desenho — "sem considerá-lo resolvido"), então a ÚNICA
