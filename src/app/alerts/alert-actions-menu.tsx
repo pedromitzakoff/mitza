@@ -16,6 +16,15 @@ import type { AlertStatus } from "@/lib/alerts/alert-types";
  * "Marcar como revisado" existia aqui como uma 3ª ação (sem observação,
  * sem mudar situação) — removida a pedido do usuário ("esse revisado pode
  * ser em acompanhamento então"): `actions.ts` explica o porquê.
+ *
+ * Rótulos dos botões (pedido do usuário: "em acompanhamento e ver amanha
+ * sao as mesmas coisas... podemos mudar pra Em acompanhamento e
+ * Resolvido"): nomeados pelo ESTADO que produzem ("Em acompanhamento"/
+ * "Resolvido"), nunca mais pelo verbo da ação ("Acompanhar amanhã"/
+ * "Resolver manualmente") — um único vocabulário, o mesmo das colunas do
+ * Kanban e dos badges de situação, em vez de dois jeitos de dizer a mesma
+ * coisa. A MECÂNICA por trás (nota opcional/obrigatória, `follow_up_until`,
+ * `resolved_at`) continua exatamente a mesma — só o texto mudou.
  */
 export function AlertActionsMenu({ alertId, status }: { alertId: string; status: AlertStatus }) {
   const [dialog, setDialog] = useState<"follow_up" | "resolve" | null>(null);
@@ -57,7 +66,7 @@ export function AlertActionsMenu({ alertId, status }: { alertId: string; status:
               onClick={() => setDialog("follow_up")}
               className="w-full rounded-md px-2 py-1.5 text-left text-sm text-overview-text-secondary hover:bg-overview-surface-hover"
             >
-              Acompanhar amanhã
+              Em acompanhamento
             </button>
           )}
           <button
@@ -65,17 +74,17 @@ export function AlertActionsMenu({ alertId, status }: { alertId: string; status:
             onClick={() => setDialog("resolve")}
             className="w-full rounded-md px-2 py-1.5 text-left text-sm text-overview-text-secondary hover:bg-overview-surface-hover"
           >
-            Resolver manualmente
+            Resolvido
           </button>
         </div>
       </details>
 
       {dialog === "follow_up" && (
         <ConfirmDialog
-          title="Acompanhar amanhã"
+          title="Em acompanhamento"
           description="O alerta passa pra 'Em acompanhamento' — a próxima avaliação do dia completo decide se ele normalizou (resolve automático) ou se persiste (volta pra 'Precisa de atenção')."
           note={{ value: note, onChange: setNote, label: "Observação (opcional)", placeholder: 'Ex.: "Conta retomada após regularização do cartão. Acompanhar se o investimento normaliza amanhã."' }}
-          confirmLabel="Acompanhar amanhã"
+          confirmLabel="Em acompanhamento"
           confirmPendingLabel="Salvando..."
           pending={isPending}
           onCancel={closeDialog}
@@ -85,10 +94,10 @@ export function AlertActionsMenu({ alertId, status }: { alertId: string; status:
 
       {dialog === "resolve" && (
         <ConfirmDialog
-          title="Resolver manualmente"
+          title="Resolvido"
           description="Marca este alerta como resolvido. Se a condição reaparecer, o mesmo alerta é reaberto automaticamente (histórico preservado)."
           note={{ value: note, onChange: setNote, label: "Por que está sendo resolvido?", placeholder: "Observação curta obrigatória", required: true }}
-          confirmLabel="Resolver"
+          confirmLabel="Resolvido"
           confirmPendingLabel="Resolvendo..."
           pending={isPending}
           onCancel={closeDialog}
