@@ -159,10 +159,11 @@ console.log("\nD — Navegação (seção 4 do pedido): estrutura final exata, n
   // "Equipe" (/team) foi removido do GESTAO_ITEMS na Etapa 1.4 da
   // reestruturação KOFF Analytics, posterior a esta etapa.
   ok("Gestão = Clientes + Configurações (Equipe removido na Etapa 1.4)", /const GESTAO_ITEMS: NavItem\[\] = \[\s*\{ label: "Clientes"[\s\S]*?\{ label: "Configurações"[\s\S]*?\];/.test(sidebarSource));
-  // Aba "Alertas" (pedido do usuário, posterior a esta etapa): único item
-  // novo em GESTAO_ITEMS desde então — cross-cliente, mesma área de
-  // "Clientes"/"Configurações", nunca um módulo de workspace de UM cliente.
-  ok("GESTAO_ITEMS = Clientes + Alertas + Configurações (3 itens — Alertas somado depois desta etapa, Equipe removido na Etapa 1.4)", countLabels(sidebarSource) === 3);
+  // Aba "Alertas" (pedido do usuário, posterior a esta etapa): entrou em
+  // GESTAO_ITEMS primeiro, mas foi realocada pro menu do cliente
+  // (`buildClientNavItems`) depois que o usuário pediu "coloque o alertas
+  // ali junto com os outros menus" — GESTAO_ITEMS volta a ter só 2 itens.
+  ok("GESTAO_ITEMS = Clientes + Configurações (2 itens — Alertas mora em buildClientNavItems agora, Equipe removido na Etapa 1.4)", countLabels(sidebarSource) === 2);
 }
 
 function countLabels(source: string): number {

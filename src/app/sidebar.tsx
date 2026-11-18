@@ -175,24 +175,31 @@ interface NavItem {
  * `wallet_position`), nunca navegação do dia a dia (mesmo raciocínio da
  * antiga "Administração"/"Gestão" das fases anteriores — só realocada pra
  * dentro da nova área "Agência" nesta fase, seção 2 do pedido: "pode
- * agrupar Clientes, Equipe e Configurações sob Gestão"). Aba "Alertas"
- * (pedido do usuário): mesma área transversal/cross-cliente — nunca um
- * módulo de UM cliente, por isso entra aqui, não em `buildClientNavItems`. */
+ * agrupar Clientes, Equipe e Configurações sob Gestão"). */
 const GESTAO_ITEMS: NavItem[] = [
   { label: "Clientes", href: "/clients", icon: Briefcase, isActive: (p) => p === "/clients" || p.startsWith("/clients/new") },
-  { label: "Alertas", href: "/alerts", icon: Bell, isActive: (p) => p.startsWith("/alerts") },
   { label: "Configurações", href: "/settings", icon: Settings, adminOnly: true, isActive: (p) => p.startsWith("/settings") },
 ];
 
 /**
  * KOFF Analytics — "Adaptar o sistema" (pedido explícito do usuário):
  * dentro do workspace de UM cliente, a Sidebar troca a Carteira (busca +
- * lista de todos os clientes) por este menu de 4 itens — Dashboard/
- * Campanhas/Anúncios/Metas, sempre escopados ao cliente ativo. Trocar de
- * cliente (ou voltar à Carteira) não é mais um item de menu — é o
- * `ClientSwitcher` no topo (ver abaixo), um seletor, não uma rota do
- * cliente. `buildWorkspaceHref` (já existia, suporta sufixo) preserva o
- * mês como sempre fez pra qualquer link do workspace.
+ * lista de todos os clientes) por este menu — Dashboard/Campanhas/
+ * Anúncios/Metas, sempre escopados ao cliente ativo. Trocar de cliente (ou
+ * voltar à Carteira) não é mais um item de menu — é o `ClientSwitcher` no
+ * topo (ver abaixo), um seletor, não uma rota do cliente. `buildWorkspaceHref`
+ * (já existia, suporta sufixo) preserva o mês como sempre fez pra qualquer
+ * link do workspace.
+ *
+ * "Alertas" (pedido explícito do usuário, depois de ver a aba enterrada
+ * dentro de "Gestão" — "coloque o alertas ali junto com os outros menus"):
+ * mora AQUI agora, não em `GESTAO_ITEMS`, mesmo sendo cross-cliente (nunca
+ * escopado por `clientId` — `href` é sempre `/alerts`, nunca
+ * `buildWorkspaceHref`) — decisão de produto explícita do usuário, que
+ * prioriza acesso rápido sobre a categorização "é módulo de 1 cliente ou
+ * da agência inteira?". Reaproveita a MESMA função pra alimentar tanto a
+ * Sidebar (desktop) quanto `MobileTabBar` (`mobile-tab-bar.tsx`, que já usa
+ * `flex-1` por item — comporta o 5º item sem precisar de ajuste de layout).
  */
 export function buildClientNavItems(clientId: string, month: string | null): NavItem[] {
   return [
@@ -210,6 +217,7 @@ export function buildClientNavItems(clientId: string, month: string | null): Nav
       isActive: (p) => p.startsWith(`/clients/${clientId}/anuncios`),
     },
     { label: "Metas", href: buildWorkspaceHref(clientId, "/metas", month), icon: Target, isActive: (p) => p.startsWith(`/clients/${clientId}/metas`) },
+    { label: "Alertas", href: "/alerts", icon: Bell, isActive: (p) => p.startsWith("/alerts") },
   ];
 }
 
@@ -459,10 +467,15 @@ function SidebarContent({
   onClose: () => void;
 }) {
   const isAdmin = profile.role === "admin";
-  const gestaoItems = GESTAO_ITEMS.filter((item) => !item.adminOnly || isAdmin).map((item) =>
-    item.href === "/alerts" ? { ...item, badgeCount: alertsNeedingAttention } : item,
-  );
+  const gestaoItems = GESTAO_ITEMS.filter((item) => !item.adminOnly || isAdmin);
   const initial = profile.name.trim().charAt(0).toUpperCase() || "?";
+
+  /** "Alertas" morou em `GESTAO_ITEMS` antes; agora mora em
+   * `buildClientNavItems` (pedido do usuário) — o selo de contagem
+   * continua anexado dinamicamente aqui, só que no item certo agora. */
+  function clientNavItemsWithBadge(clientId: string): NavItem[] {
+    return buildClientNavItems(clientId, month).map((item) => (item.href === "/alerts" ? { ...item, badgeCount: alertsNeedingAttention } : item));
+  }
 
   // MITZA ONE — Fase 2.1 (seção 2 do pedido): Agência/Gestão fechados por
   // padrão; abrem automaticamente quando a rota atual já pertence ao
@@ -606,13 +619,15 @@ function SidebarContent({
         )}
 
         {/* Etapa "Otimização do menu lateral mobile" (ponto 3 do pedido):
-            no mobile estes 4 atalhos já vivem na barra inferior
+            no mobile estes atalhos já vivem na barra inferior
             (`MobileTabBar`, mesma `buildClientNavItems`) — repeti-los aqui
             era a duplicação que o pedido aponta. `md:flex`: no desktop
-            continuam exatamente como sempre. */}
+            continuam exatamente como sempre. Aba "Alertas" (pedido do
+            usuário) entra junto, com o selo de contagem anexado por
+            `clientNavItemsWithBadge`. */}
         {activeClientId && (
           <nav aria-label="Menu do cliente" className="hidden flex-col gap-0.5 md:flex">
-            {buildClientNavItems(activeClientId, month).map((item) => (
+            {clientNavItemsWithBadge(activeClientId).map((item) => (
               <NavLink key={item.label} item={item} pathname={pathname} collapsed={collapsed} />
             ))}
           </nav>
@@ -622,7 +637,7 @@ function SidebarContent({
       <div className={collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"}>
         {activeClient && <ClientSwitcher activeClient={activeClient} walletClients={walletClients} month={month} presentation="compact" />}
         {activeClientId &&
-          buildClientNavItems(activeClientId, month).map((item) => (
+          clientNavItemsWithBadge(activeClientId).map((item) => (
             <Tooltip key={item.label} label={item.label}>
               <Link
                 href={item.href}

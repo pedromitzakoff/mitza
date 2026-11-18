@@ -64,7 +64,16 @@ console.log("\nA — Arquitetura final da Sidebar (seção 1/2/7 do pedido): car
   // /settings/team, a gestão administrativa de usuários, continua
   // acessível por dentro de Configurações).
   ok("GESTAO_ITEMS define Clientes/Configurações (Configurações admin-only), sem 'Equipe'", /label: "Clientes", href: "\/clients"/.test(sidebarSource) && !/label: "Equipe"/.test(sidebarSource) && /label: "Configurações", href: "\/settings", icon: Settings, adminOnly: true/.test(sidebarSource));
-  ok("nenhum componente/ícone decorativo novo (sem lib de ícone nova, sem gráfico/badge novo) — só lucide-react, já em uso", !sidebarSource.includes("from \"recharts\"") && !sidebarSource.includes("Badge"));
+  // Etapa "Alertas" (pedido do usuário, posterior a esta fase): somou um
+  // selo de contagem (`badgeCount`/`clientNavItemsWithBadge`, texto puro
+  // num <span>, nunca um componente de UI importado) — por isso a checagem
+  // original (bloquear qualquer ocorrência da palavra "Badge") foi
+  // refinada pra bloquear só o que ela realmente queria prevenir: lib de
+  // gráfico nova ou um COMPONENTE de badge importado de algum lugar.
+  ok(
+    "nenhum componente/ícone decorativo novo (sem lib de ícone nova, sem gráfico novo, sem componente de Badge importado) — só lucide-react, já em uso; o selo de contagem de Alertas é texto puro, não um componente novo",
+    !sidebarSource.includes('from "recharts"') && !/import\s*\{[^}]*Badge[^}]*\}\s*from/.test(sidebarSource),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -196,9 +205,14 @@ console.log("\nG — Collapsed/mobile (seção 5 do pedido; bugfix de navegaçã
     sidebarSource.includes('collapsed ? "hidden flex-col items-center gap-1.5 px-2.5 md:flex" : "hidden"'),
   );
   ok("versão compacta mostra o cliente ATUAL (se houver) via ClientAvatar — nunca a lista inteira como ícones", /\{activeClient && \(/.test(sidebarSource));
+  // Etapa "Alertas" (pedido do usuário, posterior a esta fase): a versão
+  // compacta passou a usar `clientNavItemsWithBadge` (wrapper fino sobre
+  // `buildClientNavItems`, só pra anexar o selo de contagem — ver
+  // test-koff-adaptar-sistema-menu-cliente.ts), agora com 5 itens (Alertas
+  // somado), nunca mais a chamada direta de `buildClientNavItems` aqui.
   ok(
-    "versão compacta mostra os mesmos 4 itens do menu do cliente como ícones (nunca a antiga 'busca que expande' — a Carteira saiu da Sidebar, não precisa mais desse atalho)",
-    !sidebarSource.includes("function expandAndFocusSearch") && sidebarSource.includes("buildClientNavItems(activeClientId, month).map((item) => ("),
+    "versão compacta mostra os mesmos itens do menu do cliente como ícones (nunca a antiga 'busca que expande' — a Carteira saiu da Sidebar, não precisa mais desse atalho)",
+    !sidebarSource.includes("function expandAndFocusSearch") && sidebarSource.includes("clientNavItemsWithBadge(activeClientId).map((item) => ("),
   );
   ok("nenhum arquivo de 'mobile sidebar' separado foi criado", !sidebarSource.includes("sidebar-mobile"));
 }

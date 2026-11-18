@@ -36,8 +36,12 @@ console.log("\nA — buildClientNavItems: os 4 itens, na ordem certa, escopados 
 {
   const items = buildClientNavItems("client-1", "2026-11");
 
-  ok("exatamente 4 itens — 'Contas' não é mais item de menu", items.length === 4);
-  ok("ordem: Dashboard, Campanhas, Anúncios, Metas", items.map((i) => i.label).join(",") === "Dashboard,Campanhas,Anúncios,Metas");
+  // Aba "Alertas" (pedido do usuário, posterior a esta etapa — "coloque o
+  // alertas ali junto com os outros menus"): 5º item, cross-cliente (href
+  // sempre "/alerts", nunca escopado por clientId) — "Contas" continua
+  // fora (virou o ClientSwitcher).
+  ok("exatamente 5 itens — 'Contas' não é mais item de menu, Alertas somado depois desta etapa", items.length === 5);
+  ok("ordem: Dashboard, Campanhas, Anúncios, Metas, Alertas", items.map((i) => i.label).join(",") === "Dashboard,Campanhas,Anúncios,Metas,Alertas");
   ok("Dashboard aponta pra raiz do workspace do cliente, preservando o mês", items[0].href === "/clients/client-1?month=2026-11");
   ok("Campanhas aponta pra /clients/client-1/campanhas", items[1].href === "/clients/client-1/campanhas?month=2026-11");
   ok("Anúncios aponta pra /clients/client-1/anuncios", items[2].href === "/clients/client-1/anuncios?month=2026-11");
@@ -67,8 +71,10 @@ console.log("\nC — checagem estrutural: a Sidebar mostra o menu do cliente SEM
     !/function ClientRow/.test(sidebarSource) && !/function useScrollEdges/.test(sidebarSource),
   );
   ok(
-    "o menu do cliente é construído a partir de activeClientId, resolvido com fallback (URL -> último cliente persistido -> primeiro da carteira), nunca condicionado a um if/else com a Carteira",
-    sidebarSource.includes("buildClientNavItems(activeClientId, month)") && sidebarSource.includes("pathnameClientId ?? resolvedStoredClientId ?? walletClients[0]?.id ?? null"),
+    "o menu do cliente é construído a partir de activeClientId, resolvido com fallback (URL -> último cliente persistido -> primeiro da carteira), nunca condicionado a um if/else com a Carteira — aba Alertas (pedido do usuário, posterior a esta etapa) entra via clientNavItemsWithBadge, wrapper fino sobre buildClientNavItems que só anexa o selo de contagem",
+    sidebarSource.includes("clientNavItemsWithBadge(activeClientId)") &&
+      sidebarSource.includes("buildClientNavItems(clientId, month).map(") &&
+      sidebarSource.includes("pathnameClientId ?? resolvedStoredClientId ?? walletClients[0]?.id ?? null"),
   );
   ok(
     "o último cliente ativo é persistido (localStorage) pra sobreviver a rotas administrativas sem cliente na URL",
