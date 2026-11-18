@@ -100,8 +100,9 @@ console.log("\nC — Item 1: nenhuma query/parâmetro/resultado mudou — só a 
 console.log("\nD — Item 3 (Layout raiz): getCurrentProfile() e loadAgencyAccountsTree() paralelizados, mesmo escopo de acesso e tratamento de erro\n");
 {
   ok(
-    "layout raiz paraleliza getCurrentProfile() e loadAgencyAccountsTree() num único Promise.all (antes eram 2 awaits em sequência)",
-    layoutSource.includes("const [profile, agencyTree] = await Promise.all([getCurrentProfile(), loadAgencyAccountsTree()]);"),
+    "layout raiz paraleliza getCurrentProfile() e loadAgencyAccountsTree() num único Promise.all (antes eram 2 awaits em sequência) — aba Alertas somou countAlertsNeedingAttention() no mesmo Promise.all, nunca sequenciado atrás",
+    layoutSource.includes("const [profile, agencyTree, alertsNeedingAttention] = await Promise.all([") &&
+      layoutSource.includes("getCurrentProfile(),\n    loadAgencyAccountsTree(),\n    countAlertsNeedingAttention(),"),
   );
   ok(
     "o uso da árvore continua condicional a 'profile' existir — MESMO resultado final ([] quando profile é null), nunca um comportamento novo visível",

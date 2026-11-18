@@ -4,6 +4,7 @@ import "./globals.css";
 import { getCurrentProfile } from "@/lib/auth";
 import { loadAgencyAccountsTree } from "@/lib/agency-accounts-tree-data";
 import { flattenAgencyTree } from "@/lib/agency-accounts-tree";
+import { countAlertsNeedingAttention } from "@/app/alerts/alerts-data";
 import { AppShell } from "./app-shell";
 import { ToastProvider } from "./toast-provider";
 import { NavigationProgress } from "./navigation-progress";
@@ -55,7 +56,15 @@ export default async function RootLayout({
   // anterior/próximo/seletor de antes desta fase (gestor, depois
   // `wallet_position`, "Sem responsável" por último) — nenhuma segunda
   // ordenação inventada.
-  const [profile, agencyTree] = await Promise.all([getCurrentProfile(), loadAgencyAccountsTree()]);
+  // Aba "Alertas": mesmo raciocínio do comentário acima — `countAlertsNeedingAttention()`
+  // nunca lança pra usuário anônimo (RLS de `alerts` exige sessão, mesma
+  // disciplina de `clients`/`team_members`), então entra no MESMO
+  // `Promise.all`, sem sequenciar atrás do profile.
+  const [profile, agencyTree, alertsNeedingAttention] = await Promise.all([
+    getCurrentProfile(),
+    loadAgencyAccountsTree(),
+    countAlertsNeedingAttention(),
+  ]);
   const walletClients = profile ? flattenAgencyTree(agencyTree) : [];
 
   return (
@@ -67,7 +76,7 @@ export default async function RootLayout({
         <NavigationProgress />
         <ToastProvider>
           {profile ? (
-            <AppShell profile={profile} walletClients={walletClients}>
+            <AppShell profile={profile} walletClients={walletClients} alertsNeedingAttention={alertsNeedingAttention}>
               {children}
             </AppShell>
           ) : (

@@ -159,7 +159,10 @@ console.log("\nD — Navegação (seção 4 do pedido): estrutura final exata, n
   // "Equipe" (/team) foi removido do GESTAO_ITEMS na Etapa 1.4 da
   // reestruturação KOFF Analytics, posterior a esta etapa.
   ok("Gestão = Clientes + Configurações (Equipe removido na Etapa 1.4)", /const GESTAO_ITEMS: NavItem\[\] = \[\s*\{ label: "Clientes"[\s\S]*?\{ label: "Configurações"[\s\S]*?\];/.test(sidebarSource));
-  ok("nenhum módulo/item novo foi adicionado à Sidebar (contagem de 'label:' em GESTAO_ITEMS = 2: Clientes, Configurações)", countLabels(sidebarSource) === 2);
+  // Aba "Alertas" (pedido do usuário, posterior a esta etapa): único item
+  // novo em GESTAO_ITEMS desde então — cross-cliente, mesma área de
+  // "Clientes"/"Configurações", nunca um módulo de workspace de UM cliente.
+  ok("GESTAO_ITEMS = Clientes + Alertas + Configurações (3 itens — Alertas somado depois desta etapa, Equipe removido na Etapa 1.4)", countLabels(sidebarSource) === 3);
 }
 
 function countLabels(source: string): number {

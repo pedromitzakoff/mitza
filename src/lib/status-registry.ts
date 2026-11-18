@@ -1,4 +1,6 @@
 import type {
+  AlertSeverityDb,
+  AlertStatusDb,
   ClientContractStatus,
   MonthlyReportStatus,
   ReportActionItemStatus,
@@ -115,6 +117,26 @@ export const KPI_TARGET_STATUS_REGISTRY: Record<`kpi_target.${KpiTargetStatus}`,
   "kpi_target.sem_meta": { label: "Sem meta", badgeClassName: NEUTRAL_MUTED, tone: "neutral", order: 2 },
 };
 
+/** Aba "Alertas" — gravidade é a dimensão "quão grave é o problema (ou
+ * oportuno, pra o único valor positivo)". `oportunidade` nunca usa a mesma
+ * cor de `alert_status.resolvido` (verde) — são dimensões independentes
+ * (uma oportunidade pode estar "precisa_atencao" ainda não revisada), por
+ * isso ganha o tom `INFO` (grafite da marca), reservando verde só pra
+ * status concluído. */
+export const ALERT_SEVERITY_REGISTRY: Record<`alert_severity.${AlertSeverityDb}`, StatusEntry> = {
+  "alert_severity.critico": { label: "Crítico", badgeClassName: DANGER, tone: "danger", order: 0 },
+  "alert_severity.atencao": { label: "Atenção", badgeClassName: WARNING, tone: "warning", order: 1 },
+  "alert_severity.oportunidade": { label: "Oportunidade", badgeClassName: INFO, tone: "info", order: 2 },
+};
+
+/** Situação de acompanhamento — eixo independente de gravidade (pedido,
+ * seção 1: "Situação: precisa de atenção, em acompanhamento e resolvido"). */
+export const ALERT_STATUS_REGISTRY: Record<`alert_status.${AlertStatusDb}`, StatusEntry> = {
+  "alert_status.precisa_atencao": { label: "Precisa de atenção", badgeClassName: WARNING, tone: "warning", order: 0 },
+  "alert_status.acompanhamento": { label: "Em acompanhamento", badgeClassName: INFO, tone: "info", order: 1 },
+  "alert_status.resolvido": { label: "Resolvido", badgeClassName: SUCCESS, tone: "success", order: 2 },
+};
+
 /** Todos os registries num só objeto, só pra quem precisar iterar sobre
  * todos os domínios de uma vez (ex.: uma futura tela de auditoria viva) —
  * consumo normal continua sendo direto pelo registry do próprio domínio. */
@@ -126,4 +148,6 @@ export const STATUS_REGISTRIES = {
   monthly_report: MONTHLY_REPORT_STATUS_REGISTRY,
   report_action_item: REPORT_ACTION_ITEM_STATUS_REGISTRY,
   kpi_target: KPI_TARGET_STATUS_REGISTRY,
+  alert_severity: ALERT_SEVERITY_REGISTRY,
+  alert_status: ALERT_STATUS_REGISTRY,
 } as const;

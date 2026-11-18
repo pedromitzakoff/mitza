@@ -114,8 +114,8 @@ console.log("\n6 — ClientWorkspaceHeader: MITZA ONE — Fase 2 simplificou o h
     !clientWorkspaceLayoutSource.includes("await loadAgencyAccountsTree") && !clientWorkspaceLayoutSource.includes("resolveWalletSequence("),
   );
   ok(
-    "layout raiz (src/app/layout.tsx) agora busca a carteira UMA vez pra Sidebar (MITZA ONE — Fase 2.1 reverteu pra ativo-only: loadAgencyAccountsTree() sem includeAllStatuses, ver test-mitza-one-fase2-sidebar.ts; Otimização de carregamento Item 3: em paralelo com getCurrentProfile(), mesmo resultado)",
-    rootLayoutSource.includes("Promise.all([getCurrentProfile(), loadAgencyAccountsTree()])") && rootLayoutSource.includes("flattenAgencyTree(agencyTree)"),
+    "layout raiz (src/app/layout.tsx) agora busca a carteira UMA vez pra Sidebar (MITZA ONE — Fase 2.1 reverteu pra ativo-only: loadAgencyAccountsTree() sem includeAllStatuses, ver test-mitza-one-fase2-sidebar.ts; Otimização de carregamento Item 3: em paralelo com getCurrentProfile(), mesmo resultado; aba Alertas somou countAlertsNeedingAttention() no mesmo Promise.all, sem sequenciar atrás de nada)",
+    rootLayoutSource.includes("getCurrentProfile(),\n    loadAgencyAccountsTree(),\n    countAlertsNeedingAttention(),") && rootLayoutSource.includes("flattenAgencyTree(agencyTree)"),
   );
 }
 

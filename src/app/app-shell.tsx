@@ -34,6 +34,7 @@ import { WorkspaceDrawer } from "@/components/workspace-drawer/workspace-drawer"
 export function AppShell({
   profile,
   walletClients,
+  alertsNeedingAttention,
   children,
 }: {
   profile: { name: string; role: UserRole };
@@ -42,6 +43,10 @@ export function AppShell({
    * `flattenAgencyTree`) — `AppShell` só repassa, nenhum dado novo nem
    * segunda consulta aqui. */
   walletClients: AgencyTreeClient[];
+  /** Aba "Alertas": mesma disciplina — já buscado pelo layout raiz
+   * (`countAlertsNeedingAttention`), só repassado até o selo do item
+   * "Alertas" na Sidebar. */
+  alertsNeedingAttention: number;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -52,6 +57,7 @@ export function AppShell({
         <Sidebar
           profile={profile}
           walletClients={walletClients}
+          alertsNeedingAttention={alertsNeedingAttention}
           mobileOpen={mobileOpen}
           onOpen={() => setMobileOpen(true)}
           onClose={() => setMobileOpen(false)}

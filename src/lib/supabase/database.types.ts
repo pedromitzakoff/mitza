@@ -57,6 +57,24 @@ export type ClientReportStatusDb = "draft" | "sent";
 export type ReminderScopeDb = "agency" | "client";
 export type ReminderStatusDb = "pending" | "done";
 export type TrafficChannelDb = "meta" | "google" | "tiktok" | "linkedin" | "instagram" | "other";
+
+/** Aba "Alertas" — ver `supabase/alerts.sql` pro comentário completo de cada
+ * tipo/enum. Único ponto de definição desses enums em TS — `src/lib/alerts/`
+ * nunca redeclara, sempre importa daqui. */
+export type AlertTypeDb = "spend_pace" | "no_delivery" | "cost_per_result_increase" | "spend_without_result" | "sync_issue" | "opportunity";
+export type AlertPeriodKindDb = "full_day" | "in_progress";
+export type AlertSeverityDb = "critico" | "atencao" | "oportunidade";
+export type AlertStatusDb = "precisa_atencao" | "acompanhamento" | "resolvido";
+export type AlertReferenceSourceDb = "monthly_budget" | "historical_average" | "other";
+export type AlertEventTypeDb =
+  | "criado"
+  | "avaliado"
+  | "revisado"
+  | "acompanhar"
+  | "resolvido_manual"
+  | "resolvido_auto"
+  | "reaberto"
+  | "retomado_atencao";
 export type PerformanceSourceDb = "manual" | "meta" | "google";
 
 /** Integração Stract → Supabase → MITZA — provider é o único suportado
@@ -3252,6 +3270,149 @@ export interface Database {
             columns: ["client_id"];
             isOneToOne: true;
             referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      alerts: {
+        Row: {
+          id: string;
+          client_id: string;
+          channel: TrafficChannelDb;
+          alert_type: AlertTypeDb;
+          period_kind: AlertPeriodKindDb;
+          severity: AlertSeverityDb;
+          status: AlertStatusDb;
+          period_start: string;
+          period_end: string;
+          observed_value: number | null;
+          reference_value: number | null;
+          diff_percent: number | null;
+          reference_is_estimate: boolean;
+          reference_source: AlertReferenceSourceDb | null;
+          explanation: string;
+          detail: Record<string, unknown>;
+          first_detected_at: string;
+          last_evaluated_at: string;
+          resolved_at: string | null;
+          follow_up_until: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          channel: TrafficChannelDb;
+          alert_type: AlertTypeDb;
+          period_kind?: AlertPeriodKindDb;
+          severity: AlertSeverityDb;
+          status?: AlertStatusDb;
+          period_start: string;
+          period_end: string;
+          observed_value?: number | null;
+          reference_value?: number | null;
+          diff_percent?: number | null;
+          reference_is_estimate?: boolean;
+          reference_source?: AlertReferenceSourceDb | null;
+          explanation: string;
+          detail?: Record<string, unknown>;
+          first_detected_at?: string;
+          last_evaluated_at?: string;
+          resolved_at?: string | null;
+          follow_up_until?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          channel?: TrafficChannelDb;
+          alert_type?: AlertTypeDb;
+          period_kind?: AlertPeriodKindDb;
+          severity?: AlertSeverityDb;
+          status?: AlertStatusDb;
+          period_start?: string;
+          period_end?: string;
+          observed_value?: number | null;
+          reference_value?: number | null;
+          diff_percent?: number | null;
+          reference_is_estimate?: boolean;
+          reference_source?: AlertReferenceSourceDb | null;
+          explanation?: string;
+          detail?: Record<string, unknown>;
+          first_detected_at?: string;
+          last_evaluated_at?: string;
+          resolved_at?: string | null;
+          follow_up_until?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "alerts_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      alert_events: {
+        Row: {
+          id: string;
+          alert_id: string;
+          event_type: AlertEventTypeDb;
+          from_status: AlertStatusDb | null;
+          to_status: AlertStatusDb | null;
+          note: string | null;
+          actor_id: string | null;
+          observed_value: number | null;
+          reference_value: number | null;
+          diff_percent: number | null;
+          follow_up_until: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          alert_id: string;
+          event_type: AlertEventTypeDb;
+          from_status?: AlertStatusDb | null;
+          to_status?: AlertStatusDb | null;
+          note?: string | null;
+          actor_id?: string | null;
+          observed_value?: number | null;
+          reference_value?: number | null;
+          diff_percent?: number | null;
+          follow_up_until?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          alert_id?: string;
+          event_type?: AlertEventTypeDb;
+          from_status?: AlertStatusDb | null;
+          to_status?: AlertStatusDb | null;
+          note?: string | null;
+          actor_id?: string | null;
+          observed_value?: number | null;
+          reference_value?: number | null;
+          diff_percent?: number | null;
+          follow_up_until?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "alert_events_alert_id_fkey";
+            columns: ["alert_id"];
+            isOneToOne: false;
+            referencedRelation: "alerts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "alert_events_actor_id_fkey";
+            columns: ["actor_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];

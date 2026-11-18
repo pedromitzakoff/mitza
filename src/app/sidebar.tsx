@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
+  Bell,
   Briefcase,
   ChevronRight,
   ChevronsUpDown,
@@ -162,15 +163,24 @@ interface NavItem {
   icon: LucideIcon;
   adminOnly?: boolean;
   isActive: (pathname: string) => boolean;
+  /** Aba "Alertas": contagem de alertas que precisam de atenção (pedido,
+   * seção 1 — "contador de alertas que precisam de atenção"), anexada
+   * dinamicamente em `SidebarContent` (nunca um valor estático aqui — este
+   * array é um módulo-level const, sem acesso a dado de request). `0`/
+   * `undefined` nunca renderiza o selo. */
+  badgeCount?: number;
 }
 
 /** "Gestão" — administração/infraestrutura da carteira (busca/filtros/
  * `wallet_position`), nunca navegação do dia a dia (mesmo raciocínio da
  * antiga "Administração"/"Gestão" das fases anteriores — só realocada pra
  * dentro da nova área "Agência" nesta fase, seção 2 do pedido: "pode
- * agrupar Clientes, Equipe e Configurações sob Gestão"). */
+ * agrupar Clientes, Equipe e Configurações sob Gestão"). Aba "Alertas"
+ * (pedido do usuário): mesma área transversal/cross-cliente — nunca um
+ * módulo de UM cliente, por isso entra aqui, não em `buildClientNavItems`. */
 const GESTAO_ITEMS: NavItem[] = [
   { label: "Clientes", href: "/clients", icon: Briefcase, isActive: (p) => p === "/clients" || p.startsWith("/clients/new") },
+  { label: "Alertas", href: "/alerts", icon: Bell, isActive: (p) => p.startsWith("/alerts") },
   { label: "Configurações", href: "/settings", icon: Settings, adminOnly: true, isActive: (p) => p.startsWith("/settings") },
 ];
 
@@ -233,6 +243,13 @@ function NavLink({
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       <ItemLabel collapsed={collapsed}>{item.label}</ItemLabel>
+      {Boolean(item.badgeCount) && (
+        <ItemLabel collapsed={collapsed}>
+          <span className="ml-auto flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold leading-none text-white">
+            {item.badgeCount}
+          </span>
+        </ItemLabel>
+      )}
     </Link>
   );
 }
@@ -420,6 +437,7 @@ function SidebarContent({
   pathname,
   month,
   walletClients,
+  alertsNeedingAttention,
   collapsed,
   toggleCollapsed,
   onClose,
@@ -428,6 +446,11 @@ function SidebarContent({
   pathname: string;
   month: string | null;
   walletClients: AgencyTreeClient[];
+  /** Aba "Alertas" (pedido, seção 1): contagem de alertas que precisam de
+   * atenção, pra mostrar no selo do item "Alertas" — buscada pelo layout
+   * raiz (`countAlertsNeedingAttention`), nunca uma segunda consulta aqui
+   * (`SidebarContent` renderiza em toda navegação). */
+  alertsNeedingAttention: number;
   collapsed: boolean;
   toggleCollapsed: () => void;
   /** Etapa "Otimização do menu lateral mobile": só usado pelo botão X
@@ -436,7 +459,9 @@ function SidebarContent({
   onClose: () => void;
 }) {
   const isAdmin = profile.role === "admin";
-  const gestaoItems = GESTAO_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+  const gestaoItems = GESTAO_ITEMS.filter((item) => !item.adminOnly || isAdmin).map((item) =>
+    item.href === "/alerts" ? { ...item, badgeCount: alertsNeedingAttention } : item,
+  );
   const initial = profile.name.trim().charAt(0).toUpperCase() || "?";
 
   // MITZA ONE — Fase 2.1 (seção 2 do pedido): Agência/Gestão fechados por
@@ -735,12 +760,14 @@ function SidebarMonthParam({ onMonth }: { onMonth: (month: string | null) => Rea
 export function Sidebar({
   profile,
   walletClients,
+  alertsNeedingAttention,
   mobileOpen,
   onOpen,
   onClose,
 }: {
   profile: { name: string; role: UserRole };
   walletClients: AgencyTreeClient[];
+  alertsNeedingAttention: number;
   mobileOpen: boolean;
   onOpen: () => void;
   onClose: () => void;
@@ -783,6 +810,7 @@ export function Sidebar({
               pathname={pathname}
               month={null}
               walletClients={walletClients}
+              alertsNeedingAttention={alertsNeedingAttention}
               collapsed={collapsed}
               toggleCollapsed={toggleCollapsed}
               onClose={onClose}
@@ -796,6 +824,7 @@ export function Sidebar({
                 pathname={pathname}
                 month={month}
                 walletClients={walletClients}
+                alertsNeedingAttention={alertsNeedingAttention}
                 collapsed={collapsed}
                 toggleCollapsed={toggleCollapsed}
                 onClose={onClose}

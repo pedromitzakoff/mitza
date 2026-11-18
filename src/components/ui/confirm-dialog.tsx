@@ -27,6 +27,12 @@ export function ConfirmDialog({
   /** Linha extra opcional, em destaque — ex.: prévia de alcance
    * ("8 clientes · 34 sprints serão verificadas"). */
   scopeText,
+  /** Campo de observação opcional — aba Alertas (pedido: "Acompanhar
+   * amanhã"/"Resolver manualmente" pedem uma nota curta). Nenhum outro
+   * chamador usa isto hoje; passar `note` é o único jeito de fazer
+   * `onConfirm` esperar o texto antes de habilitar o botão (quando
+   * `note.required`). */
+  note,
   confirmLabel,
   confirmPendingLabel,
   tone = "default",
@@ -37,6 +43,13 @@ export function ConfirmDialog({
   title: string;
   description: string;
   scopeText?: string;
+  note?: {
+    value: string;
+    onChange: (value: string) => void;
+    label: string;
+    placeholder?: string;
+    required?: boolean;
+  };
   confirmLabel: string;
   confirmPendingLabel: string;
   tone?: "default" | "destructive";
@@ -44,6 +57,7 @@ export function ConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const noteMissing = Boolean(note?.required) && !note!.value.trim();
   const titleId = "confirm-dialog-title";
   const confirmClasses =
     tone === "destructive"
@@ -71,6 +85,19 @@ export function ConfirmDialog({
           </h2>
           <p className="mt-1.5 text-sm text-muted-foreground">{description}</p>
           {scopeText && <p className="mt-2 text-xs font-medium text-foreground">{scopeText}</p>}
+          {note && (
+            <label className="mt-3 flex flex-col gap-1 text-sm text-foreground">
+              {note.label}
+              <textarea
+                value={note.value}
+                onChange={(event) => note.onChange(event.target.value)}
+                placeholder={note.placeholder}
+                rows={2}
+                disabled={pending}
+                className="rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-foreground outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              />
+            </label>
+          )}
           <div className="mt-4 flex items-center justify-end gap-2">
             <button
               type="button"
@@ -83,7 +110,7 @@ export function ConfirmDialog({
             <button
               type="button"
               onClick={onConfirm}
-              disabled={pending}
+              disabled={pending || noteMissing}
               className={`${confirmClasses} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60`}
             >
               {pending ? confirmPendingLabel : confirmLabel}
