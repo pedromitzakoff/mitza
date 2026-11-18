@@ -2,17 +2,20 @@
 
 import { useState, useTransition } from "react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { ToastActionButton } from "@/app/toast-action-button";
 import { useToast } from "@/app/toast-provider";
-import { markAlertReviewedAction, followUpAlertTomorrowAction, resolveAlertManuallyAction } from "@/app/alerts/actions";
+import { followUpAlertTomorrowAction, resolveAlertManuallyAction } from "@/app/alerts/actions";
 import type { AlertStatus } from "@/lib/alerts/alert-types";
 
 /**
- * Aba "Alertas" (pedido, seção 3) — as 3 ações sobre UM alerta, no mesmo
+ * Aba "Alertas" (pedido, seção 3) — as 2 ações sobre UM alerta, no mesmo
  * menu "•••" já usado em Clientes/Equipe (`AdminActionsMenu`/`team-table.tsx`),
  * só que sem o `adminOnly` (qualquer membro ativo pode agir aqui, ver
  * `actions.ts`). Um alerta "resolvido" não mostra mais nenhuma ação — nada
  * a fazer com ele até reabrir automaticamente, se reaparecer.
+ *
+ * "Marcar como revisado" existia aqui como uma 3ª ação (sem observação,
+ * sem mudar situação) — removida a pedido do usuário ("esse revisado pode
+ * ser em acompanhamento então"): `actions.ts` explica o porquê.
  */
 export function AlertActionsMenu({ alertId, status }: { alertId: string; status: AlertStatus }) {
   const [dialog, setDialog] = useState<"follow_up" | "resolve" | null>(null);
@@ -48,13 +51,6 @@ export function AlertActionsMenu({ alertId, status }: { alertId: string; status:
           •••
         </summary>
         <div className="mitza-menu-in absolute right-0 z-10 mt-1 flex w-52 flex-col gap-0.5 rounded-md border border-overview-border bg-overview-surface p-1 shadow-[var(--shadow-float)]">
-          <ToastActionButton
-            action={() => markAlertReviewedAction(alertId)}
-            pendingLabel="Registrando..."
-            className="w-full rounded-md px-2 py-1.5 text-left text-sm text-overview-text-secondary hover:bg-overview-surface-hover"
-          >
-            Marcar como revisado
-          </ToastActionButton>
           {status !== "acompanhamento" && (
             <button
               type="button"

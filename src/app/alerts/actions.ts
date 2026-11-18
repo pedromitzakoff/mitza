@@ -9,16 +9,29 @@ import { shiftDays } from "@/lib/date-range";
 import type { AlertStatus } from "@/lib/alerts/alert-types";
 
 /**
- * Aba "Alertas" (pedido do usuário, seção 3): as 3 ações manuais de
+ * Aba "Alertas" (pedido do usuário, seção 3): as 2 ações manuais de
  * acompanhamento — "dia a dia", não administrativas, por isso
  * `requireActiveProfile()` (qualquer membro interno ativo), nunca
  * `requireAdmin()` — mesmo critério de amplo acesso interno já usado em
  * `is_client_manager` (ver `supabase/alerts.sql`).
  *
- * Nenhuma delas decide a próxima avaliação automática — isso é sempre
+ * Existia uma 3ª ação ("Marcar como revisado", só registrava que alguém
+ * tinha olhado, sem mudar status/situação nem pedir observação) — removida
+ * a pedido do usuário ("esse revisado pode ser em acompanhamento então"):
+ * na prática, qualquer alerta olhado ou vira "Acompanhar amanhã" (ainda
+ * incerto, quer reavaliar) ou "Resolver manualmente" (já sabe o que
+ * houve) — um 3º estado que não compromete com nada não tinha uso real.
+ * `'revisado'` continua um `event_type` válido no banco (linhas antigas,
+ * se existirem, continuam legíveis) — só não é mais produzido por nenhuma
+ * ação daqui pra frente.
+ *
+ * Nenhuma das 2 decide a próxima avaliação automática — isso é sempre
  * `reduceAlertEvaluation` (`lib/alerts/alert-persistence.ts`), rodado pelo
- * cron. Estas 3 ações só gravam a INTENÇÃO do gestor (revisado/observação/
- * resolução manual) + o evento correspondente em `alert_events`.
+ * cron. As 2 ações só gravam a INTENÇÃO do gestor (observação/resolução
+ * manual) + o evento correspondente em `alert_events` — a MESMA
+ * observação que `alerts-data.ts` busca de volta pra mostrar no card
+ * (achado do usuário: "o texto que eu escrevo... onde que eu leio depois?"
+ * — antes não aparecia em lugar nenhum).
  */
 
 export interface AlertActionResult {
@@ -30,29 +43,6 @@ async function loadAlertForAction(alertId: string): Promise<{ id: string; status
   const supabase = await createSupabaseClient();
   const rows = await requireQuery(supabase.from("alerts").select("id, status").eq("id", alertId).limit(1), "alerts:load-for-action");
   return rows[0] ?? null;
-}
-
-/** "Marcar como revisado" — pedido: "registra que alguém analisou o
- * alerta, sem considerá-lo resolvido." Por isso NUNCA muda `status`/
- * `resolved_at`/`follow_up_until` — só grava o evento de auditoria. */
-export async function markAlertReviewedAction(alertId: string): Promise<AlertActionResult> {
-  const profile = await requireActiveProfile();
-  const supabase = await createSupabaseClient();
-
-  const alert = await loadAlertForAction(alertId);
-  if (!alert) return { error: "Alerta não encontrado." };
-
-  const { error } = await supabase.from("alert_events").insert({
-    alert_id: alertId,
-    event_type: "revisado",
-    from_status: alert.status,
-    to_status: alert.status,
-    actor_id: profile.id,
-  });
-  if (error) return { error: "Não foi possível registrar a revisão." };
-
-  revalidatePath("/alerts");
-  return { message: "Marcado como revisado." };
 }
 
 /** "Acompanhar amanhã" — pedido: "permite registrar uma observação e

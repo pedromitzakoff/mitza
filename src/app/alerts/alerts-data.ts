@@ -43,16 +43,15 @@ export interface AlertListItem {
   firstDetectedAt: string;
   lastEvaluatedAt: string;
   followUpUntil: string | null;
-  /** "Marcar como revisado" (pedido, seção 3: "registra que alguém
-   * analisou... sem considerá-lo resolvido") nunca muda status/severidade
-   * — sem isto, a ÚNICA confirmação da ação era um toast de alguns
-   * segundos (achado real do usuário: "cliquei e nada aconteceu"). Não
-   * nulo só quando o evento MAIS RECENTE do alerta é 'revisado' — uma
-   * reavaliação automática posterior (evento 'avaliado'/'retomado_atencao'/
-   * etc.) some com o selo de novo, pedindo revisão nova (estado correto:
-   * "revisado" é sobre o estado de ONTEM/agora, não permanente). */
-  lastReviewedAt: string | null;
-  lastReviewedByName: string | null;
+  /** Achado do usuário ("o texto que eu escrevo... onde que eu leio
+   * depois?") — a observação do evento MAIS RECENTE deste alerta (sempre
+   * a de "Acompanhar amanhã"/"Resolver manualmente", já que só essas 2
+   * ações gravam nota; um evento automático sem nota — ex. resolução
+   * automática por normalização — corretamente mostra `null`, nunca uma
+   * nota antiga que não reflete mais o estado atual). */
+  latestNote: string | null;
+  latestNoteByName: string | null;
+  latestNoteAt: string | null;
 }
 
 /** Ordem de prioridade da lista (pedido: "lista ordenada por gravidade e
@@ -94,17 +93,21 @@ export async function loadAlertList(filters: AlertListFilters): Promise<{
   ]);
   if (attentionCountResult.error) throw new Error(`[alerts:attention-count] ${attentionCountResult.error.message}`);
 
-  // "Revisado" só é um selo visível enquanto for o evento MAIS RECENTE de
+  // A observação mostrada no card é sempre a do evento MAIS RECENTE de
   // cada alerta — busca todo o histórico relevante de uma vez (nunca uma
   // query por linha) e fica só com o 1º eventual de cada `alert_id`
-  // (ordenado desc, então o 1º encontrado é sempre o mais recente).
+  // (ordenado desc, então o 1º encontrado é sempre o mais recente). Como
+  // só "Acompanhar amanhã"/"Resolver manualmente" gravam `note`, o evento
+  // mais recente SER um desses dois é exatamente o que faz `status` valer
+  // 'acompanhamento'/'resolvido' (manual) agora — nunca uma nota antiga
+  // de uma ocorrência já superada.
   const alertIds = alertRows.map((row) => row.id);
-  const latestEventByAlertId = new Map<string, { eventType: string; createdAt: string; actorName: string | null }>();
+  const latestEventByAlertId = new Map<string, { note: string | null; createdAt: string; actorName: string | null }>();
   if (alertIds.length > 0) {
     const eventRows = await requireQuery(
       supabase
         .from("alert_events")
-        .select("alert_id, event_type, created_at, profiles(name)")
+        .select("alert_id, note, created_at, profiles(name)")
         .in("alert_id", alertIds)
         .order("created_at", { ascending: false }),
       "alert_events:latest-per-alert",
@@ -112,7 +115,7 @@ export async function loadAlertList(filters: AlertListFilters): Promise<{
     for (const row of eventRows) {
       if (latestEventByAlertId.has(row.alert_id)) continue;
       latestEventByAlertId.set(row.alert_id, {
-        eventType: row.event_type,
+        note: row.note,
         createdAt: row.created_at,
         actorName: (row.profiles as { name: string } | null)?.name ?? null,
       });
@@ -122,7 +125,7 @@ export async function loadAlertList(filters: AlertListFilters): Promise<{
   const items: AlertListItem[] = alertRows
     .map((row): AlertListItem => {
       const latestEvent = latestEventByAlertId.get(row.id);
-      const isReviewed = latestEvent?.eventType === "revisado";
+      const hasNote = Boolean(latestEvent?.note);
       return {
         id: row.id,
         clientId: row.client_id,
@@ -143,8 +146,9 @@ export async function loadAlertList(filters: AlertListFilters): Promise<{
         firstDetectedAt: row.first_detected_at,
         lastEvaluatedAt: row.last_evaluated_at,
         followUpUntil: row.follow_up_until,
-        lastReviewedAt: isReviewed ? latestEvent!.createdAt : null,
-        lastReviewedByName: isReviewed ? latestEvent!.actorName : null,
+        latestNote: hasNote ? latestEvent!.note : null,
+        latestNoteByName: hasNote ? latestEvent!.actorName : null,
+        latestNoteAt: hasNote ? latestEvent!.createdAt : null,
       };
     })
     .sort((a, b) => {

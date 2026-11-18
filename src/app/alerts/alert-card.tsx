@@ -59,26 +59,30 @@ export function AlertCard({
           {!hideStatusBadge && (
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ALERT_STATUS_BADGE_CLASSES[alert.status]}`}>{ALERT_STATUS_LABEL[alert.status]}</span>
           )}
-          {/* Achado real do usuário ("cliquei em Marcar como revisado e nada
-              aconteceu"): a ação nunca mudava status/severidade (por
-              desenho — "sem considerá-lo resolvido"), então a ÚNICA
-              confirmação era um toast de poucos segundos. Este selo fica
-              visível enquanto 'revisado' for o evento mais recente do
-              alerta (some sozinho quando uma nova avaliação automática
-              acontecer, pedindo revisão de novo). */}
-          {alert.lastReviewedAt && (
-            <span
-              className="rounded-full bg-overview-surface-hover px-2 py-0.5 text-[11px] font-medium text-overview-text-secondary"
-              title={`Revisado${alert.lastReviewedByName ? ` por ${alert.lastReviewedByName}` : ""} · ${formatRelativeDateTime(alert.lastReviewedAt, new Date())}`}
-            >
-              ✓ Revisado
-            </span>
-          )}
           <AlertActionsMenu alertId={alert.id} status={alert.status} />
         </div>
       </div>
 
       <p className="text-sm text-overview-text-primary">{alert.explanation}</p>
+
+      {/* Achado do usuário ("o texto que eu escrevo sobre o que houve na
+          hora de resolver... onde que eu leio depois?") — antes a
+          observação de "Acompanhar amanhã"/"Resolver manualmente" ficava
+          só no banco, sem aparecer em lugar nenhum da tela. Mostra a nota
+          do evento mais recente — nunca uma nota antiga de uma ocorrência
+          já superada (ver comentário em `alerts-data.ts`). */}
+      {alert.latestNote && (
+        <p className="rounded-md bg-overview-surface-hover px-2.5 py-1.5 text-xs text-overview-text-secondary">
+          “{alert.latestNote}”
+          {(alert.latestNoteByName || alert.latestNoteAt) && (
+            <span className="text-overview-text-muted">
+              {" "}
+              — {alert.latestNoteByName ?? "alguém"}
+              {alert.latestNoteAt ? `, ${formatRelativeDateTime(alert.latestNoteAt, new Date())}` : ""}
+            </span>
+          )}
+        </p>
+      )}
 
       {alert.observedValue !== null && alert.referenceValue !== null && (
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-overview-text-secondary">
@@ -102,13 +106,6 @@ export function AlertCard({
           <span>Período: {periodLabel}</span>
           <span>Atualizado: {formatRelativeDateTime(alert.lastEvaluatedAt, new Date())}</span>
           {alert.status === "acompanhamento" && alert.followUpUntil && <span>Acompanhando até {alert.followUpUntil}</span>}
-          {/* Mesmo texto do selo acima, só que sempre visível (não depende
-              de hover — o selo usa `title`, que não existe em touch). */}
-          {alert.lastReviewedAt && (
-            <span>
-              Revisado{alert.lastReviewedByName ? ` por ${alert.lastReviewedByName}` : ""} · {formatRelativeDateTime(alert.lastReviewedAt, new Date())}
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-2">
           <Link href={buildWorkspaceHref(alert.clientId, "", null)} className="text-brand hover:underline">
