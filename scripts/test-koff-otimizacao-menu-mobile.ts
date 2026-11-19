@@ -119,8 +119,8 @@ console.log("\nD — Rodapé: perfil/função/Sair continuam; data e hora saem d
 console.log("\nE — Telas pequenas: scroll interno quando Gestão expande; rodapé nunca fica inacessível\n");
 {
   ok(
-    "a região do meio (seletor + Gestão mobile + nav) ganhou overflow-y-auto — rola internamente quando o conteúdo (Gestão expandida) excede a altura; depois ganhou pt-3 md:pt-0 (respiro no topo só no mobile, já que o botão de colapsar — única fonte de padding antes — é hidden lá)",
-    sidebarSource.includes("flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 pt-3 md:overflow-visible md:pt-0"),
+    "a região do meio (seletor + Gestão mobile + nav) ganhou overflow-y-auto — rola internamente quando o conteúdo (Gestão expandida) excede a altura; depois ganhou pt-3 md:pt-0 (respiro no topo só no mobile, já que o botão de colapsar — única fonte de padding antes — é hidden lá). Etapa posterior ('permitir arrastar entre clientes no mobile') somou touch-pan-y/overscroll-y-contain/md:touch-auto na mesma div, sem remover nenhuma classe anterior.",
+    sidebarSource.includes("flex min-h-0 flex-1 flex-col touch-pan-y overflow-y-auto overscroll-y-contain px-2.5 pt-3 md:touch-auto md:overflow-visible md:pt-0"),
   );
   ok(
     "no desktop o overflow continua visible (md:overflow-visible) — nenhuma mudança de comportamento lá, só o mobile ganhou scroll",
