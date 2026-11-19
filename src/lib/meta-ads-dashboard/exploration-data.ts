@@ -340,10 +340,28 @@ export function buildExplorationTotals(rows: ExplorationRow[]): Map<ExplorationC
   // (mesma garantia de `goalColumnValue` acima).
   const goalsPresent = new Set<PerformanceGoal>();
   for (const row of rows) if (row.resultType) goalsPresent.add(row.resultType);
+  // Achado real (conta com várias campanhas do mesmo objetivo, algumas sem
+  // nenhuma venda no período — `resultType` fica `null` nessas linhas,
+  // nunca igual ao objetivo, já que a Graph API não devolve o tipo de ação
+  // quando a contagem é zero): filtrar `goalRows` por `resultType` excluía
+  // o investimento dessas linhas do CPA do Total, enquanto a célula
+  // "Investimento" do MESMO Total soma TODAS as linhas — o CPA exibido não
+  // batia com Investimento ÷ Vendas, o cálculo mais óbvio pra quem lê as
+  // duas células lado a lado. Com um ÚNICO objetivo presente na tabela (o
+  // caso comum — todas as campanhas do cliente visam o mesmo resultado),
+  // o CPA do Total usa o MESMO investimento total da célula "Investimento"
+  // — nunca um subconjunto silenciosamente menor. Só mantém o filtro
+  // estrito por linha quando há MAIS de um objetivo na mesma tabela (conta
+  // genuinamente multi-objetivo), pra nunca misturar investimento de um
+  // objetivo diferente no CPA do outro.
+  const singleGoalPresent = goalsPresent.size === 1;
   for (const goal of goalsPresent) {
     const goalRows = rows.filter((r) => r.resultType === goal);
     const totalCount = sumColumn(goalRows, (r) => r.resultByGoal[goal]?.count ?? null);
-    const goalSpend = goalRows.reduce((sum, r) => sum + r.spend, 0);
+    // `totalSpend` nunca é `null` aqui de fato (`spend` é sempre `number`
+    // em `ExplorationRow`, nunca `null`, e `rows.length === 0` já retornou
+    // antes) — o `?? 0` só satisfaz o tipo genérico de `sumColumn`.
+    const goalSpend = singleGoalPresent ? (totalSpend ?? 0) : goalRows.reduce((sum, r) => sum + r.spend, 0);
     cells.set(goalResultColumnId(goal), totalCount !== null ? formatCount(totalCount) : "—");
     cells.set(goalCostColumnId(goal), totalCount !== null && totalCount > 0 ? formatCurrency(goalSpend / totalCount) : "—");
   }

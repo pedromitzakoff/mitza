@@ -139,4 +139,26 @@ console.log("\nF — Wiring estrutural: ExplorationTable (tfoot) e ExplorationCa
   );
 }
 
+console.log(
+  "\nG — Conta de UM objetivo só com campanha(s) sem nenhuma conversão no período: CPA do Total usa o MESMO investimento da célula Investimento (achado real, conta com campanhas 'Vendas_...')\n",
+);
+{
+  // 3 campanhas de vendas: 2 converteram, 1 não teve NENHUMA venda no
+  // período — Graph API não devolve o tipo de ação quando a contagem é
+  // zero, então essa linha chega com `resultType: null` (nunca "sales"),
+  // igual ao achado real. Investimento total das 3: 100+80+50=230.
+  const rows = [
+    row({ name: "Converteu 1", spend: 100, resultType: "sales", resultByGoal: { sales: { count: 2, cost: 50 } } }),
+    row({ name: "Converteu 2", spend: 80, resultType: "sales", resultByGoal: { sales: { count: 1, cost: 80 } } }),
+    row({ name: "Zero vendas no período", spend: 50, resultType: null, resultByGoal: {} }),
+  ];
+  const totals = buildExplorationTotals(rows);
+  ok("spend (Investimento) soma as 3 linhas, inclusive a sem venda nenhuma (230)", totals.get("spend") === formatCurrency(230));
+  ok("result:sales soma só as 2 linhas que converteram (2+1=3)", totals.get("result:sales") === formatCount(3));
+  ok(
+    "cost:sales (CPA do Total) usa o MESMO investimento da célula Investimento (230/3) — nunca só o das linhas que converteram (180/3), que não bateria com Investimento ÷ Vendas",
+    totals.get("cost:sales") === formatCurrency(230 / 3),
+  );
+}
+
 console.log(`\n${passed} verificações OK.\n`);
