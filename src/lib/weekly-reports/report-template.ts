@@ -31,25 +31,39 @@ export function formatReportPeriodLabel(periodStart: string, periodEnd: string):
   return `${formatShortDate(periodStart)} a ${formatShortDate(periodEnd)}`;
 }
 
-function formatHeadlineResultLine(goal: PerformanceGoal, resultCount: number, costPerResult: number | null): string {
+/** Pedido do usuário: "prefiro que fique em lista, e não uma do lado da
+ * outra" — cada métrica numa linha própria (nunca duas métricas juntas
+ * separadas por "·"), sempre nesta ordem: resultado, depois custo por
+ * resultado. */
+function formatHeadlineResultLines(goal: PerformanceGoal, resultCount: number, costPerResult: number | null): string[] {
   const config = PERFORMANCE_GOALS[goal];
   const costText = costPerResult !== null ? formatCurrency(costPerResult) : "indisponível";
-  return `🎯 ${config.resultMetricLabel}: ${formatCount(resultCount)} · ${config.costMetricShortLabel}: ${costText}`;
+  return [`🎯 ${config.resultMetricLabel}: ${formatCount(resultCount)}`, `💲 ${config.costMetricShortLabel}: ${costText}`];
 }
 
 /** Pedido do usuário: "no caso das vendas, precisa colocar valor em
- * vendas e ROAS" — linha extra, só pro objetivo "sales" e só quando há
+ * vendas e ROAS" — linhas extras, só pro objetivo "sales" e só quando há
  * faturamento registrado (nunca `R$0,00`/`0,00x` fabricado pra cliente
  * sem `value_column` configurado — `revenue`/`roas` chegam `null` nesse
- * caso, e a linha inteira é omitida). */
-function formatSalesRevenueLine(goal: PerformanceGoal, revenue: number | null, roas: number | null): string | null {
-  if (goal !== "sales" || revenue === null) return null;
+ * caso, e as 2 linhas somem inteiras). Mesma lista de métricas, uma por
+ * linha (pedido: "prefiro que fique em lista"). */
+function formatSalesRevenueLines(goal: PerformanceGoal, revenue: number | null, roas: number | null): string[] {
+  if (goal !== "sales" || revenue === null) return [];
   const roasText = roas !== null ? `${roas.toFixed(2)}x` : "indisponível";
-  return `💵 Valor em vendas: ${formatCurrency(revenue)} · ROAS: ${roasText}`;
+  return [`💵 Valor em vendas: ${formatCurrency(revenue)}`, `📈 ROAS: ${roasText}`];
 }
 
 function formatAdNameWithFormat(adName: string, format: string | null): string {
   return format ? `${adName} (${format})` : adName;
+}
+
+/** Pedido do usuário: "consegue colocar o link do anúncio também? pra dar
+ * pra ver qual é o melhor com CPA e melhor com CTR" — anexado ao fim da
+ * linha, só quando o criativo tem um permalink registrado (enriquecimento
+ * opcional, nunca fabricado — ver `AdHighlightEntry.permalinkUrl`). O
+ * WhatsApp linkifica a URL sozinho, então basta colar o texto puro. */
+function formatPermalinkSuffix(permalinkUrl: string | null): string {
+  return permalinkUrl ? ` · ${permalinkUrl}` : "";
 }
 
 /** Linha(s) de destaque de anúncio — `null` quando NENHUM dos 2
@@ -64,18 +78,20 @@ function formatHighlightLines(goal: PerformanceGoal, highlights: AdHighlights): 
   if (combined && bestCost && bestLinkCtr) {
     const resultText = formatPerformanceResult(bestCost.resultCount, goal);
     return [
-      `🏆👆 ${formatAdNameWithFormat(bestCost.adName, bestCost.format)}: melhor ${costShortLabel} (${resultText} a ${formatCurrency(bestCost.cost)}) e melhor CTR de link (${formatPercent(bestLinkCtr.linkCtr * 100)} em ${formatCount(bestLinkCtr.impressions)} impressões)`,
+      `🏆👆 ${formatAdNameWithFormat(bestCost.adName, bestCost.format)}: melhor ${costShortLabel} (${resultText} a ${formatCurrency(bestCost.cost)}) e melhor CTR de link (${formatPercent(bestLinkCtr.linkCtr * 100)} em ${formatCount(bestLinkCtr.impressions)} impressões)${formatPermalinkSuffix(bestCost.permalinkUrl)}`,
     ];
   }
 
   const lines: string[] = [];
   if (bestCost) {
     const resultText = formatPerformanceResult(bestCost.resultCount, goal);
-    lines.push(`🏆 Melhor ${costShortLabel}: ${formatAdNameWithFormat(bestCost.adName, bestCost.format)} · ${resultText} a ${formatCurrency(bestCost.cost)}`);
+    lines.push(
+      `🏆 Melhor ${costShortLabel}: ${formatAdNameWithFormat(bestCost.adName, bestCost.format)} · ${resultText} a ${formatCurrency(bestCost.cost)}${formatPermalinkSuffix(bestCost.permalinkUrl)}`,
+    );
   }
   if (bestLinkCtr) {
     lines.push(
-      `👆 Melhor CTR de link: ${formatAdNameWithFormat(bestLinkCtr.adName, bestLinkCtr.format)} · ${formatPercent(bestLinkCtr.linkCtr * 100)} em ${formatCount(bestLinkCtr.impressions)} impressões`,
+      `👆 Melhor CTR de link: ${formatAdNameWithFormat(bestLinkCtr.adName, bestLinkCtr.format)} · ${formatPercent(bestLinkCtr.linkCtr * 100)} em ${formatCount(bestLinkCtr.impressions)} impressões${formatPermalinkSuffix(bestLinkCtr.permalinkUrl)}`,
     );
   }
   return lines;
@@ -91,7 +107,7 @@ export interface ReportTemplateInput {
   resultCount: number;
   costPerResult: number | null;
   /** Pedido do usuário: "no caso das vendas, precisa colocar valor em
-   * vendas e ROAS" — ver `formatSalesRevenueLine`. */
+   * vendas e ROAS" — ver `formatSalesRevenueLines`. */
   revenue: number | null;
   roas: number | null;
   highlights: AdHighlights;
@@ -110,10 +126,9 @@ export function renderReportTemplate(input: ReportTemplateInput): string {
   const headerLines = [
     `*${input.clientName} | Resultados de ${weekdayRange} (${periodLabel})*`,
     `💰 Investimento: ${formatCurrency(input.investment)}`,
-    formatHeadlineResultLine(input.goal, input.resultCount, input.costPerResult),
+    ...formatHeadlineResultLines(input.goal, input.resultCount, input.costPerResult),
+    ...formatSalesRevenueLines(input.goal, input.revenue, input.roas),
   ];
-  const salesLine = formatSalesRevenueLine(input.goal, input.revenue, input.roas);
-  if (salesLine) headerLines.push(salesLine);
 
   const blocks: string[] = [headerLines.join("\n")];
 

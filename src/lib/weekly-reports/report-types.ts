@@ -13,6 +13,13 @@ export type WeeklyReportEventType = WeeklyReportEventTypeDb;
 export interface AdHighlightEntry {
   adName: string;
   format: string | null;
+  /** Pedido do usuário: "consegue colocar o link do anúncio também? pra
+   * dar pra ver qual é o melhor com CPA e melhor com CTR" — permalink do
+   * anúncio (`CreativeSummary.permalinkUrl`, `lib/creative-analytics.ts`),
+   * sempre "enriquecimento opcional" por definição daquele módulo: `null`
+   * quando o criativo nunca teve um link registrado, nunca um link
+   * fabricado/adivinhado. */
+  permalinkUrl: string | null;
 }
 
 export interface BestCostHighlight extends AdHighlightEntry {

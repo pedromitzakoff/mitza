@@ -148,6 +148,22 @@ console.log("\nD — computeAdHighlights: elegibilidade por volume mínimo, melh
     return h.bestCost === null && h.bestLinkCtr !== null && h.bestLinkCtr.adName === "Só CTR";
   })());
 
+  ok(
+    "pedido do usuário: 'consegue colocar o link do anúncio também?' — permalinkUrl do CreativeSummary propaga pro destaque, 'null' quando o criativo nunca teve link registrado (nunca fabricado)",
+    (() => {
+      const withLink = creative({ creativeName: "Com link", permalinkUrl: "https://fb.me/com-link", totalResultCount: 5, cpa: 10, totalImpressions: 2000, linkCtr: 0.05 });
+      const withoutLink = creative({ creativeName: "Sem link", permalinkUrl: null, totalResultCount: 5, cpa: 10, totalImpressions: 2000, linkCtr: 0.05 });
+      const hWith = computeAdHighlights([withLink], "leads", DEFAULT_AD_HIGHLIGHT_THRESHOLDS);
+      const hWithout = computeAdHighlights([withoutLink], "leads", DEFAULT_AD_HIGHLIGHT_THRESHOLDS);
+      return (
+        hWith.bestCost?.permalinkUrl === "https://fb.me/com-link" &&
+        hWith.bestLinkCtr?.permalinkUrl === "https://fb.me/com-link" &&
+        hWithout.bestCost?.permalinkUrl === null &&
+        hWithout.bestLinkCtr?.permalinkUrl === null
+      );
+    })(),
+  );
+
   ok("melhor custo por resultado = MENOR cpa entre os elegíveis (nunca o de maior volume por si só)", (() => {
     const cheaper = creative({ creativeName: "Depoimento de cliente", totalResultCount: 12, cpa: 14.8, totalImpressions: 100 });
     const pricier = creative({ creativeName: "Outro anúncio", totalResultCount: 20, cpa: 30, totalImpressions: 100 });
@@ -198,8 +214,8 @@ console.log("\nE — renderReportTemplate: estrutura do texto, zero resultados, 
     revenue: null,
     roas: null,
     highlights: {
-      bestCost: { adName: "Depoimento de cliente", format: null, resultCount: 12, cost: 14.8 },
-      bestLinkCtr: { adName: "Benefícios do produto", format: null, linkCtr: 0.029, impressions: 4200 },
+      bestCost: { adName: "Depoimento de cliente", format: null, permalinkUrl: "https://fb.me/depoimento", resultCount: 12, cost: 14.8 },
+      bestLinkCtr: { adName: "Benefícios do produto", format: null, permalinkUrl: null, linkCtr: 0.029, impressions: 4200 },
       combined: false,
     },
     nextStep: "testar uma nova abertura no vídeo de depoimento.",
@@ -209,8 +225,19 @@ console.log("\nE — renderReportTemplate: estrutura do texto, zero resultados, 
   ok("cabeçalho com cliente, período numérico E por extenso (pedido: 'segunda até quinta'/'sexta a domingo')", rendered.includes("*Byma | Resultados de sexta a domingo (13/11 a 15/11)*"));
   ok("lote 'sexta' (gerado na sexta) descreve o período coberto como 'segunda a quinta', nunca o inverso", renderReportTemplate({ ...baseInput, periodKind: "sexta" }).includes("Resultados de segunda a quinta ("));
   ok("linha de investimento", rendered.includes(`💰 Investimento: ${formatCurrency(620)}`));
-  ok("linha de resultado com métrica principal do cliente (Leads/CPL)", rendered.includes("🎯 Leads: 31 · CPL:"));
+  ok(
+    "pedido do usuário: 'prefiro que fique em lista, não uma do lado da outra' — resultado e custo por resultado em linhas SEPARADAS, nunca unidas por '·'",
+    rendered.includes("🎯 Leads: 31\n") && rendered.includes("💲 CPL:") && !rendered.includes("🎯 Leads: 31 ·"),
+  );
   ok("bloco de destaques com os 2 indicadores, cada um numa linha", rendered.includes("*Destaques dos anúncios*") && rendered.includes("🏆 Melhor CPL:") && rendered.includes("👆 Melhor CTR de link:"));
+  ok(
+    "pedido do usuário: 'consegue colocar o link do anúncio também?' — link do anúncio com permalink aparece na linha do destaque",
+    rendered.includes(`🏆 Melhor CPL: Depoimento de cliente · 12 leads a ${formatCurrency(14.8)} · https://fb.me/depoimento`),
+  );
+  ok(
+    "criativo SEM permalink registrado (enriquecimento opcional) -> linha do destaque sem link nenhum, nunca um link fabricado",
+    rendered.includes("👆 Melhor CTR de link: Benefícios do produto · 2,90% em 4.200 impressões") && !/Benefícios do produto[^\n]*https/.test(rendered),
+  );
   ok("bloco de próximo passo só quando preenchido", rendered.includes("*Próximo passo:* testar uma nova abertura no vídeo de depoimento."));
 
   const noNextStep = renderReportTemplate({ ...baseInput, nextStep: null });
@@ -220,37 +247,38 @@ console.log("\nE — renderReportTemplate: estrutura do texto, zero resultados, 
   ok("bloco de destaques OMITIDO inteiramente quando nenhum anúncio é elegível", !noHighlights.includes("Destaques dos anúncios"));
 
   const zeroResults = renderReportTemplate({ ...baseInput, resultCount: 0, costPerResult: null });
-  ok("zero resultados -> mostra a quantidade 0 e o custo como indisponível (nunca R$0,00/Infinity)", zeroResults.includes("🎯 Leads: 0 · CPL: indisponível"));
+  ok("zero resultados -> mostra a quantidade 0 numa linha e o custo como indisponível noutra (nunca R$0,00/Infinity)", zeroResults.includes("🎯 Leads: 0\n💲 CPL: indisponível"));
 
   const combinedInput = {
     ...baseInput,
     highlights: {
-      bestCost: { adName: "Campeão", format: null, resultCount: 10, cost: 5 },
-      bestLinkCtr: { adName: "Campeão", format: null, linkCtr: 0.08, impressions: 5000 },
+      bestCost: { adName: "Campeão", format: null, permalinkUrl: "https://fb.me/campeao", resultCount: 10, cost: 5 },
+      bestLinkCtr: { adName: "Campeão", format: null, permalinkUrl: "https://fb.me/campeao", linkCtr: 0.08, impressions: 5000 },
       combined: true,
     },
   };
   const combinedText = renderReportTemplate(combinedInput);
   ok("anúncio que lidera os 2 indicadores aparece numa linha só (combinada), nunca 2 linhas repetindo o mesmo nome", combinedText.includes("🏆👆 Campeão:") && combinedText.split("Campeão").length === 2);
+  ok("linha combinada também traz o link do anúncio", combinedText.includes("· https://fb.me/campeao"));
 
   const salesInput = { ...baseInput, goal: "sales" as const };
-  ok("métrica principal troca corretamente por objetivo (Vendas/CPA, nunca hardcoded 'Leads')", renderReportTemplate(salesInput).includes("🎯 Vendas:") && renderReportTemplate(salesInput).includes("CPA:"));
+  ok("métrica principal troca corretamente por objetivo (Vendas/CPA, nunca hardcoded 'Leads')", renderReportTemplate(salesInput).includes("🎯 Vendas:") && renderReportTemplate(salesInput).includes("💲 CPA:"));
 
   ok(
-    "pedido do usuário: 'no caso das vendas, precisa colocar valor em vendas e ROAS' — linha extra com os dois quando há faturamento",
-    renderReportTemplate({ ...salesInput, revenue: 5000, roas: 8.06 }).includes(`💵 Valor em vendas: ${formatCurrency(5000)} · ROAS: 8.06x`),
+    "pedido do usuário: 'no caso das vendas, precisa colocar valor em vendas e ROAS' — em linhas separadas, quando há faturamento",
+    renderReportTemplate({ ...salesInput, revenue: 5000, roas: 8.06 }).includes(`💵 Valor em vendas: ${formatCurrency(5000)}\n📈 ROAS: 8.06x`),
   );
   ok(
-    "objetivo de vendas SEM faturamento registrado -> linha omitida inteiramente (nunca R$0,00/0,00x fabricado)",
-    !renderReportTemplate({ ...salesInput, revenue: null, roas: null }).includes("Valor em vendas"),
+    "objetivo de vendas SEM faturamento registrado -> as 2 linhas somem inteiras (nunca R$0,00/0,00x fabricado)",
+    !renderReportTemplate({ ...salesInput, revenue: null, roas: null }).includes("Valor em vendas") && !renderReportTemplate({ ...salesInput, revenue: null, roas: null }).includes("ROAS"),
   );
   ok(
     "faturamento sem investimento no escopo -> ROAS indisponível, nunca Infinity/divisão por zero",
     renderReportTemplate({ ...salesInput, investment: 0, revenue: 5000, roas: null }).includes("💵 Valor em vendas:") &&
-      renderReportTemplate({ ...salesInput, investment: 0, revenue: 5000, roas: null }).includes("ROAS: indisponível"),
+      renderReportTemplate({ ...salesInput, investment: 0, revenue: 5000, roas: null }).includes("📈 ROAS: indisponível"),
   );
   ok(
-    "a linha de vendas NUNCA aparece pra outro objetivo (leads), mesmo com revenue/roas preenchidos por engano",
+    "as linhas de vendas NUNCA aparecem pra outro objetivo (leads), mesmo com revenue/roas preenchidos por engano",
     !renderReportTemplate({ ...baseInput, revenue: 5000, roas: 8.06 }).includes("Valor em vendas"),
   );
 }

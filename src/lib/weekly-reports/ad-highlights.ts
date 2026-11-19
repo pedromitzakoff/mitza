@@ -66,10 +66,22 @@ export function computeAdHighlights(creatives: CreativeSummary[], goal: Performa
   const bestLinkCtrSummary = linkCtrEligible.length > 0 ? pickBestLinkCtr(linkCtrEligible) : null;
 
   const bestCost: BestCostHighlight | null = bestCostSummary
-    ? { adName: bestCostSummary.creativeName, format: null, resultCount: bestCostSummary.totalResultCount!, cost: bestCostSummary.cpa! }
+    ? {
+        adName: bestCostSummary.creativeName,
+        format: null,
+        permalinkUrl: bestCostSummary.permalinkUrl,
+        resultCount: bestCostSummary.totalResultCount!,
+        cost: bestCostSummary.cpa!,
+      }
     : null;
   const bestLinkCtr: BestLinkCtrHighlight | null = bestLinkCtrSummary
-    ? { adName: bestLinkCtrSummary.creativeName, format: null, linkCtr: bestLinkCtrSummary.linkCtr!, impressions: bestLinkCtrSummary.totalImpressions! }
+    ? {
+        adName: bestLinkCtrSummary.creativeName,
+        format: null,
+        permalinkUrl: bestLinkCtrSummary.permalinkUrl,
+        linkCtr: bestLinkCtrSummary.linkCtr!,
+        impressions: bestLinkCtrSummary.totalImpressions!,
+      }
     : null;
 
   // Mesmo anúncio lidera os dois -> combina numa linha só (pedido, seção 3).
