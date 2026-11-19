@@ -1,4 +1,4 @@
-import type { ImportProviderDb, ImportSourceStatusDb, GoalResultSourceDb } from "@/lib/supabase/database.types";
+import type { ImportSourceStatusDb, GoalResultSourceDb } from "@/lib/supabase/database.types";
 import { TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 
@@ -7,9 +7,7 @@ import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals
  * este módulo responde é sempre "posso confiar nesse dado?", nunca "esse
  * resultado é bom?" (isso é Performance, nunca duplicado aqui). Deliberado:
  * NENHUMA função aqui classifica "conectado/desconectado" — só reflete os 3
- * campos que `lib/meta-api-ingest-run.ts` (hoje a única fonte automática —
- * Stract foi descontinuado, ver `docs/STRACT_INTEGRATION_ARCHITECTURE.md`)
- * já mantém com disciplina (auditados antes de escrever este arquivo):
+ * campos que a ingestão pela Meta API mantém:
  *
  * - `import_sources.status` (`pending`/`active`/`error`/`disabled`/`no_data`)
  *   — SAÚDE PERSISTENTE da fonte, avançada SÓ quando a leitura encontrou
@@ -33,10 +31,7 @@ import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals
  * pro gestor. Nenhuma das Atenções desta tela depende de um prazo inventado.
  */
 
-export const PROVIDER_LABEL: Record<ImportProviderDb, string> = {
-  stract: "Stract",
-  meta_api: "Meta API",
-};
+export const META_API_PROVIDER_LABEL = "Meta API";
 
 export type ImportSourceDisplayStatusKey = "disabled" | "pending" | "error" | "no_data" | "active";
 
@@ -81,7 +76,6 @@ export interface DataAttention {
 
 export interface ImportSourceAttentionInput {
   id: string;
-  provider: ImportProviderDb;
   channel: TrafficChannel;
   enabled: boolean;
   status: ImportSourceStatusDb;
@@ -97,18 +91,17 @@ export function buildSourceAttentions(sources: ImportSourceAttentionInput[]): Da
   for (const source of sources) {
     if (!source.enabled) continue;
     const channelLabel = TRAFFIC_CHANNELS[source.channel].label;
-    const providerLabel = PROVIDER_LABEL[source.provider];
     if (source.status === "error") {
       attentions.push({
         id: `source-error-${source.id}`,
         severity: "error",
-        message: `${providerLabel} · ${channelLabel}: erro na última sincronização.`,
+        message: `${META_API_PROVIDER_LABEL} · ${channelLabel}: erro na última sincronização.`,
       });
     } else if (source.status === "no_data") {
       attentions.push({
         id: `source-no-data-${source.id}`,
         severity: "warning",
-        message: `${providerLabel} · ${channelLabel}: a última sincronização completa não encontrou nenhuma linha.`,
+        message: `${META_API_PROVIDER_LABEL} · ${channelLabel}: a última sincronização completa não encontrou nenhuma linha.`,
       });
     }
   }

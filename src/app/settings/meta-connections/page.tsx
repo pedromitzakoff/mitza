@@ -23,7 +23,6 @@ const IMPORT_SOURCE_STATUS_LABEL: Record<ImportSourceStatusDb, string> = {
 interface MetaImportSourceRow {
   id: string;
   client_id: string;
-  provider: "stract" | "meta_api";
   external_account_id: string;
   status: ImportSourceStatusDb;
   enabled: boolean;
@@ -57,23 +56,7 @@ function hasColumn(value: string | null): boolean {
  *    investimento nativo, `lib/meta-sync.ts`, e também serve de sugestão
  *    pré-preenchida ao conectar a fonte `meta_api` pela primeira vez — ver
  *    `ManagedMetaConnection` abaixo).
- * 2. `import_sources` (canal "meta" — pode ter mais de uma linha por
- *    cliente desde a migração Stract -> Meta API direta: uma `stract`
- *    antiga, desativada, convivendo com a `meta_api` nova. Esta auditoria
- *    SEMPRE prioriza `meta_api` quando existir, nunca mostra o status da
- *    fonte Stract morta por acaso ter vindo depois na consulta).
- *
- * Removida 22/10/2026: a auditoria tinha 3 colunas (Campanha/Público/
- * Anúncio) checando `campaign_name_column`/`ad_set_name_column`/
- * `ad_name_column` — configuração exclusiva do Stract (nome de coluna a
- * mapear). A fonte `meta_api` NUNCA usa esses campos (sempre `null` pra
- * ela, grava campanha incondicionalmente, público/anúncio conforme o dado
- * que a Meta devolver) — então essas 3 colunas sempre mostravam "não
- * mapeado" pra qualquer cliente já migrado, mesmo funcionando perfeitamente.
- * Removidas em vez de corrigidas: confirmar público/anúncio de verdade
- * exigiria uma consulta adicional por cliente a `ad_set_daily_metrics`/
- * `ad_creative_daily_metrics`, sem pedido explícito pra esse nível de
- * detalhe aqui.
+ * 2. `import_sources` — conexão direta com a Meta API para a conta.
  *
  * "Gerenciar" (ponto 1 da migração — interface de conexão) abre
  * `MetaConnectionDrawer` pra conectar/reconectar a conta, sincronizar
@@ -101,23 +84,20 @@ export default async function MetaConnectionsPage({
     requireQuery(
       supabase
         .from("import_sources")
-        .select("id, client_id, provider, external_account_id, status, enabled, last_success_at")
-        .eq("channel", "meta"),
+        .select("id, client_id, external_account_id, status, enabled, last_success_at")
+        .eq("channel", "meta")
+        .eq("provider", "meta_api")
+        .order("enabled", { ascending: false })
+        .order("created_at", { ascending: false })
+        .order("id"),
       "import_sources",
     ),
   ]);
 
-  // Nunca "a última linha que a consulta devolveu" (ordem não é garantida
-  // sem ORDER BY) — sempre prioriza meta_api quando existir, igual ao
-  // critério de leitura das tabelas granulares (`lib/granular-provider-dedup.ts`).
   const importSourceByClientId = new Map<string, MetaImportSourceRow>();
-  for (const row of importSources ?? []) {
-    const existing = importSourceByClientId.get(row.client_id);
-    if (!existing || row.provider === "meta_api") importSourceByClientId.set(row.client_id, row);
+  for (const row of importSources) {
+    if (!importSourceByClientId.has(row.client_id)) importSourceByClientId.set(row.client_id, row);
   }
-  const legacyStractByClientId = new Map<string, MetaImportSourceRow>(
-    (importSources ?? []).filter((row) => row.provider === "stract").map((row) => [row.client_id, row]),
-  );
 
   const audits: MetaConnectionAudit[] = (clients ?? [])
     .filter((client) => resolveClientMediaChannels(client.media_channels).includes("meta"))
@@ -222,13 +202,11 @@ export default async function MetaConnectionsPage({
           const client = (clients ?? []).find((c) => c.id === manageClientId);
           if (!client) return null;
           const importSource = importSourceByClientId.get(manageClientId) ?? null;
-          const legacyStract = legacyStractByClientId.get(manageClientId) ?? null;
           return (
             <ManagedMetaConnection
               clientId={manageClientId}
               clientName={client.name}
-              importSource={importSource && importSource.provider === "meta_api" ? importSource : null}
-              legacyStractSource={legacyStract ? { externalAccountId: legacyStract.external_account_id, enabled: legacyStract.enabled } : null}
+              importSource={importSource}
               suggestedAccountId={client.meta_ad_account_id}
               error={drawerError}
               saved={drawerSaved}
@@ -246,7 +224,6 @@ async function ManagedMetaConnection({
   clientId,
   clientName,
   importSource,
-  legacyStractSource,
   suggestedAccountId,
   error,
   saved,
@@ -254,7 +231,6 @@ async function ManagedMetaConnection({
   clientId: string;
   clientName: string;
   importSource: MetaImportSourceRow | null;
-  legacyStractSource: { externalAccountId: string; enabled: boolean } | null;
   /** `clients.meta_ad_account_id` — pré-preenche o campo de conexão quando
    * ainda não existe fonte `meta_api` pra este cliente. Achado real: todo
    * cliente já tem esse campo preenchido desde o cadastro, então conectar
@@ -297,7 +273,6 @@ async function ManagedMetaConnection({
           : null
       }
       mappings={mappings.map((m) => ({ id: m.id, goal: m.goal as PerformanceGoal, resultColumn: m.result_column, valueColumn: m.value_column }))}
-      legacyStractSource={legacyStractSource}
       suggestedAccountId={suggestedAccountId}
     />
   );

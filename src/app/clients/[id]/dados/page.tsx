@@ -58,10 +58,10 @@ export default async function ClientDadosPage({ params }: { params: Promise<{ id
 
       <section className="mt-4">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-overview-text-muted">Fontes de dados</p>
-        {data.isFullyManual ? (
+        {!data.hasMetaApiSource ? (
           <div className="mt-2 rounded-lg border border-overview-border bg-overview-surface p-6">
             <p className="text-sm text-overview-text-secondary">
-              Este cliente não tem nenhuma fonte automática configurada — os resultados usados em Metas e Performance vêm de lançamento manual.
+              Este cliente ainda não tem uma conexão com a Meta API configurada.
             </p>
           </div>
         ) : (
@@ -143,9 +143,6 @@ function SourceCard({ source }: { source: DadosSourceView }) {
           <summary className="cursor-pointer select-none font-medium text-overview-text-primary">Detalhes técnicos</summary>
           <div className="mt-2 flex flex-col gap-1">
             <Row label="Conta externa" value={source.externalAccountId} />
-            {source.technical.tableName && <Row label="Tabela de origem" value={source.technical.tableName} />}
-            {source.technical.dateColumn && <Row label="Coluna de data" value={source.technical.dateColumn} />}
-            {source.technical.accountIdColumn && <Row label="Coluna de conta" value={source.technical.accountIdColumn} />}
             {source.mappings.length > 0 && (
               <div className="mt-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-overview-text-muted">Mapeamentos</p>

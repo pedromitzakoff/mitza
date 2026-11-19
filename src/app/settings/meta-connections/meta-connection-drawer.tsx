@@ -78,7 +78,6 @@ export function MetaConnectionDrawer({
   saved,
   importSource,
   mappings,
-  legacyStractSource,
   suggestedAccountId,
 }: {
   clientId: string;
@@ -88,7 +87,6 @@ export function MetaConnectionDrawer({
   saved?: string;
   importSource: MetaConnectionImportSource | null;
   mappings: MetaConnectionMapping[];
-  legacyStractSource: { externalAccountId: string; enabled: boolean } | null;
   /** `clients.meta_ad_account_id` — sugestão pro campo de conexão quando
    * ainda não existe fonte `meta_api` (ver comentário em
    * `ManagedMetaConnection`, `page.tsx`). */
@@ -99,14 +97,6 @@ export function MetaConnectionDrawer({
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{error}</p>}
       {saved && (
         <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{saved}</p>
-      )}
-
-      {legacyStractSource && (
-        <p className="rounded-md bg-zinc-50 px-3 py-2 text-xs text-muted-foreground dark:bg-zinc-900">
-          Fonte Stract antiga encontrada ({legacyStractSource.externalAccountId}
-          {legacyStractSource.enabled ? ", ainda habilitada no cadastro — sem efeito, o motor Stract foi removido do código" : ", desativada"}).
-          Histórico preservado, nenhuma ação necessária.
-        </p>
       )}
 
       <section className="flex flex-col gap-3">

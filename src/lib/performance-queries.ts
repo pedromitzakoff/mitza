@@ -189,7 +189,7 @@ export async function getLatestDailySpendDate(supabase: Supabase, clientId: stri
 export async function getClientIdsWithActiveImportSource(supabase: Supabase, clientIds: string[]): Promise<Set<string>> {
   if (clientIds.length === 0) return new Set();
 
-  const { data } = await supabase.from("import_sources").select("client_id").eq("enabled", true).in("client_id", clientIds);
+  const { data } = await supabase.from("import_sources").select("client_id").eq("provider", "meta_api").eq("enabled", true).in("client_id", clientIds);
 
   return new Set((data ?? []).map((row) => row.client_id));
 }
@@ -200,7 +200,7 @@ export async function getClientIdsWithActiveImportSource(supabase: Supabase, cli
  * de `daily_spend`/`daily_performance` (uma fonte pode existir sem ter
  * sincronizado nada ainda) — a fonte de verdade é sempre `import_sources`. */
 export async function getActiveImportSourceChannelsForClient(supabase: Supabase, clientId: string): Promise<Set<TrafficChannelDb>> {
-  const { data } = await supabase.from("import_sources").select("channel").eq("client_id", clientId).eq("enabled", true);
+  const { data } = await supabase.from("import_sources").select("channel").eq("client_id", clientId).eq("provider", "meta_api").eq("enabled", true);
   return new Set((data ?? []).map((row) => row.channel));
 }
 
@@ -211,7 +211,7 @@ export async function getActiveImportSourceChannelsForClient(supabase: Supabase,
  * curl/Postman). Um cliente pode ter mais de uma fonte ativa (ex.: Meta Ads
  * + Instagram) — o botão sincroniza todas de uma vez. */
 export async function getEnabledImportSourceIdsForClient(supabase: Supabase, clientId: string): Promise<string[]> {
-  const { data } = await supabase.from("import_sources").select("id").eq("client_id", clientId).eq("enabled", true);
+  const { data } = await supabase.from("import_sources").select("id").eq("client_id", clientId).eq("provider", "meta_api").eq("enabled", true);
   return (data ?? []).map((row) => row.id);
 }
 
