@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, ChevronsUpDown, SlidersHorizontal } from "lucide-react";
 import { buildAdSetSummaries, type AdSetDailyMetricRow } from "@/lib/ad-set-analytics";
 import { buildCreativeSummaries, type AdCreativeDailyMetricRow } from "@/lib/creative-analytics";
@@ -17,6 +17,7 @@ import {
   type ExplorationRow,
 } from "@/lib/meta-ads-dashboard/exploration-data";
 import { AdCardGrid } from "./ad-card-grid";
+import { updateExplorationColumnsAction } from "./exploration-columns-actions";
 
 /**
  * MITZA ONE — Cockpit Único do Cliente, "Campanhas, conjuntos e anúncios"
@@ -54,32 +55,31 @@ import { AdCardGrid } from "./ad-card-grid";
 
 export type ExplorationLevel = "campaigns" | "adsets" | "ads";
 
-const STORAGE_KEY_PREFIX = "mitza:cockpit:ad-exploration-columns:";
+/** Seleção de colunas por nível, como vem do banco (`clients.exploration_columns_*`)
+ * — `null` em qualquer nível = nunca configurado explicitamente, UI usa o
+ * default (`defaultVisible: true`) daquele nível. */
+export type StoredExplorationColumnsByLevel = Record<ExplorationLevel, string[] | null>;
 
 function isExplorationColumnId(value: unknown, validIds: ExplorationColumnId[]): value is ExplorationColumnId {
   return typeof value === "string" && (validIds as string[]).includes(value);
 }
 
-function loadStoredColumns(clientId: string, level: ExplorationLevel, validIds: ExplorationColumnId[]): ExplorationColumnId[] | null {
-  try {
-    const raw = window.localStorage.getItem(`${STORAGE_KEY_PREFIX}${level}:${clientId}`);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-    const valid = parsed.filter((id): id is ExplorationColumnId => isExplorationColumnId(id, validIds));
-    return valid.length > 0 ? valid : null;
-  } catch {
-    return null;
-  }
+function resolveStoredColumns(stored: string[] | null, validIds: ExplorationColumnId[]): ExplorationColumnId[] | null {
+  if (!stored) return null;
+  const valid = stored.filter((id): id is ExplorationColumnId => isExplorationColumnId(id, validIds));
+  return valid.length > 0 ? valid : null;
 }
 
-function saveStoredColumns(clientId: string, level: ExplorationLevel, ids: ExplorationColumnId[]) {
-  try {
-    window.localStorage.setItem(`${STORAGE_KEY_PREFIX}${level}:${clientId}`, JSON.stringify(ids));
-  } catch {
-    // Armazenamento indisponível — seleção de colunas não persiste entre
-    // sessões nesse caso, nunca quebra a tela por isso.
-  }
+function resolveColumnsByLevel(
+  stored: StoredExplorationColumnsByLevel,
+  columns: ReturnType<typeof buildExplorationColumns>,
+): Record<ExplorationLevel, ExplorationColumnId[] | null> {
+  const validIds = columns.map((col) => col.id);
+  return {
+    campaigns: resolveStoredColumns(stored.campaigns, validIds),
+    adsets: resolveStoredColumns(stored.adsets, validIds),
+    ads: resolveStoredColumns(stored.ads, validIds),
+  };
 }
 
 type SortState = { columnId: ExplorationColumnId; direction: "asc" | "desc" } | null;
@@ -414,12 +414,20 @@ export function CockpitAdExplorationSection({
    * manualmente ao entrar. `"campaigns"` preserva o comportamento de
    * sempre do Cockpit (única tela que ainda embute as 3 abas juntas). */
   initialLevel = "campaigns",
+  /** "Persistência das colunas da tabela de exploração" (pedido explícito
+   * do usuário) — seleção salva no banco (`clients.exploration_columns_*`),
+   * compartilhada entre todos os usuários e replicada automaticamente pro
+   * link público do cliente (`/r/[token]`), já que ambas as telas consomem
+   * a mesma pipeline de dados. Substitui o antigo `localStorage` (por
+   * dispositivo, nunca compartilhado). */
+  storedColumnsByLevel,
 }: {
   clientId: string;
   campaigns: ExplorationRow[];
   adSetDailyRows: AdSetDailyMetricRow[];
   creativeDailyRows: AdCreativeDailyMetricRow[];
   initialLevel?: ExplorationLevel;
+  storedColumnsByLevel: StoredExplorationColumnsByLevel;
 }) {
   const [selectedCampaign, setSelectedCampaign] = useState<{ id: string; name: string } | null>(null);
   const [level, setLevel] = useState<ExplorationLevel>(initialLevel);
@@ -444,22 +452,33 @@ export function CockpitAdExplorationSection({
   const columns = useMemo(() => buildExplorationColumns(goalsPresent), [goalsPresent]);
   const defaultColumnIds = useMemo(() => columns.filter((col) => col.defaultVisible).map((col) => col.id), [columns]);
 
-  const [visibleColumnIds, setVisibleColumnIds] = useState<ExplorationColumnId[]>(defaultColumnIds);
+  // Estado local por nível (um valor por aba, igual ao antigo `localStorage`
+  // por `level`), re-sincronizado com o banco sempre que o CLIENTE muda
+  // (troca pelo seletor, sem necessariamente remontar este componente) —
+  // re-sincronizar só quando `clientId` muda (nunca por `level`) é o que
+  // deixa um toggle feito nesta sessão sobreviver a trocar de aba e voltar,
+  // sem esperar a revalidação do servidor. Ajuste de estado DURANTE o
+  // render (padrão oficial do React pra "resetar estado quando uma prop
+  // muda", nunca dentro de um `useEffect` — evitaria um render extra em
+  // cascata) em vez de `useEffect`.
+  const [columnsState, setColumnsState] = useState<{
+    clientId: string;
+    columnsByLevel: Record<ExplorationLevel, ExplorationColumnId[] | null>;
+  }>(() => ({ clientId, columnsByLevel: resolveColumnsByLevel(storedColumnsByLevel, columns) }));
 
-  useEffect(() => {
-    function applyColumnsForLevel() {
-      const validIds = columns.map((col) => col.id);
-      const stored = loadStoredColumns(clientId, level, validIds);
-      setVisibleColumnIds(stored ?? defaultColumnIds);
-    }
-    applyColumnsForLevel();
-  }, [clientId, level, columns, defaultColumnIds]);
+  if (columnsState.clientId !== clientId) {
+    setColumnsState({ clientId, columnsByLevel: resolveColumnsByLevel(storedColumnsByLevel, columns) });
+  }
+
+  const columnsByLevel = columnsState.columnsByLevel;
+  const visibleColumnIds = columnsByLevel[level] ?? defaultColumnIds;
 
   function toggleColumn(id: ExplorationColumnId) {
     if (id === "name") return;
-    const next = visibleColumnIds.includes(id) ? visibleColumnIds.filter((existing) => existing !== id) : [...visibleColumnIds, id];
-    setVisibleColumnIds(next);
-    saveStoredColumns(clientId, level, next);
+    const current = columnsByLevel[level] ?? defaultColumnIds;
+    const next = current.includes(id) ? current.filter((existing) => existing !== id) : [...current, id];
+    setColumnsState((prev) => ({ ...prev, columnsByLevel: { ...prev.columnsByLevel, [level]: next } }));
+    void updateExplorationColumnsAction(clientId, level, next);
   }
 
   function handleSortChange(columnId: ExplorationColumnId) {

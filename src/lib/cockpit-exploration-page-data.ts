@@ -11,6 +11,7 @@ import { campaignSummaryToRow, type ExplorationRow } from "@/lib/meta-ads-dashbo
 import type { AdSetDailyMetricRow } from "@/lib/ad-set-analytics";
 import type { AdCreativeDailyMetricRow } from "@/lib/creative-analytics";
 import type { PerformanceGoal } from "@/lib/performance-goals";
+import type { StoredExplorationColumnsByLevel } from "@/app/clients/cockpit-ad-exploration-section";
 import {
   resolveCockpitFilterState,
   filterCampaignSummaries,
@@ -50,6 +51,7 @@ export interface CockpitExplorationPageData {
   adSetDailyRows: AdSetDailyMetricRow[];
   creativeDailyRows: AdCreativeDailyMetricRow[];
   cockpitFilter: CockpitFilterState;
+  storedColumnsByLevel: StoredExplorationColumnsByLevel;
 }
 
 export async function loadCockpitExplorationPageData(
@@ -64,7 +66,7 @@ export async function loadCockpitExplorationPageData(
 
   const { data: client, error } = await supabase
     .from("clients")
-    .select("id, name, media_channels")
+    .select("id, name, media_channels, exploration_columns_campaigns, exploration_columns_adsets, exploration_columns_ads")
     .eq("id", clientId)
     .is("deleted_at", null)
     .single();
@@ -89,6 +91,11 @@ export async function loadCockpitExplorationPageData(
 
   const hasMetaChannel = resolveClientMediaChannels(client.media_channels).includes("meta");
   const cockpitFilter = resolveCockpitFilterState(searchParams.filtro, searchParams.modo);
+  const storedColumnsByLevel: StoredExplorationColumnsByLevel = {
+    campaigns: client.exploration_columns_campaigns,
+    adsets: client.exploration_columns_adsets,
+    ads: client.exploration_columns_ads,
+  };
 
   if (!hasMetaChannel) {
     return {
@@ -105,6 +112,7 @@ export async function loadCockpitExplorationPageData(
       adSetDailyRows: [],
       creativeDailyRows: [],
       cockpitFilter,
+      storedColumnsByLevel,
     };
   }
 
@@ -135,5 +143,6 @@ export async function loadCockpitExplorationPageData(
     adSetDailyRows: filteredAdSetDailyRows,
     creativeDailyRows: filteredCreativeDailyRows,
     cockpitFilter,
+    storedColumnsByLevel,
   };
 }

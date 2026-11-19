@@ -84,6 +84,7 @@ import { loadDashboardGoalPerformanceData } from "@/lib/dashboard-metrics-data";
 import { buildCockpitDailyEvolutionPoints } from "@/lib/cockpit-daily-evolution";
 import { buildGoalEvolutionSeries, resolveDefaultEvolutionSeriesId, type EvolutionSeriesOption } from "@/lib/cockpit-evolution-merge";
 import { resolvePeriod, type ResolvedPeriod } from "@/lib/date-range";
+import type { StoredExplorationColumnsByLevel } from "@/app/clients/cockpit-ad-exploration-section";
 
 /**
  * Correção definitiva da divergência Dashboard interno × link compartilhado
@@ -203,6 +204,7 @@ export interface CockpitViewModel {
     campaigns: ExplorationRow[];
     adSetDailyRows: AdSetDailyMetricRow[];
     creativeDailyRows: AdCreativeDailyMetricRow[];
+    storedColumnsByLevel: StoredExplorationColumnsByLevel;
   } | null;
   externalLinks: { label: string; href: string }[];
 }
@@ -269,7 +271,7 @@ export async function buildCockpitViewModel(
   const { data: client, error: clientQueryError } = await supabase
     .from("clients")
     .select(
-      "id, name, meta_ad_account_id, status, primary_manager:team_members!clients_primary_manager_id_fkey(name), performance_goal, target_cost_per_result, avatar_url, media_channels, dashboard_url, balance_url, monthly_closing_sheet_url, dashboard_metrics",
+      "id, name, meta_ad_account_id, status, primary_manager:team_members!clients_primary_manager_id_fkey(name), performance_goal, target_cost_per_result, avatar_url, media_channels, dashboard_url, balance_url, monthly_closing_sheet_url, dashboard_metrics, exploration_columns_campaigns, exploration_columns_adsets, exploration_columns_ads",
     )
     .eq("id", clientId)
     .is("deleted_at", null)
@@ -989,6 +991,11 @@ export async function buildCockpitViewModel(
           campaigns: adExplorationCampaignRows,
           adSetDailyRows: adPerformanceData.explorationAdSetRows,
           creativeDailyRows: adPerformanceData.explorationCreativeRows,
+          storedColumnsByLevel: {
+            campaigns: client.exploration_columns_campaigns,
+            adsets: client.exploration_columns_adsets,
+            ads: client.exploration_columns_ads,
+          },
         }
       : null,
     externalLinks,

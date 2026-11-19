@@ -119,7 +119,16 @@ console.log("\n5 — EXPLORAÇÃO DE CAMPANHAS: seção própria, prioritária, 
 
 ok("page.tsx renderiza CockpitAdExplorationSection como ÁREA 3, própria (fora de qualquer aba)", /ÁREA 3[\s\S]{0,700}<CockpitAdExplorationSection/.test(pageSource));
 ok("heading com o mesmo peso visual da Visão executiva (text-base, nunca mais o rótulo pequeno de antes)", /Campanhas, conjuntos e an.{1}ncios<\/h2>/.test(pageSource) && /text-base font-medium[\s\S]{0,40}Campanhas, conjuntos/.test(pageSource));
-ok("busca + personalização de colunas preservadas (nenhuma funcionalidade removida)", explorationSectionSource.includes("SlidersHorizontal") && explorationSectionSource.includes("loadStoredColumns"));
+ok(
+  // Etapa "Persistência das colunas da tabela de exploração": a seleção
+  // deixou de ser `loadStoredColumns` (localStorage) e passou a ser
+  // `resolveColumnsByLevel` (banco, `clients.exploration_columns_*`) —
+  // busca e personalização de colunas continuam, só a fonte mudou (ver
+  // scripts/test-koff-persistencia-colunas-exploracao.ts pra cobertura
+  // dedicada dessa migração).
+  "busca + personalização de colunas preservadas (nenhuma funcionalidade removida)",
+  explorationSectionSource.includes("SlidersHorizontal") && explorationSectionSource.includes("resolveColumnsByLevel"),
+);
 // Etapa posterior "KOFF Analytics — Refinamento de UX e filtros globais do
 // Cockpit" substituiu as abas IRMÃS (só apareciam depois de clicar numa
 // campanha) por 3 abas SEMPRE visíveis com entrada direta — a limitação

@@ -383,6 +383,9 @@ export interface Database {
           monthly_closing_sheet_url: string | null;
           report_theme: ReportThemeDb;
           dashboard_metrics: string[];
+          exploration_columns_campaigns: string[] | null;
+          exploration_columns_adsets: string[] | null;
+          exploration_columns_ads: string[] | null;
         };
         Insert: {
           id?: string;
@@ -435,6 +438,9 @@ export interface Database {
           monthly_closing_sheet_url?: string | null;
           report_theme?: ReportThemeDb;
           dashboard_metrics?: string[];
+          exploration_columns_campaigns?: string[] | null;
+          exploration_columns_adsets?: string[] | null;
+          exploration_columns_ads?: string[] | null;
         };
         Update: {
           id?: string;
@@ -487,6 +493,9 @@ export interface Database {
           monthly_closing_sheet_url?: string | null;
           report_theme?: ReportThemeDb;
           dashboard_metrics?: string[];
+          exploration_columns_campaigns?: string[] | null;
+          exploration_columns_adsets?: string[] | null;
+          exploration_columns_ads?: string[] | null;
         };
         Relationships: [
           {

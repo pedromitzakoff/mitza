@@ -45,6 +45,7 @@ export default async function ClientCampanhasPage({
             adSetDailyRows={data.adSetDailyRows}
             creativeDailyRows={data.creativeDailyRows}
             initialLevel="campaigns"
+            storedColumnsByLevel={data.storedColumnsByLevel}
           />
         </div>
       ) : (
