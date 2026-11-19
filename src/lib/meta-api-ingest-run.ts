@@ -248,7 +248,7 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload, reques
       revenueByDate = new Map(combinedValueAggregate.map((row) => [row.date, row.value]));
     }
 
-    const performanceUpsertRows = buildDailyPerformanceUpsertRows(importSource.client_id, channel, goal, combinedResultAggregate, nowIso, revenueByDate, "meta_api");
+    const performanceUpsertRows = buildDailyPerformanceUpsertRows(importSource.client_id, channel, goal, combinedResultAggregate, nowIso, revenueByDate);
     const { error } = await supabase.from("daily_performance").upsert(performanceUpsertRows, { onConflict: "client_id,date,channel,result_type" });
     if (error) partialReasons.push(`resultado (${goal}) não gravado: ${error.message}`);
     else performanceRowsWritten += performanceUpsertRows.length;

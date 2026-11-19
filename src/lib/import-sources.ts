@@ -225,7 +225,6 @@ export function buildDailyPerformanceUpsertRows(
   aggregated: AggregatedDailyValue[],
   sourceUpdatedAt: string,
   revenueByDate?: Map<string, number> | null,
-  provider: ImportProviderDb = "stract",
 ): DailyPerformanceUpsertRow[] {
   return aggregated.map((row) => ({
     client_id: clientId,
@@ -235,7 +234,7 @@ export function buildDailyPerformanceUpsertRows(
     result_count: Math.round(row.value),
     revenue: revenueByDate?.get(row.date) ?? null,
     source: "import",
-    provider,
+    provider: "meta_api",
     source_updated_at: sourceUpdatedAt,
   }));
 }

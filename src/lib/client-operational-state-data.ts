@@ -118,7 +118,7 @@ export async function loadClientOperationalStates(
   // com uma import_source ativa lê performance de `daily_performance` —
   // nunca de `performance_records`, nunca os dois somados. `enabled` é o
   // único campo que decide isso (status é só observabilidade).
-  let activeImportSourcesQuery = supabase.from("import_sources").select("client_id").eq("enabled", true);
+  let activeImportSourcesQuery = supabase.from("import_sources").select("client_id").eq("provider", "meta_api").eq("enabled", true);
   if (clientId) activeImportSourcesQuery = activeImportSourcesQuery.eq("client_id", clientId);
 
   // Investimento manual multicanal (`sprint_channel_spend`, adotada como

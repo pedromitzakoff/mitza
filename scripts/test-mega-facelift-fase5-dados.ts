@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  PROVIDER_LABEL,
+  META_API_PROVIDER_LABEL,
   resolveImportSourceDisplayStatus,
   buildSourceAttentions,
   buildGoalAttentions,
@@ -61,8 +61,7 @@ console.log("\n1 — Taxonomia de status (resolveImportSourceDisplayStatus) — 
 
 console.log("\n2 — Rótulos amigáveis reaproveitam configuração já existente (nenhum mapa de label duplicado)\n");
 {
-  check("PROVIDER_LABEL.stract", PROVIDER_LABEL.stract, "Stract");
-  check("PROVIDER_LABEL.meta_api", PROVIDER_LABEL.meta_api, "Meta API");
+  check("META_API_PROVIDER_LABEL", META_API_PROVIDER_LABEL, "Meta API");
   check("canal meta usa o mesmo label de lib/traffic-channels.ts", TRAFFIC_CHANNELS.meta.label, "Meta Ads");
   check("objetivo leads usa o mesmo label de lib/performance-goals.ts", PERFORMANCE_GOALS.leads.label, "Leads");
   ok("data-trust.ts importa TRAFFIC_CHANNELS/PERFORMANCE_GOALS em vez de redeclarar os rótulos", dataTrustSource.includes('from "@/lib/traffic-channels"') && dataTrustSource.includes('from "@/lib/performance-goals"'));
@@ -71,11 +70,11 @@ console.log("\n2 — Rótulos amigáveis reaproveitam configuração já existen
 console.log("\n3 — Atenções por FONTE: só error/no_data geram atenção; desativada e pending nunca geram\n");
 {
   const sources = [
-    { id: "s-active", provider: "stract" as const, channel: "meta" as const, enabled: true, status: "active" as const },
-    { id: "s-error", provider: "stract" as const, channel: "google" as const, enabled: true, status: "error" as const },
-    { id: "s-no-data", provider: "meta_api" as const, channel: "instagram" as const, enabled: true, status: "no_data" as const },
-    { id: "s-disabled", provider: "stract" as const, channel: "meta" as const, enabled: false, status: "error" as const },
-    { id: "s-pending", provider: "stract" as const, channel: "google" as const, enabled: true, status: "pending" as const },
+    { id: "s-active", channel: "meta" as const, enabled: true, status: "active" as const },
+    { id: "s-error", channel: "google" as const, enabled: true, status: "error" as const },
+    { id: "s-no-data", channel: "instagram" as const, enabled: true, status: "no_data" as const },
+    { id: "s-disabled", channel: "meta" as const, enabled: false, status: "error" as const },
+    { id: "s-pending", channel: "google" as const, enabled: true, status: "pending" as const },
   ];
   const attentions = buildSourceAttentions(sources);
   check("exatamente 2 atenções (error + no_data) — múltiplas fontes, cada uma avaliada independentemente", attentions.length, 2);
@@ -87,7 +86,7 @@ console.log("\n3 — Atenções por FONTE: só error/no_data geram atenção; de
 
 console.log("\n4 — Dado antigo NUNCA gera atenção (decisão deliberada: nenhum threshold de frescor inventado)\n");
 {
-  const veryOldButActive = [{ id: "s1", provider: "stract" as const, channel: "meta" as const, enabled: true, status: "active" as const }];
+  const veryOldButActive = [{ id: "s1", channel: "meta" as const, enabled: true, status: "active" as const }];
   const attentions = buildSourceAttentions(veryOldButActive);
   check("fonte com status 'active' nunca gera atenção, independente de há quanto tempo o dado é — frescor é só informativo", attentions.length, 0);
   ok(
@@ -188,12 +187,12 @@ console.log("\n10 — Permissões: detalhe técnico (tabela/colunas/histórico d
   );
 }
 
-console.log("\n11 — Estados vazios: cliente 100% manual tem aviso honesto; nenhuma seção de Atenções vazia renderizada\n");
+console.log("\n11 — Estados vazios: cliente sem Meta API tem aviso; nenhuma seção de Atenções vazia renderizada\n");
 {
-  ok("isFullyManual é true só quando zero linhas em import_sources", /isFullyManual: importSourceRows\.length === 0/.test(dadosDataSource));
+  ok("apenas conexões Meta API contam como fonte na tela Dados", dadosDataSource.includes('.eq("provider", "meta_api")') && /hasMetaApiSource: importSourceRows\.length > 0/.test(dadosDataSource));
   ok(
-    "aviso de cliente manual é honesto (menciona lançamento manual, nunca finge haver fonte)",
-    dadosPageSource.includes("não tem nenhuma fonte automática configurada"),
+    "aviso identifica a ausência de conexão com a Meta API",
+    dadosPageSource.includes("ainda não tem uma conexão com a Meta API configurada"),
   );
   ok("seção Atenções só renderiza quando há pelo menos uma (nunca um card vazio '0 atenções' ocupando espaço)", /data\.attentions\.length > 0 &&/.test(dadosPageSource));
 }

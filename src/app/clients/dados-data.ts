@@ -7,7 +7,7 @@ import { formatShortDate, formatRelativeDateTime } from "@/lib/format";
 import { TRAFFIC_CHANNELS, type TrafficChannel } from "@/lib/traffic-channels";
 import { PERFORMANCE_GOALS, type PerformanceGoal } from "@/lib/performance-goals";
 import {
-  PROVIDER_LABEL,
+  META_API_PROVIDER_LABEL,
   resolveImportSourceDisplayStatus,
   buildSourceAttentions,
   buildGoalAttentions,
@@ -47,9 +47,6 @@ export interface DadosSyncRunView {
 }
 
 export interface DadosSourceTechnicalDetail {
-  tableName: string | null;
-  dateColumn: string | null;
-  accountIdColumn: string | null;
   recentRuns: DadosSyncRunView[];
 }
 
@@ -123,9 +120,7 @@ export interface DadosPageData {
   goals: DadosGoalView[];
   attentions: DataAttention[];
   health: DadosHealthSummary;
-  /** Cliente sem NENHUMA linha em `import_sources` — 100% manual, estado
-   * legítimo, nunca tratado como erro/lacuna. */
-  isFullyManual: boolean;
+  hasMetaApiSource: boolean;
 }
 
 export async function loadDadosPageData(supabase: Supabase, clientId: string, isAdmin: boolean): Promise<DadosPageData | null> {
@@ -137,9 +132,10 @@ export async function loadDadosPageData(supabase: Supabase, clientId: string, is
       supabase
         .from("import_sources")
         .select(
-          "id, provider, channel, external_account_id, table_name, date_column, account_id_column, status, enabled, last_imported_date, last_success_at",
+          "id, channel, external_account_id, status, enabled, last_imported_date, last_success_at",
         )
         .eq("client_id", clientId)
+        .eq("provider", "meta_api")
         .order("created_at", { ascending: true }),
       "import_sources:dados",
     ),
@@ -207,7 +203,7 @@ export async function loadDadosPageData(supabase: Supabase, clientId: string, is
 
     return {
       id: row.id,
-      providerLabel: PROVIDER_LABEL[row.provider],
+      providerLabel: META_API_PROVIDER_LABEL,
       channelLabel: TRAFFIC_CHANNELS[row.channel as TrafficChannel].label,
       externalAccountId: row.external_account_id,
       enabled: row.enabled,
@@ -221,9 +217,6 @@ export async function loadDadosPageData(supabase: Supabase, clientId: string, is
       mappings: mappingViewsBySourceId.get(row.id) ?? [],
       technical: isAdmin
         ? {
-            tableName: row.table_name,
-            dateColumn: row.date_column,
-            accountIdColumn: row.account_id_column,
             recentRuns: recentRunsForSource.map((run) => ({
               id: run.id,
               statusLabel: SYNC_RUN_STATUS_LABEL[run.status],
@@ -263,7 +256,6 @@ export async function loadDadosPageData(supabase: Supabase, clientId: string, is
     ...buildSourceAttentions(
       importSourceRows.map((row) => ({
         id: row.id,
-        provider: row.provider,
         channel: row.channel as TrafficChannel,
         enabled: row.enabled,
         status: row.status,
@@ -299,6 +291,6 @@ export async function loadDadosPageData(supabase: Supabase, clientId: string, is
     goals: goalViews,
     attentions,
     health,
-    isFullyManual: importSourceRows.length === 0,
+    hasMetaApiSource: importSourceRows.length > 0,
   };
 }
