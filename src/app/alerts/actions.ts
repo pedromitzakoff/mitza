@@ -6,7 +6,7 @@ import { requireActiveProfile } from "@/lib/auth";
 import { requireQuery } from "@/lib/require-query";
 import { todayDateString } from "@/lib/today";
 import { shiftDays } from "@/lib/date-range";
-import type { AlertStatus } from "@/lib/alerts/alert-types";
+import type { AlertPeriodKind, AlertStatus } from "@/lib/alerts/alert-types";
 
 /**
  * Aba "Alertas" (pedido do usuário, seção 3): as 2 ações manuais de
@@ -39,10 +39,27 @@ export interface AlertActionResult {
   message?: string;
 }
 
-async function loadAlertForAction(alertId: string): Promise<{ id: string; status: AlertStatus } | null> {
+async function loadAlertForAction(alertId: string): Promise<{ id: string; status: AlertStatus; period_kind: AlertPeriodKind } | null> {
   const supabase = await createSupabaseClient();
-  const rows = await requireQuery(supabase.from("alerts").select("id, status").eq("id", alertId).limit(1), "alerts:load-for-action");
+  const rows = await requireQuery(supabase.from("alerts").select("id, status, period_kind").eq("id", alertId).limit(1), "alerts:load-for-action");
   return rows[0] ?? null;
+}
+
+/** Achado real (usuário: "já corrigi alguns e eles voltaram") — um alerta
+ * "in_progress" (hoje) compara o acumulado de hoje com uma referência fixa
+ * pro dia inteiro; como o gasto só cresce ao longo do dia, uma vez "acima"
+ * ele permanece "acima" até a virada do dia, e a próxima avaliação
+ * automática (a cada ~30min, `reduceAlertEvaluation`) reabre qualquer
+ * "acompanhamento"/"resolvido" manual imediatamente — a ação nunca
+ * "pega" de verdade. Bloqueado aqui (não só escondido na UI, ver
+ * `alert-card.tsx`) pra nenhuma chamada direta às Server Actions também
+ * criar essa falsa impressão. */
+function rejectInProgressAction(alert: { period_kind: AlertPeriodKind }): AlertActionResult | null {
+  if (alert.period_kind !== "in_progress") return null;
+  return {
+    error:
+      "Esse alerta é sobre o gasto de hoje (recalculado o dia inteiro) — ele não tem ação manual. Ajuste o orçamento ou aguarde a virada do dia.",
+  };
 }
 
 /** "Acompanhar amanhã" — pedido: "permite registrar uma observação e
@@ -56,6 +73,8 @@ export async function followUpAlertTomorrowAction(alertId: string, formData: For
 
   const alert = await loadAlertForAction(alertId);
   if (!alert) return { error: "Alerta não encontrado." };
+  const inProgressRejection = rejectInProgressAction(alert);
+  if (inProgressRejection) return inProgressRejection;
   if (alert.status === "resolvido") return { error: "Este alerta já está resolvido — não há o que acompanhar." };
 
   const note = String(formData.get("note") ?? "").trim();
@@ -91,6 +110,8 @@ export async function resolveAlertManuallyAction(alertId: string, formData: Form
 
   const alert = await loadAlertForAction(alertId);
   if (!alert) return { error: "Alerta não encontrado." };
+  const inProgressRejection = rejectInProgressAction(alert);
+  if (inProgressRejection) return inProgressRejection;
   if (alert.status === "resolvido") return { error: "Este alerta já está resolvido." };
 
   const note = String(formData.get("note") ?? "").trim();

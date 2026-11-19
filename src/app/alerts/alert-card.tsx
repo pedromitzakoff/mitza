@@ -168,10 +168,34 @@ export function AlertCard({ alert }: { alert: AlertListItem }) {
         </div>
       </div>
 
-      {/* Ações principais à vista (pedido, seção 4: "mostre Acompanhar e
-          Resolver diretamente nos cards abertos") — nunca mais escondidas
-          atrás de um menu "•••" (só 2 ações hoje, não precisa de menu). */}
-      <AlertActionButtons alertId={alert.id} status={alert.status} />
+      {/* Achado real (achado do usuário: "já corrigi alguns e eles
+          voltaram") — um alerta "Dado parcial" (hoje, `in_progress`)
+          compara o GASTO ACUMULADO de hoje com uma referência fixa pro dia
+          inteiro (`detectSpendPaceAlert`); como o gasto só cresce ao longo
+          do dia, depois de cruzar o limiar ele permanece "acima" pelo
+          resto do dia por construção — nenhuma ação manual muda esse fato,
+          e a próxima avaliação automática (a cada ~30min) reabre o mesmo
+          alerta (`reduceAlertEvaluation`: "resolvido"/"acompanhamento" com
+          a condição ainda presente -> volta pra "precisa_atencao"), dando
+          a falsa impressão de um bug. Isso já era o comportamento
+          pretendido pro monitor "hoje em andamento" desde a Etapa Alertas
+          original ("nunca acumula estado multi-dia, só reflete o instante
+          atual") — só faltava a UI refletir isso: "Em acompanhamento"/
+          "Resolver" somem pro `in_progress`, porque prometem algo que o
+          sistema não entrega. O único jeito real de mudar o resultado de
+          hoje é ajustar o orçamento (atalho já existe acima) ou esperar a
+          virada do dia, quando o acumulado zera e o alerta se resolve
+          sozinho. */}
+      {isToday ? (
+        <p className="rounded-md bg-overview-surface-hover px-2.5 py-1.5 text-xs text-overview-text-secondary">
+          Esse alerta compara o gasto acumulado de hoje com o previsto pro dia inteiro — ele se resolve sozinho na virada do dia, ou antes se você ajustar o orçamento. Não há ação manual pra ele enquanto o dia não termina.
+        </p>
+      ) : (
+        /* Ações principais à vista (pedido, seção 4: "mostre Acompanhar e
+           Resolver diretamente nos cards abertos") — nunca mais escondidas
+           atrás de um menu "•••" (só 2 ações hoje, não precisa de menu). */
+        <AlertActionButtons alertId={alert.id} status={alert.status} />
+      )}
     </div>
   );
 }
