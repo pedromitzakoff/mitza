@@ -27,3 +27,15 @@ export const WEEKLY_REPORT_PERIOD_KIND_LABEL: Record<WeeklyReportPeriodKind, str
   segunda: "Relatório de segunda",
   sexta: "Relatório de sexta",
 };
+
+/** Pedido do usuário: "além da data em número, falar de segunda até
+ * quinta e o outro sexta a domingo" — os dias da semana cobertos por cada
+ * lote, por extenso, somados à data numérica (nunca no lugar dela). O
+ * lote "segunda" (gerado na segunda) cobre sexta a domingo; o lote
+ * "sexta" (gerado na sexta) cobre segunda a quinta — nomes de lote e
+ * intervalo coberto são deliberadamente INVERSOS, por isso este rótulo
+ * nunca é derivado de `WEEKLY_REPORT_PERIOD_KIND_LABEL` acima. */
+export const WEEKLY_REPORT_PERIOD_KIND_WEEKDAY_RANGE_LABEL: Record<WeeklyReportPeriodKind, string> = {
+  segunda: "sexta a domingo",
+  sexta: "segunda a quinta",
+};

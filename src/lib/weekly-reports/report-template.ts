@@ -1,6 +1,7 @@
 import { formatCurrency, formatCount, formatPercent, formatShortDate, formatDateWithYear } from "@/lib/format";
 import { PERFORMANCE_GOALS, formatPerformanceResult, type PerformanceGoal } from "@/lib/performance-goals";
-import type { AdHighlights } from "@/lib/weekly-reports/report-types";
+import { WEEKLY_REPORT_PERIOD_KIND_WEEKDAY_RANGE_LABEL } from "@/lib/weekly-reports/report-labels";
+import type { AdHighlights, WeeklyReportPeriodKind } from "@/lib/weekly-reports/report-types";
 
 /**
  * Aba "Reports" (pedido: "use um template para gerar o texto com os dados
@@ -34,6 +35,17 @@ function formatHeadlineResultLine(goal: PerformanceGoal, resultCount: number, co
   const config = PERFORMANCE_GOALS[goal];
   const costText = costPerResult !== null ? formatCurrency(costPerResult) : "indisponível";
   return `🎯 ${config.resultMetricLabel}: ${formatCount(resultCount)} · ${config.costMetricShortLabel}: ${costText}`;
+}
+
+/** Pedido do usuário: "no caso das vendas, precisa colocar valor em
+ * vendas e ROAS" — linha extra, só pro objetivo "sales" e só quando há
+ * faturamento registrado (nunca `R$0,00`/`0,00x` fabricado pra cliente
+ * sem `value_column` configurado — `revenue`/`roas` chegam `null` nesse
+ * caso, e a linha inteira é omitida). */
+function formatSalesRevenueLine(goal: PerformanceGoal, revenue: number | null, roas: number | null): string | null {
+  if (goal !== "sales" || revenue === null) return null;
+  const roasText = roas !== null ? `${roas.toFixed(2)}x` : "indisponível";
+  return `💵 Valor em vendas: ${formatCurrency(revenue)} · ROAS: ${roasText}`;
 }
 
 function formatAdNameWithFormat(adName: string, format: string | null): string {
@@ -71,12 +83,17 @@ function formatHighlightLines(goal: PerformanceGoal, highlights: AdHighlights): 
 
 export interface ReportTemplateInput {
   clientName: string;
+  periodKind: WeeklyReportPeriodKind;
   periodStart: string;
   periodEnd: string;
   goal: PerformanceGoal;
   investment: number;
   resultCount: number;
   costPerResult: number | null;
+  /** Pedido do usuário: "no caso das vendas, precisa colocar valor em
+   * vendas e ROAS" — ver `formatSalesRevenueLine`. */
+  revenue: number | null;
+  roas: number | null;
   highlights: AdHighlights;
   /** `null`/string vazia -> bloco "Próximo passo" omitido inteiramente
    * (pedido: "campo OPCIONAL... quando preenchido, inclua no texto"). */
@@ -85,12 +102,20 @@ export interface ReportTemplateInput {
 
 export function renderReportTemplate(input: ReportTemplateInput): string {
   const periodLabel = formatReportPeriodLabel(input.periodStart, input.periodEnd);
+  // Pedido do usuário: "além da data em número, falar de segunda até
+  // quinta e o outro sexta a domingo" — qualifica a data numérica, nunca
+  // substitui.
+  const weekdayRange = WEEKLY_REPORT_PERIOD_KIND_WEEKDAY_RANGE_LABEL[input.periodKind];
 
-  const blocks: string[] = [
-    [`*${input.clientName} | Resultados de ${periodLabel}*`, `💰 Investimento: ${formatCurrency(input.investment)}`, formatHeadlineResultLine(input.goal, input.resultCount, input.costPerResult)].join(
-      "\n",
-    ),
+  const headerLines = [
+    `*${input.clientName} | Resultados de ${weekdayRange} (${periodLabel})*`,
+    `💰 Investimento: ${formatCurrency(input.investment)}`,
+    formatHeadlineResultLine(input.goal, input.resultCount, input.costPerResult),
   ];
+  const salesLine = formatSalesRevenueLine(input.goal, input.revenue, input.roas);
+  if (salesLine) headerLines.push(salesLine);
+
+  const blocks: string[] = [headerLines.join("\n")];
 
   const highlightLines = formatHighlightLines(input.goal, input.highlights);
   if (highlightLines.length > 0) {

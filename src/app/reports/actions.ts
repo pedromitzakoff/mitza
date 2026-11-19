@@ -6,7 +6,7 @@ import { requireActiveProfile } from "@/lib/auth";
 import { requireQuery } from "@/lib/require-query";
 import { didGestorEditBodyTextVerbatim, renderReportTemplate } from "@/lib/weekly-reports/report-template";
 import type { PerformanceGoal } from "@/lib/performance-goals";
-import type { WeeklyReportMetrics, WeeklyReportStatus } from "@/lib/weekly-reports/report-types";
+import type { WeeklyReportMetrics, WeeklyReportPeriodKind, WeeklyReportStatus } from "@/lib/weekly-reports/report-types";
 import type { Database } from "@/lib/supabase/database.types";
 
 /**
@@ -30,6 +30,7 @@ interface ReportForAction {
   id: string;
   client_id: string;
   client_name: string;
+  period_kind: WeeklyReportPeriodKind;
   period_start: string;
   period_end: string;
   status: WeeklyReportStatus;
@@ -44,7 +45,7 @@ async function loadReportForAction(reportId: string): Promise<ReportForAction | 
   const rows = await requireQuery(
     supabase
       .from("weekly_reports")
-      .select("id, client_id, period_start, period_end, status, performance_goal, metrics, next_step, body_text")
+      .select("id, client_id, period_kind, period_start, period_end, status, performance_goal, metrics, next_step, body_text")
       .eq("id", reportId)
       .limit(1),
     "weekly_reports:load-for-action",
@@ -58,6 +59,7 @@ async function loadReportForAction(reportId: string): Promise<ReportForAction | 
     id: row.id,
     client_id: row.client_id,
     client_name: clientRows[0]?.name ?? "",
+    period_kind: row.period_kind,
     period_start: row.period_start,
     period_end: row.period_end,
     status: row.status,
@@ -98,12 +100,15 @@ export async function updateReportTextAction(reportId: string, formData: FormDat
   if (!didGestorEditBodyTextVerbatim(report.body_text, submittedBodyText) && metrics && report.performance_goal) {
     bodyText = renderReportTemplate({
       clientName: report.client_name,
+      periodKind: report.period_kind,
       periodStart: report.period_start,
       periodEnd: report.period_end,
       goal: report.performance_goal,
       investment: metrics.investment,
       resultCount: metrics.resultCount,
       costPerResult: metrics.costPerResult,
+      revenue: metrics.revenue,
+      roas: metrics.roas,
       highlights: metrics.highlights,
       nextStep: nextStep || null,
     });

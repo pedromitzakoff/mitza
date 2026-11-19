@@ -44,6 +44,16 @@ export interface WeeklyReportMetrics {
   /** `null` = indisponível (pedido: "zero resultados -> custo
    * indisponível", nunca `0`/`Infinity`). */
   costPerResult: number | null;
+  /** Faturamento do objetivo (pedido do usuário: "no caso das vendas,
+   * precisa colocar valor em vendas e ROAS") — `null` sem faturamento
+   * registrado pro escopo (objetivo diferente de vendas, ou sem
+   * `value_column` configurado), nunca `0` fabricado. Guardado pra
+   * QUALQUER objetivo (não só vendas) — é o template (`report-template.ts`)
+   * quem decide mostrar essa linha só quando `goal === "sales"`. */
+  revenue: number | null;
+  /** ROAS (receita ÷ investimento do objetivo) — `null` sem receita ou sem
+   * investimento no escopo (`computeRoas`, `lib/performance.ts`). */
+  roas: number | null;
   highlights: AdHighlights;
   /** Limiares usados pra elegibilidade dos destaques nesta geração —
    * guardado pra transparência/auditoria (pedido, seção 3: "informe os

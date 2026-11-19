@@ -188,12 +188,15 @@ console.log("\nE — renderReportTemplate: estrutura do texto, zero resultados, 
 {
   const baseInput = {
     clientName: "Byma",
+    periodKind: "segunda" as const,
     periodStart: "2026-11-13",
     periodEnd: "2026-11-15",
     goal: "leads" as const,
     investment: 620,
     resultCount: 31,
     costPerResult: 20,
+    revenue: null,
+    roas: null,
     highlights: {
       bestCost: { adName: "Depoimento de cliente", format: null, resultCount: 12, cost: 14.8 },
       bestLinkCtr: { adName: "Benefícios do produto", format: null, linkCtr: 0.029, impressions: 4200 },
@@ -203,7 +206,8 @@ console.log("\nE — renderReportTemplate: estrutura do texto, zero resultados, 
   };
 
   const rendered = renderReportTemplate(baseInput);
-  ok("cabeçalho com cliente e período", rendered.includes("*Byma | Resultados de 13/11 a 15/11*"));
+  ok("cabeçalho com cliente, período numérico E por extenso (pedido: 'segunda até quinta'/'sexta a domingo')", rendered.includes("*Byma | Resultados de sexta a domingo (13/11 a 15/11)*"));
+  ok("lote 'sexta' (gerado na sexta) descreve o período coberto como 'segunda a quinta', nunca o inverso", renderReportTemplate({ ...baseInput, periodKind: "sexta" }).includes("Resultados de segunda a quinta ("));
   ok("linha de investimento", rendered.includes(`💰 Investimento: ${formatCurrency(620)}`));
   ok("linha de resultado com métrica principal do cliente (Leads/CPL)", rendered.includes("🎯 Leads: 31 · CPL:"));
   ok("bloco de destaques com os 2 indicadores, cada um numa linha", rendered.includes("*Destaques dos anúncios*") && rendered.includes("🏆 Melhor CPL:") && rendered.includes("👆 Melhor CTR de link:"));
@@ -231,6 +235,24 @@ console.log("\nE — renderReportTemplate: estrutura do texto, zero resultados, 
 
   const salesInput = { ...baseInput, goal: "sales" as const };
   ok("métrica principal troca corretamente por objetivo (Vendas/CPA, nunca hardcoded 'Leads')", renderReportTemplate(salesInput).includes("🎯 Vendas:") && renderReportTemplate(salesInput).includes("CPA:"));
+
+  ok(
+    "pedido do usuário: 'no caso das vendas, precisa colocar valor em vendas e ROAS' — linha extra com os dois quando há faturamento",
+    renderReportTemplate({ ...salesInput, revenue: 5000, roas: 8.06 }).includes(`💵 Valor em vendas: ${formatCurrency(5000)} · ROAS: 8.06x`),
+  );
+  ok(
+    "objetivo de vendas SEM faturamento registrado -> linha omitida inteiramente (nunca R$0,00/0,00x fabricado)",
+    !renderReportTemplate({ ...salesInput, revenue: null, roas: null }).includes("Valor em vendas"),
+  );
+  ok(
+    "faturamento sem investimento no escopo -> ROAS indisponível, nunca Infinity/divisão por zero",
+    renderReportTemplate({ ...salesInput, investment: 0, revenue: 5000, roas: null }).includes("💵 Valor em vendas:") &&
+      renderReportTemplate({ ...salesInput, investment: 0, revenue: 5000, roas: null }).includes("ROAS: indisponível"),
+  );
+  ok(
+    "a linha de vendas NUNCA aparece pra outro objetivo (leads), mesmo com revenue/roas preenchidos por engano",
+    !renderReportTemplate({ ...baseInput, revenue: 5000, roas: 8.06 }).includes("Valor em vendas"),
+  );
 }
 
 // ---------------------------------------------------------------------------

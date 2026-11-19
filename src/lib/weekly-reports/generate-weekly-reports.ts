@@ -10,7 +10,7 @@ import { resolveClientMediaChannels, type TrafficChannel } from "@/lib/traffic-c
 import { channelToPerformanceSource } from "@/lib/performance-queries";
 import { getAdCreativeDailyMetricsForPeriod } from "@/lib/creative-analytics-data";
 import { buildCreativeSummaries } from "@/lib/creative-analytics";
-import { aggregatePerformanceResults, computeCostPerResult } from "@/lib/performance";
+import { aggregatePerformanceResults, computeCostPerResult, computeRoas } from "@/lib/performance";
 import type { PerformanceGoal } from "@/lib/performance-goals";
 import { resolveCurrentReportPeriods, type ResolvedReportPeriod } from "@/lib/weekly-reports/report-periods";
 import { isPeriodFullySynced, isReportDayConfirmed } from "@/lib/weekly-reports/report-sync-completeness";
@@ -189,6 +189,10 @@ async function generateAndPersistOneReport(
   })), goal);
   const goalInvestment = spendRows.filter((row) => goalChannels.includes(row.channel)).reduce((sum, row) => sum + row.spend, 0);
   const costPerResult = computeCostPerResult(goalInvestment, aggregated.resultCount, aggregated.hasAnyRecord);
+  // Pedido do usuário: "no caso das vendas, precisa colocar valor em
+  // vendas e ROAS" — guardado pra qualquer objetivo (null quando não há
+  // faturamento registrado), o template decide mostrar só pra "sales".
+  const roas = computeRoas(aggregated.revenue, goalInvestment);
 
   const creativeRows = channels.includes("meta")
     ? await getAdCreativeDailyMetricsForPeriod(supabase, client.id, { start: period.periodStart, end: period.periodEnd }) : [];
@@ -199,6 +203,8 @@ async function generateAndPersistOneReport(
     investment: totalInvestment,
     resultCount: aggregated.resultCount,
     costPerResult,
+    revenue: aggregated.revenue,
+    roas,
     highlights,
     thresholds: DEFAULT_AD_HIGHLIGHT_THRESHOLDS,
     computedAt: nowIso,
@@ -206,12 +212,15 @@ async function generateAndPersistOneReport(
 
   const renderedText = renderReportTemplate({
     clientName: client.name,
+    periodKind: period.periodKind,
     periodStart: period.periodStart,
     periodEnd: period.periodEnd,
     goal,
     investment: metrics.investment,
     resultCount: metrics.resultCount,
     costPerResult: metrics.costPerResult,
+    revenue: metrics.revenue,
+    roas: metrics.roas,
     highlights: metrics.highlights,
     nextStep: existing?.next_step ?? null,
   });
