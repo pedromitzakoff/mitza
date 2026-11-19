@@ -20,7 +20,7 @@ import {
   findMostRecentWeekday,
   resolveCurrentReportPeriods,
 } from "../src/lib/weekly-reports/report-periods";
-import { isPeriodFullySynced } from "../src/lib/weekly-reports/report-sync-completeness";
+import { isPeriodFullySynced, isReportDayConfirmed } from "../src/lib/weekly-reports/report-sync-completeness";
 import { computeAdHighlights } from "../src/lib/weekly-reports/ad-highlights";
 import { DEFAULT_AD_HIGHLIGHT_THRESHOLDS } from "../src/lib/weekly-reports/report-thresholds";
 import { didGestorEditBodyTextVerbatim, formatReportPeriodLabel, renderReportTemplate } from "../src/lib/weekly-reports/report-template";
@@ -268,8 +268,8 @@ console.log("\nI — generate-weekly-reports.ts: escopo, dedup, congelamento de 
   const genSource = loadSource("src", "lib", "weekly-reports", "generate-weekly-reports.ts");
 
   ok(
-    "escopo: só cliente ATIVO (WORKSPACE_ACTIVE_CONTRACT_STATUS) com integração Meta habilitada E objetivo configurado — decisão confirmada com o usuário",
-    genSource.includes('eq(WORKSPACE_ACTIVE_CONTRACT_STATUS') === false && genSource.includes("WORKSPACE_ACTIVE_CONTRACT_STATUS") && genSource.includes("integratedClientIds.has(c.id) && c.performance_goal !== null"),
+    "clientes ativos sem métrica ou integração aparecem com pendência",
+    genSource.includes('.eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS)') && genSource.includes("for (const client of clients)") && genSource.includes("waitingReason: reason"),
   );
   ok(
     "dedup: busca a linha existente por client_id+period_start+period_end ANTES de decidir inserir — nunca um INSERT direto sem checar (pedido: 'reprocessamento sem duplicatas')",
@@ -281,7 +281,7 @@ console.log("\nI — generate-weekly-reports.ts: escopo, dedup, congelamento de 
   );
   ok(
     "dado incompleto nunca conclui prematuramente — status só avança pra pronto depois de isPeriodFullySynced confirmar",
-    genSource.includes("isPeriodFullySynced(periodDates, syncedDates)") && genSource.includes("if (!fullySynced)"),
+    genSource.includes("if (!isPeriodFullySynced(dates, confirmed))"),
   );
   ok(
     "texto editado manualmente (text_edited_at) nunca é sobrescrito por um reprocessamento automático seguinte",
@@ -289,6 +289,19 @@ console.log("\nI — generate-weekly-reports.ts: escopo, dedup, congelamento de 
   );
   ok("destaques calculados SÓ com os dados do período do report (nunca um histórico maior)", genSource.includes("getAdCreativeDailyMetricsForPeriod") && genSource.includes("buildCreativeSummaries(creativeRows)"));
   ok("thresholds de volume mínimo centralizados, nunca hardcoded de novo aqui", genSource.includes("DEFAULT_AD_HIGHLIGHT_THRESHOLDS"));
+
+  ok("cron compara status e revisão antes de gravar e ignora inserção concorrente",
+    genSource.includes('.eq("status", existing.status).eq("updated_at", existing.updated_at)') && genSource.includes("ignoreDuplicates: true"));
+  const day = "2026-11-15";
+  const base = {
+    day, goal: "leads", usesGoal: true, manual: false, explicitSpend: false, explicitResult: false,
+    channelSources: [{ id: "source", status: "active", last_success_at: "2026-11-16T12:00:00Z", last_imported_date: day }],
+    covered: new Set([`source:${day}`]), mapped: new Set(["source:leads"]),
+  };
+  ok("sincronização completa confirma dia sem linhas e com zero resultados", isReportDayConfirmed(base));
+  ok("investimento sozinho não confirma resultados", !isReportDayConfirmed({ ...base, covered: new Set(), explicitSpend: true }));
+  ok("fonte sem métrica mapeada não confirma zero", !isReportDayConfirmed({ ...base, mapped: new Set() }));
+  ok("legado comprova dia com linhas explícitas de investimento e resultado", isReportDayConfirmed({ ...base, covered: new Set(), explicitSpend: true, explicitResult: true }));
 
   const sqlSource = loadSource("supabase", "weekly-reports.sql");
   ok("migration: dedup garantido no banco (unique client_id/period_start/period_end), nunca só na aplicação", sqlSource.includes("unique (client_id, period_start, period_end)"));

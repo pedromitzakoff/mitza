@@ -23,6 +23,7 @@ export interface WeeklyReportListItem {
   /** `null` enquanto `status === 'aguardando_dados'` — nenhum número foi
    * calculado ainda (nunca um `metrics` vazio tratado como zero). */
   metrics: WeeklyReportMetrics | null;
+  waitingReason: string | null;
   nextStep: string | null;
   bodyText: string;
   textEditedAt: string | null;
@@ -103,6 +104,7 @@ export async function loadWeeklyReportList(
       periodEnd: row.period_end,
       status: row.status,
       metrics: parseMetrics(row.metrics),
+      waitingReason: typeof row.metrics.waitingReason === "string" ? row.metrics.waitingReason : null,
       nextStep: row.next_step,
       bodyText: row.body_text,
       textEditedAt: row.text_edited_at,

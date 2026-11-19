@@ -36,7 +36,7 @@ export function ReportCard({ report }: { report: WeeklyReportListItem }) {
 
       {report.status === "aguardando_dados" && (
         <p className="text-sm text-overview-text-secondary">
-          Aguardando a sincronização completa dos dados do período — assim que terminar, este card passa pra &quot;Pronto para enviar&quot; automaticamente.
+          {report.waitingReason ?? "Aguardando a sincronização completa dos dados do período."}
         </p>
       )}
 

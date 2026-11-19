@@ -1308,6 +1308,8 @@ export interface Database {
         Row: {
           id: string;
           import_source_id: string;
+          requested_since: string | null;
+          requested_until: string | null;
           started_at: string;
           finished_at: string | null;
           status: DataSyncRunStatusDb;
@@ -1324,6 +1326,8 @@ export interface Database {
         Insert: {
           id?: string;
           import_source_id: string;
+          requested_since?: string | null;
+          requested_until?: string | null;
           started_at?: string;
           finished_at?: string | null;
           status?: DataSyncRunStatusDb;
@@ -1340,6 +1344,8 @@ export interface Database {
         Update: {
           id?: string;
           import_source_id?: string;
+          requested_since?: string | null;
+          requested_until?: string | null;
           started_at?: string;
           finished_at?: string | null;
           status?: DataSyncRunStatusDb;
@@ -3564,6 +3570,10 @@ export interface Database {
       };
     };
     Functions: {
+      report_sync_coverage: {
+        Args: { p_source_ids: string[]; p_start: string; p_end: string };
+        Returns: { source_id: string; day: string }[];
+      };
       backfill_sprint_tasks_from_templates: {
         Args: Record<PropertyKey, never>;
         Returns: void;

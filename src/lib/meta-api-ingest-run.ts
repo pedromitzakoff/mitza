@@ -81,7 +81,7 @@ type AdminClient = ReturnType<typeof createAdminClient>;
  * `metric_mappings` (a MESMA tabela, a MESMA lógica — nunca uma segunda),
  * soma/upsert idempotente. O n8n nunca grava nestas tabelas diretamente.
  */
-export async function ingestMetaApiPayload(payload: MetaApiIngestPayload): Promise<MetaApiIngestOutcome> {
+export async function ingestMetaApiPayload(payload: MetaApiIngestPayload, requestedWindow?: { since: string; until: string }): Promise<MetaApiIngestOutcome> {
   const supabase = createAdminClient();
 
   const { data: importSource, error: importSourceError } = await supabase
@@ -126,11 +126,20 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload): Promi
     });
   }
 
-  const { data: run, error: runInsertError } = await supabase
+  const insertRun = (window?: typeof requestedWindow) => supabase
     .from("data_sync_runs")
-    .insert({ import_source_id: importSourceId, status: "running" })
+    .insert({
+      import_source_id: importSourceId,
+      status: "running",
+      ...(window && { requested_since: window.since, requested_until: window.until }),
+    })
     .select("id")
     .single();
+
+  let { data: run, error: runInsertError } = await insertRun(requestedWindow);
+  if (requestedWindow && runInsertError?.code === "PGRST204" && runInsertError.message.includes("requested_")) {
+    ({ data: run, error: runInsertError } = await insertRun());
+  }
 
   if (runInsertError || !run) {
     throw new Error(`Falha ao criar data_sync_runs pra ${importSourceId}: ${runInsertError?.message ?? "sem dados"}`);

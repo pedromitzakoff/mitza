@@ -40,7 +40,7 @@ export async function syncOneMetaApiAccount(accountId: string): Promise<DirectSy
   const { since, until } = resolveSyncWindow(todayDateString());
   try {
     const rows = await fetchMetaApiInsightsForAccount(accountId, since, until);
-    const outcome = await ingestMetaApiPayload({ accountId, rows });
+    const outcome = await ingestMetaApiPayload({ accountId, rows }, { since, until });
 
     if (outcome.kind === "ok") {
       return { accountId, outcome: "ok", rowsRead: outcome.result.rowsRead };
