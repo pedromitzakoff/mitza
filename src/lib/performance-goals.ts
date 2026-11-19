@@ -31,6 +31,14 @@
  * `GRANULAR_RESULT_GOAL_PRIORITY` (`meta-api-ingest-run.ts`), diferente de
  * "followers", que nunca entrou (não é um resultado por campanha). Mesma
  * disciplina: só configuração nova aqui, nenhuma ramificação de código.
+ *
+ * Exceção à disciplina acima — Etapa "CTR como meta de Seguidores": por
+ * "followers" nunca ser um resultado por campanha (parágrafo acima), o par
+ * Resultado/Custo ficava sempre vazio nas tabelas de exploração pra esse
+ * objetivo. A troca pelo CTR do link (`resultUnit: "percent"` na entrada
+ * `followers` abaixo) É uma ramificação por objetivo — a única do arquivo
+ * — em `lib/meta-ads-dashboard/exploration-data.ts` (lê `linkCtr`/`linkCpc`
+ * em vez de `resultByGoal` só quando `resultUnit === "percent"`).
  */
 export type PerformanceGoal = "leads" | "sales" | "followers" | "conversations" | "registrations";
 
@@ -50,6 +58,12 @@ export interface PerformanceGoalConfig {
   /** Abreviação curta da métrica de custo (ex.: "CPL"/"CPA") — usada em
    * espaços compactos (card fechado da sprint, tabela da Visão Geral). */
   costMetricShortLabel: string;
+  /** Unidade da métrica de resultado — `"count"` pra todo objetivo
+   * atribuível por campanha (contagem inteira: leads, vendas...).
+   * `"percent"` só pra "followers" (ver comentário da entrada abaixo) —
+   * formata como porcentagem (`formatPercent`), nunca como contagem
+   * (`formatCount`). Default implícito `"count"` nas demais entradas. */
+  resultUnit?: "count" | "percent";
 }
 
 export const PERFORMANCE_GOALS: Record<PerformanceGoal, PerformanceGoalConfig> = {
@@ -81,14 +95,25 @@ export const PERFORMANCE_GOALS: Record<PerformanceGoal, PerformanceGoalConfig> =
     // usuário). `resultCount` já era somado por período desde sempre (nunca
     // fazia sentido como total acumulado, já que soma não é a operação
     // certa pra um snapshot) — o rótulo só passou a refletir isso.
+    //
+    // `resultUnit: "percent"` (Etapa "CTR como meta de Seguidores"): estes
+    // rótulos (`resultMetricLabel`/`costMetricLabel`/`costMetricShortLabel`)
+    // continuam só pros ~20 outros consumidores desta config (cards de
+    // Metas, diagnóstico, relatório semanal etc.) — nenhum deles mudou
+    // nesta etapa, todos continuam mostrando "Novos seguidores" (sempre
+    // vazio hoje, achado real do usuário: a Graph API nunca atribui
+    // "ganhou um seguidor" a uma campanha específica). SÓ as tabelas de
+    // Campanhas/Conjuntos/Anúncios (`exploration-data.ts`) substituem pelo
+    // CTR/CPC do link quando leem `resultUnit === "percent"` — com rótulo
+    // PRÓPRIO definido lá (nunca lendo `resultMetricLabel` daqui pra essa
+    // tela), exatamente pra não vazar a troca pros outros consumidores
+    // antes de cada um ser migrado deliberadamente.
     singularLabel: "Novo seguidor",
     pluralLabel: "Novos seguidores",
     resultMetricLabel: "Novos seguidores",
     costMetricLabel: "Custo por novo seguidor",
-    // Sem abreviação (ao contrário de CPL/CPA): "CPS" não é reconhecido no
-    // mercado e "CPF" já significa Cadastro de Pessoa Física — por extenso
-    // em qualquer espaço, mesmo os compactos que usam `costMetricShortLabel`.
     costMetricShortLabel: "Custo por novo seguidor",
+    resultUnit: "percent",
   },
   conversations: {
     id: "conversations",

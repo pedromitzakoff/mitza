@@ -47,6 +47,7 @@ export default async function ClientAnunciosPage({
             creativeDailyRows={data.creativeDailyRows}
             initialLevel="ads"
             storedColumnsByLevel={data.storedColumnsByLevel}
+            primaryGoal={data.resultType}
           />
         </div>
       ) : (

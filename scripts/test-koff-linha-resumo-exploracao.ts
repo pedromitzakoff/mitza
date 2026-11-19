@@ -129,13 +129,17 @@ console.log("\nF — Wiring estrutural: ExplorationTable (tfoot) e ExplorationCa
 
   ok("buildExplorationTotals é importado (nenhuma segunda implementação local)", source.includes("buildExplorationTotals,"));
   ok(
+    // Etapa "CTR como meta de Seguidores": ganhou um 2º argumento
+    // (`goalsFromColumns(columns)`) — "followers" nunca aparece via
+    // `rows`/`resultType` sozinho (ver exploration-data.ts), mesma função,
+    // mesmo wiring estrutural de sempre.
     "ExplorationTable calcula totals sobre `rows` (já filtrado/pesquisado por quem chama) e renderiza um <tfoot>",
-    source.includes("const totals = buildExplorationTotals(rows);") && source.includes("<tfoot>"),
+    source.includes("const totals = buildExplorationTotals(rows, goalsFromColumns(columns));") && source.includes("<tfoot>"),
   );
   ok("a célula 'Nome' do rodapé mostra 'Total', nunca um valor numérico fabricado ali", source.includes('{col.id === "name" ? "Total" : (totals.get(col.id) ?? "—")}'));
   ok(
     "ExplorationCardList (mobile) mostra o mesmo total como card, só quando há colunas de métrica visíveis (mesma condição das linhas normais)",
-    (source.match(/buildExplorationTotals\(rows\)/g) ?? []).length === 2,
+    (source.match(/buildExplorationTotals\(rows, goalsFromColumns\(columns\)\)/g) ?? []).length === 2,
   );
 }
 

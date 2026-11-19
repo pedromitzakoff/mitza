@@ -13,6 +13,7 @@ import {
   creativeSummaryToRow,
   explorationSortValue,
   formatExplorationCell,
+  goalsFromColumns,
   type ExplorationColumnId,
   type ExplorationRow,
 } from "@/lib/meta-ads-dashboard/exploration-data";
@@ -149,7 +150,7 @@ function ExplorationTable({
   // do MESMO conjunto exibido (já com busca/filtro aplicados por quem
   // chama — `rows` aqui já é `filteredRows`) — nunca uma segunda consulta,
   // reaproveita só os campos que as próprias linhas já carregam.
-  const totals = buildExplorationTotals(rows);
+  const totals = buildExplorationTotals(rows, goalsFromColumns(columns));
 
   return (
     <div className="max-h-[520px] overflow-auto rounded-lg border border-overview-border">
@@ -261,7 +262,7 @@ function ExplorationCardList({
 
   // Etapa "Linha resumo consolidada": mesmo total de `ExplorationTable`
   // (desktop), só reapresentado como card — nunca um segundo cálculo.
-  const totals = buildExplorationTotals(rows);
+  const totals = buildExplorationTotals(rows, goalsFromColumns(columns));
 
   return (
     <div>
@@ -421,6 +422,15 @@ export function CockpitAdExplorationSection({
    * a mesma pipeline de dados. Substitui o antigo `localStorage` (por
    * dispositivo, nunca compartilhado). */
   storedColumnsByLevel,
+  /** Etapa "CTR como meta de Seguidores" (pedido explícito do usuário) —
+   * objetivo principal resolvido do cliente (`performanceReportData.
+   * performanceGoal`, mesma fonte dos cards de métrica). Nunca aparece
+   * sozinho via `row.resultType` (abaixo) quando o objetivo é "followers"
+   * — a Graph API nunca atribui "ganhou um seguidor" a uma campanha
+   * específica, então nenhuma linha jamais tem esse `resultType`. Sem
+   * este prop, a coluna "CTR do link" (que substitui o par Resultado/
+   * Custo sempre vazio desse objetivo) nunca apareceria no seletor. */
+  primaryGoal,
 }: {
   clientId: string;
   campaigns: ExplorationRow[];
@@ -428,6 +438,7 @@ export function CockpitAdExplorationSection({
   creativeDailyRows: AdCreativeDailyMetricRow[];
   initialLevel?: ExplorationLevel;
   storedColumnsByLevel: StoredExplorationColumnsByLevel;
+  primaryGoal: PerformanceGoal | null;
 }) {
   const [selectedCampaign, setSelectedCampaign] = useState<{ id: string; name: string } | null>(null);
   const [level, setLevel] = useState<ExplorationLevel>(initialLevel);
@@ -446,8 +457,12 @@ export function CockpitAdExplorationSection({
     for (const row of campaigns) if (row.resultType) goals.add(row.resultType);
     for (const row of adSetDailyRows) if (row.resultType) goals.add(row.resultType);
     for (const row of creativeDailyRows) if (row.resultType) goals.add(row.resultType);
+    // "followers" nunca chega aqui via `resultType` (comentário no prop
+    // `primaryGoal` acima) — sem isto, o cliente com esse objetivo nunca
+    // veria a coluna CTR do link.
+    if (primaryGoal) goals.add(primaryGoal);
     return Array.from(goals);
-  }, [campaigns, adSetDailyRows, creativeDailyRows]);
+  }, [campaigns, adSetDailyRows, creativeDailyRows, primaryGoal]);
 
   const columns = useMemo(() => buildExplorationColumns(goalsPresent), [goalsPresent]);
   const defaultColumnIds = useMemo(() => columns.filter((col) => col.defaultVisible).map((col) => col.id), [columns]);

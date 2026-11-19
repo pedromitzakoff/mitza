@@ -46,6 +46,7 @@ export default async function ClientCampanhasPage({
             creativeDailyRows={data.creativeDailyRows}
             initialLevel="campaigns"
             storedColumnsByLevel={data.storedColumnsByLevel}
+            primaryGoal={data.resultType}
           />
         </div>
       ) : (

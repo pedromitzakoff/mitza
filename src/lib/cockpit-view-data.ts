@@ -205,6 +205,11 @@ export interface CockpitViewModel {
     adSetDailyRows: AdSetDailyMetricRow[];
     creativeDailyRows: AdCreativeDailyMetricRow[];
     storedColumnsByLevel: StoredExplorationColumnsByLevel;
+    /** Etapa "CTR como meta de Seguidores" — objetivo principal resolvido
+     * (mesma fonte dos cards de métrica, `performanceReportData.
+     * performanceGoal`), nunca derivável só das linhas de campanha pra
+     * "followers" (ver comentário em `CockpitAdExplorationSection`). */
+    primaryGoal: PerformanceGoal | null;
   } | null;
   externalLinks: { label: string; href: string }[];
 }
@@ -996,6 +1001,7 @@ export async function buildCockpitViewModel(
             adsets: client.exploration_columns_adsets,
             ads: client.exploration_columns_ads,
           },
+          primaryGoal: performanceReportData.performanceGoal,
         }
       : null,
     externalLinks,

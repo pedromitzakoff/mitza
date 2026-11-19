@@ -183,12 +183,47 @@ function goalCostColumnId(goal: PerformanceGoal): GoalCostColumnId {
   return `cost:${goal}`;
 }
 
+/** `true` só pra "followers" hoje (`PERFORMANCE_GOALS[goal].resultUnit ===
+ * "percent"`) — ver comentário completo em `performance-goals.ts`. Decide
+ * se a coluna de Resultado/Custo deste objetivo lê de `linkCtr`/`linkCpc`
+ * (nunca vazio) em vez de `resultByGoal` (SEMPRE vazio pra "followers" —
+ * a Graph API nunca atribui "ganhou um seguidor" a uma campanha
+ * específica). Rótulo PRÓPRIO aqui, nunca `PERFORMANCE_GOALS[goal].
+ * resultMetricLabel`/`costMetricShortLabel` — aqueles continuam dizendo
+ * "Novos seguidores" pros outros ~20 consumidores da config, que não
+ * mudaram nesta etapa. */
+function isLinkRateGoal(goal: PerformanceGoal): boolean {
+  return PERFORMANCE_GOALS[goal].resultUnit === "percent";
+}
+
+function resultColumnLabel(goal: PerformanceGoal): string {
+  return isLinkRateGoal(goal) ? "CTR do link" : PERFORMANCE_GOALS[goal].resultMetricLabel;
+}
+
+function costColumnLabel(goal: PerformanceGoal): string {
+  return isLinkRateGoal(goal) ? "Custo por clique no link" : PERFORMANCE_GOALS[goal].costMetricShortLabel;
+}
+
 /** `null` quando `id` não é uma coluna de objetivo (coluna estática) —
  * quem chama cai pro acessor estático nesse caso. */
 function parseGoalColumnId(id: ExplorationColumnId): { kind: "result" | "cost"; goal: PerformanceGoal } | null {
   if (id.startsWith("result:")) return { kind: "result", goal: id.slice("result:".length) as PerformanceGoal };
   if (id.startsWith("cost:")) return { kind: "cost", goal: id.slice("cost:".length) as PerformanceGoal };
   return null;
+}
+
+/** Extrai os objetivos já resolvidos num conjunto de colunas
+ * (`buildExplorationColumns`) — pra passar como `extraGoals` de
+ * `buildExplorationTotals` sem precisar de uma segunda fonte de verdade
+ * (o componente de tabela já recebe `columns`, nunca precisa de uma prop
+ * nova só pra isto). */
+export function goalsFromColumns(columns: readonly { id: ExplorationColumnId }[]): PerformanceGoal[] {
+  const goals = new Set<PerformanceGoal>();
+  for (const col of columns) {
+    const parsed = parseGoalColumnId(col.id);
+    if (parsed) goals.add(parsed.goal);
+  }
+  return Array.from(goals);
 }
 
 /** Ordem canônica das colunas + seleção inicial — "Nome" nunca é removível
@@ -218,8 +253,8 @@ export function buildExplorationColumns(goalsPresent: readonly PerformanceGoal[]
   // o pedido do usuário (ver Leads + Conversas + Vendas simultaneamente,
   // nunca escondido sozinho atrás de um clique a mais).
   const goalColumns: ExplorationColumnDef[] = orderedGoals.flatMap((goal) => [
-    { id: goalResultColumnId(goal), label: PERFORMANCE_GOALS[goal].resultMetricLabel, align: "right" as const, defaultVisible: true },
-    { id: goalCostColumnId(goal), label: PERFORMANCE_GOALS[goal].costMetricShortLabel, align: "right" as const, defaultVisible: true },
+    { id: goalResultColumnId(goal), label: resultColumnLabel(goal), align: "right" as const, defaultVisible: true },
+    { id: goalCostColumnId(goal), label: costColumnLabel(goal), align: "right" as const, defaultVisible: true },
   ]);
 
   return [
@@ -256,8 +291,15 @@ const NUMERIC_ACCESSOR: Record<Exclude<StaticExplorationColumnId, "name">, (row:
 /** Valor numérico de UMA coluna de objetivo — `undefined` quando a linha
  * NÃO é desse objetivo (ex.: coluna "Vendas" numa linha de Leads — nunca
  * `0` fabricado nem o número de outro objetivo vazando aqui, mesma garantia
- * de `resultByGoal`). */
+ * de `resultByGoal`).
+ *
+ * `isLinkRateGoal` (só "followers" hoje) nunca lê de `resultByGoal` — essa
+ * chave É SEMPRE vazia pra esse objetivo (ver comentário em
+ * `isLinkRateGoal`) — lê `linkCtr`/`linkCpc` diretamente, válidos em
+ * QUALQUER linha (nunca dependem de `resultType` bater, diferente dos
+ * demais objetivos). */
 function goalColumnValue(parsed: { kind: "result" | "cost"; goal: PerformanceGoal }, row: ExplorationRow): number | null {
+  if (isLinkRateGoal(parsed.goal)) return parsed.kind === "result" ? row.linkCtr : row.linkCpc;
   const entry = row.resultByGoal[parsed.goal];
   if (!entry) return null;
   return parsed.kind === "result" ? entry.count : entry.cost;
@@ -302,7 +344,14 @@ function sumColumn(rows: ExplorationRow[], pick: (row: ExplorationRow) => number
  * `lib/performance.ts`: toda métrica derivada nasce de uma divisão seguinda
  * sobre totais, nunca de uma média de proporções).
  */
-export function buildExplorationTotals(rows: ExplorationRow[]): Map<ExplorationColumnId, string> {
+/** `extraGoals` (Etapa "CTR como meta de Seguidores"): objetivos a
+ * SEMPRE incluir, mesmo sem nenhuma linha com esse `resultType` — único
+ * jeito de "followers" aparecer aqui, já que nenhuma linha jamais tem
+ * `resultType === "followers"` (a Graph API não atribui "ganhou um
+ * seguidor" a uma campanha específica). Quem chama passa os ids de
+ * objetivo já presentes nas colunas visíveis (`columns`, de
+ * `buildExplorationColumns`) — nunca uma segunda fonte de verdade. */
+export function buildExplorationTotals(rows: ExplorationRow[], extraGoals: readonly PerformanceGoal[] = []): Map<ExplorationColumnId, string> {
   const cells = new Map<ExplorationColumnId, string>();
   if (rows.length === 0) return cells;
 
@@ -340,6 +389,7 @@ export function buildExplorationTotals(rows: ExplorationRow[]): Map<ExplorationC
   // (mesma garantia de `goalColumnValue` acima).
   const goalsPresent = new Set<PerformanceGoal>();
   for (const row of rows) if (row.resultType) goalsPresent.add(row.resultType);
+  for (const goal of extraGoals) goalsPresent.add(goal);
   // Achado real (conta com várias campanhas do mesmo objetivo, algumas sem
   // nenhuma venda no período — `resultType` fica `null` nessas linhas,
   // nunca igual ao objetivo, já que a Graph API não devolve o tipo de ação
@@ -356,6 +406,23 @@ export function buildExplorationTotals(rows: ExplorationRow[]): Map<ExplorationC
   // objetivo diferente no CPA do outro.
   const singleGoalPresent = goalsPresent.size === 1;
   for (const goal of goalsPresent) {
+    if (isLinkRateGoal(goal)) {
+      // "followers": nunca soma `resultByGoal` (sempre vazio pra esse
+      // objetivo) — CTR/CPC do link recalculados dos totais já somados
+      // acima (`totalLinkClicks`/`totalImpressions`/`totalSpend`), nunca
+      // a média das razões por linha (mesma regra das demais métricas
+      // derivadas desta função).
+      cells.set(
+        goalResultColumnId(goal),
+        totalImpressions !== null && totalImpressions > 0 && totalLinkClicks !== null ? formatPercent((totalLinkClicks / totalImpressions) * 100) : "—",
+      );
+      cells.set(
+        goalCostColumnId(goal),
+        totalLinkClicks !== null && totalLinkClicks > 0 && totalSpend !== null ? formatCurrency(totalSpend / totalLinkClicks) : "—",
+      );
+      continue;
+    }
+
     const goalRows = rows.filter((r) => r.resultType === goal);
     const totalCount = sumColumn(goalRows, (r) => r.resultByGoal[goal]?.count ?? null);
     // `totalSpend` nunca é `null` aqui de fato (`spend` é sempre `number`
@@ -376,7 +443,12 @@ export function formatExplorationCell(id: ExplorationColumnId, row: ExplorationR
   if (goalColumn) {
     const value = goalColumnValue(goalColumn, row);
     if (value === null) return "—";
-    return goalColumn.kind === "cost" ? formatCurrency(value) : formatCount(value);
+    if (goalColumn.kind === "cost") return formatCurrency(value);
+    // "followers" (`isLinkRateGoal`): `value` já é `linkCtr`, fração igual
+    // a `row.ctr`/`row.linkCtr` em qualquer outro lugar — `formatPercent`
+    // espera escala de porcentagem (×100), mesma convenção de
+    // `PERCENT_COLUMNS` mais abaixo nesta função.
+    return isLinkRateGoal(goalColumn.goal) ? formatPercent(value * 100) : formatCount(value);
   }
 
   if (id === "roas") return row.roas !== null ? `${row.roas.toFixed(2)}x` : "—";

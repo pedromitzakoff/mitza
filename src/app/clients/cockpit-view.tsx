@@ -266,6 +266,7 @@ export function CockpitView({ model, today }: { model: CockpitViewModel; today: 
               adSetDailyRows={model.adExploration.adSetDailyRows}
               creativeDailyRows={model.adExploration.creativeDailyRows}
               storedColumnsByLevel={model.adExploration.storedColumnsByLevel}
+              primaryGoal={model.adExploration.primaryGoal}
             />
           </div>
         </div>
