@@ -1,4 +1,4 @@
-import type { AlertEventType, AlertStatus } from "@/lib/alerts/alert-types";
+import type { AlertCandidate, AlertEventType, AlertStatus, AlertType } from "@/lib/alerts/alert-types";
 
 /**
  * Máquina de estados pura da seção 3/5 do pedido ("Acompanhamento de
@@ -23,6 +23,40 @@ import type { AlertEventType, AlertStatus } from "@/lib/alerts/alert-types";
  */
 export interface ExistingAlertForEvaluation {
   status: AlertStatus;
+}
+
+/**
+ * A resolução automática grava o mesmo instante em resolved_at e
+ * last_evaluated_at. A resolução manual mantém a data da avaliação,
+ * inclusive nos alertas que já estavam resolvidos antes desta regra.
+ */
+export function shouldKeepManualResolution(
+  existing: {
+    status: AlertStatus;
+    resolved_at: string | null;
+    last_evaluated_at: string;
+    period_end: string;
+    detail: unknown;
+  },
+  candidate: AlertCandidate<number | null>,
+  alertType: AlertType,
+): boolean {
+  if (existing.status !== "resolvido" || !existing.resolved_at || existing.resolved_at === existing.last_evaluated_at) {
+    return false;
+  }
+
+  if (alertType === "sync_issue" && existing.detail && typeof existing.detail === "object") {
+    const reviewed = existing.detail as Record<string, unknown>;
+    const issueKeys = ["missingDates", "failedDates", "partialDates"];
+    if (issueKeys.every((key) => Array.isArray(reviewed[key]) && Array.isArray(candidate.detail[key]))) {
+      return issueKeys.every((key) => {
+        const reviewedDates = new Set(reviewed[key] as string[]);
+        return (candidate.detail[key] as string[]).every((date) => reviewedDates.has(date));
+      });
+    }
+  }
+
+  return candidate.periodEnd <= existing.period_end;
 }
 
 /** União discriminada por `action` — `nextStatus`/`eventType` só existem
