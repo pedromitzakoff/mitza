@@ -98,6 +98,7 @@ function CalendarMonthGrid({
   onPrev,
   onNext,
   className,
+  inline = false,
 }: {
   month: CalendarMonth;
   draft: DateRangeDraft;
@@ -109,6 +110,7 @@ function CalendarMonthGrid({
   onPrev?: () => void;
   onNext?: () => void;
   className?: string;
+  inline?: boolean;
 }) {
   const weeks = useMemo(() => buildCalendarWeeks(month.year, month.monthIndex), [month.year, month.monthIndex]);
   const monthLabel = useMemo(
@@ -118,6 +120,8 @@ function CalendarMonthGrid({
       ),
     [month.year, month.monthIndex],
   );
+
+  const navigationColors = inline ? "text-overview-text-primary hover:bg-overview-surface-hover" : "text-[#17171A] hover:bg-[#EFE9E0]";
 
   return (
     // Etapa "Otimização Mobile" (ajuste pós-produção): usuário notou que,
@@ -136,20 +140,20 @@ function CalendarMonthGrid({
             type="button"
             onClick={onPrev}
             aria-label="Mês anterior"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-[#17171A] hover:bg-[#EFE9E0]"
+            className={`flex h-8 w-8 items-center justify-center rounded-md ${navigationColors}`}
           >
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </button>
         ) : (
           <span className="h-8 w-8" aria-hidden="true" />
         )}
-        <span className="text-sm font-semibold capitalize text-[#17171A]">{monthLabel}</span>
+        <span className={`text-sm font-semibold capitalize ${inline ? "text-overview-text-primary" : "text-[#17171A]"}`}>{monthLabel}</span>
         {onNext ? (
           <button
             type="button"
             onClick={onNext}
             aria-label="Próximo mês"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-[#17171A] hover:bg-[#EFE9E0]"
+            className={`flex h-8 w-8 items-center justify-center rounded-md ${navigationColors}`}
           >
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -166,7 +170,7 @@ function CalendarMonthGrid({
           nos dois lados de cada dia. */}
       <div className="grid grid-cols-7 gap-y-1 justify-items-center text-center">
         {WEEKDAY_SHORT_LABELS_PT_BR.map((label) => (
-          <span key={label} className="text-[11px] font-medium uppercase text-[#6F6B65]">
+          <span key={label} className={`text-[11px] font-medium uppercase ${inline ? "text-overview-text-muted" : "text-[#6F6B65]"}`}>
             {label}
           </span>
         ))}
@@ -180,7 +184,7 @@ function CalendarMonthGrid({
           const isDisabled = (minDate !== undefined && cell.date < minDate) || (maxDate !== undefined && cell.date > maxDate);
 
           return (
-            <div key={cell.date} className={`relative ${inRange && !isBoundary ? "bg-[#EFE9E0]" : ""}`}>
+            <div key={cell.date} className={`relative ${inRange && !isBoundary ? (inline ? "bg-brand/10" : "bg-[#EFE9E0]") : ""}`}>
               <button
                 type="button"
                 data-date={cell.date}
@@ -194,7 +198,13 @@ function CalendarMonthGrid({
                 }}
                 aria-pressed={isBoundary}
                 aria-current={isToday ? "date" : undefined}
-                className={`${DAY_BUTTON_BASE} ${!cell.inMonth ? "text-[#C8BEAD]" : "text-[#17171A]"} ${
+                className={inline
+                  ? `${DAY_BUTTON_BASE} ${
+                      isDisabled ? "cursor-not-allowed text-overview-text-muted/40"
+                        : isBoundary ? "bg-brand font-semibold text-white"
+                          : `${cell.inMonth ? "text-overview-text-primary" : "text-overview-text-muted"} hover:bg-overview-surface-hover`
+                    } ${isToday && !isBoundary ? "ring-1 ring-inset ring-brand/40" : ""}`
+                  : `${DAY_BUTTON_BASE} ${!cell.inMonth ? "text-[#C8BEAD]" : "text-[#17171A]"} ${
                   isBoundary
                     ? "bg-[#D8F238] font-semibold text-[#17171A]"
                     : isDisabled
@@ -291,6 +301,7 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
   }
 
   const rightMonth = shiftCalendarMonth(leftMonth, 1);
+  const cancelColors = inline ? "text-overview-text-secondary hover:bg-overview-surface-hover" : "text-[#17171A] hover:bg-[#EFE9E0]";
 
   return (
     <div ref={containerRef} className={inline ? "w-full text-left" : "relative inline-block w-full text-left sm:w-auto"}>
@@ -301,10 +312,13 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
         onClick={() => (open ? closePanel(false) : openPanel())}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="mitza-pressable flex min-h-11 w-full items-center justify-between gap-1.5 rounded-md border border-[#C8BEAD] bg-white px-3 py-1.5 text-sm font-medium text-[#17171A] hover:bg-[#EFE9E0] disabled:pointer-events-none disabled:opacity-50 sm:inline-flex sm:w-auto sm:min-h-0 sm:justify-start"
+        className={`mitza-pressable flex min-h-11 w-full items-center justify-between gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium disabled:pointer-events-none disabled:opacity-50 sm:inline-flex sm:w-auto sm:min-h-0 sm:justify-start ${
+          inline ? "border-overview-border bg-overview-surface text-overview-text-primary hover:bg-overview-surface-hover"
+            : "border-[#C8BEAD] bg-white text-[#17171A] hover:bg-[#EFE9E0]"
+        }`}
       >
         {closedLabel}
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#6F6B65]" aria-hidden="true" />
+        <ChevronDown className={`h-3.5 w-3.5 shrink-0 ${inline ? "text-overview-text-secondary" : "text-[#6F6B65]"}`} aria-hidden="true" />
       </button>
 
       {open && (
@@ -328,10 +342,10 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
             role="dialog"
             aria-label="Selecionar período"
             className={inline
-              ? "mt-2 flex max-w-full flex-col rounded-xl border border-[#C8BEAD] bg-white"
+              ? "mt-2 flex max-w-full flex-col rounded-xl border border-overview-border bg-overview-surface"
               : "fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col rounded-t-2xl border border-[#C8BEAD] bg-white shadow-lg sm:absolute sm:inset-x-auto sm:inset-y-auto sm:bottom-auto sm:left-0 sm:top-full sm:mt-2 sm:max-h-none sm:w-auto sm:max-w-[calc(100vw_-_2rem)] sm:overflow-auto sm:rounded-xl"}
           >
-            <div className={inline ? "px-3 pt-3 text-sm text-[#17171A]" : "hidden"}>
+            <div className={inline ? "px-3 pt-3 text-sm text-overview-text-secondary" : "hidden"}>
               {draft.start && !draft.end ? "Selecione a data final." : "Selecione a data inicial e a final."}
             </div>
             {!inline && <div className="flex items-center justify-between border-b border-[#EFE9E0] px-4 py-3 sm:hidden">
@@ -374,6 +388,7 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
               <div className="flex flex-1 flex-col gap-3 p-2 sm:p-2.5">
                 <div className="flex flex-row items-start gap-3 max-[359px]:flex-col max-[359px]:items-center">
                   <CalendarMonthGrid
+                    inline={inline}
                     month={leftMonth}
                     draft={draft}
                     today={today}
@@ -402,11 +417,11 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
                 junto com presets/calendário) — "Aplicar" precisa continuar
                 alcançável com uma mão mesmo com o teclado do sistema aberto
                 ou pouca altura disponível (item 11 do pedido). */}
-            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-[#EFE9E0] px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-2.5 sm:pb-3">
+            <div className={`flex shrink-0 items-center justify-end gap-2 border-t px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-2.5 sm:pb-3 ${inline ? "border-overview-border" : "border-[#EFE9E0]"}`}>
               <button
                 type="button"
                 onClick={() => closePanel(false)}
-                className="flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-[#17171A] hover:bg-[#EFE9E0] sm:min-h-0 sm:py-1.5"
+                className={`flex min-h-11 items-center rounded-md px-3 text-sm font-medium sm:min-h-0 sm:py-1.5 ${cancelColors}`}
               >
                 Cancelar
               </button>
@@ -414,7 +429,7 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
                 type="button"
                 onClick={handleApplyClick}
                 disabled={!canApply}
-                className="flex min-h-11 items-center rounded-md bg-[#D8F238] px-3.5 text-sm font-semibold text-[#17171A] hover:brightness-95 disabled:pointer-events-none disabled:opacity-50 sm:min-h-0 sm:py-1.5"
+                className={`flex min-h-11 items-center rounded-md px-3.5 text-sm font-semibold disabled:pointer-events-none disabled:opacity-50 sm:min-h-0 sm:py-1.5 ${inline ? "bg-brand text-white hover:bg-brand-hover" : "bg-[#D8F238] text-[#17171A] hover:brightness-95"}`}
               >
                 Aplicar
               </button>
