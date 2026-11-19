@@ -34,10 +34,6 @@ export const ALERT_STATUS_BADGE_CLASSES: Record<AlertStatus, string> = {
  * em `alerts-tabs.tsx`. */
 export const ALERT_STATUS_COLUMN_ORDER: AlertStatus[] = ["precisa_atencao", "acompanhamento", "resolvido"];
 
-/** Pedido, seção 2: rótulo de cada tipo — só "spend_pace" tem avaliador
- * implementado nesta fase (`IMPLEMENTED_ALERT_TYPES`), os demais existem
- * aqui pro filtro "Tipo" e pra UI nunca precisar de um `?? "Tipo desconhecido"`
- * quando os próximos forem implementados. */
 export const ALERT_TYPE_LABEL: Record<AlertType, string> = {
   spend_pace: "Gasto acima/abaixo do previsto",
   no_delivery: "Conta sem entrega",

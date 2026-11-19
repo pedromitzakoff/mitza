@@ -38,8 +38,17 @@ export interface DirectSyncResult {
  */
 export async function syncOneMetaApiAccount(accountId: string): Promise<DirectSyncResult> {
   const { since, until } = resolveSyncWindow(todayDateString());
+  const startedAt = new Date().toISOString();
   try {
-    const rows = await fetchMetaApiInsightsForAccount(accountId, since, until);
+    const rows = await fetchMetaApiInsightsForAccount(accountId, since, until).catch(async (error: unknown) => {
+      // A coleta pode falhar antes de a ingestão criar data_sync_runs.
+      try {
+        await recordFetchFailure(accountId, startedAt);
+      } catch (recordError) {
+        console.error("[meta-api-direct-sync] Falha ao registrar erro de coleta:", recordError);
+      }
+      throw error;
+    });
     const outcome = await ingestMetaApiPayload({ accountId, rows }, { since, until });
 
     if (outcome.kind === "ok") {
@@ -50,6 +59,23 @@ export async function syncOneMetaApiAccount(accountId: string): Promise<DirectSy
     console.error(`[meta-api-direct-sync] Falha ao sincronizar ${accountId}:`, err);
     return { accountId, outcome: "error", errorMessage: err instanceof Error ? err.message : String(err) };
   }
+}
+
+async function recordFetchFailure(accountId: string, startedAt: string) {
+  const supabase = createAdminClient();
+  const { data: source, error: sourceError } = await supabase.from("import_sources").select("id")
+    .eq("provider", "meta_api").eq("external_account_id", accountId).eq("enabled", true).maybeSingle();
+  if (sourceError) throw sourceError;
+  if (!source) return;
+
+  const { error } = await supabase.from("data_sync_runs").insert({
+    import_source_id: source.id,
+    started_at: startedAt,
+    finished_at: new Date().toISOString(),
+    status: "failed",
+    error_message: "Falha ao consultar a Meta API antes da importação.",
+  });
+  if (error) throw error;
 }
 
 /**

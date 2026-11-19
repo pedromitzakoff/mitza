@@ -21,10 +21,7 @@ export type AlertStatus = AlertStatusDb;
 export type AlertReferenceSource = AlertReferenceSourceDb;
 export type AlertEventType = AlertEventTypeDb;
 
-/** Entrega incremental (decisão do usuário): só "spend_pace" é avaliado
- * nesta fase — os demais existem no enum do banco pra não exigir nova
- * migração, mas nenhum avaliador ainda os produz. */
-export const IMPLEMENTED_ALERT_TYPES: readonly AlertType[] = ["spend_pace"];
+export const IMPLEMENTED_ALERT_TYPES: readonly AlertType[] = ["spend_pace", "sync_issue"];
 
 export interface AlertRow {
   id: string;
@@ -52,13 +49,13 @@ export interface AlertRow {
 /** O que um avaliador pede pra gravar quando a condição está presente —
  * nunca inclui `status`/`id`/timestamps de controle, que são decididos pelo
  * reducer de persistência (`alert-persistence.ts`), nunca pelo detector. */
-export interface AlertCandidate {
+export interface AlertCandidate<Value extends number | null = number> {
   severity: AlertSeverity;
   periodStart: string;
   periodEnd: string;
-  observedValue: number;
-  referenceValue: number;
-  diffPercent: number;
+  observedValue: Value;
+  referenceValue: Value;
+  diffPercent: Value;
   referenceIsEstimate: boolean;
   referenceSource: AlertReferenceSource | null;
   explanation: string;

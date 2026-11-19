@@ -36,6 +36,7 @@ function formatSignedPercent(value: number): string {
  * destaque, explicação do cálculo movida pra dentro de "Ver detalhes").
  */
 export function AlertCard({ alert }: { alert: AlertListItem }) {
+  const isSyncIssue = alert.alertType === "sync_issue";
   const channelConfig = getTrafficChannelConfig(alert.channel);
   // Pedido do usuário: "eu quero um alerta sempre sobre ontem então" — o
   // monitor "hoje em andamento" (`period_kind: "in_progress"`) foi
@@ -127,7 +128,7 @@ export function AlertCard({ alert }: { alert: AlertListItem }) {
           <p className="font-medium text-overview-text-primary">
             {alert.latestNoteByName
               ? `Resolvido por ${alert.latestNoteByName}${alert.latestNoteAt ? ` · ${formatRelativeDateTime(alert.latestNoteAt, new Date())}` : ""}`
-              : "Resolvido automaticamente — o gasto normalizou sozinho"}
+              : isSyncIssue ? "Resolvido automaticamente" : "Resolvido automaticamente — o gasto normalizou sozinho"}
           </p>
           {alert.latestNote && <p className="mt-1">“{alert.latestNote}”</p>}
         </div>
@@ -136,10 +137,14 @@ export function AlertCard({ alert }: { alert: AlertListItem }) {
       {/* Explicação do cálculo (pedido, seção 2: "deixe a explicação do
           cálculo nos detalhes do alerta") — nunca mais sempre visível,
           card fica mais compacto/fácil de comparar vários de uma vez. */}
-      <details className="text-xs text-overview-text-secondary">
-        <summary className="cursor-pointer select-none text-overview-text-muted hover:text-overview-text-secondary">Ver detalhes do cálculo</summary>
-        <p className="mt-1">{alert.explanation}</p>
-      </details>
+      {isSyncIssue ? (
+        <p className="text-sm text-overview-text-secondary">{alert.explanation}</p>
+      ) : (
+        <details className="text-xs text-overview-text-secondary">
+          <summary className="cursor-pointer select-none text-overview-text-muted hover:text-overview-text-secondary">Ver detalhes do cálculo</summary>
+          <p className="mt-1">{alert.explanation}</p>
+        </details>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-overview-border pt-2 text-[11px] text-overview-text-muted">
         <div className="flex flex-wrap items-center gap-3">
@@ -150,18 +155,20 @@ export function AlertCard({ alert }: { alert: AlertListItem }) {
           <Link href={buildWorkspaceHref(alert.clientId, "", null)} className="text-brand hover:underline">
             Ver cliente
           </Link>
-          <Link href={buildWorkspaceHref(alert.clientId, "/campanhas", null)} className="text-brand hover:underline">
-            Ver campanhas
-          </Link>
-          {/* Pedido, seção 4: "quando a resolução for por aumento
-              planejado e já houver uma tela de edição de previsão,
-              ofereça um atalho para ela" — a tela de orçamento/metas já
-              existe (`/clients/[id]/metas`), nunca uma ação automática:
-              o ajuste em si continua uma decisão explícita do gestor
-              naquela tela, nunca disparado daqui. */}
-          <Link href={buildWorkspaceHref(alert.clientId, "/metas", null)} className="text-brand hover:underline">
-            Editar orçamento
-          </Link>
+          {isSyncIssue ? (
+            <Link href={buildWorkspaceHref(alert.clientId, "/dados", null)} className="text-brand hover:underline">
+              Ver dados
+            </Link>
+          ) : (
+            <>
+              <Link href={buildWorkspaceHref(alert.clientId, "/campanhas", null)} className="text-brand hover:underline">
+                Ver campanhas
+              </Link>
+              <Link href={buildWorkspaceHref(alert.clientId, "/metas", null)} className="text-brand hover:underline">
+                Editar orçamento
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
