@@ -212,13 +212,7 @@ export function CockpitView({ model, today }: { model: CockpitViewModel; today: 
 
       {model.showMetaSection && (
         <div className="mt-4">
-          <p className="text-xs text-overview-text-secondary">
-            Indicadores Meta Ads — resultados atribuídos pela Meta (janela de atribuição do Ads Manager), não confirmados por uma fonte de negócio
-            independente.
-          </p>
-          <div className="mt-2">
-            <CockpitAdMetricCards clientId={model.clientId} cards={model.adMetricCards} />
-          </div>
+          <CockpitAdMetricCards clientId={model.clientId} cards={model.adMetricCards} />
         </div>
       )}
 
