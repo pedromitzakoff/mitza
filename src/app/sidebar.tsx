@@ -363,7 +363,10 @@ function ClientSwitcher({
   function openSwitcher() {
     setOpen(true);
     setQuery("");
-    requestAnimationFrame(() => inputRef.current?.focus());
+    // Keep the mobile drawer available for swiping without opening the keyboard.
+    if (window.matchMedia("(min-width: 48rem)").matches) {
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
   }
 
   return (
@@ -397,10 +400,10 @@ function ClientSwitcher({
 
       {open && (
         <>
-          <button type="button" aria-label="Fechar" onClick={() => setOpen(false)} className="fixed inset-0 z-40" />
+          <button type="button" aria-label="Fechar" onClick={() => setOpen(false)} className="fixed inset-0 z-40 hidden md:block" />
           <div
-            className={`mitza-menu-in absolute z-50 w-64 rounded-xl border border-sidebar-border bg-sidebar-surface p-2 shadow-[var(--shadow-float)] ${
-              presentation === "compact" ? "left-full top-0 ml-2" : "left-0 top-full mt-1"
+            className={`mitza-menu-in mt-1 w-full rounded-xl md:absolute md:z-50 md:w-64 border border-sidebar-border bg-sidebar-surface p-2 shadow-[var(--shadow-float)] ${
+              presentation === "compact" ? "md:left-full md:top-0 md:ml-2 md:mt-0" : "md:left-0 md:top-full"
             }`}
           >
             <label className="sr-only" htmlFor="sidebar-client-switcher-search">
@@ -415,7 +418,7 @@ function ClientSwitcher({
               placeholder="Buscar cliente..."
               className="w-full rounded-md border border-sidebar-border bg-transparent px-2 py-1 text-xs text-sidebar-foreground placeholder:text-sidebar-foreground-subtle outline-none focus:border-steel"
             />
-            <ul role="listbox" aria-label="Clientes" className="mt-1.5 max-h-56 overflow-y-auto">
+            <ul role="listbox" aria-label="Clientes" className="mt-1.5 md:max-h-56 md:overflow-y-auto">
               {filtered.map((client) => (
                 <li key={client.id} role="option" aria-selected={client.id === activeClient.id}>
                   <Link
@@ -556,7 +559,7 @@ function SidebarContent({
           `presentation="compact"`). A Carteira completa (lista vertical de
           todos os clientes) já tem um lugar próprio em `/clients`
           (`AgencyAccountsTree`) — não precisa duplicar aqui. */}
-      <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 pt-3 md:overflow-visible md:pt-0 ${collapsed ? "md:hidden" : ""}`}>
+      <div className={`flex min-h-0 flex-1 flex-col touch-pan-y overflow-y-auto overscroll-y-contain px-2.5 pt-3 md:touch-auto md:overflow-visible md:pt-0 ${collapsed ? "md:hidden" : ""}`}>
         {/* Etapa "Otimização do menu lateral mobile" (achado real, ponto 1
             do pedido original): no desktop, a linha de recolher/expandir
             (acima) já dá respiro no topo (`pb-1 pt-1.5`) — mas ela é
@@ -566,7 +569,7 @@ function SidebarContent({
             `md:pt-0`: no desktop o espaçamento continua vindo só da linha
             de cima, nunca dobrado. */}
         {activeClient && (
-          <div className="mb-2 flex shrink-0 items-center gap-2 border-b border-sidebar-border pb-2.5">
+          <div className="mb-2 flex shrink-0 items-start gap-2 border-b border-sidebar-border pb-2.5">
             <div className="min-w-0 flex-1">
               <ClientSwitcher activeClient={activeClient} walletClients={walletClients} month={month} presentation="full" />
             </div>

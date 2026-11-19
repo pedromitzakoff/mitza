@@ -198,7 +198,7 @@ console.log("\nG — Collapsed/mobile (seção 5 do pedido; bugfix de navegaçã
   // da string inteira.
   ok(
     "menu do cliente (expandido) usa 'md:hidden' quando collapsed — some SÓ no desktop recolhido, nunca no mobile (mesma convenção de ItemLabel)",
-    /flex min-h-0 flex-1 flex-col overflow-y-auto px-2\.5 pt-3 md:overflow-visible md:pt-0 \$\{collapsed \? "md:hidden" : ""\}/.test(sidebarSource),
+    /flex min-h-0 flex-1 flex-col touch-pan-y overflow-y-auto overscroll-y-contain px-2\.5 pt-3 md:touch-auto md:overflow-visible md:pt-0 \$\{collapsed \? "md:hidden" : ""\}/.test(sidebarSource),
   );
   ok(
     "versão compacta (desktop recolhido) usa 'hidden md:flex' — nunca aparece no mobile (o menu do cliente expandido já cobre esse caso lá)",
@@ -328,7 +328,7 @@ console.log("\nL — MITZA ONE — Fase 2.1: altura da carteira priorizada (seç
     // `md:overflow-visible` (scroll só no drawer mobile) e, depois,
     // `pt-3 md:pt-0` (respiro no topo só no mobile) — `flex-1 min-h-0`
     // continua exatamente a mesma mecânica de sempre.
-    sidebarSource.includes("flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 pt-3 md:overflow-visible md:pt-0"),
+    sidebarSource.includes("flex min-h-0 flex-1 flex-col touch-pan-y overflow-y-auto overscroll-y-contain px-2.5 pt-3 md:touch-auto md:overflow-visible md:pt-0"),
   );
   ok("rodapé (relógio/Atualizar Meta/identidade/sair) continua intocado, mesma estrutura", sidebarSource.includes('border-t border-sidebar-border p-2.5'));
 }
