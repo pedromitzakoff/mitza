@@ -19,16 +19,7 @@ import type { AccountInfoSyncRun } from "./account-info-drawer";
 export interface AccountInfoDrawerData {
   lastPerformanceUpdateValue: string;
   latestDataDateLabel: string | null;
-  /** `true` quando existe PELO MENOS UMA fonte `meta_api` (busca direta na
-   * Meta) habilitada — decide se o bloco "Sincronização" (com botão
-   * "Sincronizar agora") aparece. Stract foi descontinuado (ver
-   * `docs/STRACT_INTEGRATION_ARCHITECTURE.md`) — uma linha `import_sources`
-   * antiga com `provider='stract'` ainda habilitada no banco (nunca
-   * removida destrutivamente) deliberadamente NÃO entra aqui: o botão só
-   * aparece quando realmente vai funcionar (`syncClientMetaApiSourcesAction`
-   * só entende `meta_api`), cliente nessa situação cai no fallback
-   * `metaOnlyLastSyncLabel` abaixo, mesmo estado de quem nunca teve fonte
-   * automática nenhuma. */
+  /** Existe uma fonte Meta API habilitada para sincronização. */
   hasAutomaticSyncSource: boolean;
   /** Rótulo da fonte automática ativa — sempre "Meta (busca direta)" quando
    * `hasAutomaticSyncSource` é `true` (único provider automático ativo
@@ -71,18 +62,8 @@ export async function getAccountInfoDrawerDataAction(clientId: string): Promise<
   if (!client) return { error: "Cliente não encontrado." };
   const canOperate = client.status === "ativo";
 
-  // Stract descontinuado — só fonte `meta_api` habilitada conta como
-  // "automática" aqui (ver doc-comment de `hasAutomaticSyncSource` acima).
-  // `getEnabledImportSourceIdsForClient` continua genérico de propósito
-  // (resolve o HISTÓRICO de execuções independente de provider — uma
-  // fonte `stract` antiga ainda tem seu `data_sync_runs` real), só esta
-  // checagem específica de "existe fonte automática ACIONÁVEL" ficou
-  // restrita a `meta_api`.
-  const [enabledSourceIds, { data: enabledMetaApiSourceRows }] = await Promise.all([
-    getEnabledImportSourceIdsForClient(supabase, clientId),
-    supabase.from("import_sources").select("id").eq("client_id", clientId).eq("provider", "meta_api").eq("enabled", true),
-  ]);
-  const hasAutomaticSyncSource = (enabledMetaApiSourceRows ?? []).length > 0;
+  const enabledSourceIds = await getEnabledImportSourceIdsForClient(supabase, clientId);
+  const hasAutomaticSyncSource = enabledSourceIds.length > 0;
   const syncProviderLabel = hasAutomaticSyncSource ? "Meta (busca direta)" : null;
 
   const [latestSyncStatus, latestSpendDate, recentSyncRuns, reportShareLinkStatus, [clientOperationalState]] = await Promise.all([

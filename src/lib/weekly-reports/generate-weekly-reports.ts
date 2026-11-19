@@ -59,7 +59,7 @@ export async function generateWeeklyReports(now: Date = new Date(), supabase: Ad
       supabase.from("clients").select("id, name, performance_goal, media_channels").eq("status", WORKSPACE_ACTIVE_CONTRACT_STATUS).is("deleted_at", null),
       "clients:weekly-reports",
     ),
-    requireQuery(supabase.from("import_sources").select("id, client_id, channel, status, last_success_at, last_imported_date").eq("enabled", true), "import_sources:weekly-reports"),
+    requireQuery(supabase.from("import_sources").select("id, client_id, channel, status, last_success_at, last_imported_date").eq("provider", "meta_api").eq("enabled", true), "import_sources:weekly-reports"),
   ]);
 
   const sourceIds = activeSources.map((source) => source.id);
