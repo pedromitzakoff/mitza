@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { requireQuery } from "@/lib/require-query";
 import type { TrafficChannel } from "@/lib/traffic-channels";
-import { reduceAlertEvaluation } from "@/lib/alerts/alert-persistence";
+import { reduceAlertEvaluation, shouldKeepManualResolution } from "@/lib/alerts/alert-persistence";
 import type { AlertCandidate, AlertPeriodKind, AlertType } from "@/lib/alerts/alert-types";
 
 export async function persistAlertEvaluation(
@@ -14,7 +14,7 @@ export async function persistAlertEvaluation(
   const existingRows = await requireQuery(
     supabase
       .from("alerts")
-      .select("id, status")
+      .select("id, status, period_end, detail, resolved_at, last_evaluated_at, updated_at")
       .eq("client_id", key.clientId)
       .eq("channel", key.channel)
       .eq("alert_type", key.alertType)
@@ -23,6 +23,8 @@ export async function persistAlertEvaluation(
     "alerts:existing",
   );
   const existing = existingRows[0] ?? null;
+
+  if (existing && candidate && shouldKeepManualResolution(existing, candidate, key.alertType)) return "ignored";
 
   const transition = reduceAlertEvaluation(existing ? { status: existing.status } : null, candidate !== null);
   if (transition.action === "ignore") return "ignored";
@@ -60,8 +62,12 @@ export async function persistAlertEvaluation(
       "alerts:insert",
     );
     alertId = inserted[0]?.id ?? null;
-  } else if (alertId) {
-    await requireQuery(supabase.from("alerts").update(patch).eq("id", alertId).select("id"), "alerts:update");
+  } else if (existing) {
+    const updated = await requireQuery(
+      supabase.from("alerts").update(patch).eq("id", existing.id).eq("updated_at", existing.updated_at).select("id"),
+      "alerts:update",
+    );
+    if (updated.length === 0) return "ignored";
   }
 
   if (alertId) {
