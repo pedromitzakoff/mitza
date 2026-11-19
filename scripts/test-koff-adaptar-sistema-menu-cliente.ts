@@ -37,26 +37,24 @@ console.log("\nA — buildClientNavItems: os 4 itens, na ordem certa, escopados 
   const items = buildClientNavItems("client-1", "2026-11");
 
   // Aba "Alertas" (pedido do usuário, posterior a esta etapa — "coloque o
-  // alertas ali junto com os outros menus"): 5º item, cross-cliente (href
-  // sempre "/alerts", nunca escopado por clientId) — "Contas" continua
-  // fora (virou o ClientSwitcher). "Reports" (pedido posterior, aba
-  // "Reports"): 6º item, mesmo padrão cross-cliente do "Alertas".
-  ok("exatamente 6 itens — 'Contas' não é mais item de menu, Alertas/Reports somados depois desta etapa", items.length === 6);
-  ok(
-    "ordem: Dashboard, Campanhas, Anúncios, Metas, Alertas, Reports",
-    items.map((i) => i.label).join(",") === "Dashboard,Campanhas,Anúncios,Metas,Alertas,Reports",
-  );
+  // alertas ali junto com os outros menus") e "Reports" (pedido posterior):
+  // cross-cliente, href fixo, nunca escopado por clientId — "Contas"
+  // continua fora (virou o ClientSwitcher). "Campanhas" SAIU do menu
+  // (pedido do usuário: "no próprio dash eu já vejo as campanhas" — a
+  // rota continua existindo pra links diretos, só não é mais item de
+  // menu).
+  ok("exatamente 5 itens — 'Contas' nunca foi item de menu, 'Campanhas' saiu, Alertas/Reports somados depois desta etapa", items.length === 5);
+  ok("ordem: Dashboard, Anúncios, Metas, Alertas, Reports", items.map((i) => i.label).join(",") === "Dashboard,Anúncios,Metas,Alertas,Reports");
   ok("Dashboard aponta pra raiz do workspace do cliente, preservando o mês", items[0].href === "/clients/client-1?month=2026-11");
-  ok("Campanhas aponta pra /clients/client-1/campanhas", items[1].href === "/clients/client-1/campanhas?month=2026-11");
-  ok("Anúncios aponta pra /clients/client-1/anuncios", items[2].href === "/clients/client-1/anuncios?month=2026-11");
-  ok("Metas aponta pra /clients/client-1/metas (rota já existia)", items[3].href === "/clients/client-1/metas?month=2026-11");
+  ok("Anúncios aponta pra /clients/client-1/anuncios", items[1].href === "/clients/client-1/anuncios?month=2026-11");
+  ok("Metas aponta pra /clients/client-1/metas (rota já existia)", items[2].href === "/clients/client-1/metas?month=2026-11");
 
-  ok("Dashboard ativo só na raiz exata do cliente, nunca em sub-rotas", items[0].isActive("/clients/client-1") && !items[0].isActive("/clients/client-1/campanhas"));
-  ok("Campanhas ativo em qualquer sub-rota de /campanhas", items[1].isActive("/clients/client-1/campanhas") && items[1].isActive("/clients/client-1/campanhas/x"));
-  ok("Campanhas de um cliente NUNCA fica ativo na rota de outro cliente", !items[1].isActive("/clients/client-2/campanhas"));
+  ok("Dashboard ativo só na raiz exata do cliente, nunca em sub-rotas", items[0].isActive("/clients/client-1") && !items[0].isActive("/clients/client-1/anuncios"));
+  ok("Anúncios ativo em qualquer sub-rota de /anuncios", items[1].isActive("/clients/client-1/anuncios") && items[1].isActive("/clients/client-1/anuncios/x"));
+  ok("Anúncios de um cliente NUNCA fica ativo na rota de outro cliente", !items[1].isActive("/clients/client-2/anuncios"));
 
   const noMonth = buildClientNavItems("client-1", null);
-  ok("sem mês selecionado, os links não carregam ?month= nenhum (nunca um valor fabricado)", noMonth[0].href === "/clients/client-1" && noMonth[1].href === "/clients/client-1/campanhas");
+  ok("sem mês selecionado, os links não carregam ?month= nenhum (nunca um valor fabricado)", noMonth[0].href === "/clients/client-1" && noMonth[1].href === "/clients/client-1/anuncios");
 }
 
 // ---------------------------------------------------------------------------

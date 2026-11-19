@@ -14,7 +14,6 @@ import {
   Image as ImageIcon,
   LayoutDashboard,
   LogOut,
-  Megaphone,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -206,16 +205,19 @@ const GESTAO_ITEMS: NavItem[] = [
  * `/reports`, cross-cliente, mesma posição do "Alertas" na hierarquia.
  * `MobileTabBar` passa a ter 6 itens; validado visualmente que ainda cabe
  * sem rolagem horizontal (ver QA desta entrega).
+ *
+ * "Campanhas" SAIU do menu (pedido do usuário: "acho que o menu campanhas
+ * tá ocupando espaço atoa, não precisa dele, no próprio dash eu já vejo as
+ * campanhas") — a rota `/clients/[id]/campanhas` continua existindo (links
+ * diretos, ex. "Ver campanhas" nos cards de Alertas, continuam
+ * funcionando), só não é mais um item de menu: o Dashboard já mostra a
+ * mesma seção "Campanhas, conjuntos e anúncios" (`CockpitView`,
+ * `CockpitAdExplorationSection`) — ter os dois na navegação era
+ * redundante.
  */
 export function buildClientNavItems(clientId: string, month: string | null): NavItem[] {
   return [
     { label: "Dashboard", href: buildWorkspaceHref(clientId, "", month), icon: LayoutDashboard, isActive: (p) => p === `/clients/${clientId}` },
-    {
-      label: "Campanhas",
-      href: buildWorkspaceHref(clientId, "/campanhas", month),
-      icon: Megaphone,
-      isActive: (p) => p.startsWith(`/clients/${clientId}/campanhas`),
-    },
     {
       label: "Anúncios",
       href: buildWorkspaceHref(clientId, "/anuncios", month),
