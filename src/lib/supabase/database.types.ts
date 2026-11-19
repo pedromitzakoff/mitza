@@ -61,7 +61,7 @@ export type TrafficChannelDb = "meta" | "google" | "tiktok" | "linkedin" | "inst
 /** Aba "Alertas" — ver `supabase/alerts.sql` pro comentário completo de cada
  * tipo/enum. Único ponto de definição desses enums em TS — `src/lib/alerts/`
  * nunca redeclara, sempre importa daqui. */
-export type AlertTypeDb = "spend_pace" | "no_delivery" | "cost_per_result_increase" | "spend_without_result" | "sync_issue" | "opportunity";
+export type AlertTypeDb = "spend_pace" | "no_delivery" | "cost_per_result_increase" | "spend_without_result" | "sync_issue" | "opportunity" | "balance_depletion";
 export type AlertPeriodKindDb = "full_day" | "in_progress";
 export type AlertSeverityDb = "critico" | "atencao" | "oportunidade";
 export type AlertStatusDb = "precisa_atencao" | "acompanhamento" | "resolvido";

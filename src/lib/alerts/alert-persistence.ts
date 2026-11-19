@@ -1,4 +1,10 @@
-import type { AlertEventType, AlertStatus } from "@/lib/alerts/alert-types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
+import { requireQuery } from "@/lib/require-query";
+import type { TrafficChannel } from "@/lib/traffic-channels";
+import type { AlertCandidate, AlertEventType, AlertPeriodKind, AlertStatus, AlertType } from "@/lib/alerts/alert-types";
+
+type AdminSupabase = SupabaseClient<Database>;
 
 /**
  * Máquina de estados pura da seção 3/5 do pedido ("Acompanhamento de
@@ -71,4 +77,94 @@ export function reduceAlertEvaluation(existing: ExistingAlertForEvaluation | nul
     return { action: "resolve", nextStatus: "resolvido", eventType: "resolvido_auto", resetFirstDetected: false };
   }
   return { action: "update", nextStatus: "precisa_atencao", eventType: "retomado_atencao", resetFirstDetected: false };
+}
+
+/**
+ * Parte impura (leitura/gravação no banco) compartilhada por QUALQUER
+ * avaliador de alerta — extraída de `evaluate-spend-pace.ts` quando
+ * "Saldo esgotando" (`evaluate-balance-depletion.ts`) virou o 2º avaliador
+ * a precisar exatamente da mesma sequência (ler linha existente -> decidir
+ * transição via `reduceAlertEvaluation` -> upsert em `alerts` -> registrar
+ * `alert_events`). Chave única de sempre: `(client_id, channel, alert_type,
+ * period_kind)` — UMA linha reaproveitada, nunca um INSERT novo pro mesmo
+ * problema contínuo.
+ */
+export async function persistAlertEvaluation(
+  supabase: AdminSupabase,
+  key: { clientId: string; channel: TrafficChannel; alertType: AlertType; periodKind: AlertPeriodKind },
+  candidate: AlertCandidate | null,
+  nowIso: string,
+): Promise<"created" | "updated" | "resolved" | "ignored"> {
+  const existingRows = await requireQuery(
+    supabase
+      .from("alerts")
+      .select("id, status")
+      .eq("client_id", key.clientId)
+      .eq("channel", key.channel)
+      .eq("alert_type", key.alertType)
+      .eq("period_kind", key.periodKind)
+      .limit(1),
+    "alerts:existing",
+  );
+  const existing = existingRows[0] ?? null;
+
+  const transition = reduceAlertEvaluation(existing ? { status: existing.status as AlertStatus } : null, candidate !== null);
+  if (transition.action === "ignore") return "ignored";
+
+  const patch: Database["public"]["Tables"]["alerts"]["Update"] = {
+    status: transition.nextStatus,
+    last_evaluated_at: nowIso,
+    resolved_at: transition.action === "resolve" ? nowIso : null,
+    ...(transition.resetFirstDetected ? { first_detected_at: nowIso } : {}),
+  };
+
+  if (candidate) {
+    Object.assign(patch, {
+      severity: candidate.severity,
+      period_start: candidate.periodStart,
+      period_end: candidate.periodEnd,
+      observed_value: candidate.observedValue,
+      reference_value: candidate.referenceValue,
+      diff_percent: candidate.diffPercent,
+      reference_is_estimate: candidate.referenceIsEstimate,
+      reference_source: candidate.referenceSource,
+      explanation: candidate.explanation,
+      detail: candidate.detail,
+    });
+  }
+
+  let alertId: string | null = existing?.id ?? null;
+
+  if (transition.action === "create") {
+    const inserted = await requireQuery(
+      supabase
+        .from("alerts")
+        .insert({ client_id: key.clientId, channel: key.channel, alert_type: key.alertType, period_kind: key.periodKind, ...patch } as Database["public"]["Tables"]["alerts"]["Insert"])
+        .select("id"),
+      "alerts:insert",
+    );
+    alertId = inserted[0]?.id ?? null;
+  } else if (alertId) {
+    await requireQuery(supabase.from("alerts").update(patch).eq("id", alertId).select("id"), "alerts:update");
+  }
+
+  if (alertId) {
+    await requireQuery(
+      supabase
+        .from("alert_events")
+        .insert({
+          alert_id: alertId,
+          event_type: transition.eventType,
+          from_status: existing?.status as AlertStatus | undefined,
+          to_status: transition.nextStatus,
+          observed_value: candidate?.observedValue ?? null,
+          reference_value: candidate?.referenceValue ?? null,
+          diff_percent: candidate?.diffPercent ?? null,
+        })
+        .select("id"),
+      "alert_events:insert",
+    );
+  }
+
+  return transition.action === "create" ? "created" : transition.action === "resolve" ? "resolved" : "updated";
 }

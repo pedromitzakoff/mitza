@@ -21,10 +21,12 @@ export type AlertStatus = AlertStatusDb;
 export type AlertReferenceSource = AlertReferenceSourceDb;
 export type AlertEventType = AlertEventTypeDb;
 
-/** Entrega incremental (decisão do usuário): só "spend_pace" é avaliado
- * nesta fase — os demais existem no enum do banco pra não exigir nova
- * migração, mas nenhum avaliador ainda os produz. */
-export const IMPLEMENTED_ALERT_TYPES: readonly AlertType[] = ["spend_pace"];
+/** Entrega incremental (decisão do usuário): "spend_pace" e
+ * "balance_depletion" (pedido explícito: "coloque como alerta quando
+ * estivermos 3 dias antes do saldo esgotar") são avaliados nesta fase — os
+ * demais existem no enum do banco pra não exigir nova migração, mas nenhum
+ * avaliador ainda os produz. */
+export const IMPLEMENTED_ALERT_TYPES: readonly AlertType[] = ["spend_pace", "balance_depletion"];
 
 export interface AlertRow {
   id: string;

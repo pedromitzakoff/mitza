@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { evaluateSpendPaceAlerts } from "@/lib/alerts/evaluate-spend-pace";
+import { evaluateBalanceDepletionAlerts } from "@/lib/alerts/evaluate-balance-depletion";
 import { guardCronRequest } from "@/lib/cron-auth";
 
 /**
@@ -15,8 +16,9 @@ import { guardCronRequest } from "@/lib/cron-auth";
  * monitor "hoje em andamento" (seção 4 do pedido) precisa pra refletir o
  * gasto acumulado em tempo quase real.
  *
- * Entrega incremental (decisão do usuário): só o tipo "spend_pace" é
- * avaliado por enquanto — os demais 5 tipos do pedido entram aqui conforme
+ * Entrega incremental (decisão do usuário): "spend_pace" e
+ * "balance_depletion" (pedido explícito: "saldo esgotando") são avaliados
+ * por enquanto — os demais tipos do pedido original entram aqui conforme
  * forem implementados, cada um sua própria função `evaluateXAlerts`.
  */
 export const runtime = "nodejs";
@@ -27,5 +29,6 @@ export async function GET(request: Request) {
   if (rejection) return rejection;
 
   const spendPace = await evaluateSpendPaceAlerts();
-  return NextResponse.json({ spendPace });
+  const balanceDepletion = await evaluateBalanceDepletionAlerts();
+  return NextResponse.json({ spendPace, balanceDepletion });
 }

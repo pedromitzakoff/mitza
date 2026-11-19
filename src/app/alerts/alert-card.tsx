@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { COCKPIT_CARD_CLASSES } from "@/lib/cockpit-pace";
-import { formatCurrency, formatRelativeDateTime } from "@/lib/format";
+import { formatCurrency, formatCurrencyInCurrency, formatRelativeDateTime } from "@/lib/format";
 import { getTrafficChannelConfig } from "@/lib/traffic-channels";
 import { buildWorkspaceHref } from "@/lib/client-workspace-nav";
 import { ALERT_SEVERITY_BADGE_CLASSES, ALERT_SEVERITY_LABEL, ALERT_TYPE_LABEL } from "@/lib/alerts/alert-labels";
@@ -50,7 +50,13 @@ export function AlertCard({ alert }: { alert: AlertListItem }) {
 
   const referenceLabel = alert.referenceSource === "monthly_budget" ? "orçamento mensal ÷ dias do mês" : alert.referenceSource === "historical_average" ? "média do histórico recente" : null;
 
-  const hasAmounts = alert.observedValue !== null && alert.referenceValue !== null;
+  // "Saldo esgotando" (`balance_depletion`) tem semântica própria —
+  // observedValue/referenceValue aqui são saldo/ritmo diário, nunca
+  // "gastos/previstos" como em spend_pace — por isso tem um bloco de
+  // exibição próprio (`hasBalanceDepletion`) em vez de reaproveitar o
+  // bloco genérico abaixo (`hasAmounts`), que ficaria com a frase errada.
+  const hasBalanceDepletion = alert.alertType === "balance_depletion" && alert.observedValue !== null && alert.balanceDaysRemaining !== null;
+  const hasAmounts = alert.alertType !== "balance_depletion" && alert.observedValue !== null && alert.referenceValue !== null;
   // Mês (pedido, seção 2): só mostra quando há referência confiável —
   // `monthExpectedToDate === null` normalmente significa "sem orçamento
   // mensal configurado pra este canal", nunca um 0 fabricado.
@@ -76,6 +82,22 @@ export function AlertCard({ alert }: { alert: AlertListItem }) {
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ALERT_SEVERITY_BADGE_CLASSES[alert.severity]}`}>{ALERT_SEVERITY_LABEL[alert.severity]}</span>
         </div>
       </div>
+
+      {/* "Saldo esgotando" (pedido explícito do usuário: "coloque como
+          alerta quando estivermos 3 dias antes do saldo esgotar se manter
+          o mesmo investimento do dia anterior") — saldo atual, ritmo
+          diário e dias restantes, nunca a frase "gastos/previstos" do
+          bloco genérico abaixo (que não se aplica aqui). */}
+      {hasBalanceDepletion && (
+        <p className="text-sm text-overview-text-primary">
+          Saldo: <span className="font-semibold">{formatCurrencyInCurrency(alert.observedValue!, alert.balanceCurrency ?? "BRL")}</span>
+          {" · "}Ritmo: {formatCurrencyInCurrency(alert.referenceValue!, alert.balanceCurrency ?? "BRL")}/dia
+          {" · "}
+          <span className={`font-semibold ${SEVERITY_TEXT_CLASSES[alert.severity]}`}>
+            {Math.max(0, Math.floor(alert.balanceDaysRemaining!))} dia(s) restantes
+          </span>
+        </p>
+      )}
 
       {/* Valor observado/previsto/diferença (pedido, seção 2 — exemplo:
           "Byma · R$ 234,60 gastos · R$ 120,00 previstos · +R$ 114,60

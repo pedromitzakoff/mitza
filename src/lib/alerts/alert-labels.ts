@@ -45,4 +45,5 @@ export const ALERT_TYPE_LABEL: Record<AlertType, string> = {
   spend_without_result: "Gasto relevante sem resultado",
   sync_issue: "Problema de dados ou sincronização",
   opportunity: "Oportunidade",
+  balance_depletion: "Saldo esgotando",
 };

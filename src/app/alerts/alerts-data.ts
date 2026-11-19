@@ -63,6 +63,11 @@ export interface AlertListItem {
    * fabricado); um alerta antigo sem essas chaves também cai em `null`. */
   monthActual: number | null;
   monthExpectedToDate: number | null;
+  /** Só "balance_depletion" (`detail.daysRemaining`/`detail.currency`,
+   * gravados por `detectBalanceDepletionAlert`) — `null` pra qualquer
+   * outro tipo de alerta, nunca um valor fabricado. */
+  balanceDaysRemaining: number | null;
+  balanceCurrency: string | null;
   explanation: string;
   firstDetectedAt: string;
   lastEvaluatedAt: string;
@@ -176,6 +181,8 @@ export async function loadAlertList(
       const diffReais = typeof detail.diffReais === "number" ? detail.diffReais : null;
       const monthActual = typeof detail.monthActual === "number" ? detail.monthActual : null;
       const monthExpectedToDate = typeof detail.monthExpectedToDate === "number" ? detail.monthExpectedToDate : null;
+      const balanceDaysRemaining = typeof detail.daysRemaining === "number" ? detail.daysRemaining : null;
+      const balanceCurrency = typeof detail.currency === "string" ? detail.currency : null;
       return {
         id: row.id,
         displayNumber: row.display_number,
@@ -196,6 +203,8 @@ export async function loadAlertList(
         referenceSource: row.reference_source,
         monthActual,
         monthExpectedToDate,
+        balanceDaysRemaining,
+        balanceCurrency,
         explanation: row.explanation,
         firstDetectedAt: row.first_detected_at,
         lastEvaluatedAt: row.last_evaluated_at,
