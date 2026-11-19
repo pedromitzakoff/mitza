@@ -36,6 +36,7 @@ export interface CampaignDataGap {
   since: string;
   until: string;
   missingDayCount: number;
+  missingDates: string[];
 }
 
 function subtractDays(date: Date, days: number): Date {
@@ -109,20 +110,18 @@ export function resolveGapScanWindow(today: string, lookbackDays: number, syncWi
 export function detectGapRange(
   spendDates: readonly string[],
   recordedDates: ReadonlySet<string>,
-): { since: string; until: string; missingDayCount: number } | null {
+): { since: string; until: string; missingDayCount: number; missingDates: string[] } | null {
   const missing = spendDates.filter((date) => !recordedDates.has(date)).sort();
   if (missing.length === 0) return null;
-  return { since: missing[0], until: missing[missing.length - 1], missingDayCount: missing.length };
+  return { since: missing[0], until: missing[missing.length - 1], missingDayCount: missing.length, missingDates: missing };
 }
 
 /**
  * Varre toda conta Meta API direta ATIVA e aponta o gap de cada uma —
  * `lookbackDays` limita a janela de varredura (não precisa olhar anos pra
  * trás; contas reais da MITZA não têm gap antes disso, e isso mantém a
- * consulta rápida mesmo com muitos clientes). Duas leituras por conta
- * (`daily_spend`/`campaign_daily_metrics`), nunca uma junção SQL — mais
- * simples de revisar e não depende de nenhuma relação de chave estrangeira
- * nomeada em particular.
+ * consulta rápida mesmo com muitos clientes). Lê o investimento diário e
+ * busca as campanhas apenas nas datas com investimento.
  *
  * Garantia explícita (ponto 1 do pedido): NUNCA aponta os últimos
  * `DIRECT_SYNC_WINDOW_DAYS` dias (hoje + 2 anteriores) como gap — essa é
@@ -133,8 +132,8 @@ export function detectGapRange(
  * sinal de que a sincronização normal teve chance de se autocorrigir e não
  * conseguiu.
  */
-export async function findCampaignDataGaps(supabase: Supabase, lookbackDays = 60): Promise<CampaignDataGap[]> {
-  const { windowStart, windowEnd } = resolveGapScanWindow(todayDateString(), lookbackDays, DIRECT_SYNC_WINDOW_DAYS);
+export async function findCampaignDataGaps(supabase: Supabase, lookbackDays = 60, today = todayDateString()): Promise<CampaignDataGap[]> {
+  const { windowStart, windowEnd } = resolveGapScanWindow(today, lookbackDays, DIRECT_SYNC_WINDOW_DAYS);
 
   const sources = await requireQuery(
     supabase.from("import_sources").select("client_id, external_account_id").eq("channel", "meta").eq("provider", "meta_api").eq("enabled", true),
@@ -157,34 +156,39 @@ export async function findCampaignDataGaps(supabase: Supabase, lookbackDays = 60
       const clientName = clientNameById.get(source.client_id);
       if (!clientName) return null; // cliente excluído/sem nome resolvido — nunca aponta um gap pra um id que não existe mais.
 
-      const [spendRows, campaignRows] = await Promise.all([
-        requireQuery(
-          supabase
-            .from("daily_spend")
-            .select("date")
-            .eq("client_id", source.client_id)
-            .eq("channel", "meta")
-            .gte("date", windowStart)
-            .lte("date", windowEnd)
-            .gt("spend", 0),
-          "daily_spend:gap-detection",
-        ),
-        requireQuery(
+      const spendRows = await requireQuery(
+        supabase
+          .from("daily_spend")
+          .select("date")
+          .eq("client_id", source.client_id)
+          .eq("channel", "meta")
+          .gte("date", windowStart)
+          .lte("date", windowEnd)
+          .gt("spend", 0),
+        "daily_spend:gap-detection",
+      );
+      const spendDates = [...new Set(spendRows.map((row) => row.date))];
+      if (spendDates.length === 0) return null;
+
+      const recordedDates = new Set<string>();
+      const pageSize = 500;
+      for (let offset = 0; recordedDates.size < spendDates.length; offset += pageSize) {
+        const rows = await requireQuery(
           supabase
             .from("campaign_daily_metrics")
             .select("date")
             .eq("client_id", source.client_id)
             .eq("channel", "meta")
-            .gte("date", windowStart)
-            .lte("date", windowEnd),
+            .in("date", spendDates)
+            .order("id")
+            .range(offset, offset + pageSize - 1),
           "campaign_daily_metrics:gap-detection",
-        ),
-      ]);
+        );
+        for (const row of rows) recordedDates.add(row.date);
+        if (rows.length < pageSize) break;
+      }
 
-      const gap = detectGapRange(
-        spendRows.map((r) => r.date),
-        new Set(campaignRows.map((r) => r.date)),
-      );
+      const gap = detectGapRange(spendDates, recordedDates);
       return gap ? { clientId: source.client_id, clientName, accountId: source.external_account_id, ...gap } : null;
     }),
   );

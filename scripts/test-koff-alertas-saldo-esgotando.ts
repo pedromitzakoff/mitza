@@ -95,16 +95,21 @@ console.log("\nE — Wiring estrutural: enum, rótulo, tipo implementado\n");
   ok("migração preserva todos os valores antigos do enum (nenhum removido)", ["spend_pace", "no_delivery", "cost_per_result_increase", "spend_without_result", "sync_issue", "opportunity"].every((v) => migrationSource.includes(`'${v}'`)));
 }
 
-console.log("\nF — Avaliador reaproveita a MESMA persistência compartilhada de spend_pace (nenhuma lógica duplicada)\n");
+console.log("\nF — Avaliador reaproveita a MESMA persistência compartilhada de spend_pace/sync_issue (nenhuma lógica duplicada)\n");
 {
-  const persistenceSource = loadSource("src", "lib", "alerts", "alert-persistence.ts");
-  ok("persistAlertEvaluation (parte impura) foi extraída pra cá, compartilhada entre avaliadores", persistenceSource.includes("export async function persistAlertEvaluation("));
+  // `persist-alert-evaluation.ts` — módulo compartilhado já estabelecido
+  // em produção pelo alerta "sync_issue" (Problema de sincronização,
+  // mesclado nesta branch depois do alerta de saldo já ter sido
+  // construído); `evaluate-balance-depletion.ts` foi atualizado pra usar
+  // a MESMA fonte, em vez de manter uma cópia divergente.
+  const persistenceSource = loadSource("src", "lib", "alerts", "persist-alert-evaluation.ts");
+  ok("persistAlertEvaluation (parte impura) é compartilhada entre avaliadores", persistenceSource.includes("export async function persistAlertEvaluation("));
 
   const spendPaceSource = loadSource("src", "lib", "alerts", "evaluate-spend-pace.ts");
-  ok("evaluate-spend-pace.ts importa a versão compartilhada (não tem mais sua própria cópia)", spendPaceSource.includes('import { persistAlertEvaluation } from "@/lib/alerts/alert-persistence";') && !spendPaceSource.includes("async function persistAlertEvaluation("));
+  ok("evaluate-spend-pace.ts importa a versão compartilhada (não tem mais sua própria cópia)", spendPaceSource.includes('import { persistAlertEvaluation } from "@/lib/alerts/persist-alert-evaluation";') && !spendPaceSource.includes("async function persistAlertEvaluation("));
 
   const balanceEvalSource = loadSource("src", "lib", "alerts", "evaluate-balance-depletion.ts");
-  ok("evaluate-balance-depletion.ts usa a MESMA função compartilhada", balanceEvalSource.includes('import { persistAlertEvaluation } from "@/lib/alerts/alert-persistence";'));
+  ok("evaluate-balance-depletion.ts usa a MESMA função compartilhada", balanceEvalSource.includes('import { persistAlertEvaluation } from "@/lib/alerts/persist-alert-evaluation";'));
   ok(
     "só avalia conta PRÉ-PAGA (nunca pós-paga — achado real do usuário: Meta reporta algumas contas PIX como pós-pago)",
     balanceEvalSource.includes("!snapshot.isPrepay"),

@@ -8,7 +8,7 @@ import { listDatesInclusive, computeMonthlyExpectedToDateByCalendar } from "@/li
 import { resolveClientMonthlyPlan, filterRowsToPrimaryGoal, type ClientPlanChangeRow } from "@/lib/client-plan";
 import type { TrafficChannel } from "@/lib/traffic-channels";
 import { resolveDailySpendReference, detectSpendPaceAlert } from "@/lib/alerts/spend-pace-detection";
-import { persistAlertEvaluation } from "@/lib/alerts/alert-persistence";
+import { persistAlertEvaluation } from "@/lib/alerts/persist-alert-evaluation";
 import { SPEND_PACE_HISTORY_WINDOW_DAYS } from "@/lib/alerts/spend-pace-thresholds";
 import type { AlertPeriodKind } from "@/lib/alerts/alert-types";
 

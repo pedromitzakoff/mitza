@@ -12,6 +12,8 @@ import {
   syncMetaConnectionAction,
 } from "./actions";
 import { ActionTypePicker } from "./action-type-picker";
+import { BackfillPeriodFields } from "./backfill-period-fields";
+import { todayDateString } from "@/lib/today";
 
 const inputClasses = "rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:border-zinc-500";
 const labelClasses = "flex flex-col gap-1 text-sm text-foreground";
@@ -207,22 +209,7 @@ export function MetaConnectionDrawer({
             Idempotente (pode rodar de novo sem duplicar), mas é uma operação pesada: confirme o intervalo antes de clicar.
           </p>
           <form action={runMetaApiBackfillAction.bind(null, importSource.externalAccountId, clientId)} className="flex flex-col gap-3">
-            <div className="flex gap-3">
-              <label className={`${labelClasses} flex-1`}>
-                De
-                <input type="date" name="since" required className={inputClasses} />
-              </label>
-              <label className={`${labelClasses} flex-1`}>
-                Até
-                <input type="date" name="until" required className={inputClasses} />
-              </label>
-            </div>
-            <SubmitButton
-              className="self-start rounded-md border border-amber-600 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950"
-              pendingChildren="Rodando backfill… pode levar alguns minutos"
-            >
-              Iniciar backfill histórico real
-            </SubmitButton>
+            <BackfillPeriodFields key={importSource.id} today={todayDateString()} />
           </form>
         </section>
       )}

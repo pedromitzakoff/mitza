@@ -6,7 +6,7 @@ import { todayDateString } from "@/lib/today";
 import { shiftDays } from "@/lib/date-range";
 import { fetchAccountBalanceSnapshot } from "@/lib/meta-ads-dashboard/dashboard-data";
 import { detectBalanceDepletionAlert } from "@/lib/alerts/balance-depletion-detection";
-import { persistAlertEvaluation } from "@/lib/alerts/alert-persistence";
+import { persistAlertEvaluation } from "@/lib/alerts/persist-alert-evaluation";
 
 type AdminSupabase = SupabaseClient<Database>;
 
