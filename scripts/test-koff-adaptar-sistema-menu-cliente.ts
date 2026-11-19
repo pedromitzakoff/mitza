@@ -32,7 +32,7 @@ function loadSource(...segments: string[]): string {
 }
 
 // ---------------------------------------------------------------------------
-console.log("\nA — buildClientNavItems: os 4 itens, na ordem certa, escopados ao cliente\n");
+console.log("\nA — buildClientNavItems: itens na ordem certa e no escopo correto\n");
 {
   const items = buildClientNavItems("client-1", "2026-11");
 
@@ -43,11 +43,14 @@ console.log("\nA — buildClientNavItems: os 4 itens, na ordem certa, escopados 
   // (pedido do usuário: "no próprio dash eu já vejo as campanhas" — a
   // rota continua existindo pra links diretos, só não é mais item de
   // menu).
-  ok("exatamente 5 itens — 'Contas' nunca foi item de menu, 'Campanhas' saiu, Alertas/Reports somados depois desta etapa", items.length === 5);
-  ok("ordem: Dashboard, Anúncios, Metas, Alertas, Reports", items.map((i) => i.label).join(",") === "Dashboard,Anúncios,Metas,Alertas,Reports");
+  ok("exatamente 6 itens — 'Contas' nunca foi item de menu, 'Campanhas' saiu, Alertas/Reports somados depois desta etapa", items.length === 6);
+  ok("ordem: Dashboard, Anúncios, Metas, Dados, Alertas, Reports", items.map((i) => i.label).join(",") === "Dashboard,Anúncios,Metas,Dados,Alertas,Reports");
   ok("Dashboard aponta pra raiz do workspace do cliente, preservando o mês", items[0].href === "/clients/client-1?month=2026-11");
   ok("Anúncios aponta pra /clients/client-1/anuncios", items[1].href === "/clients/client-1/anuncios?month=2026-11");
   ok("Metas aponta pra /clients/client-1/metas (rota já existia)", items[2].href === "/clients/client-1/metas?month=2026-11");
+
+  ok("Dados abre a página do cliente sem filtro de mês", items[3].href === "/clients/client-1/dados");
+  ok("Dados fica ativo apenas na página Dados do cliente atual", items[3].isActive("/clients/client-1/dados") && !items[3].isActive("/clients/client-2/dados"));
 
   ok("Dashboard ativo só na raiz exata do cliente, nunca em sub-rotas", items[0].isActive("/clients/client-1") && !items[0].isActive("/clients/client-1/anuncios"));
   ok("Anúncios ativo em qualquer sub-rota de /anuncios", items[1].isActive("/clients/client-1/anuncios") && items[1].isActive("/clients/client-1/anuncios/x"));
