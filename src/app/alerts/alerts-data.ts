@@ -97,11 +97,19 @@ export async function loadAlertList(
   // Nunca filtra por `status` aqui (seção 1: "situação" virou aba, não
   // filtro de busca) — busca as 3 situações de uma vez, com os MESMOS
   // filtros de cliente/gravidade/tipo, pra `counts` refletir as 3 abas.
+  //
+  // `period_kind = "full_day"` (pedido do usuário: "eu quero um alerta
+  // sempre sobre ontem então, já que hoje o dia ainda está acontecendo") —
+  // o monitor "hoje em andamento" (`in_progress`) foi desativado
+  // (`evaluate-spend-pace.ts` não o gera mais), mas linhas antigas podem
+  // continuar no banco; este filtro garante que elas somem do painel
+  // imediatamente, sem precisar de uma migration de limpeza.
   let query = supabase
     .from("alerts")
     .select(
       "id, display_number, client_id, channel, alert_type, period_kind, severity, status, period_start, period_end, observed_value, reference_value, diff_percent, reference_is_estimate, reference_source, detail, explanation, first_detected_at, last_evaluated_at, follow_up_until, clients(name)",
-    );
+    )
+    .eq("period_kind", "full_day");
 
   if (filters.clientId) query = query.eq("client_id", filters.clientId);
   if (filters.alertType !== "todos") query = query.eq("alert_type", filters.alertType);
@@ -118,7 +126,12 @@ export async function loadAlertList(
   const [alertRows, clients, attentionCountResult] = await Promise.all([
     requireQuery(query, "alerts:list"),
     requireQuery(supabase.from("clients").select("id, name").is("deleted_at", null).order("name"), "clients:alerts-filter"),
-    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("status", "precisa_atencao").in("severity", ["critico", "atencao"]),
+    supabase
+      .from("alerts")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "precisa_atencao")
+      .eq("period_kind", "full_day")
+      .in("severity", ["critico", "atencao"]),
   ]);
   if (attentionCountResult.error) throw new Error(`[alerts:attention-count] ${attentionCountResult.error.message}`);
 
@@ -209,6 +222,7 @@ export async function countAlertsNeedingAttention(): Promise<number> {
     .from("alerts")
     .select("id", { count: "exact", head: true })
     .eq("status", "precisa_atencao")
+    .eq("period_kind", "full_day")
     .in("severity", ["critico", "atencao"]);
   if (error) throw new Error(`[alerts:attention-count] ${error.message}`);
   return count ?? 0;

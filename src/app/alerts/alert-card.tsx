@@ -37,10 +37,14 @@ function formatSignedPercent(value: number): string {
  */
 export function AlertCard({ alert }: { alert: AlertListItem }) {
   const channelConfig = getTrafficChannelConfig(alert.channel);
-  const isToday = alert.periodKind === "in_progress";
-  const periodLabel = isToday
-    ? "Hoje"
-    : alert.periodStart === alert.periodEnd
+  // Pedido do usuário: "eu quero um alerta sempre sobre ontem então" — o
+  // monitor "hoje em andamento" (`period_kind: "in_progress"`) foi
+  // desativado (`evaluate-spend-pace.ts`/`alerts-data.ts` nunca mais
+  // geram/mostram essa variante), então todo alerta que chega aqui é
+  // sempre "full_day" (um dia civil já fechado) — nunca mais precisa do
+  // rótulo "Hoje"/badge "Dado parcial" que existiam só pra essa variante.
+  const periodLabel =
+    alert.periodStart === alert.periodEnd
       ? new Date(`${alert.periodStart}T00:00:00Z`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
       : `${alert.periodStart} a ${alert.periodEnd}`;
 
@@ -70,13 +74,6 @@ export function AlertCard({ alert }: { alert: AlertListItem }) {
         </div>
         <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-1.5 md:w-auto">
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ALERT_SEVERITY_BADGE_CLASSES[alert.severity]}`}>{ALERT_SEVERITY_LABEL[alert.severity]}</span>
-          {/* "Dia em andamento" (pedido, seção 3: "indique que o dado é
-              parcial") — nunca comparamos com uma previsão até o mesmo
-              horário (não existe referência intradiária confiável hoje),
-              só sinalizamos que o número ainda está se formando. */}
-          {isToday && (
-            <span className="rounded-full bg-overview-surface-hover px-2 py-0.5 text-[11px] font-medium text-overview-text-muted">Dado parcial</span>
-          )}
         </div>
       </div>
 
@@ -168,34 +165,14 @@ export function AlertCard({ alert }: { alert: AlertListItem }) {
         </div>
       </div>
 
-      {/* Achado real (achado do usuário: "já corrigi alguns e eles
-          voltaram") — um alerta "Dado parcial" (hoje, `in_progress`)
-          compara o GASTO ACUMULADO de hoje com uma referência fixa pro dia
-          inteiro (`detectSpendPaceAlert`); como o gasto só cresce ao longo
-          do dia, depois de cruzar o limiar ele permanece "acima" pelo
-          resto do dia por construção — nenhuma ação manual muda esse fato,
-          e a próxima avaliação automática (a cada ~30min) reabre o mesmo
-          alerta (`reduceAlertEvaluation`: "resolvido"/"acompanhamento" com
-          a condição ainda presente -> volta pra "precisa_atencao"), dando
-          a falsa impressão de um bug. Isso já era o comportamento
-          pretendido pro monitor "hoje em andamento" desde a Etapa Alertas
-          original ("nunca acumula estado multi-dia, só reflete o instante
-          atual") — só faltava a UI refletir isso: "Em acompanhamento"/
-          "Resolver" somem pro `in_progress`, porque prometem algo que o
-          sistema não entrega. O único jeito real de mudar o resultado de
-          hoje é ajustar o orçamento (atalho já existe acima) ou esperar a
-          virada do dia, quando o acumulado zera e o alerta se resolve
-          sozinho. */}
-      {isToday ? (
-        <p className="rounded-md bg-overview-surface-hover px-2.5 py-1.5 text-xs text-overview-text-secondary">
-          Esse alerta compara o gasto acumulado de hoje com o previsto pro dia inteiro — ele se resolve sozinho na virada do dia, ou antes se você ajustar o orçamento. Não há ação manual pra ele enquanto o dia não termina.
-        </p>
-      ) : (
-        /* Ações principais à vista (pedido, seção 4: "mostre Acompanhar e
-           Resolver diretamente nos cards abertos") — nunca mais escondidas
-           atrás de um menu "•••" (só 2 ações hoje, não precisa de menu). */
-        <AlertActionButtons alertId={alert.id} status={alert.status} />
-      )}
+      {/* Ações principais à vista (pedido, seção 4: "mostre Acompanhar e
+          Resolver diretamente nos cards abertos") — nunca mais escondidas
+          atrás de um menu "•••" (só 2 ações hoje, não precisa de menu).
+          Sempre disponíveis agora: todo alerta exibido é "full_day" (um
+          dia já fechado), nunca mais o "hoje em andamento" que prometia
+          uma resolução que o sistema não entregava (ver comentário em
+          `evaluate-spend-pace.ts`). */}
+      <AlertActionButtons alertId={alert.id} status={alert.status} />
     </div>
   );
 }

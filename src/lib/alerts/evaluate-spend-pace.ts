@@ -23,19 +23,25 @@ type AdminSupabase = SupabaseClient<Database>;
  * (`syncAllMetaApiAccounts`): nunca para no primeiro erro de UM
  * cliente/canal — cada falha fica isolada, as demais continuam avaliando.
  *
- * Avalia DUAS janelas independentes por cliente+canal, cada uma com sua
- * própria linha em `alerts` (`period_kind` distinto, ver `supabase/alerts.sql`):
- *  - "full_day" (ontem, dia completo) — acompanhável, participa da máquina
- *    de estados completa (`reduceAlertEvaluation`).
- *  - "in_progress" (hoje, em andamento) — seção 4 do pedido, nunca sinaliza
- *    "abaixo" (dia incompleto).
+ * Avalia só "full_day" (ontem, dia completo) — acompanhável, participa da
+ * máquina de estados completa (`reduceAlertEvaluation`).
+ *
+ * Existia uma 2ª janela, "in_progress" (hoje, em andamento) — removida a
+ * pedido do usuário ("eu quero um alerta sempre sobre ontem então, já que
+ * hoje o dia ainda está acontecendo"). Achado real que motivou a remoção:
+ * como o gasto de HOJE só cresce ao longo do dia, um alerta "in_progress"
+ * que cruzasse o limiar ficava preso em "acima" até a virada do dia, não
+ * importa a ação manual tomada — cada reavaliação (a cada ~30min) reabria
+ * o mesmo alerta, dando a falsa impressão de um bug. `isPeriodInProgress`
+ * continua existindo em `detectSpendPaceAlert` (núcleo puro, testado) só
+ * nunca mais é chamado com `true` por este orquestrador — se o monitor do
+ * dia em andamento for retomado no futuro, precisa de um design diferente
+ * (ex.: uma referência intradiária de verdade, não uma referência fixa pro
+ * dia inteiro comparada contra um acumulado parcial).
  *
  * Nunca fabrica um `actualSpend` pra um dia SEM nenhuma linha em
  * `daily_spend` (pedido, seção 5: "não disparar alertas de performance sem
- * dados suficientes") — a ÚNICA exceção é "hoje", onde a ausência de linha
- * (sincronização ainda não rodou hoje) é tratada como 0, o que nunca
- * dispara o alerta de "hoje" de qualquer forma (ele só verifica excesso,
- * nunca falta).
+ * dados suficientes").
  */
 export interface SpendPaceEvaluationSummary {
   evaluated: number;
@@ -125,27 +131,6 @@ export async function evaluateSpendPaceAlerts(now: Date = new Date(), supabase: 
       } catch (err) {
         summary.errors.push({ clientId, channel, periodKind: "full_day", message: err instanceof Error ? err.message : String(err) });
       }
-    }
-
-    // Janela "in_progress" (hoje) — ausência de linha hoje = 0 (sync ainda
-    // não rodou), nunca dispara por si só (o detector só verifica excesso
-    // aqui, nunca falta).
-    const todayRow = points.find((p) => p.date === today);
-    try {
-      const outcome = await evaluateAndPersist(supabase, {
-        clientId,
-        channel,
-        periodKind: "in_progress",
-        actualSpend: todayRow?.spend ?? 0,
-        evaluatedDate: today,
-        isPeriodInProgress: true,
-        points,
-        planChanges,
-        nowIso,
-      });
-      bumpSummary(summary, outcome);
-    } catch (err) {
-      summary.errors.push({ clientId, channel, periodKind: "in_progress", message: err instanceof Error ? err.message : String(err) });
     }
   }
 

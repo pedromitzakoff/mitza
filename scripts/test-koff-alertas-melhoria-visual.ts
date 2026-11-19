@@ -143,7 +143,10 @@ console.log("\nG — alert-card.tsx: card compacto, valor em destaque, detalhes 
   ok("contexto do mês só aparece quando monthActual E monthExpectedToDate existem (nunca um 0 fabricado)", cardSource.includes("hasMonthContext"));
   ok("explicação do cálculo foi movida pra dentro de <details> (nunca mais sempre visível)", /<details[^>]*>[\s\S]*Ver detalhes do cálculo[\s\S]*<\/details>/.test(cardSource));
   ok("badge de status (precisa de atenção/em acompanhamento/resolvido) saiu do card — a ABA já diz a situação", !cardSource.includes("ALERT_STATUS_BADGE_CLASSES[alert.status]"));
-  ok("'Dado parcial' sinaliza dia em andamento, sem comparar com previsão até o mesmo horário (não existe referência intradiária confiável)", cardSource.includes("Dado parcial"));
+  ok(
+    "'Dado parcial'/monitor do dia em andamento foi removido (pedido do usuário: 'quero um alerta sempre sobre ontem') — card nunca mais mostra esse badge",
+    !/<span[^>]*>\s*Dado parcial\s*<\/span>/.test(cardSource),
+  );
   ok("'Em acompanhamento' mostra responsável e próxima checagem quando preenchidos", cardSource.includes("Responsável:") && cardSource.includes("Próxima checagem:"));
   ok("'Resolvido' preserva quem resolveu e quando, ou sinaliza resolução automática", cardSource.includes("Resolvido automaticamente"));
   ok("atalho 'Editar orçamento' aponta pra tela de Metas já existente (nunca uma ação automática de ajuste)", cardSource.includes('buildWorkspaceHref(alert.clientId, "/metas", null)') && cardSource.includes("Editar orçamento"));
