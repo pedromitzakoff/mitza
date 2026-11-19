@@ -126,7 +126,20 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload, reques
     });
   }
 
-  const insertRun = (window?: typeof requestedWindow) => supabase
+  // Achado real (11/2026): quem chama sem saber o período pedido (hoje só
+  // o endpoint n8n, `api/n8n/meta-insights/route.ts` — contrato de payload
+  // documentado em `docs/N8N_META_INGESTION_GUIDE.md`, nunca alterado por
+  // isto) deixava `requested_since/until` sempre `null`, invisível pra
+  // `report_sync_coverage` e pro alerta "Problema de dados ou
+  // sincronização" mesmo com os dados corretos já gravados. Só um
+  // fallback — nunca sobrescreve uma janela que quem chama já sabe de
+  // verdade (`meta-api-direct-sync.ts`/`meta-api-backfill.ts`, que sempre
+  // passam a própria). Um payload genuinamente sem nenhuma linha (conta
+  // zerada no período) não tem data pra inferir — fica `undefined` nesse
+  // caso, mesmo comportamento de antes pra essa situação específica.
+  const effectiveWindow = requestedWindow ?? deriveWindowFromRows(payload.rows);
+
+  const insertRun = (window?: typeof effectiveWindow) => supabase
     .from("data_sync_runs")
     .insert({
       import_source_id: importSourceId,
@@ -136,8 +149,8 @@ export async function ingestMetaApiPayload(payload: MetaApiIngestPayload, reques
     .select("id")
     .single();
 
-  let { data: run, error: runInsertError } = await insertRun(requestedWindow);
-  if (requestedWindow && runInsertError?.code === "PGRST204" && runInsertError.message.includes("requested_")) {
+  let { data: run, error: runInsertError } = await insertRun(effectiveWindow);
+  if (effectiveWindow && runInsertError?.code === "PGRST204" && runInsertError.message.includes("requested_")) {
     ({ data: run, error: runInsertError } = await insertRun());
   }
 
@@ -630,4 +643,14 @@ function minDateValue(rows: MetaApiIngestPayload["rows"]): string | null {
   let min: string | null = null;
   for (const row of rows) if (min === null || row.date < min) min = row.date;
   return min;
+}
+
+/** Fallback de `requested_since/until` pra quem chama sem saber o período
+ * pedido (ver comentário em `ingestMetaApiPayload`) — min/max `date` das
+ * próprias linhas recebidas. `undefined` quando `rows` está vazio (nada a
+ * inferir) — exportada só pra teste direto (núcleo puro). */
+export function deriveWindowFromRows(rows: MetaApiIngestPayload["rows"]): { since: string; until: string } | undefined {
+  const since = minDateValue(rows);
+  const until = maxDateValue(rows);
+  return since && until ? { since, until } : undefined;
 }

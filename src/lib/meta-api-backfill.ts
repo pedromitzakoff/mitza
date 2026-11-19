@@ -158,7 +158,17 @@ export async function runMetaApiBackfill(
     let batchResult: BackfillBatchResult;
     try {
       const rows = await fetchMetaApiInsightsForAccount(accountId, range.since, range.until);
-      const outcome = await ingestMetaApiPayload({ accountId, rows });
+      // Achado real (11/2026): sem passar a janela pedida aqui,
+      // `data_sync_runs.requested_since/until` ficava sempre `null` pra
+      // qualquer dia sincronizado via backfill — invisível pra
+      // `report_sync_coverage` (`supabase/weekly-reports-sync-coverage.sql`)
+      // e, por consequência, pro alerta "Problema de dados ou
+      // sincronização" (`evaluate-sync-issues.ts`), mesmo com os dados
+      // corretos já gravados. Mesma janela que `meta-api-direct-sync.ts`
+      // já passa sempre — nunca derivada das `rows` recebidas (um dia sem
+      // nenhuma linha, ex. conta zerada no período, também precisa contar
+      // como "coberto").
+      const outcome = await ingestMetaApiPayload({ accountId, rows }, { since: range.since, until: range.until });
       batchResult =
         outcome.kind === "ok"
           ? { since: range.since, until: range.until, outcome: "ok", rowsRead: outcome.result.rowsRead }
