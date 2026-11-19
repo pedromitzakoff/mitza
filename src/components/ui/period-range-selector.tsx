@@ -58,7 +58,7 @@ export interface PeriodRangePreset {
 }
 
 export interface PeriodRangeSelectorProps {
-  value: { start: string; end: string };
+  value: { start: string; end: string } | null;
   /** Ordem de exibição na coluna de presets — o consumidor decide quais
    * (e quantos) aparecem; nunca uma lista fixa forçada por este componente. */
   presets: PeriodRangePreset[];
@@ -69,6 +69,7 @@ export interface PeriodRangeSelectorProps {
   minDate?: string;
   maxDate?: string;
   disabled?: boolean;
+  inline?: boolean;
 }
 
 function matchPreset(range: { start: string; end: string }, presets: PeriodRangePreset[]): PeriodRangePreset | null {
@@ -211,23 +212,25 @@ function CalendarMonthGrid({
   );
 }
 
-export function PeriodRangeSelector({ value, presets, onApply, today, minDate, maxDate, disabled }: PeriodRangeSelectorProps) {
+export function PeriodRangeSelector({ value, presets, onApply, today, minDate, maxDate, disabled, inline = false }: PeriodRangeSelectorProps) {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<DateRangeDraft>({ start: value.start, end: value.end });
-  const [leftMonth, setLeftMonth] = useState<CalendarMonth>(() => calendarMonthFromDateString(value.start));
+  const [draft, setDraft] = useState<DateRangeDraft>(value ?? { start: null, end: null });
+  const [leftMonth, setLeftMonth] = useState<CalendarMonth>(() => calendarMonthFromDateString(value?.start ?? today));
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const activePreset = matchPreset(value, presets);
+  const activePreset = value ? matchPreset(value, presets) : null;
   const todayYear = Number(today.slice(0, 4));
-  const closedLabel = formatCompactPeriodLabel({ start: value.start, end: value.end, presetLabel: activePreset?.label ?? null, todayYear });
+  const closedLabel = value
+    ? formatCompactPeriodLabel({ start: value.start, end: value.end, presetLabel: activePreset?.label ?? null, todayYear })
+    : "Selecionar período";
   const draftPreset = draft.start && draft.end ? matchPreset({ start: draft.start, end: draft.end }, presets) : null;
   const canApply = Boolean(draft.start && draft.end && isValidDateRange(draft.start, draft.end));
 
   function openPanel() {
-    setDraft({ start: value.start, end: value.end });
-    setLeftMonth(calendarMonthFromDateString(value.start));
+    setDraft(value ?? { start: null, end: null });
+    setLeftMonth(calendarMonthFromDateString(value?.start ?? today));
     setOpen(true);
   }
 
@@ -284,13 +287,13 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
     if (!draft.start || !draft.end || !canApply) return;
     const matched = matchPreset({ start: draft.start, end: draft.end }, presets);
     onApply({ start: draft.start, end: draft.end, presetKey: matched?.key ?? null });
-    setOpen(false);
+    closePanel(inline);
   }
 
   const rightMonth = shiftCalendarMonth(leftMonth, 1);
 
   return (
-    <div ref={containerRef} className="relative inline-block w-full text-left sm:w-auto">
+    <div ref={containerRef} className={inline ? "w-full text-left" : "relative inline-block w-full text-left sm:w-auto"}>
       <button
         ref={triggerRef}
         type="button"
@@ -319,14 +322,19 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
               nascer parcialmente fora da tela à esquerda em telas de
               desktop mais estreitas (achado testando esta correção, nunca
               reportado pelo usuário — confirmado e corrigido aqui junto). */}
-          <div className="fixed inset-0 z-40 bg-black/30 sm:hidden" onClick={() => closePanel(false)} aria-hidden="true" />
+          {!inline && <div className="fixed inset-0 z-40 bg-black/30 sm:hidden" onClick={() => closePanel(false)} aria-hidden="true" />}
           <div
             ref={panelRef}
             role="dialog"
             aria-label="Selecionar período"
-            className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col rounded-t-2xl border border-[#C8BEAD] bg-white shadow-lg sm:absolute sm:inset-x-auto sm:inset-y-auto sm:bottom-auto sm:left-0 sm:top-full sm:mt-2 sm:max-h-none sm:w-auto sm:max-w-[calc(100vw_-_2rem)] sm:overflow-auto sm:rounded-xl"
+            className={inline
+              ? "mt-2 flex max-w-full flex-col rounded-xl border border-[#C8BEAD] bg-white"
+              : "fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col rounded-t-2xl border border-[#C8BEAD] bg-white shadow-lg sm:absolute sm:inset-x-auto sm:inset-y-auto sm:bottom-auto sm:left-0 sm:top-full sm:mt-2 sm:max-h-none sm:w-auto sm:max-w-[calc(100vw_-_2rem)] sm:overflow-auto sm:rounded-xl"}
           >
-            <div className="flex items-center justify-between border-b border-[#EFE9E0] px-4 py-3 sm:hidden">
+            <div className={inline ? "px-3 pt-3 text-sm text-[#17171A]" : "hidden"}>
+              {draft.start && !draft.end ? "Selecione a data final." : "Selecione a data inicial e a final."}
+            </div>
+            {!inline && <div className="flex items-center justify-between border-b border-[#EFE9E0] px-4 py-3 sm:hidden">
               <span className="text-sm font-semibold text-[#17171A]">Selecionar período</span>
               <button
                 type="button"
@@ -336,7 +344,7 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
               >
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
-            </div>
+            </div>}
 
             {/* Etapa "Otimização Mobile" (ajuste pós-produção): usuário viu
                 em produção e pediu o MESMO layout do desktop no mobile —
@@ -348,7 +356,7 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
                 nesses aparelhos bem estreitos mantém o empilhado antigo,
                 que continua seguro em qualquer largura. */}
             <div className="flex flex-1 flex-row overflow-y-auto max-[359px]:flex-col">
-              <div className="flex w-28 shrink-0 flex-col gap-0.5 border-r border-[#EFE9E0] p-2 sm:w-40 sm:gap-1 sm:p-3 max-[359px]:w-full max-[359px]:border-b max-[359px]:border-r-0 max-[359px]:p-3">
+              {(!inline || presets.length > 0) && <div className="flex w-28 shrink-0 flex-col gap-0.5 border-r border-[#EFE9E0] p-2 sm:w-40 sm:gap-1 sm:p-3 max-[359px]:w-full max-[359px]:border-b max-[359px]:border-r-0 max-[359px]:p-3">
                 {presets.map((preset) => (
                   <button
                     key={preset.key}
@@ -361,7 +369,7 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
                     {preset.label}
                   </button>
                 ))}
-              </div>
+              </div>}
 
               <div className="flex flex-1 flex-col gap-3 p-2 sm:p-2.5">
                 <div className="flex flex-row items-start gap-3 max-[359px]:flex-col max-[359px]:items-center">
@@ -376,7 +384,7 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
                     onPrev={() => setLeftMonth((current) => shiftCalendarMonth(current, -1))}
                     onNext={() => setLeftMonth((current) => shiftCalendarMonth(current, 1))}
                   />
-                  <CalendarMonthGrid
+                  {!inline && <CalendarMonthGrid
                     month={rightMonth}
                     draft={draft}
                     today={today}
@@ -385,7 +393,7 @@ export function PeriodRangeSelector({ value, presets, onApply, today, minDate, m
                     onSelect={handleDayClick}
                     onKeyNavigate={handleKeyNavigate}
                     className="hidden sm:flex"
-                  />
+                  />}
                 </div>
               </div>
             </div>
