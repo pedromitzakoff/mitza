@@ -11,7 +11,7 @@
  */
 import assert from "node:assert/strict";
 import { resolveDailySpendReference, detectSpendPaceAlert } from "../src/lib/alerts/spend-pace-detection";
-import { reduceAlertEvaluation } from "../src/lib/alerts/alert-persistence";
+import { reduceAlertEvaluation, shouldKeepManualResolution } from "../src/lib/alerts/alert-persistence";
 import { DEFAULT_SPEND_PACE_THRESHOLDS } from "../src/lib/alerts/spend-pace-thresholds";
 
 let passed = 0;
@@ -144,6 +144,34 @@ console.log("\nE — reduceAlertEvaluation: máquina de estados (seção 3/5 do 
     reopened.action === "update" && reopened.nextStatus === "precisa_atencao" && reopened.eventType === "reaberto",
   );
   ok("reabertura reseta first_detected_at (nova ocorrência, mesmo reaproveitando a linha)", reopened.action !== "ignore" && reopened.resetFirstDetected === true);
+}
+
+console.log("\nF — Resolver manualmente conserva a resolução da mesma ocorrência\n");
+{
+  const existing = {
+    status: "resolvido" as const,
+    resolved_at: "2026-11-19T11:01:00Z",
+    last_evaluated_at: "2026-11-19T11:00:00Z",
+    period_end: "2026-11-18",
+    detail: { missingDates: ["2026-11-15", "2026-11-18"], failedDates: [], partialDates: [] },
+  };
+  const candidate = {
+    severity: "atencao" as const, periodStart: "2026-11-18", periodEnd: "2026-11-18",
+    observedValue: 90, referenceValue: 200, diffPercent: -55,
+    referenceIsEstimate: false, referenceSource: null, explanation: "", detail: {},
+  };
+  ok("o mesmo dia continua resolvido, mesmo se a Meta atualizar o valor", shouldKeepManualResolution(existing, candidate, "spend_pace"));
+  ok("um novo dia pode gerar alerta", !shouldKeepManualResolution(existing, { ...candidate, periodStart: "2026-11-19", periodEnd: "2026-11-19" }, "spend_pace"));
+  ok("uma resolução automática ainda permite recorrência", !shouldKeepManualResolution({ ...existing, resolved_at: existing.last_evaluated_at }, candidate, "spend_pace"));
+
+  const syncCandidate = { ...candidate, detail: { missingDates: ["2026-11-15"], failedDates: [], partialDates: [] } };
+  ok("um subconjunto dos dias já revisados continua resolvido", shouldKeepManualResolution(existing, syncCandidate, "sync_issue"));
+  ok("um dia faltante novo dentro do intervalo reabre o alerta", !shouldKeepManualResolution(existing, {
+    ...syncCandidate, detail: { ...syncCandidate.detail, missingDates: ["2026-11-15", "2026-11-16"] },
+  }, "sync_issue"));
+  ok("uma falha nova no mesmo dia também gera alerta", !shouldKeepManualResolution(existing, {
+    ...syncCandidate, detail: { ...syncCandidate.detail, failedDates: ["2026-11-18"] },
+  }, "sync_issue"));
 }
 
 // ---------------------------------------------------------------------------

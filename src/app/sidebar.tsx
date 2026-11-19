@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ChevronsUpDown,
   Clock,
+  Database,
   FileText,
   Image as ImageIcon,
   LayoutDashboard,
@@ -225,6 +226,7 @@ export function buildClientNavItems(clientId: string, month: string | null): Nav
       isActive: (p) => p.startsWith(`/clients/${clientId}/anuncios`),
     },
     { label: "Metas", href: buildWorkspaceHref(clientId, "/metas", month), icon: Target, isActive: (p) => p.startsWith(`/clients/${clientId}/metas`) },
+    { label: "Dados", href: buildWorkspaceHref(clientId, "/dados", null), icon: Database, isActive: (p) => p === `/clients/${clientId}/dados` },
     { label: "Alertas", href: "/alerts", icon: Bell, isActive: (p) => p.startsWith("/alerts") },
     { label: "Reports", href: "/reports", icon: FileText, isActive: (p) => p.startsWith("/reports") },
   ];
