@@ -7,6 +7,7 @@ import type { PerformanceGoal } from "./performance-goals";
 import type { PerformanceSummary } from "./performance";
 import type { TrafficChannel } from "./traffic-channels";
 import { matchesNameFilter, recomputeFilteredSummary, type NameFilterMode, type FilterableDailyRow } from "./performance-report/report-filter-recompute";
+import { computeRoas } from "./performance";
 
 /**
  * KOFF Analytics — "Refinamento de UX e filtros globais do Cockpit" (pedido
@@ -192,6 +193,36 @@ export function resolveFilteredExecutiveCardOverride(
       unavailableReason: "Indisponível no escopo filtrado — sem dados de campanha para este objetivo.",
     };
   }
+
+  // Achado real (conta com campanhas que bateram o filtro de nome, mas
+  // tiveram ZERO resultados num dia específico — a Graph API não devolve
+  // o tipo de ação quando a contagem é zero, então `resultType` fica
+  // `null` nesse dia, excluído de `rowsForGoal` acima): o investimento
+  // usado no CPL/CPA filtrado ficava menor que o investimento mostrado no
+  // card de Investimento (que soma TODAS as linhas que batem o filtro,
+  // independente de `resultType` — `filteredCampaignInvestment`,
+  // `cockpit-view-data.ts`). Mesma correção já aplicada em
+  // `exploration-data.ts` pro Total da tabela de exploração: com um
+  // ÚNICO objetivo em jogo neste escopo filtrado (o caso comum), o CPL/
+  // CPA/ROAS usa o MESMO investimento total filtrado — nunca um
+  // subconjunto silenciosamente menor. Só mantém o recorte estrito por
+  // `resultType` quando há campanhas de OUTRO objetivo no mesmo escopo
+  // filtrado (conta genuinamente multi-objetivo), pra nunca misturar
+  // investimento de um objetivo diferente no CPL/CPA do outro.
+  const matchedRows = allCampaignDailyRows.filter((row) => matchesCampaign(row.campaignName, filter));
+  const hasOtherGoalInScope = matchedRows.some((row) => row.resultType !== null && row.resultType !== resultType);
+  if (!hasOtherGoalInScope) {
+    const matchedSpend = matchedRows.reduce((sum, row) => sum + row.spend, 0);
+    const resultCount = result.summary.resultCount;
+    return {
+      resultCount,
+      costPerResult: resultCount > 0 ? matchedSpend / resultCount : null,
+      revenue: result.summary.revenue,
+      roas: computeRoas(result.summary.revenue, matchedSpend),
+      filteredNotice: filteredNoticeText,
+    };
+  }
+
   return {
     resultCount: result.summary.resultCount,
     costPerResult: result.summary.costPerResult,
