@@ -78,8 +78,12 @@ console.log("\nA — Cards compactos (seção 1 do pedido): paddings/gaps reduzi
     cardsSource.includes("formatCurrency(headline.monthActual)") && cardsSource.includes("Necessário") && cardsSource.includes("<AgencyInvestmentBar"),
   );
   ok(
+    // Etapa "Filtro global respeita tudo": `total` passou a ler
+    // `realMonthPlanned` (nunca `headline.monthPlanned`, que vira 0 sob
+    // filtro) — a composição "Planejado" é edição do plano REAL, nunca
+    // deveria zerar só por existir um filtro de visualização ativo.
     "a caixa 'Orçamento do mês' separada foi eliminada — DashboardBudget nasce com compact (sem a própria moldura/título duplicados)",
-    cardsSource.includes("<DashboardBudget clientId={clientId} monthParam={monthParam} total={headline.monthPlanned} channels={channels} canEdit={canEdit} compact />"),
+    cardsSource.includes("<DashboardBudget clientId={clientId} monthParam={monthParam} total={realMonthPlanned} channels={channels} canEdit={canEdit} compact />"),
   );
   ok(
     "'Planejado' não é mais exibido duas vezes — o headline do card ORÇAMENTO não repete o valor que o DashboardBudget compacto já mostra",

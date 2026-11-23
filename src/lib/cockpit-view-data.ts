@@ -860,6 +860,23 @@ export async function buildCockpitViewModel(
   const filteredAdSetDailyRows = filterAdSetDailyRows(performanceReportData.adSetDailyRows, cockpitFilter);
   const filteredCreativeDailyRows = filterCreativeDailyRows(performanceReportData.creativeDailyRows, cockpitFilter);
 
+  // Pedido explícito do usuário ("quando colocar o filtro de contém eu
+  // quero que tudo seja atualizado, incluindo o investimento... Todo
+  // dashboard inteiro deve respeitar o filtro... se não vou confundir meu
+  // cliente") — REVERTE a decisão anterior ("orçamentos e metas globais
+  // não devem ser apresentados como metas do subconjunto filtrado"): o
+  // card de Orçamento passa a somar só as campanhas que batem o filtro
+  // (`filteredExplorationCampaigns`, já filtrado acima — nenhuma consulta
+  // nova) em vez do cliente inteiro, igual aos cards de Resultado/Custo
+  // por resultado (que já respeitavam o filtro desde a Etapa "Filtro
+  // global de performance"). Planejamento mensal/ritmo (`monthPlanned`/
+  // `monthExpectedToDate`/`monthStatus`/`neededDailyRate`) continuam
+  // suprimidos sob filtro — mesma razão de sempre: não existe uma fração
+  // do orçamento mensal "pertencente" a um recorte de campanhas, comparar
+  // o investimento FILTRADO com a meta do cliente INTEIRO seria o mesmo
+  // erro que motivou a mudança original, só invertido.
+  const filteredCampaignInvestment = filteredExplorationCampaigns.reduce((sum, c) => sum + c.totalSpend, 0);
+
   const adPerformanceData = buildCockpitAdPerformanceData({
     client: { id: client.id, name: client.name },
     metaAdAccountId,
@@ -970,7 +987,9 @@ export async function buildCockpitViewModel(
     isFilterActive: cockpitFilter.isActive,
     banners,
     budget: {
-      headline: { monthActual: monthActualForHeadline, monthPlanned, monthExpectedToDate, monthStatus, neededDailyRate: budgetNeededDailyRate },
+      headline: cockpitFilter.isActive
+        ? { monthActual: filteredCampaignInvestment, monthPlanned: 0, monthExpectedToDate: 0, monthStatus: "sem_meta", neededDailyRate: null }
+        : { monthActual: monthActualForHeadline, monthPlanned, monthExpectedToDate, monthStatus, neededDailyRate: budgetNeededDailyRate },
       channels: dashboardChannels.map((c) => ({ channel: c.channel, planned: c.planned })),
       canEdit: canEditBudgetInline,
     },

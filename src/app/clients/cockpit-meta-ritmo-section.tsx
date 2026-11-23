@@ -171,14 +171,16 @@ export function CockpitBudgetCard({
   monthParam,
   channels,
   canEdit,
-  /** KOFF Analytics — "Filtro global de performance": Orçamento é sempre
-   * do CLIENTE INTEIRO (dinheiro planejado pro mês, nunca um recorte por
-   * campanha) — nunca recalculado pro escopo filtrado (pedido explícito do
-   * usuário: "orçamentos e metas globais não devem ser apresentados como
-   * metas do subconjunto filtrado"). Quando o filtro está ativo, mostra
-   * uma nota explícita deixando claro que este card continua olhando o
-   * cliente inteiro — nunca mistura silenciosamente dado global com
-   * filtrado. */
+  /** Etapa "Filtro global respeita tudo" (pedido explícito do usuário:
+   * "quando colocar o filtro de contém eu quero que tudo seja atualizado,
+   * incluindo o investimento... Todo dashboard inteiro deve respeitar o
+   * filtro... se não vou confundir meu cliente") — reverte a decisão
+   * anterior ("orçamentos e metas globais não devem ser apresentados como
+   * metas do subconjunto filtrado"): `headline.monthActual` já vem
+   * recalculado só das campanhas filtradas quando o filtro está ativo
+   * (`lib/cockpit-view-data.ts`), igual aos cards de Resultado/Custo por
+   * resultado. Este prop só decide a NOTA abaixo do número — nunca mistura
+   * silenciosamente filtrado com não filtrado. */
   isGlobalFilterActive = false,
   /** Etapa "Correção do rótulo de Investimento fora do mês" (bug
    * reportado pelo usuário): `headline.monthActual` já vinha certo fora de
@@ -190,6 +192,13 @@ export function CockpitBudgetCard({
    * faz sentido pra comparar contra uma janela de poucos dias) — por isso
    * o texto do estado vazio também precisa deixar de mencionar "o mês". */
   isMonthAligned = true,
+  /** Etapa "Filtro global respeita tudo": `headline.monthPlanned` vira `0`
+   * sob filtro (nenhuma meta mensal "pertence" a um recorte de campanhas)
+   * — mas a composição "Planejado" por canal, embaixo (`DashboardBudget`,
+   * edição inline do plano REAL), nunca deveria mostrar R$0 só porque uma
+   * visualização filtrada está ativa no momento; continua lendo o
+   * planejamento de verdade, intocado pelo filtro. */
+  realMonthPlanned,
 }: {
   headline: CockpitBudgetHeadlineView;
   clientId: string;
@@ -198,6 +207,7 @@ export function CockpitBudgetCard({
   canEdit: boolean;
   isGlobalFilterActive?: boolean;
   isMonthAligned?: boolean;
+  realMonthPlanned: number;
 }) {
   const summary = resolveMonthPeriodSummary(
     {
@@ -216,7 +226,7 @@ export function CockpitBudgetCard({
       <p className="mt-1 text-2xl font-bold tracking-tight text-overview-text-primary tabular-nums">{formatCurrency(headline.monthActual)}</p>
       <p className="text-xs text-overview-text-secondary">
         investido {isMonthAligned ? "no mês" : "no período"}
-        {isGlobalFilterActive && <span className="text-overview-text-muted"> · cliente inteiro, não filtrado</span>}
+        {isGlobalFilterActive && <span className="text-overview-text-muted"> · escopo filtrado por campanha</span>}
       </p>
       {headline.monthPlanned > 0 ? (
         <div className="mt-1.5 flex flex-col gap-0.5 text-[11px] text-overview-text-muted">
@@ -230,7 +240,7 @@ export function CockpitBudgetCard({
         </div>
       ) : (
         <p className="mt-1.5 text-[11px] text-overview-text-muted">
-          {isMonthAligned ? "Sem planejamento configurado para o mês." : "Sem planejamento mensal comparável neste período."}
+          {isGlobalFilterActive ? "Sem comparação com meta — escopo filtrado por campanha." : isMonthAligned ? "Sem planejamento configurado para o mês." : "Sem planejamento mensal comparável neste período."}
         </p>
       )}
 
@@ -238,9 +248,12 @@ export function CockpitBudgetCard({
           por canal) sem repetir sua própria moldura/título — a caixa única
           deste card já estabelece o contexto "ORÇAMENTO" acima (seção 1 do
           pedido: eliminar a caixa dupla, mantendo edição/multicanal
-          intactos). Único lugar onde o valor planejado aparece agora. */}
+          intactos). Único lugar onde o valor planejado aparece agora.
+          `total={realMonthPlanned}` (nunca `headline.monthPlanned`) — esta
+          composição é edição do plano REAL, nunca deveria mostrar R$0 só
+          por existir um filtro de visualização ativo no momento. */}
       <div className="mt-2 border-t border-overview-border/60 pt-2">
-        <DashboardBudget clientId={clientId} monthParam={monthParam} total={headline.monthPlanned} channels={channels} canEdit={canEdit} compact />
+        <DashboardBudget clientId={clientId} monthParam={monthParam} total={realMonthPlanned} channels={channels} canEdit={canEdit} compact />
       </div>
     </div>
   );

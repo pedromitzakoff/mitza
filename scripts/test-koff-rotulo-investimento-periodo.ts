@@ -41,6 +41,9 @@ console.log("\nA — CockpitBudgetCard recebe isMonthAligned e troca o rótulo d
   );
   ok("a antiga string FIXA 'investido no mês' (sem condicional nenhum) não existe mais", !cardSource.includes('investido no mês{isGlobalFilterActive'));
   ok(
+    // Etapa "Filtro global respeita tudo" acrescentou uma 3ª condição
+    // (escopo filtrado) na frente das 2 de sempre — o texto de cada uma
+    // continua intacto, só a ordem de checagem mudou.
     "o estado vazio (sem planejamento) também troca de texto — nunca mais fala de 'o mês' fora do mês",
     cardSource.includes('isMonthAligned ? "Sem planejamento configurado para o mês." : "Sem planejamento mensal comparável neste período."'),
   );

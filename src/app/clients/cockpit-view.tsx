@@ -180,6 +180,7 @@ export function CockpitView({ model, today }: { model: CockpitViewModel; today: 
             canEdit={model.budget.canEdit}
             isGlobalFilterActive={model.isFilterActive}
             isMonthAligned={model.periodResolved.isMonthAligned}
+            realMonthPlanned={model.budget.channels.reduce((sum, c) => sum + (c.planned ?? 0), 0)}
           />
         </div>
         {model.resultCards.map(({ result, status, cost, sales }) => (
