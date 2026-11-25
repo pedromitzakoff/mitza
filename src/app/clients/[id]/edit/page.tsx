@@ -100,6 +100,7 @@ export default async function EditClientPage({
             error={error}
             defaultName={client.name}
             defaultMetaAdAccountId={client.meta_ad_account_id}
+            defaultGoogleAdsCustomerId={client.google_ads_customer_id}
             defaults={client}
             submitLabel="Salvar"
             cancelHref={returnTo}

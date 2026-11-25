@@ -88,6 +88,7 @@ export function ClientForm({
   error,
   defaultName,
   defaultMetaAdAccountId,
+  defaultGoogleAdsCustomerId,
   defaults,
   submitLabel,
   submitPendingLabel = "Salvando...",
@@ -99,6 +100,7 @@ export function ClientForm({
   error?: string;
   defaultName?: string;
   defaultMetaAdAccountId?: string | null;
+  defaultGoogleAdsCustomerId?: string | null;
   /** Campos estruturais (Etapa 27) — todos opcionais, `undefined` numa
    * criação nova. */
   defaults?: Partial<ClientRow>;
@@ -145,6 +147,11 @@ export function ClientForm({
   // este estado só decide o `*`/texto de ajuda em tela, nunca é a fonte da
   // regra).
   const [metaChannelChecked, setMetaChannelChecked] = useState(mediaChannels.has("meta"));
+  // Etapa "Conexão Google Ads": mesmo padrão exato do campo Meta acima —
+  // conta Google só é exigida enquanto "Google Ads" estiver marcado em
+  // Canais de mídia (validado de verdade em validateGoogleAdsAccountRequirement,
+  // ../actions.ts; este estado só decide o `*`/texto de ajuda em tela).
+  const [googleChannelChecked, setGoogleChannelChecked] = useState(mediaChannels.has("google"));
 
   // Etapa "Configurações do Cliente": lido mesmo quando `tabbed` é `false`
   // (new-client) — sem `ClientSettingsTabsProvider` ancestral, o contexto
@@ -294,6 +301,7 @@ export function ClientForm({
                     defaultChecked={mediaChannels.has(channel)}
                     onChange={(event) => {
                       if (channel === "meta") setMetaChannelChecked(event.target.checked);
+                      if (channel === "google") setGoogleChannelChecked(event.target.checked);
                     }}
                     className="h-4 w-4 rounded border-overview-border"
                   />
@@ -319,6 +327,25 @@ export function ClientForm({
               {metaChannelChecked
                 ? "Obrigatória enquanto Meta Ads estiver marcado acima."
                 : "Só necessária se Meta Ads estiver marcado acima — cliente Google-only pode deixar em branco."}
+            </span>
+          </label>
+
+          <label className={labelClasses}>
+            <span>
+              Conta de anúncios (Google Ads) {googleChannelChecked && <span className="text-overview-danger">*</span>}
+            </span>
+            <input
+              name="google_ads_customer_id"
+              placeholder="1234567890"
+              pattern="[0-9]{10}"
+              title="Formato: Customer ID do Google Ads, 10 dígitos, sem hífen"
+              defaultValue={defaultGoogleAdsCustomerId ?? ""}
+              className={`${inputClasses} font-mono`}
+            />
+            <span className="text-xs text-overview-text-secondary">
+              {googleChannelChecked
+                ? "Obrigatória enquanto Google Ads estiver marcado acima. A conta precisa já estar vinculada à conta Gerenciadora (MCC) da Mitza."
+                : "Só necessária se Google Ads estiver marcado acima."}
             </span>
           </label>
 

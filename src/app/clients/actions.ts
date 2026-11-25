@@ -110,6 +110,11 @@ function readClientFields(formData: FormData) {
     // CONDICIONAL ("meta em media_channels -> precisa ter conta") é
     // validada logo abaixo, em `createClientAction`/`updateClientAction`.
     meta_ad_account_id: optionalText(formData, "meta_ad_account_id"),
+    // Etapa "Conexão Google Ads": mesma regra exata de meta_ad_account_id
+    // acima — opcional por padrão, obrigatória condicionalmente quando
+    // "google" está em media_channels (validateGoogleAdsAccountRequirement,
+    // logo abaixo).
+    google_ads_customer_id: optionalText(formData, "google_ads_customer_id"),
     ...readStructuralFields(formData),
   };
 }
@@ -122,6 +127,16 @@ function readClientFields(formData: FormData) {
 function validateMetaAccountRequirement(mediaChannels: string[], metaAdAccountId: string | null): string | null {
   if (mediaChannels.includes("meta") && !metaAdAccountId) {
     return "Informe a conta de anúncios do Meta (obrigatória enquanto Meta Ads estiver marcado em Canais de mídia)";
+  }
+  return null;
+}
+
+/** Etapa "Conexão Google Ads": mesma regra de validateMetaAccountRequirement,
+ * espelhada pro canal Google — exigida só quando o cliente de fato opera
+ * esse canal (`media_channels` inclui "google"). */
+function validateGoogleAdsAccountRequirement(mediaChannels: string[], googleAdsCustomerId: string | null): string | null {
+  if (mediaChannels.includes("google") && !googleAdsCustomerId) {
+    return "Informe a conta de anúncios do Google Ads (obrigatória enquanto Google Ads estiver marcado em Canais de mídia)";
   }
   return null;
 }
@@ -155,7 +170,7 @@ function resolveClientCreationErrorMessage(error: { code?: string; message: stri
 
 export async function createClientAction(formData: FormData) {
   const profile = await requireAdmin();
-  const { name, meta_ad_account_id, ...structural } = readClientFields(formData);
+  const { name, meta_ad_account_id, google_ads_customer_id, ...structural } = readClientFields(formData);
 
   // Objetivo de performance é obrigatório só na CRIAÇÃO (Etapa 71, seção 2)
   // — clientes já existentes continuam podendo ficar sem objetivo
@@ -175,6 +190,11 @@ export async function createClientAction(formData: FormData) {
   const metaAccountError = validateMetaAccountRequirement(structural.media_channels, meta_ad_account_id);
   if (metaAccountError) {
     redirect(`/clients/new?error=${encodeURIComponent(metaAccountError)}`);
+  }
+
+  const googleAdsAccountError = validateGoogleAdsAccountRequirement(structural.media_channels, google_ads_customer_id);
+  if (googleAdsAccountError) {
+    redirect(`/clients/new?error=${encodeURIComponent(googleAdsAccountError)}`);
   }
 
   const supabase = await createSupabaseClient();
@@ -204,7 +224,7 @@ export async function createClientAction(formData: FormData) {
 
   const { data: client, error } = await supabase
     .from("clients")
-    .insert({ name, meta_ad_account_id, ...structural })
+    .insert({ name, meta_ad_account_id, google_ads_customer_id, ...structural })
     .select("id")
     .single();
 
@@ -274,7 +294,7 @@ export async function updateClientAction(clientId: string, returnTo: string, for
   // `createClientAction`/`deleteClientAction` continuam admin-only
   // (criar/excluir cliente é mais estrutural, fora do pedido).
   const profile = await requireClientManagerAccess(clientId);
-  const { name, meta_ad_account_id, ...structural } = readClientFields(formData);
+  const { name, meta_ad_account_id, google_ads_customer_id, ...structural } = readClientFields(formData);
 
   if (structural.media_channels.length === 0) {
     redirect(`/clients/${clientId}/edit?error=${encodeURIComponent("Selecione pelo menos um canal de mídia")}`);
@@ -283,6 +303,11 @@ export async function updateClientAction(clientId: string, returnTo: string, for
   const metaAccountError = validateMetaAccountRequirement(structural.media_channels, meta_ad_account_id);
   if (metaAccountError) {
     redirect(`/clients/${clientId}/edit?error=${encodeURIComponent(metaAccountError)}`);
+  }
+
+  const googleAdsAccountError = validateGoogleAdsAccountRequirement(structural.media_channels, google_ads_customer_id);
+  if (googleAdsAccountError) {
+    redirect(`/clients/${clientId}/edit?error=${encodeURIComponent(googleAdsAccountError)}`);
   }
 
   const supabase = await createSupabaseClient();
@@ -309,6 +334,7 @@ export async function updateClientAction(clientId: string, returnTo: string, for
       .update({
         name,
         meta_ad_account_id,
+        google_ads_customer_id,
         ...structural,
         ...(photoResult.avatarUrl ? { avatar_url: photoResult.avatarUrl } : {}),
       })

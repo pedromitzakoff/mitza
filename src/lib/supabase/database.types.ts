@@ -87,7 +87,7 @@ export type WeeklyReportEventTypeDb = "gerado" | "pronto_para_enviar" | "texto_e
 /** Integração Stract → Supabase → MITZA — provider é o único suportado
  * nesta primeira versão (Google/TikTok/LinkedIn ficam preparados
  * conceitualmente pelo `channel`, sem exigir nova migration quando chegarem). */
-export type ImportProviderDb = "stract" | "meta_api";
+export type ImportProviderDb = "stract" | "meta_api" | "google_ads";
 /** Saúde/configuração PERSISTENTE de uma import_source — distinto do status
  * de UMA execução (`DataSyncRunStatusDb`). */
 export type ImportSourceStatusDb = "pending" | "active" | "error" | "disabled" | "no_data";
@@ -336,6 +336,7 @@ export interface Database {
           id: string;
           name: string;
           meta_ad_account_id: string | null;
+          google_ads_customer_id: string | null;
           created_at: string;
           deleted_at: string | null;
           legal_name: string | null;
@@ -391,6 +392,7 @@ export interface Database {
           id?: string;
           name: string;
           meta_ad_account_id?: string | null;
+          google_ads_customer_id?: string | null;
           created_at?: string;
           deleted_at?: string | null;
           legal_name?: string | null;
@@ -446,6 +448,7 @@ export interface Database {
           id?: string;
           name?: string;
           meta_ad_account_id?: string | null;
+          google_ads_customer_id?: string | null;
           created_at?: string;
           deleted_at?: string | null;
           legal_name?: string | null;
