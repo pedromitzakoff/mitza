@@ -109,28 +109,34 @@ export async function evaluateBalanceDepletionAlerts(
 
     try {
       const snapshot = await fetchAccountBalanceSnapshot(accountId);
+      // Histórico diário de saldo (`supabase/account-balance-snapshots.sql`)
+      // — pedido do usuário: "toda segunda e sexta quero saber quanto tem de
+      // saldo na conta". Conta pós-paga também é gravada (sem saldo, com
+      // `is_prepay = false`) — pedido do usuário: "pode mostrar as que são
+      // pós-pagas também... se mudar eu preciso saber". Falha aqui nunca
+      // impede a avaliação do alerta.
+      if (snapshot.status === "ok") {
+        const { error: snapshotError } = await supabase.from("account_balance_snapshots").upsert(
+          {
+            client_id: clientId,
+            snapshot_date: today,
+            ad_account_id: accountId,
+            is_prepay: snapshot.isPrepay,
+            balance: snapshot.isPrepay ? snapshot.balance : null,
+            currency: snapshot.isPrepay ? snapshot.currency : null,
+            daily_spend_yesterday: dailySpendYesterday,
+            fetched_at: nowIso,
+          },
+          { onConflict: "client_id,snapshot_date" },
+        );
+        if (snapshotError) {
+          console.error(`[alerts:balance-depletion] falha ao gravar saldo do cliente ${clientId}:`, snapshotError.message);
+        }
+      }
+
       if (snapshot.status !== "ok" || !snapshot.isPrepay) {
         summary.skippedNotPrepayOrUnavailable++;
         continue;
-      }
-
-      // Histórico diário de saldo (`supabase/account-balance-snapshots.sql`)
-      // — pedido do usuário: "toda segunda e sexta quero saber quanto tem de
-      // saldo na conta". Falha aqui nunca impede a avaliação do alerta.
-      const { error: snapshotError } = await supabase.from("account_balance_snapshots").upsert(
-        {
-          client_id: clientId,
-          snapshot_date: today,
-          ad_account_id: accountId,
-          balance: snapshot.balance,
-          currency: snapshot.currency,
-          daily_spend_yesterday: dailySpendYesterday,
-          fetched_at: nowIso,
-        },
-        { onConflict: "client_id,snapshot_date" },
-      );
-      if (snapshotError) {
-        console.error(`[alerts:balance-depletion] falha ao gravar saldo do cliente ${clientId}:`, snapshotError.message);
       }
 
       const candidate = detectBalanceDepletionAlert({

@@ -3281,8 +3281,9 @@ export interface Database {
           client_id: string;
           snapshot_date: string;
           ad_account_id: string;
-          balance: number;
-          currency: string;
+          is_prepay: boolean;
+          balance: number | null;
+          currency: string | null;
           daily_spend_yesterday: number | null;
           fetched_at: string;
         };
@@ -3290,8 +3291,9 @@ export interface Database {
           client_id: string;
           snapshot_date: string;
           ad_account_id: string;
-          balance: number;
-          currency: string;
+          is_prepay?: boolean;
+          balance?: number | null;
+          currency?: string | null;
           daily_spend_yesterday?: number | null;
           fetched_at?: string;
         };
@@ -3299,8 +3301,9 @@ export interface Database {
           client_id?: string;
           snapshot_date?: string;
           ad_account_id?: string;
-          balance?: number;
-          currency?: string;
+          is_prepay?: boolean;
+          balance?: number | null;
+          currency?: string | null;
           daily_spend_yesterday?: number | null;
           fetched_at?: string;
         };
