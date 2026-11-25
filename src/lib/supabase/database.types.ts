@@ -3276,6 +3276,44 @@ export interface Database {
           },
         ];
       };
+      account_balance_snapshots: {
+        Row: {
+          client_id: string;
+          snapshot_date: string;
+          ad_account_id: string;
+          balance: number;
+          currency: string;
+          daily_spend_yesterday: number | null;
+          fetched_at: string;
+        };
+        Insert: {
+          client_id: string;
+          snapshot_date: string;
+          ad_account_id: string;
+          balance: number;
+          currency: string;
+          daily_spend_yesterday?: number | null;
+          fetched_at?: string;
+        };
+        Update: {
+          client_id?: string;
+          snapshot_date?: string;
+          ad_account_id?: string;
+          balance?: number;
+          currency?: string;
+          daily_spend_yesterday?: number | null;
+          fetched_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "account_balance_snapshots_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       creative_preview_refresh_log: {
         Row: {
           client_id: string;

@@ -36,24 +36,24 @@ function loadSource(...segments: string[]): string {
 }
 
 // ---------------------------------------------------------------------------
-console.log("\nA — detectBalanceDepletionAlert: limiar de 3 dias (pedido literal), crítico vs atenção\n");
+console.log("\nA — detectBalanceDepletionAlert: limiar de 5 dias, crítico (2 dias) vs atenção\n");
 {
   const farFromDepletion = detectBalanceDepletionAlert({ balance: 1000, currency: "BRL", dailySpendYesterday: 50, periodStart: "2026-11-19", periodEnd: "2026-11-19" });
-  ok("saldo dura 20 dias no ritmo de ontem -> sem alerta (bem acima dos 3 dias)", farFromDepletion === null);
+  ok("saldo dura 20 dias no ritmo de ontem -> sem alerta (bem acima dos 5 dias)", farFromDepletion === null);
 
-  const exactlyThree = detectBalanceDepletionAlert({ balance: 300, currency: "BRL", dailySpendYesterday: 100, periodStart: "2026-11-19", periodEnd: "2026-11-19" });
-  ok("exatamente 3 dias restantes -> dispara (pedido: '3 dias antes')", exactlyThree !== null);
-  ok("3 dias restantes -> gravidade 'atencao' (acima do limiar crítico de 1 dia)", exactlyThree?.severity === "atencao");
+  const exactlyThree = detectBalanceDepletionAlert({ balance: 500, currency: "BRL", dailySpendYesterday: 100, periodStart: "2026-11-19", periodEnd: "2026-11-19" });
+  ok("exatamente 5 dias restantes -> dispara (pedido: '5 dias de acabar')", exactlyThree !== null);
+  ok("5 dias restantes -> gravidade 'atencao' (acima do limiar crítico de 2 dias)", exactlyThree?.severity === "atencao");
 
   const oneDay = detectBalanceDepletionAlert({ balance: 90, currency: "BRL", dailySpendYesterday: 100, periodStart: "2026-11-19", periodEnd: "2026-11-19" });
   ok("menos de 1 dia restante -> gravidade 'critico'", oneDay?.severity === "critico");
 
-  const justOverThreshold = detectBalanceDepletionAlert({ balance: 301, currency: "BRL", dailySpendYesterday: 100, periodStart: "2026-11-19", periodEnd: "2026-11-19" });
-  ok("3,01 dias restantes (passou de 3) -> sem alerta ainda", justOverThreshold === null);
+  const justOverThreshold = detectBalanceDepletionAlert({ balance: 501, currency: "BRL", dailySpendYesterday: 100, periodStart: "2026-11-19", periodEnd: "2026-11-19" });
+  ok("5,01 dias restantes (passou de 5) -> sem alerta ainda", justOverThreshold === null);
 
-  ok("observedValue = saldo atual (nunca o gasto)", exactlyThree?.observedValue === 300);
+  ok("observedValue = saldo atual (nunca o gasto)", exactlyThree?.observedValue === 500);
   ok("referenceValue = gasto de ontem (pedido explícito: 'o mesmo investimento do dia anterior')", exactlyThree?.referenceValue === 100);
-  ok("detail.daysRemaining guarda os dias restantes calculados", exactlyThree?.detail.daysRemaining === 3);
+  ok("detail.daysRemaining guarda os dias restantes calculados", exactlyThree?.detail.daysRemaining === 5);
   ok("detail.currency propaga a moeda da conta", exactlyThree?.detail.currency === "BRL");
 }
 
@@ -75,7 +75,7 @@ console.log("\nC — já esgotado (saldo zerado) -> ainda dispara, como 'crític
 
 console.log("\nD — thresholds configuráveis (mesmo padrão de SpendPaceThresholds)\n");
 {
-  ok("limiar de atenção padrão é 3 dias (pedido literal: '3 dias antes')", DEFAULT_BALANCE_DEPLETION_THRESHOLDS.attentionDaysRemaining === 3);
+  ok("limiar de atenção padrão é 5 dias (pedido: 'quando tiver a 5 dias de acabar')", DEFAULT_BALANCE_DEPLETION_THRESHOLDS.attentionDaysRemaining === 5);
   const customThresholds = { attentionDaysRemaining: 5, criticalDaysRemaining: 2 };
   const withCustom = detectBalanceDepletionAlert({ balance: 400, currency: "BRL", dailySpendYesterday: 100, periodStart: "2026-11-19", periodEnd: "2026-11-19", thresholds: customThresholds });
   ok("limiar customizado de 5 dias -> 4 dias restantes já dispara (não dispararia no padrão de 3)", withCustom !== null);

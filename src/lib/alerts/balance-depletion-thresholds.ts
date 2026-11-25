@@ -7,7 +7,9 @@
  */
 export interface BalanceDepletionThresholds {
   /** Dias restantes (saldo ÷ gasto de ontem) iguais ou abaixo disto já
-   * dispara o alerta — pedido literal: "3 dias antes". */
+   * dispara o alerta — pedido original: "3 dias antes"; ampliado para 5
+   * dias a pedido do usuário ("quando tiver a 5 dias de acabar quero ser
+   * avisado"). */
   attentionDaysRemaining: number;
   /** Dias restantes iguais ou abaixo disto viram "crítico" em vez de
    * "atenção" — refinamento (não pedido explicitamente), mesmo padrão de
@@ -16,6 +18,6 @@ export interface BalanceDepletionThresholds {
 }
 
 export const DEFAULT_BALANCE_DEPLETION_THRESHOLDS: BalanceDepletionThresholds = {
-  attentionDaysRemaining: 3,
-  criticalDaysRemaining: 1,
+  attentionDaysRemaining: 5,
+  criticalDaysRemaining: 2,
 };
